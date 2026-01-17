@@ -1,0 +1,140 @@
+{
+  "templates": {
+    "reminder_24h": {
+      "name": "reminder_24h",
+      "wa_message_id": "1553752412438998",
+      "record_guid": "16af183a-94e4-497f-ae58-502b0072293a",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 5,
+          "parameters": [
+            "customer_name",
+            "appointment_date",
+            "appointment_time",
+            "branch_name",
+            "service_name"
+          ]
+        }
+      }
+    },
+    "same_day_checkin": {
+      "name": "same_day_checkin",
+      "wa_message_id": "1397546108382697",
+      "record_guid": "8303c94f-d0fb-402a-a4fd-ee02f57a940e",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 2,
+          "parameters": ["customer_name", "appointment_time"]
+        }
+      }
+    },
+    "post_session_feedback": {
+      "name": "post_session_feedback",
+      "wa_message_id": "885927340658052",
+      "record_guid": "0beddf53-db9a-4cdb-9b6e-e5b1483c833f",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 1,
+          "parameters": ["customer_name"]
+        }
+      }
+    },
+    "no_show_followup": {
+      "name": "no_show_followup",
+      "wa_message_id": "1396511885155373",
+      "record_guid": "205286b6-358e-4048-b089-fb1ea9d845cf",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 2,
+          "parameters": ["customer_name", "phone_number"]
+        }
+      }
+    },
+    "one_month_followup": {
+      "name": "one_month_followup",
+      "wa_message_id": "842363998553484",
+      "record_guid": "0caf3b58-4a2b-4e6d-b55c-0af2341b2699",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 1,
+          "parameters": ["customer_name"]
+        }
+      }
+    },
+    "missed_yesterday": {
+      "name": "missed_yesterday",
+      "wa_message_id": "1436541924468894",
+      "record_guid": "48eba3ff-0a16-47eb-bf07-2b92f43510e7",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 2,
+          "parameters": ["customer_name", "phone_number"]
+        }
+      }
+    },
+    "missed_this_month": {
+      "name": "missed_this_month",
+      "wa_message_id": "1090366319768263",
+      "record_guid": "b3fcf502-f9ee-46c3-b3b5-3a80dae3c8c7",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 2,
+          "parameters": ["customer_name", "phone_number"]
+        }
+      }
+    },
+    "attended_yesterday": {
+      "name": "attended_yesterday",
+      "wa_message_id": "1578679806821017",
+      "record_guid": "ffcf90db-1c7a-4414-bbaa-491992063c57",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 3,
+          "parameters": [
+            "customer_name",
+            "next_appointment_date",
+            "phone_number"
+          ]
+        }
+      }
+    }
+  },
+  "api_config": {
+    "base_url": "https://omni-apis.montymobile.com",
+    "endpoint": "/notification/api/v2/WhatsappApi/send-whatsapp",
+    "source": "96178974402",
+    "api_id": "9db12f0d-3c27-4d9c-b9fd-0227aebfd81d",
+    "tenant": "98df9ffe-fa84-41ee-9293-33614722d952",
+    "api_key": "f5a24c81de876f85f0d6e80e04228deab8f21f5c36e7456579614d2f8d6e5ba0"
+  },
+  "notes": {
+    "status": "All templates are APPROVED by WhatsApp",
+    "languages_available": ["ar"],
+    "languages_missing": ["en", "fr"],
+    "next_steps": ["Add English and French versions", "Test all templates"]
+  }
+}

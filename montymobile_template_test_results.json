@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-11-27T15:50:05.182095",
+  "results": {
+    "template": "True"
+  },
+  "api_config": {
+    "base_url": "https://omni-apis.montymobile.com",
+    "endpoint": "/notification/api/v2/WhatsappApi/send-whatsapp",
+    "template_name": "reminder1"
+  }
+}

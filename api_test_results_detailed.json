@@ -1,0 +1,1326 @@
+{
+  "test_date": "2025-10-28T07:14:38.381851",
+  "api_base_url": "https://boc-lb.com",
+  "summary": {
+    "total": 22,
+    "passed": 21,
+    "failed": 1,
+    "percentage": 95.5
+  },
+  "by_category": {
+    "Clinic Data": {
+      "passed": 4,
+      "failed": 0
+    },
+    "Customer Management": {
+      "passed": 5,
+      "failed": 1
+    },
+    "Appointment Management": {
+      "passed": 8,
+      "failed": 0
+    },
+    "Q&A System": {
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "results": [
+    {
+      "name": "List Branches",
+      "endpoint": "/agent/branches",
+      "method": "GET",
+      "category": "Clinic Data",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.27,
+      "url": "https://boc-lb.com/agent/branches",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Branches retrieved successfully",
+        "data": [
+          {
+            "id": 1,
+            "name": "Beirut"
+          },
+          {
+            "id": 3,
+            "name": "Antelias"
+          }
+        ],
+        "status": 200
+      }
+    },
+    {
+      "name": "List Services",
+      "endpoint": "/agent/services",
+      "method": "GET",
+      "category": "Clinic Data",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.23,
+      "url": "https://boc-lb.com/agent/services",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Services retrieved successfully",
+        "data": [
+          {
+            "id": 1,
+            "name": "Laser Hair Removal Men"
+          },
+          {
+            "id": 11,
+            "name": "CO2 Laser"
+          },
+          {
+            "id": 12,
+            "name": "Laser Hair Removal Women"
+          },
+          {
+            "id": 13,
+            "name": "Laser Tattoo Removal"
+          },
+          {
+            "id": 14,
+            "name": "Whitinig"
+          }
+        ],
+        "status": 200
+      }
+    },
+    {
+      "name": "List Machines",
+      "endpoint": "/agent/machines",
+      "method": "GET",
+      "category": "Clinic Data",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.26,
+      "url": "https://boc-lb.com/agent/machines",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Machines retrieved successfully",
+        "data": [
+          {
+            "id": 9,
+            "name": "Quadro"
+          },
+          {
+            "id": 10,
+            "name": "Trio"
+          },
+          {
+            "id": 13,
+            "name": "NEO"
+          },
+          {
+            "id": 14,
+            "name": "DPL"
+          },
+          {
+            "id": 15,
+            "name": "candela"
+          }
+        ],
+        "status": 200
+      }
+    },
+    {
+      "name": "Clinic Hours",
+      "endpoint": "/agent/clinic/hours",
+      "method": "GET",
+      "category": "Clinic Data",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.25,
+      "url": "https://boc-lb.com/agent/clinic/hours",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Clinic hours retrieved successfully",
+        "data": {
+          "sunday": {
+            "opening_hours": "09:00",
+            "closing_hours": "20:00"
+          },
+          "monday": {
+            "opening_hours": "09:00",
+            "closing_hours": "20:00"
+          },
+          "tuesday": {
+            "opening_hours": "09:00",
+            "closing_hours": "20:00"
+          },
+          "wednesday": {
+            "opening_hours": "09:00",
+            "closing_hours": "20:00"
+          },
+          "thursday": {
+            "opening_hours": "09:00",
+            "closing_hours": "20:00"
+          },
+          "friday": {
+            "opening_hours": "09:00",
+            "closing_hours": "20:00"
+          },
+          "saturday": {
+            "opening_hours": "09:00",
+            "closing_hours": "20:00"
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Check Customer Gender",
+      "endpoint": "/agent/customers/gender",
+      "method": "GET",
+      "category": "Customer Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.27,
+      "url": "https://boc-lb.com/agent/customers/gender?phone=3956607",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Customer gender retrieved successfully",
+        "data": {
+          "customer": {
+            "id": 6395,
+            "name": "jonny122",
+            "phone": "03956607",
+            "user_code": "LJ06395",
+            "gender": "Female"
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Get Customer by Phone",
+      "endpoint": "/agent/customers/by-phone",
+      "method": "GET",
+      "category": "Customer Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.26,
+      "url": "https://boc-lb.com/agent/customers/by-phone?phone=3956607",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Customer retrieved successfully",
+        "data": {
+          "id": 6395,
+          "name": "jonny122",
+          "phone": "03956607",
+          "gender": "Female",
+          "user_code": "LJ06395",
+          "email": "jonny122@linalaser.com",
+          "branch_id": 1,
+          "created_at": "2024-11-04T21:47:02.000000Z"
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Create Customer",
+      "endpoint": "/agent/customers/create",
+      "method": "POST",
+      "category": "Customer Management",
+      "status_code": 422,
+      "success": true,
+      "actual_success": false,
+      "response_time": 0.23,
+      "url": "https://boc-lb.com/agent/customers/create",
+      "error": null,
+      "response": {
+        "success": false,
+        "message": {
+          "phone": [
+            "The phone has already been taken."
+          ]
+        },
+        "data": null,
+        "status": 422
+      }
+    },
+    {
+      "name": "Get Customer Sessions",
+      "endpoint": "/agent/customers/sessions",
+      "method": "GET",
+      "category": "Customer Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.25,
+      "url": "https://boc-lb.com/agent/customers/sessions?customer_id=4",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Sessions retrieved successfully",
+        "data": [
+          {
+            "customer_id": "4",
+            "appointment_id": 297,
+            "date": "26/12/2024 01:00:00 PM",
+            "service": "Laser Hair Removal Men",
+            "area": [
+              {
+                "name": "Full",
+                "session_number": 1
+              }
+            ],
+            "session_number": null,
+            "status": "Done",
+            "notes": null
+          },
+          {
+            "customer_id": "4",
+            "appointment_id": 15560,
+            "date": "05/08/2025 09:00:00 PM",
+            "service": "Laser Hair Removal Men",
+            "area": [
+              {
+                "name": "Full",
+                "session_number": 1
+              }
+            ],
+            "session_number": null,
+            "status": "Done",
+            "notes": null
+          },
+          {
+            "customer_id": "4",
+            "appointment_id": 12696,
+            "date": "15/11/2025 04:00:00 PM",
+            "service": "Laser Hair Removal Women",
+            "area": [
+              {
+                "name": "Full",
+                "session_number": 1
+              }
+            ],
+            "session_number": null,
+            "status": "Available",
+            "notes": null
+          }
+        ],
+        "status": 200
+      }
+    },
+    {
+      "name": "List Customer Appointments",
+      "endpoint": "/agent/appointments/customer",
+      "method": "GET",
+      "category": "Customer Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.26,
+      "url": "https://boc-lb.com/agent/appointments/customer?phone=71123456",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Customer appointments retrieved successfully",
+        "data": [
+          {
+            "customer_id": 4,
+            "appointment_id": 12696,
+            "date": "15/11/2025",
+            "time": "04:00 PM",
+            "service": "Laser Hair Removal Women",
+            "status": "Available"
+          },
+          {
+            "customer_id": 4,
+            "appointment_id": 15560,
+            "date": "05/08/2025",
+            "time": "09:00 PM",
+            "service": "Laser Hair Removal Men",
+            "status": "Done"
+          },
+          {
+            "customer_id": 4,
+            "appointment_id": 297,
+            "date": "26/12/2024",
+            "time": "01:00 PM",
+            "service": "Laser Hair Removal Men",
+            "status": "Done"
+          }
+        ],
+        "status": 200
+      }
+    },
+    {
+      "name": "Add Customer Note",
+      "endpoint": "/agent/customers/notes/add",
+      "method": "POST",
+      "category": "Customer Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.26,
+      "url": "https://boc-lb.com/agent/customers/notes/add",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Note added to customer successfully",
+        "data": {
+          "customer_id": 6395,
+          "note": "Test note added via API",
+          "added_by": "bot"
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Check Next Appointment",
+      "endpoint": "/agent/appointments/next",
+      "method": "GET",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.29,
+      "url": "https://boc-lb.com/agent/appointments/next?phone=3956607",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Next appointment found",
+        "data": {
+          "customer": {
+            "id": 6395,
+            "name": "jonny122",
+            "phone": "03956607",
+            "user_code": "LJ06395"
+          },
+          "appointment": {
+            "id": 21984,
+            "date": "01/12/2025 02:00:00 PM",
+            "session_number": 1,
+            "employee_name": null,
+            "employee_phone": null,
+            "employee_id": null,
+            "customer": {
+              "id": 6395,
+              "name": "jonny122",
+              "email": "jonny122@linalaser.com",
+              "user_code": "LJ06395",
+              "phone": "03956607",
+              "gender": "Female",
+              "dob": "01/01/2000",
+              "weight": null,
+              "height": null,
+              "marriage_status": null,
+              "occupation": null,
+              "specialty": null,
+              "branch_id": 1,
+              "branch": "Beirut",
+              "is_active": false,
+              "role_id": 2,
+              "role": "manager",
+              "description": null,
+              "signature": null,
+              "medical_detail": null
+            },
+            "added_by": {
+              "id": 1,
+              "name": "Mahmoud",
+              "user_code": "LM00001",
+              "email": "mahmoud@linalaser.com",
+              "email_verified_at": "2024-11-04T21:46:34.000000Z",
+              "is_default_password": false,
+              "country_code": null,
+              "phone": "71534928",
+              "gender": "Male",
+              "dob": "2000-01-01T00:00:00.000000Z",
+              "weight": null,
+              "height": null,
+              "marriage_status": null,
+              "occupation": null,
+              "specialty": null,
+              "emergency_contact_name": null,
+              "emergency_contact_phone": null,
+              "emergency_contact_relationship": null,
+              "branch_id": 1,
+              "android_payment_token": null,
+              "ios_payment_token": null,
+              "device": null,
+              "is_active": true,
+              "created_at": "2024-11-04T21:46:34.000000Z",
+              "updated_at": "2024-11-04T21:46:34.000000Z",
+              "has_signature": 0,
+              "description": null,
+              "deleted_at": null
+            },
+            "branch": "Beirut",
+            "status": {
+              "id": 1,
+              "name": "Available",
+              "display_name": "Available",
+              "color": "#32CD32"
+            },
+            "service": {
+              "id": 1,
+              "name": "Laser Hair Removal Men",
+              "color": "#ff0000"
+            },
+            "machine": null,
+            "body_parts": [],
+            "color": "#ff0000",
+            "cost": 0,
+            "discount": {
+              "has_discount": false,
+              "percentage": null,
+              "amount": null,
+              "total_cost_after_discount": null,
+              "is_approved": false
+            },
+            "edited_color": null,
+            "next_appointment": null
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Get Sessions Count",
+      "endpoint": "/agent/appointments/sessions/count",
+      "method": "GET",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.24,
+      "url": "https://boc-lb.com/agent/appointments/sessions/count?phone=3956607",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Sessions count retrieved successfully",
+        "data": {
+          "customer": {
+            "id": 6395,
+            "name": "jonny122",
+            "phone": "03956607",
+            "user_code": "LJ06395"
+          },
+          "total_sessions": 4,
+          "completed_sessions": 0,
+          "upcoming_sessions": 3,
+          "sessions_by_service": []
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Check Payment Status",
+      "endpoint": "/agent/appointments/payment",
+      "method": "GET",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.31,
+      "url": "https://boc-lb.com/agent/appointments/payment?phone=3956607",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Appointment payment details retrieved",
+        "data": {
+          "total_price": 0,
+          "amount_paid_usd": null,
+          "paid_lbp": null,
+          "is_fully_paid": "Yes"
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Get Pricing Details",
+      "endpoint": "/agent/appointments/pricing",
+      "method": "GET",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.24,
+      "url": "https://boc-lb.com/agent/appointments/pricing?service_id=1&machine_id=1",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Pricing details retrieved successfully",
+        "data": {
+          "service": {
+            "id": 1,
+            "name": "Laser Hair Removal Men"
+          },
+          "machine": null,
+          "body_parts": [],
+          "pricing": 0
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Get Missed Appointments",
+      "endpoint": "/agent/appointments/missed",
+      "method": "GET",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.28,
+      "url": "https://boc-lb.com/agent/appointments/missed",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Missed appointments retrieved successfully",
+        "data": {
+          "date": "2025-10-28",
+          "count": 36,
+          "clients": [
+            {
+              "user_id": 6075,
+              "phone": "70536598",
+              "name": "yohann abdelnour",
+              "user_code": "LYA06075",
+              "missed_appointment": {
+                "id": 15095,
+                "date": "28/10/2025 01:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 11371,
+              "phone": "70879476",
+              "name": "bilal ali mobrak",
+              "user_code": "LBAM11371",
+              "missed_appointment": {
+                "id": 17313,
+                "date": "28/10/2025 04:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Trio",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 1254,
+              "phone": "03373875",
+              "name": "Abbas Hmdeh",
+              "user_code": "LAH01254",
+              "missed_appointment": {
+                "id": 18365,
+                "date": "28/10/2025 07:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 10951,
+              "phone": "03322293",
+              "name": "khodor mohammad al rifaii",
+              "user_code": "LKMAR10951",
+              "missed_appointment": {
+                "id": 18366,
+                "date": "28/10/2025 06:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 11757,
+              "phone": "76 187 386",
+              "name": "kareem maalouf",
+              "user_code": "LKM11757",
+              "missed_appointment": {
+                "id": 18874,
+                "date": "28/10/2025 07:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 6764,
+              "phone": "81618161",
+              "name": "mohammad alwade",
+              "user_code": "LMA06764",
+              "missed_appointment": {
+                "id": 19624,
+                "date": "28/10/2025 01:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 6764,
+              "phone": "81618161",
+              "name": "mohammad alwade",
+              "user_code": "LMA06764",
+              "missed_appointment": {
+                "id": 19625,
+                "date": "28/10/2025 01:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "DPL",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 8741,
+              "phone": "78911939",
+              "name": "Abdallah yehya chehimeh",
+              "user_code": "LAYC08741",
+              "missed_appointment": {
+                "id": 19806,
+                "date": "28/10/2025 04:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 11594,
+              "phone": "78 816 200",
+              "name": "farhan khalaf",
+              "user_code": "LFK11594",
+              "missed_appointment": {
+                "id": 19810,
+                "date": "28/10/2025 10:00:00 AM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 4058,
+              "phone": "70363201",
+              "name": "ahmad najmeddine",
+              "user_code": "LAN04058",
+              "missed_appointment": {
+                "id": 20372,
+                "date": "28/10/2025 11:00:00 AM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 3781,
+              "phone": "+963 993 120 128",
+              "name": "rami ali",
+              "user_code": "LRA03781",
+              "missed_appointment": {
+                "id": 21336,
+                "date": "28/10/2025 01:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 10711,
+              "phone": "70326236",
+              "name": "Bilal mahmoud al-hallak",
+              "user_code": "LBMA10711",
+              "missed_appointment": {
+                "id": 21376,
+                "date": "28/10/2025 01:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 11241,
+              "phone": "03915229",
+              "name": "ammar alkhatreb",
+              "user_code": "LAA11241",
+              "missed_appointment": {
+                "id": 21456,
+                "date": "28/10/2025 01:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 7084,
+              "phone": "81603601",
+              "name": "Oussama Nassar",
+              "user_code": "LON07084",
+              "missed_appointment": {
+                "id": 21508,
+                "date": "28/10/2025 07:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 7075,
+              "phone": "03567519",
+              "name": "Mohamad moussalli",
+              "user_code": "LMM07075",
+              "missed_appointment": {
+                "id": 21540,
+                "date": "28/10/2025 04:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 11172,
+              "phone": "79153113",
+              "name": "roudy mouawad",
+              "user_code": "LRM11172",
+              "missed_appointment": {
+                "id": 21545,
+                "date": "28/10/2025 05:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 1851,
+              "phone": "70355898",
+              "name": "ciline yassine222",
+              "user_code": "LCY01851",
+              "missed_appointment": {
+                "id": 21585,
+                "date": "28/10/2025 06:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 11308,
+              "phone": "71218996",
+              "name": "ali alzo3bi",
+              "user_code": "LAA11308",
+              "missed_appointment": {
+                "id": 21589,
+                "date": "28/10/2025 04:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 8870,
+              "phone": "78901726",
+              "name": "ludvic boueri",
+              "user_code": "LLB08870",
+              "missed_appointment": {
+                "id": 21608,
+                "date": "28/10/2025 06:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 839,
+              "phone": "79128181",
+              "name": "Muhammad Alghosh",
+              "user_code": "LMA00839",
+              "missed_appointment": {
+                "id": 21627,
+                "date": "28/10/2025 11:00:00 AM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Trio",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 11800,
+              "phone": "70 534 283",
+              "name": "albert eid",
+              "user_code": "LAE11800",
+              "missed_appointment": {
+                "id": 21700,
+                "date": "28/10/2025 05:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 4590,
+              "phone": "03020403",
+              "name": "johnny abboud",
+              "user_code": "LJA04590",
+              "missed_appointment": {
+                "id": 21701,
+                "date": "28/10/2025 10:30:00 AM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 1859,
+              "phone": "71009000",
+              "name": "mohammad sabe3",
+              "user_code": "LMS01859",
+              "missed_appointment": {
+                "id": 21704,
+                "date": "28/10/2025 07:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 1626,
+              "phone": "70555255",
+              "name": "Ibrahim Mezher",
+              "user_code": "LIM01626",
+              "missed_appointment": {
+                "id": 21712,
+                "date": "28/10/2025 10:00:00 AM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 10912,
+              "phone": "78961346",
+              "name": "Ali shehab",
+              "user_code": "LAS10912",
+              "missed_appointment": {
+                "id": 21725,
+                "date": "28/10/2025 06:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 11601,
+              "phone": "70600630",
+              "name": "nazih hareb",
+              "user_code": "LNH11601",
+              "missed_appointment": {
+                "id": 21764,
+                "date": "28/10/2025 04:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 3226,
+              "phone": "81058187",
+              "name": "youssif mohammad",
+              "user_code": "LYM03226",
+              "missed_appointment": {
+                "id": 21875,
+                "date": "28/10/2025 06:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 10175,
+              "phone": "78973243",
+              "name": "Hadi saab",
+              "user_code": "LHS10175",
+              "missed_appointment": {
+                "id": 21876,
+                "date": "28/10/2025 11:00:00 AM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Trio",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 12117,
+              "phone": "70315268",
+              "name": "steven sfeir",
+              "user_code": "SS12117",
+              "missed_appointment": {
+                "id": 21880,
+                "date": "28/10/2025 03:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 11979,
+              "phone": "78 950 509",
+              "name": "Raed atwi",
+              "user_code": "RA11979",
+              "missed_appointment": {
+                "id": 21925,
+                "date": "28/10/2025 05:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 306,
+              "phone": "71455512",
+              "name": "Meras Aljurdi",
+              "user_code": "LMA00306",
+              "missed_appointment": {
+                "id": 21936,
+                "date": "28/10/2025 05:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "NEO",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 11301,
+              "phone": "00963945686149",
+              "name": "milad salem",
+              "user_code": "LMS11301",
+              "missed_appointment": {
+                "id": 21941,
+                "date": "28/10/2025 03:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 7621,
+              "phone": "70822227",
+              "name": "Majd ali massry",
+              "user_code": "LMAM07621",
+              "missed_appointment": {
+                "id": 21962,
+                "date": "28/10/2025 06:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 11996,
+              "phone": "+961 3 860 884",
+              "name": "Nicolas fouad chibli",
+              "user_code": "NFC11996",
+              "missed_appointment": {
+                "id": 21963,
+                "date": "28/10/2025 07:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Antelias"
+              }
+            },
+            {
+              "user_id": 11564,
+              "phone": "81 376 255",
+              "name": "Nour safa",
+              "user_code": "LNS11564",
+              "missed_appointment": {
+                "id": 21964,
+                "date": "28/10/2025 07:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            },
+            {
+              "user_id": 12125,
+              "phone": "+961 70 428 799",
+              "name": "elias azzam",
+              "user_code": "EA12125",
+              "missed_appointment": {
+                "id": 21967,
+                "date": "28/10/2025 03:00:00 PM",
+                "service": "Laser Hair Removal Men",
+                "machine": "Quadro",
+                "branch": "Beirut"
+              }
+            }
+          ]
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Send Appointment Reminders",
+      "endpoint": "/agent/appointments/reminders",
+      "method": "GET",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.26,
+      "url": "https://boc-lb.com/agent/appointments/reminders?phone=3956607",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Appointment reminders retrieved successfully",
+        "data": {
+          "date": "2025-10-29",
+          "count": 0,
+          "appointments": []
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Create Appointment",
+      "endpoint": "/agent/appointments/create",
+      "method": "POST",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.31,
+      "url": "https://boc-lb.com/agent/appointments/create",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Appointment created successfully",
+        "data": {
+          "appointment": {
+            "id": 21987,
+            "date": "01/12/2025 02:00:00 PM",
+            "session_number": 1,
+            "employee_name": null,
+            "employee_phone": null,
+            "employee_id": null,
+            "customer": {
+              "id": 6395,
+              "name": "jonny122",
+              "email": "jonny122@linalaser.com",
+              "user_code": "LJ06395",
+              "phone": "03956607",
+              "gender": "Female",
+              "dob": "01/01/2000",
+              "weight": null,
+              "height": null,
+              "marriage_status": null,
+              "occupation": null,
+              "specialty": null,
+              "branch_id": 1,
+              "branch": "Beirut",
+              "is_active": false,
+              "role_id": 2,
+              "role": "manager",
+              "description": null,
+              "signature": null,
+              "medical_detail": null
+            },
+            "added_by": {
+              "id": 1,
+              "name": "Mahmoud",
+              "user_code": "LM00001",
+              "email": "mahmoud@linalaser.com",
+              "email_verified_at": "2024-11-04T21:46:34.000000Z",
+              "is_default_password": false,
+              "country_code": null,
+              "phone": "71534928",
+              "gender": "Male",
+              "dob": "2000-01-01T00:00:00.000000Z",
+              "weight": null,
+              "height": null,
+              "marriage_status": null,
+              "occupation": null,
+              "specialty": null,
+              "emergency_contact_name": null,
+              "emergency_contact_phone": null,
+              "emergency_contact_relationship": null,
+              "branch_id": 1,
+              "android_payment_token": null,
+              "ios_payment_token": null,
+              "device": null,
+              "is_active": true,
+              "created_at": "2024-11-04T21:46:34.000000Z",
+              "updated_at": "2024-11-04T21:46:34.000000Z",
+              "has_signature": 0,
+              "description": null,
+              "deleted_at": null
+            },
+            "branch": "Beirut",
+            "status": {
+              "id": 1,
+              "name": "Available",
+              "display_name": "Available",
+              "color": "#32CD32"
+            },
+            "service": {
+              "id": 1,
+              "name": "Laser Hair Removal Men",
+              "color": "#ff0000"
+            },
+            "machine": null,
+            "body_parts": [],
+            "color": "#ff0000",
+            "cost": 0,
+            "discount": {
+              "has_discount": false,
+              "percentage": null,
+              "amount": null,
+              "total_cost_after_discount": null,
+              "is_approved": false
+            },
+            "edited_color": null,
+            "next_appointment": null
+          },
+          "pricing": 0
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Update Appointment",
+      "endpoint": "/agent/appointments/update/date",
+      "method": "POST",
+      "category": "Appointment Management",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.29,
+      "url": "https://boc-lb.com/agent/appointments/update/date",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Appointment date updated successfully",
+        "data": {
+          "customer_id": 4,
+          "appointment_id": 12696,
+          "old_date": "15/11/2025 04:00:00 PM",
+          "new_date": "15/11/2025 04:00:00 PM"
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Get All Q&A Entries",
+      "endpoint": "/agent/qa/list",
+      "method": "GET",
+      "category": "Q&A System",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.23,
+      "url": "https://boc-lb.com/agent/qa/list?language=ar",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Q&A entries retrieved successfully",
+        "data": [
+          {
+            "qa_id": 12,
+            "question": "22",
+            "answer": "2",
+            "category": "general",
+            "language": "ar",
+            "usage_count": 0
+          },
+          {
+            "qa_id": 13,
+            "question": "\u0633\u0624\u0627\u0644 \u062a\u062c\u0631\u064a\u0628\u064a\u061f",
+            "answer": "\u062c\u0648\u0627\u0628 \u062a\u062c\u0631\u064a\u0628\u064a",
+            "category": "general",
+            "language": "ar",
+            "usage_count": 0
+          },
+          {
+            "qa_id": 14,
+            "question": "\u0633\u0624\u0627\u0644 \u062a\u062c\u0631\u064a\u0628\u064a\u061f",
+            "answer": "\u062c\u0648\u0627\u0628 \u062a\u062c\u0631\u064a\u0628\u064a",
+            "category": "general",
+            "language": "ar",
+            "usage_count": 0
+          },
+          {
+            "qa_id": 15,
+            "question": "\u0633\u0624\u0627\u0644 \u062a\u062c\u0631\u064a\u0628\u064a\u061f",
+            "answer": "\u062c\u0648\u0627\u0628 \u062a\u062c\u0631\u064a\u0628\u064a",
+            "category": "general",
+            "language": "ar",
+            "usage_count": 0
+          }
+        ],
+        "status": 200
+      }
+    },
+    {
+      "name": "Get Q&A Categories",
+      "endpoint": "/agent/qa/categories",
+      "method": "GET",
+      "category": "Q&A System",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.23,
+      "url": "https://boc-lb.com/agent/qa/categories",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Categories retrieved successfully",
+        "data": [
+          {
+            "category": "general",
+            "count": 4,
+            "name_ar": "\u0639\u0627\u0645",
+            "name_en": "General"
+          }
+        ],
+        "status": 200
+      }
+    },
+    {
+      "name": "Create Q&A Entry",
+      "endpoint": "/agent/qa/create",
+      "method": "POST",
+      "category": "Q&A System",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.27,
+      "url": "https://boc-lb.com/agent/qa/create",
+      "error": null,
+      "response": {
+        "success": true,
+        "message": "Q&A created successfully",
+        "data": {
+          "qa_id": 16,
+          "created_at": "2025-10-28 05:14:40",
+          "category": "general"
+        },
+        "status": 200
+      }
+    },
+    {
+      "name": "Delete Q&A Entry",
+      "endpoint": "/agent/qa/delete",
+      "method": "POST",
+      "category": "Q&A System",
+      "status_code": 200,
+      "success": true,
+      "actual_success": true,
+      "response_time": 0.33,
+      "url": "https://boc-lb.com/agent/qa/delete",
+      "error": null,
+      "response": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content"
+    }
+  ]
+}
