@@ -16,6 +16,14 @@ from services import api_integrations
 # Import local Q&A service for context injection
 from services.local_qa_service import local_qa_service
 
+# Lebanon timezone - imported once at module level for performance
+try:
+    from zoneinfo import ZoneInfo
+    LEBANON_TZ = ZoneInfo("Asia/Beirut")
+except ImportError:
+    import pytz
+    LEBANON_TZ = pytz.timezone("Asia/Beirut")
+
 _custom_qa_cache = {}
 
 
@@ -144,6 +152,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     # Pass the current_gender and Q&A reference to get_system_instruction
     system_instruction_core = get_system_instruction(user_id, current_preferred_lang, qa_reference_text)
 
+    # Log which training files GPT is receiving
+    print(f"📄 GPT will receive knowledge_base.txt in context")
+    print(f"📄 GPT will receive style_guide.txt in context")
+
+    # Detect if this is a price-related question
+    price_keywords = [
+        'price', 'cost', 'how much', 'pricing', 'سعر', 'اسعار', 'كم', 'قديش', 'أديش', 'تكلفة',
+        'prix', 'coût', 'combien', 'tarif', 'adesh', 'adde', '2adde', '2adesh', 'kam', 'sa3er'
+    ]
+    user_input_lower = user_input.lower()
+    is_price_question = any(keyword in user_input_lower for keyword in price_keywords)
+
+    if is_price_question:
+        print(f"📄 GPT will receive price_list.txt in context (price-related question detected)")
+
     early_name_instruction = (
         "**Early Name Capture:**\n"
         "If the user's name is not yet known and gender has just been confirmed, "
@@ -151,6 +174,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "'May I have your full name please?' or 'What is your name?'. "
         "Once provided, acknowledge it naturally (e.g., 'Thanks, {name}!') and use it in future replies."
     )
+
+    # Get current Lebanon time for GPT to use in date/time calculations
+    current_lebanon_time = datetime.datetime.now(LEBANON_TZ)
+    current_date_str = current_lebanon_time.strftime("%Y-%m-%d")
+    current_time_str = current_lebanon_time.strftime("%H:%M:%S")
+    current_day_name = current_lebanon_time.strftime("%A")
 
     # Enhanced booking instruction: GPT is responsible for parsing date/time from natural language
     booking_instruction = (
@@ -183,7 +212,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "3. Preferred machine (Neo, Quadro, or Trio) - or use default\n"
         "4. Preferred branch - or use default (ط§ظ„ظ…ظ†ط§ط±ط©/Manara)\n"
         "5. Date and time\n"
-        "**Date and Time Conversion (CRITICAL):** You MUST intelligently convert any natural language date/time expressions (e.g., 'tomorrow at 3 PM', 'next Friday', 'in 3 days', 'tonight at 7:30 PM') into the exact 'YYYY-MM-DD HH:MM:SS' format. Always use the *current actual date and time* as your reference point for 'tomorrow', 'next week', etc. The appointment date must be in the future and not more than 365 days from today. If the user provides only a day (e.g., 'tomorrow'), suggest a default time like '10:00:00' or '14:00:00 (2 PM)'. If only a time is given (e.g., 'at 5 PM'), assume today's date if it's in the future, otherwise assume tomorrow. You must confirm the extracted date and time in your `bot_reply` before trying to book.\n"
+        f"**🕐 CURRENT DATE AND TIME (Lebanon/Beirut): {current_day_name}, {current_date_str} at {current_time_str}**\n"
+        "**Date and Time Conversion (CRITICAL):** You MUST intelligently convert any natural language date/time expressions (e.g., 'tomorrow at 3 PM', 'next Friday', 'in 3 days', 'tonight at 7:30 PM') into the exact 'YYYY-MM-DD HH:MM:SS' format. "
+        f"Use the CURRENT DATE AND TIME shown above ({current_date_str} {current_time_str}) as your reference point for 'today', 'tomorrow', 'next week', etc. "
+        "The appointment date must be in the future (after the current time shown above) and not more than 365 days from today. If the user provides only a day (e.g., 'tomorrow'), suggest a default time like '10:00:00' or '14:00:00 (2 PM)'. If only a time is given (e.g., 'at 3 PM'), check if that time is AFTER the current time - if yes, use today's date; if no, use tomorrow's date. You must confirm the extracted date and time in your `bot_reply` before trying to book.\n"
         "**Confirmation and Tool Call:** Do NOT call `create_appointment` until you have *all* required parameters and you have *confirmed them with the user* in your `bot_reply`. If details are missing, your `action` should be `ask_for_details_for_booking`, and your `bot_reply` should ask for the *next specific missing piece of information*. For example, 'طھظ…ط§ظ…طŒ ظˆط£ظٹ ط¬ظ‡ط§ط² ط¨طھظپط¶ظ„طں' or 'ظˆظ…ط§ ظ‡ظˆ ط§ط³ظ…ظƒ ط§ظ„ظƒط§ظ…ظ„طں' (NOT phone or gender if already known). If the user says 'ok book it' but not all info is there, you still ask for the missing parts.\n"
         "**Example of Confirmation:** If user says 'ok book me for tomorrow 1pm', and you know all other details, your `bot_reply` should be: 'طھظ…ط§ظ…طŒ ط¥ط°ط§ظ‹ ظ…ظˆط¹ط¯ظƒ ط¨ظƒط±ط§ ط§ظ„ط³ط¨طھ 28 طھظ…ظˆط² ط§ظ„ط³ط§ط¹ط© 1:00 ط¨ط¹ط¯ ط§ظ„ط¸ظ‡ط± ظپظٹ ظپط±ط¹ ط§ظ„ظ…ظ†ط§ط±ط© ط¹ظ„ظ‰ ط¬ظ‡ط§ط² ط§ظ„ظ†ظٹظˆطŒ طµط­ظٹط­طں' and `action` should be `confirm_booking_details`. Only call the tool (`create_appointment`) after final confirmation by the user (e.g., 'yes', 'ok', 'confirm'). If you have all information and user confirms, then `action` should be `tool_call` and `bot_reply` should inform the user that you are booking."
     )
@@ -578,9 +610,11 @@ User message: {user_input}"""
                                 dt_obj = datetime.datetime.strptime(original_date_str, '%Y-%m-%d')
                                 # Default to a common clinic opening time if only date is provided
                                 dt_obj = dt_obj.replace(hour=10, minute=0, second=0) # Default to 10:00:00 AM
-                            
+
                             if dt_obj:
-                                now = datetime.datetime.now()
+                                # Use Lebanon timezone for all date comparisons
+                                now = datetime.datetime.now(LEBANON_TZ).replace(tzinfo=None)  # Naive datetime in Lebanon time
+                                print(f"DEBUG: Current Lebanon time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
                                 # NEW: If the year is in the past, assume current year
                                 if dt_obj.year < now.year:
                                     dt_obj = dt_obj.replace(year=now.year)
@@ -641,27 +675,18 @@ User message: {user_input}"""
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
                         
                         # 📊 ANALYTICS: Track service when appointment is created
-                        if function_name == "create_appointment" and tool_output.get("success"):
+                        if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics
-                            
-                            # Map service_id to service name
-                            service_id = function_args.get("service_id")
-                            service_map = {
-                                1: "laser_hair_removal",
-                                2: "tattoo_removal",
-                                3: "co2_laser",
-                                4: "skin_whitening",
-                                5: "botox",
-                                6: "fillers"
-                            }
-                            service_name = service_map.get(service_id, f"service_{service_id}")
-                            
-                            # Log service request
-                            analytics.log_service_request(
-                                user_id=user_id,
-                                service=service_name
-                            )
-                            print(f"📊 Analytics: Service tracked from appointment - {service_name}")
+
+                            # Get service and machine names from API response
+                            appointment_data = tool_output.get("data", {}).get("appointment") or {}
+                            service_info = appointment_data.get("service") or {}
+                            service_name = service_info.get("name", "unknown_service") if isinstance(service_info, dict) else str(service_info)
+                            machine_info = appointment_data.get("machine")
+                            # Handle machine being either a string or a dict
+                            machine_name = machine_info.get("name", "unassigned") if isinstance(machine_info, dict) else (str(machine_info) if machine_info else "unassigned")
+
+                            print(f"📊 Analytics: Service tracked from appointment - {service_name}, Machine: {machine_name}")
                             
                             # Log appointment booking
                             analytics.log_appointment(
@@ -673,7 +698,7 @@ User message: {user_input}"""
                             print(f"📊 Analytics: Appointment booked - {service_name}")
                         
                         # 📊 ANALYTICS: Track appointment reschedule
-                        elif function_name == "update_appointment_date" and tool_output.get("success"):
+                        elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics
                             
                             # Get service from appointment data if available

@@ -490,6 +490,8 @@ export const useApi = () => {
           conversation_id: conversationId,
           user_id: userId,
           operator_id: operatorId,
+        }, {
+          timeout: 60000, // 60 seconds - Firestore operations can be slow
         });
         toast.success("Conversation taken over successfully!");
         return response.data;
@@ -498,6 +500,10 @@ export const useApi = () => {
         if (error.code === "ERR_NETWORK") {
           toast.error("Backend offline - cannot take over conversation");
           return { success: false, error: "Backend offline" };
+        }
+        if (error.code === "ECONNABORTED") {
+          toast.error("Takeover timed out - please try again");
+          return { success: false, error: "timeout of 60000ms exceeded" };
         }
         // Show actual error message from server
         const errorMsg = error.response?.data?.detail || error.response?.data?.error || error.message || "Unknown error";
@@ -516,6 +522,8 @@ export const useApi = () => {
       const response = await api.post("/api/live-chat/release", {
         conversation_id: conversationId,
         user_id: userId,
+      }, {
+        timeout: 60000, // 60 seconds - Firestore operations can be slow
       });
       toast.success("Conversation released to bot!");
       return response.data;
@@ -523,6 +531,10 @@ export const useApi = () => {
       if (error.code === "ERR_NETWORK") {
         toast.error("Backend offline - cannot release conversation");
         return { success: false, error: "Backend offline" };
+      }
+      if (error.code === "ECONNABORTED") {
+        toast.error("Release timed out - please try again");
+        return { success: false, error: "timeout" };
       }
       throw error;
     } finally {
@@ -546,6 +558,8 @@ export const useApi = () => {
           message,
           operator_id: operatorId,
           message_type: messageType,
+        }, {
+          timeout: 60000, // 60 seconds - Firestore + WhatsApp operations can be slow
         });
         toast.success("Message sent!");
         return response.data;
@@ -553,6 +567,10 @@ export const useApi = () => {
         if (error.code === "ERR_NETWORK") {
           toast.error("Backend offline - cannot send message");
           return { success: false, error: "Backend offline" };
+        }
+        if (error.code === "ECONNABORTED") {
+          toast.error("Message send timed out - please try again");
+          return { success: false, error: "timeout" };
         }
         throw error;
       } finally {

@@ -29,8 +29,6 @@ firebase-admin==6.2.0
 # Validation
 pydantic==2.5.0
 
-# CORS
-python-cors==1.7.0
 
 # WebSocket support
 websockets==12.0

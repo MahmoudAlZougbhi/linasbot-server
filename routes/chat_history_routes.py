@@ -82,6 +82,7 @@ async def get_chat_history_customers():
                     customer_name = customer_info.get("name", "Unknown Customer")
                     phone_full = customer_info.get("phone_full", user_id)
                     phone_clean = customer_info.get("phone_clean", user_id.replace("+", ""))
+                    gender = customer_info.get("gender") or config.user_gender.get(user_id, "unknown")
 
                     if customer_name == "Unknown Customer":
                         customer_name = config.user_names.get(user_id, "Unknown Customer")
@@ -91,6 +92,7 @@ async def get_chat_history_customers():
                         "user_name": customer_name,
                         "phone_full": phone_full,
                         "phone_clean": phone_clean,
+                        "gender": gender,
                         "last_message": last_message_text,
                         "last_message_time": latest_timestamp.isoformat() if latest_timestamp else None,
                         "message_count": total_messages,

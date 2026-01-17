@@ -24,9 +24,11 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         config.user_last_bot_response_time[user_id] = datetime.datetime.now()
     if user_id not in config.user_greeting_stage:
         config.user_greeting_stage[user_id] = 0
-    # FIX: Only initialize gender if truly not set or empty (prevents overwriting known gender)
-    if not config.user_gender.get(user_id):
-        config.user_gender[user_id] = ""
+    # FIX: Only set to "unknown" if gender is not already a valid value
+    # This prevents overwriting gender restored from Firestore after restart
+    current_gender = config.user_gender.get(user_id)
+    if current_gender not in ["male", "female"]:
+        config.user_gender[user_id] = "unknown"
     if user_id not in config.gender_attempts:
         config.gender_attempts[user_id] = 0
     if user_id not in config.user_in_training_mode:

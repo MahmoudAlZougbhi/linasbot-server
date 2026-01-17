@@ -197,9 +197,51 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
         print(f"✅ CRITICAL: Stored phone_number {phone_number} for user {user_id} BEFORE any processing")
     else:
         print(f"⚠️ WARNING: No phone_number extracted for user {user_id}")
-    
-    # Fetch customer data from API
-    if phone_number:
+
+    # ===== RESTORE USER STATE FROM FIRESTORE FIRST (handles server restart) =====
+    # Always try to restore from Firestore before API lookup
+    # Only restore if gender is not already set to a valid value
+    current_gender = config.user_gender.get(user_id)
+    print(f"🔍 DEBUG: Before Firestore restore - current_gender in memory: '{current_gender}'")
+    if current_gender not in ["male", "female"]:
+        try:
+            from utils.utils import get_user_state_from_firestore
+            print(f"🔄 Attempting to restore user state from Firestore for {user_id}...")
+            firestore_state = await get_user_state_from_firestore(user_id)
+            print(f"🔍 DEBUG: Firestore returned state: {firestore_state}")
+
+            if firestore_state:
+                # Restore gender if valid
+                firestore_gender = firestore_state.get("gender", "")
+                if firestore_gender in ["male", "female"]:
+                    config.user_gender[user_id] = firestore_gender
+                    print(f"✅ Restored gender from Firestore: {firestore_gender}")
+
+                # Restore greeting stage if > 0
+                firestore_greeting_stage = firestore_state.get("greeting_stage", 0)
+                if firestore_greeting_stage > 0:
+                    config.user_greeting_stage[user_id] = firestore_greeting_stage
+                    print(f"✅ Restored greeting_stage from Firestore: {firestore_greeting_stage}")
+
+                # Restore name if available
+                firestore_name = firestore_state.get("name", "")
+                if firestore_name and firestore_name != "Unknown Customer":
+                    config.user_names[user_id] = firestore_name
+                    user_name = firestore_name
+                    print(f"✅ Restored name from Firestore: {firestore_name}")
+            else:
+                print(f"ℹ️ No user state found in Firestore for {user_id}")
+        except Exception as e:
+            print(f"❌ Error restoring user state from Firestore: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Debug: Log state after Firestore restoration attempt
+    print(f"🔍 DEBUG: After Firestore restore - gender: '{config.user_gender.get(user_id)}', greeting_stage: {config.user_greeting_stage.get(user_id, 0)}")
+
+    # Fetch customer data from API ONLY if Firestore didn't have valid gender
+    current_gender_after_firestore = config.user_gender.get(user_id)
+    if current_gender_after_firestore not in ["male", "female"] and phone_number:
         try:
             from services.api_integrations import get_customer_by_phone
             
@@ -236,10 +278,10 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
             print(f"❌ Error fetching customer from API: {e}")
             import traceback
             traceback.print_exc()
-    
+
     # Initialize user state ONLY for NEW users
     is_new_user = (
-        user_id not in config.user_names or 
+        user_id not in config.user_names or
         user_id not in config.user_greeting_stage or
         config.user_greeting_stage.get(user_id, 0) == 0
     )
@@ -340,7 +382,7 @@ async def start_command_whatsapp(user_whatsapp_id: str, user_name: str):
         config.user_greeting_stage[user_whatsapp_id] = 2  # Skip gender question
         print(f"✅ Gender already set (preserving): {existing_gender}")
     else:
-        config.user_gender[user_whatsapp_id] = ""  # Only reset if truly not set
+        config.user_gender[user_whatsapp_id] = "unknown"  # Use "unknown" for consistency
         config.user_greeting_stage[user_whatsapp_id] = 1  # Ask for gender
         print(f"ℹ️ Gender not found, will ask user")
 

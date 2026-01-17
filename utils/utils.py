@@ -89,21 +89,13 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         phone_number: Optional actual phone number (for Qiscus where user_id is room_id)
         metadata: Optional metadata dict (e.g., operator_id, handled_by)
     """
-    # DEBUG: Log all parameters for diagnosing user message save issues
-    print(f"\n{'='*60}")
-    print(f"📝 SAVE_CONVERSATION_MESSAGE_TO_FIRESTORE CALLED")
-    print(f"   role: {role}")
-    print(f"   user_id: {user_id}")
-    print(f"   conversation_id: {conversation_id}")
-    print(f"   phone_number: {phone_number}")
-    print(f"   text preview: {text[:50] if text else 'None'}...")
-    print(f"{'='*60}\n")
+    import asyncio
 
     # Check if we're in testing mode - skip Firebase saving for tests
     if hasattr(config, 'TESTING_MODE') and config.TESTING_MODE:
         print(f"🧪 TESTING MODE: Skipping Firebase save for user {user_id}, role {role}")
         return
-    
+
     db = get_firestore_db()
     if not db:
         print("⚠️ Firestore not initialized. Skipping conversation save.")
@@ -116,118 +108,95 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
     conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
 
-    # CRITICAL FIX: If conversation_id is provided but phone_number is not,
-    # try to get phone from the existing conversation's customer_info.
-    # This fixes the bug where user messages weren't being saved for Qiscus users.
-    actual_phone_number = None
-
-    print(f"🔍 PHONE LOOKUP: phone_number param={phone_number}, conversation_id={conversation_id}")
-
-    if phone_number:
-        actual_phone_number = phone_number
-        print(f"✅ PHONE LOOKUP: Using provided phone_number: {phone_number}")
-    elif conversation_id:
+    # Resolve phone_number using fallback chain if not provided
+    # Priority: 1) provided phone_number, 2) existing conversation, 3) user document, 4) user_id if it looks like a phone
+    if not phone_number:
         # Try to get phone from existing conversation
-        print(f"🔍 PHONE LOOKUP: No phone provided, trying existing conversation {conversation_id}...")
-        try:
-            existing_conv_ref = conversations_collection_for_user.document(conversation_id)
-            existing_conv_snap = existing_conv_ref.get()
-            if existing_conv_snap.exists:
-                existing_customer_info = existing_conv_snap.to_dict().get('customer_info', {})
-                existing_phone = existing_customer_info.get('phone_full')
-                print(f"🔍 PHONE LOOKUP: Conversation exists, customer_info={existing_customer_info}")
-                if existing_phone:
-                    actual_phone_number = existing_phone
-                    print(f"✅ PHONE LOOKUP: Retrieved phone from conversation: {existing_phone}")
+        if conversation_id:
+            try:
+                existing_conv_ref = conversations_collection_for_user.document(conversation_id)
+                # ✅ Use asyncio.to_thread to prevent blocking
+                existing_conv_snap = await asyncio.to_thread(existing_conv_ref.get)
+                if existing_conv_snap.exists:
+                    existing_phone = existing_conv_snap.to_dict().get('customer_info', {}).get('phone_full')
+                    if existing_phone:
+                        phone_number = existing_phone
+            except Exception as e:
+                print(f"⚠️ Could not retrieve phone from conversation: {e}")
+
+        # Try to get from user document
+        if not phone_number:
+            try:
+                # ✅ Use asyncio.to_thread to prevent blocking
+                user_doc_check = await asyncio.to_thread(user_doc_ref.get)
+                if user_doc_check.exists:
+                    existing_phone = user_doc_check.to_dict().get('phone_full')
+                    if existing_phone:
+                        phone_number = existing_phone
+            except Exception as e:
+                pass  # Silent fail, will try user_id next
+
+        # Fall back to user_id if it looks like a phone number
+        if not phone_number:
+            is_likely_phone = (user_id.startswith('+961') or
+                              user_id.startswith('961') or
+                              (user_id.isdigit() and user_id.startswith('7') and len(user_id) <= 8))
+            is_likely_room_id = (user_id.isdigit() and len(user_id) >= 8 and not user_id.startswith('7'))
+
+            if is_likely_room_id or (user_id.isdigit() and len(user_id) >= 9):
+                # This looks like a room_id (Qiscus), not a phone
+                if conversation_id:
+                    phone_number = "unknown"
                 else:
-                    print(f"⚠️ PHONE LOOKUP: Conversation exists but no phone_full in customer_info")
+                    print(f"❌ SKIPPING SAVE: Cannot create conversation without phone (user_id={user_id} looks like room_id)")
+                    return
             else:
-                print(f"⚠️ PHONE LOOKUP: Conversation {conversation_id} does not exist")
-        except Exception as e:
-            print(f"❌ PHONE LOOKUP ERROR: Could not retrieve from conversation: {e}")
-    else:
-        print(f"🔍 PHONE LOOKUP: No phone and no conversation_id provided")
+                # user_id looks like a phone number (Meta/360Dialog)
+                phone_number = user_id
 
-    # If still no phone, try to get from user document
-    if not actual_phone_number:
-        try:
-            user_doc = user_doc_ref.get()
-            if user_doc.exists:
-                user_doc_data = user_doc.to_dict()
-                existing_phone = user_doc_data.get('phone_full')
-                if existing_phone:
-                    actual_phone_number = existing_phone
-                    print(f"✅ DEBUG: Retrieved phone_number from user document: {existing_phone}")
-        except Exception as e:
-            print(f"⚠️ DEBUG: Could not retrieve phone from user document: {e}")
+    print(f"📱 Firebase save: user_id={user_id}, phone={phone_number}, role={role}")
 
-    # If still no phone, fall back to user_id validation
-    if not actual_phone_number:
-        # Determine if user_id is a phone number or a room_id
-        # Phone numbers typically: start with +961, 961, or 7 (Lebanon)
-        # Room IDs are typically: large numbers like 353568587
-
-        is_likely_phone = (user_id.startswith('+961') or
-                          user_id.startswith('961') or
-                          (user_id.isdigit() and user_id.startswith('7') and len(user_id) <= 8))
-        is_likely_room_id = (user_id.isdigit() and len(user_id) >= 8 and not user_id.startswith('7'))
-
-        if is_likely_room_id or (user_id.isdigit() and len(user_id) >= 9):
-            # This looks like a room_id, NOT a phone number
-            print(f"⚠️ PHONE LOOKUP: user_id '{user_id}' looks like room_id (Qiscus)")
-            # For existing conversations, still try to save the message
-            if conversation_id:
-                print(f"✅ PHONE LOOKUP: Will save to existing conversation {conversation_id} with phone='unknown'")
-                actual_phone_number = "unknown"
-            else:
-                print(f"\n{'!'*60}")
-                print(f"❌ SKIPPING SAVE: Cannot create NEW conversation without phone!")
-                print(f"   role={role}, user_id={user_id}")
-                print(f"   conversation_id={conversation_id}")
-                print(f"   phone_number={phone_number}")
-                print(f"   This message will NOT be saved!")
-                print(f"{'!'*60}\n")
-                # Don't save - return to prevent corrupting data
-                return
-        else:
-            # This looks like a phone number (for Meta/360Dialog)
-            actual_phone_number = user_id
-            print(f"WARNING: No phone_number provided, using user_id as phone: {user_id}")
-
-    print(f"DEBUG: Firebase save - user_id: {user_id}, phone_number: {phone_number}, actual_phone: {actual_phone_number}")
-    
     # Get customer info for this user_id
     customer_name = user_name or config.user_names.get(user_id, "Unknown Customer")
-    
+
     # Clean phone number (remove country code for API lookup)
-    clean_phone = actual_phone_number.replace("+", "").replace("-", "").replace(" ", "")
+    clean_phone = phone_number.replace("+", "").replace("-", "").replace(" ", "")
     if clean_phone.startswith("961"):  # Lebanon country code
         clean_phone = clean_phone[3:]  # Remove country code
     elif clean_phone.startswith("1") and len(clean_phone) == 11:  # US/Canada
         clean_phone = clean_phone[1:]
 
     # Ensure the user document exists (create if it doesn't)
-    # Note: user_doc_ref and conversations_collection_for_user were set up earlier
-    user_doc = user_doc_ref.get()
+    # Get current gender and greeting stage for persistence
+    current_gender = config.user_gender.get(user_id, "")
+    current_greeting_stage = config.user_greeting_stage.get(user_id, 0)
+
+    # ✅ Use asyncio.to_thread to prevent blocking
+    user_doc = await asyncio.to_thread(user_doc_ref.get)
     if not user_doc.exists:
-        user_doc_ref.set({
-            "user_id": user_id,  # This is room_id for Qiscus, phone for others
+        await asyncio.to_thread(user_doc_ref.set, {
+            "user_id": user_id,
             "name": customer_name,
-            "phone_full": actual_phone_number,  # Store the actual phone number
-            "phone_clean": clean_phone,  # Store clean phone for API lookups
+            "phone_full": phone_number,
+            "phone_clean": clean_phone,
+            "gender": current_gender,
+            "greeting_stage": current_greeting_stage,
             "created_at": datetime.datetime.now(),
             "last_activity": datetime.datetime.now()
         })
-        print(f"✅ Created user document for {user_id} with phone {actual_phone_number}")
     else:
-        # Update last activity and phone info (in case it changed)
-        user_doc_ref.update({
+        # Update last activity and phone info
+        update_data = {
             "last_activity": datetime.datetime.now(),
-            "phone_full": actual_phone_number,
+            "phone_full": phone_number,
             "phone_clean": clean_phone,
             "name": customer_name
-        })
-        print(f"✅ Updated user document for {user_id} with phone {actual_phone_number}")
+        }
+        if current_gender:
+            update_data["gender"] = current_gender
+        if current_greeting_stage > 0:
+            update_data["greeting_stage"] = current_greeting_stage
+        await asyncio.to_thread(user_doc_ref.update, update_data)
     
     # Try to get customer name from API if not provided
     if customer_name == "Unknown Customer":
@@ -244,139 +213,107 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         except Exception as e:
             print(f"⚠️ Could not fetch customer name from API for {clean_phone}: {e}")
     
-    # Prepare customer info to save
+    # Prepare customer info to save (including gender for persistence)
+    user_gender_value = config.user_gender.get(user_id, "")
+    user_greeting_stage_value = config.user_greeting_stage.get(user_id, 0)
+
     customer_info = {
-        "phone_full": actual_phone_number,  # Full phone with country code
+        "phone_full": phone_number,  # Full phone with country code
         "phone_clean": clean_phone,  # Clean phone for API lookups
         "name": customer_name,
+        "gender": user_gender_value,  # Persist gender to Firestore
+        "greeting_stage": user_greeting_stage_value,  # Persist greeting stage
         "last_updated": datetime.datetime.now()
     }
 
     try:
-        print(f"📍 SAVE LOGIC: conversation_id={conversation_id}, role={role}")
         if conversation_id:
             # Update existing conversation document
-            print(f"📍 APPENDING to existing conversation: {conversation_id}")
             doc_ref = conversations_collection_for_user.document(conversation_id)
-            doc_snap = doc_ref.get() # Firebase Admin SDK get() is synchronous
+            # ✅ Use asyncio.to_thread to prevent blocking
+            doc_snap = await asyncio.to_thread(doc_ref.get)
 
             if doc_snap.exists:
                 current_messages = doc_snap.to_dict().get('messages', [])
-                print(f"📍 Current message count BEFORE append: {len(current_messages)}")
                 message_data = {
                     "role": role,
                     "text": text,
-                    "timestamp": datetime.datetime.now(), # Use current timestamp
-                    "language": detect_language(text)['language']  # Detect and save language
+                    "timestamp": datetime.datetime.now(),
+                    "language": detect_language(text)['language']
                 }
-                # Merge metadata fields directly into message_data for easier access
+                # Merge metadata fields at top level for easier querying
                 if metadata:
                     message_data["metadata"] = metadata
-                    # Also add type, audio_url, and image_url at top level for easier querying
-                    if "type" in metadata:
-                        message_data["type"] = metadata["type"]
-                    if "audio_url" in metadata:
-                        message_data["audio_url"] = metadata["audio_url"]
-                    if "image_url" in metadata:
-                        message_data["image_url"] = metadata["image_url"]
-
-                # DEBUG: Log what we're about to save
-                print(f"\n🔍 ABOUT TO APPEND MESSAGE (existing conversation):")
-                print(f"   role in message_data: {message_data.get('role')}")
-                print(f"   keys in message_data: {list(message_data.keys())}")
-                print(f"   role parameter: {role}")
-                print(f"   text preview: {text[:30] if len(text) > 30 else text}...\n")
+                    for key in ["type", "audio_url", "image_url"]:
+                        if key in metadata:
+                            message_data[key] = metadata[key]
 
                 current_messages.append(message_data)
-                print(f"📍 Message count AFTER append: {len(current_messages)}")
-                # Update conversation with new message and customer info
-                doc_ref.update({
+                # ✅ Use asyncio.to_thread to prevent blocking
+                await asyncio.to_thread(doc_ref.update, {
                     "messages": current_messages,
                     "customer_info": customer_info,
                     "last_updated": datetime.datetime.now()
                 })
-                print(f"✅ SUCCESSFULLY appended {role} message to conversation {conversation_id} for user {user_id}.")
+                print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
             else:
-                print(f"⚠️ Conversation {conversation_id} not found. Creating new conversation.")
-                # Fallback: create a new document in the collection
+                # Conversation not found - create new one
                 message_data = {
                     "role": role,
                     "text": text,
                     "timestamp": datetime.datetime.now(),
-                    "language": detect_language(text)['language']  # Detect and save language
+                    "language": detect_language(text)['language']
                 }
-                # Merge metadata fields at top level
                 if metadata:
                     message_data["metadata"] = metadata
-                    if "type" in metadata:
-                        message_data["type"] = metadata["type"]
-                    if "audio_url" in metadata:
-                        message_data["audio_url"] = metadata["audio_url"]
-                    if "image_url" in metadata:
-                        message_data["image_url"] = metadata["image_url"]
+                    for key in ["type", "audio_url", "image_url"]:
+                        if key in metadata:
+                            message_data[key] = metadata[key]
 
-                # DEBUG: Log what we're about to save
-                print(f"\n🔍 ABOUT TO CREATE NEW CONVERSATION (fallback):")
-                print(f"   role in message_data: {message_data.get('role')}")
-                print(f"   keys in message_data: {list(message_data.keys())}")
-                print(f"   role parameter: {role}")
-                print(f"   text preview: {text[:30] if len(text) > 30 else text}...\n")
-
-                _, new_doc_ref = conversations_collection_for_user.add({
+                # ✅ Use asyncio.to_thread to prevent blocking
+                _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": user_id,
                     "customer_info": customer_info,
                     "messages": [message_data],
                     "timestamp": datetime.datetime.now(),
-                    "status": "active",  # IMPORTANT: Set default status
-                    "sentiment": "neutral", # Default sentiment
-                    "human_takeover_active": False, # Default to AI control
+                    "status": "active",
+                    "sentiment": "neutral",
+                    "human_takeover_active": False,
                     "last_updated": datetime.datetime.now()
                 })
-                # Ensure config.user_data_whatsapp is initialized before accessing
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
                 config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
-                print(f"✅ Created new conversation {new_doc_ref.id} for user {user_id} (fallback).")
+                print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
         else:
-            # Create a new conversation document in the collection
+            # No conversation_id - create new conversation
             message_data = {
                 "role": role,
                 "text": text,
                 "timestamp": datetime.datetime.now(),
-                "language": detect_language(text)['language']  # Detect and save language
+                "language": detect_language(text)['language']
             }
-            # Merge metadata fields at top level
             if metadata:
                 message_data["metadata"] = metadata
-                if "type" in metadata:
-                    message_data["type"] = metadata["type"]
-                if "audio_url" in metadata:
-                    message_data["audio_url"] = metadata["audio_url"]
-                if "image_url" in metadata:
-                    message_data["image_url"] = metadata["image_url"]
+                for key in ["type", "audio_url", "image_url"]:
+                    if key in metadata:
+                        message_data[key] = metadata[key]
 
-            # DEBUG: Log what we're about to save
-            print(f"\n🔍 ABOUT TO CREATE NEW CONVERSATION (no conversation_id):")
-            print(f"   role in message_data: {message_data.get('role')}")
-            print(f"   keys in message_data: {list(message_data.keys())}")
-            print(f"   role parameter: {role}")
-            print(f"   text preview: {text[:30] if len(text) > 30 else text}...\n")
-
-            _, new_doc_ref = conversations_collection_for_user.add({
+            # ✅ Use asyncio.to_thread to prevent blocking
+            _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                 "user_id": user_id,
                 "customer_info": customer_info,
                 "messages": [message_data],
                 "timestamp": datetime.datetime.now(),
-                "status": "active",  # IMPORTANT: Set default status
-                "sentiment": "neutral", # Default sentiment
-                "human_takeover_active": False, # Default to AI control
+                "status": "active",
+                "sentiment": "neutral",
+                "human_takeover_active": False,
                 "last_updated": datetime.datetime.now()
             })
-            # Ensure config.user_data_whatsapp is initialized before accessing
             if user_id not in config.user_data_whatsapp:
                 config.user_data_whatsapp[user_id] = {}
             config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
-            print(f"✅ Created new conversation {new_doc_ref.id} for user {user_id}.")
+            print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
 
     except Exception as e:
         print(f"❌ ERROR saving conversation message to Firestore for user {user_id}: {e}")
@@ -637,13 +574,15 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
         operator_id: Optional operator ID who is taking over
         operator_name: Optional operator name for display to customer
     """
+    import asyncio
+
     db = get_firestore_db()
     if not db:
         print("❌ Firestore not initialized. Cannot set human takeover status.")
         return
 
     # Correct path: artifacts (collection) -> {appId} (document) -> users (collection) -> {userId} (document) -> conversations (collection) -> {conversationId} (document)
-    app_id_for_firestore = "linas-ai-bot-backend" 
+    app_id_for_firestore = "linas-ai-bot-backend"
     conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
 
     try:
@@ -651,7 +590,7 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
             "human_takeover_active": status,
             "last_updated": datetime.datetime.now()
         }
-        
+
         if status and operator_id:
             # Taking over - set operator_id, operator_name, and change status to "human"
             update_data["operator_id"] = operator_id
@@ -669,10 +608,11 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
             update_data["release_time"] = datetime.datetime.now()
             update_data["status"] = "active"  # ✅ Set status back to "active" when released
             print(f"🔄 Setting conversation status to 'active' for bot release")
-        
-        conv_doc_ref.update(update_data)
+
+        # ✅ Use asyncio.to_thread to prevent blocking the event loop
+        await asyncio.to_thread(conv_doc_ref.update, update_data)
         config.user_in_human_takeover_mode[user_id] = status # Update local config as well
-        
+
         operator_info = f" by operator {operator_name or operator_id}" if operator_id else ""
         print(f"✅ Set human takeover status for conversation {conversation_id} (user {user_id}) to {status}{operator_info}.")
     except Exception as e:
@@ -728,6 +668,117 @@ async def get_conversation_history_from_firestore(user_id: str, conversation_id:
         import traceback
         traceback.print_exc()
         return []
+
+
+async def save_user_name_to_firestore(user_id: str, name: str):
+    """
+    Saves/updates a user's name in Firestore.
+
+    Args:
+        user_id: The user's ID (room_id for Qiscus or phone for others)
+        name: The user's name to save
+    """
+    # Check if we're in testing mode - skip Firebase saving for tests
+    if hasattr(config, 'TESTING_MODE') and config.TESTING_MODE:
+        print(f"🧪 TESTING MODE: Skipping Firebase name save for user {user_id}")
+        return
+
+    db = get_firestore_db()
+    if not db:
+        print("⚠️ Firestore not initialized. Skipping user name save.")
+        return
+
+    app_id_for_firestore = "linas-ai-bot-backend"
+    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+
+    try:
+        user_doc = user_doc_ref.get()
+        if user_doc.exists:
+            # Update existing user document with name
+            user_doc_ref.update({
+                "name": name,
+                "last_activity": datetime.datetime.now()
+            })
+            print(f"✅ Updated user name in Firestore for {user_id}: {name}")
+        else:
+            # Create new user document with name
+            user_doc_ref.set({
+                "user_id": user_id,
+                "name": name,
+                "created_at": datetime.datetime.now(),
+                "last_activity": datetime.datetime.now()
+            })
+            print(f"✅ Created user document in Firestore for {user_id} with name: {name}")
+    except Exception as e:
+        print(f"❌ ERROR saving user name to Firestore for {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def get_user_state_from_firestore(user_id: str) -> dict:
+    """
+    Retrieves user state (gender, greeting_stage, name, phone) from Firestore.
+    This is used to restore user state after server restart.
+
+    Args:
+        user_id: The user's ID (room_id for Qiscus)
+
+    Returns:
+        Dict with user state: {gender, greeting_stage, name, phone_full, phone_clean}
+        Returns empty dict if user not found or error occurs.
+    """
+    import asyncio
+
+    db = get_firestore_db()
+    if not db:
+        print("⚠️ Firestore not initialized. Cannot retrieve user state.")
+        return {}
+
+    app_id_for_firestore = "linas-ai-bot-backend"
+    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+
+    try:
+        # ✅ Use asyncio.to_thread to prevent blocking the event loop
+        user_doc = await asyncio.to_thread(user_doc_ref.get)
+        if not user_doc.exists:
+            print(f"ℹ️ No user document found in Firestore for user_id: {user_id}")
+            # Try to get from most recent conversation's customer_info
+            conversations_ref = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            # ✅ Use asyncio.to_thread for the query
+            conversations = await asyncio.to_thread(
+                lambda: list(conversations_ref.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(1).get())
+            )
+
+            for conv in conversations:
+                conv_data = conv.to_dict()
+                customer_info = conv_data.get('customer_info', {})
+                if customer_info:
+                    print(f"✅ Found user state in conversation customer_info: {customer_info}")
+                    return {
+                        "gender": customer_info.get("gender", ""),
+                        "greeting_stage": customer_info.get("greeting_stage", 0),
+                        "name": customer_info.get("name", ""),
+                        "phone_full": customer_info.get("phone_full", ""),
+                        "phone_clean": customer_info.get("phone_clean", "")
+                    }
+            return {}
+
+        user_data = user_doc.to_dict()
+        print(f"✅ Retrieved user state from Firestore for {user_id}: gender={user_data.get('gender')}, greeting_stage={user_data.get('greeting_stage')}")
+
+        return {
+            "gender": user_data.get("gender", ""),
+            "greeting_stage": user_data.get("greeting_stage", 0),
+            "name": user_data.get("name", ""),
+            "phone_full": user_data.get("phone_full", ""),
+            "phone_clean": user_data.get("phone_clean", "")
+        }
+
+    except Exception as e:
+        print(f"❌ ERROR retrieving user state from Firestore for {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {}
 
 
 # IMPORTANT: To avoid circular dependency, send_whatsapp_message cannot be imported directly here.
@@ -965,9 +1016,9 @@ def get_openai_tools_schema():
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number, e.g., '71 123 456'."},
-                        "service_id": {"type": "integer", "description": "ID of the service (e.g., 1 for Laser Hair Removal)."},
-                        "machine_id": {"type": "integer", "description": "ID of the machine (e.g., 1 for Cynosure Elite+)."},
-                        "branch_id": {"type": "integer", "description": "ID of the branch (e.g., 1 for Main Branch)."},
+                        "service_id": {"type": "integer", "description": "Service ID: 1=Hair Removal Men, 2=CO2 Laser, 3=Hair Removal Women, 4=Tattoo Removal, 5=Whitening. MUST match the service requested."},
+                        "machine_id": {"type": "integer", "description": "Machine ID: For Tattoo Removal use 5 (Pico), for Hair Removal use 2 (Neo)/3 (Quadro)/4 (Trio), for CO2 use 6, for Whitening use 7 (DPL)."},
+                        "branch_id": {"type": "integer", "description": "Branch ID: 1=Beirut Manara, 2=Antelias. Default to 1 if not specified."},
                         # This is derived from the API Documentation PDF
                         "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). This date and time MUST be converted from user's natural language (e.g., 'tomorrow', 'next Saturday', 'in 3 days') to an exact future date and time based on current time. The date must be in the future and not more than 365 days from today."},
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
@@ -1115,10 +1166,10 @@ def get_openai_tools_schema():
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "service_id": {"type": "integer", "description": "The ID of the service."},
-                        "machine_id": {"type": "integer", "description": "The ID of the machine used (optional)."},
+                        "service_id": {"type": "integer", "description": "Service ID: 1=Hair Removal Men, 2=CO2 Laser, 3=Hair Removal Women, 4=Tattoo Removal, 5=Whitening."},
+                        "machine_id": {"type": "integer", "description": "Machine ID (optional): 2=Neo, 3=Quadro, 4=Trio, 5=Pico, 6=CO2, 7=DPL."},
                         "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "IDs of body parts (optional)."},
-                        "branch_id": {"type": "integer", "description": "The ID of the branch (optional)."}
+                        "branch_id": {"type": "integer", "description": "Branch ID (optional): 1=Beirut Manara, 2=Antelias."}
                     },
                     "required": ["service_id"]
                 }
@@ -1330,6 +1381,40 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         3. Trained Q&A pairs take PRIORITY over your general knowledge
         4. If a trained answer exists, USE IT - don't generate your own response
         ''' if qa_reference else ''}
+
+        **CRITICAL: Appointment Booking Flow (MUST FOLLOW THIS ORDER):**
+        When a user wants to book an appointment, you MUST follow these steps IN ORDER:
+        1. **First:** Call `get_customer_by_phone` to check if the customer exists in the system
+        2. **If customer NOT found:** Call `create_customer` with the user's name, phone, gender, and branch_id (default branch_id=1) BEFORE booking
+        3. **Then:** Call `create_appointment` to book the appointment
+
+        **NEVER call create_appointment without first ensuring the customer exists!**
+        If you skip customer creation, the appointment will fail with "Customer not found" error.
+
+        **CRITICAL: Service IDs for Booking (MUST USE THESE EXACT IDs):**
+        When calling `create_appointment`, use these EXACT service_id values:
+        - service_id = 1: Laser Hair Removal (Men) - إزالة الشعر بالليزر للرجال
+        - service_id = 11: CO2 Laser (Scar Removal, Acne Scars, Stretch Marks) - ليزر CO2
+        - service_id = 12: Laser Hair Removal (Women) - إزالة الشعر بالليزر للنساء
+        - service_id = 13: Laser Tattoo Removal - إزالة الوشم بالليزر
+        - service_id = 14: Whitening (Dark Area Lightening) - تفتيح المناطق الداكنة
+
+        **CRITICAL: Machine IDs for Booking (MUST USE THESE EXACT IDs):**
+        - machine_id = 13: Neo (for laser hair removal - light skin)
+        - machine_id = 9: Quadro (for laser hair removal)
+        - machine_id = 10: Trio (for laser hair removal)
+        - machine_id = 15: Candela (for laser tattoo removal)
+        - machine_id = 14: DPL (for whitening/dark area lightening)
+
+        **Service-Machine Matching Rules:**
+        - Laser Tattoo Removal (service_id=13) → MUST use Candela (machine_id=15)
+        - Hair Removal Men (service_id=1) or Women (service_id=12) → Use Neo (machine_id=13), Quadro (machine_id=9), or Trio (machine_id=10)
+        - CO2 Laser treatments (service_id=11) → MUST use CO2 Laser (machine_id=14)
+        - Whitening (service_id=14) → MUST use DPL (machine_id=14)
+
+        **Branch IDs:**
+        - branch_id = 1: Beirut - Manara (Main Branch)
+        - branch_id = 2: Antelias - Center Haj Building
 
         **Crucial Note:** You are NOT restricted from analyzing or reading information from any part of the Knowledge Base (including Custom Training Data, Core Knowledge Base, Price List). You MUST always search for answers from all available sources and provide the most accurate and appropriate response. Be flexible and innovative in using this information.
 

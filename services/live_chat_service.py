@@ -18,11 +18,11 @@ from utils.utils import get_firestore_db, set_human_takeover_status
 class LiveChatService:
     """Service for managing live chat operations with hybrid approach"""
 
-    # Time window for active conversations (7 days in seconds)
-    ACTIVE_TIME_WINDOW = 7 * 24 * 60 * 60  # 7 days (changed from 6 hours to prevent auto-archiving)
+    # Time window for active conversations (6 hours in seconds)
+    ACTIVE_TIME_WINDOW = 6 * 60 * 60  # 6 hours
 
     # Cache configuration
-    CACHE_TTL = 120  # seconds - cache results to avoid repeated slow Firestore queries
+    CACHE_TTL = 5  # seconds - short cache for near real-time updates
 
     def __init__(self):
         self.operator_sessions = {}
@@ -43,7 +43,7 @@ class LiveChatService:
         - Returns one entry per client with their latest conversation
         """
         # Check cache first
-        current_time = datetime.datetime.now()
+        current_time = datetime.datetime.now(datetime.timezone.utc)
         if (self._conversations_cache is not None and
             self._conversations_cache_time is not None and
             (current_time - self._conversations_cache_time).total_seconds() < self.CACHE_TTL):
@@ -60,10 +60,11 @@ class LiveChatService:
             
             # Dictionary to group conversations by client
             client_conversations = {}
-            current_time = datetime.datetime.now()
+            current_time = datetime.datetime.now(datetime.timezone.utc)
 
             # Limit to 50 users max for performance
-            users_docs = list(users_collection.limit(50).stream())
+            # ✅ Use asyncio.to_thread to prevent blocking the event loop
+            users_docs = await asyncio.to_thread(lambda: list(users_collection.limit(50).stream()))
 
             # Helper function to fetch conversations for a single user
             async def fetch_user_conversations(user_id):
@@ -72,7 +73,8 @@ class LiveChatService:
                     conversations_collection = users_collection.document(user_id).collection(
                         config.FIRESTORE_CONVERSATIONS_COLLECTION
                     )
-                    conversations_docs = list(conversations_collection.stream())
+                    # ✅ Use asyncio.to_thread to prevent blocking the event loop
+                    conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
                     return (user_id, conversations_docs)
                 except Exception as e:
                     print(f"⚠️ Error fetching conversations for user {user_id}: {e}")
@@ -174,9 +176,12 @@ class LiveChatService:
                     # CRITICAL: Get phone from customer_info or user_data, NEVER from user_id (which is room_id for Qiscus)
                     phone_full = customer_info.get("phone_full") or config.user_data_whatsapp.get(user_id, {}).get('phone_number') or "Unknown"
                     phone_clean = customer_info.get("phone_clean") or (config.user_data_whatsapp.get(user_id, {}).get('phone_number', '').replace('+', '').replace('-', '').replace(' ', '')) or "Unknown"
-                    
+
                     language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
-                    
+
+                    # Get gender from customer_info or memory
+                    gender = customer_info.get("gender") or config.user_gender.get(user_id, "unknown")
+
                     # Create grouped client entry
                     client_entry = {
                         "user_id": user_id,
@@ -184,6 +189,7 @@ class LiveChatService:
                         "user_phone": phone_full,
                         "phone_clean": phone_clean,
                         "language": language,
+                        "gender": gender,
                         "conversation_count": len(client_convs),
                         "conversations": client_convs,
                         # Latest conversation details
@@ -225,13 +231,14 @@ class LiveChatService:
             db = get_firestore_db()
             if not db:
                 return []
-            
+
             app_id = "linas-ai-bot-backend"
             conversations_collection = db.collection("artifacts").document(app_id).collection(
                 "users"
             ).document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-            
-            conversations_docs = list(conversations_collection.stream())
+
+            # ✅ Use asyncio.to_thread to prevent blocking the event loop
+            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
             conversations = []
             
             for conv_doc in conversations_docs:
@@ -270,22 +277,24 @@ class LiveChatService:
             db = get_firestore_db()
             if not db:
                 return []
-            
+
             app_id = "linas-ai-bot-backend"
             users_collection = db.collection("artifacts").document(app_id).collection("users")
-            
+
             waiting_queue = []
-            current_time = datetime.datetime.now()
-            
-            users_docs = list(users_collection.stream())
-            
+            current_time = datetime.datetime.now(datetime.timezone.utc)
+
+            # ✅ Use asyncio.to_thread to prevent blocking the event loop
+            users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
+
             for user_doc in users_docs:
                 user_id = user_doc.id
-                
+
                 conversations_collection = users_collection.document(user_id).collection(
                     config.FIRESTORE_CONVERSATIONS_COLLECTION
                 )
-                conversations_docs = list(conversations_collection.stream())
+                # ✅ Use asyncio.to_thread to prevent blocking the event loop
+                conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
                 
                 for conv_doc in conversations_docs:
                     conv_data = conv_doc.to_dict()
@@ -398,11 +407,12 @@ class LiveChatService:
             }
             
             print(f"🔄 Updating conversation {conversation_id} with data: {update_data}")
-            conv_ref.update(update_data)
+            # ✅ Use asyncio.to_thread to prevent blocking the event loop
+            await asyncio.to_thread(conv_ref.update, update_data)
             print(f"✅ Firebase updated successfully for conversation {conversation_id}")
-            
+
             # Verify the update
-            updated_doc = conv_ref.get()
+            updated_doc = await asyncio.to_thread(conv_ref.get)
             if updated_doc.exists:
                 updated_data = updated_doc.to_dict()
                 print(f"✅ Verified: status = {updated_data.get('status')}, resolved_by = {updated_data.get('resolved_by')}")
@@ -478,8 +488,8 @@ class LiveChatService:
                 user_id
             ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
             
-            # Reopen conversation
-            conv_ref.update({
+            # Reopen conversation - use asyncio.to_thread to prevent blocking
+            await asyncio.to_thread(conv_ref.update, {
                 "status": "active",
                 "reopened_at": datetime.datetime.now(),
                 "resolved_at": None,
@@ -515,12 +525,13 @@ class LiveChatService:
                 user_id
             ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
             
-            conv_ref.update({
+            # ✅ Use asyncio.to_thread to prevent blocking the event loop
+            await asyncio.to_thread(conv_ref.update, {
                 "status": "archived",
                 "archived_at": datetime.datetime.now(),
                 "archived_reason": "auto_6h_timeout"
             })
-            
+
             print(f"📦 Auto-archived conversation {conversation_id} (6-hour timeout)")
             
         except Exception as e:
@@ -789,51 +800,48 @@ class LiveChatService:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    async def get_conversation_details(self, user_id: str, conversation_id: str) -> Dict[str, Any]:
-        """Get detailed conversation history"""
+    async def get_conversation_details(self, user_id: str, conversation_id: str, max_messages: int = 100) -> Dict[str, Any]:
+        """Get detailed conversation history
+
+        Args:
+            user_id: The user's ID
+            conversation_id: The conversation document ID
+            max_messages: Maximum number of messages to return (default 100, prevents timeout on large conversations)
+        """
         try:
             db = get_firestore_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
-            
+
             app_id = "linas-ai-bot-backend"
             conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
                 user_id
             ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-            
-            conv_doc = conv_ref.get()
+
+            # ✅ Use asyncio.to_thread to prevent blocking the event loop
+            conv_doc = await asyncio.to_thread(conv_ref.get)
             if not conv_doc.exists:
                 return {"success": False, "error": "Conversation not found"}
-            
+
             conv_data = conv_doc.to_dict()
             messages = conv_data.get("messages", [])
-            
+
+            # ✅ Limit messages to prevent timeout on large conversations
+            total_messages = len(messages)
+            if total_messages > max_messages:
+                print(f"⚠️ Conversation {conversation_id} has {total_messages} messages, returning last {max_messages}")
+                messages = messages[-max_messages:]  # Get last N messages
+
             formatted_messages = []
-            # DEBUG: Count messages by role
-            role_counts = {}
+
             for msg in messages:
-                role = msg.get("role", "unknown")
-                role_counts[role] = role_counts.get(role, 0) + 1
-            print(f"\n🔍 RETRIEVED MESSAGES ROLE DISTRIBUTION:")
-            print(f"   Total messages: {len(messages)}")
-            for role, count in role_counts.items():
-                print(f"   - {role}: {count}")
-            print()
-
-            for i, msg in enumerate(messages):
-                # Debug: Print first message to see structure
-                if i == 0:
-                    print(f"🔍 DEBUG first message keys: {list(msg.keys())}")
-                    print(f"🔍 DEBUG first message role: '{msg.get('role')}'")
-                    print(f"🔍 DEBUG first message text: '{msg.get('text', '')[:50]}'")
-
                 msg_data = {
                     "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
                     "is_user": msg.get("role") == "user",
                     "content": msg.get("text", ""),
                     "type": msg.get("type", "text"),
                     "handled_by": msg.get("metadata", {}).get("handled_by", "bot"),
-                    "role": msg.get("role")  # Debug: Include raw role
+                    "role": msg.get("role")
                 }
 
                 # Add audio_url if it exists (for voice messages) - check both top level and metadata
@@ -847,17 +855,21 @@ class LiveChatService:
                     msg_data["image_url"] = image_url
 
                 formatted_messages.append(msg_data)
-            
+
             return {
                 "success": True,
                 "conversation_id": conversation_id,
                 "messages": formatted_messages,
+                "total_messages": total_messages,
+                "returned_messages": len(formatted_messages),
                 "sentiment": conv_data.get("sentiment", "neutral"),
                 "status": conv_data.get("status", "active")
             }
-            
+
         except Exception as e:
             print(f"❌ Error getting conversation details: {e}")
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": str(e)}
     
     async def get_metrics(self) -> Dict[str, Any]:
@@ -901,18 +913,25 @@ class LiveChatService:
             return {"success": False, "error": str(e)}
     
     def _parse_timestamp(self, timestamp) -> datetime.datetime:
-        """Parse various timestamp formats"""
+        """Parse various timestamp formats - always returns UTC-aware datetime"""
         if isinstance(timestamp, str):
             try:
-                return datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                # Handle ISO format strings
+                dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                # If naive (no timezone), assume it's UTC
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                return dt
             except:
-                return datetime.datetime.now()
+                return datetime.datetime.now(datetime.timezone.utc)
         elif hasattr(timestamp, 'timestamp'):
-            return datetime.datetime.fromtimestamp(timestamp.timestamp())
+            # Firestore timestamp object - .timestamp() returns UTC epoch seconds
+            return datetime.datetime.fromtimestamp(timestamp.timestamp(), tz=datetime.timezone.utc)
         elif hasattr(timestamp, 'seconds'):
-            return datetime.datetime.fromtimestamp(timestamp.seconds)
+            # Firestore timestamp with seconds attribute - epoch seconds are always UTC
+            return datetime.datetime.fromtimestamp(timestamp.seconds, tz=datetime.timezone.utc)
         else:
-            return datetime.datetime.now()
+            return datetime.datetime.now(datetime.timezone.utc)
 
 
 # Global instance

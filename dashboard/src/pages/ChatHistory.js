@@ -249,21 +249,24 @@ const ChatHistory = () => {
 
       if (data.success) {
         const convList = data.conversations || [];
+        // ✅ PRIORITY: Display conversations immediately
         setConversations(convList);
+        setIsLoadingConversations(false);
 
-        // Auto-select and load first conversation if available
+        // Auto-select and lazy load first conversation if available
         if (convList.length > 0) {
           const firstConvId = convList[0].id;
           setSelectedConversationId(firstConvId);
-          await loadConversationMessages(customerId, firstConvId);
+          // ✅ Lazy load messages asynchronously - don't block UI
+          loadConversationMessages(customerId, firstConvId);
         }
       } else {
         toast.error("Failed to load conversations");
+        setIsLoadingConversations(false);
       }
     } catch (error) {
       console.error("Error loading conversations:", error);
       toast.error("Error loading conversations");
-    } finally {
       setIsLoadingConversations(false);
     }
   };
@@ -275,11 +278,18 @@ const ChatHistory = () => {
       return;
     }
 
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
     setIsLoadingMessages(true);
     try {
       const response = await fetch(
-        `/api/chat-history/messages/${userId}/${conversationId}`
+        `/api/chat-history/messages/${userId}/${conversationId}`,
+        { signal: controller.signal }
       );
+      clearTimeout(timeoutId);
+
       const data = await response.json();
 
       if (data.success) {
@@ -295,8 +305,14 @@ const ChatHistory = () => {
         setConversationMessages([]);
       }
     } catch (error) {
-      console.error("Error loading messages:", error);
-      toast.error("Error loading messages");
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error("Message fetch timed out after 60 seconds");
+        toast.error("Loading messages timed out - conversation may have too many messages");
+      } else {
+        console.error("Error loading messages:", error);
+        toast.error("Error loading messages");
+      }
       setConversationMessages([]);
     } finally {
       setIsLoadingMessages(false);
@@ -604,6 +620,12 @@ const ChatHistory = () => {
                       </span>
                       <span>•</span>
                       <span>{selectedCustomer.message_count} messages</span>
+                      {selectedCustomer.gender && selectedCustomer.gender !== "unknown" && (
+                        <>
+                          <span>•</span>
+                          <span className="capitalize">{selectedCustomer.gender}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

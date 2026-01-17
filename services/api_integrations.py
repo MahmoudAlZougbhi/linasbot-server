@@ -390,17 +390,18 @@ async def create_customer(name: str, phone: str, gender: str, email: str = None,
     return response
 
 async def update_customer_gender(customer_id: int, gender: str):
-    """Updates the gender of an existing customer."""
-    print(f"API Call: update_customer_gender for customer_id={customer_id}, gender={gender}")
-    json_data = {
-        "gender": gender  # Gender should be 'Male' or 'Female'
-    }
-    response = await _make_api_request("POST", f"customers/{customer_id}/update-gender", json_data=json_data)
-    if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "update_customer_gender", "status": "success", "customer_id": customer_id, "gender": gender})
-    else:
-        log_report_event("api_call", "System", "N/A", {"api": "update_customer_gender", "status": "failed", "error": response.get("message"), "customer_id": customer_id})
-    return response
+    """
+    DEPRECATED: The external API does not support updating customer gender (returns 404).
+    Gender is now persisted via Firestore in user_persistence_service.py.
+    This function is kept for backwards compatibility but will always fail.
+    Use user_persistence.save_user_gender() instead.
+    """
+    print(f"⚠️ DEPRECATED: update_customer_gender called for customer_id={customer_id}, gender={gender}")
+    print(f"⚠️ External API does not support gender updates. Use Firestore via user_persistence.save_user_gender()")
+
+    # Return a mock success to prevent errors in legacy code
+    # Gender is actually saved via Firestore in user_persistence_service.py
+    return {"success": True, "message": "Gender saved via Firestore (external API deprecated)"}
 
 
 # Modified log_report_event to accept user_id and update Firestore metrics

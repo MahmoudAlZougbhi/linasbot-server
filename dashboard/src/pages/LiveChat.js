@@ -212,15 +212,28 @@ const LiveChat = () => {
   // ✅ Send button race condition state
   const [isSending, setIsSending] = useState(false);
 
+  // ✅ Messages loading state for lazy loading
+  const [messagesLoading, setMessagesLoading] = useState(false);
+
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
+  const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
+  const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
   }, [selectedConversation]);
+
+  useEffect(() => {
+    activeConversationsRef.current = activeConversations;
+  }, [activeConversations]);
+
+  useEffect(() => {
+    useMockDataRef.current = useMockData;
+  }, [useMockData]);
 
   const {
     getLiveConversations,
@@ -232,8 +245,12 @@ const LiveChat = () => {
     submitFeedback,
   } = useApi();
 
-  // Fetch conversation messages
+  // Fetch conversation messages with timeout
   const fetchConversationMessages = async (userId, conversationId) => {
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
     try {
       // Use the same base URL logic as useApi
       const baseURL =
@@ -246,20 +263,29 @@ const LiveChat = () => {
         `Fetching messages for user ${userId}, conversation ${conversationId}`
       );
       const response = await fetch(
-        `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}`
+        `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}`,
+        { signal: controller.signal }
       );
+      clearTimeout(timeoutId);
+
       const data = await response.json();
 
       console.log("API Response:", data);
 
       if (data.success && data.messages) {
-        console.log(`Loaded ${data.messages.length} messages`);
+        console.log(`Loaded ${data.messages.length} messages (${data.returned_messages || data.messages.length} of ${data.total_messages || data.messages.length} total)`);
         return data.messages;
       }
       console.warn("No messages found or API error:", data);
       return [];
     } catch (error) {
-      console.error("Error fetching conversation messages:", error);
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error("Message fetch timed out after 60 seconds");
+        toast.error("Loading messages timed out - conversation may have too many messages");
+      } else {
+        console.error("Error fetching conversation messages:", error);
+      }
       return [];
     }
   };
@@ -280,6 +306,7 @@ const LiveChat = () => {
           conversationsResponse.success &&
           conversationsResponse.conversations
         ) {
+          // ✅ PRIORITY: Display chats immediately without waiting for messages
           setActiveConversations(conversationsResponse.conversations);
           setUseMockData(false);
 
@@ -293,14 +320,23 @@ const LiveChat = () => {
             !activeConversations.length
           ) {
             const firstConv = conversationsResponse.conversations[0];
-            // Fetch messages for first conversation
-            const messages = await fetchConversationMessages(
-              firstConv.user_id,
-              firstConv.conversation_id
-            );
+            // ✅ Set conversation immediately with empty history (show loading state)
             setSelectedConversation({
               conversation: firstConv,
-              history: messages,
+              history: [],
+            });
+            // ✅ Lazy load messages asynchronously - don't block UI
+            setMessagesLoading(true);
+            fetchConversationMessages(
+              firstConv.user_id,
+              firstConv.conversation_id
+            ).then((messages) => {
+              setSelectedConversation((prev) =>
+                prev?.conversation?.conversation_id === firstConv.conversation_id
+                  ? { ...prev, history: messages }
+                  : prev
+              );
+              setMessagesLoading(false);
             });
           } else if (currentSelection) {
             // If a conversation is selected, update its data but keep it selected
@@ -345,6 +381,9 @@ const LiveChat = () => {
     // Only refreshes the CONVERSATION LIST, not the selected conversation messages
     // This prevents scroll jumping while keeping conversations up-to-date
     const autoRefreshInterval = setInterval(async () => {
+      // Skip auto-refresh if using mock data (backend is offline/slow)
+      if (useMockDataRef.current) return;
+
       setIsRefreshing(true);
       try {
         const conversationsResponse = await getLiveConversations();
@@ -353,8 +392,9 @@ const LiveChat = () => {
           conversationsResponse.conversations
         ) {
           // Track which conversations are NEW (not in previous list)
+          // ✅ Use ref to get current state (fixes stale closure issue)
           const previousIds = new Set(
-            activeConversations.map((c) => c.conversation_id)
+            activeConversationsRef.current.map((c) => c.conversation_id)
           );
           const currentIds = new Set(
             conversationsResponse.conversations.map((c) => c.conversation_id)
@@ -408,12 +448,50 @@ const LiveChat = () => {
       } finally {
         setIsRefreshing(false);
       }
-    }, 10000); // Refresh every 10 seconds (matches backend cache TTL)
+    }, 5000); // Refresh every 5 seconds (matches backend cache TTL)
 
     // Cleanup interval on unmount
     return () => clearInterval(autoRefreshInterval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - only run once on mount
+
+  // ✅ Real-time message polling for selected conversation
+  useEffect(() => {
+    // Skip polling for mock data - prevents "undefined/conv_001" API calls
+    if (!selectedConversation || useMockData) return;
+
+    const pollMessages = async () => {
+      try {
+        const messages = await fetchConversationMessages(
+          selectedConversation.conversation.user_id,
+          selectedConversation.conversation.conversation_id
+        );
+
+        // Only update if we got messages and there are new ones
+        if (messages && messages.length > 0) {
+          setSelectedConversation((prev) => {
+            if (!prev) return prev;
+            // Only update if message count changed (new messages arrived)
+            if (messages.length !== prev.history.length) {
+              console.log(`📨 New messages detected: ${prev.history.length} → ${messages.length}`);
+              return {
+                ...prev,
+                history: messages,
+              };
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        // Silent fail - don't spam console on polling errors
+      }
+    };
+
+    // Poll messages every 3 seconds for real-time feel
+    const messageInterval = setInterval(pollMessages, 3000);
+
+    return () => clearInterval(messageInterval);
+  }, [selectedConversation?.conversation?.conversation_id, useMockData]); // Re-run when conversation changes or mock data status changes
 
   // Load mock data fallback
   const loadMockData = () => {
@@ -421,6 +499,7 @@ const LiveChat = () => {
     const mockConversations = [
       {
         conversation_id: "conv_001",
+        user_id: "mock_user_001",
         user_name: "Sarah Ahmed",
         user_phone: "+961 70 123456",
         status: "bot",
@@ -437,6 +516,7 @@ const LiveChat = () => {
       },
       {
         conversation_id: "conv_002",
+        user_id: "mock_user_002",
         user_name: "Marie Dubois",
         user_phone: "+961 71 234567",
         status: "human",
@@ -454,6 +534,7 @@ const LiveChat = () => {
       },
       {
         conversation_id: "conv_003",
+        user_id: "mock_user_003",
         user_name: "John Smith",
         user_phone: "+961 76 345678",
         status: "waiting_human",
@@ -473,6 +554,7 @@ const LiveChat = () => {
     const mockQueue = [
       {
         conversation_id: "conv_003",
+        user_id: "mock_user_003",
         user_name: "John Smith",
         user_phone: "+961 76 345678",
         language: "en",
@@ -483,6 +565,7 @@ const LiveChat = () => {
       },
       {
         conversation_id: "conv_004",
+        user_id: "mock_user_004",
         user_name: "Fatima Hassan",
         user_phone: "+961 03 456789",
         language: "ar",
@@ -561,8 +644,9 @@ const LiveChat = () => {
         conversationsResponse.success &&
         conversationsResponse.conversations
       ) {
+        // ✅ Use ref to get current state (fixes stale closure issue)
         const previousIds = new Set(
-          activeConversations.map((c) => c.conversation_id)
+          activeConversationsRef.current.map((c) => c.conversation_id)
         );
         const newIds = new Set(
           conversationsResponse.conversations
@@ -1245,15 +1329,25 @@ const LiveChat = () => {
                       ? "bg-primary-50 border-2 border-primary-300"
                       : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
                   }`}
-                  onClick={async () => {
-                    // Fetch messages for this conversation
-                    const messages = await fetchConversationMessages(
-                      conv.user_id,
-                      conv.conversation_id
-                    );
+                  onClick={() => {
+                    // ✅ PRIORITY: Show conversation immediately with loading state
                     setSelectedConversation({
                       conversation: conv,
-                      history: messages,
+                      history: [],
+                    });
+                    // ✅ Lazy load messages asynchronously - don't block UI
+                    setMessagesLoading(true);
+                    fetchConversationMessages(
+                      conv.user_id,
+                      conv.conversation_id
+                    ).then((messages) => {
+                      // Only update if this conversation is still selected
+                      setSelectedConversation((prev) =>
+                        prev?.conversation?.conversation_id === conv.conversation_id
+                          ? { ...prev, history: messages }
+                          : prev
+                      );
+                      setMessagesLoading(false);
                     });
                   }}
                 >
@@ -1385,6 +1479,34 @@ const LiveChat = () => {
 
               {/* Messages - Fixed Height with Internal Scroll */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+                {/* ✅ Loading indicator for messages */}
+                {messagesLoading && selectedConversation.history.length === 0 && (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <svg
+                        className="animate-spin h-8 w-8 mx-auto mb-3 text-primary-500"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <p className="text-slate-500 text-sm">Loading messages...</p>
+                    </div>
+                  </div>
+                )}
                 {selectedConversation.history.map((msg, index) => {
                   // ✅ Check if this is a voice message - Updated to use new Firebase structure
                   // First check msg.type (preferred), fallback to old content-based detection
@@ -1701,6 +1823,12 @@ const LiveChat = () => {
                     <p className="text-xs text-slate-500">Language</p>
                     <p className="font-medium text-slate-800">
                       {selectedConversation.conversation.language.toUpperCase()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Gender</p>
+                    <p className="font-medium text-slate-800 capitalize">
+                      {selectedConversation.conversation.gender || "Unknown"}
                     </p>
                   </div>
                   <div>

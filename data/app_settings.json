@@ -16,7 +16,7 @@
     "sessionTimeout": 24
   },
   "smartMessaging": {
-    "enabled": false,
+    "enabled": true,
     "previewBeforeSend": false,
     "autoApproveAfterMinutes": 0,
     "maxQueueSize": 1000,

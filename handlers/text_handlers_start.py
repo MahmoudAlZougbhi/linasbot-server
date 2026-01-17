@@ -40,7 +40,7 @@ async def start_command(user_id: str, user_name: str, send_message_func, send_ac
         config.user_greeting_stage[user_id] = 2  # Skip gender question
     else:
         print(f"ℹ️ Gender not found or unknown, will ask user")
-        config.user_gender[user_id] = ""  # Only reset if truly not set
+        config.user_gender[user_id] = "unknown"  # Use "unknown" for consistency
         config.user_greeting_stage[user_id] = 1  # Ask for gender
 
     # Send initial welcome message

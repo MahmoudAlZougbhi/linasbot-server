@@ -30,6 +30,50 @@ from handlers.voice_handlers import handle_voice_message
 from modules.whatsapp_adapters import send_whatsapp_typing_indicator
 
 
+async def restore_user_state_from_firestore(user_id: str) -> str:
+    """
+    Restore user state (gender, name, greeting_stage) from Firestore.
+    Returns the restored name if found, otherwise returns None.
+    This is needed for dashboard test endpoints which bypass webhook_handlers.
+    """
+    current_gender = config.user_gender.get(user_id)
+    restored_name = None
+
+    if current_gender not in ["male", "female"]:
+        try:
+            from utils.utils import get_user_state_from_firestore
+            print(f"🔄 [Dashboard] Restoring user state from Firestore for {user_id}...")
+            firestore_state = await get_user_state_from_firestore(user_id)
+
+            if firestore_state:
+                # Restore gender
+                firestore_gender = firestore_state.get("gender", "")
+                if firestore_gender in ["male", "female"]:
+                    config.user_gender[user_id] = firestore_gender
+                    print(f"✅ [Dashboard] Restored gender from Firestore: {firestore_gender}")
+
+                # Restore greeting stage
+                firestore_greeting_stage = firestore_state.get("greeting_stage", 0)
+                if firestore_greeting_stage > 0:
+                    config.user_greeting_stage[user_id] = firestore_greeting_stage
+                    print(f"✅ [Dashboard] Restored greeting_stage from Firestore: {firestore_greeting_stage}")
+
+                # Restore name
+                firestore_name = firestore_state.get("name", "")
+                if firestore_name and firestore_name != "Unknown Customer":
+                    config.user_names[user_id] = firestore_name
+                    restored_name = firestore_name
+                    print(f"✅ [Dashboard] Restored name from Firestore: {firestore_name}")
+            else:
+                print(f"ℹ️ [Dashboard] No user state found in Firestore for {user_id}")
+        except Exception as e:
+            print(f"❌ [Dashboard] Error restoring user state: {e}")
+            import traceback
+            traceback.print_exc()
+
+    return restored_name
+
+
 async def dashboard_send_message_capture(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
     """Capture bot responses for dashboard display"""
     if message_text:
@@ -108,17 +152,27 @@ async def test_message(request: TestMessageRequest):
                 'user_preferred_lang': 'ar',
                 'initial_user_query_to_process': None,
                 'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None
+                'current_conversation_id': None,
+                'phone_number': request.phone  # Store phone_number for Firestore saves
             }
-        
+        else:
+            # Ensure phone_number is set even for existing user_data
+            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+
+        # ===== RESTORE USER STATE FROM FIRESTORE (handles server restart) =====
+        restored_name = await restore_user_state_from_firestore(user_id)
+        if restored_name:
+            user_name = restored_name
+
         async def handle_message_dashboard(user_whatsapp_id: str, user_input_text: str, user_name: str):
             """Dashboard version that captures bot responses WITHOUT saving to Firebase"""
             if user_whatsapp_id not in config.user_data_whatsapp:
                 config.user_data_whatsapp[user_whatsapp_id] = {
-                    'user_preferred_lang': 'ar', 
-                    'initial_user_query_to_process': None, 
-                    'awaiting_human_handover_confirmation': False, 
-                    'current_conversation_id': None
+                    'user_preferred_lang': 'ar',
+                    'initial_user_query_to_process': None,
+                    'awaiting_human_handover_confirmation': False,
+                    'current_conversation_id': None,
+                    'phone_number': request.phone  # Store phone_number for Firestore saves
                 }
 
             # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
@@ -246,12 +300,17 @@ async def test_image(request: TestImageRequest):
                 'user_preferred_lang': 'ar',
                 'initial_user_query_to_process': None,
                 'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None
+                'current_conversation_id': None,
+                'phone_number': request.phone  # Store phone_number for Firestore saves
             }
-        
-        # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
-        # config.TESTING_MODE = True
-        # print(f"🧪 TESTING MODE ENABLED - Firebase saving disabled for user {user_id}")
+        else:
+            # Ensure phone_number is set even for existing user_data
+            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+
+        # Restore user state from Firestore
+        restored_name = await restore_user_state_from_firestore(user_id)
+        if restored_name:
+            user_name = restored_name
 
         async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
             await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
@@ -356,17 +415,27 @@ async def test_voice(
                 'user_preferred_lang': 'ar',
                 'initial_user_query_to_process': None,
                 'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None
+                'current_conversation_id': None,
+                'phone_number': request.phone  # Store phone_number for Firestore saves
             }
-        
+        else:
+            # Ensure phone_number is set even for existing user_data
+            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+
+        # Restore user state from Firestore
+        restored_name = await restore_user_state_from_firestore(user_id)
+        if restored_name:
+            user_name = restored_name
+
         async def handle_voice_dashboard(user_whatsapp_id: str, voice_text: str, user_name: str):
             """Dashboard version for voice testing - simulates transcription"""
             if user_whatsapp_id not in config.user_data_whatsapp:
                 config.user_data_whatsapp[user_whatsapp_id] = {
-                    'user_preferred_lang': 'ar', 
-                    'initial_user_query_to_process': None, 
-                    'awaiting_human_handover_confirmation': False, 
-                    'current_conversation_id': None
+                    'user_preferred_lang': 'ar',
+                    'initial_user_query_to_process': None,
+                    'awaiting_human_handover_confirmation': False,
+                    'current_conversation_id': None,
+                    'phone_number': request.phone  # Store phone_number for Firestore saves
                 }
 
             # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
@@ -484,8 +553,17 @@ async def test_voice_text(request: TestVoiceRequest):
                 'user_preferred_lang': 'ar',
                 'initial_user_query_to_process': None,
                 'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None
+                'current_conversation_id': None,
+                'phone_number': request.phone  # Store phone_number for Firestore saves
             }
+        else:
+            # Ensure phone_number is set even for existing user_data
+            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+
+        # Restore user state from Firestore
+        restored_name = await restore_user_state_from_firestore(user_id)
+        if restored_name:
+            user_name = restored_name
 
         async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
             await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
@@ -564,15 +642,24 @@ async def test_voice_upload(
         user_name = f"Test User ({phone})"
         
         dashboard_bot_responses.pop(user_id, None)
-        
+
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
                 'user_preferred_lang': 'ar',
                 'initial_user_query_to_process': None,
                 'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None
+                'current_conversation_id': None,
+                'phone_number': phone  # Store phone_number for Firestore saves
             }
-        
+        else:
+            # Ensure phone_number is set even for existing user_data
+            config.user_data_whatsapp[user_id]['phone_number'] = phone
+
+        # Restore user state from Firestore (for existing customers returning after server restart)
+        restored_name = await restore_user_state_from_firestore(user_id)
+        if restored_name:
+            user_name = restored_name
+
         # Read audio file into BytesIO
         audio_bytes = await audio.read()
         print(f"DEBUG: Read {len(audio_bytes)} bytes from uploaded audio")
@@ -689,15 +776,24 @@ async def test_image_upload(
         user_name = f"Test User ({phone})"
         
         dashboard_bot_responses.pop(user_id, None)
-        
+
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
                 'user_preferred_lang': 'ar',
                 'initial_user_query_to_process': None,
                 'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None
+                'current_conversation_id': None,
+                'phone_number': phone  # Store phone_number for Firestore saves
             }
-        
+        else:
+            # Ensure phone_number is set even for existing user_data
+            config.user_data_whatsapp[user_id]['phone_number'] = phone
+
+        # Restore user state from Firestore (for existing customers returning after server restart)
+        restored_name = await restore_user_state_from_firestore(user_id)
+        if restored_name:
+            user_name = restored_name
+
         # Read image file and convert to base64 data URL
         image_bytes = await image.read()
         print(f"DEBUG: Read {len(image_bytes)} bytes from uploaded image")
