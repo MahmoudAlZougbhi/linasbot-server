@@ -199,12 +199,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "    3. Set action='confirm_appointment_reschedule'\n"
         "    Example: 'I see your appointment is on Nov 16 at 10:00 AM. You want to change it to 11:00 AM on the same day, correct?'\n"
         "  STEP 2 - When customer confirms (says 'yes', 'correct', 'confirm', etc.) AND you just asked for confirmation:\n"
-        "    1. Call `check_next_appointment(phone='{customer_phone_clean}')` again to get the appointment_id\n"
-        "    2. From the tool result, extract the appointment_id (e.g., 21741)\n"
-        "    3. IMMEDIATELY call `update_appointment_date(appointment_id=<from_step1>, phone='{customer_phone_clean}', date='YYYY-MM-DD HH:MM:SS')` with the new date\n"
-        "    4. You MUST call BOTH tools in the same response when customer confirms!\n"
-        "    5. After tools execute, confirm the update to customer\n"
-        "  CRITICAL: When customer confirms, call BOTH check_next_appointment AND update_appointment_date together!\n"
+        "    1. Call `check_next_appointment(phone='{customer_phone_clean}')` FIRST to get current appointment details\n"
+        "    2. Call `update_appointment_date(appointment_id=0, phone='{customer_phone_clean}', date='YYYY-MM-DD HH:MM:SS')` with appointment_id=0 (placeholder)\n"
+        "    3. The system will AUTO-CHAIN the correct appointment_id from check_next_appointment's response\n"
+        "    4. After tools execute, confirm the update to customer\n"
+        "  IMPORTANT: Call BOTH tools together - the system handles getting the correct appointment_id automatically.\n"
         "- To CANCEL appointment: No API available - offer human handover\n"
         "**What You MUST Ask For (New Appointments):**\n"
         "1. Service/treatment they want (if not clear)\n"
@@ -319,7 +318,10 @@ User message: {user_input}"""
         parsed_response = {}
 
         if tool_calls:
-            messages.append(first_response_message) 
+            messages.append(first_response_message)
+
+            # Track check_next_appointment result to auto-chain appointment_id for update_appointment_date
+            check_next_appointment_result = None
 
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
@@ -665,6 +667,18 @@ User message: {user_input}"""
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
 
+                # --- FIX: Auto-chain appointment_id from check_next_appointment to update_appointment_date ---
+                # When GPT calls both tools together, it can't know the real appointment_id until check_next_appointment returns.
+                # This code automatically uses the correct appointment_id from the check result.
+                if function_name == "update_appointment_date" and check_next_appointment_result:
+                    actual_appointment_id = check_next_appointment_result.get("data", {}).get("appointment", {}).get("id")
+                    if actual_appointment_id:
+                        gpt_provided_id = function_args.get("appointment_id")
+                        if gpt_provided_id != actual_appointment_id:
+                            print(f"DEBUG: Auto-chaining appointment_id: GPT provided {gpt_provided_id}, actual is {actual_appointment_id}")
+                            function_args["appointment_id"] = actual_appointment_id
+                        else:
+                            print(f"DEBUG: appointment_id already correct: {actual_appointment_id}")
 
                 if hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
                     function_to_call = getattr(api_integrations, function_name)
@@ -673,7 +687,12 @@ User message: {user_input}"""
                     try:
                         tool_output = await function_to_call(**function_args)
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
-                        
+
+                        # Store check_next_appointment result for auto-chaining appointment_id
+                        if function_name == "check_next_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
+                            check_next_appointment_result = tool_output
+                            print(f"DEBUG: Stored check_next_appointment result for auto-chaining")
+
                         # 📊 ANALYTICS: Track service when appointment is created
                         if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics

@@ -1398,6 +1398,12 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         - service_id = 12: Laser Hair Removal (Women) - إزالة الشعر بالليزر للنساء
         - service_id = 13: Laser Tattoo Removal - إزالة الوشم بالليزر
         - service_id = 14: Whitening (Dark Area Lightening) - تفتيح المناطق الداكنة
+        - service_id = 15: Hifo
+        - service_id = 16: eye brows extension
+        - service_id = 17: full hydro facial 
+        - service_id = 19: half hydro facial
+        - service_id = 20: manual hydro facial
+        - service_id = 21: facial micro needling
 
         **CRITICAL: Machine IDs for Booking (MUST USE THESE EXACT IDs):**
         - machine_id = 13: Neo (for laser hair removal - light skin)
@@ -1411,6 +1417,11 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         - Hair Removal Men (service_id=1) or Women (service_id=12) → Use Neo (machine_id=13), Quadro (machine_id=9), or Trio (machine_id=10)
         - CO2 Laser treatments (service_id=11) → MUST use CO2 Laser (machine_id=14)
         - Whitening (service_id=14) → MUST use DPL (machine_id=14)
+        - Eye brows extension (service_id=16) → No machine required
+        - Full hydro facial (service_id=17) → No machine required
+        - Half hydro facial (service_id=19) → No machine required
+        - Manual hydro facial (service_id=20) → No machine required
+        - Facial micro needling (service_id=21) → No machine required
 
         **Branch IDs:**
         - branch_id = 1: Beirut - Manara (Main Branch)

@@ -343,37 +343,37 @@ git push origin main
 **Fix Applied** (`utils/utils.py`):
 Added complete service_id, machine_id, and branch_id mappings to system prompt:
 
-**Service IDs:**
-| service_id | Service Name |
-|------------|--------------|
-| 1 | Laser Hair Removal (Men) |
-| 2 | CO2 Laser (Scar Removal, Acne Scars, Stretch Marks) |
-| 3 | Laser Hair Removal (Women) |
-| 4 | Laser Tattoo Removal |
-| 5 | Whitening (Dark Area Lightening) |
-
-**Machine IDs:**
-| machine_id | Machine Name | Used For |
-|------------|--------------|----------|
-| 1 | Cynosure Elite+ | Hair Removal |
-| 2 | Neo | Hair Removal (light skin) |
-| 3 | Quadro | Hair Removal |
-| 4 | Trio | Hair Removal |
-| 5 | Pico Laser | Tattoo Removal ONLY |
-| 6 | CO2 Laser | Scar Removal |
-| 7 | DPL | Whitening |
-
-**Branch IDs:**
-| branch_id | Branch Location |
-|-----------|-----------------|
-| 1 | Beirut - Manara (Main) |
-| 2 | Antelias - Center Haj |
-
-**Service-Machine Matching Rules Added:**
-- Tattoo Removal (service_id=4) → MUST use Pico Laser (machine_id=5)
-- Hair Removal → Use Neo (2), Quadro (3), or Trio (4)
-- CO2 treatments (service_id=2) → MUST use CO2 Laser (6)
-- Whitening (service_id=5) → MUST use DPL (7)
+<!--**Service IDs:**-->
+<!--| service_id | Service Name |-->
+<!--|------------|--------------|-->
+<!--| 1 | Laser Hair Removal (Men) |-->
+<!--| 2 | CO2 Laser (Scar Removal, Acne Scars, Stretch Marks) |-->
+<!--| 3 | Laser Hair Removal (Women) |-->
+<!--| 4 | Laser Tattoo Removal |-->
+<!--| 5 | Whitening (Dark Area Lightening) |-->
+<!---->
+<!--**Machine IDs:**-->
+<!--| machine_id | Machine Name | Used For |-->
+<!--|------------|--------------|----------|-->
+<!--| 1 | Cynosure Elite+ | Hair Removal |-->
+<!--| 2 | Neo | Hair Removal (light skin) |-->
+<!--| 3 | Quadro | Hair Removal |-->
+<!--| 4 | Trio | Hair Removal |-->
+<!--| 5 | Pico Laser | Tattoo Removal ONLY |-->
+<!--| 6 | CO2 Laser | Scar Removal |-->
+<!--| 7 | DPL | Whitening |-->
+<!---->
+<!--**Branch IDs:**-->
+<!--| branch_id | Branch Location |-->
+<!--|-----------|-----------------|-->
+<!--| 1 | Beirut - Manara (Main) |-->
+<!--| 2 | Antelias - Center Haj |-->
+<!---->
+<!--**Service-Machine Matching Rules Added:**-->
+<!--- Tattoo Removal (service_id=4) → MUST use Pico Laser (machine_id=5)-->
+<!--- Hair Removal → Use Neo (2), Quadro (3), or Trio (4)-->
+<!--- CO2 treatments (service_id=2) → MUST use CO2 Laser (6)-->
+<!--- Whitening (service_id=5) → MUST use DPL (7)-->
 
 **Files Modified**:
 - `utils/utils.py`:
