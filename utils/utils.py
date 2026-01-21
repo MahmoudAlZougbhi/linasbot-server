@@ -652,9 +652,24 @@ async def get_conversation_history_from_firestore(user_id: str, conversation_id:
         messages = conversation_data.get('messages', [])
         
         # Convert to OpenAI format and take last N messages
+        # Valid OpenAI roles: 'system', 'assistant', 'user', 'function', 'tool'
         openai_messages = []
         for msg in messages[-max_messages:]:
-            role = "assistant" if msg.get('role') == 'ai' else msg.get('role', 'user')
+            original_role = msg.get('role', 'user')
+
+            # Map roles to OpenAI-compatible roles
+            if original_role == 'ai':
+                role = 'assistant'
+            elif original_role == 'operator':
+                # Treat operator messages as assistant (human staff responding)
+                role = 'assistant'
+            elif original_role in ['user', 'assistant', 'system', 'function', 'tool']:
+                role = original_role
+            else:
+                # Skip unknown roles to prevent API errors
+                print(f"⚠️ Skipping message with unknown role: {original_role}")
+                continue
+
             openai_messages.append({
                 "role": role,
                 "content": msg.get('text', '')
@@ -812,63 +827,34 @@ except Exception as e:
 
 
 def detect_language(text: str) -> dict:
-    """Enhanced language detection with confidence scoring"""
+    """
+    Simple language detection for system-generated messages only.
+    GPT handles language detection for user conversations.
+    This is only used for error messages, rate limits, etc.
+    """
     if not text or not text.strip():
         return {"language": "en", "confidence": 0.0}
 
     text = text.strip()
-    text_length = len(text)
 
-    # Count character types
+    # Count Arabic characters
     arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))
-    latin_chars = len(re.findall(r'[a-zA-Z]', text))
-    digits = len(re.findall(r'\d', text))
+    text_length = len(text.replace(' ', ''))
 
     arabic_ratio = arabic_chars / text_length if text_length > 0 else 0
-    latin_ratio = latin_chars / text_length if text_length > 0 else 0
 
-    # 1. Arabic Detection (>70% Arabic characters)
-    if arabic_ratio > 0.7:
+    # Arabic detection (50%+ Arabic characters)
+    if arabic_ratio >= 0.5:
         return {"language": "ar", "confidence": arabic_ratio}
 
-    # 2. Franco-Arabic Detection (Enhanced)
-    franco_keywords = {
-        'common': ['kifak', 'shou', 'mish', 'ana', 'bade', 'ra7', 'ktir', 'ya3ne', 'yaane', 'halla2', 'bass', 'mbala', 'tayeb', 'tamem', 'inta', 'inti', 'wen', 'meshe', 'shil', 'aande', '3ande', 'emhe', 'em7e'],
-        'advanced': ['ma3', 'la2', 'laa', 'tab', 'yalla', 'habibi', 'shu', 'ma3lish', 'iza', 'law', 'kif', 'leh', 'leish', 'ma', 'msh', 'ta3ite', 'mne7', 'wa2ta', 'hala2', 'biddak', 'bidde']
-    }
-
+    # Simple French detection for common greetings/words
     text_lower = text.lower()
-    common_matches = sum(1 for kw in franco_keywords['common'] if kw in text_lower)
-    advanced_matches = sum(1 for kw in franco_keywords['advanced'] if kw in text_lower)
+    french_indicators = ['bonjour', 'merci', 'je ', 'vous', 'oui', 'non', 'comment']
+    if any(word in text_lower for word in french_indicators):
+        return {"language": "fr", "confidence": 0.7}
 
-    # Franco indicators
-    has_numerals = any(n in text for n in ['2', '3', '5', '7', '8', '9'])  # Arabic numerals in Latin
-    has_franco_keywords = common_matches >= 1 or advanced_matches >= 2
-    is_mostly_latin = latin_ratio > 0.5 and arabic_ratio < 0.3
-
-    if is_mostly_latin and (has_franco_keywords or (has_numerals and latin_ratio > 0.6)):
-        confidence = min(0.9, 0.6 + (common_matches * 0.1) + (advanced_matches * 0.05))
-        return {"language": "franco", "confidence": confidence}
-
-    # 3. French Detection
-    # Strong French indicators (definite French if present)
-    strong_french_keywords = ['bonjour', 'bonsoir', 'merci', 'rendez-vous', "s'il", 'voulez', 'pouvez']
-    # Common French words
-    common_french_keywords = ['salut', 'oui', 'non', 'comment', 'quoi', 'pour', 'avec', 'mais', 'très', 'bien']
-
-    strong_matches = sum(1 for kw in strong_french_keywords if kw in text_lower)
-    common_matches = sum(1 for kw in common_french_keywords if kw in text_lower)
-
-    # Detect French if:
-    # - At least 1 strong keyword, OR
-    # - At least 2 common keywords
-    if latin_ratio > 0.5 and (strong_matches >= 1 or common_matches >= 2):
-        total_matches = strong_matches + common_matches
-        confidence = min(0.9, 0.6 + (total_matches * 0.1))
-        return {"language": "fr", "confidence": confidence}
-
-    # 4. Default to English
-    return {"language": "en", "confidence": 0.5 if latin_ratio > 0.5 else 0.3}
+    # Default to English
+    return {"language": "en", "confidence": 0.5}
 
 
 
@@ -1011,7 +997,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "create_appointment",
-                "description": "Creates a new appointment record. Requires client phone number, service ID, machine ID, branch ID, and date (including time).",
+                "description": "Creates a new appointment record. Requires client phone number, service ID, machine ID, branch ID, date (including time), and body_part_ids (REQUIRED for hair removal and tattoo removal services). Do NOT call without body_part_ids for hair removal or tattoo services.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1022,7 +1008,7 @@ def get_openai_tools_schema():
                         # This is derived from the API Documentation PDF
                         "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). This date and time MUST be converted from user's natural language (e.g., 'tomorrow', 'next Saturday', 'in 3 days') to an exact future date and time based on current time. The date must be in the future and not more than 365 days from today."},
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
-                        "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "IDs of body parts (optional, e.g., [1, 2] for legs and arms)."}
+                        "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "**REQUIRED for Hair Removal (service_id 1, 12) and Tattoo Removal (service_id 13)**. Body part IDs specifying which areas to treat. You MUST ask the customer which body area they want before calling this function. Do NOT call create_appointment without body_part_ids for these services."}
                     },
                     "required": ["phone", "service_id", "machine_id", "branch_id", "date"]
                 }
@@ -1283,43 +1269,14 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         Use neutral language until gender is confirmed.
         """
     
-    # Map language codes to explicit instructions
-    language_map = {
-        "ar": "Arabic",
-        "en": "English", 
-        "fr": "French",
-        "franco": "colloquial Lebanese Arabic dialect written in Arabic script"
-    }
-    
-    response_language = language_map.get(response_lang, "English")
-    
-    # Create explicit language instruction with multi-layered emphasis
-    language_instruction = f"""
-        **🚨 CRITICAL LANGUAGE REQUIREMENT - HIGHEST PRIORITY 🚨**
-
-        **User's Detected Language: {response_language}**
-
-        **MANDATORY RULE - NO EXCEPTIONS:**
-        You MUST respond EXCLUSIVELY in {response_language}. This is NON-NEGOTIABLE.
-
-        **Language Mapping (STRICT):**
-        - User writes in English → You respond in English ONLY
-        - User writes in Arabic → You respond in Arabic ONLY
-        - User writes in French → You respond in French ONLY
-        - User writes in Franco (Latin-script Arabic) → You respond in colloquial Lebanese Arabic using Arabic script ONLY
-
-        **FORBIDDEN:**
-        ❌ DO NOT mix languages in your response
-        ❌ DO NOT switch languages mid-sentence
-        ❌ DO NOT respond in a different language than specified
-        ❌ DO NOT use English words in Arabic responses (except brand names)
-        ❌ DO NOT use Arabic words in English responses
-
-        **VALIDATION CHECK:**
-        Before sending your response, verify that 100% of your reply (excluding brand names, numbers) is in {response_language}.
-        If Franco detected → Your response MUST be Lebanese Arabic in Arabic script (ع،ط§،ظ„...), NOT Latin characters.
-
-        **This language consistency is MORE IMPORTANT than any other instruction.**
+    # Language instruction - GPT detects and responds in user's language
+    # The actual detection logic is in chat_response_service.py's language_detection_instruction
+    language_instruction = """
+        **LANGUAGE HANDLING:**
+        - You will detect the user's language from their message and respond in the SAME language
+        - Supported languages: English, Arabic, French, Franco-Arabic
+        - If user writes in Franco-Arabic (Latin letters for Arabic sounds like "kifak", "shu"), respond in Arabic SCRIPT
+        - Always set the correct `detected_language` in your JSON response: "en", "ar", "fr", or "franco"
         """
             
     return f"""
@@ -1383,12 +1340,34 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         ''' if qa_reference else ''}
 
         **CRITICAL: Appointment Booking Flow (MUST FOLLOW THIS ORDER):**
-        When a user wants to book an appointment, you MUST follow these steps IN ORDER:
-        1. **First:** Call `get_customer_by_phone` to check if the customer exists in the system
-        2. **If customer NOT found:** Call `create_customer` with the user's name, phone, gender, and branch_id (default branch_id=1) BEFORE booking
-        3. **Then:** Call `create_appointment` to book the appointment
+        When a user wants to book an appointment, you MUST:
 
-        **NEVER call create_appointment without first ensuring the customer exists!**
+        **STEP 1 - CHECK EXISTING APPOINTMENTS FIRST (MANDATORY):**
+        When user says "book me", "yes book", "I want to book", your FIRST action MUST be:
+        - Call `check_next_appointment` to check for existing appointments
+        - Set action="tool_call" and provide a brief message like "Let me check your appointments..."
+        - DO NOT say "I'll proceed with scheduling" without actually calling a tool!
+
+        **STEP 2 - HANDLE EXISTING APPOINTMENT (if found):**
+        If an existing appointment is found, ask the user:
+        "I see you already have an appointment for [service] on [date] at [time]. Would you like to:
+        1. Keep this appointment and add a NEW one
+        2. Change/reschedule this existing appointment"
+        Wait for their choice before proceeding.
+
+        **STEP 3 - ASK FOR DATE AND TIME:**
+        - If adding NEW appointment OR no existing appointment: Ask "What date and time works best for you?"
+        - If changing existing: Ask "What new date and time would you prefer?"
+        - Use action "ask_for_details_for_booking" when asking for date/time
+
+        **STEP 4 - CONFIRM AND BOOK:**
+        Once you have date/time, confirm with user: "I'll book [service] for [date] at [time]. Correct?"
+        Only after confirmation:
+        1. Call `get_customer_by_phone` to check if customer exists
+        2. If NOT found: Call `create_customer` first
+        3. Finally: Call `create_appointment` with the confirmed date/time
+
+        **NEVER call create_appointment without first asking for and confirming the date/time!**
         If you skip customer creation, the appointment will fail with "Customer not found" error.
 
         **CRITICAL: Service IDs for Booking (MUST USE THESE EXACT IDs):**
@@ -1432,7 +1411,7 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. If you use a tool, provide a 'bot_reply' that summarizes the tool's purpose to the user while I process the tool call. Here is the strict JSON schema you MUST follow:
         ```json
         {{
-          "action": "answer_question" | "ask_gender" | "confirm_gender" | "human_handover" | "human_handover_initial_ask" | "human_handover_confirmed" | "return_to_normal_chat" | "initial_greet_and_ask_gender" | "unknown_query" | "provide_info" | "tool_call" | "confirm_booking_details" | "check_customer_status",
+          "action": "answer_question" | "ask_gender" | "confirm_gender" | "human_handover" | "human_handover_initial_ask" | "human_handover_confirmed" | "return_to_normal_chat" | "initial_greet_and_ask_gender" | "unknown_query" | "provide_info" | "tool_call" | "confirm_booking_details" | "check_customer_status" | "ask_for_details_for_booking",
           "bot_reply": "Your response to the user, in their preferred language.",
           "detected_language": "ar" | "en" | "fr" | "franco",
           "detected_gender": "male" | "female" | null,

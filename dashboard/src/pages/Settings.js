@@ -12,9 +12,11 @@ import {
   LockClosedIcon,
   EyeIcon,
   EyeSlashIcon,
+  UsersIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import UserManagement from '../components/UserManagement/UserManagement';
 
 const Settings = () => {
   const { user, changePassword } = useAuth();
@@ -41,12 +43,17 @@ const Settings = () => {
     humanTakeoverNotifyMobiles: '',
   });
 
+  // Check if user can manage users
+  const canManageUsers = user?.role === 'admin' || user?.resolvedPermissions?.userManagement === true;
+
   const tabs = [
     { id: 'general', name: 'General', icon: Cog6ToothIcon, color: 'from-blue-500 to-cyan-500' },
     { id: 'security', name: 'Security', icon: LockClosedIcon, color: 'from-red-500 to-pink-500' },
     { id: 'api', name: 'API Keys', icon: KeyIcon, color: 'from-green-500 to-emerald-500' },
     { id: 'languages', name: 'Languages', icon: GlobeAltIcon, color: 'from-purple-500 to-pink-500' },
     { id: 'notifications', name: 'Notifications', icon: BellIcon, color: 'from-orange-500 to-red-500' },
+    // Users tab only visible to users with userManagement permission
+    ...(canManageUsers ? [{ id: 'users', name: 'Users', icon: UsersIcon, color: 'from-indigo-500 to-violet-500' }] : []),
   ];
 
   const languages = [
@@ -123,17 +130,17 @@ const Settings = () => {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
-    
+
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       toast.error('New passwords do not match');
       return;
     }
-    
+
     if (passwordForm.newPassword.length < 8) {
       toast.error('Password must be at least 8 characters');
       return;
     }
-    
+
     try {
       await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
       setPasswordForm({
@@ -171,7 +178,7 @@ const Settings = () => {
         transition={{ duration: 0.6, delay: 0.2 }}
         className="flex justify-center"
       >
-        <div className="glass rounded-2xl p-2 inline-flex space-x-2">
+        <div className="glass rounded-2xl p-2 inline-flex flex-wrap gap-2 justify-center">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -258,7 +265,7 @@ const Settings = () => {
 
               <div className="space-y-4">
                 <h3 className="font-semibold text-slate-800">Features</h3>
-                
+
                 {[
                   { key: 'enableVoice', label: 'Voice Message Processing', desc: 'Allow voice message transcription' },
                   { key: 'enableImages', label: 'Image Analysis', desc: 'Enable image processing and analysis' },
@@ -440,11 +447,11 @@ const Settings = () => {
                   <div>
                     <h4 className="font-medium text-red-800">Security Tips</h4>
                     <ul className="text-sm text-red-700 mt-1 space-y-1">
-                      <li>• Use a strong password with at least 8 characters</li>
-                      <li>• Include uppercase, lowercase, numbers, and symbols</li>
-                      <li>• Never share your password with anyone</li>
-                      <li>• Change your password regularly</li>
-                      <li>• Session expires after 24 hours of inactivity</li>
+                      <li>Use a strong password with at least 8 characters</li>
+                      <li>Include uppercase, lowercase, numbers, and symbols</li>
+                      <li>Never share your password with anyone</li>
+                      <li>Change your password regularly</li>
+                      <li>Session expires after 24 hours of inactivity</li>
                     </ul>
                   </div>
                 </div>
@@ -484,11 +491,11 @@ const Settings = () => {
                         <p className="text-xs text-slate-500 font-mono">{api.key}</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-3">
                       <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                        api.status === 'active' 
-                          ? 'bg-green-100 text-green-700' 
+                        api.status === 'active'
+                          ? 'bg-green-100 text-green-700'
                           : 'bg-slate-100 text-slate-600'
                       }`}>
                         {api.status === 'active' ? (
@@ -503,7 +510,7 @@ const Settings = () => {
                           </>
                         )}
                       </span>
-                      
+
                       <button
                         onClick={() => handleTestAPI(api.name)}
                         className="btn-ghost text-sm px-3 py-1"
@@ -555,16 +562,16 @@ const Settings = () => {
                         <p className="text-sm text-slate-600">Code: {lang.code}</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-3">
                       <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                        lang.enabled 
-                          ? 'bg-green-100 text-green-700' 
+                        lang.enabled
+                          ? 'bg-green-100 text-green-700'
                           : 'bg-slate-100 text-slate-600'
                       }`}>
                         {lang.enabled ? 'Enabled' : 'Disabled'}
                       </span>
-                      
+
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
@@ -586,9 +593,9 @@ const Settings = () => {
                 <div>
                   <h4 className="font-medium text-purple-800">Language Rules</h4>
                   <ul className="text-sm text-purple-700 mt-1 space-y-1">
-                    <li>• Bot responds in Arabic, English, or French only</li>
-                    <li>• Franco-Arabic input is understood but responses are in Arabic</li>
-                    <li>• Language detection is automatic based on input</li>
+                    <li>Bot responds in Arabic, English, or French only</li>
+                    <li>Franco-Arabic input is understood but responses are in Arabic</li>
+                    <li>Language detection is automatic based on input</li>
                   </ul>
                 </div>
               </div>
@@ -644,7 +651,7 @@ const Settings = () => {
                     placeholder="e.g., +1234567890, +9876543210, +1122334455"
                   />
                   <p className="text-xs text-slate-500 mt-2">
-                    💡 Tip: Enter mobile numbers with country code, separated by commas. These numbers will receive WhatsApp notifications when a conversation needs human attention.
+                    Enter mobile numbers with country code, separated by commas. These numbers will receive WhatsApp notifications when a conversation needs human attention.
                   </p>
                 </div>
               </div>
@@ -658,6 +665,10 @@ const Settings = () => {
               </button>
             </div>
           </div>
+        )}
+
+        {activeTab === 'users' && canManageUsers && (
+          <UserManagement />
         )}
       </motion.div>
     </div>

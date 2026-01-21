@@ -43,3 +43,10 @@ gunicorn==21.2.0
 
 # Optional: For monitoring
 prometheus-client==0.19.0
+
+# Password Hashing
+bcrypt>=4.0.0
+
+# Language Detection for English/French (used in language_resolver.py)
+# langdetect is pure Python and works reliably
+langdetect>=1.0.9

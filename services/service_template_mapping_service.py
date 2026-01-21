@@ -238,17 +238,38 @@ class ServiceTemplateMappingService:
         return services
 
     def get_available_templates(self) -> List[Dict]:
-        """Get list of all available template types"""
+        """Get list of all available template types (including custom templates)"""
+        # Default templates
         templates = [
-            {'id': 'reminder_24h', 'name': '24-Hour Reminder'},
-            {'id': 'same_day_checkin', 'name': 'Same Day Check-in'},
-            {'id': 'post_session_feedback', 'name': 'Post-Session Feedback'},
-            {'id': 'no_show_followup', 'name': 'No-Show Follow-up'},
-            {'id': 'one_month_followup', 'name': 'One Month Follow-up'},
-            {'id': 'missed_yesterday', 'name': 'Missed Yesterday'},
-            {'id': 'missed_this_month', 'name': 'Missed This Month'},
-            {'id': 'attended_yesterday', 'name': 'Attended Yesterday'}
+            {'id': 'reminder_24h', 'name': '24-Hour Reminder', 'isDefault': True},
+            {'id': 'same_day_checkin', 'name': 'Same Day Check-in', 'isDefault': True},
+            {'id': 'post_session_feedback', 'name': 'Post-Session Feedback', 'isDefault': True},
+            {'id': 'no_show_followup', 'name': 'No-Show Follow-up', 'isDefault': True},
+            {'id': 'one_month_followup', 'name': 'One Month Follow-up', 'isDefault': True},
+            {'id': 'missed_yesterday', 'name': 'Missed Yesterday', 'isDefault': True},
+            {'id': 'missed_this_month', 'name': 'Missed This Month', 'isDefault': True},
+            {'id': 'attended_yesterday', 'name': 'Attended Yesterday', 'isDefault': True}
         ]
+
+        # Add custom templates from message_templates.json
+        try:
+            template_file = 'data/message_templates.json'
+            if os.path.exists(template_file):
+                with open(template_file, 'r', encoding='utf-8') as f:
+                    all_templates = json.load(f)
+
+                default_ids = {t['id'] for t in templates}
+                for template_id, template_data in all_templates.items():
+                    if template_id not in default_ids:
+                        templates.append({
+                            'id': template_id,
+                            'name': template_data.get('name', template_id),
+                            'isDefault': False,
+                            'isCustom': True
+                        })
+        except Exception as e:
+            print(f"Error loading custom templates: {e}")
+
         return templates
 
     def reset_service_to_defaults(self, service_id: int) -> Dict:

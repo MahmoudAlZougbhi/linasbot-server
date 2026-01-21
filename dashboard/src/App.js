@@ -24,6 +24,7 @@ import Register from './pages/Register';
 
 // Contexts
 import { AuthProvider } from './contexts/AuthContext';
+import { PermissionsProvider } from './contexts/PermissionsContext';
 
 // Hooks
 import { useApi } from './hooks/useApi';
@@ -82,7 +83,7 @@ function AppContent() {
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Header */}
-            <Header 
+            <Header
               onMenuClick={() => setSidebarOpen(!sidebarOpen)}
               botStatus={botStatus}
             />
@@ -99,7 +100,7 @@ function AppContent() {
                   {/* Public Routes */}
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
-                  
+
                   {/* Protected Routes */}
                   <Route path="/" element={
                     <ProtectedRoute>
@@ -146,7 +147,7 @@ function AppContent() {
                       <Settings />
                     </ProtectedRoute>
                   } />
-                  
+
                   {/* Catch all - redirect to dashboard */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
@@ -190,18 +191,20 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          
-          {/* Protected App Routes */}
-          <Route path="/*" element={
-            <ProtectedRoute>
-              <AppContent />
-            </ProtectedRoute>
-          } />
-        </Routes>
+        <PermissionsProvider>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+
+            {/* Protected App Routes */}
+            <Route path="/*" element={
+              <ProtectedRoute>
+                <AppContent />
+              </ProtectedRoute>
+            } />
+          </Routes>
+        </PermissionsProvider>
       </AuthProvider>
     </Router>
   );

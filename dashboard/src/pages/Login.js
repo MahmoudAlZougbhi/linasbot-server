@@ -87,7 +87,7 @@ const Login = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-field pl-10 w-full"
-                  placeholder="admin@lina.com"
+                  placeholder="email@example.com"
                   required
                 />
               </div>
@@ -183,17 +183,17 @@ const Login = () => {
             </p>
           </div>
 
-          {/* Demo Credentials */}
+          {/* Demo Credentials
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
             className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200"
           >
-            <p className="text-xs text-blue-800 font-medium mb-1">Demo Credentials:</p>
+            {/* <p className="text-xs text-blue-800 font-medium mb-1">Demo Credentials:</p>
             <p className="text-xs text-blue-700">Email: admin@lina.com</p>
-            <p className="text-xs text-blue-700">Password: admin123</p>
-          </motion.div>
+            <p className="text-xs text-blue-700">Password: admin123</p> */}
+          {/* </motion.div> */}
         </motion.div>
 
         {/* Footer */}

@@ -170,25 +170,24 @@ class UserPersistenceService:
     def save_user_language(self, user_id: str, language: str) -> None:
         """
         Save user's preferred language to cache and config
-        Once set, it should not change unless user explicitly switches
+        Language can change on each message based on detection
         """
         if language not in ['ar', 'en', 'fr', 'franco']:
             print(f"⚠️ Invalid language value: {language}")
             return
-        
-        # Only update if not already set or if it's the first message
-        current_lang = self._language_cache.get(user_id)
-        
-        if not current_lang:
-            # First time setting language - lock it in
-            self._language_cache[user_id] = language
-            if user_id not in config.user_data_whatsapp:
-                config.user_data_whatsapp[user_id] = {}
-            config.user_data_whatsapp[user_id]['user_preferred_lang'] = language
-            print(f"🌐 Language locked for {user_id}: {language}")
+
+        # Always update language - users can switch languages mid-conversation
+        previous_lang = self._language_cache.get(user_id)
+        self._language_cache[user_id] = language
+
+        if user_id not in config.user_data_whatsapp:
+            config.user_data_whatsapp[user_id] = {}
+        config.user_data_whatsapp[user_id]['user_preferred_lang'] = language
+
+        if previous_lang and previous_lang != language:
+            print(f"🌐 Language updated for {user_id}: {previous_lang} → {language}")
         else:
-            # Language already set - don't change it
-            print(f"🔒 Language already locked for {user_id}: {current_lang} (ignoring {language})")
+            print(f"🌐 Language set for {user_id}: {language}")
     
     def clear_cache(self, user_id: str = None) -> None:
         """Clear cache for a specific user or all users"""

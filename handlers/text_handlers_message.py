@@ -257,17 +257,10 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         else:
             user_data['initial_user_query_to_process'] = None
 
-    # Language locking - only detect on first message, then lock it
-    if not user_data.get('language_locked', False):
-        lang_result = detect_language(raw_msg)
-        current_message_lang = lang_result['language']
-        user_data['user_preferred_lang'] = current_message_lang
-        user_data['language_confidence'] = lang_result['confidence']
-        user_data['language_locked'] = True
-        user_persistence.save_user_language(user_id, current_message_lang)
-        print(f"[handle_message] 🔒 Language LOCKED for user {user_id}: {current_message_lang} (confidence: {lang_result['confidence']:.2%})")
-    else:
-        print(f"[handle_message] ℹ️ Language already locked for user {user_id}: {user_data.get('user_preferred_lang')}")
+    # Language detection is now handled BEFORE GPT call by language_detection_service
+    # The LanguageResolver detects language on each message using heuristics (Arabic script, Franco-Arabic, French/English markers)
+    # GPT is then instructed to respond in the detected language
+    print(f"[handle_message] 🌐 Language will be detected pre-GPT by language_detection_service for user {user_id}")
 
     # Message combining logic
     config.user_pending_messages[user_id].append(raw_msg)

@@ -223,7 +223,12 @@ async def get_pricing_details(service_id: int, machine_id: int = None, body_part
     print(f"API Call: get_pricing_details for service_id={service_id}")
     params = {"service_id": service_id}
     if machine_id: params["machine_id"] = machine_id
-    if body_part_ids: params["body_part_ids"] = body_part_ids
+    # Format body_part_ids as PHP-style array params (body_part_ids[]=1&body_part_ids[]=2)
+    if body_part_ids:
+        if isinstance(body_part_ids, list):
+            params["body_part_ids[]"] = body_part_ids
+        else:
+            params["body_part_ids[]"] = [body_part_ids]
     if branch_id: params["branch_id"] = branch_id
     response = await _make_api_request("GET", "appointments/pricing", params=params)
     if response.get("success"):

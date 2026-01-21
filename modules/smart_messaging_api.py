@@ -41,10 +41,97 @@ async def get_message_templates():
 
 @app.post("/api/smart-messaging/templates/{template_id}")
 async def update_message_template(template_id: str, template_data: Dict[str, Any]):
-    """Update a specific message template"""
+    """Update or create a message template"""
     try:
         template_file = 'data/message_templates.json'
-        
+
+        # Load existing templates
+        if os.path.exists(template_file):
+            with open(template_file, 'r', encoding='utf-8') as f:
+                templates = json.load(f)
+        else:
+            templates = {}
+
+        is_new = template_data.get('isNew', False)
+
+        # Check if creating a new template
+        if is_new or template_id not in templates:
+            # Create new template
+            templates[template_id] = {
+                'name': template_data.get('name', template_id),
+                'description': template_data.get('description', ''),
+                'ar': template_data.get('ar', ''),
+                'en': template_data.get('en', ''),
+                'fr': template_data.get('fr', ''),
+                'isCustom': True,
+                'createdAt': datetime.now().isoformat()
+            }
+            action = "created"
+        else:
+            # Update existing template
+            if 'ar' in template_data:
+                templates[template_id]['ar'] = template_data['ar']
+            if 'en' in template_data:
+                templates[template_id]['en'] = template_data['en']
+            if 'fr' in template_data:
+                templates[template_id]['fr'] = template_data['fr']
+            if 'name' in template_data:
+                templates[template_id]['name'] = template_data['name']
+            if 'description' in template_data:
+                templates[template_id]['description'] = template_data['description']
+            templates[template_id]['updatedAt'] = datetime.now().isoformat()
+            action = "updated"
+
+        # Save back to file
+        with open(template_file, 'w', encoding='utf-8') as f:
+            json.dump(templates, f, ensure_ascii=False, indent=2)
+
+        # Reload templates in smart_messaging service if available
+        try:
+            from services.smart_messaging import smart_messaging
+            smart_messaging.message_templates[template_id] = {
+                'ar': templates[template_id]['ar'],
+                'en': templates[template_id]['en'],
+                'fr': templates[template_id]['fr']
+            }
+        except ImportError:
+            # Service may not be available in all deployments
+            pass
+
+        return {
+            "success": True,
+            "message": f"Template {action} successfully",
+            "template_id": template_id
+        }
+    except Exception as e:
+        print(f"❌ Error updating template: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.delete("/api/smart-messaging/templates/{template_id}")
+async def delete_message_template(template_id: str):
+    """Delete a custom message template"""
+    try:
+        template_file = 'data/message_templates.json'
+
+        # Default templates that cannot be deleted
+        default_templates = [
+            "reminder_24h", "same_day_checkin", "post_session_feedback",
+            "no_show_followup", "one_month_followup", "missed_yesterday",
+            "missed_this_month", "attended_yesterday"
+        ]
+
+        if template_id in default_templates:
+            return {
+                "success": False,
+                "error": "Cannot delete default templates"
+            }
+
         # Load existing templates
         if os.path.exists(template_file):
             with open(template_file, 'r', encoding='utf-8') as f:
@@ -54,44 +141,34 @@ async def update_message_template(template_id: str, template_data: Dict[str, Any
                 "success": False,
                 "error": "Templates file not found"
             }
-        
-        # Update the specific template
-        if template_id in templates:
-            # Update only the language fields
-            if 'ar' in template_data:
-                templates[template_id]['ar'] = template_data['ar']
-            if 'en' in template_data:
-                templates[template_id]['en'] = template_data['en']
-            if 'fr' in template_data:
-                templates[template_id]['fr'] = template_data['fr']
-            
-            # Save back to file
-            with open(template_file, 'w', encoding='utf-8') as f:
-                json.dump(templates, f, ensure_ascii=False, indent=2)
-            
-            # Reload templates in smart_messaging service if available
-            try:
-                from services.smart_messaging import smart_messaging
-                smart_messaging.message_templates[template_id] = {
-                    'ar': templates[template_id]['ar'],
-                    'en': templates[template_id]['en'],
-                    'fr': templates[template_id]['fr']
-                }
-            except ImportError:
-                # Service may not be available in all deployments
-                pass
-            
-            return {
-                "success": True,
-                "message": "Template updated successfully"
-            }
-        else:
+
+        if template_id not in templates:
             return {
                 "success": False,
                 "error": "Template not found"
             }
+
+        # Delete the template
+        del templates[template_id]
+
+        # Save back to file
+        with open(template_file, 'w', encoding='utf-8') as f:
+            json.dump(templates, f, ensure_ascii=False, indent=2)
+
+        # Remove from smart_messaging service if available
+        try:
+            from services.smart_messaging import smart_messaging
+            if template_id in smart_messaging.message_templates:
+                del smart_messaging.message_templates[template_id]
+        except ImportError:
+            pass
+
+        return {
+            "success": True,
+            "message": "Template deleted successfully"
+        }
     except Exception as e:
-        print(f"❌ Error updating template: {e}")
+        print(f"❌ Error deleting template: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -610,6 +687,7 @@ async def get_messages_detail(status: str = "all"):
                 # Get placeholders for template data
                 placeholders = msg.get("placeholders", {})
 
+                full_content = msg.get("rendered_content", "")
                 message_entry = {
                     "message_id": message_id,
                     "customer_phone": msg.get("customer_phone", ""),
@@ -624,7 +702,8 @@ async def get_messages_detail(status: str = "all"):
                     "created_at": msg.get("created_at"),
                     "template_data": placeholders,
                     "time_until_send": time_until_send,
-                    "content_preview": msg.get("rendered_content", "")[:100] + "..." if msg.get("rendered_content") else ""
+                    "content_preview": full_content[:100] + "..." if len(full_content) > 100 else full_content,
+                    "full_content": full_content
                 }
 
                 messages.append(message_entry)
@@ -882,6 +961,31 @@ async def get_available_services():
 # PREVIEW QUEUE ENDPOINTS
 # ==========================================
 
+@app.get("/api/smart-messaging/preview-queue/{message_id}")
+async def get_preview_message_details(message_id: str):
+    """Get full details of a single message from the preview queue"""
+    try:
+        from services.message_preview_service import message_preview_service
+
+        # Get all messages and find the one we need
+        all_messages = message_preview_service.get_pending_messages(status=None)
+
+        for msg in all_messages:
+            if msg.get("message_id") == message_id:
+                return {
+                    "success": True,
+                    "message": msg
+                }
+
+        return {
+            "success": False,
+            "error": "Message not found"
+        }
+    except Exception as e:
+        print(f"Error getting message details: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/smart-messaging/preview-queue")
 async def get_preview_queue(status: str = "pending_approval"):
     """
@@ -949,14 +1053,46 @@ async def reject_preview_message(message_id: str, request_data: Dict[str, Any] =
 
 @app.post("/api/smart-messaging/preview-queue/{message_id}/edit")
 async def edit_preview_message(message_id: str, request_data: Dict[str, Any]):
-    """Edit message content before approval"""
+    """Edit message content before sending"""
     try:
         from services.message_preview_service import message_preview_service
+        from services.smart_messaging import smart_messaging
 
+        # First try to edit in preview queue
         result = message_preview_service.edit_message(message_id, request_data)
-        return result
+
+        if result.get('success'):
+            return result
+
+        # If not found in preview queue, try to edit in smart_messaging scheduled messages
+        if message_id in smart_messaging.scheduled_messages:
+            msg = smart_messaging.scheduled_messages[message_id]
+
+            # Update the message content if provided
+            if 'rendered_content' in request_data:
+                msg['content'] = request_data['rendered_content']
+
+            # Update scheduled send time if provided
+            if 'scheduled_send_time' in request_data:
+                from datetime import datetime
+                try:
+                    new_time = datetime.fromisoformat(request_data['scheduled_send_time'].replace('Z', '+00:00'))
+                    msg['send_at'] = new_time
+                except:
+                    pass
+
+            smart_messaging.scheduled_messages[message_id] = msg
+            return {
+                "success": True,
+                "message": "Scheduled message updated successfully",
+                "message_id": message_id
+            }
+
+        return {"success": False, "error": "Message not found in any queue"}
     except Exception as e:
         print(f"Error editing message: {e}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 

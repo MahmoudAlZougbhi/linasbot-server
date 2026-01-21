@@ -16,6 +16,9 @@ from services import api_integrations
 # Import local Q&A service for context injection
 from services.local_qa_service import local_qa_service
 
+# Import dynamic model selector for cost optimization
+from services.dynamic_model_selector import select_optimal_model
+
 # Lebanon timezone - imported once at module level for performance
 try:
     from zoneinfo import ZoneInfo
@@ -86,7 +89,7 @@ def validate_language_match(user_language: str, bot_response: str, detected_resp
     return True, ""
 
 # user_id is the WhatsApp phone number
-async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None) -> dict:
+async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None) -> dict:
     user_name = config.user_names.get(user_id, "client") 
     current_gender_attempts = config.gender_attempts.get(user_id, 0)
     
@@ -167,12 +170,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if is_price_question:
         print(f"📄 GPT will receive price_list.txt in context (price-related question detected)")
 
+    # Build name instruction based on whether name is known
+    name_is_known = user_name and user_name != "client"
     early_name_instruction = (
-        "**Early Name Capture:**\n"
-        "If the user's name is not yet known and gender has just been confirmed, "
-        "you must ask politely for their full name with a clear question like "
-        "'May I have your full name please?' or 'What is your name?'. "
-        "Once provided, acknowledge it naturally (e.g., 'Thanks, {name}!') and use it in future replies."
+        "**Early Name Capture (CRITICAL FOR NEW USERS):**\n"
+        f"**CURRENT NAME STATUS: {'KNOWN - ' + user_name if name_is_known else 'NOT KNOWN'}**\n\n"
+        + (
+            f"The user's name is already known as '{user_name}'. Do NOT ask for their name again.\n"
+            if name_is_known else
+            "**🚨 NAME IS NOT KNOWN - YOU MUST ASK FOR IT! 🚨**\n"
+            "IMMEDIATELY after the user confirms their gender (says 'male', 'female', 'شاب', 'صبية', etc.), "
+            "your VERY NEXT response MUST ask for their full name. Do NOT skip this step!\n"
+            "Ask politely: 'May I have your full name please?' / 'ممكن اسمك الكامل من فضلك؟'\n"
+            "Do NOT proceed to ask about services, body areas, or booking until you have their name.\n"
+            "The flow for new users is: 1) Gender → 2) Full Name → 3) Service/Booking questions.\n"
+        )
     )
 
     # Get current Lebanon time for GPT to use in date/time calculations
@@ -181,14 +193,46 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     current_time_str = current_lebanon_time.strftime("%H:%M:%S")
     current_day_name = current_lebanon_time.strftime("%A")
 
+    # Build gender instruction based on whether gender is already known
+    gender_info_line = f"- **Gender**: Current gender is '{current_gender}'. "
+    if current_gender in ['male', 'female']:
+        gender_info_line += f"**GENDER IS ALREADY '{current_gender.upper()}' - NEVER ASK FOR GENDER! Just use '{current_gender}' for pricing and services. DO NOT say 'to give you personalized pricing, are you male or female?' - you already know!**\n"
+    else:
+        gender_info_line += "Only ask if it's 'unknown' AND you need it for the service.\n"
+
     # Enhanced booking instruction: GPT is responsible for parsing date/time from natural language
     booking_instruction = (
+        "**BOOKING FLOW - FOLLOW THIS EXACT ORDER:**\n\n"
+        "**STEP 1: CHECK IF NEW OR EXISTING CUSTOMER**\n"
+        "When user wants to book:\n"
+        f"- Call `check_next_appointment(phone='{customer_phone_clean}')` to check for existing appointments\n"
+        "- **CRITICAL: If the response says 'Customer not found' or success=false → This is a NEW customer!**\n"
+        "- For NEW customers: Skip to STEP 3 immediately. Do NOT stop or show an error!\n"
+        "- For EXISTING customers with appointments: Go to STEP 2\n\n"
+        "**STEP 2: HANDLE EXISTING APPOINTMENT (only if found)**\n"
+        "If the tool returns an existing appointment (success=true with appointment data), ask:\n"
+        "'I see you already have an appointment for [service] on [date] at [time]. Would you like to:'\n"
+        "'1. Keep this appointment and add a NEW one'\n"
+        "'2. Change/reschedule this existing appointment'\n"
+        "Wait for their choice before proceeding.\n\n"
+        "**STEP 3: COLLECT ALL REQUIRED BOOKING DETAILS**\n"
+        "Before calling `create_appointment`, you MUST have ALL of these:\n"
+        "1. Service type (hair removal, tattoo removal, CO2, whitening, etc.)\n"
+        "2. **BODY PART (MANDATORY for hair removal & tattoo removal)** - Ask 'Which area would you like to treat?'\n"
+        "3. Machine preference (Neo, Quadro, Trio for hair removal; Pico for tattoo)\n"
+        "4. **BRANCH (MANDATORY)** - You MUST ask which branch. Options: Beirut (Manara) or Antelias (Center Haj). NEVER assume a branch!\n"
+        "5. Date and time\n\n"
+        "**🚨 BODY PART REQUIREMENT:**\n"
+        "- For Laser Hair Removal (service_id 1 or 12): body_part_ids is REQUIRED\n"
+        "- For Tattoo Removal (service_id 13): body_part_ids is REQUIRED\n"
+        "- NEVER call `create_appointment` for these services without body_part_ids!\n"
+        "- If body part is missing, ask: 'Which area would you like the treatment on?'\n\n"
         "**Appointment Booking Process:**\n"
-        "When the user expresses intent to book an appointment, you are responsible for gathering *all* necessary details for the `create_appointment` tool. These details are: Full Name, Specific Service, Body Area(s) (if applicable for laser hair removal), Preferred Machine (Neo, Quadro, or Trio), Preferred Branch, and an Exact Date and Time.\n"
+        "When the user expresses intent to book an appointment, you are responsible for gathering *all* necessary details for the `create_appointment` tool. These details are: Full Name, Specific Service, **Body Area(s) (REQUIRED for laser hair removal and tattoo removal)**, Preferred Machine (Neo, Quadro, or Trio), Preferred Branch, and an Exact Date and Time.\n"
         "**IMPORTANT - Information Already Known:**\n"
-        f"- **Customer Name**: The customer's full name is '{user_name}'. Their first name is '{customer_first_name}'. You already know their name, so DO NOT ask for it again. Use '{customer_first_name}' when addressing them in responses.\n"
+        f"- **Customer Name**: {('The customer full name is ' + user_name + '. Their first name is ' + str(customer_first_name) + '. You already know their name, so DO NOT ask for it again. Use ' + str(customer_first_name) + ' when addressing them.') if name_is_known else '**NAME IS NOT KNOWN YET.** You MUST ask for their full name before proceeding with booking. Ask: May I have your full name please? / ممكن اسمك الكامل؟'}\n"
         f"- **Customer Phone**: The customer's phone number (without country code) is '{customer_phone_clean}'. When using tools like check_next_appointment, update_appointment_date, or create_appointment that require a phone parameter, ALWAYS use '{customer_phone_clean}'. DO NOT ask for phone number, DO NOT extract it from conversation.\n"
-        f"- **Gender**: Current gender is '{current_gender}'. If it's 'male' or 'female', DO NOT ask for gender again. Only ask if it's 'unknown' AND you need it for the service.\n"
+        f"{gender_info_line}"
         "**Appointment Management:**\n"
         "- To CHECK appointments: Use `check_next_appointment` tool with phone='{customer_phone_clean}'\n"
         "- To CREATE new appointment: Use `create_appointment` tool\n"
@@ -209,14 +253,22 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "1. Service/treatment they want (if not clear)\n"
         "2. Body area (for laser hair removal)\n"
         "3. Preferred machine (Neo, Quadro, or Trio) - or use default\n"
-        "4. Preferred branch - or use default (ط§ظ„ظ…ظ†ط§ط±ط©/Manara)\n"
+        "4. **Preferred branch - MUST ASK, NEVER ASSUME!** Options: Beirut (Manara) or Antelias (Center Haj)\n"
         "5. Date and time\n"
         f"**🕐 CURRENT DATE AND TIME (Lebanon/Beirut): {current_day_name}, {current_date_str} at {current_time_str}**\n"
         "**Date and Time Conversion (CRITICAL):** You MUST intelligently convert any natural language date/time expressions (e.g., 'tomorrow at 3 PM', 'next Friday', 'in 3 days', 'tonight at 7:30 PM') into the exact 'YYYY-MM-DD HH:MM:SS' format. "
         f"Use the CURRENT DATE AND TIME shown above ({current_date_str} {current_time_str}) as your reference point for 'today', 'tomorrow', 'next week', etc. "
         "The appointment date must be in the future (after the current time shown above) and not more than 365 days from today. If the user provides only a day (e.g., 'tomorrow'), suggest a default time like '10:00:00' or '14:00:00 (2 PM)'. If only a time is given (e.g., 'at 3 PM'), check if that time is AFTER the current time - if yes, use today's date; if no, use tomorrow's date. You must confirm the extracted date and time in your `bot_reply` before trying to book.\n"
         "**Confirmation and Tool Call:** Do NOT call `create_appointment` until you have *all* required parameters and you have *confirmed them with the user* in your `bot_reply`. If details are missing, your `action` should be `ask_for_details_for_booking`, and your `bot_reply` should ask for the *next specific missing piece of information*. For example, 'طھظ…ط§ظ…طŒ ظˆط£ظٹ ط¬ظ‡ط§ط² ط¨طھظپط¶ظ„طں' or 'ظˆظ…ط§ ظ‡ظˆ ط§ط³ظ…ظƒ ط§ظ„ظƒط§ظ…ظ„طں' (NOT phone or gender if already known). If the user says 'ok book it' but not all info is there, you still ask for the missing parts.\n"
-        "**Example of Confirmation:** If user says 'ok book me for tomorrow 1pm', and you know all other details, your `bot_reply` should be: 'طھظ…ط§ظ…طŒ ط¥ط°ط§ظ‹ ظ…ظˆط¹ط¯ظƒ ط¨ظƒط±ط§ ط§ظ„ط³ط¨طھ 28 طھظ…ظˆط² ط§ظ„ط³ط§ط¹ط© 1:00 ط¨ط¹ط¯ ط§ظ„ط¸ظ‡ط± ظپظٹ ظپط±ط¹ ط§ظ„ظ…ظ†ط§ط±ط© ط¹ظ„ظ‰ ط¬ظ‡ط§ط² ط§ظ„ظ†ظٹظˆطŒ طµط­ظٹط­طں' and `action` should be `confirm_booking_details`. Only call the tool (`create_appointment`) after final confirmation by the user (e.g., 'yes', 'ok', 'confirm'). If you have all information and user confirms, then `action` should be `tool_call` and `bot_reply` should inform the user that you are booking."
+        "**Example of Confirmation:** If user says 'ok book me for tomorrow 1pm', and you know all other details, your `bot_reply` should be: 'طھظ…ط§ظ…طŒ ط¥ط°ط§ظ‹ ظ…ظˆط¹ط¯ظƒ ط¨ظƒط±ط§ ط§ظ„ط³ط¨طھ 28 طھظ…ظˆط² ط§ظ„ط³ط§ط¹ط© 1:00 ط¨ط¹ط¯ ط§ظ„ط¸ظ‡ط± ظپظٹ ظپط±ط¹ ط§ظ„ظ…ظ†ط§ط±ط© ط¹ظ„ظ‰ ط¬ظ‡ط§ط² ط§ظ„ظ†ظٹظˆطŒ طµط­ظٹط­طں' and `action` should be `confirm_booking_details`. Only call the tool (`create_appointment`) after final confirmation by the user (e.g., 'yes', 'ok', 'confirm'). If you have all information and user confirms, then `action` should be `tool_call` and `bot_reply` should inform the user that you are booking.\n"
+        "**🚨 AFTER SUCCESSFUL BOOKING - Confirmation Message MUST Include:**\n"
+        "When the appointment is successfully created, your confirmation message MUST mention ALL of these details:\n"
+        "1. Date and time of the appointment\n"
+        "2. **Body part/area being treated** (e.g., 'Full Arms', 'Legs', 'Back') - ALWAYS include this!\n"
+        "3. Machine being used (Neo, Quadro, Trio, etc.)\n"
+        "4. Branch location\n"
+        "5. Price (if available in the API response)\n"
+        "Example: 'Your appointment for laser hair removal on your **legs** has been booked for tomorrow at 12:00 PM with the Neo machine at our Beirut branch. The session costs $80.'"
     )
 
     # Enhanced gender ask instruction: GPT is responsible for when and how to ask
@@ -246,64 +298,55 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "Your `action` in this case should be `ask_gender`. Prioritize this question over detailed service information or booking if gender is unknown and relevant for a precise answer. **If `current_gender_from_config` is already 'male' or 'female', you MUST NOT use the `ask_gender` or `initial_greet_and_ask_gender` actions. Assume the gender is known and proceed with the user's request, using the appropriate gender phrasing as defined in the system instruction.**"
     )
 
-    # NEW: Instruction for Franco Arabic response style (ENHANCED)
-    franco_arabic_response_instruction = ""
-    if current_preferred_lang == "franco":
-        franco_arabic_response_instruction = (
-            """**🔴 FRANCO-ARABIC CONVERSION PROTOCOL - MANDATORY 🔴**
+    # Language instruction - language already detected, tell GPT to respond in it
+    language_response_instruction = f"""
+**🌐 LANGUAGE RESPONSE - CRITICAL REQUIREMENT 🌐**
 
-**User Input Type:** Franco-Arabic (Latin script for Arabic sounds, e.g., 'kifak', 'shu', 'merhaba')
+User's language detected as: **{current_preferred_lang}**
+You MUST respond in: **{response_language}**
 
-**YOUR RESPONSE REQUIREMENT:**
-✅ MUST respond in Lebanese colloquial Arabic dialect
-✅ MUST use Arabic script (ك، ي، ف، ع، ط، ح, etc.)
-✅ MUST NOT use Latin/English characters (except brand names, numbers)
+**RESPONSE RULES:**
+- If response_language is "ar": Respond in Arabic script (العربية)
+- If response_language is "en": Respond in English
+- If response_language is "fr": Respond in French
 
-**CRITICAL EXAMPLES:**
-- User writes: "kifak?" → You write in Arabic script (NOT "kifak")
-- User writes: "shu 3am ta3mol?" → You write in Arabic script (NOT "shu 3am ta3mol")
-- User writes: "marhaba" → You write in Arabic script (NOT "marhaba")
-- User writes: "Lina's" → You write: "Lina's" (brand name exception)
+Note: If user wrote in Franco-Arabic (Latin letters for Arabic sounds like "kifak"),
+you still respond in Arabic SCRIPT, not Franco.
 
-**JSON OUTPUT:**
-- `detected_language`: "franco" (to indicate input was Franco)
-- `bot_reply`: Lebanese Arabic in Arabic script (NOT Latin)
+**YOUR JSON MUST INCLUDE:**
+- `detected_language`: "{current_preferred_lang}"
+- `bot_reply`: Your response in **{response_language}**
 
-**VALIDATION CHECKLIST:**
-Before submitting your `bot_reply`:
-1. Is your entire response in Arabic script?
-2. Did you avoid all Latin characters except brand names?
-3. Is the dialect colloquial Lebanese (not formal Standard Arabic)?
-
-**THIS IS A HARD REQUIREMENT. Any Latin-script Arabic in your response is a CRITICAL ERROR.**"""
-        )
+DO NOT detect language yourself - it has already been detected.
+"""
 
 
     # Combine all system instructions
-    system_instruction_final = system_instruction_core + "\n\n" + early_name_instruction + "\n\n" + booking_instruction + "\n\n" + gender_ask_instruction + "\n\n" + franco_arabic_response_instruction
+    system_instruction_final = system_instruction_core + "\n\n" + early_name_instruction + "\n\n" + booking_instruction + "\n\n" + gender_ask_instruction + "\n\n" + language_response_instruction
 
 
     messages = [{"role": "system", "content": system_instruction_final}]
     messages.extend(current_context_messages[-config.MAX_CONTEXT_MESSAGES:])
 
-    # MULTI-LAYERED APPROACH: Add language reminder at user message level as well
-    language_map = {"ar": "Arabic", "en": "English", "fr": "French", "franco": "Lebanese Arabic (Arabic script)"}
-    target_language = language_map.get(current_preferred_lang, current_preferred_lang)
-
-    # Wrap user input with language reminder (reinforces system instruction)
-    user_message_with_context = f"""[REMINDER: Respond ONLY in {target_language}]
-
-User message: {user_input}"""
-
-    messages.append({"role": "user", "content": user_message_with_context})
+    # Let GPT detect language naturally - no forced language reminder
+    messages.append({"role": "user", "content": user_input})
     
     gpt_raw_content = "" # Initialize gpt_raw_content here to make it accessible in except blocks
+
+    # Dynamic model selection based on question complexity
+    selected_model, model_metadata = select_optimal_model(
+        question=user_input,
+        context=current_context_messages,
+        user_tier="standard"
+    )
+    print(f"🤖 Model selected: {selected_model} | Complexity: {model_metadata['complexity']} | Reason: {model_metadata['reason']}")
+
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o",
+            model=selected_model,
             messages=messages,
-            temperature=0.7, 
-            tools=get_openai_tools_schema(), 
+            temperature=0.7,
+            tools=get_openai_tools_schema(),
             tool_choice="auto",
             response_format={"type": "json_object"}
         )
@@ -329,6 +372,106 @@ User message: {user_input}"""
                 
                 # --- NEW LOGIC: Pre-process date/time for create_appointment tool call ---
                 if function_name == "create_appointment":
+                    # === CRITICAL VALIDATION: Ensure user explicitly provided date/time ===
+                    # GPT sometimes makes up dates - we must verify the user actually specified one
+                    def user_provided_datetime(messages, user_input):
+                        """Check if user explicitly mentioned a date or time in their messages."""
+                        # Date/time patterns that indicate user provided a date
+                        datetime_patterns = [
+                            # Explicit dates
+                            r'\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b',  # 21/01, 21-01-2026, etc.
+                            r'\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b',  # 21st january, 21 jan
+                            r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\b',  # january 21st
+                            # Relative dates
+                            r'\b(?:today|tomorrow|the day after tomorrow|after tomorrow|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|week)|this\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b',
+                            r'\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
+                            # Arabic relative dates
+                            r'\b(?:اليوم|بكرا|غدا|بعد بكرا|بعد غدا|الاثنين|الثلاثاء|الاربعاء|الخميس|الجمعة|السبت|الاحد)\b',
+                            # Franco-Arab dates (expanded)
+                            r'\b(?:bukra|bokra|ba3d bukra|ba3d bokra|lyom|el yom|elyom|alyom)\b',
+                            # Franco-Arab time: "aal 3", "3al 3", "saa 3", "el sa3a 3"
+                            r'\b(?:aal|3al|3a|saa|sa3a|el\s*sa3a)\s*\d{1,2}\b',
+                            # Time patterns
+                            r'\b\d{1,2}\s*(?::\d{2})?\s*(?:am|pm|صباحا|مساء|الصبح|بالليل|noon|midnight)\b',
+                            r'\bat\s+\d{1,2}(?::\d{2})?\b',  # at 11, at 11:00
+                            r'\b(?:morning|afternoon|evening|صباح|مساء)\b',
+                            # Simple time reference after relative date (e.g., "bokra 3", "tomorrow 3")
+                            r'\b(?:bukra|bokra|tomorrow|غدا|بكرا)\s+(?:aal|3al|at|el|)?\s*\d{1,2}\b',
+                        ]
+
+                        # Check user input and recent user messages
+                        all_user_text = user_input.lower()
+                        for msg in messages:
+                            if msg.get("role") == "user":
+                                all_user_text += " " + msg.get("content", "").lower()
+
+                        for pattern in datetime_patterns:
+                            if re.search(pattern, all_user_text, re.IGNORECASE):
+                                print(f"DEBUG: Found date/time pattern in user messages: {pattern}")
+                                return True
+
+                        return False
+
+                    # Validate that user actually provided a date/time
+                    if not user_provided_datetime(current_context_messages, user_input):
+                        print("ERROR: GPT attempted to book without user specifying date/time. Rejecting.")
+                        # Return response asking for date/time
+                        parsed_response = {
+                            "action": "ask_for_details_for_booking",
+                            "bot_reply": "What date and time would work best for your appointment?" if current_preferred_lang == "en" else
+                                        "شو التاريخ والوقت يلي بيناسبك للموعد؟" if current_preferred_lang == "ar" else
+                                        "Quel jour et quelle heure vous conviendraient pour le rendez-vous?" if current_preferred_lang == "fr" else
+                                        "shu el tarekh w el wa2et li byesbak lal maw3ad?",
+                            "detected_language": current_preferred_lang,
+                            "detected_gender": current_gender,
+                            "current_gender_from_config": current_gender
+                        }
+                        return parsed_response
+
+                    # === CRITICAL VALIDATION: Ensure user explicitly provided branch location ===
+                    def user_provided_branch(messages, user_input):
+                        """Check if user explicitly mentioned a branch location in their messages."""
+                        branch_patterns = [
+                            # Branch names
+                            r'\b(?:beirut|beyrouth|بيروت|bayrut)\b',
+                            r'\b(?:manara|منارة|el manara|el-manara)\b',
+                            r'\b(?:antelias|انطلياس|antilyas)\b',
+                            r'\b(?:center\s*haj|haj\s*building)\b',
+                            # Generic branch references with location
+                            r'\b(?:branch\s+(?:1|2|one|two))\b',
+                            r'\b(?:first\s+branch|second\s+branch)\b',
+                            r'\b(?:main\s+branch)\b',
+                        ]
+
+                        # Check user input and recent user messages
+                        all_user_text = user_input.lower()
+                        for msg in messages:
+                            if msg.get("role") == "user":
+                                all_user_text += " " + msg.get("content", "").lower()
+
+                        for pattern in branch_patterns:
+                            if re.search(pattern, all_user_text, re.IGNORECASE):
+                                print(f"DEBUG: Found branch pattern in user messages: {pattern}")
+                                return True
+
+                        return False
+
+                    # Validate that user actually provided a branch
+                    if not user_provided_branch(current_context_messages, user_input):
+                        print("ERROR: GPT attempted to book without user specifying branch. Rejecting.")
+                        # Return response asking for branch
+                        parsed_response = {
+                            "action": "ask_for_details_for_booking",
+                            "bot_reply": "Which branch would you prefer? We have Beirut (Manara) and Antelias (Center Haj Building)." if current_preferred_lang == "en" else
+                                        "أي فرع بتفضل؟ عنا بيروت (المنارة) وأنطلياس (سنتر الحاج)." if current_preferred_lang == "ar" else
+                                        "Quelle branche préférez-vous? Nous avons Beyrouth (Manara) et Antelias (Center Haj)." if current_preferred_lang == "fr" else
+                                        "ayya far3 btfadel? 3anna beirut (manara) w antelias (center haj).",
+                            "detected_language": current_preferred_lang,
+                            "detected_gender": current_gender,
+                            "current_gender_from_config": current_gender
+                        }
+                        return parsed_response
+
                     # Extract customer name and phone from the conversation if not provided in tool args
                     # CRITICAL FIX: For Qiscus, user_id is room_id, NOT phone number
                     # Get actual phone number from user_data_whatsapp
@@ -785,49 +928,12 @@ User message: {user_input}"""
         else:
             parsed_response = json.loads(gpt_raw_content)
 
-        # ✅ LANGUAGE VALIDATION: Check if bot response matches expected language
+        # Language was pre-detected before GPT call - use it directly
+        # GPT was instructed to respond in the pre-detected language
         bot_reply = parsed_response.get("bot_reply", "")
-        detected_language = parsed_response.get("detected_language", current_preferred_lang)
-
-        if bot_reply:  # Only validate if there's a reply
-            is_valid, error_msg = validate_language_match(current_preferred_lang, bot_reply, detected_language)
-
-            if not is_valid:
-                print(f"⚠️ Language mismatch detected! Expected: {current_preferred_lang}, {error_msg}")
-                print(f"   Retrying with STRONGER language enforcement...")
-
-                # Retry with enhanced instruction and lower temperature
-                language_map = {"ar": "Arabic", "en": "English", "fr": "French", "franco": "Arabic"}
-                target_language = language_map.get(current_preferred_lang, current_preferred_lang)
-
-                enhanced_instruction = f"""
-                CRITICAL: You MUST respond in {target_language} ONLY.
-                This is NON-NEGOTIABLE. Any other language is FORBIDDEN.
-                """
-
-                # Modify the system message for retry
-                retry_messages = messages.copy()
-                retry_messages[0] = {"role": "system", "content": enhanced_instruction + retry_messages[0]["content"]}
-
-                try:
-                    # Retry with temperature=0 for more deterministic output
-                    retry_response = await client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=retry_messages,
-                        temperature=0,  # More deterministic
-                        response_format={"type": "json_object"}
-                    )
-
-                    retry_content = retry_response.choices[0].message.content.strip()
-                    retry_parsed = json.loads(retry_content)
-
-                    # Use retry response if it has bot_reply
-                    if "bot_reply" in retry_parsed:
-                        print(f"✅ Retry successful, using second response")
-                        parsed_response = retry_parsed
-                except Exception as retry_error:
-                    print(f"❌ Retry failed: {retry_error}, using original response")
-                    # Keep original parsed_response
+        detected_language = current_preferred_lang  # Use pre-detected language
+        parsed_response['detected_language'] = detected_language  # Ensure it's in the response
+        print(f"🌐 Using pre-detected language: {detected_language}")
 
         # Ensure current_gender_from_config in the output reflects the *actual* config value
         # This is critical for GPT to "see" the current state of the bot's knowledge about gender.
@@ -836,8 +942,17 @@ User message: {user_input}"""
         # CRITICAL FIX: Override GPT's action if it tries to ask for gender when we already know it
         # GPT sometimes ignores the instruction that gender is already known and tries to ask anyway
         if current_gender in ["male", "female"] and parsed_response.get("action") in ["ask_gender", "initial_greet_and_ask_gender"]:
-            print(f"⚠️ GPT tried to ask for gender but current_gender is already '{current_gender}'. Overriding action to 'answer_question'.")
-            parsed_response["action"] = "answer_question"
+            print(f"⚠️ GPT tried to ask for gender but current_gender is already '{current_gender}'. Overriding action and response.")
+            parsed_response["action"] = "provide_info"
+            # Replace the entire response since it was asking about gender
+            fallback_responses = {
+                "en": "I'd be happy to help! What would you like to know?",
+                "ar": "بكل سرور! كيف بقدر ساعدك؟",
+                "franco": "أكيد! كيف بقدر ساعدك؟",
+                "fr": "Avec plaisir! Comment puis-je vous aider?"
+            }
+            parsed_response["bot_reply"] = fallback_responses.get(current_preferred_lang, fallback_responses["en"])
+            print(f"✅ Using fallback response: {parsed_response['bot_reply']}")
 
         # ADDITIONAL FIX: Remove gender questions from bot_reply when gender is already known
         # GPT may include gender questions in the text even when action is correct
@@ -850,8 +965,12 @@ User message: {user_input}"""
                 r'(شب|شاب)\s*(أو|ولا|أم)\s*(صبي[ة]?|بنت)',
                 r'جنسك|ما\s*هو\s*جنسك',
                 r'👦👧',  # Common emoji pattern for gender question
-                # English patterns
-                r'are\s*you\s*(male|female|a\s*(man|woman|boy|girl))',
+                # English patterns - ORDER MATTERS: comprehensive patterns FIRST
+                r'may\s+I\s+ask\s+(if\s+)?you\'?re\s+.*\??',  # "may I ask if you're male or female?"
+                r'To\s+give\s+you\s+personalized.*male\s+or\s+female\??',  # Common GPT phrase
+                r"(if\s+)?you're\s+(male|female)\s*(or\s+(male|female))?\??",  # "you're male or female?"
+                r'male\s+or\s+female\s*\??',  # "male or female?"
+                r'are\s*you\s*(male|female|a\s*(man|woman|boy|girl))\??',
                 r'(male|female)\s*\?',
                 r'your\s*gender',
                 r'what\s*is\s*your\s*gender',
@@ -876,7 +995,30 @@ User message: {user_input}"""
                     sanitized = re_module.sub(r'\s*[،,؟?]\s*$', '', sanitized)  # Remove trailing punctuation
                     sanitized = re_module.sub(r'\s+', ' ', sanitized).strip()  # Normalize spaces
 
-                    if sanitized and len(sanitized) > 10:  # Keep if there's meaningful content left
+                    # Check if sanitized response is incomplete (ends with dangling words)
+                    incomplete_endings = [
+                        r"\byou're\s*$", r"\bif you're\s*$", r"\bare you\s*$", r"\bmay I ask\s*$",
+                        r"\bask if\s*$", r"\byour\s*$", r"\ba\s*$", r"\ban\s*$", r"\bthe\s*$",
+                        r"\bor\s*$", r"\bmale\s+or\s*$", r"\bfemale\s+or\s*$",  # Catches "or", "male or", "female or"
+                        r"\bif you're\s+\w+\s+or\s*$",  # Catches "if you're male or"
+                        r"\bأنت[ِ]?\s*$", r"\bهل\s*$", r"\bإذا\s*$", r"\bأو\s*$"  # Arabic "or"
+                    ]
+                    is_incomplete = any(re_module.search(ending, sanitized, re_module.IGNORECASE) for ending in incomplete_endings)
+
+                    if is_incomplete or not sanitized or len(sanitized) <= 10:
+                        # Response is incomplete or useless - provide a proper fallback
+                        print(f"⚠️ Sanitized response is incomplete or too short. Using fallback response.")
+                        fallback_responses = {
+                            "en": "I'd be happy to help you with that! Let me provide the information you need.",
+                            "ar": "بكل سرور! خليني أعطيك المعلومات اللي بتحتاجها.",
+                            "franco": "أكيد! خليني أساعدك.",
+                            "fr": "Avec plaisir! Laissez-moi vous aider."
+                        }
+                        parsed_response["bot_reply"] = fallback_responses.get(current_preferred_lang, fallback_responses["en"])
+                        # Change action to trigger re-processing without gender question
+                        parsed_response["action"] = "provide_info"
+                        print(f"✅ Using fallback response: {parsed_response['bot_reply']}")
+                    else:
                         parsed_response["bot_reply"] = sanitized
                         print(f"✅ Sanitized bot_reply: {sanitized[:100]}...")
                     break
@@ -892,7 +1034,49 @@ User message: {user_input}"""
         
         if "action" not in parsed_response or "bot_reply" not in parsed_response:
             raise ValueError("GPT response missing required fields (action or bot_reply)")
-        
+
+        # ============================================================
+        # LANGUAGE VALIDATION: Regenerate if response is in wrong language
+        # ============================================================
+        final_bot_reply = parsed_response.get("bot_reply", "")
+        is_lang_valid, lang_error = validate_language_match(response_language, final_bot_reply, response_language)
+
+        if not is_lang_valid:
+            print(f"⚠️ {lang_error}")
+            print(f"🔄 Regenerating response in correct language: {response_language}")
+
+            # Build a strong language-only instruction
+            lang_correction_prompt = f"""Your previous response was in the WRONG language.
+
+The user's message was: "{user_input}"
+Your response was: "{final_bot_reply}"
+
+You MUST respond in **{response_language.upper()}** ONLY.
+- If response_language is "en": Write your ENTIRE response in English. NO Arabic characters.
+- If response_language is "ar": Write your ENTIRE response in Arabic script (العربية).
+- If response_language is "fr": Write your ENTIRE response in French. NO Arabic characters.
+
+Rewrite your response in the correct language. Return ONLY a JSON object with "action" and "bot_reply"."""
+
+            try:
+                correction_response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": f"You are a helpful assistant. Respond ONLY in {response_language}. Return JSON with 'action' and 'bot_reply' fields."},
+                        {"role": "user", "content": lang_correction_prompt}
+                    ],
+                    temperature=0,
+                    response_format={"type": "json_object"}
+                )
+                corrected_content = correction_response.choices[0].message.content.strip()
+                corrected_parsed = json.loads(corrected_content)
+                if "bot_reply" in corrected_parsed:
+                    parsed_response["bot_reply"] = corrected_parsed["bot_reply"]
+                    print(f"✅ Language corrected. New response: {parsed_response['bot_reply'][:100]}...")
+            except Exception as lang_fix_err:
+                print(f"❌ Failed to correct language: {lang_fix_err}")
+                # Keep original response if correction fails
+
         return parsed_response
     except json.JSONDecodeError as e:
         print(f"â‌Œ JSON Decode Error from GPT chat response: {e}. Raw content: {gpt_raw_content}")

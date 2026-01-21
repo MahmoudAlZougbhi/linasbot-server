@@ -3,6 +3,7 @@
 
 from handlers.text_handlers_firestore import *
 from services.analytics_events import analytics
+from services.language_detection_service import language_detection_service
 import time
 
 
@@ -18,6 +19,22 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     current_gender = config.user_gender.get(user_id, "unknown")
     current_preferred_lang = user_data.get('user_preferred_lang', 'ar')
     current_conversation_id = user_data.get('current_conversation_id')
+
+    # ===== PRE-GPT LANGUAGE DETECTION =====
+    is_expecting_name = user_data.get('awaiting_name_input', False)
+    lang_result = language_detection_service.detect_language(
+        user_id=user_id,
+        message=user_input_to_process,
+        user_data=user_data,
+        is_expecting_name=is_expecting_name
+    )
+
+    # Update language variables
+    current_preferred_lang = lang_result['detected_language']
+    response_language = lang_result['response_language']
+
+    print(f"[_process_and_respond] 🌐 Language detected: {current_preferred_lang} → respond in: {response_language}")
+    # =====================================
 
     # DEBUG: Log gender state at start of processing
     print(f"[_process_and_respond] 🔍 USER STATE for {user_id}:")
@@ -38,8 +55,56 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # NEW: Check if we're awaiting name input after gender confirmation
     if user_data.get('awaiting_name_input', False):
         print(f"🔔 Received name input from user {user_id}: '{user_input_to_process}'")
-        
-        extracted_name = user_input_to_process.strip()
+
+        # Extract actual name from common phrases
+        def extract_name_from_input(text):
+            """Extract the actual name from phrases like 'my name is jad', 'ana ismi jad', etc."""
+            text = text.strip()
+            text_lower = text.lower()
+
+            # Patterns to extract name from - MUST start at beginning of string (^)
+            # This prevents matching partial words in the middle of a name
+            patterns = [
+                # English patterns
+                r"^(?:my name is|i'm|i am|im|it's|its|call me|they call me|name's)\s+(.+)",
+                # Franco-Arabic patterns (common ways to say "my name is" in Franco)
+                r"^(?:ana ismi|ana esmi|ana isme|ismi|esmi|isme|esme)\s+(.+)",
+                # French patterns
+                r"^(?:je m'appelle|je suis|mon nom est|c'est)\s+(.+)",
+            ]
+
+            for pattern in patterns:
+                match = re.match(pattern, text_lower)  # Use re.match instead of re.search
+                if match:
+                    # Get the name part, preserving original case from input
+                    name_start = match.start(1)
+                    name_end = match.end(1)
+                    # Find corresponding position in original text
+                    extracted = text[name_start:name_end].strip()
+                    # Clean up punctuation at the end
+                    extracted = re.sub(r'[.,!?]+$', '', extracted).strip()
+                    if extracted:
+                        print(f"DEBUG: Extracted name '{extracted}' from phrase '{text}'")
+                        return extracted
+
+            # Arabic patterns (separate due to RTL) - also anchor to start
+            arabic_patterns = [
+                r'^(?:اسمي|انا اسمي|انا)\s+(.+)',
+            ]
+            for pattern in arabic_patterns:
+                match = re.match(pattern, text)  # Use re.match
+                if match:
+                    extracted = match.group(1).strip()
+                    extracted = re.sub(r'[.,!?،؟]+$', '', extracted).strip()
+                    if extracted:
+                        print(f"DEBUG: Extracted Arabic name '{extracted}' from phrase '{text}'")
+                        return extracted
+
+            # No pattern matched - return original (user just typed their name)
+            print(f"DEBUG: No prefix pattern matched, using full input as name: '{text}'")
+            return text
+
+        extracted_name = extract_name_from_input(user_input_to_process)
         
         # Basic validation: name should be 2-50 characters, letters/spaces/hyphens/apostrophes only
         name_pattern = r'^[A-Za-z\u00C0-\u00FF\u0600-\u06FF\s\-\']+$'
@@ -150,6 +215,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 current_context_messages=conversation_history,
                 current_gender=current_gender,
                 current_preferred_lang=current_preferred_lang,
+                response_language=response_language,
                 is_initial_message_after_start=is_initial_message_for_gpt,
                 initial_user_query_to_process=initial_user_query_to_process_original
             )
@@ -222,6 +288,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 current_context_messages=conversation_history,
                 current_gender=current_gender,
                 current_preferred_lang=current_preferred_lang,
+                response_language=response_language,
                 is_initial_message_after_start=is_initial_message_for_gpt,
                 initial_user_query_to_process=None
             )
@@ -231,8 +298,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     detected_gender_from_gpt = gpt_response_data.get("detected_gender")
     detected_language = gpt_response_data.get("detected_language")
 
-    if detected_language and user_data.get('user_preferred_lang') != detected_language:
-        user_data['user_preferred_lang'] = detected_language
+    # Update language from GPT's detection
+    if detected_language and detected_language in ['en', 'ar', 'fr', 'franco']:
+        previous_lang = user_data.get('user_preferred_lang', 'ar')
+        if previous_lang != detected_language:
+            user_data['user_preferred_lang'] = detected_language
+            user_persistence.save_user_language(user_id, detected_language)
+            print(f"[_process_and_respond] 🌐 Language updated by GPT: {previous_lang} → {detected_language}")
+        else:
+            print(f"[_process_and_respond] 🌐 Language confirmed by GPT: {detected_language}")
+        # Update local variable so all follow-up messages in this function use the detected language
+        current_preferred_lang = detected_language
 
     if detected_gender_from_gpt and config.user_gender.get(user_id) != detected_gender_from_gpt:
         config.user_gender[user_id] = detected_gender_from_gpt
@@ -297,6 +373,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 current_context_messages=conversation_history,
                 current_gender=detected_gender_from_gpt or current_gender,
                 current_preferred_lang=current_preferred_lang,
+                response_language=response_language,
                 is_initial_message_after_start=False,
                 initial_user_query_to_process=None
             )

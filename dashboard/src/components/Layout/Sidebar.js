@@ -1,5 +1,5 @@
-import React from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import React, { useMemo } from "react";
+import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   HomeIcon,
@@ -13,56 +13,75 @@ import {
   XMarkIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
+import { useAuth } from "../../contexts/AuthContext";
+import { hasPermission } from "../../utils/permissions";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: HomeIcon, active: true },
+// Navigation items with permission keys
+const navigationItems = [
+  { name: "Dashboard", href: "/", icon: HomeIcon, permissionKey: "dashboard" },
   {
     name: "Testing Lab",
     href: "/testing",
     icon: BeakerIcon,
-    active: true,
     badge: "Active",
+    permissionKey: "testing",
   },
   {
     name: "AI Training",
     href: "/training",
     icon: AcademicCapIcon,
-    active: true,
     badge: "Active",
+    permissionKey: "training",
   },
   {
     name: "Live Chat",
     href: "/live-chat",
     icon: ChatBubbleLeftRightIcon,
-    active: true,
     badge: "Active",
+    permissionKey: "liveChat",
   },
   {
     name: "Chat History",
     href: "/chat-history",
     icon: ClockIcon,
-    active: true,
     badge: "Active",
+    permissionKey: "chatHistory",
   },
   {
     name: "Analytics",
     href: "/analytics",
     icon: ChartBarIcon,
-    active: true,
     badge: "Active",
+    permissionKey: "analytics",
   },
   {
     name: "Smart Messaging",
     href: "/smart-messaging",
     icon: BellIcon,
-    active: true,
     badge: "Active",
+    permissionKey: "smartMessaging",
   },
-  { name: "Settings", href: "/settings", icon: Cog6ToothIcon, active: true },
+  { name: "Settings", href: "/settings", icon: Cog6ToothIcon, permissionKey: "settings" },
 ];
 
 const Sidebar = ({ onClose }) => {
-  const location = useLocation();
+  const { user } = useAuth();
+
+  // Filter navigation items based on user permissions
+  const navigation = useMemo(() => {
+    if (!user) return [];
+
+    // Admin has access to everything
+    if (user.role === 'admin') {
+      return navigationItems;
+    }
+
+    // Filter based on permissions
+    return navigationItems.filter(item => {
+      if (!item.permissionKey) return true;
+      return hasPermission(user, item.permissionKey);
+    });
+  }, [user]);
 
   return (
     <div className="flex flex-col w-80 h-full">
@@ -106,8 +125,6 @@ const Sidebar = ({ onClose }) => {
         {/* Navigation */}
         <nav className="flex-1 p-6 space-y-2">
           {navigation.map((item, index) => {
-            const isActive = location.pathname === item.href;
-
             return (
               <motion.div
                 key={item.name}
@@ -115,66 +132,53 @@ const Sidebar = ({ onClose }) => {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
               >
-                {item.active ? (
-                  <NavLink
-                    to={item.href}
-                    className={({ isActive }) =>
-                      `group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative overflow-hidden ${
-                        isActive
-                          ? "bg-gradient-to-r from-primary-500 to-secondary-500 text-white shadow-lg"
-                          : "text-slate-700 hover:bg-white/50 hover:text-slate-900"
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && (
-                          <motion.div
-                            layoutId="activeTab"
-                            className="absolute inset-0 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-xl"
-                            transition={{
-                              type: "spring",
-                              bounce: 0.2,
-                              duration: 0.6,
-                            }}
-                          />
-                        )}
-                        <div className="relative flex items-center w-full">
-                          <item.icon
-                            className={`mr-3 h-5 w-5 transition-colors ${
-                              isActive
-                                ? "text-white"
-                                : "text-slate-500 group-hover:text-slate-700"
+                <NavLink
+                  to={item.href}
+                  className={({ isActive }) =>
+                    `group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative overflow-hidden ${
+                      isActive
+                        ? "bg-gradient-to-r from-primary-500 to-secondary-500 text-white shadow-lg"
+                        : "text-slate-700 hover:bg-white/50 hover:text-slate-900"
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeTab"
+                          className="absolute inset-0 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-xl"
+                          transition={{
+                            type: "spring",
+                            bounce: 0.2,
+                            duration: 0.6,
+                          }}
+                        />
+                      )}
+                      <div className="relative flex items-center w-full">
+                        <item.icon
+                          className={`mr-3 h-5 w-5 transition-colors ${
+                            isActive
+                              ? "text-white"
+                              : "text-slate-500 group-hover:text-slate-700"
+                          }`}
+                        />
+                        <span className="flex-1">{item.name}</span>
+                        {item.badge && (
+                          <span
+                            className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
+                              item.badge === "Active"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-amber-100 text-amber-700"
                             }`}
-                          />
-                          <span className="flex-1">{item.name}</span>
-                          {item.badge && (
-                            <span
-                              className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
-                                item.badge === "Active"
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </NavLink>
-                ) : (
-                  <div className="group flex items-center px-4 py-3 text-sm font-medium rounded-xl text-slate-400 cursor-not-allowed relative">
-                    <item.icon className="mr-3 h-5 w-5 text-slate-300" />
-                    <span className="flex-1">{item.name}</span>
-                    {item.badge && (
-                      <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-500">
-                        {item.badge}
-                      </span>
-                    )}
-                    <div className="absolute inset-0 bg-slate-100/50 rounded-xl opacity-50"></div>
-                  </div>
-                )}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </NavLink>
               </motion.div>
             );
           })}

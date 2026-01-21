@@ -16,6 +16,9 @@ import {
   UserIcon,
   Squares2X2Icon,
   InboxIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 
@@ -47,6 +50,21 @@ const SmartMessaging = () => {
   const [serviceMappings, setServiceMappings] = useState({});
   const [availableServices, setAvailableServices] = useState([]);
   const [availableTemplates, setAvailableTemplates] = useState([]);
+
+  // NEW: Edit modals state
+  const [editingScheduledMessage, setEditingScheduledMessage] = useState(null);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [showCreateTemplateModal, setShowCreateTemplateModal] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({
+    id: "",
+    name: "",
+    description: "",
+    ar: "",
+    en: "",
+    fr: ""
+  });
+  const [savingScheduledEdit, setSavingScheduledEdit] = useState(false);
+  const [viewingMessage, setViewingMessage] = useState(null);
 
   // Fetch real data from API
   useEffect(() => {
@@ -265,6 +283,234 @@ const SmartMessaging = () => {
     } catch (error) {
       console.error("Error saving service mappings:", error);
       toast.error("Failed to save service mappings");
+    }
+  };
+
+  // View a message's full content
+  const handleViewMessage = async (message) => {
+    let fullContent = message.full_content || message.content_preview || "";
+
+    // If we don't have full content, fetch it
+    if (!message.full_content && message.message_id) {
+      try {
+        const response = await fetch(`/api/smart-messaging/preview-queue/${message.message_id}`);
+        const result = await response.json();
+        if (result.success && result.message) {
+          fullContent = result.message.rendered_content || result.message.content || fullContent;
+        }
+      } catch (error) {
+        console.error("Error fetching message details:", error);
+      }
+    }
+
+    setViewingMessage({
+      ...message,
+      fullContent
+    });
+  };
+
+  // Edit a scheduled message - use full_content if available, otherwise fetch
+  const handleEditScheduledMessage = async (message) => {
+    // First, try to use full_content from the message object (already loaded)
+    let fullContent = message.full_content || message.content_preview || "";
+
+    // If we don't have full content, fetch it from the API
+    if (!message.full_content) {
+      try {
+        const response = await fetch(`/api/smart-messaging/preview-queue/${message.message_id}`);
+        const result = await response.json();
+
+        if (result.success && result.message) {
+          fullContent = result.message.rendered_content || result.message.content || fullContent;
+        }
+      } catch (error) {
+        console.error("Error fetching message details:", error);
+      }
+    }
+
+    setEditingScheduledMessage({
+      ...message,
+      editedContent: fullContent,
+      editedSendTime: message.send_at ? new Date(message.send_at).toISOString().slice(0, 16) : ""
+    });
+  };
+
+  // Save edited scheduled message
+  const handleSaveScheduledMessageEdit = async () => {
+    if (!editingScheduledMessage) return;
+
+    setSavingScheduledEdit(true);
+    try {
+      const response = await fetch(`/api/smart-messaging/preview-queue/${editingScheduledMessage.message_id}/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rendered_content: editingScheduledMessage.editedContent,
+          scheduled_send_time: editingScheduledMessage.editedSendTime
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Message updated successfully!");
+        setEditingScheduledMessage(null);
+        fetchSmartMessagingData();
+      } else {
+        toast.error(result.error || "Failed to update message");
+      }
+    } catch (error) {
+      console.error("Error saving scheduled message edit:", error);
+      toast.error("Failed to save changes");
+    } finally {
+      setSavingScheduledEdit(false);
+    }
+  };
+
+  // Cancel a scheduled message
+  const handleCancelScheduledMessage = async (messageId) => {
+    if (!window.confirm("Are you sure you want to cancel this scheduled message?")) return;
+
+    try {
+      const response = await fetch(`/api/smart-messaging/preview-queue/${messageId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Cancelled by user" })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Scheduled message cancelled");
+        fetchSmartMessagingData();
+      } else {
+        toast.error(result.error || "Failed to cancel message");
+      }
+    } catch (error) {
+      console.error("Error cancelling message:", error);
+      toast.error("Failed to cancel message");
+    }
+  };
+
+  // Open template editor
+  const handleEditTemplate = (templateId) => {
+    const template = messageTemplates[templateId];
+    if (template) {
+      setEditingTemplate({
+        id: templateId,
+        name: template.name,
+        description: template.description,
+        ar: template.ar || "",
+        en: template.en || "",
+        fr: template.fr || ""
+      });
+    }
+  };
+
+  // Save template edits
+  const handleSaveTemplateEdit = async () => {
+    if (!editingTemplate) return;
+
+    setSavingTemplate(editingTemplate.id);
+    try {
+      const response = await fetch(`/api/smart-messaging/templates/${editingTemplate.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ar: editingTemplate.ar,
+          en: editingTemplate.en,
+          fr: editingTemplate.fr,
+          name: editingTemplate.name,
+          description: editingTemplate.description
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Template saved successfully!");
+        setEditingTemplate(null);
+        fetchSmartMessagingData();
+      } else {
+        toast.error(result.error || "Failed to save template");
+      }
+    } catch (error) {
+      console.error("Error saving template:", error);
+      toast.error("Failed to save template");
+    } finally {
+      setSavingTemplate(null);
+    }
+  };
+
+  // Create new template
+  const handleCreateTemplate = async () => {
+    if (!newTemplate.id || !newTemplate.name) {
+      toast.error("Template ID and name are required");
+      return;
+    }
+
+    // Validate ID format (lowercase, underscores only)
+    const idPattern = /^[a-z][a-z0-9_]*$/;
+    if (!idPattern.test(newTemplate.id)) {
+      toast.error("Template ID must start with a letter and contain only lowercase letters, numbers, and underscores");
+      return;
+    }
+
+    if (messageTemplates[newTemplate.id]) {
+      toast.error("A template with this ID already exists");
+      return;
+    }
+
+    setSavingTemplate("new");
+    try {
+      const response = await fetch(`/api/smart-messaging/templates/${newTemplate.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ar: newTemplate.ar || "",
+          en: newTemplate.en || "",
+          fr: newTemplate.fr || "",
+          name: newTemplate.name,
+          description: newTemplate.description,
+          isNew: true
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Template created successfully!");
+        setShowCreateTemplateModal(false);
+        setNewTemplate({ id: "", name: "", description: "", ar: "", en: "", fr: "" });
+        fetchSmartMessagingData();
+      } else {
+        toast.error(result.error || "Failed to create template");
+      }
+    } catch (error) {
+      console.error("Error creating template:", error);
+      toast.error("Failed to create template");
+    } finally {
+      setSavingTemplate(null);
+    }
+  };
+
+  // Delete a custom template
+  const handleDeleteTemplate = async (templateId) => {
+    if (!window.confirm(`Are you sure you want to delete the template "${messageTemplates[templateId]?.name}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/smart-messaging/templates/${templateId}`, {
+        method: "DELETE"
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Template deleted successfully!");
+        fetchSmartMessagingData();
+      } else {
+        toast.error(result.error || "Failed to delete template");
+      }
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      toast.error("Failed to delete template");
     }
   };
 
@@ -545,7 +791,12 @@ const SmartMessaging = () => {
         icon: CheckCircleIcon,
       },
     };
-    return types[type] || types.reminder_24h;
+    // Return default info for custom templates
+    return types[type] || {
+      name: type ? type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) : "Custom",
+      color: "bg-violet-100 text-violet-700",
+      icon: EnvelopeIcon,
+    };
   };
 
   const getTemplateIcon = (templateId) => {
@@ -559,7 +810,8 @@ const SmartMessaging = () => {
       missed_this_month: ExclamationTriangleIcon,
       attended_yesterday: CheckCircleIcon,
     };
-    return icons[templateId] || ClockIcon;
+    // Return default icon for custom templates
+    return icons[templateId] || EnvelopeIcon;
   };
 
   const getTemplateColor = (templateId) => {
@@ -573,7 +825,8 @@ const SmartMessaging = () => {
       missed_this_month: "from-red-400 to-red-600",
       attended_yesterday: "from-green-400 to-green-600",
     };
-    return colors[templateId] || "from-blue-500 to-cyan-500";
+    // Return a purple gradient for custom templates
+    return colors[templateId] || "from-violet-500 to-purple-600";
   };
 
   if (loading) {
@@ -1030,13 +1283,16 @@ const SmartMessaging = () => {
                     <th className="text-left py-3 px-4 font-medium text-slate-700">
                       Details
                     </th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredMessages.length === 0 ? (
                     <tr>
                       <td
-                        colSpan="6"
+                        colSpan="7"
                         className="py-8 text-center text-slate-500"
                       >
                         {searchQuery
@@ -1157,6 +1413,37 @@ const SmartMessaging = () => {
                               )}
                             </div>
                           </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center space-x-1">
+                              {/* View button - available for all messages */}
+                              <button
+                                onClick={() => handleViewMessage(message)}
+                                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="View message"
+                              >
+                                <EyeIcon className="w-4 h-4" />
+                              </button>
+                              {/* Edit and Cancel - only for scheduled messages */}
+                              {isScheduled && (
+                                <>
+                                  <button
+                                    onClick={() => handleEditScheduledMessage(message)}
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit message"
+                                  >
+                                    <PencilIcon className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleCancelScheduledMessage(message.message_id)}
+                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Cancel message"
+                                  >
+                                    <XMarkIcon className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
@@ -1233,6 +1520,21 @@ const SmartMessaging = () => {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
           >
+            {/* Header with Create Button */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Message Templates</h3>
+                <p className="text-sm text-slate-600">Manage and customize your message templates</p>
+              </div>
+              <button
+                onClick={() => setShowCreateTemplateModal(true)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2 shadow-lg"
+              >
+                <PlusIcon className="w-5 h-5" />
+                <span>Create Template</span>
+              </button>
+            </div>
+
             {/* Testing Lab Section */}
             <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
               <div className="mb-4">
@@ -1386,6 +1688,9 @@ const SmartMessaging = () => {
                   const Icon = getTemplateIcon(templateId);
                   const color = getTemplateColor(templateId);
                   const isActive = templateStates[templateId] !== false; // Default to true
+                  // Check if this is a custom template (not one of the default ones)
+                  const defaultTemplates = ["reminder_24h", "same_day_checkin", "post_session_feedback", "no_show_followup", "one_month_followup", "missed_yesterday", "missed_this_month", "attended_yesterday"];
+                  const isCustomTemplate = !defaultTemplates.includes(templateId);
 
                   return (
                     <div
@@ -1400,9 +1705,14 @@ const SmartMessaging = () => {
                           <Icon className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-bold text-slate-800">
-                            {templateData.name}
-                          </h3>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="font-bold text-slate-800">
+                              {templateData.name}
+                            </h3>
+                            {isCustomTemplate && (
+                              <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">Custom</span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500">
                             {templateData.description}
                           </p>
@@ -1419,6 +1729,17 @@ const SmartMessaging = () => {
                             {stats.by_type?.[templateId]?.sent || 0}
                           </span>
                         </div>
+                      </div>
+
+                      {/* Edit Button */}
+                      <div className="mb-4">
+                        <button
+                          onClick={() => handleEditTemplate(templateId)}
+                          className="w-full px-4 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center space-x-2"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                          <span>Edit Template</span>
+                        </button>
                       </div>
 
                       {/* Active/Inactive Switch */}
@@ -1458,6 +1779,19 @@ const SmartMessaging = () => {
                           />
                         </button>
                       </div>
+
+                      {/* Delete Button for Custom Templates */}
+                      {isCustomTemplate && (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => handleDeleteTemplate(templateId)}
+                            className="w-full px-4 py-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center space-x-2 text-sm"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                            <span>Delete Template</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -1584,6 +1918,507 @@ const SmartMessaging = () => {
                 </div>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* View Message Modal */}
+      <AnimatePresence>
+        {viewingMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setViewingMessage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-800">Message Details</h3>
+                  <button
+                    onClick={() => setViewingMessage(null)}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-slate-500" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {/* Status Badge */}
+                <div className="flex items-center space-x-3">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    viewingMessage.status === "sent"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {viewingMessage.status === "sent" ? (
+                      <>
+                        <CheckCircleIcon className="w-4 h-4 mr-1" />
+                        Sent
+                      </>
+                    ) : (
+                      <>
+                        <ClockIcon className="w-4 h-4 mr-1" />
+                        Scheduled
+                      </>
+                    )}
+                  </span>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    getMessageTypeInfo(viewingMessage.message_type).color
+                  }`}>
+                    {getMessageTypeInfo(viewingMessage.message_type).name}
+                  </span>
+                </div>
+
+                {/* Customer Info */}
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase">Customer</p>
+                      <p className="font-semibold text-slate-800">{viewingMessage.customer_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase">Phone</p>
+                      <p className="font-medium text-slate-700">{viewingMessage.customer_phone}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase">Language</p>
+                      <p className="font-medium text-slate-700">{viewingMessage.language?.toUpperCase()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase">
+                        {viewingMessage.status === "sent" ? "Sent At" : "Scheduled For"}
+                      </p>
+                      <p className="font-medium text-slate-700">
+                        {viewingMessage.status === "sent" && viewingMessage.sent_at
+                          ? new Date(viewingMessage.sent_at).toLocaleString()
+                          : viewingMessage.send_at
+                          ? new Date(viewingMessage.send_at).toLocaleString()
+                          : "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Message Content */}
+                <div>
+                  <p className="text-sm font-medium text-slate-700 mb-2">Message Content</p>
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">
+                      {viewingMessage.fullContent || viewingMessage.content_preview || "No content available"}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-200 flex justify-end space-x-3">
+                {viewingMessage.status === "scheduled" && (
+                  <button
+                    onClick={() => {
+                      setViewingMessage(null);
+                      handleEditScheduledMessage(viewingMessage);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                    <span>Edit Message</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewingMessage(null)}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Scheduled Message Modal */}
+      <AnimatePresence>
+        {editingScheduledMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setEditingScheduledMessage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-800">Edit Scheduled Message</h3>
+                  <button
+                    onClick={() => setEditingScheduledMessage(null)}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-slate-500" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {/* Customer Info */}
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <p className="text-sm text-slate-600">Customer</p>
+                  <p className="font-semibold text-slate-800">{editingScheduledMessage.customer_name}</p>
+                  <p className="text-sm text-slate-500">{editingScheduledMessage.customer_phone}</p>
+                </div>
+
+                {/* Scheduled Time */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Scheduled Send Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editingScheduledMessage.editedSendTime}
+                    onChange={(e) => setEditingScheduledMessage({
+                      ...editingScheduledMessage,
+                      editedSendTime: e.target.value
+                    })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Message Content */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Message Content
+                  </label>
+                  <textarea
+                    value={editingScheduledMessage.editedContent}
+                    onChange={(e) => setEditingScheduledMessage({
+                      ...editingScheduledMessage,
+                      editedContent: e.target.value
+                    })}
+                    rows={8}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
+                    placeholder="Enter message content..."
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    {editingScheduledMessage.editedContent?.length || 0} characters
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-200 flex justify-end space-x-3">
+                <button
+                  onClick={() => setEditingScheduledMessage(null)}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveScheduledMessageEdit}
+                  disabled={savingScheduledEdit}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+                >
+                  {savingScheduledEdit ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Template Modal */}
+      <AnimatePresence>
+        {editingTemplate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setEditingTemplate(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-800">Edit Template: {editingTemplate.name}</h3>
+                  <button
+                    onClick={() => setEditingTemplate(null)}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-slate-500" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Template Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Template Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editingTemplate.name}
+                      onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      value={editingTemplate.description}
+                      onChange={(e) => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Language Tabs */}
+                <div className="space-y-4">
+                  {/* Arabic */}
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-lg">Arabic</span>
+                      <span className="text-xs px-2 py-0.5 bg-slate-100 rounded">RTL</span>
+                    </div>
+                    <textarea
+                      value={editingTemplate.ar}
+                      onChange={(e) => setEditingTemplate({ ...editingTemplate, ar: e.target.value })}
+                      rows={5}
+                      dir="rtl"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* English */}
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-lg">English</span>
+                    </div>
+                    <textarea
+                      value={editingTemplate.en}
+                      onChange={(e) => setEditingTemplate({ ...editingTemplate, en: e.target.value })}
+                      rows={5}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* French */}
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-lg">French</span>
+                    </div>
+                    <textarea
+                      value={editingTemplate.fr}
+                      onChange={(e) => setEditingTemplate({ ...editingTemplate, fr: e.target.value })}
+                      rows={5}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Placeholders Help */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-semibold text-blue-800 mb-2">Available Placeholders:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {["{customer_name}", "{appointment_date}", "{appointment_time}", "{branch_name}", "{service_name}", "{phone_number}", "{next_appointment_date}"].map((ph) => (
+                      <code key={ph} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                        {ph}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-200 flex justify-end space-x-3">
+                <button
+                  onClick={() => setEditingTemplate(null)}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveTemplateEdit}
+                  disabled={savingTemplate === editingTemplate.id}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+                >
+                  {savingTemplate === editingTemplate.id ? "Saving..." : "Save Template"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Create Template Modal */}
+      <AnimatePresence>
+        {showCreateTemplateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowCreateTemplateModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-800">Create New Template</h3>
+                  <button
+                    onClick={() => setShowCreateTemplateModal(false)}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-slate-500" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Template Info */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Template ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplate.id}
+                      onChange={(e) => setNewTemplate({ ...newTemplate, id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
+                      placeholder="e.g., holidays_greeting"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Lowercase letters, numbers, underscores only</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Template Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplate.name}
+                      onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
+                      placeholder="e.g., Holidays Greeting"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplate.description}
+                      onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })}
+                      placeholder="e.g., Sent during holidays"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Language Templates */}
+                <div className="space-y-4">
+                  {/* Arabic */}
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-lg">Arabic</span>
+                      <span className="text-xs px-2 py-0.5 bg-slate-100 rounded">RTL</span>
+                    </div>
+                    <textarea
+                      value={newTemplate.ar}
+                      onChange={(e) => setNewTemplate({ ...newTemplate, ar: e.target.value })}
+                      rows={4}
+                      dir="rtl"
+                      placeholder="Enter Arabic message template..."
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* English */}
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-lg">English</span>
+                    </div>
+                    <textarea
+                      value={newTemplate.en}
+                      onChange={(e) => setNewTemplate({ ...newTemplate, en: e.target.value })}
+                      rows={4}
+                      placeholder="Enter English message template..."
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* French */}
+                  <div className="p-4 border border-slate-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-lg">French</span>
+                    </div>
+                    <textarea
+                      value={newTemplate.fr}
+                      onChange={(e) => setNewTemplate({ ...newTemplate, fr: e.target.value })}
+                      rows={4}
+                      placeholder="Enter French message template..."
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Placeholders Help */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-semibold text-blue-800 mb-2">Available Placeholders:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {["{customer_name}", "{appointment_date}", "{appointment_time}", "{branch_name}", "{service_name}", "{phone_number}", "{next_appointment_date}"].map((ph) => (
+                      <code key={ph} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                        {ph}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-200 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowCreateTemplateModal(false)}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateTemplate}
+                  disabled={savingTemplate === "new" || !newTemplate.id || !newTemplate.name}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  <span>{savingTemplate === "new" ? "Creating..." : "Create Template"}</span>
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

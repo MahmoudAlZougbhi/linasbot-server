@@ -8,8 +8,8 @@ const api = axios.create({
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1"
       ? "http://localhost:8003" // Local development
-      : "https://bot.tradershubs.site", // Production VPS
-  timeout: 30000,
+      : "", // Production - use same origin (works on any domain)
+  timeout: 90000, // 90 seconds - increased for slow GPT responses
   headers: {
     "Content-Type": "application/json",
   },

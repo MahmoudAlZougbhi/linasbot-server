@@ -31,14 +31,60 @@ user_rate_tracker = defaultdict(lambda: {
     'last_reset': datetime.now()
 })
 
+def is_laser_service_context(text: str) -> bool:
+    """
+    Check if the message is clearly about laser services (body parts for treatment).
+    This helps prevent false positives from moderation API.
+    """
+    import re
+    text_lower = text.lower()
+
+    # Body parts commonly treated with laser (in multiple languages)
+    body_parts = [
+        # English
+        'arms', 'legs', 'face', 'back', 'chest', 'bikini', 'underarms', 'full body',
+        'upper lip', 'chin', 'neck', 'shoulders', 'stomach', 'hands', 'feet', 'fingers',
+        # Arabic
+        'ايدين', 'رجلين', 'وجه', 'ظهر', 'صدر', 'بكيني', 'ابط', 'جسم كامل',
+        'شفة', 'ذقن', 'رقبة', 'اكتاف', 'بطن', 'ايادي', 'قدمين',
+        # Franco-Arabic
+        'eedayn', 'rejlayn', 'wej', 'daher', 'sader', 'ebt',
+    ]
+
+    # Service-related keywords
+    service_keywords = [
+        'laser', 'hair removal', 'treatment', 'session', 'appointment', 'book', 'price',
+        'ليزر', 'ازالة', 'شعر', 'جلسة', 'موعد', 'حجز', 'سعر',
+        'do', 'want', 'need', 'بدي', 'بدها', 'عايز', 'عايزة',
+    ]
+
+    has_body_part = any(part in text_lower for part in body_parts)
+    has_service_keyword = any(kw in text_lower for kw in service_keywords)
+
+    # If message contains body part + service context, it's likely about laser services
+    if has_body_part and has_service_keyword:
+        return True
+
+    # Also check for common patterns like "I want to do [body part]"
+    do_patterns = [
+        r'\b(?:do|want|need|book|get)\s+(?:my\s+)?(?:arms|legs|face|back|chest|bikini|underarms|full body)\b',
+        r'\b(?:بدي|عايز|عايزة)\s+(?:اعمل|اعملي)?\s*(?:ايدين|رجلين|وجه|ظهر|صدر|بكيني|ابط)\b',
+    ]
+    for pattern in do_patterns:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return True
+
+    return False
+
+
 async def moderate_content(text: str, user_id: str = None) -> Tuple[bool, Dict]:
     """
     Check content for policy violations using OpenAI's Moderation API
-    
+
     Args:
         text: The text content to moderate
         user_id: Optional user ID for tracking
-        
+
     Returns:
         Tuple of (is_safe, moderation_results)
     """
@@ -47,24 +93,60 @@ async def moderate_content(text: str, user_id: str = None) -> Tuple[bool, Dict]:
         response = await client.moderations.create(
             input=text
         )
-        
+
         result = response.results[0]
-        
+
         # Check if content is flagged
         if result.flagged:
+            flagged_categories = [cat for cat, flagged in result.categories.model_dump().items() if flagged]
+            category_scores = result.category_scores.model_dump()
+
+            # CHECK FOR FALSE POSITIVES: Laser service context
+            # If flagged for self-harm but message is clearly about laser services, allow it
+            is_self_harm_flag = any('self_harm' in cat or 'self-harm' in cat for cat in flagged_categories)
+            is_service_context = is_laser_service_context(text)
+
+            if is_self_harm_flag and is_service_context:
+                print(f"✅ MODERATION: False positive detected for user {user_id} - laser service context")
+                print(f"   Message: '{text[:100]}...' flagged as {flagged_categories} but is service-related")
+                return True, {
+                    'flagged': False,
+                    'false_positive': True,
+                    'original_categories': flagged_categories,
+                    'category_scores': category_scores,
+                    'message': 'Content allowed - laser service context detected'
+                }
+
+            # Also check if scores are relatively low (< 0.5) for self-harm - likely false positive
+            self_harm_score = max(
+                category_scores.get('self_harm', 0),
+                category_scores.get('self-harm', 0),
+                category_scores.get('self_harm_intent', 0),
+                category_scores.get('self-harm/intent', 0)
+            )
+            if is_self_harm_flag and self_harm_score < 0.5:
+                print(f"✅ MODERATION: Low confidence self-harm flag ({self_harm_score:.2f}) for user {user_id} - allowing")
+                return True, {
+                    'flagged': False,
+                    'low_confidence': True,
+                    'original_categories': flagged_categories,
+                    'category_scores': category_scores,
+                    'message': 'Content allowed - low confidence flag'
+                }
+
             print(f"⚠️ MODERATION WARNING: Content flagged for user {user_id}")
-            print(f"Categories: {[cat for cat, flagged in result.categories.model_dump().items() if flagged]}")
-            
+            print(f"Categories: {flagged_categories}")
+
             # Log the violation
             log_violation(user_id, text, result.categories.model_dump())
-            
+
             return False, {
                 'flagged': True,
                 'categories': result.categories.model_dump(),
-                'category_scores': result.category_scores.model_dump(),
+                'category_scores': category_scores,
                 'message': 'Content violates OpenAI usage policies'
             }
-        
+
         return True, {
             'flagged': False,
             'categories': result.categories.model_dump(),
