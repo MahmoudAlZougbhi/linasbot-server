@@ -515,7 +515,7 @@ DO NOT detect language yourself - it has already been detected.
                             # Pattern 1: User explicitly states their name
                             if msg_role == "user":
                                 name_match = re.search(
-                                    r'(?:my name is|i am|i\'m|call me|انا اسمي|اسمي|اسمي هو|je m\'appelle|je suis)\s+([A-Za-zÀ-ÿا-ي\s]{2,50})',
+                                    r"(?:my name is|i am|i'm|call me|انا اسمي|اسمي|اسمي هو|je\s*m['\s]?appelle|je suis|moi c'est)\s+([A-Za-zÀ-ÿا-ي\s]{2,50})",
                                     msg_content,
                                     re.IGNORECASE | re.UNICODE
                                 )
@@ -941,18 +941,65 @@ DO NOT detect language yourself - it has already been detected.
 
         # CRITICAL FIX: Override GPT's action if it tries to ask for gender when we already know it
         # GPT sometimes ignores the instruction that gender is already known and tries to ask anyway
+        # Instead of a generic fallback, re-call GPT with explicit context to answer the user's question
         if current_gender in ["male", "female"] and parsed_response.get("action") in ["ask_gender", "initial_greet_and_ask_gender"]:
-            print(f"⚠️ GPT tried to ask for gender but current_gender is already '{current_gender}'. Overriding action and response.")
-            parsed_response["action"] = "provide_info"
-            # Replace the entire response since it was asking about gender
-            fallback_responses = {
-                "en": "I'd be happy to help! What would you like to know?",
-                "ar": "بكل سرور! كيف بقدر ساعدك؟",
-                "franco": "أكيد! كيف بقدر ساعدك؟",
-                "fr": "Avec plaisir! Comment puis-je vous aider?"
-            }
-            parsed_response["bot_reply"] = fallback_responses.get(current_preferred_lang, fallback_responses["en"])
-            print(f"✅ Using fallback response: {parsed_response['bot_reply']}")
+            print(f"⚠️ GPT tried to ask for gender but current_gender is already '{current_gender}'. Re-calling GPT with explicit context.")
+
+            # Build a focused re-call prompt that preserves context
+            gender_word = "male" if current_gender == "male" else "female"
+            recall_system_prompt = f"""You are a helpful assistant for Lina's Laser Center.
+
+CRITICAL: The user's gender is ALREADY KNOWN as {gender_word.upper()}. Do NOT ask for gender.
+
+The user just sent a message. Answer their question or continue the conversation naturally.
+If they mentioned a service (tattoo removal, hair removal, etc.), proceed with booking flow - ask for date/time, branch, etc.
+
+Respond in {response_language}. Return JSON with "action" and "bot_reply" fields.
+For booking-related responses, use action="ask_for_details_for_booking".
+For general answers, use action="answer_question"."""
+
+            # Include last few messages for context
+            context_summary = ""
+            for msg in current_context_messages[-4:]:
+                role = "User" if msg.get("role") == "user" else "Bot"
+                context_summary += f"{role}: {msg.get('content', '')[:100]}\n"
+
+            recall_user_prompt = f"""Recent conversation:
+{context_summary}
+User's latest message: {user_input}
+
+Answer the user's question or continue the booking flow. Do NOT ask for gender."""
+
+            try:
+                recall_response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": recall_system_prompt},
+                        {"role": "user", "content": recall_user_prompt}
+                    ],
+                    temperature=0.7,
+                    response_format={"type": "json_object"}
+                )
+                recall_content = recall_response.choices[0].message.content.strip()
+                recall_parsed = json.loads(recall_content)
+
+                if "bot_reply" in recall_parsed:
+                    parsed_response["bot_reply"] = recall_parsed["bot_reply"]
+                    parsed_response["action"] = recall_parsed.get("action", "answer_question")
+                    print(f"✅ Re-call successful. New response: {parsed_response['bot_reply'][:100]}...")
+                else:
+                    raise ValueError("Re-call response missing bot_reply")
+
+            except Exception as recall_err:
+                print(f"❌ Re-call failed: {recall_err}. Using fallback.")
+                parsed_response["action"] = "provide_info"
+                fallback_responses = {
+                    "en": "I'd be happy to help! What would you like to know?",
+                    "ar": "بكل سرور! كيف بقدر ساعدك؟",
+                    "franco": "أكيد! كيف بقدر ساعدك؟",
+                    "fr": "Avec plaisir! Comment puis-je vous aider?"
+                }
+                parsed_response["bot_reply"] = fallback_responses.get(current_preferred_lang, fallback_responses["en"])
 
         # ADDITIONAL FIX: Remove gender questions from bot_reply when gender is already known
         # GPT may include gender questions in the text even when action is correct
@@ -1006,18 +1053,48 @@ DO NOT detect language yourself - it has already been detected.
                     is_incomplete = any(re_module.search(ending, sanitized, re_module.IGNORECASE) for ending in incomplete_endings)
 
                     if is_incomplete or not sanitized or len(sanitized) <= 10:
-                        # Response is incomplete or useless - provide a proper fallback
-                        print(f"⚠️ Sanitized response is incomplete or too short. Using fallback response.")
-                        fallback_responses = {
-                            "en": "I'd be happy to help you with that! Let me provide the information you need.",
-                            "ar": "بكل سرور! خليني أعطيك المعلومات اللي بتحتاجها.",
-                            "franco": "أكيد! خليني أساعدك.",
-                            "fr": "Avec plaisir! Laissez-moi vous aider."
-                        }
-                        parsed_response["bot_reply"] = fallback_responses.get(current_preferred_lang, fallback_responses["en"])
-                        # Change action to trigger re-processing without gender question
-                        parsed_response["action"] = "provide_info"
-                        print(f"✅ Using fallback response: {parsed_response['bot_reply']}")
+                        # Response is incomplete or useless - re-call GPT with context
+                        print(f"⚠️ Sanitized response is incomplete or too short. Re-calling GPT with context.")
+
+                        # Build a focused re-call prompt
+                        gender_word = "male" if current_gender == "male" else "female"
+                        recall_system = f"""You are a helpful assistant for Lina's Laser Center.
+The user's gender is ALREADY KNOWN as {gender_word.upper()}. Do NOT ask for gender.
+Answer the user's question directly. Respond in {response_language}.
+Return JSON with "action" and "bot_reply" fields."""
+
+                        context_msgs = ""
+                        for msg in current_context_messages[-3:]:
+                            role = "User" if msg.get("role") == "user" else "Bot"
+                            context_msgs += f"{role}: {msg.get('content', '')[:80]}\n"
+
+                        try:
+                            recall_resp = await client.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[
+                                    {"role": "system", "content": recall_system},
+                                    {"role": "user", "content": f"Context:\n{context_msgs}\nUser: {user_input}\n\nAnswer directly without asking for gender."}
+                                ],
+                                temperature=0.7,
+                                response_format={"type": "json_object"}
+                            )
+                            recall_data = json.loads(recall_resp.choices[0].message.content.strip())
+                            if "bot_reply" in recall_data:
+                                parsed_response["bot_reply"] = recall_data["bot_reply"]
+                                parsed_response["action"] = recall_data.get("action", "answer_question")
+                                print(f"✅ Re-call successful: {parsed_response['bot_reply'][:80]}...")
+                            else:
+                                raise ValueError("Missing bot_reply")
+                        except Exception as e:
+                            print(f"❌ Re-call failed: {e}. Using fallback.")
+                            fallback_responses = {
+                                "en": "I'd be happy to help you with that! Let me provide the information you need.",
+                                "ar": "بكل سرور! خليني أعطيك المعلومات اللي بتحتاجها.",
+                                "franco": "أكيد! خليني أساعدك.",
+                                "fr": "Avec plaisir! Laissez-moi vous aider."
+                            }
+                            parsed_response["bot_reply"] = fallback_responses.get(current_preferred_lang, fallback_responses["en"])
+                            parsed_response["action"] = "provide_info"
                     else:
                         parsed_response["bot_reply"] = sanitized
                         print(f"✅ Sanitized bot_reply: {sanitized[:100]}...")

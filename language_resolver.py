@@ -104,12 +104,16 @@ NAME_EXCLUSIONS = {
     "un", "une", "le", "la", "les", "des", "du", "de", "au", "aux",
     "merci", "bonjour", "salut", "oui", "non", "pour", "votre", "avec",
     "comment", "beaucoup", "bien", "très", "aide", "rendez",
+    # French verbs/phrases that indicate "my name is" patterns (NOT names)
+    "mappelle", "m'appelle", "appelle", "suis", "moi", "c'est",
     # English pronouns/common words
     "i", "you", "he", "she", "we", "they", "it",
     "my", "your", "his", "her", "our", "their",
     "the", "a", "an", "and", "or", "but", "for", "with",
     "hello", "hi", "thanks", "thank", "please", "yes", "no",
     "would", "like", "want", "need", "book", "appointment", "help",
+    # English name introduction phrases (NOT names)
+    "name", "is", "am", "im", "call", "my names", "name's"
 }
 
 def looks_like_full_name(text: str) -> bool:
@@ -403,14 +407,41 @@ class LanguageResolver:
             self._cache[conversation_id] = state
             return "ar"
 
-        # Franco/Arabizi dominates French and English
+        # ============================================================
+        # Franco/Arabizi detection with smart override
+        # STRONG signals (digits or high score) → Franco wins immediately
+        # WEAK signals (single word match) → Check langdetect first
+        # ============================================================
         arabizi_yes, arabizi_s = is_arabizi(raw, threshold=self.ARABIZI_THRESHOLD)
-        if arabizi_yes:
+        has_arabizi_digits = bool(ARABIZI_DIGITS_RE.search(mask_times(clean(raw).lower())))
+
+        # STRONG Franco signal: digits present OR high score (>=4 = at least 2 word matches)
+        if arabizi_yes and (has_arabizi_digits or arabizi_s >= 4):
             state.lang_locked = "ar"
             state.confidence = 0.90
-            state.last_reasons.append(f"arabizi_score={arabizi_s}")
+            state.last_reasons.append(f"arabizi_strong={arabizi_s}(digits={has_arabizi_digits})")
             self._cache[conversation_id] = state
-            return "franco"  # Return "franco" to indicate Franco-Arabic was detected
+            return "franco"
+
+        # WEAK Franco signal: check langdetect first to avoid false positives
+        # e.g., French "la machine" matching Franco "la" (no)
+        if arabizi_yes and arabizi_s < 4:
+            detected = detect_en_fr(raw)
+            if detected:
+                lang, prob = detected
+                # If langdetect is confident it's French/English, trust it over weak Franco
+                if prob >= 0.80:
+                    state.lang_locked = lang
+                    state.confidence = prob
+                    state.last_reasons.append(f"langdetect_over_weak_franco={lang}:{prob:.2f}(arabizi_s={arabizi_s})")
+                    self._cache[conversation_id] = state
+                    return lang
+            # langdetect not confident, fall back to Franco
+            state.lang_locked = "ar"
+            state.confidence = 0.70
+            state.last_reasons.append(f"arabizi_weak={arabizi_s}")
+            self._cache[conversation_id] = state
+            return "franco"
 
         # Low-signal messages: keep previous language (after Arabic/Franco checks passed)
         # This prevents "ok", "yes", "manara" from switching language

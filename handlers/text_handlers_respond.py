@@ -69,8 +69,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 r"^(?:my name is|i'm|i am|im|it's|its|call me|they call me|name's)\s+(.+)",
                 # Franco-Arabic patterns (common ways to say "my name is" in Franco)
                 r"^(?:ana ismi|ana esmi|ana isme|ismi|esmi|isme|esme)\s+(.+)",
-                # French patterns
-                r"^(?:je m'appelle|je suis|mon nom est|c'est)\s+(.+)",
+                # French patterns - handle all apostrophe variations:
+                # - je m'appelle (proper)
+                # - je mappelle (no apostrophe - common typing)
+                # - je m appelle (space instead of apostrophe)
+                r"^(?:je\s*m['\s]?appelle|je suis|mon nom est|c'est|moi c'est)\s+(.+)",
             ]
 
             for pattern in patterns:
