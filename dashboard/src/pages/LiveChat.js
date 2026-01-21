@@ -377,121 +377,195 @@ const LiveChat = () => {
 
     fetchLiveData();
 
-    // ✅ Solution 1 + 4: Auto-refresh conversation list every 5 seconds
-    // Only refreshes the CONVERSATION LIST, not the selected conversation messages
-    // This prevents scroll jumping while keeping conversations up-to-date
-    const autoRefreshInterval = setInterval(async () => {
-      // Skip auto-refresh if using mock data (backend is offline/slow)
+    // ============================================================
+    // 📡 SSE (Server-Sent Events) for Real-Time Updates
+    // Replaces polling with efficient server-push notifications
+    // ============================================================
+    let eventSource = null;
+    let reconnectTimeout = null;
+    let fallbackInterval = null;
+
+    const connectSSE = () => {
+      // Skip SSE if using mock data
       if (useMockDataRef.current) return;
 
-      setIsRefreshing(true);
+      const baseURL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:8003'
+        : '';
+
       try {
-        const conversationsResponse = await getLiveConversations();
-        if (
-          conversationsResponse.success &&
-          conversationsResponse.conversations
-        ) {
-          // Track which conversations are NEW (not in previous list)
-          // ✅ Use ref to get current state (fixes stale closure issue)
-          const previousIds = new Set(
-            activeConversationsRef.current.map((c) => c.conversation_id)
-          );
-          const currentIds = new Set(
-            conversationsResponse.conversations.map((c) => c.conversation_id)
-          );
+        eventSource = new EventSource(`${baseURL}/api/live-chat/events`);
 
-          // New conversations are ones that didn't exist before
-          const newIds = new Set(
-            conversationsResponse.conversations
-              .filter((c) => !previousIds.has(c.conversation_id))
-              .map((c) => c.conversation_id)
-          );
+        eventSource.onopen = () => {
+          console.log('📡 SSE connected - real-time updates enabled');
+          // Clear fallback polling when SSE connects
+          if (fallbackInterval) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = null;
+          }
+        };
 
-          // Update the list with new badges
-          setActiveConversations(conversationsResponse.conversations);
-          setNewConversationIds(newIds);
-          setLastRefreshTime(new Date());
+        // Handle conversation list updates
+        eventSource.addEventListener('conversations', (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.conversations) {
+              const previousIds = new Set(
+                activeConversationsRef.current.map((c) => c.conversation_id)
+              );
+              const newIds = new Set(
+                data.conversations
+                  .filter((c) => !previousIds.has(c.conversation_id))
+                  .map((c) => c.conversation_id)
+              );
 
-          // ✅ IMPORTANT: Only update selected conversation's metadata, NOT its history
-          // History stays the same until user explicitly clicks to refresh
-          const currentSelection = selectedConversationRef.current;
-          if (currentSelection) {
-            const updatedConv = conversationsResponse.conversations.find(
-              (c) =>
-                c.conversation_id ===
-                currentSelection.conversation.conversation_id
-            );
-            if (updatedConv) {
-              // Update selected conversation metadata but KEEP history intact
-              setSelectedConversation((prev) => ({
-                ...prev,
-                conversation: updatedConv, // Update conversation info (status, etc)
-                // DON'T touch history - keep existing messages
-              }));
+              setActiveConversations(data.conversations);
+              setNewConversationIds(newIds);
+              setLastRefreshTime(new Date());
+
+              if (newIds.size > 0) {
+                setTimeout(() => setNewConversationIds(new Set()), 10000);
+              }
             }
+          } catch (e) {
+            console.error('SSE parse error:', e);
+          }
+        });
+
+        // Handle new message events
+        eventSource.addEventListener('new_message', async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('📨 SSE: New message received', data);
+
+            // Refresh conversation list to update last message preview
+            setIsRefreshing(true);
+            const conversationsResponse = await getLiveConversations();
+            if (conversationsResponse.success && conversationsResponse.conversations) {
+              setActiveConversations(conversationsResponse.conversations);
+              setLastRefreshTime(new Date());
+            }
+            setIsRefreshing(false);
+
+            // If this message is for the currently selected conversation, fetch new messages
+            const currentSelection = selectedConversationRef.current;
+            if (currentSelection &&
+                (currentSelection.conversation.user_id === data.user_id ||
+                 currentSelection.conversation.conversation_id === data.conversation_id)) {
+              const messages = await fetchConversationMessages(
+                currentSelection.conversation.user_id,
+                currentSelection.conversation.conversation_id
+              );
+              if (messages && messages.length > 0) {
+                setSelectedConversation((prev) => {
+                  if (!prev) return prev;
+                  return { ...prev, history: messages };
+                });
+              }
+            }
+          } catch (e) {
+            console.error('SSE new_message error:', e);
+          }
+        });
+
+        // Handle new conversation events
+        eventSource.addEventListener('new_conversation', async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('📡 SSE: New conversation', data);
+
+            // Refresh conversation list
+            const conversationsResponse = await getLiveConversations();
+            if (conversationsResponse.success && conversationsResponse.conversations) {
+              const newIds = new Set([data.conversation_id]);
+              setActiveConversations(conversationsResponse.conversations);
+              setNewConversationIds(newIds);
+              setLastRefreshTime(new Date());
+
+              setTimeout(() => setNewConversationIds(new Set()), 10000);
+            }
+          } catch (e) {
+            console.error('SSE new_conversation error:', e);
+          }
+        });
+
+        // Handle heartbeat (keep-alive)
+        eventSource.addEventListener('heartbeat', () => {
+          // Connection is alive, nothing to do
+        });
+
+        eventSource.onerror = (error) => {
+          console.warn('📡 SSE connection error, falling back to polling');
+          eventSource.close();
+
+          // Start fallback polling
+          if (!fallbackInterval) {
+            fallbackInterval = setInterval(async () => {
+              if (useMockDataRef.current) return;
+              try {
+                const conversationsResponse = await getLiveConversations();
+                if (conversationsResponse.success && conversationsResponse.conversations) {
+                  setActiveConversations(conversationsResponse.conversations);
+                  setLastRefreshTime(new Date());
+                }
+              } catch (e) {
+                // Silent fail
+              }
+            }, 10000); // Slower fallback polling (10s)
           }
 
-          // Auto-clear "new" badge after 10 seconds
-          if (newIds.size > 0) {
-            setTimeout(() => {
-              setNewConversationIds(new Set());
-            }, 10000);
-          }
-        }
+          // Try to reconnect SSE after 5 seconds
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        };
+
       } catch (error) {
-        // Silent on timeout errors (expected for slow Firestore queries)
-        // Only log unexpected errors
-        if (error.code !== "ECONNABORTED" && error.code !== "ERR_NETWORK") {
-          console.error("Error auto-refreshing conversations:", error);
-        }
-        // For timeout/network errors, fail silently and try again in 10s
-      } finally {
-        setIsRefreshing(false);
+        console.error('SSE initialization error:', error);
       }
-    }, 5000); // Refresh every 5 seconds (matches backend cache TTL)
+    };
 
-    // Cleanup interval on unmount
-    return () => clearInterval(autoRefreshInterval);
+    // Start SSE connection
+    connectSSE();
+
+    // Cleanup on unmount
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (fallbackInterval) {
+        clearInterval(fallbackInterval);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - only run once on mount
 
-  // ✅ Real-time message polling for selected conversation
+  // ✅ Fetch messages when selected conversation changes (not polling)
   useEffect(() => {
-    // Skip polling for mock data - prevents "undefined/conv_001" API calls
+    // Skip for mock data
     if (!selectedConversation || useMockData) return;
 
-    const pollMessages = async () => {
+    // Fetch messages once when conversation is selected
+    const fetchMessages = async () => {
       try {
         const messages = await fetchConversationMessages(
           selectedConversation.conversation.user_id,
           selectedConversation.conversation.conversation_id
         );
-
-        // Only update if we got messages and there are new ones
         if (messages && messages.length > 0) {
           setSelectedConversation((prev) => {
             if (!prev) return prev;
-            // Only update if message count changed (new messages arrived)
-            if (messages.length !== prev.history.length) {
-              console.log(`📨 New messages detected: ${prev.history.length} → ${messages.length}`);
-              return {
-                ...prev,
-                history: messages,
-              };
-            }
-            return prev;
+            return { ...prev, history: messages };
           });
         }
       } catch (error) {
-        // Silent fail - don't spam console on polling errors
+        // Silent fail
       }
     };
 
-    // Poll messages every 3 seconds for real-time feel
-    const messageInterval = setInterval(pollMessages, 3000);
-
-    return () => clearInterval(messageInterval);
-  }, [selectedConversation?.conversation?.conversation_id, useMockData]); // Re-run when conversation changes or mock data status changes
+    fetchMessages();
+  }, [selectedConversation?.conversation?.conversation_id, useMockData]); // Only fetch when conversation changes
 
   // Load mock data fallback
   const loadMockData = () => {

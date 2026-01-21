@@ -5,13 +5,110 @@ Live Chat API Routes - Hybrid Approach
 - 6-hour time filter
 - Status management (active/resolved/archived)
 - Auto-reopen on new message
+- SSE (Server-Sent Events) for real-time updates
 """
-from fastapi import APIRouter
+import asyncio
+import json
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from services.live_chat_service import live_chat_service
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 router = APIRouter()
+
+# ============================================================
+# SSE (Server-Sent Events) for Real-Time Updates
+# ============================================================
+# Global set to track connected SSE clients
+_sse_clients: set = set()
+
+async def sse_event_generator(request: Request):
+    """
+    Generator that yields SSE events to connected clients.
+    Keeps connection alive and sends updates when available.
+    """
+    client_queue = asyncio.Queue()
+    _sse_clients.add(client_queue)
+
+    try:
+        # Send initial connection event
+        yield f"event: connected\ndata: {json.dumps({'status': 'connected'})}\n\n"
+
+        # Send current state immediately
+        try:
+            conversations = await live_chat_service.get_active_conversations()
+            yield f"event: conversations\ndata: {json.dumps({'conversations': conversations, 'total': len(conversations)})}\n\n"
+        except Exception as e:
+            print(f"⚠️ SSE: Error sending initial conversations: {e}")
+
+        # Keep connection alive and send updates
+        while True:
+            # Check if client disconnected
+            if await request.is_disconnected():
+                break
+
+            try:
+                # Wait for an event with timeout (for heartbeat)
+                event = await asyncio.wait_for(client_queue.get(), timeout=30.0)
+                yield f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
+            except asyncio.TimeoutError:
+                # Send heartbeat to keep connection alive
+                yield f"event: heartbeat\ndata: {json.dumps({'timestamp': asyncio.get_event_loop().time()})}\n\n"
+    except asyncio.CancelledError:
+        pass
+    finally:
+        _sse_clients.discard(client_queue)
+        print(f"📡 SSE client disconnected. Active clients: {len(_sse_clients)}")
+
+async def broadcast_sse_event(event_type: str, data: dict):
+    """
+    Broadcast an event to all connected SSE clients.
+    Called when new messages arrive or conversations change.
+    """
+    if not _sse_clients:
+        return
+
+    event = {"type": event_type, "data": data}
+    disconnected = set()
+
+    for client_queue in _sse_clients:
+        try:
+            client_queue.put_nowait(event)
+        except Exception:
+            disconnected.add(client_queue)
+
+    # Clean up disconnected clients
+    _sse_clients.difference_update(disconnected)
+
+@router.get("/api/live-chat/events")
+async def live_chat_events(request: Request):
+    """
+    SSE endpoint for real-time live chat updates.
+    Dashboard connects here instead of polling.
+
+    Events:
+    - connected: Initial connection established
+    - conversations: Full conversation list update
+    - new_message: New message in a conversation
+    - conversation_update: Single conversation changed
+    - heartbeat: Keep-alive ping every 30s
+    """
+    print(f"📡 SSE client connected. Active clients: {len(_sse_clients) + 1}")
+    return StreamingResponse(
+        sse_event_generator(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
+
+# Export broadcast function for use in other modules
+def get_sse_broadcast():
+    """Get the broadcast function for use in message handlers"""
+    return broadcast_sse_event
 
 # Pydantic models for Live Chat requests
 class TakeoverRequest(BaseModel):

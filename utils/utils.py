@@ -256,6 +256,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "last_updated": datetime.datetime.now()
                 })
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
+
+                # 📡 Broadcast SSE event for real-time dashboard updates
+                try:
+                    from modules.live_chat_api import broadcast_sse_event
+                    asyncio.create_task(broadcast_sse_event("new_message", {
+                        "user_id": user_id,
+                        "conversation_id": conversation_id,
+                        "role": role,
+                        "text": text[:100] + "..." if len(text) > 100 else text,
+                        "phone": phone_number
+                    }))
+                except Exception as sse_err:
+                    pass  # Silent fail - SSE is optional enhancement
             else:
                 # Conversation not found - create new one
                 message_data = {
@@ -314,6 +327,18 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 config.user_data_whatsapp[user_id] = {}
             config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
             print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
+
+            # 📡 Broadcast SSE event for new conversation
+            try:
+                from modules.live_chat_api import broadcast_sse_event
+                asyncio.create_task(broadcast_sse_event("new_conversation", {
+                    "user_id": user_id,
+                    "conversation_id": new_doc_ref.id,
+                    "phone": phone_number,
+                    "name": customer_name
+                }))
+            except Exception as sse_err:
+                pass  # Silent fail - SSE is optional enhancement
 
     except Exception as e:
         print(f"❌ ERROR saving conversation message to Firestore for user {user_id}: {e}")
