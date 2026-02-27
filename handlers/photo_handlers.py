@@ -47,10 +47,13 @@ async def handle_photo_message(user_id: str, user_name: str, image_url: str, use
 
     # ✅ FIXED: Save user's photo message to Firestore with type and image URL metadata
     current_conversation_id = user_data.get('current_conversation_id')
+    source_message_id = user_data.pop("_source_message_id", None)
     image_metadata = {
         "type": "image",
         "image_url": image_url  # Save the image URL for dashboard display
     }
+    if source_message_id:
+        image_metadata["source_message_id"] = source_message_id
     await save_conversation_message_to_firestore(
         user_id, 
         "user", 

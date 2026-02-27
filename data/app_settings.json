@@ -28,5 +28,18 @@
         "customer_name"
       ]
     }
+  },
+  "pricingSync": {
+    "enabled": true,
+    "sourceOfTruth": "api_get_pricing_details",
+    "requireBodyPartServiceIds": [
+      1,
+      12,
+      13
+    ],
+    "discountRules": {
+      "preferSystemDiscountValues": true,
+      "deriveFinalPriceWhenMissing": true
+    }
   }
 }

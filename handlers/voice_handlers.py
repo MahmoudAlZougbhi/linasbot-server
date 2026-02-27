@@ -49,10 +49,13 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
 
     # ✅ NEW: Save user's voice message to Firestore with metadata
     current_conversation_id = user_data.get('current_conversation_id')
+    source_message_id = user_data.pop("_source_message_id", None)
     voice_metadata = {
         "type": "voice",
         "audio_url": audio_url  # Save the audio URL for dashboard playback
     }
+    if source_message_id:
+        voice_metadata["source_message_id"] = source_message_id
     await save_conversation_message_to_firestore(
         user_id,
         "user",

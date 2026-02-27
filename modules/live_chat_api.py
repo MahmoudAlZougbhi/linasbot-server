@@ -8,7 +8,7 @@ Includes SSE (Server-Sent Events) for real-time dashboard updates.
 import asyncio
 import json
 from datetime import datetime
-from fastapi import Request
+from fastapi import Request, Query
 from fastapi.responses import StreamingResponse
 
 
@@ -126,14 +126,15 @@ async def live_chat_events(request: Request):
 
 
 @app.get("/api/live-chat/active-conversations")
-async def get_active_conversations():
-    """Get all active conversations"""
+async def get_active_conversations(search: str = Query(default="", description="Search by client name or phone")):
+    """Get active conversations with optional client search."""
     try:
-        conversations = await live_chat_service.get_active_conversations()
+        conversations = await live_chat_service.get_active_conversations(search=search)
         return {
             "success": True,
             "conversations": conversations,
-            "total": len(conversations)
+            "total": len(conversations),
+            "search": search
         }
     except Exception as e:
         print(f"❌ Error in get_active_conversations: {e}")

@@ -201,6 +201,7 @@ const LiveChat = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedAudio, setRecordedAudio] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [isSendingVoice, setIsSendingVoice] = useState(false);
 
   // ✅ Image Upload State
   const [selectedImage, setSelectedImage] = useState(null);
@@ -236,6 +237,14 @@ const LiveChat = () => {
   useEffect(() => {
     useMockDataRef.current = useMockData;
   }, [useMockData]);
+
+  useEffect(() => {
+    return () => {
+      if (recordedAudio?.url?.startsWith("blob:")) {
+        URL.revokeObjectURL(recordedAudio.url);
+      }
+    };
+  }, [recordedAudio]);
 
   const {
     getLiveConversations,
@@ -1029,55 +1038,80 @@ const LiveChat = () => {
   };
 
   const discardRecording = () => {
+    if (recordedAudio?.url?.startsWith("blob:")) {
+      URL.revokeObjectURL(recordedAudio.url);
+    }
     setRecordedAudio(null);
     setRecordingTime(0);
   };
 
   const sendVoiceMessage = async () => {
-    if (!recordedAudio || !selectedConversation) return;
+    if (!recordedAudio || !selectedConversation || isSendingVoice) return;
+
+    setIsSendingVoice(true);
+    const localRecordedAudio = recordedAudio;
 
     try {
       // Convert blob to base64
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64Audio = reader.result.split(",")[1];
+        try {
+          const base64Audio = reader.result.split(",")[1];
 
-        // Call API to send voice message
-        const result = await sendOperatorMessage(
-          selectedConversation.conversation.conversation_id,
-          selectedConversation.conversation.user_id,
-          base64Audio,
-          "operator_001",
-          "voice"
-        );
+          // Call API to send voice message
+          const result = await sendOperatorMessage(
+            selectedConversation.conversation.conversation_id,
+            selectedConversation.conversation.user_id,
+            base64Audio,
+            "operator_001",
+            "voice"
+          );
 
-        if (result.success) {
-          // Add voice message to UI
-          const newMessage = {
-            timestamp: new Date().toISOString(),
-            is_user: false,
-            content: "[رسالة صوتية]",
-            type: "voice",
-            audio_url: recordedAudio.url,
-            handled_by: "human",
-          };
+          if (result.success) {
+            // Use persisted URL from backend so playback remains available after refresh.
+            const persistedAudioUrl =
+              result.storage_url || result.whatsapp_audio_url || localRecordedAudio.url;
 
-          setSelectedConversation((prev) => ({
-            ...prev,
-            history: [...prev.history, newMessage],
-          }));
+            const newMessage = {
+              timestamp: new Date().toISOString(),
+              is_user: false,
+              content: "[رسالة صوتية]",
+              text: "[رسالة صوتية]",
+              type: "voice",
+              audio_url: persistedAudioUrl,
+              handled_by: "human",
+            };
 
-          setRecordedAudio(null);
-          setRecordingTime(0);
-          toast.success("Voice message sent to customer");
-        } else {
-          toast.error("Failed to send voice message");
+            setSelectedConversation((prev) => ({
+              ...prev,
+              history: [...prev.history, newMessage],
+            }));
+
+            if (localRecordedAudio?.url?.startsWith("blob:")) {
+              URL.revokeObjectURL(localRecordedAudio.url);
+            }
+            setRecordedAudio(null);
+            setRecordingTime(0);
+            toast.success("Voice message sent to customer");
+          } else {
+            toast.error("Failed to send voice message");
+          }
+        } catch (sendError) {
+          console.error("Error sending voice message:", sendError);
+          toast.error("Error sending voice message");
+        } finally {
+          setIsSendingVoice(false);
         }
+      };
+      reader.onerror = () => {
+        setIsSendingVoice(false);
+        toast.error("Failed to process recorded audio");
       };
       reader.readAsDataURL(recordedAudio.blob);
     } catch (error) {
       console.error("Error sending voice message:", error);
       toast.error("Error sending voice message");
+      setIsSendingVoice(false);
     }
   };
 
@@ -1760,10 +1794,11 @@ const LiveChat = () => {
                           </button>
                           <button
                             onClick={sendVoiceMessage}
-                            className="btn-primary flex items-center space-x-1"
+                            disabled={isSendingVoice}
+                            className="btn-primary flex items-center space-x-1 disabled:opacity-50"
                           >
                             <PaperAirplaneIcon className="w-4 h-4" />
-                            <span>Send</span>
+                            <span>{isSendingVoice ? "Sending..." : "Send"}</span>
                           </button>
                         </div>
                       </div>

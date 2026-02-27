@@ -4,37 +4,27 @@ Media API module: Audio and media proxy endpoints
 Handles proxying external audio URLs to avoid CORS issues in the browser.
 """
 
-import os
 import httpx
-from urllib.parse import unquote
 from fastapi import Query, Request
 from fastapi.responses import Response, FileResponse
 
 from modules.core import app
-
-# Directory for locally served media files
-MEDIA_SERVE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "audio")
-os.makedirs(MEDIA_SERVE_DIR, exist_ok=True)
+from services.media_service import (
+    resolve_media_file_path,
+    get_media_content_type,
+)
 
 
 @app.api_route("/api/media/serve/{filename}", methods=["GET", "HEAD"])
 async def serve_media_file(filename: str, request: Request):
     """Serve locally stored audio/media files for WhatsApp delivery"""
-    file_path = os.path.join(MEDIA_SERVE_DIR, filename)
-    if not os.path.exists(file_path):
+    file_path = resolve_media_file_path(filename)
+    if not file_path or not file_path.exists():
         return Response(content="File not found", status_code=404)
 
-    # Determine content type
-    if filename.endswith(".ogg"):
-        media_type = "audio/ogg"
-    elif filename.endswith(".webm"):
-        media_type = "audio/webm"
-    elif filename.endswith(".mp3"):
-        media_type = "audio/mpeg"
-    else:
-        media_type = "application/octet-stream"
+    media_type = get_media_content_type(filename)
 
-    file_size = os.path.getsize(file_path)
+    file_size = file_path.stat().st_size
 
     if request.method == "HEAD":
         return Response(
@@ -46,7 +36,7 @@ async def serve_media_file(filename: str, request: Request):
             }
         )
 
-    return FileResponse(file_path, media_type=media_type)
+    return FileResponse(str(file_path), media_type=media_type)
 
 
 @app.get("/api/media/audio")

@@ -10,7 +10,7 @@ Live Chat API Routes - Hybrid Approach
 import asyncio
 import json
 from datetime import datetime
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from services.live_chat_service import live_chat_service
@@ -146,14 +146,15 @@ class EndConversationRequest(BaseModel):
     operator_id: str
 
 @router.get("/api/live-chat/active-conversations")
-async def get_active_conversations():
-    """Get all active conversations (grouped by client, 6-hour filter)"""
+async def get_active_conversations(search: str = Query(default="", description="Search by client name or phone")):
+    """Get active conversations (grouped by client, 6-hour filter) with optional search."""
     try:
-        conversations = await live_chat_service.get_active_conversations()
+        conversations = await live_chat_service.get_active_conversations(search=search)
         return {
             "success": True,
             "conversations": conversations,
-            "total": len(conversations)
+            "total": len(conversations),
+            "search": search
         }
     except Exception as e:
         print(f"❌ Error in get_active_conversations: {e}")

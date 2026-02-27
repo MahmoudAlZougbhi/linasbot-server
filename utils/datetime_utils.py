@@ -93,6 +93,23 @@ _EXPLICIT_DATETIME_PATTERNS = [
     r"\b(?:الاثنين|الثلاثاء|الاربعاء|الخميس|الجمعة|السبت|الاحد)\b",
 ]
 
+_RESCHEDULE_INTENT_PATTERNS = [
+    # English
+    r"\bpostpone\b",
+    r"\breschedul(?:e|ing|ed)?\b",
+    r"\bmove(?:\s+up)?\s+(?:my\s+)?appointment\b",
+    r"\bchange\s+(?:my\s+)?appointment\b",
+    r"\bshift\s+(?:my\s+)?appointment\b",
+    # Arabic
+    r"(?:بدي|بدّي|ممكن|اريد|أريد|حابب|حابة)?\s*(?:أج[ّ]?ل|اج[ّ]?ل|تأجيل|تاجيل|أخ[ّ]?ر|اخر|غي[ّ]?ر|غير|عد[ّ]?ل|عدل|نق[ّ]?ل|نقل)\s*(?:لي)?\s*(?:موعدي|الموعد|موعد)",
+    r"(?:موعدي|الموعد|موعد)\s*(?:بدي|بدّي|ممكن|اريد|أريد)?\s*(?:أج[ّ]?ل|اج[ّ]?ل|تأجيل|تاجيل|تعديل|تغيير|تأخير|تاخير|نقل)",
+    r"(?:تأجيل|تاجيل|تغيير\s*الموعد|تبديل\s*الموعد|نقل\s*الموعد|موعد\s*تاني|موعد\s*اخر|موعد\s*آخر)",
+    # Franco-Arabic
+    r"\b(a2?aj+el|ajjel|ta2?jil|2ajel|akher|ghayy?er|8ayyer|baddel|na2?el)\b.*\b(maw3ad|m3ad|mo3ad|mou3ad|appointment)\b",
+    # French
+    r"\b(reporter|reprogrammer|replanifier|d[ée]caler|changer)\b.*\b(rendez[- ]?vous)\b",
+]
+
 
 def detect_relative_intent(text: str) -> Optional[str]:
     """
@@ -171,6 +188,14 @@ def text_mentions_datetime(text: str) -> bool:
         return True
 
     return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _EXPLICIT_DATETIME_PATTERNS)
+
+
+def detect_reschedule_intent(text: str) -> bool:
+    """Return True when text clearly asks to postpone/reschedule an appointment."""
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _RESCHEDULE_INTENT_PATTERNS)
 
 
 def parse_datetime_flexible(date_value: str) -> Optional[datetime.datetime]:

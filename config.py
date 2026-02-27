@@ -79,7 +79,8 @@ DEFAULT_SERVICE_ID = 1
 DEFAULT_MACHINE_ID = 1
 
 # Delay for combining rapid messages from a user (e.g., multiple short texts sent quickly)
-MESSAGE_COMBINING_DELAY = 1.0 # seconds
+# Requirement: wait 3 seconds after the LAST message before responding.
+MESSAGE_COMBINING_DELAY = 3.0 # seconds
 
 # --- Bot Welcome Messages (Language-specific) ---
 WELCOME_MESSAGES = {

@@ -6,6 +6,7 @@ Manages application settings storage and retrieval
 
 import json
 import os
+import re
 from typing import Dict, Any
 
 
@@ -102,6 +103,12 @@ class SettingsService:
         try:
             if category not in self.settings:
                 self.settings[category] = {}
+
+            if category == "notifications" and "humanTakeoverNotifyMobiles" in updates:
+                updates = dict(updates)
+                updates["humanTakeoverNotifyMobiles"] = self.normalize_human_takeover_notify_mobiles(
+                    updates.get("humanTakeoverNotifyMobiles", "")
+                )
             
             # Update the settings
             self.settings[category].update(updates)
@@ -114,12 +121,72 @@ class SettingsService:
     
     def get_human_takeover_notify_mobiles(self) -> str:
         """Get the mobile numbers for human takeover notifications"""
-        return self.get_setting('notifications', 'humanTakeoverNotifyMobiles', '')
+        raw_numbers = self.get_setting('notifications', 'humanTakeoverNotifyMobiles', '')
+        return self.normalize_human_takeover_notify_mobiles(raw_numbers)
+
+    def normalize_human_takeover_notify_mobiles(self, mobile_numbers: str) -> str:
+        """
+        Normalize and deduplicate configured handoff notification numbers.
+
+        Accepted separators: comma, semicolon, or newline.
+        Returns a comma-separated string in normalized international format.
+        """
+        if not mobile_numbers:
+            return ""
+
+        raw_items = re.split(r"[,;\n]+", str(mobile_numbers))
+        normalized_items = []
+        seen = set()
+
+        for raw_item in raw_items:
+            normalized = self._normalize_single_mobile(raw_item)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            normalized_items.append(normalized)
+
+        return ", ".join(normalized_items)
+
+    def _normalize_single_mobile(self, mobile_number: str) -> str:
+        """Normalize one phone number to +<country><number> format."""
+        if not mobile_number:
+            return ""
+
+        cleaned = str(mobile_number).strip()
+        if not cleaned:
+            return ""
+
+        # Keep only digits and leading plus
+        cleaned = re.sub(r"[^\d+]", "", cleaned)
+        if not cleaned:
+            return ""
+
+        if cleaned.startswith("00"):
+            cleaned = "+" + cleaned[2:]
+
+        if not cleaned.startswith("+"):
+            if cleaned.startswith("961"):
+                cleaned = "+" + cleaned
+            elif cleaned.startswith("0"):
+                cleaned = "+961" + cleaned[1:]
+            else:
+                cleaned = "+961" + cleaned
+
+        return cleaned
+
+    def get_human_takeover_notify_mobiles_list(self):
+        """Get normalized notification numbers as a list."""
+        raw = self.get_human_takeover_notify_mobiles()
+        normalized = self.normalize_human_takeover_notify_mobiles(raw)
+        if not normalized:
+            return []
+        return [item.strip() for item in normalized.split(",") if item.strip()]
     
     def set_human_takeover_notify_mobiles(self, mobile_numbers: str) -> bool:
         """Set the mobile numbers for human takeover notifications"""
+        normalized_numbers = self.normalize_human_takeover_notify_mobiles(mobile_numbers)
         return self.update_settings('notifications', {
-            'humanTakeoverNotifyMobiles': mobile_numbers
+            'humanTakeoverNotifyMobiles': normalized_numbers
         })
 
 

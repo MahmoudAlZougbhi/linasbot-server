@@ -10,6 +10,9 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
+_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+_DATA_DIR = os.path.join(_BASE_DIR, 'data')
+
 
 class MessagePreviewService:
     """
@@ -17,9 +20,9 @@ class MessagePreviewService:
     """
 
     def __init__(self):
-        self.preview_queue_file = 'data/message_preview_queue.json'
-        self.app_settings_file = 'data/app_settings.json'
-        self.templates_file = 'data/message_templates.json'
+        self.preview_queue_file = os.path.join(_DATA_DIR, 'message_preview_queue.json')
+        self.app_settings_file = os.path.join(_DATA_DIR, 'app_settings.json')
+        self.templates_file = os.path.join(_DATA_DIR, 'message_templates.json')
         self.preview_queue = self._load_preview_queue()
         print(f"MessagePreviewService initialized with {len(self.preview_queue)} pending messages")
 
@@ -57,6 +60,7 @@ class MessagePreviewService:
     def _save_app_settings(self, settings: Dict) -> bool:
         """Save app settings"""
         try:
+            os.makedirs(os.path.dirname(self.app_settings_file), exist_ok=True)
             with open(self.app_settings_file, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
             return True

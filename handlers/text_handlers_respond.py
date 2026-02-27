@@ -4,7 +4,36 @@
 from handlers.text_handlers_firestore import *
 from services.analytics_events import analytics
 from services.language_detection_service import language_detection_service
+from utils.datetime_utils import detect_reschedule_intent
 import time
+
+PRICE_INTENT_KEYWORDS = [
+    "price",
+    "cost",
+    "how much",
+    "pricing",
+    "سعر",
+    "اسعار",
+    "كم",
+    "قديش",
+    "أديش",
+    "تكلفة",
+    "prix",
+    "coût",
+    "combien",
+    "tarif",
+    "adesh",
+    "adde",
+    "2adde",
+    "2adesh",
+    "kam",
+    "sa3er",
+]
+
+
+def _is_price_intent(text: str) -> bool:
+    normalized = str(text or "").lower()
+    return any(keyword in normalized for keyword in PRICE_INTENT_KEYWORDS)
 
 
 async def _process_and_respond(user_id: str, user_name: str, user_input_to_process: str, user_data: dict, send_message_func, send_action_func):
@@ -200,7 +229,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 "current_gender_from_config": current_gender
             }
             user_data['awaiting_human_handover_confirmation'] = False
-            await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
         elif any(kw in user_input_lower for kw in rejection_keywords_ar):
             gpt_response_data = {
                 "action": "return_to_normal_chat",
@@ -247,7 +275,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         # Decision flow: 70%+ returns Q&A directly, <70% passes to GPT with top 3 relevant Q&A pairs
         print(f"[_process_and_respond] 🔍 Checking Q&A DATABASE for: '{query_to_send_to_gpt}'")
 
-        match_result = await local_qa_service.find_match_with_tier(query_to_send_to_gpt, current_preferred_lang)
+        is_reschedule_intent = detect_reschedule_intent(query_to_send_to_gpt)
+        is_price_intent = _is_price_intent(query_to_send_to_gpt)
+        if is_reschedule_intent:
+            # Routing safeguard: postpone/reschedule requests should never be short-circuited to Q&A.
+            print(f"[_process_and_respond] 🔁 Reschedule intent detected. Skipping direct Q&A routing.")
+            match_result = None
+        elif is_price_intent:
+            # Pricing must come from system/API sync path, never from static Q&A text.
+            print(f"[_process_and_respond] 💰 Price intent detected. Skipping direct Q&A routing for exact system pricing.")
+            match_result = None
+        else:
+            match_result = await local_qa_service.find_match_with_tier(query_to_send_to_gpt, current_preferred_lang)
 
         if match_result:
             # 70%+ match: Return Q&A directly
@@ -300,6 +339,52 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     bot_reply_text = gpt_response_data.get("bot_reply")
     detected_gender_from_gpt = gpt_response_data.get("detected_gender")
     detected_language = gpt_response_data.get("detected_language")
+    escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
+
+    async def _activate_ai_handover(escalation_reason: str, trigger_source: str):
+        """Switch conversation to waiting_human, notify admins from settings, and write audit."""
+        db = get_firestore_db()
+        if db and current_conversation_id:
+            try:
+                app_id_for_firestore = "linas-ai-bot-backend"
+                conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                conv_doc_ref.update({
+                    "status": "waiting_human",
+                    "human_takeover_active": True,
+                    "human_takeover_requested": True,
+                    "operator_id": None,
+                    "escalation_reason": escalation_reason,
+                    "escalation_time": datetime.datetime.now(),
+                    "last_updated": datetime.datetime.now()
+                })
+                print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision)")
+            except Exception as e:
+                print(f"⚠️ Failed to update handover state in Firestore: {e}")
+
+        config.user_in_human_takeover_mode[user_id] = True
+
+        notify_human_on_whatsapp(
+            user_name,
+            current_gender,
+            user_input_to_process,
+            type_of_notification=f"AI handover - {escalation_reason}"
+        )
+
+        try:
+            from services.human_takeover_notification_service import human_takeover_notification_service
+            await human_takeover_notification_service.notify_and_audit_handoff(
+                user_id=user_id,
+                user_gender=current_gender,
+                customer_name=user_name,
+                customer_phone=user_data.get('phone_number', 'Unknown'),
+                escalation_reason=escalation_reason,
+                last_message=user_input_to_process,
+                trigger_source=trigger_source,
+                conversation_id=current_conversation_id,
+                extra_details={"action": action}
+            )
+        except Exception as notify_error:
+            print(f"⚠️ Failed to send AI handoff template/audit: {notify_error}")
 
     # Update language from GPT's detection
     if detected_language and detected_language in ['en', 'ar', 'fr', 'franco']:
@@ -429,8 +514,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     elif action == "human_handover_confirmed":
         await send_message_func(user_id, bot_reply_text)
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
-        notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification="طلب محادثة مع موظف (مؤكد)")
-        log_report_event("human_handover", user_name, current_gender, {"message": user_input_to_process, "status": "confirmed"})
+        await _activate_ai_handover(
+            escalation_reason=escalation_reason_from_gpt or "customer_requested_human",
+            trigger_source="ai_handover_confirmed"
+        )
+        log_report_event("human_handover", user_id, current_gender, {
+            "message": user_input_to_process,
+            "status": "confirmed",
+            "source": "ai_handover_confirmed"
+        })
+        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
 
     elif action == "return_to_normal_chat":
         await send_message_func(user_id, bot_reply_text)
@@ -439,8 +532,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     elif action == "human_handover":
         await send_message_func(user_id, bot_reply_text)
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
-        notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification="طلب محادثة مع موظف (مباشر)")
-        log_report_event("human_handover", user_name, current_gender, {"message": user_input_to_process, "status": "direct"})
+        await _activate_ai_handover(
+            escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
+            trigger_source="ai_handover_direct"
+        )
+        log_report_event("human_handover", user_id, current_gender, {
+            "message": user_input_to_process,
+            "status": "direct",
+            "source": "ai_handover_direct"
+        })
         await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
 
     elif action in ["answer_question", "normal_chat", "unknown_query", "provide_info", "tool_call", "ask_for_details_for_booking", "ask_for_service_type", "ask_for_details", "ask_for_tattoo_photo", "check_customer_status", "confirm_appointment_reschedule"]:

@@ -8,6 +8,9 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
+_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+_DATA_DIR = os.path.join(_BASE_DIR, 'data')
+
 
 class ServiceTemplateMappingService:
     """
@@ -15,7 +18,8 @@ class ServiceTemplateMappingService:
     """
 
     def __init__(self):
-        self.mapping_file = 'data/service_template_mapping.json'
+        self.mapping_file = os.path.join(_DATA_DIR, 'service_template_mapping.json')
+        self.templates_file = os.path.join(_DATA_DIR, 'message_templates.json')
         self.mappings = self._load_mappings()
         print(f"ServiceTemplateMappingService initialized with {len(self.mappings.get('service_mappings', {}))} services")
 
@@ -253,7 +257,7 @@ class ServiceTemplateMappingService:
 
         # Add custom templates from message_templates.json
         try:
-            template_file = 'data/message_templates.json'
+            template_file = self.templates_file
             if os.path.exists(template_file):
                 with open(template_file, 'r', encoding='utf-8') as f:
                     all_templates = json.load(f)

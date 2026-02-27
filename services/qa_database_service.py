@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from difflib import SequenceMatcher
 import re
+from services.language_detection_service import language_detection_service
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +31,43 @@ class QADatabaseService:
             raise ValueError("Missing API credentials: LINASLASER_API_BASE_URL or LINASLASER_API_TOKEN")
         
         print(f"🤖 QADatabaseService initialized with API: {self.base_url}")
+
+    @staticmethod
+    def _normalize_language(language: Optional[str], default: str = "ar") -> str:
+        return language_detection_service.normalize_training_language(language, default=default)
+
+    def _extract_question_for_language(self, qa: dict, language: str) -> str:
+        """
+        Support both backend response formats:
+        1) Flat: {question, answer, language}
+        2) Multilingual row: {question_ar, question_en, ...}
+        """
+        requested_language = self._normalize_language(language)
+        question_key = f"question_{requested_language}"
+        if qa.get(question_key):
+            return qa.get(question_key, "")
+
+        qa_language = self._normalize_language(qa.get("language"), default="")
+        if qa_language:
+            if qa_language != requested_language:
+                return ""
+            return qa.get("question", "")
+
+        return qa.get("question", "")
+
+    def _extract_answer_for_language(self, qa: dict, language: str) -> str:
+        requested_language = self._normalize_language(language)
+        answer_key = f"answer_{requested_language}"
+        if qa.get(answer_key):
+            return qa.get(answer_key, "")
+
+        qa_language = self._normalize_language(qa.get("language"), default="")
+        if qa_language:
+            if qa_language != requested_language:
+                return ""
+            return qa.get("answer", "")
+
+        return qa.get("answer", "")
     
     async def _make_api_request(self, method: str, endpoint: str, data: dict = None, params: dict = None) -> dict:
         """Make authenticated API request to backend"""
@@ -82,6 +120,49 @@ class QADatabaseService:
         Create a new Q&A pair in the database
         Backend expects: {question_ar, answer_ar, question_en, answer_en, ...}
         """
+        # Auto-generate missing EN/FR/Franco when Arabic source is provided.
+        if question_ar and answer_ar:
+            missing_targets = []
+            if not question_en or not answer_en:
+                missing_targets.append("en")
+            if not question_fr or not answer_fr:
+                missing_targets.append("fr")
+            if not question_franco or not answer_franco:
+                missing_targets.append("franco")
+
+            if missing_targets:
+                translation_result = await language_detection_service.translate_arabic_training_pair(
+                    question_ar=question_ar,
+                    answer_ar=answer_ar,
+                    target_languages=missing_targets,
+                )
+                translations = translation_result.get("translations", {})
+
+                if "en" in translations:
+                    question_en = question_en or translations["en"].get("question", "")
+                    answer_en = answer_en or translations["en"].get("answer", "")
+                if "fr" in translations:
+                    question_fr = question_fr or translations["fr"].get("question", "")
+                    answer_fr = answer_fr or translations["fr"].get("answer", "")
+                if "franco" in translations:
+                    question_franco = question_franco or translations["franco"].get("question", "")
+                    answer_franco = answer_franco or translations["franco"].get("answer", "")
+
+                unresolved = []
+                if not question_en or not answer_en:
+                    unresolved.append("en")
+                if not question_fr or not answer_fr:
+                    unresolved.append("fr")
+                if not question_franco or not answer_franco:
+                    unresolved.append("franco")
+
+                if unresolved:
+                    return {
+                        "success": False,
+                        "error": "Auto translation failed for required languages",
+                        "missing_languages": unresolved,
+                    }
+
         data = {
             "question_ar": question_ar or "",
             "answer_ar": answer_ar or "",
@@ -128,6 +209,16 @@ class QADatabaseService:
         
         print(f"📋 Fetching Q&A pairs from database (filters: {params})")
         response = await self._make_api_request("GET", "/qa/list", params=params)
+
+        if response.get("success") and language:
+            requested_language = self._normalize_language(language, default="")
+            data = response.get("data", [])
+            if isinstance(data, list) and data and any("language" in qa for qa in data):
+                filtered = [
+                    qa for qa in data
+                    if self._normalize_language(qa.get("language"), default="") == requested_language
+                ]
+                response = {**response, "data": filtered, "count": len(filtered)}
         
         if response.get("success"):
             count = len(response.get("data", []))
@@ -199,6 +290,16 @@ class QADatabaseService:
         
         print(f"🔍 Searching Q&A pairs: '{query}' (language: {language})")
         response = await self._make_api_request("GET", "/qa/search", params=params)
+
+        if response.get("success") and language:
+            requested_language = self._normalize_language(language, default="")
+            data = response.get("data", [])
+            if isinstance(data, list) and data and any("language" in qa for qa in data):
+                filtered = [
+                    qa for qa in data
+                    if self._normalize_language(qa.get("language"), default="") == requested_language
+                ]
+                response = {**response, "data": filtered, "count": len(filtered)}
         
         if response.get("success"):
             count = len(response.get("data", []))
@@ -237,9 +338,10 @@ class QADatabaseService:
             dict: Matched Q&A pair with score, or None if no match
         """
         print(f"🔍 Finding match for: '{question}' (language: {language})")
+        requested_language = self._normalize_language(language)
         
-        # Get all active Q&A pairs from database
-        response = await self.get_qa_pairs(active_only=True)
+        # Get active Q&A pairs only for the requested language view.
+        response = await self.get_qa_pairs(language=requested_language, active_only=True)
         
         if not response.get("success"):
             print(f"❌ Failed to fetch Q&A pairs for matching")
@@ -256,18 +358,12 @@ class QADatabaseService:
         
         # Check each Q&A pair for similarity
         for qa in qa_pairs:
-            # Backend returns: {qa_id, question, answer, category, language, usage_count}
-            qa_question = qa.get("question", "")
-            qa_language = qa.get("language", "ar")
-            
-            # Skip if no question
+            qa_question = self._extract_question_for_language(qa, requested_language)
+
+            # Skip if no question in requested language
             if not qa_question:
                 continue
-            
-            # ✨ CHANGED: Check ALL languages, not just the detected one
-            # This allows matching regardless of language detection accuracy
-            # The similarity algorithm will find the best match across all Q&As
-            
+
             # Calculate similarity
             similarity = self.calculate_similarity(question, qa_question)
             
@@ -293,7 +389,7 @@ class QADatabaseService:
             return {
                 "qa_pair": best_match,
                 "match_score": best_score,
-                "matched_language": language
+                "matched_language": requested_language
             }
         
         print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, threshold: {self.match_threshold:.2%})")
@@ -393,8 +489,7 @@ async def get_qa_response(question: str, language: str = "ar") -> Optional[str]:
         print(f"   Category: {qa_pair.get('category')}")
         print(f"   Usage Count: {qa_pair.get('usage_count', 0)}")
         
-        # Backend returns: {qa_id, question, answer, category, language, usage_count}
-        answer = qa_pair.get("answer", "")
+        answer = qa_db_service._extract_answer_for_language(qa_pair, language)
         
         return answer
     

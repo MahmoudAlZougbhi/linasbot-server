@@ -34,7 +34,7 @@ async def test_qa_endpoint():
 @app.get("/api/qa/list")
 async def list_qa_pairs(
     category: Optional[str] = None,
-    language: Optional[str] = None,
+    language: str = "ar",
     active_only: bool = True
 ):
     """List all Q&A pairs with optional filtering - FROM DATABASE"""
@@ -59,27 +59,59 @@ async def create_qa_pair(qa_data: dict):
         print("="*80)
         print(f"📥 Received qa_data type: {type(qa_data)}")
         print(f"📥 Received qa_data: {qa_data}")
-        print(f"📥 question_ar: {qa_data.get('question_ar', '')}")
-        print(f"📥 answer_ar: {qa_data.get('answer_ar', '')}")
-        print(f"📥 question_en: {qa_data.get('question_en', '')}")
-        print(f"📥 answer_en: {qa_data.get('answer_en', '')}")
-        print(f"📥 question_fr: {qa_data.get('question_fr', '')}")
-        print(f"📥 answer_fr: {qa_data.get('answer_fr', '')}")
-        print(f"📥 question_franco: {qa_data.get('question_franco', '')}")
-        print(f"📥 answer_franco: {qa_data.get('answer_franco', '')}")
+        question_ar = qa_data.get("question_ar", "").strip()
+        answer_ar = qa_data.get("answer_ar", "").strip()
+        question_en = qa_data.get("question_en", "").strip()
+        answer_en = qa_data.get("answer_en", "").strip()
+        question_fr = qa_data.get("question_fr", "").strip()
+        answer_fr = qa_data.get("answer_fr", "").strip()
+        question_franco = qa_data.get("question_franco", "").strip()
+        answer_franco = qa_data.get("answer_franco", "").strip()
+
+        # Accept compact payload shape: {question, answer, language, category, tags}
+        question = qa_data.get("question", "").strip()
+        answer = qa_data.get("answer", "").strip()
+        if question and answer and not any(
+            [question_ar, question_en, question_fr, question_franco]
+        ):
+            detected_language = language_detection_service.normalize_training_language(
+                qa_data.get("language"),
+                default=language_detection_service.detect_training_language(question),
+            )
+            if detected_language == "ar":
+                question_ar = question
+                answer_ar = answer
+            elif detected_language == "en":
+                question_en = question
+                answer_en = answer
+            elif detected_language == "fr":
+                question_fr = question
+                answer_fr = answer
+            else:
+                question_franco = question
+                answer_franco = answer
+
+        print(f"📥 question_ar: {question_ar}")
+        print(f"📥 answer_ar: {answer_ar}")
+        print(f"📥 question_en: {question_en}")
+        print(f"📥 answer_en: {answer_en}")
+        print(f"📥 question_fr: {question_fr}")
+        print(f"📥 answer_fr: {answer_fr}")
+        print(f"📥 question_franco: {question_franco}")
+        print(f"📥 answer_franco: {answer_franco}")
         print(f"📥 category: {qa_data.get('category', 'general')}")
         print(f"📥 tags: {qa_data.get('tags', [])}")
         print("="*80 + "\n")
         
         response = await qa_db_service.create_qa_pair(
-            question_ar=qa_data.get("question_ar", ""),
-            answer_ar=qa_data.get("answer_ar", ""),
-            question_en=qa_data.get("question_en", ""),
-            answer_en=qa_data.get("answer_en", ""),
-            question_fr=qa_data.get("question_fr", ""),
-            answer_fr=qa_data.get("answer_fr", ""),
-            question_franco=qa_data.get("question_franco", ""),
-            answer_franco=qa_data.get("answer_franco", ""),
+            question_ar=question_ar,
+            answer_ar=answer_ar,
+            question_en=question_en,
+            answer_en=answer_en,
+            question_fr=question_fr,
+            answer_fr=answer_fr,
+            question_franco=question_franco,
+            answer_franco=answer_franco,
             category=qa_data.get("category", "general"),
             tags=qa_data.get("tags", [])
         )
@@ -149,8 +181,7 @@ async def test_qa_match(test_data: dict):
         
         if match_result:
             qa_pair = match_result["qa_pair"]
-            answer_key = f"answer_{language}"
-            answer = qa_pair.get(answer_key, qa_pair.get("answer_ar", ""))
+            answer = qa_db_service._extract_answer_for_language(qa_pair, language)
             
             return {
                 "success": True,

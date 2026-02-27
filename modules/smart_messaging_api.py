@@ -3,34 +3,93 @@ Smart Messaging API Module
 Handles message templates endpoints for the dashboard
 """
 
-from fastapi import HTTPException
 import json
 import os
+import tempfile
+import threading
+from contextlib import contextmanager
+from pathlib import Path
 from typing import Dict, Any
 from datetime import datetime
 
 from modules.core import app
 from utils.utils import save_conversation_message_to_firestore
 
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
+
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_DATA_DIR = _BASE_DIR / "data"
+_TEMPLATE_FILE = _DATA_DIR / "message_templates.json"
+_TEMPLATE_LOCK_FILE = _DATA_DIR / ".message_templates.lock"
+_PROCESS_TEMPLATE_LOCK = threading.Lock()
+
+
+@contextmanager
+def _template_store_lock():
+    """Lock template read/write across threads and (on Unix) processes."""
+    os.makedirs(_DATA_DIR, exist_ok=True)
+    with _PROCESS_TEMPLATE_LOCK:
+        with open(_TEMPLATE_LOCK_FILE, "a+", encoding="utf-8") as lock_handle:
+            if fcntl is not None:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def _load_templates_from_disk() -> Dict[str, Any]:
+    if not _TEMPLATE_FILE.exists():
+        return {}
+
+    with open(_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
+        templates = json.load(f)
+
+    if not isinstance(templates, dict):
+        raise ValueError("Invalid templates file format: expected JSON object")
+
+    return templates
+
+
+def _save_templates_to_disk(templates: Dict[str, Any]) -> None:
+    os.makedirs(_DATA_DIR, exist_ok=True)
+    temp_fd, temp_path = tempfile.mkstemp(
+        dir=str(_DATA_DIR),
+        prefix="message_templates_",
+        suffix=".json"
+    )
+
+    try:
+        with os.fdopen(temp_fd, 'w', encoding='utf-8') as temp_file:
+            json.dump(templates, temp_file, ensure_ascii=False, indent=2)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+
+        os.replace(temp_path, _TEMPLATE_FILE)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
 
 @app.get("/api/smart-messaging/templates")
 async def get_message_templates():
     """Get all message templates from JSON file"""
     try:
-        template_file = 'data/message_templates.json'
-        
-        if os.path.exists(template_file):
-            with open(template_file, 'r', encoding='utf-8') as f:
-                templates = json.load(f)
-            return {
-                "success": True,
-                "templates": templates
-            }
-        else:
-            return {
-                "success": False,
-                "error": "Templates file not found"
-            }
+        with _template_store_lock():
+            templates = _load_templates_from_disk()
+
+        return {
+            "success": True,
+            "templates": templates
+        }
     except Exception as e:
         print(f"❌ Error getting templates: {e}")
         return {
@@ -43,56 +102,44 @@ async def get_message_templates():
 async def update_message_template(template_id: str, template_data: Dict[str, Any]):
     """Update or create a message template"""
     try:
-        template_file = 'data/message_templates.json'
+        with _template_store_lock():
+            templates = _load_templates_from_disk()
 
-        # Load existing templates
-        if os.path.exists(template_file):
-            with open(template_file, 'r', encoding='utf-8') as f:
-                templates = json.load(f)
-        else:
-            templates = {}
+            is_new = bool(template_data.get('isNew', False)) or template_id not in templates
+            now_iso = datetime.now().isoformat()
 
-        is_new = template_data.get('isNew', False)
+            # Check if creating a new template
+            if is_new:
+                templates[template_id] = {
+                    'name': str(template_data.get('name', template_id)),
+                    'description': str(template_data.get('description', '')),
+                    'ar': str(template_data.get('ar', '')),
+                    'en': str(template_data.get('en', '')),
+                    'fr': str(template_data.get('fr', '')),
+                    'isCustom': True,
+                    'createdAt': now_iso
+                }
+                action = "created"
+            else:
+                # Merge updates so partial payloads never wipe other languages/fields
+                for field in ('ar', 'en', 'fr', 'name', 'description'):
+                    if field in template_data:
+                        value = template_data[field]
+                        templates[template_id][field] = '' if value is None else str(value)
 
-        # Check if creating a new template
-        if is_new or template_id not in templates:
-            # Create new template
-            templates[template_id] = {
-                'name': template_data.get('name', template_id),
-                'description': template_data.get('description', ''),
-                'ar': template_data.get('ar', ''),
-                'en': template_data.get('en', ''),
-                'fr': template_data.get('fr', ''),
-                'isCustom': True,
-                'createdAt': datetime.now().isoformat()
-            }
-            action = "created"
-        else:
-            # Update existing template
-            if 'ar' in template_data:
-                templates[template_id]['ar'] = template_data['ar']
-            if 'en' in template_data:
-                templates[template_id]['en'] = template_data['en']
-            if 'fr' in template_data:
-                templates[template_id]['fr'] = template_data['fr']
-            if 'name' in template_data:
-                templates[template_id]['name'] = template_data['name']
-            if 'description' in template_data:
-                templates[template_id]['description'] = template_data['description']
-            templates[template_id]['updatedAt'] = datetime.now().isoformat()
-            action = "updated"
+                templates[template_id]['updatedAt'] = now_iso
+                action = "updated"
 
-        # Save back to file
-        with open(template_file, 'w', encoding='utf-8') as f:
-            json.dump(templates, f, ensure_ascii=False, indent=2)
+            _save_templates_to_disk(templates)
+            saved_template = templates[template_id]
 
         # Reload templates in smart_messaging service if available
         try:
             from services.smart_messaging import smart_messaging
             smart_messaging.message_templates[template_id] = {
-                'ar': templates[template_id]['ar'],
-                'en': templates[template_id]['en'],
-                'fr': templates[template_id]['fr']
+                'ar': saved_template.get('ar', ''),
+                'en': saved_template.get('en', ''),
+                'fr': saved_template.get('fr', '')
             }
         except ImportError:
             # Service may not be available in all deployments
@@ -101,7 +148,8 @@ async def update_message_template(template_id: str, template_data: Dict[str, Any
         return {
             "success": True,
             "message": f"Template {action} successfully",
-            "template_id": template_id
+            "template_id": template_id,
+            "template": saved_template
         }
     except Exception as e:
         print(f"❌ Error updating template: {e}")
@@ -117,8 +165,6 @@ async def update_message_template(template_id: str, template_data: Dict[str, Any
 async def delete_message_template(template_id: str):
     """Delete a custom message template"""
     try:
-        template_file = 'data/message_templates.json'
-
         # Default templates that cannot be deleted
         default_templates = [
             "reminder_24h", "same_day_checkin", "post_session_feedback",
@@ -132,28 +178,18 @@ async def delete_message_template(template_id: str):
                 "error": "Cannot delete default templates"
             }
 
-        # Load existing templates
-        if os.path.exists(template_file):
-            with open(template_file, 'r', encoding='utf-8') as f:
-                templates = json.load(f)
-        else:
-            return {
-                "success": False,
-                "error": "Templates file not found"
-            }
+        with _template_store_lock():
+            templates = _load_templates_from_disk()
 
-        if template_id not in templates:
-            return {
-                "success": False,
-                "error": "Template not found"
-            }
+            if template_id not in templates:
+                return {
+                    "success": False,
+                    "error": "Template not found"
+                }
 
-        # Delete the template
-        del templates[template_id]
-
-        # Save back to file
-        with open(template_file, 'w', encoding='utf-8') as f:
-            json.dump(templates, f, ensure_ascii=False, indent=2)
+            # Delete the template
+            del templates[template_id]
+            _save_templates_to_disk(templates)
 
         # Remove from smart_messaging service if available
         try:
@@ -165,7 +201,8 @@ async def delete_message_template(template_id: str):
 
         return {
             "success": True,
-            "message": "Template deleted successfully"
+            "message": "Template deleted successfully",
+            "template_id": template_id
         }
     except Exception as e:
         print(f"❌ Error deleting template: {e}")

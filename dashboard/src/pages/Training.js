@@ -43,6 +43,7 @@ const Training = () => {
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("general");
+  const [selectedLanguage, setSelectedLanguage] = useState("ar");
 
   // Edit mode state
   const [editingEntry, setEditingEntry] = useState(null);
@@ -95,10 +96,20 @@ const Training = () => {
     { value: "hours", label: "Working Hours", emoji: "⏰" },
   ];
 
+  const languageOptions = [
+    { value: "ar", label: "Arabic", flag: "🇸🇦" },
+    { value: "en", label: "English", flag: "🇺🇸" },
+    { value: "fr", label: "French", flag: "🇫🇷" },
+    { value: "franco", label: "Franco", flag: "🔤" },
+  ];
+
   useEffect(() => {
-    loadTrainingData();
     loadStatistics();
   }, []);
+
+  useEffect(() => {
+    loadTrainingData(selectedLanguage);
+  }, [selectedLanguage]);
 
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -113,15 +124,15 @@ const Training = () => {
     }
   }, [searchQuery, trainingEntries]);
 
-  const loadTrainingData = async () => {
+  const loadTrainingData = async (language = selectedLanguage) => {
     try {
       console.log("🔄 Loading Q&A pairs from local file...");
-      const response = await getLocalQAPairs();
+      const response = await getLocalQAPairs({ language });
 
       console.log("📦 Response:", response);
 
       if (response.success && response.data) {
-        console.log(`✅ Loaded ${response.data.length} Q&A pairs`);
+        console.log(`✅ Loaded ${response.data.length} Q&A pairs (${language})`);
         setTrainingEntries(response.data);
       } else {
         console.log("⚠️ No data or success=false");
@@ -169,7 +180,7 @@ const Training = () => {
 
       if (response.success) {
         // Reload data from backend
-        await loadTrainingData();
+        await loadTrainingData(selectedLanguage);
         await loadStatistics();
 
         // Reset form
@@ -177,9 +188,15 @@ const Training = () => {
         setNewAnswer("");
         setSelectedCategory("general");
 
-        toast.success(
-          `✅ Q&A saved! Language detected: ${response.data.language}`
-        );
+        if ((response.count_created || 1) > 1) {
+          toast.success(
+            `✅ Saved in 4 languages (AR/EN/FR/Franco). Showing ${selectedLanguage.toUpperCase()} view.`
+          );
+        } else {
+          toast.success(
+            `✅ Q&A saved! Language detected: ${response.data.language}`
+          );
+        }
       } else {
         toast.error(response.error || "Failed to create Q&A pair");
       }
@@ -199,7 +216,7 @@ const Training = () => {
 
       if (response.success) {
         // Reload from backend
-        await loadTrainingData();
+        await loadTrainingData(selectedLanguage);
         await loadStatistics();
         toast.success("✅ Q&A pair deleted successfully!");
         setDeleteConfirmEntry(null);
@@ -253,7 +270,7 @@ const Training = () => {
 
       if (response.success) {
         // Reload data from backend
-        await loadTrainingData();
+        await loadTrainingData(selectedLanguage);
         await loadStatistics();
 
         // Reset edit state
@@ -292,8 +309,8 @@ const Training = () => {
           AI Training Center
         </h1>
         <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-          Teach your AI assistant new knowledge. Add Q&A pairs and the bot will
-          automatically detect the language!
+          Teach your AI assistant with Q&A pairs. Arabic entries are auto-saved
+          in English, French, and Franco too.
         </p>
       </motion.div>
 
@@ -445,7 +462,7 @@ const Training = () => {
                     className="input-field w-full h-24 resize-none"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    💡 Language will be auto-detected from your question
+                    💡 Language is auto-detected. Arabic Q&A auto-generates EN/FR/Franco copies.
                   </p>
                 </div>
 
@@ -516,19 +533,38 @@ const Training = () => {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-slate-800 font-display flex items-center">
                   <BookOpenIcon className="w-6 h-6 mr-2 text-blue-600" />
-                  Training Data ({trainingEntries.length})
+                  Training Data ({selectedLanguage.toUpperCase()}) ({trainingEntries.length})
                 </h2>
 
-                {/* Search */}
-                <div className="relative">
-                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search entries..."
-                    className="input-field pl-10 w-64"
-                  />
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center rounded-xl bg-slate-100 p-1">
+                    {languageOptions.map((lang) => (
+                      <button
+                        key={lang.value}
+                        onClick={() => setSelectedLanguage(lang.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          selectedLanguage === lang.value
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        <span className="mr-1">{lang.flag}</span>
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search */}
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={`Search ${selectedLanguage.toUpperCase()} entries...`}
+                      className="input-field pl-10 w-64"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -729,7 +765,7 @@ const Training = () => {
                       <p className="text-slate-500">
                         {searchQuery
                           ? "No entries match your search"
-                          : "No training data yet"}
+                          : `No ${selectedLanguage.toUpperCase()} training data yet`}
                       </p>
                       <p className="text-sm text-slate-400 mt-1">
                         {searchQuery

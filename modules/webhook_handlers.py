@@ -201,6 +201,13 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     else:
         print(f"⚠️ WARNING: No phone_number extracted for user {user_id}")
 
+    # Persist source message id as one-shot metadata for Firestore dedupe.
+    source_message_id = parsed_message.get("message_id")
+    if source_message_id:
+        config.user_data_whatsapp[user_id]["_source_message_id"] = str(source_message_id)
+    else:
+        config.user_data_whatsapp[user_id].pop("_source_message_id", None)
+
     # ===== RESTORE USER STATE FROM FIRESTORE FIRST (handles server restart) =====
     # Always try to restore from Firestore before API lookup
     # Only restore if gender is not already set to a valid value
@@ -353,6 +360,9 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     else:
         await adapter.send_text_message(user_id, "عذراً، أنا أستطيع معالجة الرسائل النصية، الصور، والرسائل الصوتية فقط حالياً. 😅")
         print(f"Unhandled message type: {message_type} from {user_id}")
+
+    # Clear one-shot source ID if it wasn't consumed in handlers.
+    config.user_data_whatsapp.get(user_id, {}).pop("_source_message_id", None)
 
 
 # ============================================================================

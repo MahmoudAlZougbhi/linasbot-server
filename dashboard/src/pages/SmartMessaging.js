@@ -541,21 +541,32 @@ const SmartMessaging = () => {
     try {
       setLoading(true);
 
-      // Fetch scheduler status
-      const statusResponse = await fetch("/api/smart-messaging/status");
-      const statusResult = await statusResponse.json();
+      const fetchJsonSafely = async (url) => {
+        try {
+          const response = await fetch(url);
+          return await response.json();
+        } catch (error) {
+          console.error(`Error fetching ${url}:`, error);
+          return null;
+        }
+      };
 
-      if (statusResult.success) {
+      const [statusResult, countsResult, templatesResult] = await Promise.all([
+        fetchJsonSafely("/api/smart-messaging/status"),
+        fetchJsonSafely("/api/smart-messaging/counts"),
+        fetchJsonSafely("/api/smart-messaging/templates")
+      ]);
+
+      if (statusResult?.success) {
         setSchedulerStatus(statusResult);
+      } else if (statusResult) {
+        console.warn("Failed to fetch scheduler status:", statusResult.error);
       }
 
       // ✅ LAZY LOADING: Fetch only counts initially (fast)
-      const countsResponse = await fetch("/api/smart-messaging/counts");
-      const countsResult = await countsResponse.json();
-
-      if (countsResult.success) {
+      if (countsResult?.success) {
         setMessageCounts(countsResult.counts || {});
-      } else {
+      } else if (countsResult) {
         console.warn("Failed to fetch message counts:", countsResult.error);
       }
 
@@ -564,10 +575,7 @@ const SmartMessaging = () => {
       setLoadedCategories(new Set());
 
       // Fetch templates
-      const templatesResponse = await fetch("/api/smart-messaging/templates");
-      const templatesResult = await templatesResponse.json();
-
-      if (templatesResult.success) {
+      if (templatesResult?.success) {
         setMessageTemplates(templatesResult.templates);
         // Initialize edited templates with current values
         setEditedTemplates(
@@ -575,6 +583,8 @@ const SmartMessaging = () => {
         );
         // selectedLanguage is now a single string, not per-template
         // Already initialized to "ar" in useState
+      } else if (templatesResult) {
+        console.warn("Failed to fetch templates:", templatesResult.error);
       }
     } catch (error) {
       console.error("Error fetching smart messaging data:", error);

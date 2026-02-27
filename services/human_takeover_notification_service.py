@@ -4,8 +4,10 @@ Human Takeover Notification Service
 Sends WhatsApp template notifications to admin/staff when a conversation is escalated
 """
 
-from typing import List, Dict, Any
+import re
+from typing import List, Dict, Any, Optional
 from services.montymobile_template_service import montymobile_template_service
+from services.api_integrations import log_report_event
 
 
 class HumanTakeoverNotificationService:
@@ -44,11 +46,17 @@ class HumanTakeoverNotificationService:
         if not mobile_numbers_string or not mobile_numbers_string.strip():
             return []
         
-        # Split by comma and clean each number
+        # Split by common separators and clean each number
         numbers = []
-        for number in mobile_numbers_string.split(','):
+        seen_numbers = set()
+        for number in re.split(r"[,;\n]+", mobile_numbers_string):
             cleaned = number.strip()
             if cleaned:
+                # Keep only digits and leading plus
+                cleaned = re.sub(r"[^\d+]", "", cleaned)
+                if cleaned.startswith("00"):
+                    cleaned = "+" + cleaned[2:]
+
                 # Ensure number starts with +
                 if not cleaned.startswith('+'):
                     # Assume Lebanon country code if not provided
@@ -60,8 +68,9 @@ class HumanTakeoverNotificationService:
                     else:
                         # Add +961 prefix
                         cleaned = '+961' + cleaned
-                
-                numbers.append(cleaned)
+                if cleaned not in seen_numbers:
+                    seen_numbers.add(cleaned)
+                    numbers.append(cleaned)
         
         return numbers
     
@@ -194,6 +203,64 @@ class HumanTakeoverNotificationService:
             last_message=last_message,
             notify_numbers=notify_numbers
         )
+
+    async def notify_and_audit_handoff(
+        self,
+        user_id: str,
+        user_gender: str,
+        customer_name: str,
+        customer_phone: str,
+        escalation_reason: str,
+        last_message: str,
+        trigger_source: str,
+        conversation_id: Optional[str] = None,
+        settings_mobile_numbers: Optional[str] = None,
+        extra_details: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Unified AI->Human handoff flow:
+        1) Notifies configured admin numbers
+        2) Writes an audit event with notification outcome
+        """
+        if settings_mobile_numbers is None:
+            from services.settings_service import settings_service
+            settings_mobile_numbers = settings_service.get_human_takeover_notify_mobiles()
+
+        notification_result = await self.notify_from_settings(
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            escalation_reason=escalation_reason,
+            last_message=last_message,
+            settings_mobile_numbers=settings_mobile_numbers
+        )
+
+        audit_details = {
+            "trigger_source": trigger_source,
+            "conversation_id": conversation_id,
+            "escalation_reason": escalation_reason,
+            "customer_name": customer_name,
+            "customer_phone": customer_phone,
+            "last_message": (last_message or "")[:250],
+            "notification_success": notification_result.get("success", False),
+            "notification_sent_count": notification_result.get("sent_count", 0),
+            "notification_total_numbers": notification_result.get("total_numbers", 0),
+            "notification_error": notification_result.get("error")
+        }
+        if extra_details:
+            audit_details.update(extra_details)
+
+        log_report_event(
+            "human_handover_audit",
+            user_id or customer_phone or "unknown_user",
+            user_gender or "unknown",
+            audit_details
+        )
+
+        return {
+            "success": notification_result.get("success", False),
+            "notification_result": notification_result,
+            "audit_event": "human_handover_audit"
+        }
 
 
 # Global instance

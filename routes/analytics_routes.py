@@ -4,14 +4,14 @@ Provides endpoints for analytics data aggregated from Firebase, Backend API, and
 """
 
 from fastapi import APIRouter, Query
-from typing import Optional
 from services.analytics_service import analytics_service
 
 router = APIRouter()
 
 @router.get("/api/analytics/summary")
 async def get_analytics_summary(
-    time_range: int = Query(7, description="Number of days to include in analytics (default: 7)")
+    time_range: int = Query(7, description="Number of days to include in analytics (default: 7)"),
+    use_real_costs: bool = Query(True, description="Whether to fetch real OpenAI API costs")
 ):
     """
     Get comprehensive analytics summary
@@ -39,7 +39,10 @@ async def get_analytics_summary(
     - trending_topics: Popular conversation topics
     """
     try:
-        summary = await analytics_service.get_analytics_summary(time_range)
+        summary = await analytics_service.get_analytics_summary(
+            time_range=time_range,
+            use_real_costs=use_real_costs,
+        )
         return {
             "success": True,
             "data": summary

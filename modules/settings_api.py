@@ -44,6 +44,12 @@ async def update_settings(category: str, updates: Dict[str, Any]):
                 "success": False,
                 "error": f"Invalid category. Must be one of: {valid_categories}"
             }
+
+        # Keep notification recipients normalized even when updated via generic endpoint.
+        if category == "notifications" and "humanTakeoverNotifyMobiles" in updates:
+            updates["humanTakeoverNotifyMobiles"] = settings_service.normalize_human_takeover_notify_mobiles(
+                updates.get("humanTakeoverNotifyMobiles", "")
+            )
         
         # Update settings
         success = settings_service.update_settings(category, updates)
@@ -75,9 +81,11 @@ async def get_human_takeover_mobiles():
     """Get mobile numbers for human takeover notifications"""
     try:
         mobile_numbers = settings_service.get_human_takeover_notify_mobiles()
+        mobile_numbers_list = settings_service.get_human_takeover_notify_mobiles_list()
         return {
             "success": True,
-            "mobile_numbers": mobile_numbers
+            "mobile_numbers": mobile_numbers,
+            "mobile_numbers_list": mobile_numbers_list
         }
     except Exception as e:
         print(f"❌ Error getting human takeover mobiles: {e}")
@@ -92,14 +100,22 @@ async def set_human_takeover_mobiles(data: Dict[str, Any]):
     """Set mobile numbers for human takeover notifications"""
     try:
         mobile_numbers = data.get('mobile_numbers', '')
+        if isinstance(mobile_numbers, list):
+            mobile_numbers = ", ".join(str(item) for item in mobile_numbers if str(item).strip())
+        elif mobile_numbers is None:
+            mobile_numbers = ""
+        else:
+            mobile_numbers = str(mobile_numbers)
         
         success = settings_service.set_human_takeover_notify_mobiles(mobile_numbers)
+        normalized_numbers = settings_service.get_human_takeover_notify_mobiles()
         
         if success:
             return {
                 "success": True,
                 "message": "Mobile numbers updated successfully",
-                "mobile_numbers": mobile_numbers
+                "mobile_numbers": normalized_numbers,
+                "mobile_numbers_list": settings_service.get_human_takeover_notify_mobiles_list()
             }
         else:
             return {

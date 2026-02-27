@@ -3,9 +3,13 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import json
 import os
+from pathlib import Path
+
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_DATA_DIR = _BASE_DIR / "data"
 
 class SmartMessagingService:
     """
@@ -17,9 +21,12 @@ class SmartMessagingService:
     - 1-month follow-ups
     """
     
-    SENT_MESSAGES_FILE = 'data/sent_smart_messages.json'
+    SENT_MESSAGES_FILE = str(_DATA_DIR / "sent_smart_messages.json")
 
     def __init__(self):
+        self.templates_file = str(_DATA_DIR / "message_templates.json")
+        self.settings_file = str(_DATA_DIR / "app_settings.json")
+        self.mapping_file = str(_DATA_DIR / "service_template_mapping.json")
         self.message_templates = self._load_templates()
         self.scheduled_messages = {}
         self.sent_messages_log = []
@@ -72,7 +79,7 @@ class SmartMessagingService:
 
     def _load_templates(self) -> Dict:
         """Load message templates from JSON file or use defaults"""
-        template_file = 'data/message_templates.json'
+        template_file = self.templates_file
         
         if os.path.exists(template_file):
             try:
@@ -505,7 +512,7 @@ Des questions? Nous sommes là! 💬
     def _is_smart_messaging_enabled(self) -> bool:
         """Check if smart messaging is globally enabled"""
         try:
-            settings_file = 'data/app_settings.json'
+            settings_file = self.settings_file
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
@@ -517,7 +524,7 @@ Des questions? Nous sommes là! 💬
     def _is_preview_mode_enabled(self) -> bool:
         """Check if preview before send is enabled"""
         try:
-            settings_file = 'data/app_settings.json'
+            settings_file = self.settings_file
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
@@ -529,7 +536,7 @@ Des questions? Nous sommes là! 💬
     def _is_template_enabled_for_service(self, service_id: int, template_id: str) -> bool:
         """Check if template is enabled for a specific service"""
         try:
-            mapping_file = 'data/service_template_mapping.json'
+            mapping_file = self.mapping_file
             if os.path.exists(mapping_file):
                 with open(mapping_file, 'r', encoding='utf-8') as f:
                     mappings = json.load(f)

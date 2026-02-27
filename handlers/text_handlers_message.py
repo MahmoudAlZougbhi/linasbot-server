@@ -5,6 +5,24 @@ from handlers.text_handlers_firestore import *
 from handlers.text_handlers_delayed import _delayed_process_messages
 
 
+_EXPLICIT_HUMAN_HANDOFF_PATTERNS = [
+    r"\b(human|agent|representative|operator|customer\s*service|someone\s+real)\b",
+    r"\b(talk|speak|transfer|connect|escalate)\b.{0,20}\b(human|agent|representative|operator|someone)\b",
+    r"\b(call\s+(me|us|please|now|back)|phone\s+call|callback)\b",
+    r"(بدي|بدي احكي|حولني|وديني|خليني)\s*(?:احكي\s*)?(?:مع|على)\s*(?:موظف|شخص|انسان|مدير|مسؤول|خدمة العملاء)",
+    r"(اتصلوا|اتصل|دقوا|تواصلوا)\s*(?:فيي|بي|معي|معنا)?",
+    r"(مش\s*بدي\s*(?:بوت|روبوت)|بدي\s*حدا\s*بشري|بدي\s*حدا\s*حقيقي)"
+]
+
+
+def _is_explicit_human_handoff_request(message: str) -> bool:
+    """Detect direct customer request for human/call takeover."""
+    message_text = (message or "").strip().lower()
+    if not message_text:
+        return False
+    return any(re.search(pattern, message_text, re.IGNORECASE | re.UNICODE) for pattern in _EXPLICIT_HUMAN_HANDOFF_PATTERNS)
+
+
 async def handle_message(user_id: str, user_name: str, user_input_text: str, user_data: dict, send_message_func, send_action_func, skip_firestore_save: bool = False):
     """
     Main message handler for WhatsApp text messages.
@@ -73,7 +91,20 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         print(f"   raw_msg preview: {raw_msg[:50] if raw_msg else 'None'}...")
         print(f"{'='*60}\n")
 
-        await save_conversation_message_to_firestore(user_id, "user", raw_msg, current_conversation_id, user_name, phone_for_save)
+        source_message_id = user_data.pop("_source_message_id", None)
+        message_metadata = {"type": "text"}
+        if source_message_id:
+            message_metadata["source_message_id"] = source_message_id
+
+        await save_conversation_message_to_firestore(
+            user_id,
+            "user",
+            raw_msg,
+            current_conversation_id,
+            user_name,
+            phone_for_save,
+            metadata=message_metadata,
+        )
 
         # Update local user_data with the conversation_id (might have been created)
         new_conv_id = config.user_data_whatsapp[user_id].get('current_conversation_id')
@@ -84,9 +115,111 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         # Just ensure current_conversation_id is up-to-date
         if 'current_conversation_id' not in user_data or not user_data['current_conversation_id']:
             user_data['current_conversation_id'] = config.user_data_whatsapp[user_id].get('current_conversation_id')
+
+    current_conversation_id = user_data.get('current_conversation_id')
     
     # Get Firestore DB instance for sentiment and takeover checks
     db = get_firestore_db()
+
+    async def _trigger_human_takeover(
+        trigger_source: str,
+        escalation_reason: str,
+        customer_message: str,
+        escalation_score: float = None,
+        detected_issues: list = None
+    ):
+        """Mark conversation as waiting_human, notify admins, and write audit event."""
+        if db and current_conversation_id:
+            try:
+                app_id_for_firestore = "linas-ai-bot-backend"
+                conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                update_payload = {
+                    "status": "waiting_human",
+                    "human_takeover_active": True,
+                    "human_takeover_requested": True,
+                    "operator_id": None,
+                    "escalation_reason": escalation_reason,
+                    "escalation_time": datetime.datetime.now()
+                }
+                if escalation_score is not None:
+                    update_payload["escalation_score"] = escalation_score
+                if detected_issues:
+                    update_payload["detected_issues"] = detected_issues
+
+                conv_doc_ref.update(update_payload)
+                print(f"✅ Conversation marked as waiting_human in Firebase")
+            except Exception as e:
+                print(f"⚠️ Failed to mark conversation as waiting_human: {e}")
+
+        config.user_in_human_takeover_mode[user_id] = True
+
+        escalation_messages = {
+            "ar": "شكراً لصبرك. سيتم تحويلك إلى أحد موظفينا قريباً. 🙏",
+            "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
+            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"
+        }
+        escalation_msg = escalation_messages.get(user_data.get('user_preferred_lang', 'ar'), escalation_messages['ar'])
+        await send_message_func(user_id, escalation_msg)
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            escalation_msg,
+            current_conversation_id,
+            user_name,
+            user_data.get('phone_number')
+        )
+
+        notify_human_on_whatsapp(
+            user_name,
+            config.user_gender.get(user_id, "unknown"),
+            customer_message,
+            type_of_notification=f"{trigger_source} - {escalation_reason}"
+        )
+
+        try:
+            from services.human_takeover_notification_service import human_takeover_notification_service
+
+            notify_result = await human_takeover_notification_service.notify_and_audit_handoff(
+                user_id=user_id,
+                user_gender=config.user_gender.get(user_id, "unknown"),
+                customer_name=user_name,
+                customer_phone=user_data.get('phone_number', 'Unknown'),
+                escalation_reason=escalation_reason,
+                last_message=customer_message,
+                trigger_source=trigger_source,
+                conversation_id=current_conversation_id,
+                extra_details={
+                    "escalation_score": escalation_score,
+                    "detected_issues": detected_issues or []
+                }
+            )
+            notification_result = notify_result.get("notification_result", {})
+            if notification_result.get("success"):
+                print(f"✅ Sent notifications to {notification_result.get('sent_count')} admin(s)")
+            else:
+                print(f"⚠️ Notification sending failed: {notification_result.get('error')}")
+        except Exception as notify_error:
+            print(f"⚠️ Error sending human takeover notifications: {notify_error}")
+            import traceback
+            traceback.print_exc()
+
+    # Explicit user request for human/call gets immediate takeover
+    if _is_explicit_human_handoff_request(raw_msg) and not config.user_in_human_takeover_mode.get(user_id, False):
+        print(f"📞 Explicit human/call handoff requested by user {user_id}")
+        await _trigger_human_takeover(
+            trigger_source="customer_explicit_request",
+            escalation_reason="customer_requested_human",
+            customer_message=raw_msg,
+            escalation_score=100,
+            detected_issues=["explicit_human_request_or_call"]
+        )
+        log_report_event("human_handover", user_id, config.user_gender.get(user_id, "unknown"), {
+            "message": raw_msg,
+            "status": "direct_keyword_trigger",
+            "reason": "customer_requested_human"
+        })
+        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        return
     
     # Analyze sentiment and check if auto-escalation is needed
     sentiment_analysis = sentiment_service.analyze_sentiment(
@@ -114,80 +247,16 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         print(f"   Reason: {sentiment_analysis['escalation_reason']}")
         print(f"   Score: {sentiment_analysis['escalation_score']}")
         print(f"   Issues: {sentiment_analysis['detected_issues']}")
-        
-        # Set conversation to waiting for human
-        if db and user_data.get('current_conversation_id'):
-            try:
-                conv_doc_ref.update({
-                    "status": "waiting_human",
-                    "human_takeover_active": True,
-                    "human_takeover_requested": True,
-                    "operator_id": None,
-                    "escalation_reason": sentiment_analysis['escalation_reason'],
-                    "escalation_score": sentiment_analysis['escalation_score'],
-                    "escalation_time": datetime.datetime.now()
-                })
-                print(f"✅ Conversation marked as waiting_human in Firebase")
-                config.user_in_human_takeover_mode[user_id] = True
-            except Exception as e:
-                print(f"⚠️ Failed to mark conversation as waiting_human: {e}")
-        
-        # Send notification to customer
-        escalation_messages = {
-            "ar": "شكراً لصبرك. لاحظنا أنك قد تحتاج مساعدة إضافية. سيتم تحويلك إلى أحد موظفينا قريباً. 🙏",
-            "en": "Thank you for your patience. We noticed you may need additional help. You'll be transferred to one of our staff members shortly. 🙏",
-            "fr": "Merci pour votre patience. Nous avons remarqué que vous pourriez avoir besoin d'aide supplémentaire. Vous serez transféré à l'un de nos employés sous peu. 🙏"
-        }
-        
-        escalation_msg = escalation_messages.get(user_data.get('user_preferred_lang', 'ar'), escalation_messages['ar'])
-        await send_message_func(user_id, escalation_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", escalation_msg, current_conversation_id, user_name, user_data.get('phone_number'))
-        
-        # Notify human operators (OLD METHOD - WhatsApp direct)
-        notify_human_on_whatsapp(
-            user_name, 
-            config.user_gender.get(user_id, "unknown"), 
-            raw_msg, 
-            type_of_notification=f"تصعيد تلقائي - {sentiment_analysis['escalation_reason']}"
+        await _trigger_human_takeover(
+            trigger_source="sentiment_auto_escalation",
+            escalation_reason=sentiment_analysis['escalation_reason'],
+            customer_message=raw_msg,
+            escalation_score=sentiment_analysis['escalation_score'],
+            detected_issues=sentiment_analysis['detected_issues']
         )
         
-        # NEW: Send template notification to admin mobile numbers from settings
-        try:
-            from services.settings_service import settings_service
-            from services.human_takeover_notification_service import human_takeover_notification_service
-            
-            # Get mobile numbers from settings
-            notify_mobiles = settings_service.get_human_takeover_notify_mobiles()
-            
-            if notify_mobiles and notify_mobiles.strip():
-                print(f"📱 Sending human takeover template notifications...")
-                
-                # Get customer phone number
-                customer_phone = user_data.get('phone_number', 'Unknown')
-                
-                # Send template notification
-                notification_result = await human_takeover_notification_service.notify_from_settings(
-                    customer_name=user_name,
-                    customer_phone=customer_phone,
-                    escalation_reason=sentiment_analysis['escalation_reason'],
-                    last_message=raw_msg,
-                    settings_mobile_numbers=notify_mobiles
-                )
-                
-                if notification_result.get('success'):
-                    print(f"✅ Sent notifications to {notification_result.get('sent_count')} admin(s)")
-                else:
-                    print(f"⚠️ Failed to send notifications: {notification_result.get('error')}")
-            else:
-                print(f"ℹ️ No admin mobile numbers configured for human takeover notifications")
-                
-        except Exception as notify_error:
-            print(f"⚠️ Error sending human takeover notifications: {notify_error}")
-            import traceback
-            traceback.print_exc()
-        
         # Log the escalation
-        log_report_event("auto_escalation", user_name, config.user_gender.get(user_id, "unknown"), {
+        log_report_event("auto_escalation", user_id, config.user_gender.get(user_id, "unknown"), {
             "message": raw_msg,
             "reason": sentiment_analysis['escalation_reason'],
             "score": sentiment_analysis['escalation_score'],

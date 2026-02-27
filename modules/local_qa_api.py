@@ -8,10 +8,11 @@ import json
 import os
 from datetime import datetime
 from typing import Optional
+import uuid
 from fastapi import HTTPException
 
 from modules.core import app
-from utils.utils import detect_language
+from services.language_detection_service import language_detection_service
 
 # Path to local Q&A file
 QA_FILE_PATH = "data/qa_pairs.jsonl"
@@ -64,18 +65,74 @@ def write_qa_pairs(qa_pairs):
         return False
 
 
+def build_qa_entry(
+    question: str,
+    answer: str,
+    language: str,
+    category: str,
+    qa_group_id: str,
+    source_language: str,
+    is_auto_translated: bool,
+):
+    """Build a normalized Q&A entry for JSONL storage."""
+    return {
+        "question": question,
+        "answer": answer,
+        "language": language_detection_service.normalize_training_language(language),
+        "category": category,
+        "timestamp": datetime.now().isoformat(),
+        "qa_group_id": qa_group_id,
+        "source_language": language_detection_service.normalize_training_language(source_language),
+        "is_auto_translated": bool(is_auto_translated),
+    }
+
+
+def reload_local_qa_cache():
+    """Reload in-memory local QA cache so bot uses latest training instantly."""
+    try:
+        from services.local_qa_service import local_qa_service
+
+        local_qa_service.qa_pairs = local_qa_service.load_from_jsonl()
+    except Exception as e:
+        print(f"⚠️ Failed to reload local_qa_service cache: {e}")
+
+
 @app.get("/api/local-qa/list")
-async def list_local_qa_pairs():
+async def list_local_qa_pairs(language: Optional[str] = None):
     """List all Q&A pairs from local JSON file"""
     try:
         print("📖 Reading local Q&A pairs from file...")
         qa_pairs = read_qa_pairs()
-        print(f"✅ Found {len(qa_pairs)} Q&A pairs")
+        selected_language = language_detection_service.normalize_training_language(
+            language, default="ar"
+        )
+
+        if selected_language:
+            qa_pairs = [
+                qa for qa in qa_pairs
+                if language_detection_service.normalize_training_language(
+                    qa.get("language"), default=""
+                ) == selected_language
+            ]
+
+        by_language = {"ar": [], "en": [], "fr": [], "franco": []}
+        for qa in qa_pairs:
+            lang = language_detection_service.normalize_training_language(qa.get("language"))
+            if lang not in by_language:
+                by_language[lang] = []
+            by_language[lang].append(qa)
+
+        print(
+            f"✅ Found {len(qa_pairs)} Q&A pairs"
+            f"{f' for {selected_language}' if selected_language else ''}"
+        )
         
         return {
             "success": True,
             "data": qa_pairs,
-            "count": len(qa_pairs)
+            "count": len(qa_pairs),
+            "selected_language": selected_language,
+            "by_language": by_language,
         }
     except Exception as e:
         print(f"❌ Error listing Q&A pairs: {e}")
@@ -94,6 +151,7 @@ async def create_local_qa_pair(qa_data: dict):
         question = qa_data.get("question", "").strip()
         answer = qa_data.get("answer", "").strip()
         category = qa_data.get("category", "general")
+        requested_language = qa_data.get("language")
         
         if not question or not answer:
             return {
@@ -101,39 +159,93 @@ async def create_local_qa_pair(qa_data: dict):
                 "error": "Question and answer are required"
             }
         
-        # Auto-detect language
-        lang_result = detect_language(question)
-        detected_language = lang_result['language']
-        print(f"🔍 Detected language: {detected_language} (confidence: {lang_result['confidence']:.2%})")
+        detected_language = language_detection_service.normalize_training_language(
+            requested_language,
+            default=language_detection_service.detect_training_language(question),
+        )
+        print(f"🔍 Training language: {detected_language}")
 
-        # Create new Q&A entry
-        new_qa = {
-            "question": question,
-            "answer": answer,
-            "language": detected_language,
-            "category": category,
-            "timestamp": datetime.now().isoformat()
-        }
+        qa_group_id = qa_data.get("qa_group_id") or f"qa_{uuid.uuid4().hex[:10]}"
+        created_entries = []
+
+        if detected_language == "ar":
+            # Arabic source entries must save EN/FR/Franco variants too.
+            translation_result = await language_detection_service.translate_arabic_training_pair(
+                question_ar=question,
+                answer_ar=answer,
+                target_languages=["en", "fr", "franco"],
+            )
+            if not translation_result.get("success"):
+                return {
+                    "success": False,
+                    "error": "Failed to auto-translate Arabic Q&A to all target languages",
+                    "missing_languages": translation_result.get("missing_languages", []),
+                }
+
+            created_entries.append(
+                build_qa_entry(
+                    question=question,
+                    answer=answer,
+                    language="ar",
+                    category=category,
+                    qa_group_id=qa_group_id,
+                    source_language="ar",
+                    is_auto_translated=False,
+                )
+            )
+
+            translations = translation_result.get("translations", {})
+            for target_lang in ["en", "fr", "franco"]:
+                translated = translations.get(target_lang, {})
+                created_entries.append(
+                    build_qa_entry(
+                        question=translated.get("question", ""),
+                        answer=translated.get("answer", ""),
+                        language=target_lang,
+                        category=category,
+                        qa_group_id=qa_group_id,
+                        source_language="ar",
+                        is_auto_translated=True,
+                    )
+                )
+        else:
+            created_entries.append(
+                build_qa_entry(
+                    question=question,
+                    answer=answer,
+                    language=detected_language,
+                    category=category,
+                    qa_group_id=qa_group_id,
+                    source_language=detected_language,
+                    is_auto_translated=False,
+                )
+            )
         
         # Read existing Q&A pairs
         qa_pairs = read_qa_pairs()
         
-        # Append new Q&A
-        qa_pairs.append(new_qa)
+        # Append new Q&A entries (single language or multilingual batch)
+        qa_pairs.extend(created_entries)
         
         # Write back to file
         if write_qa_pairs(qa_pairs):
+            reload_local_qa_cache()
             print(f"✅ Q&A pair saved successfully!")
             print(f"   Question: {question}")
             print(f"   Answer: {answer}")
             print(f"   Language: {detected_language}")
             print(f"   Category: {category}")
+            print(f"   Entries created: {len(created_entries)}")
             print("="*80 + "\n")
             
             return {
                 "success": True,
                 "message": "Q&A pair created successfully",
-                "data": new_qa
+                "data": created_entries[0],
+                "created_entries": created_entries,
+                "count_created": len(created_entries),
+                "detected_language": detected_language,
+                "qa_group_id": qa_group_id,
             }
         else:
             return {
@@ -172,16 +284,22 @@ async def update_local_qa_pair(qa_id: int, updates: dict):
             qa_pairs[qa_index]["answer"] = updates["answer"]
         if "category" in updates:
             qa_pairs[qa_index]["category"] = updates["category"]
+        if "language" in updates:
+            qa_pairs[qa_index]["language"] = language_detection_service.normalize_training_language(
+                updates["language"]
+            )
         
-        # Re-detect language if question changed
-        if "question" in updates:
-            lang_result = detect_language(updates["question"])
-            qa_pairs[qa_index]["language"] = lang_result['language']
+        # Re-detect language only if question changed and language not explicitly provided
+        if "question" in updates and "language" not in updates:
+            qa_pairs[qa_index]["language"] = language_detection_service.detect_training_language(
+                updates["question"]
+            )
         
         qa_pairs[qa_index]["timestamp"] = datetime.now().isoformat()
         
         # Write back to file
         if write_qa_pairs(qa_pairs):
+            reload_local_qa_cache()
             print(f"✅ Q&A pair {qa_id} updated successfully")
             return {
                 "success": True,
@@ -219,6 +337,7 @@ async def delete_local_qa_pair(qa_id: int):
         
         # Write back to file
         if write_qa_pairs(qa_pairs):
+            reload_local_qa_cache()
             print(f"✅ Q&A pair {qa_id} deleted successfully")
             print(f"   Deleted: {deleted_qa['question']}")
             return {
@@ -248,7 +367,9 @@ async def get_local_qa_statistics():
         category_counts = {}
         
         for qa in qa_pairs:
-            lang = qa.get("language", "unknown")
+            lang = language_detection_service.normalize_training_language(
+                qa.get("language"), default="unknown"
+            )
             cat = qa.get("category", "general")
             
             language_counts[lang] = language_counts.get(lang, 0) + 1

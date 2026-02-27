@@ -74,6 +74,164 @@ def get_firestore_db():
         initialize_firestore() # Attempt to initialize if not already
     return _firestore_db
 
+
+_PHONE_ROOM_MAPPING_CACHE = {"mtime": None, "room_to_phone": {}}
+MESSAGE_DEDUPE_WINDOW_SECONDS = 20
+
+
+def _normalize_phone_digits(value: str) -> str:
+    if value is None:
+        return ""
+    digits = re.sub(r"\D", "", str(value))
+    if digits.startswith("00"):
+        digits = digits[2:]
+    return digits
+
+
+def _is_placeholder_phone(phone_number: str) -> bool:
+    if phone_number is None:
+        return True
+    value = str(phone_number).strip().lower()
+    return (not value) or value in {"unknown", "none", "null"} or value.startswith("room:")
+
+
+def _clean_phone_for_lookup(phone_number: str) -> str:
+    digits = _normalize_phone_digits(phone_number)
+    if digits.startswith("961") and len(digits) > 8:
+        return digits[3:]
+    if digits.startswith("1") and len(digits) == 11:
+        return digits[1:]
+    return digits
+
+
+def _load_room_to_phone_mapping() -> dict:
+    """
+    Load room_id -> phone mapping from data/phone_to_room_mapping.json with mtime cache.
+    """
+    mapping_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "data",
+        "phone_to_room_mapping.json",
+    )
+
+    try:
+        mtime = os.path.getmtime(mapping_path)
+    except Exception:
+        _PHONE_ROOM_MAPPING_CACHE["room_to_phone"] = {}
+        _PHONE_ROOM_MAPPING_CACHE["mtime"] = None
+        return {}
+
+    if _PHONE_ROOM_MAPPING_CACHE["mtime"] == mtime:
+        return _PHONE_ROOM_MAPPING_CACHE["room_to_phone"]
+
+    room_to_phone = {}
+    try:
+        with open(mapping_path, "r", encoding="utf-8") as mapping_file:
+            mapping_data = json.load(mapping_file) or {}
+
+        raw_phone_to_room = mapping_data.get("phone_to_room_mapping", {})
+        if isinstance(raw_phone_to_room, dict):
+            for raw_phone, raw_room_id in raw_phone_to_room.items():
+                room_id = str(raw_room_id).strip()
+                phone_value = str(raw_phone).strip()
+                if room_id and phone_value:
+                    room_to_phone[room_id] = phone_value
+
+        raw_room_to_phone = mapping_data.get("room_to_phone_mapping", {})
+        if isinstance(raw_room_to_phone, dict):
+            for raw_room_id, raw_phone in raw_room_to_phone.items():
+                room_id = str(raw_room_id).strip()
+                phone_value = str(raw_phone).strip()
+                if room_id and phone_value:
+                    room_to_phone[room_id] = phone_value
+    except Exception as e:
+        print(f"⚠️ Failed loading phone_to_room_mapping.json: {e}")
+        room_to_phone = {}
+
+    _PHONE_ROOM_MAPPING_CACHE["room_to_phone"] = room_to_phone
+    _PHONE_ROOM_MAPPING_CACHE["mtime"] = mtime
+    return room_to_phone
+
+
+def _resolve_phone_from_room_mapping(user_id: str) -> str:
+    room_to_phone = _load_room_to_phone_mapping()
+    return room_to_phone.get(str(user_id).strip(), "")
+
+
+def _extract_source_message_id(metadata: dict) -> str:
+    if not isinstance(metadata, dict):
+        return ""
+    for key in ("source_message_id", "message_id", "webhook_message_id", "wamid"):
+        value = metadata.get(key)
+        if value:
+            return str(value).strip()
+    return ""
+
+
+def _parse_timestamp_for_dedupe(timestamp) -> datetime.datetime:
+    if isinstance(timestamp, datetime.datetime):
+        dt = timestamp
+    elif isinstance(timestamp, str):
+        try:
+            dt = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except Exception:
+            dt = datetime.datetime.now(datetime.timezone.utc)
+    elif hasattr(timestamp, "timestamp"):
+        dt = datetime.datetime.fromtimestamp(timestamp.timestamp(), tz=datetime.timezone.utc)
+    elif hasattr(timestamp, "seconds"):
+        dt = datetime.datetime.fromtimestamp(timestamp.seconds, tz=datetime.timezone.utc)
+    else:
+        dt = datetime.datetime.now(datetime.timezone.utc)
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt
+
+
+def _is_duplicate_message(existing_messages: list, new_message: dict) -> bool:
+    if not existing_messages:
+        return False
+
+    new_metadata = new_message.get("metadata", {}) or {}
+    new_source_id = _extract_source_message_id(new_metadata)
+    if new_source_id:
+        for existing_msg in reversed(existing_messages[-100:]):
+            existing_source_id = _extract_source_message_id(existing_msg.get("metadata", {}) or {})
+            if existing_source_id and existing_source_id == new_source_id:
+                return True
+
+    new_role = str(new_message.get("role", "")).strip().lower()
+    new_text = str(new_message.get("text", "")).strip()
+    new_type = str(new_message.get("type") or new_metadata.get("type") or "text").strip().lower()
+    new_ts = _parse_timestamp_for_dedupe(new_message.get("timestamp"))
+
+    # Content/time fallback dedupe is only applied to user messages.
+    if new_role != "user":
+        return False
+
+    for existing_msg in reversed(existing_messages[-20:]):
+        existing_metadata = existing_msg.get("metadata", {}) or {}
+        existing_role = str(existing_msg.get("role", "")).strip().lower()
+        existing_text = str(existing_msg.get("text", "")).strip()
+        existing_type = str(existing_msg.get("type") or existing_metadata.get("type") or "text").strip().lower()
+
+        if existing_role != new_role or existing_text != new_text or existing_type != new_type:
+            continue
+
+        existing_ts = _parse_timestamp_for_dedupe(existing_msg.get("timestamp"))
+        if abs((new_ts - existing_ts).total_seconds()) <= MESSAGE_DEDUPE_WINDOW_SECONDS:
+            return True
+
+    return False
+
+
+def _invalidate_live_chat_cache():
+    try:
+        from services.live_chat_service import live_chat_service
+        live_chat_service.invalidate_cache()
+    except Exception:
+        pass
+
 async def save_conversation_message_to_firestore(user_id: str, role: str, text: str, conversation_id: str = None, user_name: str = None, phone_number: str = None, metadata: dict = None):
     """
     Saves a message (user or bot) to Firestore.
@@ -108,8 +266,14 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
     conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
 
-    # Resolve phone_number using fallback chain if not provided
-    # Priority: 1) provided phone_number, 2) existing conversation, 3) user document, 4) user_id if it looks like a phone
+    # Resolve phone_number using fallback chain if not provided.
+    # Priority:
+    # 1) provided phone_number
+    # 2) existing conversation
+    # 3) user document
+    # 4) static room->phone mapping file
+    # 5) user_id if it looks like a phone
+    # 6) room-id fallback token (never skip save)
     if not phone_number:
         # Try to get phone from existing conversation
         if conversation_id:
@@ -136,6 +300,12 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             except Exception as e:
                 pass  # Silent fail, will try user_id next
 
+        # Try static room->phone mapping
+        if not phone_number:
+            mapped_phone = _resolve_phone_from_room_mapping(user_id)
+            if mapped_phone:
+                phone_number = mapped_phone
+
         # Fall back to user_id if it looks like a phone number
         if not phone_number:
             is_likely_phone = (user_id.startswith('+961') or
@@ -144,12 +314,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             is_likely_room_id = (user_id.isdigit() and len(user_id) >= 8 and not user_id.startswith('7'))
 
             if is_likely_room_id or (user_id.isdigit() and len(user_id) >= 9):
-                # This looks like a room_id (Qiscus), not a phone
-                if conversation_id:
-                    phone_number = "unknown"
-                else:
-                    print(f"❌ SKIPPING SAVE: Cannot create conversation without phone (user_id={user_id} looks like room_id)")
-                    return
+                # This looks like a room_id (Qiscus), not a phone.
+                # Do not skip save; keep a deterministic placeholder and resolve later.
+                phone_number = f"room:{user_id}"
             else:
                 # user_id looks like a phone number (Meta/360Dialog)
                 phone_number = user_id
@@ -159,12 +326,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     # Get customer info for this user_id
     customer_name = user_name or config.user_names.get(user_id, "Unknown Customer")
 
-    # Clean phone number (remove country code for API lookup)
-    clean_phone = phone_number.replace("+", "").replace("-", "").replace(" ", "")
-    if clean_phone.startswith("961"):  # Lebanon country code
-        clean_phone = clean_phone[3:]  # Remove country code
-    elif clean_phone.startswith("1") and len(clean_phone) == 11:  # US/Canada
-        clean_phone = clean_phone[1:]
+    clean_phone = _clean_phone_for_lookup(phone_number)
+    placeholder_phone = _is_placeholder_phone(phone_number)
 
     # Ensure the user document exists (create if it doesn't)
     # Get current gender and greeting stage for persistence
@@ -174,24 +337,27 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     # ✅ Use asyncio.to_thread to prevent blocking
     user_doc = await asyncio.to_thread(user_doc_ref.get)
     if not user_doc.exists:
-        await asyncio.to_thread(user_doc_ref.set, {
+        user_doc_payload = {
             "user_id": user_id,
             "name": customer_name,
-            "phone_full": phone_number,
-            "phone_clean": clean_phone,
             "gender": current_gender,
             "greeting_stage": current_greeting_stage,
             "created_at": datetime.datetime.now(),
             "last_activity": datetime.datetime.now()
-        })
+        }
+        if not placeholder_phone:
+            user_doc_payload["phone_full"] = phone_number
+            user_doc_payload["phone_clean"] = clean_phone
+        await asyncio.to_thread(user_doc_ref.set, user_doc_payload)
     else:
         # Update last activity and phone info
         update_data = {
             "last_activity": datetime.datetime.now(),
-            "phone_full": phone_number,
-            "phone_clean": clean_phone,
             "name": customer_name
         }
+        if not placeholder_phone:
+            update_data["phone_full"] = phone_number
+            update_data["phone_clean"] = clean_phone
         if current_gender:
             update_data["gender"] = current_gender
         if current_greeting_stage > 0:
@@ -199,7 +365,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         await asyncio.to_thread(user_doc_ref.update, update_data)
     
     # Try to get customer name from API if not provided
-    if customer_name == "Unknown Customer":
+    if customer_name == "Unknown Customer" and clean_phone.isdigit():
         try:
             from services.api_integrations import get_customer_by_phone
             customer_response = await get_customer_by_phone(phone=clean_phone)
@@ -217,44 +383,73 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     user_gender_value = config.user_gender.get(user_id, "")
     user_greeting_stage_value = config.user_greeting_stage.get(user_id, 0)
 
+    existing_user_data = user_doc.to_dict() if user_doc.exists else {}
+    effective_phone_full = phone_number
+    effective_phone_clean = clean_phone
+    if placeholder_phone:
+        existing_phone = existing_user_data.get("phone_full")
+        if existing_phone and not _is_placeholder_phone(existing_phone):
+            effective_phone_full = existing_phone
+            effective_phone_clean = _clean_phone_for_lookup(existing_phone)
+
     customer_info = {
-        "phone_full": phone_number,  # Full phone with country code
-        "phone_clean": clean_phone,  # Clean phone for API lookups
+        "phone_full": effective_phone_full,
+        "phone_clean": effective_phone_clean,
         "name": customer_name,
-        "gender": user_gender_value,  # Persist gender to Firestore
-        "greeting_stage": user_greeting_stage_value,  # Persist greeting stage
+        "gender": user_gender_value,
+        "greeting_stage": user_greeting_stage_value,
         "last_updated": datetime.datetime.now()
     }
+
+    def _build_message_data() -> dict:
+        safe_text = text if isinstance(text, str) else str(text or "")
+        payload = {
+            "role": role,
+            "text": safe_text,
+            "timestamp": datetime.datetime.now(),
+            "language": detect_language(safe_text)["language"]
+        }
+        normalized_metadata = dict(metadata or {})
+        source_message_id = _extract_source_message_id(normalized_metadata)
+        if source_message_id:
+            normalized_metadata["source_message_id"] = source_message_id
+        if normalized_metadata:
+            payload["metadata"] = normalized_metadata
+            for key in ["type", "audio_url", "image_url"]:
+                if key in normalized_metadata:
+                    payload[key] = normalized_metadata[key]
+        return payload
 
     try:
         if conversation_id:
             # Update existing conversation document
             doc_ref = conversations_collection_for_user.document(conversation_id)
-            # ✅ Use asyncio.to_thread to prevent blocking
             doc_snap = await asyncio.to_thread(doc_ref.get)
 
             if doc_snap.exists:
-                current_messages = doc_snap.to_dict().get('messages', [])
-                message_data = {
-                    "role": role,
-                    "text": text,
-                    "timestamp": datetime.datetime.now(),
-                    "language": detect_language(text)['language']
-                }
-                # Merge metadata fields at top level for easier querying
-                if metadata:
-                    message_data["metadata"] = metadata
-                    for key in ["type", "audio_url", "image_url"]:
-                        if key in metadata:
-                            message_data[key] = metadata[key]
+                doc_data = doc_snap.to_dict() or {}
+                current_messages = doc_data.get("messages", [])
+                message_data = _build_message_data()
+
+                if _is_duplicate_message(current_messages, message_data):
+                    print(f"🔁 Duplicate message skipped for conversation {conversation_id}")
+                    _invalidate_live_chat_cache()
+                    return
+
+                if _is_placeholder_phone(customer_info.get("phone_full")):
+                    existing_customer_info = doc_data.get("customer_info", {}) or {}
+                    existing_phone = existing_customer_info.get("phone_full")
+                    if existing_phone and not _is_placeholder_phone(existing_phone):
+                        customer_info["phone_full"] = existing_phone
+                        customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
 
                 current_messages.append(message_data)
-                # ✅ Use asyncio.to_thread to prevent blocking
                 await asyncio.to_thread(doc_ref.update, {
                     "messages": current_messages,
                     "customer_info": customer_info,
                     "last_updated": datetime.datetime.now()
                 })
+                _invalidate_live_chat_cache()
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event for real-time dashboard updates
@@ -266,25 +461,14 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         "conversation_id": conversation_id,
                         "role": role,
                         "text": text[:100] + "..." if len(text) > 100 else text,
-                        "phone": phone_number
+                        "phone": customer_info.get("phone_full")
                     }))
                 except Exception as sse_err:
                     print(f"❌ SSE Broadcast error: {sse_err}")
             else:
                 # Conversation not found - create new one
-                message_data = {
-                    "role": role,
-                    "text": text,
-                    "timestamp": datetime.datetime.now(),
-                    "language": detect_language(text)['language']
-                }
-                if metadata:
-                    message_data["metadata"] = metadata
-                    for key in ["type", "audio_url", "image_url"]:
-                        if key in metadata:
-                            message_data[key] = metadata[key]
+                message_data = _build_message_data()
 
-                # ✅ Use asyncio.to_thread to prevent blocking
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": user_id,
                     "customer_info": customer_info,
@@ -297,16 +481,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
-                config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
+                config.user_data_whatsapp[user_id]["current_conversation_id"] = new_doc_ref.id
+                _invalidate_live_chat_cache()
                 print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
         else:
-            # No conversation_id — try to find the customer's existing conversation
-            # before creating a brand-new one.  This ensures smart messages land
-            # inside the same conversation the bot reads when the customer replies.
+            # No conversation_id — try to reuse latest conversation first.
             resolved_conversation_id = None
 
             # 1) Check in-memory cache
-            cached_id = config.user_data_whatsapp.get(user_id, {}).get('current_conversation_id')
+            cached_id = config.user_data_whatsapp.get(user_id, {}).get("current_conversation_id")
             if cached_id:
                 try:
                     cached_ref = conversations_collection_for_user.document(cached_id)
@@ -316,7 +499,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 except Exception:
                     pass
 
-            # 2) Query Firestore for the latest conversation for this user
+            # 2) Query Firestore for latest conversation
             if not resolved_conversation_id:
                 try:
                     query = conversations_collection_for_user.order_by(
@@ -328,36 +511,41 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 except Exception as q_err:
                     print(f"⚠️ Could not query existing conversations: {q_err}")
 
-            message_data = {
-                "role": role,
-                "text": text,
-                "timestamp": datetime.datetime.now(),
-                "language": detect_language(text)['language']
-            }
-            if metadata:
-                message_data["metadata"] = metadata
-                for key in ["type", "audio_url", "image_url"]:
-                    if key in metadata:
-                        message_data[key] = metadata[key]
+            message_data = _build_message_data()
 
             if resolved_conversation_id:
                 # Append to existing conversation
                 doc_ref = conversations_collection_for_user.document(resolved_conversation_id)
                 doc_snap = await asyncio.to_thread(doc_ref.get)
-                current_messages = doc_snap.to_dict().get('messages', []) if doc_snap.exists else []
+                doc_data = doc_snap.to_dict() if doc_snap.exists else {}
+                current_messages = doc_data.get("messages", [])
+
+                if _is_duplicate_message(current_messages, message_data):
+                    print(f"🔁 Duplicate message skipped for conversation {resolved_conversation_id}")
+                    _invalidate_live_chat_cache()
+                    return
+
+                if _is_placeholder_phone(customer_info.get("phone_full")):
+                    existing_customer_info = doc_data.get("customer_info", {}) or {}
+                    existing_phone = existing_customer_info.get("phone_full")
+                    if existing_phone and not _is_placeholder_phone(existing_phone):
+                        customer_info["phone_full"] = existing_phone
+                        customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
+
                 current_messages.append(message_data)
                 # Reopen conversation if it was resolved/archived - any new message should make it active
                 await asyncio.to_thread(doc_ref.update, {
                     "messages": current_messages,
                     "customer_info": customer_info,
                     "last_updated": datetime.datetime.now(),
-                    "status": "active",  # Always reopen on new message
-                    "human_takeover_active": False,  # Reset to bot handling
-                    "operator_id": None  # Clear operator assignment
+                    "status": "active",
+                    "human_takeover_active": False,
+                    "operator_id": None
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
-                config.user_data_whatsapp[user_id]['current_conversation_id'] = resolved_conversation_id
+                config.user_data_whatsapp[user_id]["current_conversation_id"] = resolved_conversation_id
+                _invalidate_live_chat_cache()
                 print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {user_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event
@@ -368,13 +556,12 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         "conversation_id": resolved_conversation_id,
                         "role": role,
                         "text": text[:100] + "..." if len(text) > 100 else text,
-                        "phone": phone_number
+                        "phone": customer_info.get("phone_full")
                     }))
                 except Exception:
                     pass
             else:
                 # No existing conversation found — create a new one
-                # ✅ Use asyncio.to_thread to prevent blocking
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": user_id,
                     "customer_info": customer_info,
@@ -387,7 +574,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
-                config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
+                config.user_data_whatsapp[user_id]["current_conversation_id"] = new_doc_ref.id
+                _invalidate_live_chat_cache()
                 print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
 
                 # 📡 Broadcast SSE event for new conversation
@@ -396,7 +584,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     asyncio.create_task(broadcast_sse_event("new_conversation", {
                         "user_id": user_id,
                         "conversation_id": new_doc_ref.id,
-                        "phone": phone_number,
+                        "phone": customer_info.get("phone_full"),
                         "name": customer_name
                     }))
                 except Exception:
@@ -482,6 +670,7 @@ async def update_voice_message_with_transcription(user_id: str, conversation_id:
             "messages": current_messages,
             "last_updated": datetime.datetime.now()
         })
+        _invalidate_live_chat_cache()
 
         print(f"✅ Updated voice message in conversation {conversation_id} with transcription")
         print(f"   Text: {transcribed_text[:50]}...")
@@ -610,8 +799,12 @@ async def upload_base64_to_firebase_storage(base64_data: str, file_name: str, fi
             traceback.print_exc()
 
             # Fallback to local serve URL
-            bot_domain = os.getenv("BOT_PUBLIC_DOMAIN", "linasaibot.com")
-            serve_url = f"https://{bot_domain}/api/media/serve/{unique_filename}"
+            from services.media_service import build_public_media_url
+
+            serve_url = build_public_media_url(unique_filename)
+            if serve_url.startswith("/"):
+                bot_domain = os.getenv("BOT_PUBLIC_DOMAIN", "linasaibot.com")
+                serve_url = f"https://{bot_domain}{serve_url}"
             print(f"   Falling back to local serve URL: {serve_url}")
             return serve_url
 
@@ -1094,7 +1287,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "create_appointment",
-                "description": "Creates a new appointment record. Requires client phone number, service ID, machine ID, branch ID, date (including time), and body_part_ids (REQUIRED for hair removal and tattoo removal services). Do NOT call without body_part_ids for hair removal or tattoo services.",
+                "description": "Creates a new appointment record. Requires client phone number, service ID, machine ID, branch ID, date (including time), and body_part_ids (REQUIRED for hair removal and tattoo removal services). Do NOT call without body_part_ids for hair removal or tattoo services. NEVER use this for a change/reschedule request when a paused/postponed appointment already exists; use update_appointment_date instead.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1115,7 +1308,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "update_appointment_date",
-                "description": "Updates the date/time of an existing appointment. Use this when customer wants to reschedule or change their appointment.",
+                "description": "Updates the date/time of an existing appointment. Use this when customer wants to reschedule, postpone, or change their appointment. This MUST be used for paused/postponed appointments (never create a new appointment in that case).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1180,7 +1373,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "check_next_appointment",
-                "description": "Returns the next scheduled appointment for a client.",
+                "description": "Returns the next scheduled appointment for a client. Use this before deciding create_appointment vs update_appointment_date for any change request. If status is paused/postponed, update the existing appointment and do not create a new one.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1323,7 +1516,12 @@ def get_openai_tools_schema():
     ]
     return tools
 
-def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
+def get_system_instruction(
+    user_id,
+    response_lang,
+    qa_reference: str = "",
+    include_price_list: bool = True
+):
     """
     Generate system instruction for GPT with optional Q&A reference injection.
 
@@ -1331,6 +1529,7 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         user_id: User identifier
         response_lang: Response language code (ar, en, fr, franco)
         qa_reference: Optional formatted Q&A pairs to inject into system prompt
+        include_price_list: Whether to include the price_list.txt content in prompt context
     """
     user_gender_str = config.user_gender.get(user_id, "unknown")
     
@@ -1366,6 +1565,13 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         Use neutral language until gender is confirmed.
         """
     
+    price_list_section = ""
+    if include_price_list:
+        price_list_section = f"""
+        **💰 PRICE LIST:** (Use this to answer pricing questions)
+        {config.PRICE_LIST}
+        """
+
     return f"""
         You are a comprehensive knowledge manager and an official smart assistant for Lina's Laser Center. Your primary task is to answer customer inquiries accurately and authoritatively, providing comprehensive information about services, prices, appointments, and interacting with the center's system.
 
@@ -1377,8 +1583,7 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         **📘 KNOWLEDGE BASE:** (Use this to answer questions about services, devices, IDs, and matching rules)
         {config.CORE_KNOWLEDGE_BASE}
 
-        **💰 PRICE LIST:** (Use this to answer pricing questions)
-        {config.PRICE_LIST}
+        {price_list_section}
 
         {gender_instruction}
 
@@ -1397,6 +1602,13 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         3. Trained Q&A pairs take PRIORITY over your general knowledge
         4. If a trained answer exists, USE IT - don't generate your own response
         ''' if qa_reference else ''}
+
+        **🔴 APPOINTMENT STATE MACHINE RULES (MANDATORY):**
+        1. If the user asks to change/reschedule/postpone an appointment, treat this as a CHANGE request, not a NEW booking.
+        2. For CHANGE requests, you MUST check existing appointment state (using check_next_appointment).
+        3. If any existing appointment is paused/postponed, you MUST call update_appointment_date on that same appointment.
+        4. NEVER call create_appointment for a paused/postponed appointment change request.
+        5. If user asks to change appointment but did not provide a new date/time, ask for the new date/time first.
 
         **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. If you use a tool, provide a 'bot_reply' that summarizes the tool's purpose to the user while I process the tool call. Here is the strict JSON schema you MUST follow:
         ```json

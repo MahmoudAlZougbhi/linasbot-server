@@ -11,6 +11,7 @@ from datetime import datetime
 from difflib import SequenceMatcher
 import re
 from pathlib import Path
+from services.language_detection_service import language_detection_service
 
 
 class LocalQAService:
@@ -86,15 +87,21 @@ class LocalQAService:
         except Exception as e:
             print(f"❌ Error saving Q&A file: {e}")
             return False
-            print(f"❌ Error saving Q&A file: {e}")
-            return False
+
+    @staticmethod
+    def _normalize_language(language: Optional[str], default: str = "ar") -> str:
+        return language_detection_service.normalize_training_language(language, default=default)
     
     async def get_qa_pairs(self, category: str = None, language: str = None, active_only: bool = True) -> dict:
         """Get Q&A pairs with optional filtering"""
         filtered = self.qa_pairs
-        
+
         if language:
-            filtered = [qa for qa in filtered if qa.get("language") == language]
+            normalized_language = self._normalize_language(language, default="")
+            filtered = [
+                qa for qa in filtered
+                if self._normalize_language(qa.get("language"), default="") == normalized_language
+            ]
         
         if category:
             filtered = [qa for qa in filtered if qa.get("category") == category]
@@ -119,7 +126,7 @@ class LocalQAService:
             qa_pair = {
                 "question": question,
                 "answer": answer,
-                "language": language,
+                "language": self._normalize_language(language),
                 "category": category,
                 "timestamp": datetime.now().isoformat()
             }
@@ -325,7 +332,13 @@ class LocalQAService:
             
             for qa in self.qa_pairs:
                 # Filter by language if specified
-                if language and qa.get("language") != language:
+                if language:
+                    requested_language = self._normalize_language(language, default="")
+                    qa_language = self._normalize_language(qa.get("language"), default="")
+                    if qa_language != requested_language:
+                        continue
+
+                if not qa.get("question") and not qa.get("answer"):
                     continue
                 
                 # Calculate similarity for question
@@ -363,6 +376,7 @@ class LocalQAService:
         """Find best matching Q&A pair"""
         best_match = None
         best_score = 0
+        requested_language = self._normalize_language(language)
         
         # DEBUG: Check if Q&A pairs are loaded
         if not self.qa_pairs:
@@ -371,9 +385,11 @@ class LocalQAService:
             return None
         
         for qa in self.qa_pairs:
-            qa_language = qa.get("language", "ar")
-            
-            # Check all languages for better matching
+            qa_language = self._normalize_language(qa.get("language"))
+            # Never mix language datasets during matching.
+            if qa_language != requested_language:
+                continue
+
             similarity = self.calculate_similarity(question, qa.get("question", ""))
             
             if similarity > best_score:
@@ -408,8 +424,11 @@ class LocalQAService:
 
         for qa in self.qa_pairs:
             # Filter by language if specified
-            if language and qa.get("language") != language:
-                continue
+            if language:
+                requested_language = self._normalize_language(language, default="")
+                qa_language = self._normalize_language(qa.get("language"), default="")
+                if qa_language != requested_language:
+                    continue
 
             similarity = self.calculate_similarity(question, qa.get("question", ""))
 
@@ -419,7 +438,7 @@ class LocalQAService:
                     "question": qa.get("question"),
                     "answer": qa.get("answer"),
                     "similarity": similarity,
-                    "language": qa.get("language", "ar")
+                    "language": self._normalize_language(qa.get("language"))
                 })
 
         # Sort by similarity descending
@@ -445,12 +464,17 @@ class LocalQAService:
         """
         best_match = None
         best_score = 0
+        requested_language = self._normalize_language(language)
 
         if not self.qa_pairs:
             print(f"❌ DEBUG: NO Q&A PAIRS LOADED!")
             return None
 
         for qa in self.qa_pairs:
+            qa_language = self._normalize_language(qa.get("language"))
+            if qa_language != requested_language:
+                continue
+
             similarity = self.calculate_similarity(question, qa.get("question", ""))
 
             if similarity > best_score:
@@ -464,7 +488,7 @@ class LocalQAService:
                 "qa_pair": best_match,
                 "match_score": best_score,
                 "tier": "direct",
-                "matched_language": best_match.get("language", language)
+                "matched_language": self._normalize_language(best_match.get("language"), default=requested_language)
             }
 
         print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, needs ≥70%)")
@@ -478,7 +502,7 @@ class LocalQAService:
             # Count by language
             language_counts = {}
             for qa in self.qa_pairs:
-                lang = qa.get("language", "unknown")
+                lang = self._normalize_language(qa.get("language"), default="unknown")
                 language_counts[lang] = language_counts.get(lang, 0) + 1
             
             # Count by category

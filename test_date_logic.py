@@ -7,6 +7,7 @@ from utils.datetime_utils import (
     align_datetime_to_day_reference,
     detect_day_reference,
     detect_relative_intent,
+    detect_reschedule_intent,
     parse_datetime_flexible,
     resolve_relative_datetime,
     text_mentions_datetime,
@@ -100,3 +101,30 @@ def test_align_tomorrow_reference_when_candidate_is_today():
     candidate = datetime.datetime(2026, 2, 27, 9, 0, 0, tzinfo=BOT_FIXED_TZ)
     aligned = align_datetime_to_day_reference(candidate, "بكرا", reference=REFERENCE_NOW)
     assert aligned.strftime("%Y-%m-%d %H:%M:%S") == "2026-02-28 09:00:00"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "postpone to today",
+        "please reschedule my appointment",
+        "بدي أجل موعدي لليوم",
+        "ممكن تغيير الموعد",
+        "je veux reporter mon rendez-vous",
+    ],
+)
+def test_detect_reschedule_intent_multilingual_positive(text):
+    assert detect_reschedule_intent(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "what are your working hours today",
+        "ما هي ساعات العمل اليوم؟",
+        "hello",
+        "كم سعر الجلسة؟",
+    ],
+)
+def test_detect_reschedule_intent_negative(text):
+    assert detect_reschedule_intent(text) is False

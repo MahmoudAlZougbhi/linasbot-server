@@ -11,6 +11,7 @@ from datetime import datetime
 import hashlib
 from difflib import SequenceMatcher
 import re
+from services.language_detection_service import language_detection_service
 
 class QAManager:
     """Manages Q&A pairs with multi-language support and fuzzy matching"""
@@ -37,12 +38,16 @@ class QAManager:
         os.makedirs(os.path.dirname(self.data_path), exist_ok=True)
         with open(self.data_path, 'w', encoding='utf-8') as f:
             json.dump(self.qa_database, f, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def _normalize_language(language: Optional[str], default: str = "ar") -> str:
+        return language_detection_service.normalize_training_language(language, default=default)
     
     def create_qa_pair(self, 
                        question_ar: str, answer_ar: str,
-                       question_en: str, answer_en: str,
-                       question_fr: str, answer_fr: str,
-                       question_franco: str, answer_franco: str,
+                       question_en: str = "", answer_en: str = "",
+                       question_fr: str = "", answer_fr: str = "",
+                       question_franco: str = "", answer_franco: str = "",
                        category: str = "general",
                        tags: List[str] = None) -> str:
         """
@@ -116,24 +121,16 @@ class QAManager:
         """
         best_match = None
         best_score = 0
+        requested_language = self._normalize_language(language)
         
         for qa in self.qa_database["qa_pairs"]:
             if not qa.get("is_active", True):
                 continue
                 
             # Check in specified language
-            if language in qa:
-                qa_question = qa[language]["question"]
+            if requested_language in qa:
+                qa_question = qa[requested_language]["question"]
                 similarity = self.calculate_similarity(question, qa_question)
-                
-                if similarity > best_score:
-                    best_score = similarity
-                    best_match = qa
-            
-            # Also check in English (fallback)
-            if language != "en" and "en" in qa:
-                qa_question_en = qa["en"]["question"]
-                similarity = self.calculate_similarity(question, qa_question_en)
                 
                 if similarity > best_score:
                     best_score = similarity
@@ -148,7 +145,7 @@ class QAManager:
             return {
                 "qa_pair": best_match,
                 "match_score": best_score,
-                "matched_language": language
+                "matched_language": requested_language
             }
         
         return None
@@ -169,14 +166,23 @@ class QAManager:
             # Filter by category
             if category and qa.get("category") != category:
                 continue
+
+            # Keep language view isolated when requested.
+            if language:
+                requested_language = self._normalize_language(language, default="")
+                localized = qa.get(requested_language, {})
+                if not localized.get("question") and not localized.get("answer"):
+                    continue
             
             # Filter by search query
             if query:
                 query_lower = query.lower()
                 match_found = False
+                requested_language = self._normalize_language(language, default="")
                 
-                # Search in all languages
-                for lang in ["ar", "en", "fr", "franco"]:
+                # Search in selected language only, or all languages if not specified.
+                languages_to_search = [requested_language] if requested_language else ["ar", "en", "fr", "franco"]
+                for lang in languages_to_search:
                     if lang in qa:
                         if query_lower in qa[lang]["question"].lower() or \
                            query_lower in qa[lang]["answer"].lower():
@@ -292,8 +298,9 @@ async def get_qa_response(question: str, language: str = "ar") -> Optional[str]:
         print(f"   Usage Count: {qa_pair.get('usage_count')}")
         
         # Return answer in requested language
-        if language in qa_pair:
-            return qa_pair[language]["answer"]
+        requested_language = qa_manager._normalize_language(language)
+        if requested_language in qa_pair:
+            return qa_pair[requested_language]["answer"]
         # Fallback to Arabic if language not found
         elif "ar" in qa_pair:
             return qa_pair["ar"]["answer"]

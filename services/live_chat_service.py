@@ -9,11 +9,15 @@ Live Chat Service - Hybrid Approach
 
 import datetime
 import asyncio
-from typing import List, Dict, Optional, Any
+import json
+import os
+import re
+from typing import List, Dict, Optional, Any, Tuple
 from collections import defaultdict
 from google.cloud import firestore
 import config
 from utils.utils import get_firestore_db, set_human_takeover_status
+from services.media_service import build_whatsapp_audio_delivery_url
 
 
 class LiveChatService:
@@ -24,6 +28,7 @@ class LiveChatService:
 
     # Cache configuration
     CACHE_TTL = 5  # seconds - short cache for near real-time updates
+    PHONE_MAPPING_CACHE_TTL = 60  # seconds
 
     def __init__(self):
         self.operator_sessions = {}
@@ -34,21 +39,98 @@ class LiveChatService:
         # Cache for waiting queue
         self._queue_cache = None
         self._queue_cache_time = None
+        # Cache for static phone<->room mapping file
+        self._phone_to_room_cache = {}
+        self._room_to_phone_cache = {}
+        self._phone_mapping_cache_time = None
+
+    def invalidate_cache(self):
+        """Clear service caches so UI reads latest state."""
+        self._conversations_cache = None
+        self._conversations_cache_time = None
+        self._queue_cache = None
+        self._queue_cache_time = None
+
+    def _dedupe_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        De-duplicate messages for idempotent read paths.
+        Uses source_message_id when available, otherwise falls back to a content signature.
+        """
+        if not messages:
+            return []
+
+        deduped: List[Dict[str, Any]] = []
+        seen_source_ids = set()
+        seen_signatures = set()
+
+        for msg in messages:
+            metadata = msg.get("metadata", {}) or {}
+            source_message_id = str(metadata.get("source_message_id", "")).strip()
+
+            if source_message_id:
+                if source_message_id in seen_source_ids:
+                    continue
+                seen_source_ids.add(source_message_id)
+
+            msg_role = str(msg.get("role", "")).strip().lower()
+            msg_type = str(msg.get("type") or metadata.get("type") or "text").strip().lower()
+            msg_text = str(msg.get("text", "")).strip()
+            msg_ts = self._parse_timestamp(msg.get("timestamp")).replace(microsecond=0).isoformat()
+            signature = (msg_role, msg_type, msg_text, msg_ts)
+
+            if not source_message_id and signature in seen_signatures:
+                continue
+
+            seen_signatures.add(signature)
+            deduped.append(msg)
+
+        return deduped
+
+    def _history_filter_match(self, dt: datetime.datetime, filter_by: str) -> bool:
+        if filter_by == "all":
+            return True
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        age_hours = (now - dt).total_seconds() / 3600.0
+
+        if filter_by == "today":
+            return age_hours <= 24
+        if filter_by == "week":
+            return age_hours <= 24 * 7
+        if filter_by == "month":
+            return age_hours <= 24 * 30
+        return True
+
+    def _paginate(self, items: List[Dict[str, Any]], page: int, page_size: int) -> Tuple[List[Dict[str, Any]], int, int]:
+        safe_page = max(1, int(page))
+        safe_page_size = max(1, min(int(page_size), 1000))
+        total_items = len(items)
+        total_pages = max(1, (total_items + safe_page_size - 1) // safe_page_size)
+        start = (safe_page - 1) * safe_page_size
+        end = start + safe_page_size
+        return items[start:end], total_items, total_pages
         
-    async def get_active_conversations(self) -> List[Dict[str, Any]]:
+    async def get_active_conversations(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get active conversations grouped by client
         - Only shows conversations from last 6 hours
         - Groups multiple conversations per client
         - Excludes resolved/archived conversations
         - Returns one entry per client with their latest conversation
+        - Optional search by client name or phone (partial, normalized)
         """
+        normalized_search = (search or "").strip()
+
         # Check cache first
         current_time = datetime.datetime.now(datetime.timezone.utc)
         if (self._conversations_cache is not None and
             self._conversations_cache_time is not None and
             (current_time - self._conversations_cache_time).total_seconds() < self.CACHE_TTL):
             print(f"📦 Returning cached active conversations ({len(self._conversations_cache)} clients)")
+            if normalized_search:
+                filtered_cached = self._filter_conversations(self._conversations_cache, normalized_search)
+                print(f"🔎 Live chat search '{normalized_search}': {len(filtered_cached)} matches (cache)")
+                return filtered_cached
             return self._conversations_cache
 
         try:
@@ -63,11 +145,14 @@ class LiveChatService:
             client_conversations = {}
             current_time = datetime.datetime.now(datetime.timezone.utc)
 
-            # Limit to 50 users max for performance, ordered by last_activity (most recent first)
-            # ✅ Use asyncio.to_thread to prevent blocking the event loop
-            users_docs = await asyncio.to_thread(
-                lambda: list(users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).limit(50).stream())
-            )
+            # Pull all users (no hard cap) so live/history stay consistent.
+            # Try sorted query first; fallback if ordering field is inconsistent.
+            try:
+                users_docs = await asyncio.to_thread(
+                    lambda: list(users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).stream())
+                )
+            except Exception:
+                users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
 
             # Helper function to fetch conversations for a single user
             async def fetch_user_conversations(user_id):
@@ -100,10 +185,9 @@ class LiveChatService:
 
                 # Collect all conversations for this client
                 client_convs = []
-
                 for conv_doc in conversations_docs:
                     conv_data = conv_doc.to_dict()
-                    messages = conv_data.get("messages", [])
+                    messages = self._dedupe_messages(conv_data.get("messages", []))
 
                     if not messages:
                         continue
@@ -126,12 +210,12 @@ class LiveChatService:
                             last_preview_message = msg
                             break
 
-                    # Apply time filter
+                    # Apply time filter (read-only; do not mutate status while listing)
                     time_diff = (current_time - last_message_time).total_seconds()
                     if time_diff > self.ACTIVE_TIME_WINDOW:
-                        # Auto-archive old conversations
-                        await self._auto_archive_conversation(user_id, conv_doc.id)
-                        continue
+                        # Keep human/waiting conversations visible even if old.
+                        if not conv_data.get("human_takeover_active", False):
+                            continue
                     
                     # Get conversation metadata
                     human_takeover = conv_data.get("human_takeover_active", False)
@@ -162,6 +246,7 @@ class LiveChatService:
                         "duration_seconds": duration_seconds,
                         "sentiment": sentiment,
                         "operator_id": operator_id,
+                        "customer_info": conv_data.get("customer_info", {}),
                         "last_message": {
                             "content": last_preview_message.get("text", ""),
                             "is_user": last_preview_message.get("role") == "user",
@@ -179,13 +264,10 @@ class LiveChatService:
                     # Get latest conversation
                     latest_conv = client_convs[0]
                     
-                    # Get user info from Firebase customer_info first, fallback to config
-                    customer_info = conv_data.get("customer_info", {})
+                    # Get user info from latest conversation snapshot.
+                    customer_info = latest_conv.get("customer_info", {}) or {}
                     user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
-                    
-                    # CRITICAL: Get phone from customer_info or user_data, NEVER from user_id (which is room_id for Qiscus)
-                    phone_full = customer_info.get("phone_full") or config.user_data_whatsapp.get(user_id, {}).get('phone_number') or "Unknown"
-                    phone_clean = customer_info.get("phone_clean") or (config.user_data_whatsapp.get(user_id, {}).get('phone_number', '').replace('+', '').replace('-', '').replace(' ', '')) or "Unknown"
+                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
 
                     language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
 
@@ -225,6 +307,11 @@ class LiveChatService:
             self._conversations_cache = active_conversations
             self._conversations_cache_time = current_time
 
+            if normalized_search:
+                filtered = self._filter_conversations(active_conversations, normalized_search)
+                print(f"🔎 Live chat search '{normalized_search}': {len(filtered)} matches")
+                return filtered
+
             return active_conversations
             
         except Exception as e:
@@ -232,6 +319,281 @@ class LiveChatService:
             import traceback
             traceback.print_exc()
             return []
+
+    async def get_history_customers(
+        self,
+        search: str = "",
+        filter_by: str = "all",
+        page: int = 1,
+        page_size: int = 200,
+    ) -> Dict[str, Any]:
+        """Canonical customer list for chat history."""
+        try:
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "error": "Firestore not initialized"}
+
+            app_id = "linas-ai-bot-backend"
+            users_collection = db.collection("artifacts").document(app_id).collection("users")
+            users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
+
+            async def fetch_user_conversations(user_doc):
+                user_id = user_doc.id
+                conversations_collection = users_collection.document(user_id).collection(
+                    config.FIRESTORE_CONVERSATIONS_COLLECTION
+                )
+                conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
+                return user_id, conversations_docs
+
+            fetch_results = await asyncio.gather(
+                *[fetch_user_conversations(doc) for doc in users_docs],
+                return_exceptions=True
+            )
+
+            customers: List[Dict[str, Any]] = []
+            for result in fetch_results:
+                if isinstance(result, Exception):
+                    continue
+
+                user_id, conversations_docs = result
+
+                latest_timestamp = None
+                latest_message_text = ""
+                latest_customer_info = {}
+                total_messages = 0
+                conversation_count = 0
+
+                for conv_doc in conversations_docs:
+                    conversation_count += 1
+                    conv_data = conv_doc.to_dict() or {}
+                    messages = self._dedupe_messages(conv_data.get("messages", []))
+                    if not messages:
+                        continue
+
+                    total_messages += len(messages)
+                    last_message = messages[-1]
+                    candidate_ts = self._parse_timestamp(last_message.get("timestamp"))
+
+                    if latest_timestamp is None or candidate_ts > latest_timestamp:
+                        latest_timestamp = candidate_ts
+                        latest_message_text = str(last_message.get("text", ""))
+                        latest_customer_info = conv_data.get("customer_info", {}) or {}
+
+                if latest_timestamp is None:
+                    continue
+
+                user_name = (
+                    latest_customer_info.get("name")
+                    or config.user_names.get(user_id)
+                    or "Unknown Customer"
+                )
+                phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=latest_customer_info)
+                gender = latest_customer_info.get("gender") or config.user_gender.get(user_id, "unknown")
+
+                customers.append({
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "phone_full": phone_full,
+                    "phone_clean": phone_clean,
+                    "gender": gender,
+                    "last_message": latest_message_text,
+                    "last_message_time": latest_timestamp.isoformat(),
+                    "message_count": total_messages,
+                    "conversation_count": conversation_count,
+                    "unread_count": 0,
+                })
+
+            search_value = (search or "").strip().lower()
+            if search_value:
+                filtered_customers = []
+                for customer in customers:
+                    if (
+                        search_value in str(customer.get("user_name", "")).lower()
+                        or search_value in str(customer.get("user_id", "")).lower()
+                        or search_value in str(customer.get("phone_full", "")).lower()
+                        or search_value in str(customer.get("phone_clean", "")).lower()
+                        or search_value in str(customer.get("last_message", "")).lower()
+                    ):
+                        filtered_customers.append(customer)
+                customers = filtered_customers
+
+            customers = [
+                customer for customer in customers
+                if self._history_filter_match(
+                    self._parse_timestamp(customer.get("last_message_time")),
+                    filter_by
+                )
+            ]
+
+            customers.sort(key=lambda item: item.get("last_message_time", ""), reverse=True)
+            paged_customers, total_customers, total_pages = self._paginate(customers, page, page_size)
+
+            return {
+                "success": True,
+                "customers": paged_customers,
+                "total_customers": total_customers,
+                "page": max(1, int(page)),
+                "page_size": max(1, min(int(page_size), 1000)),
+                "total_pages": total_pages,
+            }
+        except Exception as e:
+            print(f"❌ Error getting history customers: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    async def get_history_conversations(
+        self,
+        user_id: str,
+        page: int = 1,
+        page_size: int = 200,
+        status: str = "all",
+        search: str = "",
+    ) -> Dict[str, Any]:
+        """Canonical conversation list for a single user."""
+        try:
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "error": "Firestore not initialized"}
+
+            app_id = "linas-ai-bot-backend"
+            conversations_collection = db.collection("artifacts").document(app_id).collection("users").document(
+                user_id
+            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+
+            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
+
+            conversations: List[Dict[str, Any]] = []
+            total_messages = 0
+            for conv_doc in conversations_docs:
+                conv_data = conv_doc.to_dict() or {}
+                messages = self._dedupe_messages(conv_data.get("messages", []))
+                message_count = len(messages)
+                total_messages += message_count
+
+                last_timestamp = self._parse_timestamp(conv_data.get("timestamp"))
+                last_message = None
+                if messages:
+                    raw_last = messages[-1]
+                    last_timestamp = self._parse_timestamp(raw_last.get("timestamp"))
+                    last_message = {
+                        "role": raw_last.get("role"),
+                        "text": raw_last.get("text", ""),
+                        "timestamp": last_timestamp.isoformat(),
+                        "type": raw_last.get("type", "text"),
+                    }
+
+                conversations.append({
+                    "id": conv_doc.id,
+                    "message_count": message_count,
+                    "last_message": last_message,
+                    "timestamp": last_timestamp.isoformat(),
+                    "user_id": conv_data.get("user_id", user_id),
+                    "sentiment": conv_data.get("sentiment", "neutral"),
+                    "human_takeover_active": conv_data.get("human_takeover_active", False),
+                    "status": conv_data.get("status", "active"),
+                })
+
+            if status and status != "all":
+                conversations = [conv for conv in conversations if conv.get("status") == status]
+
+            search_value = (search or "").strip().lower()
+            if search_value:
+                conversations = [
+                    conv for conv in conversations
+                    if search_value in str(conv.get("id", "")).lower()
+                    or search_value in str(conv.get("status", "")).lower()
+                    or search_value in str((conv.get("last_message") or {}).get("text", "")).lower()
+                ]
+
+            conversations.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
+            paged_conversations, total_conversations, total_pages = self._paginate(conversations, page, page_size)
+
+            return {
+                "success": True,
+                "conversations": paged_conversations,
+                "user_id": user_id,
+                "total_conversations": total_conversations,
+                "total_messages": total_messages,
+                "page": max(1, int(page)),
+                "page_size": max(1, min(int(page_size), 1000)),
+                "total_pages": total_pages,
+            }
+        except Exception as e:
+            print(f"❌ Error getting history conversations for {user_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    async def get_history_messages(
+        self,
+        user_id: str,
+        conversation_id: str,
+        page: int = 1,
+        page_size: int = 1000,
+        search: str = "",
+        sort: str = "asc",
+    ) -> Dict[str, Any]:
+        """Canonical paginated message history for one conversation."""
+        try:
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "error": "Firestore not initialized", "messages": []}
+
+            app_id = "linas-ai-bot-backend"
+            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(user_id).collection(
+                config.FIRESTORE_CONVERSATIONS_COLLECTION
+            ).document(conversation_id)
+
+            conv_doc = await asyncio.to_thread(conv_ref.get)
+            if not conv_doc.exists:
+                return {"success": False, "error": "Conversation not found", "messages": []}
+
+            conv_data = conv_doc.to_dict() or {}
+            messages = self._dedupe_messages(conv_data.get("messages", []))
+            normalized_messages = []
+            for msg in messages:
+                normalized_messages.append({
+                    **msg,
+                    "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
+                })
+
+            search_value = (search or "").strip().lower()
+            if search_value:
+                normalized_messages = [
+                    msg for msg in normalized_messages
+                    if search_value in str(msg.get("text", "")).lower()
+                ]
+
+            reverse_sort = str(sort).lower() == "desc"
+            normalized_messages.sort(key=lambda item: item.get("timestamp", ""), reverse=reverse_sort)
+            safe_page = max(1, int(page))
+            safe_page_size = max(1, min(int(page_size), 1000))
+            total_messages = len(normalized_messages)
+            total_pages = max(1, (total_messages + safe_page_size - 1) // safe_page_size)
+
+            # Backward-compatible default: when UI requests page 1 in ascending order,
+            # return the latest chunk so recent messages are always visible.
+            if (not reverse_sort) and safe_page == 1 and total_messages > safe_page_size:
+                paged_messages = normalized_messages[-safe_page_size:]
+            else:
+                paged_messages, _, _ = self._paginate(normalized_messages, safe_page, safe_page_size)
+
+            return {
+                "success": True,
+                "conversation_id": conversation_id,
+                "messages": paged_messages,
+                "total_messages": total_messages,
+                "page": safe_page,
+                "page_size": safe_page_size,
+                "total_pages": total_pages,
+                "returned_messages": len(paged_messages),
+            }
+        except Exception as e:
+            print(f"❌ Error getting history messages for {conversation_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e), "messages": []}
     
     async def get_client_conversations(self, user_id: str) -> List[Dict[str, Any]]:
         """
@@ -253,7 +615,7 @@ class LiveChatService:
             
             for conv_doc in conversations_docs:
                 conv_data = conv_doc.to_dict()
-                messages = conv_data.get("messages", [])
+                messages = self._dedupe_messages(conv_data.get("messages", []))
                 
                 if not messages:
                     continue
@@ -308,7 +670,7 @@ class LiveChatService:
                 
                 for conv_doc in conversations_docs:
                     conv_data = conv_doc.to_dict()
-                    messages = conv_data.get("messages", [])
+                    messages = self._dedupe_messages(conv_data.get("messages", []))
                     
                     if not messages:
                         continue
@@ -337,11 +699,6 @@ class LiveChatService:
                             last_preview_message = msg
                             break
 
-                    # Apply 6-hour filter
-                    time_diff = (current_time - last_message_time).total_seconds()
-                    if time_diff > self.ACTIVE_TIME_WINDOW:
-                        continue
-                    
                     # Calculate wait time
                     escalation_time = conv_data.get("escalation_time")
                     if escalation_time:
@@ -353,10 +710,7 @@ class LiveChatService:
                     # Get user info from Firebase customer_info first, fallback to config
                     customer_info = conv_data.get("customer_info", {})
                     user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
-                    
-                    # CRITICAL: Get phone from customer_info or user_data, NEVER from user_id (which is room_id for Qiscus)
-                    phone_full = customer_info.get("phone_full") or config.user_data_whatsapp.get(user_id, {}).get('phone_number') or "Unknown"
-                    phone_clean = customer_info.get("phone_clean") or (config.user_data_whatsapp.get(user_id, {}).get('phone_number', '').replace('+', '').replace('-', '').replace(' ', '')) or "Unknown"
+                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
                     
                     language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
                     sentiment = conv_data.get("sentiment", "neutral")
@@ -445,8 +799,7 @@ class LiveChatService:
                 print(f"🔄 Cleared current_conversation_id for {user_id} - next message will start new conversation")
 
             # Invalidate cache
-            self._conversations_cache = None
-            self._queue_cache = None
+            self.invalidate_cache()
 
             # Send notification to customer
             if adapter:
@@ -567,8 +920,7 @@ class LiveChatService:
             self.operator_sessions[conversation_id] = operator_id
 
             # Invalidate cache
-            self._conversations_cache = None
-            self._queue_cache = None
+            self.invalidate_cache()
 
             print(f"✅ Operator {operator_id} took over conversation {conversation_id}")
 
@@ -592,8 +944,7 @@ class LiveChatService:
                 del self.operator_sessions[conversation_id]
 
             # Invalidate cache
-            self._conversations_cache = None
-            self._queue_cache = None
+            self.invalidate_cache()
 
             print(f"✅ Conversation {conversation_id} released back to bot")
 
@@ -690,8 +1041,8 @@ class LiveChatService:
                         "operator_id": operator_id,
                         "handled_by": "human",
                         "type": "voice",
-                        "audio_data": audio_data_to_upload,  # Store converted Opus or fallback WebM
                         "audio_url": storage_url,  # Store the public URL with key name 'audio_url' for easy retrieval
+                        "audio_mime_type": upload_file_type,
                         "message_length": len(message)
                     }
                 )
@@ -700,20 +1051,21 @@ class LiveChatService:
                 print(f"🎙️ Sending voice message via WhatsApp to {user_id}...")
                 try:
                     if storage_url:
-                        # Use server serve URL - clean path MontyMobile can fetch
-                        # File already saved locally by upload function, Firebase used for long-term storage
-                        parts = storage_url.split('/o/')
-                        serve_filename = parts[1].split('?')[0] if len(parts) > 1 else storage_url
-                        whatsapp_audio_url = f"https://linasaibot.com/api/media/serve/{serve_filename}"
+                        whatsapp_audio_url = build_whatsapp_audio_delivery_url(storage_url)
                         print(f"📤 Proxy URL for WhatsApp: {whatsapp_audio_url}")
-                        send_result = await adapter.send_audio_message(user_id, whatsapp_audio_url, audio_base64=audio_data_to_upload)
+                        send_result = await adapter.send_audio_message(user_id, whatsapp_audio_url)
                         if send_result.get("success"):
                             print(f"✅ Sent voice message via WhatsApp")
                         else:
                             error_msg = send_result.get("error", "Unknown error")
                             print(f"⚠️ WhatsApp audio send failed: {error_msg}")
                             print(f"⚠️ Audio URL was: {storage_url}")
-                            return {"success": False, "error": f"WhatsApp audio send failed: {error_msg}", "storage_url": storage_url}
+                            return {
+                                "success": False,
+                                "error": f"WhatsApp audio send failed: {error_msg}",
+                                "storage_url": storage_url,
+                                "whatsapp_audio_url": whatsapp_audio_url
+                            }
                     else:
                         # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام رسالة صوتية من المشغل. يرجى فتح لوحة المعلومات لسماعها."
@@ -727,7 +1079,12 @@ class LiveChatService:
 
                 print(f"✅ Voice message processed and sent for {user_id}")
 
-                return {"success": True, "message": "Voice message sent successfully", "storage_url": storage_url}
+                return {
+                    "success": True,
+                    "message": "Voice message sent successfully",
+                    "storage_url": storage_url,
+                    "whatsapp_audio_url": build_whatsapp_audio_delivery_url(storage_url) if storage_url else None
+                }
                     
             elif message_type == "image":
                 # message contains base64 image data
@@ -858,7 +1215,7 @@ class LiveChatService:
                 return {"success": False, "error": "Conversation not found"}
 
             conv_data = conv_doc.to_dict()
-            messages = conv_data.get("messages", [])
+            messages = self._dedupe_messages(conv_data.get("messages", []))
 
             # ✅ Limit messages to prevent timeout on large conversations
             total_messages = len(messages)
@@ -877,6 +1234,7 @@ class LiveChatService:
                     "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
                     "is_user": msg.get("role") == "user",
                     "content": msg.get("text", ""),
+                    "text": msg.get("text", ""),
                     "type": msg.get("type", "text"),
                     "handled_by": msg.get("metadata", {}).get("handled_by", "bot"),
                     "role": msg.get("role")
@@ -949,6 +1307,221 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error getting metrics: {e}")
             return {"success": False, "error": str(e)}
+
+    def _normalize_phone_digits(self, value: Any) -> str:
+        """Return digits-only phone value (supports +, spaces, dashes, 00 prefix)."""
+        if value is None:
+            return ""
+        digits = re.sub(r"\D", "", str(value))
+        if digits.startswith("00"):
+            digits = digits[2:]
+        return digits
+
+    def _build_phone_variants(self, value: Any) -> set:
+        """
+        Build comparable phone variants to support mixed country-code/local searches.
+        Example: +96176466674 -> {96176466674, 76466674, 6466674}
+        """
+        digits = self._normalize_phone_digits(value)
+        if not digits:
+            return set()
+
+        variants = {digits}
+
+        if digits.startswith("0") and len(digits) > 1:
+            variants.add(digits[1:])
+
+        # Lebanon-aware variants
+        if digits.startswith("961") and len(digits) > 3:
+            local_number = digits[3:]
+            variants.add(local_number)
+            if local_number.startswith("0") and len(local_number) > 1:
+                variants.add(local_number[1:])
+        elif len(digits) == 8:
+            variants.add(f"961{digits}")
+            if digits.startswith("0") and len(digits) > 1:
+                variants.add(f"961{digits[1:]}")
+
+        # Generic "local-part" fallback for other country codes.
+        if len(digits) > 8:
+            variants.add(digits[-8:])
+        if len(digits) > 7:
+            variants.add(digits[-7:])
+
+        return {variant for variant in variants if len(variant) >= 2}
+
+    def _phone_matches_search(self, search_term: str, *candidate_values: Any) -> bool:
+        """Return True when normalized phone variants partially overlap."""
+        search_variants = self._build_phone_variants(search_term)
+        if not search_variants:
+            return False
+
+        for candidate_value in candidate_values:
+            candidate_variants = self._build_phone_variants(candidate_value)
+            for search_variant in search_variants:
+                for candidate_variant in candidate_variants:
+                    if search_variant in candidate_variant or candidate_variant in search_variant:
+                        return True
+        return False
+
+    def _filter_conversations(self, conversations: List[Dict[str, Any]], search_term: str) -> List[Dict[str, Any]]:
+        """Filter conversations by client name and/or phone (partial, normalized)."""
+        normalized_search = (search_term or "").strip()
+        if not normalized_search:
+            return conversations
+
+        lowered_search = normalized_search.lower()
+        has_phone_digits = bool(self._normalize_phone_digits(normalized_search))
+
+        filtered = []
+        for conversation in conversations:
+            user_name = str(conversation.get("user_name", "")).lower()
+            if lowered_search in user_name:
+                filtered.append(conversation)
+                continue
+
+            phone_candidates = [
+                conversation.get("user_phone"),
+                conversation.get("phone_clean"),
+            ]
+            user_id = conversation.get("user_id")
+            user_id_digits = self._normalize_phone_digits(user_id)
+            resolved_phone_digits = self._normalize_phone_digits(conversation.get("user_phone"))
+
+            # Only consider user_id as phone fallback when no better phone is available.
+            if user_id_digits and (not resolved_phone_digits or resolved_phone_digits == user_id_digits):
+                phone_candidates.append(user_id)
+
+            if has_phone_digits and self._phone_matches_search(
+                normalized_search,
+                *phone_candidates,
+            ):
+                filtered.append(conversation)
+
+        return filtered
+
+    def _choose_preferred_phone(self, current_phone: Optional[str], candidate_phone: str) -> str:
+        """Prefer a richer display phone (with +country code / longer digits)."""
+        if not current_phone:
+            return candidate_phone
+
+        current_digits = self._normalize_phone_digits(current_phone)
+        candidate_digits = self._normalize_phone_digits(candidate_phone)
+
+        if candidate_phone.startswith("+") and not current_phone.startswith("+"):
+            return candidate_phone
+        if len(candidate_digits) > len(current_digits):
+            return candidate_phone
+
+        return current_phone
+
+    def _load_phone_room_mapping(self) -> Dict[str, str]:
+        """Load `data/phone_to_room_mapping.json` with short TTL cache."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if (
+            self._phone_mapping_cache_time is not None
+            and (now - self._phone_mapping_cache_time).total_seconds() < self.PHONE_MAPPING_CACHE_TTL
+        ):
+            return self._room_to_phone_cache
+
+        phone_to_room = {}
+        room_to_phone = {}
+
+        mapping_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "data",
+            "phone_to_room_mapping.json",
+        )
+
+        try:
+            with open(mapping_path, "r", encoding="utf-8") as mapping_file:
+                mapping_data = json.load(mapping_file)
+            raw_mapping = mapping_data.get("phone_to_room_mapping", {})
+            if isinstance(raw_mapping, dict):
+                for raw_phone, raw_room_id in raw_mapping.items():
+                    room_id = str(raw_room_id).strip()
+                    phone_value = str(raw_phone).strip()
+                    normalized_phone = self._normalize_phone_digits(phone_value)
+
+                    if not room_id or not normalized_phone:
+                        continue
+
+                    phone_to_room[normalized_phone] = room_id
+                    room_to_phone[room_id] = self._choose_preferred_phone(
+                        room_to_phone.get(room_id),
+                        phone_value
+                    )
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"⚠️ Failed to load phone_to_room_mapping.json: {e}")
+
+        self._phone_to_room_cache = phone_to_room
+        self._room_to_phone_cache = room_to_phone
+        self._phone_mapping_cache_time = now
+        return self._room_to_phone_cache
+
+    def _get_mapped_phone_for_room(self, user_id: str) -> Optional[str]:
+        """Return mapped phone for a room_id/user_id when available."""
+        room_to_phone = self._load_phone_room_mapping()
+        return room_to_phone.get(str(user_id))
+
+    def _resolve_user_phone(self, user_id: str, customer_info: Optional[Dict[str, Any]]) -> Tuple[str, str]:
+        """
+        Resolve best phone for dashboard/search:
+        1) customer_info
+        2) runtime memory (config.user_data_whatsapp)
+        3) static phone_to_room_mapping.json
+        """
+        customer_info = customer_info or {}
+        user_data = config.user_data_whatsapp.get(user_id, {})
+
+        phone_full = str(customer_info.get("phone_full") or "").strip()
+        phone_clean_raw = str(customer_info.get("phone_clean") or "").strip()
+        memory_phone = str(user_data.get("phone_number") or "").strip()
+        mapped_phone = str(self._get_mapped_phone_for_room(user_id) or "").strip()
+
+        user_digits = self._normalize_phone_digits(user_id)
+        phone_full_digits = self._normalize_phone_digits(phone_full)
+        memory_digits = self._normalize_phone_digits(memory_phone)
+        mapped_digits = self._normalize_phone_digits(mapped_phone)
+
+        # If Firestore saved room_id instead of real phone, replace it.
+        if phone_full_digits and user_digits and phone_full_digits == user_digits:
+            if mapped_digits and mapped_digits != user_digits:
+                phone_full = mapped_phone
+                phone_full_digits = mapped_digits
+            elif memory_digits and memory_digits != user_digits:
+                phone_full = memory_phone
+                phone_full_digits = memory_digits
+
+        # If still missing, fallback to memory then static mapping.
+        if not phone_full_digits:
+            if memory_digits:
+                phone_full = memory_phone
+                phone_full_digits = memory_digits
+            elif mapped_digits:
+                phone_full = mapped_phone
+                phone_full_digits = mapped_digits
+
+        clean_digits = self._normalize_phone_digits(phone_clean_raw)
+        if clean_digits and user_digits and clean_digits == user_digits and phone_full_digits:
+            clean_digits = phone_full_digits
+        if not clean_digits:
+            clean_digits = phone_full_digits
+
+        # Backward-compatible "clean" format used elsewhere in the app.
+        if clean_digits.startswith("961") and len(clean_digits) > 8:
+            phone_clean = clean_digits[3:]
+        else:
+            phone_clean = clean_digits
+
+        if not phone_full:
+            phone_full = "Unknown"
+        if not phone_clean:
+            phone_clean = "Unknown"
+
+        return phone_full, phone_clean
     
     def _parse_timestamp(self, timestamp) -> datetime.datetime:
         """Parse various timestamp formats - always returns UTC-aware datetime"""

@@ -5,8 +5,7 @@ Uses event-based analytics with append-only JSONL file
 """
 
 from modules.core import app
-from services.analytics_events import analytics
-from services.openai_usage_service import openai_usage_service
+from services.analytics_service import analytics_service
 
 
 @app.get("/api/analytics/summary")
@@ -23,34 +22,10 @@ async def get_analytics_summary(time_range: int = 7, use_real_costs: bool = True
     """
     try:
         print(f"📊 Analytics API: Aggregating events for last {time_range} days")
-        
-        # Aggregate events from JSONL file
-        result = analytics.aggregate_analytics(days=time_range)
-        
-        # Fetch real costs from OpenAI if requested
-        if use_real_costs:
-            print(f"💰 Fetching real costs from OpenAI API...")
-            try:
-                openai_usage = await openai_usage_service.get_usage_for_last_n_days(time_range)
-                
-                if openai_usage.get('success'):
-                    # Replace estimated costs with real costs
-                    result['token_usage']['total_cost_usd'] = openai_usage['total_cost_usd']
-                    result['token_usage']['total_tokens'] = openai_usage['total_tokens']
-                    result['token_usage']['source'] = 'openai_api'
-                    result['token_usage']['model_breakdown'] = openai_usage.get('model_breakdown', {})
-                    result['token_usage']['daily_costs'] = openai_usage.get('daily_costs', [])
-                    
-                    print(f"✅ Using real OpenAI costs: ${openai_usage['total_cost_usd']:.4f}")
-                else:
-                    print(f"⚠️ Failed to fetch real costs, using estimates")
-                    result['token_usage']['source'] = 'estimated'
-                    
-            except Exception as e:
-                print(f"⚠️ Error fetching real costs: {e}")
-                result['token_usage']['source'] = 'estimated'
-        else:
-            result['token_usage']['source'] = 'estimated'
+        result = await analytics_service.get_analytics_summary(
+            time_range=time_range,
+            use_real_costs=use_real_costs,
+        )
         
         if result.get("success"):
             print(f"✅ Analytics API: Successfully aggregated analytics")

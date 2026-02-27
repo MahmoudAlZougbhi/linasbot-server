@@ -800,10 +800,16 @@ export const useApi = () => {
   );
 
   // ✨ NEW: Local Q&A Management Functions (JSON file-based)
-  const getLocalQAPairs = useCallback(async () => {
+  const getLocalQAPairs = useCallback(async (filters = {}) => {
     try {
       setLoading(true);
-      const response = await api.get("/api/local-qa/list");
+      const params = new URLSearchParams();
+      if (filters.language) params.append("language", filters.language);
+      const query = params.toString();
+      const endpoint = query
+        ? `/api/local-qa/list?${query}`
+        : "/api/local-qa/list";
+      const response = await api.get(endpoint);
       return response.data;
     } catch (error) {
       if (error.code === "ERR_NETWORK") {

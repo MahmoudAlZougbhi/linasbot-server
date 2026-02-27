@@ -9,12 +9,14 @@ from services.moderation_service import moderate_content, check_rate_limits, get
 from difflib import SequenceMatcher
 import datetime
 import re
+from typing import Any, Dict, List, Optional
 
 # Import all API functions from api_integrations
 from services import api_integrations
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
+    detect_reschedule_intent,
     now_in_bot_tz,
     parse_datetime_flexible,
     resolve_relative_datetime,
@@ -31,6 +33,31 @@ from services.dynamic_model_selector import select_optimal_model
 BOOKING_TZ = BOT_FIXED_TZ
 
 _custom_qa_cache = {}
+
+PRICE_KEYWORDS = [
+    "price",
+    "cost",
+    "how much",
+    "pricing",
+    "سعر",
+    "اسعار",
+    "كم",
+    "قديش",
+    "أديش",
+    "تكلفة",
+    "prix",
+    "coût",
+    "combien",
+    "tarif",
+    "adesh",
+    "adde",
+    "2adde",
+    "2adesh",
+    "kam",
+    "sa3er",
+]
+
+DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS = {1, 12, 13}
 
 
 def format_qa_for_context(qa_pairs: list) -> str:
@@ -91,6 +118,356 @@ def validate_language_match(user_language: str, bot_response: str, detected_resp
 
     return True, ""
 
+
+def looks_like_working_hours_reply(text: str) -> bool:
+    """Heuristic: detect replies that are clearly about clinic hours/opening times."""
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+
+    hours_patterns = [
+        r"\bworking\s+hours\b",
+        r"\bopening\s+hours\b",
+        r"\bopen\s+from\b",
+        r"\bclinic\s+hours\b",
+        r"(?:ساعات\s*(?:العمل|الدوام)|اوقات\s*العمل|دوامنا|الدوام)",
+        r"\bhoraires\b",
+        r"\bouvert\b",
+    ]
+    return any(re.search(pattern, normalized, re.IGNORECASE | re.UNICODE) for pattern in hours_patterns)
+
+
+def is_price_related_question(text: str) -> bool:
+    normalized = str(text or "").lower()
+    return any(keyword in normalized for keyword in PRICE_KEYWORDS)
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    if value is None or value == "":
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    cleaned = str(value).replace("$", "").replace(",", "").replace("%", "").strip()
+    try:
+        return float(cleaned)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_body_part_ids(raw_value: Any) -> List[int]:
+    if raw_value is None or raw_value == "":
+        return []
+
+    if isinstance(raw_value, list):
+        result = []
+        for item in raw_value:
+            parsed = _safe_int(item)
+            if parsed is not None:
+                result.append(parsed)
+        return result
+
+    if isinstance(raw_value, str):
+        pieces = [part.strip() for part in raw_value.split(",") if part.strip()]
+        result = []
+        for part in pieces:
+            parsed = _safe_int(part)
+            if parsed is not None:
+                result.append(parsed)
+        return result
+
+    parsed_single = _safe_int(raw_value)
+    return [parsed_single] if parsed_single is not None else []
+
+
+def _get_body_part_required_service_ids() -> set:
+    configured_ids = set(DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS)
+    try:
+        with open("data/app_settings.json", "r", encoding="utf-8") as settings_file:
+            app_settings = json.load(settings_file)
+        configured_list = app_settings.get("pricingSync", {}).get("requireBodyPartServiceIds", [])
+        normalized = {_safe_int(item) for item in configured_list}
+        normalized = {item for item in normalized if item is not None}
+        if normalized:
+            configured_ids = normalized
+    except Exception as settings_error:
+        print(f"ℹ️ Pricing sync settings fallback to defaults: {settings_error}")
+    return configured_ids
+
+
+def _pricing_missing_details_reply(language: str, missing: str) -> str:
+    messages = {
+        "service": {
+            "ar": "كرمال أعطيك السعر الدقيق من السيستم، أي خدمة بدك؟ (إزالة شعر، إزالة تاتو، أو تبييض DPL)",
+            "en": "To give you the exact system price, which service do you want? (Hair removal, tattoo removal, or DPL whitening)",
+            "fr": "Pour vous donner le prix exact du système, quel service souhaitez-vous ? (Épilation, détatouage ou blanchiment DPL)",
+            "franco": "كرمال أعطيك السعر الدقيق من السيستم، أي خدمة بدك؟ (إزالة شعر، إزالة تاتو، أو تبييض DPL)",
+        },
+        "body_part": {
+            "ar": "تمام، بس قبل السعر الدقيق لازم أعرف أي منطقة بالجسم بدك (مثال: إبط، ذراع، ظهر، وجه...).",
+            "en": "Sure, before I fetch the exact price I need the body area (for example: underarm, arms, back, face...).",
+            "fr": "D'accord, avant de récupérer le prix exact j'ai besoin de la zone du corps (ex: aisselles, bras, dos, visage...).",
+            "franco": "تمام، بس قبل السعر الدقيق لازم أعرف أي منطقة بالجسم بدك (مثال: إبط، ذراع، ظهر، وجه...).",
+        },
+        "unavailable": {
+            "ar": "ما قدرت أوصل لسعر السيستم هلق. إذا فيك جرّب بعد شوي أو خبرني التفاصيل (الخدمة + المنطقة) وبرجع بتأكد فوراً.",
+            "en": "I couldn't fetch the live system price right now. Please try again shortly, or share service + area and I'll recheck immediately.",
+            "fr": "Je n'ai pas pu récupérer le prix en direct pour le moment. Réessayez dans un instant, ou donnez service + zone et je reverifie immédiatement.",
+            "franco": "ما قدرت أوصل لسعر السيستم هلق. إذا فيك جرّب بعد شوي أو خبرني التفاصيل (الخدمة + المنطقة) وبرجع بتأكد فوراً.",
+        },
+    }
+    lang_bucket = messages.get(missing, messages["unavailable"])
+    return lang_bucket.get(language, lang_bucket["en"])
+
+
+def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_state: Dict[str, Any]) -> Optional[int]:
+    existing = _safe_int(booking_state.get("service_id"))
+    if existing is not None:
+        return existing
+
+    text = str(user_input or "").lower()
+    if any(keyword in text for keyword in ["tattoo", "وشم", "تاتو", "détatouage"]):
+        return 13
+    if any(keyword in text for keyword in ["whitening", "dpl", "تبييض", "تفتيح", "blanchiment"]):
+        return 4
+    if any(keyword in text for keyword in ["hair", "epilation", "إزالة الشعر", "ليزر", "شعر"]):
+        if current_gender == "female":
+            return 12
+        return 1
+    return None
+
+
+def _merge_pricing_args_with_booking_state(
+    function_name: str,
+    function_args: Dict[str, Any],
+    booking_state: Dict[str, Any],
+    current_gender: str,
+    user_input: str,
+) -> None:
+    if function_name not in {"get_pricing_details", "create_appointment"}:
+        return
+
+    inferred_service_id = _infer_service_id_for_pricing(user_input, current_gender, booking_state)
+    if function_args.get("service_id") is None and inferred_service_id is not None:
+        function_args["service_id"] = inferred_service_id
+
+    if function_args.get("machine_id") is None and booking_state.get("machine_id") is not None:
+        function_args["machine_id"] = booking_state.get("machine_id")
+
+    if function_args.get("branch_id") is None and booking_state.get("branch_id") is not None:
+        function_args["branch_id"] = booking_state.get("branch_id")
+
+    incoming_body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
+    if incoming_body_part_ids:
+        function_args["body_part_ids"] = incoming_body_part_ids
+    elif booking_state.get("body_part_ids"):
+        function_args["body_part_ids"] = booking_state.get("body_part_ids")
+
+
+def _remember_booking_selection(user_id: str, function_args: Dict[str, Any]) -> None:
+    state = config.user_booking_state[user_id]
+
+    service_id = _safe_int(function_args.get("service_id"))
+    machine_id = _safe_int(function_args.get("machine_id"))
+    branch_id = _safe_int(function_args.get("branch_id"))
+    body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
+
+    if service_id is not None:
+        state["service_id"] = service_id
+    if machine_id is not None:
+        state["machine_id"] = machine_id
+    if branch_id is not None:
+        state["branch_id"] = branch_id
+    if body_part_ids:
+        state["body_part_ids"] = body_part_ids
+
+
+def _extract_first_numeric(item: Dict[str, Any], keys: List[str]) -> Optional[float]:
+    for key in keys:
+        if key in item:
+            parsed = _safe_float(item.get(key))
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _extract_label(item: Dict[str, Any]) -> str:
+    machine_value = item.get("machine")
+    machine_name = machine_value.get("name") if isinstance(machine_value, dict) else machine_value
+    candidates = [
+        item.get("body_part_name"),
+        item.get("body_part"),
+        item.get("area_name"),
+        item.get("area"),
+        machine_name,
+        item.get("machine_name"),
+        item.get("title"),
+        item.get("name"),
+        item.get("service_name"),
+    ]
+    for candidate in candidates:
+        if candidate is not None and str(candidate).strip():
+            return str(candidate).strip()
+    return "Price"
+
+
+def _extract_pricing_rows(pricing_payload: Any) -> List[Dict[str, Any]]:
+    if pricing_payload is None:
+        return []
+
+    candidates: List[Dict[str, Any]] = []
+    visited_nodes = set()
+
+    def walk(node: Any) -> None:
+        node_id = id(node)
+        if node_id in visited_nodes:
+            return
+        visited_nodes.add(node_id)
+
+        if isinstance(node, dict):
+            candidates.append(node)
+            for value in node.values():
+                if isinstance(value, (dict, list)):
+                    walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                if isinstance(value, (dict, list)):
+                    walk(value)
+
+    walk(pricing_payload)
+
+    rows: List[Dict[str, Any]] = []
+    seen_signatures = set()
+
+    for item in candidates:
+        base_price = _extract_first_numeric(
+            item,
+            ["original_price", "base_price", "price_before_discount", "list_price", "price"],
+        )
+        final_price = _extract_first_numeric(
+            item,
+            ["final_price", "discounted_price", "price_after_discount", "net_price", "total_price"],
+        )
+        discount_amount = _extract_first_numeric(
+            item,
+            ["discount_amount", "discount_value", "offer_amount", "saved_amount", "total_discount"],
+        )
+        discount_percent = _extract_first_numeric(
+            item,
+            ["discount_percent", "discount_percentage", "offer_percent", "discount_rate"],
+        )
+
+        if final_price is None and base_price is not None:
+            if discount_amount is not None:
+                final_price = base_price - discount_amount
+            elif discount_percent is not None:
+                final_price = base_price * (1 - (discount_percent / 100.0))
+
+        if base_price is None and final_price is not None:
+            base_price = final_price
+        if final_price is None and base_price is not None:
+            final_price = base_price
+
+        if base_price is None and final_price is None:
+            continue
+
+        if discount_amount is None and base_price is not None and final_price is not None:
+            delta = base_price - final_price
+            if delta > 0.009:
+                discount_amount = delta
+
+        if (
+            discount_percent is None
+            and discount_amount is not None
+            and base_price is not None
+            and base_price > 0
+        ):
+            discount_percent = (discount_amount / base_price) * 100.0
+
+        label = _extract_label(item)
+        signature = (
+            label,
+            round(base_price or 0.0, 4),
+            round(final_price or 0.0, 4),
+            round(discount_amount or 0.0, 4),
+        )
+        if signature in seen_signatures:
+            continue
+        seen_signatures.add(signature)
+
+        rows.append(
+            {
+                "label": label,
+                "base_price": base_price,
+                "final_price": final_price,
+                "discount_amount": discount_amount,
+                "discount_percent": discount_percent,
+            }
+        )
+
+    return rows
+
+
+def _format_amount(value: Optional[float]) -> str:
+    if value is None:
+        return "0"
+    rounded = round(float(value), 2)
+    if abs(rounded - round(rounded)) < 0.01:
+        return str(int(round(rounded)))
+    return f"{rounded:.2f}".rstrip("0").rstrip(".")
+
+
+def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
+    rows = _extract_pricing_rows(pricing_payload)
+    title = {
+        "ar": "💰 هيدي الأسعار الدقيقة من السيستم:",
+        "en": "💰 Here is the exact system pricing:",
+        "fr": "💰 Voici les prix exacts du système :",
+        "franco": "💰 هيدي الأسعار الدقيقة من السيستم:",
+    }.get(language, "💰 Here is the exact system pricing:")
+
+    if not rows:
+        raw_payload = json.dumps(pricing_payload, ensure_ascii=False)
+        if len(raw_payload) > 900:
+            raw_payload = raw_payload[:900] + "..."
+        return f"{title}\n{raw_payload}"
+
+    lines = [title]
+    for row in rows:
+        label = row["label"]
+        final_amount = _format_amount(row["final_price"])
+        base_amount = _format_amount(row["base_price"])
+        discount_amount = row["discount_amount"] or 0.0
+        discount_percent = row["discount_percent"] or 0.0
+
+        if discount_amount > 0.009:
+            if language in {"ar", "franco"}:
+                lines.append(
+                    f"- {label}: {final_amount}$ (بدل {base_amount}$، خصم {_format_amount(discount_percent)}% = {_format_amount(discount_amount)}$)"
+                )
+            elif language == "fr":
+                lines.append(
+                    f"- {label} : {final_amount}$ (au lieu de {base_amount}$, remise {_format_amount(discount_percent)}% = {_format_amount(discount_amount)}$)"
+                )
+            else:
+                lines.append(
+                    f"- {label}: {final_amount}$ (was {base_amount}$, discount {_format_amount(discount_percent)}% = {_format_amount(discount_amount)}$)"
+                )
+        else:
+            lines.append(f"- {label}: {final_amount}$")
+
+    return "\n".join(lines)
+
 # user_id is the WhatsApp phone number
 async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None) -> dict:
     user_name = config.user_names.get(user_id, "client") 
@@ -136,18 +513,27 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         explicitly_detected_gender_from_input = await get_gender_from_gpt(user_input)
         print(f"DEBUG GPT Gender Recognition: Input '{user_input}' -> Detected as '{explicitly_detected_gender_from_input}' (for logging/debug, GPT will decide action)")
 
+    is_reschedule_intent = detect_reschedule_intent(user_input)
+    if is_reschedule_intent:
+        print("🔁 Intent routing lock: reschedule/postpone intent detected.")
+
     # NOTE: conversation_log.jsonl is NO LONGER USED
     # Q&A matching is now handled by qa_database_service.py (API-based)
     # This happens in text_handlers.py BEFORE calling this function
     # If we reach here, it means no Q&A match was found, so proceed with GPT-4
 
     # NEW: Get relevant Q&A pairs to inject into GPT context
-    # This ensures GPT knows about trained answers even for partial matches
-    relevant_qa = await local_qa_service.get_relevant_qa_pairs(
-        question=user_input,
-        language=current_preferred_lang,
-        limit=3
-    )
+    # This ensures GPT knows about trained answers even for partial matches.
+    # For reschedule intents, skip Q&A injection to avoid drifting into unrelated informational replies.
+    relevant_qa = []
+    if not is_reschedule_intent:
+        relevant_qa = await local_qa_service.get_relevant_qa_pairs(
+            question=user_input,
+            language=current_preferred_lang,
+            limit=3
+        )
+    else:
+        print("🔁 Skipping Q&A context injection for reschedule/postpone intent.")
     qa_reference_text = format_qa_for_context(relevant_qa)
 
     if relevant_qa:
@@ -155,24 +541,26 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         for qa in relevant_qa:
             print(f"   - Q: '{qa['question'][:50]}...' (Match: {qa['similarity']:.0%})")
 
-    # Get the core system instruction from utils.py, which now contains the JSON output format requirement.
-    # Pass the current_gender and Q&A reference to get_system_instruction
-    system_instruction_core = get_system_instruction(user_id, current_preferred_lang, qa_reference_text)
+    # Detect if this is a price-related question and load sync rules.
+    is_price_question = is_price_related_question(user_input)
+    body_part_required_service_ids = _get_body_part_required_service_ids()
+
+    # Get the core system instruction from utils.py, with conditional price list loading.
+    system_instruction_core = get_system_instruction(
+        user_id,
+        current_preferred_lang,
+        qa_reference_text,
+        include_price_list=is_price_question
+    )
 
     # Log which training files GPT is receiving
     print(f"📄 GPT will receive knowledge_base.txt in context")
     print(f"📄 GPT will receive style_guide.txt in context")
 
-    # Detect if this is a price-related question
-    price_keywords = [
-        'price', 'cost', 'how much', 'pricing', 'سعر', 'اسعار', 'كم', 'قديش', 'أديش', 'تكلفة',
-        'prix', 'coût', 'combien', 'tarif', 'adesh', 'adde', '2adde', '2adesh', 'kam', 'sa3er'
-    ]
-    user_input_lower = user_input.lower()
-    is_price_question = any(keyword in user_input_lower for keyword in price_keywords)
-
     if is_price_question:
         print(f"📄 GPT will receive price_list.txt in context (price-related question detected)")
+    else:
+        print("📄 GPT will skip price_list.txt in context (not a price-related question)")
 
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
     name_is_known = user_name and user_name != "client"
@@ -194,8 +582,19 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
     )
 
+    routing_guardrail = ""
+    if is_reschedule_intent:
+        routing_guardrail = (
+            "\n\n"
+            "**🔒 INTENT ROUTING OVERRIDE:**\n"
+            "- The user's latest request is to RESCHEDULE/POSTPONE an appointment.\n"
+            "- This is NOT a clinic working-hours request.\n"
+            "- Do NOT call `get_clinic_hours` for this message.\n"
+            "- Use appointment flow only: `check_next_appointment` then `update_appointment_date` when date/time is provided.\n"
+        )
+
     # Combine system instruction with dynamic context
-    system_instruction_final = system_instruction_core + "\n\n" + dynamic_customer_context
+    system_instruction_final = system_instruction_core + "\n\n" + dynamic_customer_context + routing_guardrail
 
     messages = [{"role": "system", "content": system_instruction_final}]
     messages.extend(current_context_messages[-config.MAX_CONTEXT_MESSAGES:])
@@ -233,12 +632,150 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         tool_calls = first_response_message.tool_calls
 
         parsed_response = {}
+        latest_pricing_payload = None
 
         if tool_calls:
             messages.append(first_response_message)
 
             # Track check_next_appointment result to auto-chain appointment_id for update_appointment_date
             check_next_appointment_result = None
+            paused_appointment_lookup_cache = {}
+
+            def normalize_phone_for_lookup(raw_phone: str) -> str:
+                if not raw_phone:
+                    return ""
+                normalized = str(raw_phone).replace("+", "").replace(" ", "").replace("-", "")
+                if normalized.startswith("961"):
+                    normalized = normalized[3:]
+                return normalized
+
+            def extract_appointment_id(appointment_payload: dict):
+                if not isinstance(appointment_payload, dict):
+                    return None
+                for key in ("appointment_id", "id", "appointmentId"):
+                    value = appointment_payload.get(key)
+                    if value is None:
+                        continue
+                    try:
+                        return int(value)
+                    except (TypeError, ValueError):
+                        continue
+                return None
+
+            def extract_appointment_status(appointment_payload: dict) -> str:
+                if not isinstance(appointment_payload, dict):
+                    return ""
+
+                raw_status = (
+                    appointment_payload.get("status")
+                    or appointment_payload.get("appointment_status")
+                    or appointment_payload.get("appointmentStatus")
+                    or appointment_payload.get("state")
+                    or appointment_payload.get("appointment_state")
+                )
+
+                if isinstance(raw_status, dict):
+                    raw_status = raw_status.get("name") or raw_status.get("status")
+
+                return str(raw_status or "").strip()
+
+            def is_paused_status(status_value: str) -> bool:
+                status_normalized = str(status_value or "").strip().lower().replace("_", " ").replace("-", " ")
+                return status_normalized in {
+                    "pause",
+                    "paused",
+                    "postpone",
+                    "postponed",
+                    "on hold",
+                    "hold",
+                    "paused appointment",
+                    "مؤجل",
+                    "مؤجل",
+                    "تاجيل",
+                    "تأجيل",
+                }
+
+            def extract_check_next_appointment(response_payload: dict) -> dict:
+                if not isinstance(response_payload, dict):
+                    return {}
+                data = response_payload.get("data")
+                if isinstance(data, dict):
+                    appointment_payload = data.get("appointment")
+                    if isinstance(appointment_payload, dict):
+                        return appointment_payload
+                    # Some APIs return the appointment directly under data
+                    if extract_appointment_id(data):
+                        return data
+                return {}
+
+            def extract_customer_appointments(response_payload: dict) -> list:
+                if not isinstance(response_payload, dict):
+                    return []
+                data = response_payload.get("data")
+                if isinstance(data, list):
+                    return [item for item in data if isinstance(item, dict)]
+                if isinstance(data, dict):
+                    if isinstance(data.get("appointments"), list):
+                        return [item for item in data.get("appointments", []) if isinstance(item, dict)]
+                    if isinstance(data.get("data"), list):
+                        return [item for item in data.get("data", []) if isinstance(item, dict)]
+                    appointment_payload = data.get("appointment")
+                    if isinstance(appointment_payload, dict):
+                        return [appointment_payload]
+                    if extract_appointment_id(data):
+                        return [data]
+                return []
+
+            def detect_change_request_intent(user_text: str) -> bool:
+                text = str(user_text or "").strip().lower()
+                if not text:
+                    return False
+
+                change_patterns = [
+                    r"\b(reschedule|rescheduling|postpone|postponing|push back|move appointment|change appointment|shift appointment)\b",
+                    r"\b(reporter|decaler|décaler|deplacer|déplacer|changer rendez[- ]?vous)\b",
+                    r"(تأجيل|اجل|أجل|أجّل|تغيير الموعد|غير الموعد|غيّر الموعد|نقل الموعد|تبديل الموعد|موعد تاني|موعد اخر|موعد آخر)",
+                    r"\b(2ajel|ajjel|ghayer el maw3ed|ghayer maw3ed|postpone el maw3ed|reschedule el maw3ed)\b",
+                ]
+                return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns)
+
+            async def find_paused_appointment_id(phone_to_lookup: str):
+                nonlocal check_next_appointment_result
+                normalized_phone = normalize_phone_for_lookup(phone_to_lookup)
+                if not normalized_phone:
+                    return None
+
+                if normalized_phone in paused_appointment_lookup_cache:
+                    return paused_appointment_lookup_cache[normalized_phone]
+
+                paused_appointment_id = None
+
+                # First check the dedicated "next appointment" endpoint.
+                try:
+                    next_result = await api_integrations.check_next_appointment(phone=normalized_phone)
+                    if isinstance(next_result, dict) and next_result.get("success"):
+                        check_next_appointment_result = next_result
+                        next_appointment_payload = extract_check_next_appointment(next_result)
+                        if is_paused_status(extract_appointment_status(next_appointment_payload)):
+                            paused_appointment_id = extract_appointment_id(next_appointment_payload)
+                except Exception as pause_next_error:
+                    print(f"WARNING: Paused guard check_next_appointment failed for {normalized_phone}: {pause_next_error}")
+
+                # Fallback: scan all customer appointments for paused records.
+                if not paused_appointment_id:
+                    try:
+                        customer_appointments = await api_integrations.get_customer_appointments(phone=normalized_phone)
+                        if isinstance(customer_appointments, dict) and customer_appointments.get("success"):
+                            for appointment_payload in extract_customer_appointments(customer_appointments):
+                                if is_paused_status(extract_appointment_status(appointment_payload)):
+                                    paused_appointment_id = extract_appointment_id(appointment_payload)
+                                    if paused_appointment_id:
+                                        break
+                    except Exception as pause_list_error:
+                        print(f"WARNING: Paused guard get_customer_appointments failed for {normalized_phone}: {pause_list_error}")
+
+                paused_appointment_lookup_cache[normalized_phone] = paused_appointment_id
+                return paused_appointment_id
 
             def collect_user_datetime_text(context_messages: list, latest_user_input: str) -> str:
                 """
@@ -309,6 +846,91 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
                 all_user_text_for_date = collect_user_datetime_text(current_context_messages, user_input)
+                user_requested_change = detect_change_request_intent(all_user_text_for_date) or is_reschedule_intent
+                forced_update_appointment_id = None
+                booking_state = config.user_booking_state[user_id]
+
+                # Keep pricing args and persisted booking state in sync.
+                _merge_pricing_args_with_booking_state(
+                    function_name=function_name,
+                    function_args=function_args,
+                    booking_state=booking_state,
+                    current_gender=current_gender,
+                    user_input=user_input,
+                )
+
+                # Pricing requests for certain services must include body part selection.
+                if function_name == "get_pricing_details":
+                    service_id_for_pricing = _safe_int(function_args.get("service_id"))
+                    normalized_body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
+                    if normalized_body_part_ids:
+                        function_args["body_part_ids"] = normalized_body_part_ids
+                    if (
+                        service_id_for_pricing in body_part_required_service_ids
+                        and not normalized_body_part_ids
+                    ):
+                        print("SAFETY: Missing body_part_ids for pricing tool call. Asking for body area.")
+                        parsed_response = {
+                            "action": "ask_for_details_for_booking",
+                            "bot_reply": _pricing_missing_details_reply(current_preferred_lang, "body_part"),
+                            "detected_language": current_preferred_lang,
+                            "detected_gender": current_gender,
+                            "current_gender_from_config": current_gender,
+                        }
+                        return parsed_response
+
+                # SAFETY GUARD: Reschedule intent must never route to working-hours tool.
+                if function_name == "get_clinic_hours" and (is_reschedule_intent or user_requested_change):
+                    phone_for_reschedule = (
+                        function_args.get("phone")
+                        or customer_phone_clean
+                        or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                        or user_id
+                    )
+                    print(
+                        f"SAFETY: Re-routing get_clinic_hours -> check_next_appointment for reschedule intent (phone={phone_for_reschedule})."
+                    )
+                    function_name = "check_next_appointment"
+                    function_args = {"phone": phone_for_reschedule}
+
+                # SAFETY GUARD: If a paused appointment exists and user asks to change/reschedule,
+                # never allow create_appointment. Force update_appointment_date.
+                if function_name == "create_appointment" and user_requested_change:
+                    phone_for_pause_guard = normalize_phone_for_lookup(
+                        function_args.get("phone")
+                        or customer_phone_clean
+                        or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                        or user_id
+                    )
+
+                    # Prevent hallucinated date/time for change requests too.
+                    if not text_mentions_datetime(all_user_text_for_date):
+                        print("SAFETY: Change request detected without explicit date/time. Asking user for date/time.")
+                        parsed_response = {
+                            "action": "ask_for_details_for_booking",
+                            "bot_reply": "What new date and time would you like for your appointment?" if current_preferred_lang == "en" else
+                                        "أكيد، شو التاريخ والوقت الجديد يلي بدك ياه لموعدك؟" if current_preferred_lang == "ar" else
+                                        "Bien sûr, quelle nouvelle date et heure souhaitez-vous pour votre rendez-vous?" if current_preferred_lang == "fr" else
+                                        "أكيد، shu el tarekh w el wa2et el jdid li badak yeh lal maw3ad?",
+                            "detected_language": current_preferred_lang,
+                            "detected_gender": current_gender,
+                            "current_gender_from_config": current_gender
+                        }
+                        return parsed_response
+
+                    paused_appointment_id = await find_paused_appointment_id(phone_for_pause_guard)
+                    if paused_appointment_id:
+                        requested_date = function_args.get("date")
+                        function_name = "update_appointment_date"
+                        function_args = {
+                            "appointment_id": paused_appointment_id,
+                            "phone": phone_for_pause_guard,
+                            "date": requested_date,
+                        }
+                        forced_update_appointment_id = paused_appointment_id
+                        print(
+                            f"SAFETY: Converted create_appointment -> update_appointment_date for paused appointment_id={paused_appointment_id}"
+                        )
                 
                 # --- NEW LOGIC: Pre-process date/time for create_appointment tool call ---
                 if function_name == "create_appointment":
@@ -642,6 +1264,26 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     function_args["service_id"] = function_args.get("service_id", config.DEFAULT_SERVICE_ID)
                     function_args["machine_id"] = function_args.get("machine_id", config.DEFAULT_MACHINE_ID)
                     function_args["branch_id"] = function_args.get("branch_id", config.DEFAULT_BRANCH_ID)
+                    _remember_booking_selection(user_id, function_args)
+
+                    selected_service_id = _safe_int(function_args.get("service_id"))
+                    selected_body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
+                    if selected_body_part_ids:
+                        function_args["body_part_ids"] = selected_body_part_ids
+                        _remember_booking_selection(user_id, function_args)
+                    if (
+                        selected_service_id in body_part_required_service_ids
+                        and not selected_body_part_ids
+                    ):
+                        print("SAFETY: create_appointment called without body_part_ids for body-part-required service.")
+                        parsed_response = {
+                            "action": "ask_for_details_for_booking",
+                            "bot_reply": _pricing_missing_details_reply(current_preferred_lang, "body_part"),
+                            "detected_language": current_preferred_lang,
+                            "detected_gender": current_gender,
+                            "current_gender_from_config": current_gender,
+                        }
+                        return parsed_response
 
                     # Date normalization and intent alignment (+0200)
                     normalize_tool_date(function_name, function_args, all_user_text_for_date)
@@ -653,13 +1295,46 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         del function_args['name']
 
                 if function_name == "update_appointment_date":
+                    if user_requested_change and not text_mentions_datetime(all_user_text_for_date):
+                        print("SAFETY: update_appointment_date requested without explicit date/time. Asking user for new date/time.")
+                        parsed_response = {
+                            "action": "ask_for_details_for_booking",
+                            "bot_reply": "Sure, what new date and time would you like for your appointment?" if current_preferred_lang == "en" else
+                                        "أكيد، شو التاريخ والوقت الجديد يلي بدك ياه لموعدك؟" if current_preferred_lang == "ar" else
+                                        "Bien sûr, quelle nouvelle date et heure souhaitez-vous pour votre rendez-vous?" if current_preferred_lang == "fr" else
+                                        "أكيد، shu el tarekh w el wa2et el jdid li badak yeh lal maw3ad?",
+                            "detected_language": current_preferred_lang,
+                            "detected_gender": current_gender,
+                            "current_gender_from_config": current_gender
+                        }
+                        return parsed_response
+
+                    phone_for_pause_guard = normalize_phone_for_lookup(
+                        function_args.get("phone")
+                        or customer_phone_clean
+                        or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                        or user_id
+                    )
+
+                    if user_requested_change and phone_for_pause_guard:
+                        paused_appointment_id = await find_paused_appointment_id(phone_for_pause_guard)
+                        if paused_appointment_id and function_args.get("appointment_id") != paused_appointment_id:
+                            print(
+                                f"SAFETY: Overriding update_appointment_date appointment_id with paused appointment_id={paused_appointment_id}"
+                            )
+                            function_args["appointment_id"] = paused_appointment_id
+                            forced_update_appointment_id = paused_appointment_id
+
+                    if phone_for_pause_guard and not function_args.get("phone"):
+                        function_args["phone"] = phone_for_pause_guard
+
                     normalize_tool_date(function_name, function_args, all_user_text_for_date)
 
                 # --- FIX: Auto-chain appointment_id from check_next_appointment to update_appointment_date ---
                 # When GPT calls both tools together, it can't know the real appointment_id until check_next_appointment returns.
                 # This code automatically uses the correct appointment_id from the check result.
-                if function_name == "update_appointment_date" and check_next_appointment_result:
-                    actual_appointment_id = check_next_appointment_result.get("data", {}).get("appointment", {}).get("id")
+                if function_name == "update_appointment_date" and check_next_appointment_result and not forced_update_appointment_id:
+                    actual_appointment_id = extract_appointment_id(extract_check_next_appointment(check_next_appointment_result))
                     if actual_appointment_id:
                         gpt_provided_id = function_args.get("appointment_id")
                         if gpt_provided_id != actual_appointment_id:
@@ -667,6 +1342,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             function_args["appointment_id"] = actual_appointment_id
                         else:
                             print(f"DEBUG: appointment_id already correct: {actual_appointment_id}")
+
+                _remember_booking_selection(user_id, function_args)
 
                 if hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
                     function_to_call = getattr(api_integrations, function_name)
@@ -681,12 +1358,31 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             check_next_appointment_result = tool_output
                             print(f"DEBUG: Stored check_next_appointment result for auto-chaining")
 
+                        if function_name == "get_pricing_details" and isinstance(tool_output, dict) and tool_output.get("success"):
+                            latest_pricing_payload = tool_output.get("data")
+                            config.user_booking_state[user_id]["last_pricing_payload"] = latest_pricing_payload
+                            print("💰 Synced pricing payload captured from get_pricing_details")
+
                         # 📊 ANALYTICS: Track service when appointment is created
                         if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics
 
                             # Get service and machine names from API response
-                            appointment_data = tool_output.get("data", {}).get("appointment") or {}
+                            raw_data_payload = tool_output.get("data", {})
+                            if isinstance(raw_data_payload, dict):
+                                appointment_data = raw_data_payload.get("appointment") or {}
+                                pricing_from_appointment = (
+                                    raw_data_payload.get("pricing")
+                                    or appointment_data.get("pricing")
+                                    or appointment_data.get("price_details")
+                                )
+                            else:
+                                appointment_data = {}
+                                pricing_from_appointment = None
+                            if pricing_from_appointment:
+                                latest_pricing_payload = pricing_from_appointment
+                                config.user_booking_state[user_id]["last_pricing_payload"] = pricing_from_appointment
+                                print("💰 Synced pricing payload captured from create_appointment")
                             service_info = appointment_data.get("service") or {}
                             service_name = service_info.get("name", "unknown_service") if isinstance(service_info, dict) else str(service_info)
                             machine_info = appointment_data.get("machine")
@@ -785,6 +1481,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Ensure current_gender_from_config in the output reflects the *actual* config value
         # This is critical for GPT to "see" the current state of the bot's knowledge about gender.
         parsed_response['current_gender_from_config'] = current_gender
+
+        # SAFETY GUARD: For reschedule intent, block fallback drift into clinic-hours info.
+        if is_reschedule_intent:
+            action_value = str(parsed_response.get("action", "")).strip().lower()
+            reply_value = parsed_response.get("bot_reply", "")
+            if action_value in {"answer_question", "provide_info", "normal_chat", "unknown_query"} and looks_like_working_hours_reply(reply_value):
+                print("SAFETY: Working-hours style reply detected for reschedule intent. Replacing with reschedule prompt.")
+                reschedule_fallback = {
+                    "ar": "أكيد. خلينا نكمّل تأجيل الموعد. رح أتأكد من موعدك الحالي وبعدين نحدد الوقت الجديد المناسب لليوم.",
+                    "en": "Sure. Let's continue with rescheduling your appointment. I'll check your current booking, then we can set the new time for today.",
+                    "fr": "Bien sûr. Continuons le report de votre rendez-vous. Je vais vérifier votre réservation actuelle, puis fixer la nouvelle heure pour aujourd'hui.",
+                    "franco": "أكيد. خلينا نكمّل تأجيل الموعد. رح أتأكد من موعدك الحالي وبعدين نحدد الوقت الجديد المناسب لليوم.",
+                }
+                parsed_response["action"] = "ask_for_details_for_booking"
+                parsed_response["bot_reply"] = reschedule_fallback.get(current_preferred_lang, reschedule_fallback["en"])
 
         # CRITICAL FIX: Override GPT's action if it tries to ask for gender when we already know it
         # GPT sometimes ignores the instruction that gender is already known and tries to ask anyway
@@ -962,6 +1673,60 @@ Return JSON with "action" and "bot_reply" fields."""
         
         if "action" not in parsed_response or "bot_reply" not in parsed_response:
             raise ValueError("GPT response missing required fields (action or bot_reply)")
+
+        # ============================================================
+        # PRICING SYNC: WhatsApp price must mirror system price exactly
+        # ============================================================
+        if is_price_question:
+            booking_state = config.user_booking_state[user_id]
+            pricing_payload_to_send = latest_pricing_payload
+            service_id_for_sync = _safe_int(booking_state.get("service_id"))
+            if service_id_for_sync is None:
+                inferred_service = _infer_service_id_for_pricing(user_input, current_gender, booking_state)
+                if inferred_service is not None:
+                    booking_state["service_id"] = inferred_service
+                    service_id_for_sync = inferred_service
+
+            if pricing_payload_to_send is None:
+                selected_body_parts = _normalize_body_part_ids(booking_state.get("body_part_ids"))
+
+                if service_id_for_sync is None:
+                    parsed_response["action"] = "ask_for_details_for_booking"
+                    parsed_response["bot_reply"] = _pricing_missing_details_reply(current_preferred_lang, "service")
+                elif service_id_for_sync in body_part_required_service_ids and not selected_body_parts:
+                    parsed_response["action"] = "ask_for_details_for_booking"
+                    parsed_response["bot_reply"] = _pricing_missing_details_reply(current_preferred_lang, "body_part")
+                else:
+                    pricing_call_args = {"service_id": service_id_for_sync}
+                    machine_id_for_sync = _safe_int(booking_state.get("machine_id"))
+                    branch_id_for_sync = _safe_int(booking_state.get("branch_id"))
+                    if machine_id_for_sync is not None:
+                        pricing_call_args["machine_id"] = machine_id_for_sync
+                    if selected_body_parts:
+                        pricing_call_args["body_part_ids"] = selected_body_parts
+                    if branch_id_for_sync is not None:
+                        pricing_call_args["branch_id"] = branch_id_for_sync
+
+                    try:
+                        pricing_result = await api_integrations.get_pricing_details(**pricing_call_args)
+                        if isinstance(pricing_result, dict) and pricing_result.get("success"):
+                            pricing_payload_to_send = pricing_result.get("data")
+                            booking_state["last_pricing_payload"] = pricing_payload_to_send
+                            _remember_booking_selection(user_id, pricing_call_args)
+                        else:
+                            parsed_response["action"] = "ask_for_details_for_booking"
+                            parsed_response["bot_reply"] = _pricing_missing_details_reply(current_preferred_lang, "unavailable")
+                    except Exception as pricing_sync_error:
+                        print(f"⚠️ Pricing sync fetch failed: {pricing_sync_error}")
+                        parsed_response["action"] = "ask_for_details_for_booking"
+                        parsed_response["bot_reply"] = _pricing_missing_details_reply(current_preferred_lang, "unavailable")
+
+            if pricing_payload_to_send is not None:
+                parsed_response["action"] = "answer_question"
+                parsed_response["bot_reply"] = _build_exact_pricing_reply(
+                    current_preferred_lang,
+                    pricing_payload_to_send,
+                )
 
         # ============================================================
         # LANGUAGE VALIDATION: Regenerate if response is in wrong language
