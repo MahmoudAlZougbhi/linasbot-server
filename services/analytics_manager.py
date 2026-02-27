@@ -4,7 +4,7 @@ Analytics Manager
 Provides a thin manager layer around event aggregation.
 """
 
-from typing import Dict
+from typing import Dict,any
 
 from services.analytics_events import analytics
 
