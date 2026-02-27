@@ -7,8 +7,16 @@ Includes SSE (Server-Sent Events) for real-time dashboard updates.
 
 import asyncio
 import json
+from datetime import datetime
 from fastapi import Request
 from fastapi.responses import StreamingResponse
+
+
+def json_serializer(obj):
+    """Custom JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 from modules.core import app
 from modules.models import (
@@ -42,7 +50,7 @@ async def sse_event_generator(request: Request):
         # Send current conversations immediately
         try:
             conversations = await live_chat_service.get_active_conversations()
-            yield f"event: conversations\ndata: {json.dumps({'conversations': conversations, 'total': len(conversations)})}\n\n"
+            yield f"event: conversations\ndata: {json.dumps({'conversations': conversations, 'total': len(conversations)}, default=json_serializer)}\n\n"
         except Exception as e:
             print(f"⚠️ SSE: Error sending initial conversations: {e}")
 
@@ -55,9 +63,13 @@ async def sse_event_generator(request: Request):
             try:
                 # Wait for an event with timeout (for heartbeat)
                 event = await asyncio.wait_for(client_queue.get(), timeout=30.0)
-                yield f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
+                print(f"📡 SSE: Got event from queue: {event['type']}")
+                event_data = json.dumps(event['data'], default=json_serializer)
+                print(f"📡 SSE: Yielding event to client: {event['type']}")
+                yield f"event: {event['type']}\ndata: {event_data}\n\n"
             except asyncio.TimeoutError:
                 # Send heartbeat to keep connection alive
+                print(f"📡 SSE: Sending heartbeat")
                 yield f"event: heartbeat\ndata: {json.dumps({'timestamp': asyncio.get_event_loop().time()})}\n\n"
     except asyncio.CancelledError:
         pass
@@ -70,7 +82,9 @@ async def broadcast_sse_event(event_type: str, data: dict):
     Broadcast an event to all connected SSE clients.
     Called when new messages arrive or conversations change.
     """
+    print(f"📡 SSE broadcast called: {event_type}, clients: {len(_sse_clients)}")
     if not _sse_clients:
+        print(f"📡 SSE: No clients connected, skipping broadcast")
         return
 
     event = {"type": event_type, "data": data}
@@ -79,7 +93,9 @@ async def broadcast_sse_event(event_type: str, data: dict):
     for client_queue in _sse_clients:
         try:
             client_queue.put_nowait(event)
-        except Exception:
+            print(f"📡 SSE: Event queued successfully for client")
+        except Exception as e:
+            print(f"📡 SSE: Error queuing event: {e}")
             disconnected.add(client_queue)
 
     # Clean up disconnected clients

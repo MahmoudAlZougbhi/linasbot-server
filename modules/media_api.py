@@ -4,12 +4,49 @@ Media API module: Audio and media proxy endpoints
 Handles proxying external audio URLs to avoid CORS issues in the browser.
 """
 
+import os
 import httpx
 from urllib.parse import unquote
-from fastapi import Query
-from fastapi.responses import Response
+from fastapi import Query, Request
+from fastapi.responses import Response, FileResponse
 
 from modules.core import app
+
+# Directory for locally served media files
+MEDIA_SERVE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "audio")
+os.makedirs(MEDIA_SERVE_DIR, exist_ok=True)
+
+
+@app.api_route("/api/media/serve/{filename}", methods=["GET", "HEAD"])
+async def serve_media_file(filename: str, request: Request):
+    """Serve locally stored audio/media files for WhatsApp delivery"""
+    file_path = os.path.join(MEDIA_SERVE_DIR, filename)
+    if not os.path.exists(file_path):
+        return Response(content="File not found", status_code=404)
+
+    # Determine content type
+    if filename.endswith(".ogg"):
+        media_type = "audio/ogg"
+    elif filename.endswith(".webm"):
+        media_type = "audio/webm"
+    elif filename.endswith(".mp3"):
+        media_type = "audio/mpeg"
+    else:
+        media_type = "application/octet-stream"
+
+    file_size = os.path.getsize(file_path)
+
+    if request.method == "HEAD":
+        return Response(
+            status_code=200,
+            headers={
+                "Content-Type": media_type,
+                "Content-Length": str(file_size),
+                "Accept-Ranges": "bytes",
+            }
+        )
+
+    return FileResponse(file_path, media_type=media_type)
 
 
 @app.get("/api/media/audio")
@@ -20,8 +57,8 @@ async def proxy_audio(url: str = Query(..., description="The audio URL to proxy"
     with proper headers for browser playback.
     """
     try:
-        # Decode the URL if it was encoded
-        decoded_url = unquote(url)
+        # Use URL as-is (FastAPI already decodes query params once)
+        decoded_url = url
 
         # Validate URL to prevent SSRF attacks
         if not decoded_url.startswith(('https://', 'http://')):

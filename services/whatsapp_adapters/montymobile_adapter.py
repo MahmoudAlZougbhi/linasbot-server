@@ -3,6 +3,7 @@ MontyMobile WhatsApp Adapter
 New Qiscus API endpoint using MontyMobile infrastructure
 """
 import json
+import time
 from typing import Dict, Any, Optional
 from .base_adapter import WhatsAppAdapter
 
@@ -22,9 +23,8 @@ class MontyMobileAdapter(WhatsAppAdapter):
         """
         super().__init__(api_token, tenant_id)  # Use tenant_id as phone_number_id equivalent
         
-        # MontyMobile API configuration - UPDATED TO NEW ENDPOINT
-        # Force new URL (ignore .env for now)
-        self.base_url = 'https://omni-apis.montymobile.com'
+        # MontyMobile API configuration - NEW WHATSAPP NOTIFICATION ENDPOINT
+        self.base_url = 'https://whatsapp-notification.montymobile.com'
         self.tenant_id = tenant_id
         self.api_id = api_id  # Keep for backward compatibility but not used in new endpoint
         self.source_number = source_number
@@ -54,7 +54,7 @@ class MontyMobileAdapter(WhatsAppAdapter):
             message: Text message to send
         """
         # NEW ENDPOINT - Updated from testing
-        url = f"{self.base_url}/notification/api/v2/WhatsappApi/send-session"
+        url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
         
         # Convert room_id to phone number if needed
         phone_number = self._get_phone_from_room_id(to_number)
@@ -70,30 +70,19 @@ class MontyMobileAdapter(WhatsAppAdapter):
         }
         
         try:
-            print(f"\n{'='*80}")
-            print(f"🔄 MONTYMOBILE: Sending text message")
-            print(f"{'='*80}")
-            print(f"📤 TO: {phone_number}")
-            print(f"📤 FROM (source): {self.source_number}")
-            print(f"📤 URL: {url}")
-            print(f"📤 Headers: {json.dumps(self.headers, indent=2)}")
-            print(f"📤 Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
-            print(f"{'='*80}\n")
+            import os
+            if os.getenv("DEBUG_MONTYMOBILE", "false").lower() == "true":
+                print(f"🔄 MONTYMOBILE: Sending to {phone_number[:6]}***")
             
+            t0 = time.time()
             response = await self.client.post(url, headers=self.headers, json=payload)
-            
+            elapsed_ms = (time.time() - t0) * 1000
+
             response_text = response.text
-            print(f"\n{'='*80}")
-            print(f"📥 MONTYMOBILE: Response received")
-            print(f"{'='*80}")
-            print(f"📥 Status Code: {response.status_code}")
-            print(f"📥 Response Text: {response_text}")
-            print(f"{'='*80}\n")
             
             # Parse response
             try:
                 result = response.json()
-                print(f"📥 Parsed JSON: {json.dumps(result, indent=2, ensure_ascii=False)}")
                 
                 # Check if successful based on MontyMobile response format
                 if response.status_code == 200 and result.get("success"):
@@ -136,7 +125,7 @@ class MontyMobileAdapter(WhatsAppAdapter):
             caption: Optional caption for the image
         """
         # NEW ENDPOINT
-        url = f"{self.base_url}/notification/api/v2/WhatsappApi/send-session"
+        url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
         
         # Convert room_id to phone number if needed
         phone_number = self._get_phone_from_room_id(to_number)
@@ -158,14 +147,17 @@ class MontyMobileAdapter(WhatsAppAdapter):
             print(f"📤 Caption: {caption}")
             print(f"📤 Payload: {json.dumps(payload, indent=2)}")
             
+            t0 = time.time()
             response = await self.client.post(url, headers=self.headers, json=payload)
-            
+            elapsed_ms = (time.time() - t0) * 1000
+
+            print(f"⏱️  MONTYMOBILE IMAGE API TOOK: {elapsed_ms:.0f}ms")
             print(f"📥 Status: {response.status_code}")
-            
+
             try:
                 result = response.json()
                 print(f"📥 Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
-                
+
                 if response.status_code == 200 and result.get("success"):
                     print(f"✅ Image sent successfully")
                     return {"success": True, "data": result}
@@ -185,54 +177,66 @@ class MontyMobileAdapter(WhatsAppAdapter):
             traceback.print_exc()
             return {"success": False, "error": str(e)}
     
-    async def send_audio_message(self, to_number: str, audio_url: str) -> Dict[str, Any]:
+    async def send_audio_message(self, to_number: str, audio_url: str, audio_base64: str = None) -> Dict[str, Any]:
         """
-        Send an audio message via MontyMobile
-        
+        Send an audio message via MontyMobile.
+        Uses the audio URL (should be Firebase/Google CDN URL for reachability).
+
         Args:
             to_number: Destination phone number (can be room_id or phone)
-            audio_url: URL of the audio file
+            audio_url: URL of the audio file (Firebase Storage URL)
+            audio_base64: Optional base64-encoded audio data (unused, kept for interface compat)
         """
-        # NEW ENDPOINT
-        url = f"{self.base_url}/notification/api/v2/WhatsappApi/send-session"
-        
-        # Convert room_id to phone number if needed
         phone_number = self._get_phone_from_room_id(to_number)
-        
-        # NEW PAYLOAD FORMAT - No apiId
-        payload = {
-            "to": phone_number,
-            "type": "AUDIO",
-            "source": self.source_number,
-            "audio": {
-                "link": audio_url
-            }
-        }
-        
+        send_url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
+
         try:
             print(f"\n🔄 MONTYMOBILE: Sending audio to {phone_number}")
             print(f"📤 Audio URL: {audio_url}")
-            
-            response = await self.client.post(url, headers=self.headers, json=payload)
-            
+
+            # Attempt 1: Send as DOCUMENT type with link (AUDIO type doesn't deliver)
+            print(f"📤 Attempt 1: Sending as DOCUMENT with link...")
+            doc_payload = {
+                "to": phone_number,
+                "type": "DOCUMENT",
+                "source": self.source_number,
+                "document": {
+                    "link": audio_url,
+                    "filename": "voice_message.ogg"
+                }
+            }
+            t0 = time.time()
+            response = await self.client.post(send_url, headers=self.headers, json=doc_payload)
+            elapsed_ms = (time.time() - t0) * 1000
+            print(f"⏱️  MONTYMOBILE AUDIO API TOOK: {elapsed_ms:.0f}ms")
             print(f"📥 Status: {response.status_code}")
-            
             try:
                 result = response.json()
                 print(f"📥 Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
-                
                 if response.status_code == 200 and result.get("success"):
-                    print(f"✅ Audio sent successfully")
+                    print(f"✅ Audio sent as DOCUMENT type")
                     return {"success": True, "data": result}
-                else:
-                    print(f"❌ Audio send failed")
-                    return {"success": False, "error": result.get("message")}
             except json.JSONDecodeError:
-                if response.status_code == 200:
-                    return {"success": True, "message": "Audio sent"}
-                else:
-                    return {"success": False, "error": f"HTTP {response.status_code}"}
-                    
+                pass
+
+            # Attempt 3: Fallback to text with link
+            print(f"📤 Attempt 3: Fallback to text with link...")
+            text_payload = {
+                "to": phone_number,
+                "type": "TEXT",
+                "source": self.source_number,
+                "text": {
+                    "body": f"🎙️ Voice message: {audio_url}"
+                }
+            }
+            text_response = await self.client.post(send_url, headers=self.headers, json=text_payload)
+            print(f"📥 Text fallback status: {text_response.status_code}")
+
+            if text_response.status_code == 200:
+                return {"success": True, "message": "Audio sent as text link (fallback)", "method": "text_fallback"}
+            else:
+                return {"success": False, "error": "All audio send methods failed"}
+
         except Exception as e:
             print(f"❌ ERROR sending MontyMobile audio: {e}")
             import traceback
@@ -249,7 +253,7 @@ class MontyMobileAdapter(WhatsAppAdapter):
             filename: Optional filename for the document
         """
         # NEW ENDPOINT
-        url = f"{self.base_url}/notification/api/v2/WhatsappApi/send-session"
+        url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
         
         phone_number = self._get_phone_from_room_id(to_number)
         
@@ -321,12 +325,9 @@ class MontyMobileAdapter(WhatsAppAdapter):
         Expected similar structure to Qiscus but with MontyMobile specifics
         """
         try:
-            print(f"\n{'='*80}")
-            print(f"🔔 WEBHOOK RECEIVED - MontyMobile")
-            print(f"{'='*80}")
-            print(f"📥 Raw webhook data:")
-            print(json.dumps(webhook_data, indent=2, ensure_ascii=False))
-            print(f"{'='*80}\n")
+            import os
+            if os.getenv("DEBUG_MONTYMOBILE", "false").lower() == "true":
+                print(f"🔔 MontyMobile webhook: object={webhook_data.get('object', 'N/A')}")
             
             # MontyMobile sends Meta/WhatsApp Cloud API format
             # Check for Meta format first (most common)
@@ -413,9 +414,17 @@ class MontyMobileAdapter(WhatsAppAdapter):
         try:
             print(f"📥 Parsing Meta format webhook...")
             
-            # Navigate through Meta webhook structure
-            entry = webhook_data.get("entry", [])[0]
-            changes = entry.get("changes", [])[0]
+            # Navigate through Meta webhook structure (with bounds checking)
+            entry_list = webhook_data.get("entry", [])
+            if not entry_list:
+                print("❌ No entry in webhook")
+                return None
+            entry = entry_list[0]
+            changes_list = entry.get("changes", [])
+            if not changes_list:
+                print("❌ No changes in webhook entry")
+                return None
+            changes = changes_list[0]
             value = changes.get("value", {})
             
             # CRITICAL FIX: Check if this is a status update (not a message)

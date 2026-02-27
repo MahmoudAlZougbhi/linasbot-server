@@ -84,7 +84,7 @@ class UserService:
             "id": user_id,
             "email": user_data['email'].lower().strip(),
             "password": self._hash_password(user_data['password']),
-            "name": user_data.get('name') or user_data['email'].split('@')[0],
+            "name": user_data.get('name') or (user_data.get('email') or 'user@unknown').split('@')[0],
             "role": user_data.get('role', 'viewer'),
             "permissions": user_data.get('permissions'),  # Custom permission overrides
             "status": user_data.get('status', 'active'),

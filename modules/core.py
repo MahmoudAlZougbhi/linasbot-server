@@ -65,8 +65,10 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
-# Initialize HTTP client for WhatsApp API calls
-WHATSAPP_API_BASE_URL = "https://graph.facebook.com/v19.0/{}".format(WHATSAPP_PHONE_NUMBER_ID)
+# Initialize HTTP client for WhatsApp API calls (Meta provider only)
+# Avoids URL with "None" when Meta credentials are missing
+_phone_id = (str(WHATSAPP_PHONE_NUMBER_ID).strip() if WHATSAPP_PHONE_NUMBER_ID else "") or "0"
+WHATSAPP_API_BASE_URL = "https://graph.facebook.com/v19.0/{}".format(_phone_id)
 whatsapp_api_client = httpx.AsyncClient(base_url=WHATSAPP_API_BASE_URL)
 
 # Dashboard statistics tracking

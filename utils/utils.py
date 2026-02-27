@@ -259,7 +259,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
 
                 # 📡 Broadcast SSE event for real-time dashboard updates
                 try:
-                    from modules.live_chat_api import broadcast_sse_event
+                    from modules.live_chat_api import broadcast_sse_event, _sse_clients
+                    print(f"📡 SSE Broadcast: new_message for {user_id}, connected clients: {len(_sse_clients)}")
                     asyncio.create_task(broadcast_sse_event("new_message", {
                         "user_id": user_id,
                         "conversation_id": conversation_id,
@@ -268,7 +269,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         "phone": phone_number
                     }))
                 except Exception as sse_err:
-                    pass  # Silent fail - SSE is optional enhancement
+                    print(f"❌ SSE Broadcast error: {sse_err}")
             else:
                 # Conversation not found - create new one
                 message_data = {
@@ -299,7 +300,34 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
                 print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
         else:
-            # No conversation_id - create new conversation
+            # No conversation_id — try to find the customer's existing conversation
+            # before creating a brand-new one.  This ensures smart messages land
+            # inside the same conversation the bot reads when the customer replies.
+            resolved_conversation_id = None
+
+            # 1) Check in-memory cache
+            cached_id = config.user_data_whatsapp.get(user_id, {}).get('current_conversation_id')
+            if cached_id:
+                try:
+                    cached_ref = conversations_collection_for_user.document(cached_id)
+                    cached_snap = await asyncio.to_thread(cached_ref.get)
+                    if cached_snap.exists:
+                        resolved_conversation_id = cached_id
+                except Exception:
+                    pass
+
+            # 2) Query Firestore for the latest conversation for this user
+            if not resolved_conversation_id:
+                try:
+                    query = conversations_collection_for_user.order_by(
+                        "last_updated", direction=firestore.Query.DESCENDING
+                    ).limit(1)
+                    docs = await asyncio.to_thread(lambda: list(query.stream()))
+                    if docs:
+                        resolved_conversation_id = docs[0].id
+                except Exception as q_err:
+                    print(f"⚠️ Could not query existing conversations: {q_err}")
+
             message_data = {
                 "role": role,
                 "text": text,
@@ -312,33 +340,67 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     if key in metadata:
                         message_data[key] = metadata[key]
 
-            # ✅ Use asyncio.to_thread to prevent blocking
-            _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
-                "user_id": user_id,
-                "customer_info": customer_info,
-                "messages": [message_data],
-                "timestamp": datetime.datetime.now(),
-                "status": "active",
-                "sentiment": "neutral",
-                "human_takeover_active": False,
-                "last_updated": datetime.datetime.now()
-            })
-            if user_id not in config.user_data_whatsapp:
-                config.user_data_whatsapp[user_id] = {}
-            config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
-            print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
+            if resolved_conversation_id:
+                # Append to existing conversation
+                doc_ref = conversations_collection_for_user.document(resolved_conversation_id)
+                doc_snap = await asyncio.to_thread(doc_ref.get)
+                current_messages = doc_snap.to_dict().get('messages', []) if doc_snap.exists else []
+                current_messages.append(message_data)
+                # Reopen conversation if it was resolved/archived - any new message should make it active
+                await asyncio.to_thread(doc_ref.update, {
+                    "messages": current_messages,
+                    "customer_info": customer_info,
+                    "last_updated": datetime.datetime.now(),
+                    "status": "active",  # Always reopen on new message
+                    "human_takeover_active": False,  # Reset to bot handling
+                    "operator_id": None  # Clear operator assignment
+                })
+                if user_id not in config.user_data_whatsapp:
+                    config.user_data_whatsapp[user_id] = {}
+                config.user_data_whatsapp[user_id]['current_conversation_id'] = resolved_conversation_id
+                print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {user_id} (total: {len(current_messages)})")
 
-            # 📡 Broadcast SSE event for new conversation
-            try:
-                from modules.live_chat_api import broadcast_sse_event
-                asyncio.create_task(broadcast_sse_event("new_conversation", {
+                # 📡 Broadcast SSE event
+                try:
+                    from modules.live_chat_api import broadcast_sse_event
+                    asyncio.create_task(broadcast_sse_event("new_message", {
+                        "user_id": user_id,
+                        "conversation_id": resolved_conversation_id,
+                        "role": role,
+                        "text": text[:100] + "..." if len(text) > 100 else text,
+                        "phone": phone_number
+                    }))
+                except Exception:
+                    pass
+            else:
+                # No existing conversation found — create a new one
+                # ✅ Use asyncio.to_thread to prevent blocking
+                _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": user_id,
-                    "conversation_id": new_doc_ref.id,
-                    "phone": phone_number,
-                    "name": customer_name
-                }))
-            except Exception as sse_err:
-                pass  # Silent fail - SSE is optional enhancement
+                    "customer_info": customer_info,
+                    "messages": [message_data],
+                    "timestamp": datetime.datetime.now(),
+                    "status": "active",
+                    "sentiment": "neutral",
+                    "human_takeover_active": False,
+                    "last_updated": datetime.datetime.now()
+                })
+                if user_id not in config.user_data_whatsapp:
+                    config.user_data_whatsapp[user_id] = {}
+                config.user_data_whatsapp[user_id]['current_conversation_id'] = new_doc_ref.id
+                print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
+
+                # 📡 Broadcast SSE event for new conversation
+                try:
+                    from modules.live_chat_api import broadcast_sse_event
+                    asyncio.create_task(broadcast_sse_event("new_conversation", {
+                        "user_id": user_id,
+                        "conversation_id": new_doc_ref.id,
+                        "phone": phone_number,
+                        "name": customer_name
+                    }))
+                except Exception:
+                    pass
 
     except Exception as e:
         print(f"❌ ERROR saving conversation message to Firestore for user {user_id}: {e}")
@@ -433,14 +495,14 @@ async def update_voice_message_with_transcription(user_id: str, conversation_id:
 
 def convert_webm_to_opus(base64_webm: str) -> tuple[str, str]:
     """
-    Convert WebM audio (base64) to Opus format (base64).
-    Opus is the codec WhatsApp/Qiscus prefers for voice messages.
-    
+    Convert WebM audio (base64) to OGG/Opus format (base64).
+    WhatsApp requires Opus codec wrapped in OGG container (audio/ogg).
+
     Args:
         base64_webm: Base64-encoded WebM audio data
-        
+
     Returns:
-        Tuple of (base64_opus_data, file_name_with_opus_extension)
+        Tuple of (base64_ogg_data, file_name_with_ogg_extension)
     """
     try:
         import base64
@@ -458,27 +520,27 @@ def convert_webm_to_opus(base64_webm: str) -> tuple[str, str]:
         webm_audio = AudioSegment.from_file(io.BytesIO(webm_bytes), format="webm")
         print(f"   ✅ WebM loaded: {len(webm_audio)}ms duration, {webm_audio.frame_rate}Hz sample rate")
         
-        # Export as Opus (pydub will use ffmpeg for this)
-        opus_buffer = io.BytesIO()
+        # Export as OGG with Opus codec (WhatsApp requires Opus in OGG container)
+        ogg_buffer = io.BytesIO()
         webm_audio.export(
-            opus_buffer,
-            format="opus",
+            ogg_buffer,
+            format="ogg",
             codec="libopus",
             bitrate="128k",
             parameters=["-vbr", "on", "-compression_level", "10"]
         )
-        opus_bytes = opus_buffer.getvalue()
-        print(f"   ✅ Converted to Opus: {len(opus_bytes)} bytes")
-        
+        ogg_bytes = ogg_buffer.getvalue()
+        print(f"   ✅ Converted to OGG/Opus: {len(ogg_bytes)} bytes")
+
         # Encode back to base64
-        base64_opus = base64.b64encode(opus_bytes).decode('utf-8')
-        
-        # Create new filename with .opus extension
+        base64_ogg = base64.b64encode(ogg_bytes).decode('utf-8')
+
+        # Create new filename with .ogg extension (WhatsApp compatible)
         timestamp = int(time.time())
-        file_name = f"voice_{timestamp}.opus"
-        
+        file_name = f"voice_{timestamp}.ogg"
+
         print(f"   ✅ Conversion complete! New file: {file_name}")
-        return base64_opus, file_name
+        return base64_ogg, file_name
         
     except Exception as e:
         print(f"❌ ERROR converting WebM to Opus: {e}")
@@ -491,64 +553,70 @@ def convert_webm_to_opus(base64_webm: str) -> tuple[str, str]:
 
 async def upload_base64_to_firebase_storage(base64_data: str, file_name: str, file_type: str = "audio/webm") -> str:
     """
-    Uploads base64 data to Firebase Storage and returns the public URL.
-    
+    Uploads base64 media to Firebase Storage and returns a public download URL.
+    Firebase URLs are on Google's CDN and accessible by external services like MontyMobile.
+
     Args:
         base64_data: The base64-encoded file data
-        file_name: Name for the file in storage (e.g., "voice_message_123.webm")
+        file_name: Name for the file (e.g., "voice_message_123.ogg")
         file_type: MIME type of the file (default: "audio/webm")
-    
+
     Returns:
-        The public URL of the uploaded file, or None if upload fails
+        The Firebase Storage download URL, or local serve URL as fallback
     """
     try:
-        from firebase_admin import storage, credentials
         import base64
         import uuid
-        
-        # Try to get bucket from Firebase config or use default
-        try:
-            # Get default bucket from firebase_admin (usually from service account)
-            app = firebase_admin.get_app()
-            bucket = storage.bucket()  # Uses default bucket from app config
-            print(f"📦 Using default Firebase Storage bucket: {bucket.name}")
-        except Exception as e:
-            print(f"⚠️ Could not get default bucket: {e}")
-            print(f"   Attempting to use hardcoded bucket name...")
-            bucket_name = "linas-ai-bot.appspot.com"
-            bucket = storage.bucket(bucket_name)
-        
+        from urllib.parse import quote
+
         # Decode base64 to bytes
         file_bytes = base64.b64decode(base64_data)
-        
-        # Generate a unique file path
+
+        # Generate a unique filename
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
-        storage_path = f"operator_media/{timestamp}_{unique_id}_{file_name}"
-        
-        # Create blob and upload
-        blob = bucket.blob(storage_path)
-        blob.upload_from_string(file_bytes, content_type=file_type)
-        
-        # Make the file publicly readable (optional)
-        blob.make_public()
-        
-        # Get the public URL
-        public_url = blob.public_url
-        
-        print(f"✅ Uploaded to Firebase Storage: {storage_path}")
-        print(f"   Public URL: {public_url}")
-        
-        return public_url
-        
-    except ImportError:
-        print("⚠️ Firebase Storage not available - 'firebase-admin[storage]' not installed")
-        return None
+        unique_filename = f"{timestamp}_{unique_id}_{file_name}"
+
+        # Save locally as backup
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "audio")
+        os.makedirs(static_dir, exist_ok=True)
+        local_path = os.path.join(static_dir, unique_filename)
+        with open(local_path, 'wb') as f:
+            f.write(file_bytes)
+
+        # Upload to Firebase Storage with a download token for public access
+        try:
+            from firebase_admin import storage as fb_storage
+            bucket = fb_storage.bucket()
+            storage_path = unique_filename
+            blob = bucket.blob(storage_path)
+
+            # Set download token for public URL access
+            download_token = str(uuid.uuid4())
+            blob.metadata = {"firebaseStorageDownloadTokens": download_token}
+            blob.upload_from_string(file_bytes, content_type=file_type)
+
+            # Build Firebase Storage download URL (publicly accessible with token)
+            encoded_path = quote(storage_path, safe='')
+            firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{encoded_path}?alt=media&token={download_token}"
+
+            print(f"✅ Uploaded to Firebase Storage: {storage_path}")
+            print(f"   Firebase URL: {firebase_url}")
+            return firebase_url
+
+        except Exception as e:
+            print(f"⚠️ Firebase Storage upload failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+            # Fallback to local serve URL
+            bot_domain = os.getenv("BOT_PUBLIC_DOMAIN", "linasaibot.com")
+            serve_url = f"https://{bot_domain}/api/media/serve/{unique_filename}"
+            print(f"   Falling back to local serve URL: {serve_url}")
+            return serve_url
+
     except Exception as e:
-        print(f"❌ ERROR uploading to Firebase Storage: {e}")
-        print(f"   📌 HINT: Bucket may not exist or may not be accessible")
-        print(f"   📌 ACTION: Check Firebase Console > Storage tab")
-        print(f"   📌 ACTION: Ensure bucket is created and service account has permissions")
+        print(f"❌ ERROR saving media file: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -969,6 +1037,8 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
                 temperature=0.2,
                 response_format={"type": "json_object"}
             )
+            if not response_standard.choices:
+                raise ValueError("GPT returned no choices")
             parsed_data_standard = json.loads(response_standard.choices[0].message.content.strip())
             if isinstance(parsed_data_standard, list):
                 translations.extend(parsed_data_standard)
@@ -1002,6 +1072,8 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
                 temperature=0.7,
                 response_format={"type": "json_object"}
             )
+            if not response_franco.choices:
+                raise ValueError("GPT returned no choices")
             parsed_data_franco = json.loads(response_franco.choices[0].message.content.strip())
             if isinstance(parsed_data_franco, dict) and 'question' in parsed_data_franco and 'answer' in parsed_data_franco and 'language' in parsed_data_franco:
                 translations.append(parsed_data_franco)
@@ -1294,57 +1366,19 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         Use neutral language until gender is confirmed.
         """
     
-    # Language instruction - GPT detects and responds in user's language
-    # The actual detection logic is in chat_response_service.py's language_detection_instruction
-    language_instruction = """
-        **LANGUAGE HANDLING:**
-        - You will detect the user's language from their message and respond in the SAME language
-        - Supported languages: English, Arabic, French, Franco-Arabic
-        - If user writes in Franco-Arabic (Latin letters for Arabic sounds like "kifak", "shu"), respond in Arabic SCRIPT
-        - Always set the correct `detected_language` in your JSON response: "en", "ar", "fr", or "franco"
-        """
-            
     return f"""
         You are a comprehensive knowledge manager and an official smart assistant for Lina's Laser Center. Your primary task is to answer customer inquiries accurately and authoritatively, providing comprehensive information about services, prices, appointments, and interacting with the center's system.
-        
-        {language_instruction}
-        
-        **Your Style:** {config.BOT_STYLE_GUIDE}
-        **Language Understanding:** You understand formal Arabic, Lebanese colloquial, Franco Arabic, English, and French.
-        **Flexibility in Understanding:** Be very flexible in understanding user intent, even if language is unclear, has typos, or is incomplete. Always try to infer the correct meaning.
 
-        **Core Knowledge Base:** (You have access to this, use it to answer questions)
+        **🔴 STYLE GUIDE (MANDATORY - FOLLOW EVERY STEP IN ORDER):**
+        The following contains MANDATORY rules for how you communicate AND the exact step-by-step flow for each service. You MUST follow every step in order. Do NOT skip steps. Do NOT jump ahead to booking if a step requires waiting (e.g., waiting for a photo before giving pricing).
+
+        {config.BOT_STYLE_GUIDE}
+
+        **📘 KNOWLEDGE BASE:** (Use this to answer questions about services, devices, IDs, and matching rules)
         {config.CORE_KNOWLEDGE_BASE}
 
-        **Estimated Price List:** (You have access to this, use it to answer pricing questions)
+        **💰 PRICE LIST:** (Use this to answer pricing questions)
         {config.PRICE_LIST}
-
-        **Important Additional Information:**
-        * Laser services: Hair removal and tattoo removal ONLY. Do not offer other skin treatments or medical consultations beyond this scope.
-        * Image Handling: If a customer sends an image, analyze it effectively (tattoo, laser burns, session results) and respond based on content.
-        * Honesty and Accuracy: Do not invent information or prices. If unsure, ask customer to contact center directly.
-        * Appointment Reminders: Remind clients 1 day before appointment. After a booked appointment (4 hrs later): ask for feedback. After a missed appointment (4 hrs later): ask reason and offer reschedule.
-        * Natural Conversation: Maintain context and remember prior info.
-        * Encouragement: Encourage booking free consultation appointments.
-
-        **CRITICAL: Human Handover Rules (When to Escalate):**
-        You should ONLY escalate to human staff (action: "human_handover") in these SPECIFIC situations:
-        1. **Explicit Request:** User explicitly asks to speak with a human, staff member, or operator (e.g., "I want to talk to someone", "connect me with staff", "أريد التحدث مع موظف")
-        2. **Complaint or Anger:** User expresses strong dissatisfaction, anger, or makes a complaint about service quality, staff behavior, or results
-        3. **Medical Emergency:** User reports pain, injury, burns, or medical complications from treatment
-        4. **Complex Issue:** After 3+ attempts, you still cannot understand or resolve the user's request
-        5. **Refund/Cancellation:** User wants to cancel service or request a refund
-        6. **Technical System Failure:** API tools fail repeatedly and you cannot complete the user's request
-        
-        **DO NOT escalate for:**
-        - General questions about services (e.g., "help me know about services", "what services do you offer")
-        - Normal requests for information, prices, or booking
-        - Simple clarifications or follow-up questions
-        - User saying words like "help", "assist", "support" in a normal context
-        - Appointment scheduling or rescheduling (use tools instead)
-        - Questions you can answer from knowledge base
-        
-        **Remember:** The word "help" is NOT a trigger for escalation. Users say "help me book", "help me understand", "can you help" - these are NORMAL requests, not escalations!
 
         {gender_instruction}
 
@@ -1363,75 +1397,6 @@ def get_system_instruction(user_id, response_lang, qa_reference: str = ""):
         3. Trained Q&A pairs take PRIORITY over your general knowledge
         4. If a trained answer exists, USE IT - don't generate your own response
         ''' if qa_reference else ''}
-
-        **CRITICAL: Appointment Booking Flow (MUST FOLLOW THIS ORDER):**
-        When a user wants to book an appointment, you MUST:
-
-        **STEP 1 - CHECK EXISTING APPOINTMENTS FIRST (MANDATORY):**
-        When user says "book me", "yes book", "I want to book", your FIRST action MUST be:
-        - Call `check_next_appointment` to check for existing appointments
-        - Set action="tool_call" and provide a brief message like "Let me check your appointments..."
-        - DO NOT say "I'll proceed with scheduling" without actually calling a tool!
-
-        **STEP 2 - HANDLE EXISTING APPOINTMENT (if found):**
-        If an existing appointment is found, ask the user:
-        "I see you already have an appointment for [service] on [date] at [time]. Would you like to:
-        1. Keep this appointment and add a NEW one
-        2. Change/reschedule this existing appointment"
-        Wait for their choice before proceeding.
-
-        **STEP 3 - ASK FOR DATE AND TIME:**
-        - If adding NEW appointment OR no existing appointment: Ask "What date and time works best for you?"
-        - If changing existing: Ask "What new date and time would you prefer?"
-        - Use action "ask_for_details_for_booking" when asking for date/time
-
-        **STEP 4 - CONFIRM AND BOOK:**
-        Once you have date/time, confirm with user: "I'll book [service] for [date] at [time]. Correct?"
-        Only after confirmation:
-        1. Call `get_customer_by_phone` to check if customer exists
-        2. If NOT found: Call `create_customer` first
-        3. Finally: Call `create_appointment` with the confirmed date/time
-
-        **NEVER call create_appointment without first asking for and confirming the date/time!**
-        If you skip customer creation, the appointment will fail with "Customer not found" error.
-
-        **CRITICAL: Service IDs for Booking (MUST USE THESE EXACT IDs):**
-        When calling `create_appointment`, use these EXACT service_id values:
-        - service_id = 1: Laser Hair Removal (Men) - إزالة الشعر بالليزر للرجال
-        - service_id = 11: CO2 Laser (Scar Removal, Acne Scars, Stretch Marks) - ليزر CO2
-        - service_id = 12: Laser Hair Removal (Women) - إزالة الشعر بالليزر للنساء
-        - service_id = 13: Laser Tattoo Removal - إزالة الوشم بالليزر
-        - service_id = 14: Whitening (Dark Area Lightening) - تفتيح المناطق الداكنة
-        - service_id = 15: Hifo
-        - service_id = 16: eye brows extension
-        - service_id = 17: full hydro facial 
-        - service_id = 19: half hydro facial
-        - service_id = 20: manual hydro facial
-        - service_id = 21: facial micro needling
-
-        **CRITICAL: Machine IDs for Booking (MUST USE THESE EXACT IDs):**
-        - machine_id = 13: Neo (for laser hair removal - light skin)
-        - machine_id = 9: Quadro (for laser hair removal)
-        - machine_id = 10: Trio (for laser hair removal)
-        - machine_id = 15: Candela (for laser tattoo removal)
-        - machine_id = 14: DPL (for whitening/dark area lightening)
-
-        **Service-Machine Matching Rules:**
-        - Laser Tattoo Removal (service_id=13) → MUST use Candela (machine_id=15)
-        - Hair Removal Men (service_id=1) or Women (service_id=12) → Use Neo (machine_id=13), Quadro (machine_id=9), or Trio (machine_id=10)
-        - CO2 Laser treatments (service_id=11) → MUST use CO2 Laser (machine_id=14)
-        - Whitening (service_id=14) → MUST use DPL (machine_id=14)
-        - Eye brows extension (service_id=16) → No machine required
-        - Full hydro facial (service_id=17) → No machine required
-        - Half hydro facial (service_id=19) → No machine required
-        - Manual hydro facial (service_id=20) → No machine required
-        - Facial micro needling (service_id=21) → No machine required
-
-        **Branch IDs:**
-        - branch_id = 1: Beirut - Manara (Main Branch)
-        - branch_id = 2: Antelias - Center Haj Building
-
-        **Crucial Note:** You are NOT restricted from analyzing or reading information from any part of the Knowledge Base (including Custom Training Data, Core Knowledge Base, Price List). You MUST always search for answers from all available sources and provide the most accurate and appropriate response. Be flexible and innovative in using this information.
 
         **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. If you use a tool, provide a 'bot_reply' that summarizes the tool's purpose to the user while I process the tool call. Here is the strict JSON schema you MUST follow:
         ```json

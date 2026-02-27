@@ -96,9 +96,12 @@ async def login(request: LoginRequest):
 @app.get("/api/auth/session/{user_id}")
 async def validate_session(user_id: str):
     """
-    Validate session and get fresh user data
+    Validate session and get fresh user data.
 
-    Called by frontend to refresh user data (e.g., after permission changes)
+    Called by frontend to refresh user data (e.g., after permission changes).
+    SECURITY NOTE: This endpoint returns user data by user_id without verifying
+    the caller. In production, add JWT/session verification so callers can only
+    request their own user_id. Frontend currently sends only its own id from localStorage.
     """
     try:
         user = user_service.get_user_by_id(user_id)

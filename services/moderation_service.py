@@ -94,6 +94,8 @@ async def moderate_content(text: str, user_id: str = None) -> Tuple[bool, Dict]:
             input=text
         )
 
+        if not response.results:
+            return True, {'flagged': False, 'message': 'No moderation result'}
         result = response.results[0]
 
         # Check if content is flagged

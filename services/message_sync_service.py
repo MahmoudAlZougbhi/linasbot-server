@@ -195,7 +195,7 @@ class MessageSyncService:
                 'branch_name': branch_name,
                 'service_name': service_name,
                 'phone_number': '+961 1 234 567',
-                'next_appointment_date': (apt_datetime + timedelta(days=30)).strftime('%Y-%m-%d')
+                'next_appointment_date': (apt_datetime + timedelta(days=17)).strftime('%Y-%m-%d')
             }
             
             current_time = datetime.now()
@@ -288,10 +288,10 @@ class MessageSyncService:
                 
                 message_ids.append(msg_id)
             
-            # 4. One-Month Follow-up (30 days after)
-            send_at = apt_datetime + timedelta(days=30)
+            # 4. One-Month Follow-up (17 days after)
+            send_at = apt_datetime + timedelta(days=17)
             msg_id = f"msg_{apt_id}_one_month_followup"
-            
+
             self.queue.add_message({
                 'message_id': msg_id,
                 'appointment_id': apt_id,
@@ -312,9 +312,37 @@ class MessageSyncService:
                 'appointment_datetime': apt_datetime.isoformat(),
                 'appointment_status': appointment.get('status', 'Available')
             })
-            
+
             message_ids.append(msg_id)
-            
+
+            # 5. Attended Yesterday / Thank You (24 hours after appointment)
+            send_at = apt_datetime + timedelta(hours=24)
+            if send_at > current_time:  # Only if in future
+                msg_id = f"msg_{apt_id}_attended_yesterday"
+
+                self.queue.add_message({
+                    'message_id': msg_id,
+                    'appointment_id': apt_id,
+                    'appointment_fingerprint': self.queue.generate_fingerprint(appointment),
+                    'customer_phone': customer_phone,
+                    'customer_name': customer_name,
+                    'message_type': 'attended_yesterday',
+                    'template_id': 'attended_yesterday',
+                    'language': 'ar',
+                    'parameters': parameters,
+                    'send_at': send_at.isoformat(),
+                    'status': 'scheduled',
+                    'created_at': current_time.isoformat(),
+                    'updated_at': current_time.isoformat(),
+                    'sent_at': None,
+                    'error': None,
+                    'retry_count': 0,
+                    'appointment_datetime': apt_datetime.isoformat(),
+                    'appointment_status': appointment.get('status', 'Available')
+                })
+
+                message_ids.append(msg_id)
+
             logger.debug(f"Generated {len(message_ids)} messages for appointment {apt_id}")
         
         except Exception as e:

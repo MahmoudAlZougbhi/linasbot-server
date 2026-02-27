@@ -79,6 +79,8 @@ async def process_training_request_with_gpt(user_id: int, training_instruction_t
 
         response = await client.chat.completions.create(**completion_args)
 
+        if not response.choices:
+            raise ValueError("GPT returned no choices for training response")
         gpt_raw_response = response.choices[0].message.content.strip()
         print(f"GPT Raw Training Response: {gpt_raw_response}")
 

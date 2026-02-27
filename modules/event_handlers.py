@@ -11,9 +11,15 @@ from typing import Any, Dict, Optional
 from modules.core import app, PYDUB_AVAILABLE, AudioSegment
 import config
 from utils.utils import get_firestore_db, save_conversation_message_to_firestore
-from services.api_integrations import send_appointment_reminders, get_missed_appointments, log_report_event
+from services.api_integrations import send_appointment_reminders, get_missed_appointments, get_paused_appointments_between_dates, log_report_event
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-from services.appointment_scheduler import populate_scheduled_messages_from_appointments, populate_no_show_messages_from_missed_appointments
+from services.appointment_scheduler import (
+    populate_scheduled_messages_from_appointments,
+    populate_no_show_messages_from_missed_appointments,
+    populate_one_month_followups,
+    populate_missed_month_messages,
+    populate_missed_yesterday_messages
+)
 
 
 @app.on_event("startup")
@@ -43,7 +49,13 @@ async def startup_event():
         
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from services.smart_messaging import smart_messaging
-        from services.appointment_scheduler import populate_scheduled_messages_from_appointments, populate_no_show_messages_from_missed_appointments
+        from services.appointment_scheduler import (
+            populate_scheduled_messages_from_appointments,
+            populate_no_show_messages_from_missed_appointments,
+            populate_one_month_followups,
+            populate_missed_month_messages,
+            populate_missed_yesterday_messages
+        )
         
         scheduler = AsyncIOScheduler()
         
@@ -92,7 +104,67 @@ async def startup_event():
                 print(f"❌ Error populating no-show messages: {e}")
                 import traceback
                 traceback.print_exc()
-        
+
+        # Job 0A3: Populate 1-MONTH FOLLOW-UP messages (from last month's appointments)
+        async def populate_one_month_job():
+            """Fetch last month's appointments and populate 1-month follow-up messages"""
+            try:
+                print("📅 POPULATING 1-MONTH FOLLOW-UP MESSAGES")
+                print("=" * 80)
+                result = await populate_one_month_followups()
+                if result.get('success'):
+                    print(f"✅ {result.get('message')}")
+                    print(f"   📊 Month: {result.get('month', 'N/A')}")
+                    print(f"   - Appointments found: {result.get('total_appointments', 0)}")
+                    print(f"   - Follow-ups scheduled: {result.get('total_messages', 0)}")
+                else:
+                    print(f"⚠️ Failed to populate 1-month messages: {result.get('message')}")
+                print("=" * 80)
+            except Exception as e:
+                print(f"❌ Error populating 1-month messages: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Job 0A4: Populate MISSED-MONTH messages (from this month's missed appointments)
+        async def populate_missed_month_job():
+            """Fetch this month's missed appointments and populate missed-month messages"""
+            try:
+                print("📅 POPULATING MISSED-MONTH MESSAGES")
+                print("=" * 80)
+                result = await populate_missed_month_messages()
+                if result.get('success'):
+                    print(f"✅ {result.get('message')}")
+                    print(f"   📊 Month: {result.get('month', 'N/A')}")
+                    print(f"   - Missed appointments found: {result.get('total_missed', 0)}")
+                    print(f"   - Messages scheduled: {result.get('total_messages', 0)}")
+                else:
+                    print(f"⚠️ Failed to populate missed-month messages: {result.get('message')}")
+                print("=" * 80)
+            except Exception as e:
+                print(f"❌ Error populating missed-month messages: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Job 0A5: Populate MISSED-YESTERDAY messages (from yesterday's paused appointments)
+        async def populate_missed_yesterday_job():
+            """Fetch yesterday's paused appointments and populate missed-yesterday messages"""
+            try:
+                print("📅 POPULATING MISSED-YESTERDAY MESSAGES")
+                print("=" * 80)
+                result = await populate_missed_yesterday_messages()
+                if result.get('success'):
+                    print(f"✅ {result.get('message')}")
+                    print(f"   📅 Date: {result.get('date', 'N/A')}")
+                    print(f"   - Paused appointments found: {result.get('total_missed', 0)}")
+                    print(f"   - Messages scheduled: {result.get('total_messages', 0)}")
+                else:
+                    print(f"⚠️ Failed to populate missed-yesterday messages: {result.get('message')}")
+                print("=" * 80)
+            except Exception as e:
+                print(f"❌ Error populating missed-yesterday messages: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Job 0B: Monitor Smart Messaging scheduled messages with global toggle & preview mode support
         async def monitor_smart_messages_job():
             """Monitor scheduled messages with smart controls"""
@@ -182,11 +254,11 @@ async def startup_event():
                     print("=" * 80)
                     return
 
-                # Original monitoring mode (when preview is disabled)
-                print("MONITORING Smart Messaging scheduled messages")
+                # Direct send mode (when preview is disabled)
+                print("SENDING Smart Messaging scheduled messages (preview disabled)")
                 print("=" * 80)
 
-                # Get messages that would be sent
+                # Get messages that are ready to send
                 messages_to_send = await smart_messaging.process_scheduled_messages()
 
                 if not messages_to_send:
@@ -197,21 +269,62 @@ async def startup_event():
                 print(f"Found {len(messages_to_send)} messages READY TO SEND")
                 print("=" * 80)
 
-                # Display each message
+                # Send each message
+                from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+                adapter = WhatsAppFactory.get_adapter()
+                sent_count = 0
+                failed_count = 0
+
                 for i, msg in enumerate(messages_to_send, 1):
                     phone = msg.get('phone')
                     content = msg.get('content')
                     msg_type = msg.get('type')
                     message_id = msg.get('message_id')
+                    customer_name = msg.get('customer_name', 'Customer')
 
-                    print(f"\n Message #{i}:")
+                    print(f"\n📤 Sending Message #{i}:")
                     print(f"   ID: {message_id}")
                     print(f"   Type: {msg_type}")
                     print(f"   To: {phone}")
                     print(f"   Content: {content[:100]}{'...' if len(content) > 100 else ''}")
 
+                    try:
+                        # Actually send the message
+                        result = await adapter.send_text_message(phone, content)
+
+                        if result.get('success'):
+                            sent_count += 1
+                            smart_messaging.mark_message_sent(message_id)
+                            print(f"   ✅ Sent successfully")
+
+                            # Save to conversation history for continuous context
+                            await save_conversation_message_to_firestore(
+                                user_id=phone,
+                                role="ai",
+                                text=content,
+                                conversation_id=None,
+                                user_name=customer_name,
+                                phone_number=phone,
+                                metadata={
+                                    "source": "smart_message",
+                                    "type": msg_type,
+                                    "message_id": message_id
+                                }
+                            )
+                            print(f"   💾 Saved to conversation history")
+                        else:
+                            failed_count += 1
+                            error_msg = result.get('error', 'Unknown error')
+                            smart_messaging.mark_message_failed(message_id, error_msg)
+                            print(f"   ❌ Failed to send: {error_msg}")
+
+                    except Exception as send_error:
+                        failed_count += 1
+                        smart_messaging.mark_message_failed(message_id, str(send_error))
+                        print(f"   ❌ Error sending: {send_error}")
+
                 print("\n" + "=" * 80)
-                print(f"Monitoring complete: {len(messages_to_send)} messages ready")
+                print(f"Send complete: {sent_count} sent, {failed_count} failed")
                 print("=" * 80)
 
             except Exception as e:
@@ -236,37 +349,72 @@ async def startup_event():
         async def send_missed_yesterday_followups():
             try:
                 print("📨 Running missed yesterday follow-ups job...")
+
+                # Check if smart messaging is globally enabled
+                settings_file = 'data/app_settings.json'
+                smart_messaging_enabled = True
+
+                if os.path.exists(settings_file):
+                    try:
+                        with open(settings_file, 'r', encoding='utf-8') as f:
+                            settings = json.load(f)
+                        smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
+                    except Exception as e:
+                        print(f"Error reading settings: {e}")
+
+                if not smart_messaging_enabled:
+                    print("⏸️ Smart Messaging is DISABLED. Skipping missed yesterday follow-ups.")
+                    return
+
                 yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-                result = await get_missed_appointments(date=yesterday)
-                
-                if result.get('success') and result.get('data'):
-                    missed_appointments = result['data']
-                    print(f"📋 Found {len(missed_appointments)} missed appointments from yesterday")
-                    
-                    for appointment in missed_appointments:
+
+                # Use the new paused appointments API with yesterday as both start and end
+                result = await get_paused_appointments_between_dates(
+                    start_date=yesterday,
+                    end_date=yesterday,
+                    service_id=None
+                )
+
+                paused_appointments = []
+                if result.get('success'):
+                    response_data = result.get('data', {})
+                    if isinstance(response_data, dict):
+                        paused_appointments = response_data.get('appointments', [])
+                    elif isinstance(response_data, list):
+                        paused_appointments = response_data
+
+                if paused_appointments:
+                    print(f"📋 Found {len(paused_appointments)} paused appointments from yesterday")
+
+                    for appointment in paused_appointments:
                         try:
-                            customer_phone = appointment.get('customer_phone', appointment.get('phone'))
-                            customer_name = appointment.get('customer_name', appointment.get('name', 'عميلنا العزيز'))
-                            language = appointment.get('language', 'ar')
-                            
+                            # New API response structure
+                            customer_data = appointment.get('customer', {})
+                            customer_phone = customer_data.get('phone')
+                            customer_name = customer_data.get('name', 'عميلنا العزيز')
+                            language = 'ar'  # Default language
+
                             if not customer_phone:
                                 continue
-                            
+
                             placeholders = {
                                 'customer_name': customer_name,
                                 'phone_number': config.TRAINER_WHATSAPP_NUMBER or '+961 XX XXXXXX'
                             }
-                            
+
                             message_content = smart_messaging.get_message_content(
                                 'missed_yesterday',
                                 language,
                                 placeholders
                             )
-                            
+
                             if message_content:
                                 adapter = WhatsAppFactory.get_adapter()
                                 await adapter.send_text_message(customer_phone, message_content)
                                 print(f"✅ Sent missed yesterday message to {customer_phone}")
+
+                                # Sync in-memory scheduled_messages dict
+                                smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_yesterday")
 
                                 # Save to conversation history for continuous context
                                 await save_conversation_message_to_firestore(
@@ -292,7 +440,7 @@ async def startup_event():
                         except Exception as e:
                             print(f"❌ Error sending missed yesterday message: {e}")
                 else:
-                    print(f"ℹ️ No missed appointments from yesterday")
+                    print(f"ℹ️ No paused appointments from yesterday")
             except Exception as e:
                 print(f"❌ Error in missed yesterday follow-ups job: {e}")
         
@@ -300,6 +448,23 @@ async def startup_event():
         async def send_missed_this_month_followups():
             try:
                 print("📨 Running missed this month follow-ups job...")
+
+                # Check if smart messaging is globally enabled
+                settings_file = 'data/app_settings.json'
+                smart_messaging_enabled = True
+
+                if os.path.exists(settings_file):
+                    try:
+                        with open(settings_file, 'r', encoding='utf-8') as f:
+                            settings = json.load(f)
+                        smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
+                    except Exception as e:
+                        print(f"Error reading settings: {e}")
+
+                if not smart_messaging_enabled:
+                    print("⏸️ Smart Messaging is DISABLED. Skipping missed this month follow-ups.")
+                    return
+
                 first_day_of_month = datetime.datetime.now().replace(day=1).strftime('%Y-%m-%d')
                 result = await get_missed_appointments(date=first_day_of_month)
                 
@@ -337,6 +502,9 @@ async def startup_event():
                                 await adapter.send_text_message(customer_phone, message_content)
                                 print(f"✅ Sent missed this month message to {customer_phone}")
 
+                                # Sync in-memory scheduled_messages dict
+                                smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_this_month")
+
                                 # Save to conversation history for continuous context
                                 await save_conversation_message_to_firestore(
                                     user_id=customer_phone,
@@ -369,6 +537,23 @@ async def startup_event():
         async def send_attended_yesterday_messages():
             try:
                 print("📨 Running attended yesterday thank you messages job...")
+
+                # Check if smart messaging is globally enabled
+                settings_file = 'data/app_settings.json'
+                smart_messaging_enabled = True
+
+                if os.path.exists(settings_file):
+                    try:
+                        with open(settings_file, 'r', encoding='utf-8') as f:
+                            settings = json.load(f)
+                        smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
+                    except Exception as e:
+                        print(f"Error reading settings: {e}")
+
+                if not smart_messaging_enabled:
+                    print("⏸️ Smart Messaging is DISABLED. Skipping attended yesterday messages.")
+                    return
+
                 yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%d/%m/%Y')
                 
                 db = get_firestore_db()
@@ -445,6 +630,9 @@ async def startup_event():
                                 await adapter.send_text_message(user_id, message_content)
                                 print(f"✅ Sent attended yesterday message to {user_id}")
 
+                                # Sync in-memory scheduled_messages dict
+                                smart_messaging.mark_messages_sent_by_phone(user_id, "attended_yesterday")
+
                                 # Save to conversation history for continuous context
                                 await save_conversation_message_to_firestore(
                                     user_id=user_id,
@@ -476,7 +664,50 @@ async def startup_event():
                 import traceback
                 traceback.print_exc()
         
+        # Job 5: Daily refresh - clear stale messages and re-populate fresh ones
+        async def daily_refresh_messages_job():
+            """
+            Runs at midnight each day to:
+            1. Clear stale messages from previous days (except 1-month and missed-month)
+            2. Re-populate all message categories with fresh data
+            """
+            try:
+                print("\n" + "=" * 80)
+                print("🌅 DAILY MESSAGE REFRESH - Clearing stale messages and re-populating")
+                print("=" * 80)
+
+                # Step 1: Clear stale messages
+                result = smart_messaging.clear_daily_messages()
+                print(f"   🧹 Cleared {result['cleared']} stale messages, kept {result['kept']}")
+
+                # Step 2: Re-populate all categories with fresh data
+                print("   🔄 Re-populating scheduled messages...")
+                await populate_messages_job()
+                await populate_no_show_messages_job()
+                await populate_one_month_job()
+                await populate_missed_month_job()
+                await populate_missed_yesterday_job()
+
+                print("=" * 80)
+                print("✅ DAILY REFRESH COMPLETE")
+                print("=" * 80 + "\n")
+            except Exception as e:
+                print(f"❌ Error in daily refresh job: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Schedule jobs
+        # DAILY REFRESH: Clear stale messages and re-populate at midnight
+        scheduler.add_job(
+            daily_refresh_messages_job,
+            'cron',
+            hour=0,
+            minute=1,
+            id='daily_refresh_messages',
+            name='Daily Refresh - Clear Stale Messages & Re-populate',
+            replace_existing=True
+        )
+
         # FIRST: Populate scheduled messages from real appointments (runs immediately on startup, then every 2 hours)
         scheduler.add_job(
             populate_messages_job,
@@ -487,16 +718,49 @@ async def startup_event():
             replace_existing=True
         )
         
-        # FIRST-B: Populate NO-SHOW follow-up messages from missed appointments (runs immediately on startup, then every 2 hours)
+        # FIRST-B: Populate NO-SHOW follow-up messages from missed appointments (runs immediately on startup, then every 1 hour)
         scheduler.add_job(
             populate_no_show_messages_job,
             'interval',
-            minutes=120,
+            minutes=60,
             id='populate_no_show_messages',
             name='Populate No-Show Follow-Up Messages from Missed Appointments',
             replace_existing=True
         )
-        
+
+        # FIRST-C: Populate 1-MONTH FOLLOW-UP messages (daily at 6 AM - from last month's appointments)
+        scheduler.add_job(
+            populate_one_month_job,
+            'cron',
+            hour=6,
+            minute=0,
+            id='populate_one_month_followups',
+            name='Populate 1-Month Follow-Up Messages',
+            replace_existing=True
+        )
+
+        # FIRST-D: Populate MISSED-MONTH messages (daily at 6:30 AM - from this month's missed appointments)
+        scheduler.add_job(
+            populate_missed_month_job,
+            'cron',
+            hour=6,
+            minute=30,
+            id='populate_missed_month_messages',
+            name='Populate Missed-Month Messages',
+            replace_existing=True
+        )
+
+        # FIRST-E: Populate MISSED-YESTERDAY messages (daily at 6:15 AM - from yesterday's paused appointments)
+        scheduler.add_job(
+            populate_missed_yesterday_job,
+            'cron',
+            hour=6,
+            minute=15,
+            id='populate_missed_yesterday_messages',
+            name='Populate Missed-Yesterday Messages',
+            replace_existing=True
+        )
+
         # SECOND: Monitor Smart Messaging scheduled messages every 10 minutes (VERIFICATION MODE - NOT SENDING)
         scheduler.add_job(
             monitor_smart_messages_job,
@@ -555,12 +819,22 @@ async def startup_event():
         asyncio.create_task(populate_messages_job())
         print("🚨 SCHEDULING INITIAL NO-SHOW MESSAGES POPULATION (running in background)...")
         asyncio.create_task(populate_no_show_messages_job())
+        print("📅 SCHEDULING INITIAL 1-MONTH FOLLOW-UP POPULATION (running in background)...")
+        asyncio.create_task(populate_one_month_job())
+        print("📅 SCHEDULING INITIAL MISSED-MONTH POPULATION (running in background)...")
+        asyncio.create_task(populate_missed_month_job())
+        print("📅 SCHEDULING INITIAL MISSED-YESTERDAY POPULATION (running in background)...")
+        asyncio.create_task(populate_missed_yesterday_job())
         print("✅ Background tasks scheduled - startup will complete immediately")
-        
+
         print("✅ Smart Messaging Scheduler started successfully")
         print("📅 Scheduled jobs:")
+        print("   - Daily refresh (clear stale + re-populate): Daily at 00:01 AM")
         print("   - Populate messages from appointments: Every 2 hours (+ on startup)")
-        print("   - Populate no-show messages from missed: Every 2 hours (+ on startup)")
+        print("   - Populate no-show messages from missed: Every 1 hour (+ on startup)")
+        print("   - Populate 1-month follow-ups: Daily at 6 AM (+ on startup)")
+        print("   - Populate missed-yesterday messages: Daily at 6:15 AM (+ on startup)")
+        print("   - Populate missed-month messages: Daily at 6:30 AM (+ on startup)")
         print("   - Monitor messages: Every 10 minutes")
         print("   - Appointment reminders: Every 30 minutes")
         print("   - Missed yesterday follow-ups: Daily at 10:00 AM")

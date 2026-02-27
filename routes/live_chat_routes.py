@@ -9,6 +9,7 @@ Live Chat API Routes - Hybrid Approach
 """
 import asyncio
 import json
+from datetime import datetime
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -16,6 +17,13 @@ from services.live_chat_service import live_chat_service
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 router = APIRouter()
+
+
+def json_serializer(obj):
+    """Custom JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 # ============================================================
 # SSE (Server-Sent Events) for Real-Time Updates

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   DocumentTextIcon,
   CheckCircleIcon,
@@ -8,6 +8,10 @@ import {
   BookOpenIcon,
   CurrencyDollarIcon,
   SparklesIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
@@ -72,6 +76,13 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
   const [lastModified, setLastModified] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Search functionality state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const textareaRef = useRef(null);
+  const searchInputRef = useRef(null);
+
   const Icon = FILE_ICONS[fileId] || DocumentTextIcon;
   const colors = FILE_COLORS[fileId] || FILE_COLORS.knowledge_base;
   const helpText = FILE_HELP_TEXT[fileId] || "";
@@ -85,6 +96,110 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
   useEffect(() => {
     setHasChanges(content !== originalContent);
   }, [content, originalContent]);
+
+  // Search results calculation
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || !content) return [];
+
+    const results = [];
+    const searchLower = searchQuery.toLowerCase();
+    const contentLower = content.toLowerCase();
+    let index = 0;
+
+    while ((index = contentLower.indexOf(searchLower, index)) !== -1) {
+      // Find line number
+      const lineNumber = content.substring(0, index).split('\n').length;
+      // Get context (the line containing the match)
+      const lines = content.split('\n');
+      const lineContent = lines[lineNumber - 1] || '';
+
+      results.push({
+        index,
+        lineNumber,
+        lineContent: lineContent.trim(),
+        matchText: content.substring(index, index + searchQuery.length)
+      });
+      index += 1;
+    }
+
+    return results;
+  }, [searchQuery, content]);
+
+  // Reset current match index when search changes
+  useEffect(() => {
+    setCurrentMatchIndex(0);
+  }, [searchQuery]);
+
+  // Focus search input when search opens
+  useEffect(() => {
+    if (isSearchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isSearchOpen]);
+
+  // Navigate to a specific match in the textarea
+  const navigateToMatch = (matchIndex) => {
+    if (searchResults.length === 0 || !textareaRef.current) return;
+
+    const match = searchResults[matchIndex];
+    if (!match) return;
+
+    const textarea = textareaRef.current;
+    textarea.focus();
+    textarea.setSelectionRange(match.index, match.index + searchQuery.length);
+
+    // Scroll to the selection
+    const lineHeight = 20; // approximate line height in pixels
+    const scrollPosition = (match.lineNumber - 5) * lineHeight;
+    textarea.scrollTop = Math.max(0, scrollPosition);
+
+    setCurrentMatchIndex(matchIndex);
+  };
+
+  const goToNextMatch = () => {
+    if (searchResults.length === 0) return;
+    const nextIndex = (currentMatchIndex + 1) % searchResults.length;
+    navigateToMatch(nextIndex);
+  };
+
+  const goToPrevMatch = () => {
+    if (searchResults.length === 0) return;
+    const prevIndex = (currentMatchIndex - 1 + searchResults.length) % searchResults.length;
+    navigateToMatch(prevIndex);
+  };
+
+  const toggleSearch = () => {
+    setIsSearchOpen(!isSearchOpen);
+    if (isSearchOpen) {
+      setSearchQuery("");
+    }
+  };
+
+  // Keyboard shortcut for search (Ctrl+F or Cmd+F)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+      if (e.key === 'Escape' && isSearchOpen) {
+        setIsSearchOpen(false);
+        setSearchQuery("");
+      }
+      // Enter key to go to next match
+      if (e.key === 'Enter' && isSearchOpen && searchResults.length > 0) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          goToPrevMatch();
+        } else {
+          goToNextMatch();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isSearchOpen, searchResults.length, currentMatchIndex]);
 
   const loadFile = async () => {
     try {
@@ -276,10 +391,118 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
                 Unsaved changes
               </span>
             )}
+            {/* Search Toggle Button */}
+            <button
+              onClick={toggleSearch}
+              className={`p-2 rounded-lg transition-all duration-200 ${
+                isSearchOpen
+                  ? `${colors.bg} ${colors.icon}`
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+              }`}
+              title="Search (Ctrl+F)"
+            >
+              <MagnifyingGlassIcon className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
         <div className="space-y-4">
+          {/* Search Bar */}
+          <AnimatePresence>
+            {isSearchOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className={`${colors.helpBg} border ${colors.helpBorder} rounded-lg p-3`}>
+                  <div className="flex items-center space-x-3">
+                    <div className="relative flex-1">
+                      <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search in content..."
+                        className="input-field pl-9 pr-4 py-2 w-full text-sm"
+                      />
+                    </div>
+
+                    {/* Match count and navigation */}
+                    {searchQuery && (
+                      <div className="flex items-center space-x-2">
+                        <span className={`text-sm font-medium ${searchResults.length > 0 ? colors.helpText : 'text-slate-400'}`}>
+                          {searchResults.length > 0
+                            ? `${currentMatchIndex + 1} of ${searchResults.length}`
+                            : 'No matches'}
+                        </span>
+
+                        {searchResults.length > 0 && (
+                          <>
+                            <button
+                              onClick={goToPrevMatch}
+                              className={`p-1.5 rounded-lg ${colors.bg} ${colors.icon} hover:opacity-80 transition-opacity`}
+                              title="Previous match (Shift+Enter)"
+                            >
+                              <ChevronUpIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={goToNextMatch}
+                              className={`p-1.5 rounded-lg ${colors.bg} ${colors.icon} hover:opacity-80 transition-opacity`}
+                              title="Next match (Enter)"
+                            >
+                              <ChevronDownIcon className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={toggleSearch}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                      title="Close search (Esc)"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Search Results Preview */}
+                  {searchQuery && searchResults.length > 0 && (
+                    <div className="mt-3 max-h-40 overflow-y-auto space-y-1">
+                      {searchResults.slice(0, 10).map((result, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => navigateToMatch(idx)}
+                          className={`w-full text-left p-2 rounded-lg text-sm transition-colors ${
+                            idx === currentMatchIndex
+                              ? `${colors.bg} ${colors.helpText}`
+                              : 'hover:bg-white/50 text-slate-600'
+                          }`}
+                        >
+                          <span className="font-medium text-slate-400 mr-2">Line {result.lineNumber}:</span>
+                          <span className="truncate">
+                            {result.lineContent.length > 80
+                              ? result.lineContent.substring(0, 80) + '...'
+                              : result.lineContent}
+                          </span>
+                        </button>
+                      ))}
+                      {searchResults.length > 10 && (
+                        <p className="text-xs text-slate-400 text-center py-1">
+                          +{searchResults.length - 10} more matches
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {helpText && (
             <div className={`${colors.helpBg} border ${colors.helpBorder} rounded-lg p-4`}>
               <p className={`text-sm ${colors.helpText}`}>
@@ -289,6 +512,7 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
           )}
 
           <textarea
+            ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder={`Enter ${title.toLowerCase()} content here...`}

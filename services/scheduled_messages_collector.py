@@ -246,12 +246,12 @@ class ScheduledMessagesCollector:
                     })
         
         # 5. 1-Month Follow-up
-        # Collects: Attended appointments 30+ days passed (if status is "Done")
-        # Send time: 30 days after appointment
+        # Collects: Attended appointments 17+ days passed (if status is "Done")
+        # Send time: 17 days after appointment
         if apt_status.lower() == 'done':
-            if time_since_apt.total_seconds() >= 2592000:  # 30 days passed
-                if time_since_apt.total_seconds() < 2678400:  # But not more than 31 days (prevent resending)
-                    send_datetime = apt_datetime + timedelta(days=30)
+            if time_since_apt.total_seconds() >= 1468800:  # 17 days passed
+                if time_since_apt.total_seconds() < 1555200:  # But not more than 18 days (prevent resending)
+                    send_datetime = apt_datetime + timedelta(days=17)
                     if send_datetime > current_time:  # Only if send time is in future (shouldn't happen)
                         messages.append({
                             "appointment_id": apt_id,
@@ -268,18 +268,26 @@ class ScheduledMessagesCollector:
                             "last_updated": current_time.isoformat()
                         })
         
-        # 6. Missed Yesterday (Optional - varies constantly)
-        # Collects: Missed appointments 24-48 hours passed
-        # Note: This varies too much. Can skip file persistence if you prefer.
-        
-        # 7. Missed This Month (Optional - varies constantly)
-        # Collects: Missed appointments 30+ days passed
-        # Note: This varies too much. Can skip file persistence if you prefer.
-        
-        # 8. Attended Yesterday (Optional - varies constantly)
-        # Collects: Attended appointments 24+ hours passed
-        # Note: This varies too much. Can skip file persistence if you prefer.
-        
+        # 6. Attended Yesterday / Thank You (24 hours after appointment)
+        # Collects: Appointments where send time (24h after) is in the future
+        # Send time: 24 hours after appointment
+        send_datetime = apt_datetime + timedelta(hours=24)
+        if send_datetime > current_time:  # Only if send time is in future
+            messages.append({
+                "appointment_id": apt_id,
+                "customer_name": customer_name,
+                "customer_phone": customer_phone,
+                "message_type": "attended_yesterday",
+                "reason": "Thank You / Post-Visit Follow-up",
+                "send_datetime": send_datetime.isoformat(),
+                "status": "pending",
+                "error": None,
+                "appointment_datetime": apt_datetime.isoformat(),
+                "appointment_status": apt_status,
+                "created_at": current_time.isoformat(),
+                "last_updated": current_time.isoformat()
+            })
+
         return messages
     
     def get_pending_messages(self) -> List[Dict]:

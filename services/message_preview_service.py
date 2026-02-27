@@ -124,6 +124,24 @@ class MessagePreviewService:
         Returns:
             Dict with success status and message_id
         """
+        # Create a deduplication key based on customer + template + scheduled time
+        customer_phone = message_data.get('customer_phone', '')
+        template_id = message_data.get('template_id', '')
+        scheduled_time = str(message_data.get('scheduled_send_time', ''))
+        dedup_key = f"{customer_phone}_{template_id}_{scheduled_time}"
+
+        # Check if this message already exists in the queue
+        for existing_msg in self.preview_queue:
+            existing_key = f"{existing_msg.get('customer_phone', '')}_{existing_msg.get('template_id', '')}_{existing_msg.get('scheduled_send_time', '')}"
+            if existing_key == dedup_key:
+                # Message already exists, skip adding
+                return {
+                    'success': True,
+                    'message_id': existing_msg.get('message_id'),
+                    'duplicate': True,
+                    'validation_result': existing_msg.get('validation_result')
+                }
+
         # Generate unique message ID
         message_id = str(uuid.uuid4())[:8] + "_" + datetime.now().strftime("%Y%m%d%H%M%S")
 

@@ -42,6 +42,11 @@ const SmartMessaging = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const RECORDS_PER_PAGE = 20;
 
+  // NEW: Lazy loading state
+  const [messageCounts, setMessageCounts] = useState({});
+  const [loadingCategory, setLoadingCategory] = useState(null);
+  const [loadedCategories, setLoadedCategories] = useState(new Set());
+
   // NEW: Smart Messages control states
   const [smartMessagingEnabled, setSmartMessagingEnabled] = useState(true);
   const [previewBeforeSend, setPreviewBeforeSend] = useState(true);
@@ -544,19 +549,19 @@ const SmartMessaging = () => {
         setSchedulerStatus(statusResult);
       }
 
-      // ✅ NEW: Fetch detailed messages (both sent and scheduled)
-      const messagesResponse = await fetch(
-        "/api/smart-messaging/messages?status=all"
-      );
-      const messagesResult = await messagesResponse.json();
+      // ✅ LAZY LOADING: Fetch only counts initially (fast)
+      const countsResponse = await fetch("/api/smart-messaging/counts");
+      const countsResult = await countsResponse.json();
 
-      if (messagesResult.success) {
-        // Display all messages (sent + scheduled combined)
-        setSentMessages(messagesResult.messages || []);
+      if (countsResult.success) {
+        setMessageCounts(countsResult.counts || {});
       } else {
-        console.warn("Failed to fetch messages detail:", messagesResult.error);
-        setSentMessages([]);
+        console.warn("Failed to fetch message counts:", countsResult.error);
       }
+
+      // Clear messages - will be loaded lazily when category is selected
+      setSentMessages([]);
+      setLoadedCategories(new Set());
 
       // Fetch templates
       const templatesResponse = await fetch("/api/smart-messaging/templates");
@@ -577,6 +582,52 @@ const SmartMessaging = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ✅ LAZY LOADING: Fetch messages for a specific category
+  const fetchMessagesForCategory = async (category) => {
+    // Skip if already loaded or currently loading
+    if (loadedCategories.has(category) || loadingCategory === category) {
+      return;
+    }
+
+    try {
+      setLoadingCategory(category);
+
+      // Build URL with message_type filter (unless "all")
+      const url = category === "all"
+        ? "/api/smart-messaging/messages?status=all"
+        : `/api/smart-messaging/messages?status=all&message_type=${category}`;
+
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (result.success) {
+        const newMessages = result.messages || [];
+
+        // Merge with existing messages (avoid duplicates)
+        setSentMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.message_id));
+          const uniqueNew = newMessages.filter(m => !existingIds.has(m.message_id));
+          return [...prev, ...uniqueNew];
+        });
+
+        // Mark category as loaded
+        setLoadedCategories(prev => new Set([...prev, category]));
+      }
+    } catch (error) {
+      console.error(`Error fetching messages for ${category}:`, error);
+      toast.error(`Failed to load ${category} messages`);
+    } finally {
+      setLoadingCategory(null);
+    }
+  };
+
+  // ✅ LAZY LOADING: Handle category selection
+  const handleCategorySelect = (category) => {
+    setSelectedMessageType(category);
+    setCurrentPage(1);
+    fetchMessagesForCategory(category);
   };
 
   const handleTemplateChange = (templateId, language, value) => {
@@ -628,7 +679,69 @@ const SmartMessaging = () => {
     }
   };
 
-  // Filter messages based on search query AND message type
+  // Date-range filter helper based on message type
+  const isMessageInDateRange = (message, messageType) => {
+    const now = new Date();
+    // Use local date components (not toISOString which converts to UTC)
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    const startOfMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const startOfNextMonthStr = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-${String(nextMonth.getDate()).padStart(2, "0")}`;
+
+    // Get the send/sent date (YYYY-MM-DD) for this message
+    const sendDateStr = (message.send_at || message.sent_at || message.scheduled_for || "").substring(0, 10) || null;
+    // Get appointment date from template_data
+    const appointmentDate = message.template_data?.appointment_date || null;
+
+    // Get send time as Date object (used for 24h reminder)
+    const sendTime = new Date(message.send_at || message.sent_at || message.created_at || message.scheduled_at);
+
+    switch (messageType) {
+      case "reminder_24h":
+        // Show messages where send_at is within ±24h from now
+        if (isNaN(sendTime.getTime())) return true;
+        const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        return sendTime >= past24h && sendTime <= next24h;
+      case "same_day_checkin":
+        // Show messages where send_at is within ±24h from now
+        if (isNaN(sendTime.getTime())) return true;
+        const checkinPast = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const checkinFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        return sendTime >= checkinPast && sendTime <= checkinFuture;
+      case "post_session_feedback":
+        // Show messages scheduled for today only
+        if (!sendDateStr) return true;
+        return sendDateStr === todayStr;
+      case "no_show_followup":
+        // Show today's missed appointments (sent same day as appointment)
+        return sendDateStr === todayStr;
+      case "missed_yesterday":
+        // Show yesterday's missed appointments
+        return appointmentDate === yesterdayStr || sendDateStr === yesterdayStr;
+      case "missed_this_month":
+        // Show current month's missed appointments
+        const missedDate = appointmentDate || sendDateStr;
+        return missedDate >= startOfMonthStr && missedDate < startOfNextMonthStr;
+      case "one_month_followup":
+        // Show 1-month followups scheduled within current month
+        return sendDateStr >= startOfMonthStr && sendDateStr < startOfNextMonthStr;
+      case "attended_yesterday":
+        // Show messages scheduled for today or tomorrow
+        if (!sendDateStr) return true;
+        const thankYouTomorrow = new Date(now);
+        thankYouTomorrow.setDate(thankYouTomorrow.getDate() + 1);
+        const thankYouTomorrowStr = `${thankYouTomorrow.getFullYear()}-${String(thankYouTomorrow.getMonth() + 1).padStart(2, "0")}-${String(thankYouTomorrow.getDate()).padStart(2, "0")}`;
+        return sendDateStr === todayStr || sendDateStr === thankYouTomorrowStr;
+      default:
+        return true;
+    }
+  };
+
+  // Filter messages based on search query, message type, AND date range
   const allFilteredMessages = sentMessages
     .filter((message) => {
       // Filter by type
@@ -636,6 +749,14 @@ const SmartMessaging = () => {
         selectedMessageType !== "all" &&
         message.message_type !== selectedMessageType
       ) {
+        return false;
+      }
+
+      // Filter by date range based on message type
+      // For "all" tab: apply each message's own category date filter
+      // For specific tab: apply that category's date filter
+      const typeToCheck = selectedMessageType === "all" ? message.message_type : selectedMessageType;
+      if (!isMessageInDateRange(message, typeToCheck)) {
         return false;
       }
 
@@ -720,32 +841,17 @@ const SmartMessaging = () => {
 
   const pageNumbers = getPageNumbers();
 
-  // Count messages by type
+  // ✅ LAZY LOADING: Use counts from API instead of calculating from loaded messages
   const messageTypesCounts = {
-    all: sentMessages.length,
-    reminder_24h: sentMessages.filter((m) => m.message_type === "reminder_24h")
-      .length,
-    same_day_checkin: sentMessages.filter(
-      (m) => m.message_type === "same_day_checkin"
-    ).length,
-    post_session_feedback: sentMessages.filter(
-      (m) => m.message_type === "post_session_feedback"
-    ).length,
-    one_month_followup: sentMessages.filter(
-      (m) => m.message_type === "one_month_followup"
-    ).length,
-    no_show_followup: sentMessages.filter(
-      (m) => m.message_type === "no_show_followup"
-    ).length,
-    missed_yesterday: sentMessages.filter(
-      (m) => m.message_type === "missed_yesterday"
-    ).length,
-    missed_this_month: sentMessages.filter(
-      (m) => m.message_type === "missed_this_month"
-    ).length,
-    attended_yesterday: sentMessages.filter(
-      (m) => m.message_type === "attended_yesterday"
-    ).length,
+    all: Object.values(messageCounts).reduce((sum, count) => sum + count, 0),
+    reminder_24h: messageCounts.reminder_24h || 0,
+    same_day_checkin: messageCounts.same_day_checkin || 0,
+    post_session_feedback: messageCounts.post_session_feedback || 0,
+    one_month_followup: messageCounts.one_month_followup || 0,
+    no_show_followup: messageCounts.no_show_followup || 0,
+    missed_yesterday: messageCounts.missed_yesterday || 0,
+    missed_this_month: messageCounts.missed_this_month || 0,
+    attended_yesterday: messageCounts.attended_yesterday || 0,
   };
 
   const getMessageTypeInfo = (type) => {
@@ -1041,10 +1147,7 @@ const SmartMessaging = () => {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {/* All Button */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("all");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("all")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "all"
                       ? "ring-2 ring-offset-2 ring-primary-500 shadow-lg"
@@ -1063,10 +1166,7 @@ const SmartMessaging = () => {
 
                 {/* 24h Reminder */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("reminder_24h");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("reminder_24h")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "reminder_24h"
                       ? "ring-2 ring-offset-2 ring-blue-500 shadow-lg"
@@ -1085,10 +1185,7 @@ const SmartMessaging = () => {
 
                 {/* Same Day Check-in */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("same_day_checkin");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("same_day_checkin")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "same_day_checkin"
                       ? "ring-2 ring-offset-2 ring-purple-500 shadow-lg"
@@ -1107,10 +1204,7 @@ const SmartMessaging = () => {
 
                 {/* Post Session Feedback */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("post_session_feedback");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("post_session_feedback")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "post_session_feedback"
                       ? "ring-2 ring-offset-2 ring-green-500 shadow-lg"
@@ -1129,10 +1223,7 @@ const SmartMessaging = () => {
 
                 {/* 1-Month Follow-up */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("one_month_followup");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("one_month_followup")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "one_month_followup"
                       ? "ring-2 ring-offset-2 ring-indigo-500 shadow-lg"
@@ -1151,10 +1242,7 @@ const SmartMessaging = () => {
 
                 {/* No-Show Follow-up */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("no_show_followup");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("no_show_followup")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "no_show_followup"
                       ? "ring-2 ring-offset-2 ring-red-500 shadow-lg"
@@ -1173,10 +1261,7 @@ const SmartMessaging = () => {
 
                 {/* Missed Yesterday */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("missed_yesterday");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("missed_yesterday")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "missed_yesterday"
                       ? "ring-2 ring-offset-2 ring-orange-500 shadow-lg"
@@ -1195,10 +1280,7 @@ const SmartMessaging = () => {
 
                 {/* Missed This Month */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("missed_this_month");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("missed_this_month")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "missed_this_month"
                       ? "ring-2 ring-offset-2 ring-pink-500 shadow-lg"
@@ -1217,10 +1299,7 @@ const SmartMessaging = () => {
 
                 {/* Attended Yesterday */}
                 <button
-                  onClick={() => {
-                    setSelectedMessageType("attended_yesterday");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => handleCategorySelect("attended_yesterday")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                     selectedMessageType === "attended_yesterday"
                       ? "ring-2 ring-offset-2 ring-teal-500 shadow-lg"
@@ -1239,24 +1318,24 @@ const SmartMessaging = () => {
               </div>
             </div>
 
-            {/* Summary Section */}
+            {/* Summary Section - reflects selected category */}
             <div className="mb-4 grid grid-cols-3 gap-3">
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-xs text-green-600 font-medium">SENT</p>
                 <p className="text-lg font-bold text-green-700">
-                  {sentMessages.filter((m) => m.status === "sent").length}
+                  {allFilteredMessages.filter((m) => m.status === "sent").length}
                 </p>
               </div>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-xs text-blue-600 font-medium">TO BE SENT</p>
                 <p className="text-lg font-bold text-blue-700">
-                  {sentMessages.filter((m) => m.status === "scheduled").length}
+                  {allFilteredMessages.filter((m) => m.status === "scheduled").length}
                 </p>
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
                 <p className="text-xs text-slate-600 font-medium">TOTAL</p>
                 <p className="text-lg font-bold text-slate-700">
-                  {sentMessages.length}
+                  {allFilteredMessages.length}
                 </p>
               </div>
             </div>
@@ -1289,7 +1368,19 @@ const SmartMessaging = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMessages.length === 0 ? (
+                  {loadingCategory ? (
+                    <tr>
+                      <td
+                        colSpan="7"
+                        className="py-8 text-center text-slate-500"
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
+                          Loading {loadingCategory.replace(/_/g, ' ')} messages...
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredMessages.length === 0 ? (
                     <tr>
                       <td
                         colSpan="7"
@@ -1297,7 +1388,9 @@ const SmartMessaging = () => {
                       >
                         {searchQuery
                           ? "No messages found matching your search"
-                          : "No messages yet"}
+                          : !loadedCategories.has(selectedMessageType)
+                            ? "Click a category to load messages"
+                            : "No messages yet"}
                       </td>
                     </tr>
                   ) : (
@@ -1399,7 +1492,7 @@ const SmartMessaging = () => {
                           <td className="py-3 px-4">
                             <div className="text-sm">
                               <p className="text-slate-600">
-                                {message.language.toUpperCase()}
+                                {(message.language || "ar").toUpperCase()}
                               </p>
                               {message.template_data?.appointment_date && (
                                 <p className="text-xs text-slate-500 mt-1">

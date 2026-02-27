@@ -17,7 +17,7 @@
   },
   "smartMessaging": {
     "enabled": false,
-    "previewBeforeSend": true,
+    "previewBeforeSend": false,
     "autoApproveAfterMinutes": 0,
     "maxQueueSize": 1000,
     "validationRules": {

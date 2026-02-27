@@ -47,6 +47,8 @@ async def get_gender_from_gpt(user_input: str) -> str:
             temperature=0.15, # Adjusted temperature for more confident gender detection
             max_tokens=10
         )
+        if not response.choices:
+            return "unknown"
         gender_prediction = response.choices[0].message.content.strip().lower()
         if gender_prediction in ["male", "female"]:
             return gender_prediction

@@ -11,6 +11,7 @@ import datetime
 import asyncio
 from typing import List, Dict, Optional, Any
 from collections import defaultdict
+from google.cloud import firestore
 import config
 from utils.utils import get_firestore_db, set_human_takeover_status
 
@@ -62,9 +63,11 @@ class LiveChatService:
             client_conversations = {}
             current_time = datetime.datetime.now(datetime.timezone.utc)
 
-            # Limit to 50 users max for performance
+            # Limit to 50 users max for performance, ordered by last_activity (most recent first)
             # ✅ Use asyncio.to_thread to prevent blocking the event loop
-            users_docs = await asyncio.to_thread(lambda: list(users_collection.limit(50).stream()))
+            users_docs = await asyncio.to_thread(
+                lambda: list(users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).limit(50).stream())
+            )
 
             # Helper function to fetch conversations for a single user
             async def fetch_user_conversations(user_id):
@@ -112,9 +115,16 @@ class LiveChatService:
                     if conv_status in ["resolved", "archived"]:
                         continue
 
-                    # Get last message time
+                    # Get last message time (use actual last message for timing)
                     last_message = messages[-1]
                     last_message_time = self._parse_timestamp(last_message.get("timestamp"))
+
+                    # For preview, find the last non-smart message
+                    last_preview_message = last_message
+                    for msg in reversed(messages):
+                        if msg.get("metadata", {}).get("source") != "smart_message":
+                            last_preview_message = msg
+                            break
 
                     # Apply time filter
                     time_diff = (current_time - last_message_time).total_seconds()
@@ -153,8 +163,8 @@ class LiveChatService:
                         "sentiment": sentiment,
                         "operator_id": operator_id,
                         "last_message": {
-                            "content": last_message.get("text", ""),
-                            "is_user": last_message.get("role") == "user",
+                            "content": last_preview_message.get("text", ""),
+                            "is_user": last_preview_message.get("role") == "user",
                             "timestamp": last_message_time.isoformat()
                         }
                     }
@@ -316,10 +326,17 @@ class LiveChatService:
                     if conv_status in ["resolved", "archived"]:
                         continue
                     
-                    # Get last message time
+                    # Get last message time (use actual last message for timing)
                     last_message = messages[-1]
                     last_message_time = self._parse_timestamp(last_message.get("timestamp"))
-                    
+
+                    # For preview, find the last non-smart message
+                    last_preview_message = last_message
+                    for msg in reversed(messages):
+                        if msg.get("metadata", {}).get("source") != "smart_message":
+                            last_preview_message = msg
+                            break
+
                     # Apply 6-hour filter
                     time_diff = (current_time - last_message_time).total_seconds()
                     if time_diff > self.ACTIVE_TIME_WINDOW:
@@ -360,9 +377,9 @@ class LiveChatService:
                         "sentiment": sentiment,
                         "message_count": len(messages),
                         "priority": priority,
-                        "last_message": last_message.get("text", "")
+                        "last_message": last_preview_message.get("text", "")
                     }
-                    
+
                     waiting_queue.append(queue_item)
             
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
@@ -421,6 +438,11 @@ class LiveChatService:
             config.user_in_human_takeover_mode[user_id] = False
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
+
+            # Clear current_conversation_id so next message creates a new conversation
+            if user_id in config.user_data_whatsapp:
+                config.user_data_whatsapp[user_id].pop('current_conversation_id', None)
+                print(f"🔄 Cleared current_conversation_id for {user_id} - next message will start new conversation")
 
             # Invalidate cache
             self._conversations_cache = None
@@ -633,8 +655,8 @@ class LiveChatService:
                     if opus_file_name:  # Conversion successful
                         audio_data_to_upload = opus_data
                         upload_file_name = opus_file_name
-                        upload_file_type = "audio/opus"
-                        print(f"✅ Voice converted to Opus")
+                        upload_file_type = "audio/ogg"
+                        print(f"✅ Voice converted to OGG/Opus")
                 except Exception as e:
                     print(f"⚠️ WebM to Opus conversion failed: {e}")
                     print(f"   Continuing with original WebM format...")
@@ -674,25 +696,37 @@ class LiveChatService:
                     }
                 )
                 
-                # Step 3: Send voice message via Qiscus
-                print(f"🎙️ Sending voice message via Qiscus to {user_id}...")
+                # Step 3: Send voice message via WhatsApp
+                print(f"🎙️ Sending voice message via WhatsApp to {user_id}...")
                 try:
                     if storage_url:
-                        # Send as native audio message (plays directly on phone, not just a link)
-                        await adapter.send_audio_message(user_id, storage_url)
-                        print(f"✅ Sent voice as native audio message via Qiscus")
+                        # Use server serve URL - clean path MontyMobile can fetch
+                        # File already saved locally by upload function, Firebase used for long-term storage
+                        parts = storage_url.split('/o/')
+                        serve_filename = parts[1].split('?')[0] if len(parts) > 1 else storage_url
+                        whatsapp_audio_url = f"https://linasaibot.com/api/media/serve/{serve_filename}"
+                        print(f"📤 Proxy URL for WhatsApp: {whatsapp_audio_url}")
+                        send_result = await adapter.send_audio_message(user_id, whatsapp_audio_url, audio_base64=audio_data_to_upload)
+                        if send_result.get("success"):
+                            print(f"✅ Sent voice message via WhatsApp")
+                        else:
+                            error_msg = send_result.get("error", "Unknown error")
+                            print(f"⚠️ WhatsApp audio send failed: {error_msg}")
+                            print(f"⚠️ Audio URL was: {storage_url}")
+                            return {"success": False, "error": f"WhatsApp audio send failed: {error_msg}", "storage_url": storage_url}
                     else:
                         # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام رسالة صوتية من المشغل. يرجى فتح لوحة المعلومات لسماعها."
                         await adapter.send_text_message(user_id, text_notification)
                         print(f"✅ Sent text notification (storage upload failed)")
                 except Exception as e:
-                    print(f"⚠️ Failed to send via Qiscus: {e}")
+                    print(f"⚠️ Failed to send via WhatsApp: {e}")
                     import traceback
                     traceback.print_exc()
-                
+                    return {"success": False, "error": f"Failed to send voice: {str(e)}"}
+
                 print(f"✅ Voice message processed and sent for {user_id}")
-                
+
                 return {"success": True, "message": "Voice message sent successfully", "storage_url": storage_url}
                     
             elif message_type == "image":
@@ -835,6 +869,10 @@ class LiveChatService:
             formatted_messages = []
 
             for msg in messages:
+                # Skip smart messages (automated reminders) - they shouldn't appear in live chat
+                if msg.get("metadata", {}).get("source") == "smart_message":
+                    continue
+
                 msg_data = {
                     "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
                     "is_user": msg.get("role") == "user",

@@ -54,5 +54,14 @@
     "ar": "💜 شكراً لزيارتك!\n\n{customer_name} العزيز/ة،\nشكراً لحضورك بالأمس! 🌟\n\nنأمل أن تكون راضياً عن الخدمة.\n\nنصائح مهمة بعد الجلسة:\n✅ تجنب التعرض للشمس لمدة 48 ساعة\n✅ استخدم ��اقي الشمس SPF 50+\n✅ رطب البشرة جيداً\n✅ تجنب الماء الساخن لمدة 24 ساعة\n\nموعدك القادم: {next_appointment_date}\n\nأي استفسار؟ نحن هنا! 💬\n{phone_number}",
     "en": "💜 Thank You for Your Visit!\n\nDear {customer_name},\nThank you for coming yesterday! 🌟\n\nWe hope you're satisfied with the service.\n\nImportant post-session tips:\n✅ Avoid sun exposure for 48 hours\n✅ Use SPF 50+ sunscreen\n✅ Keep skin well moisturized\n✅ Avoid hot water for 24 hours\n\nYour next appointment: {next_appointment_date}\n\nAny questions? We're here! 💬\n{phone_number}",
     "fr": "💜 Merci de Votre Visite!\n\nCher(e) {customer_name},\nMerci d'être venu(e) hier! 🌟\n\nNous espérons que vous êtes satisfait(e).\n\nConseils importants après la séance:\n✅ Évitez le soleil pendant 48 heures\n✅ Utilisez SPF 50+ crème solaire\n✅ Hydratez bien la peau\n✅ Évitez l'eau chaude pendant 24 heures\n\nVotre prochain rendez-vous: {next_appointment_date}\n\nDes questions? Nous sommes là! 💬\n{phone_number}"
+  },
+  "test": {
+    "name": "test",
+    "description": "test",
+    "ar": "",
+    "en": "testing",
+    "fr": "",
+    "isCustom": true,
+    "createdAt": "2026-01-26T15:46:53.883504"
   }
 }

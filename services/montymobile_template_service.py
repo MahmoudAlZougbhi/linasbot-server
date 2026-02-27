@@ -16,13 +16,23 @@ class MontyMobileTemplateService:
     def __init__(self):
         # Load template configuration
         config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'montymobile_templates.json')
-        with open(config_path, 'r', encoding='utf-8') as f:
-            self.config = json.load(f)
-        
-        self.templates = self.config['templates']
-        self.api_config = self.config['api_config']
-        
-        print(f"✅ Loaded {len(self.templates)} MontyMobile templates")
+        try:
+            if not os.path.exists(config_path):
+                print(f"❌ MontyMobile config not found at: {config_path}")
+                self.config = {}
+                self.templates = {}
+                self.api_config = {}
+                return
+            with open(config_path, 'r', encoding='utf-8') as f:
+                self.config = json.load(f)
+            self.templates = self.config.get('templates', {})
+            self.api_config = self.config.get('api_config', {})
+            print(f"✅ Loaded {len(self.templates)} MontyMobile templates")
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"❌ Error loading MontyMobile config: {e}")
+            self.config = {}
+            self.templates = {}
+            self.api_config = {}
     
     def get_template_info(self, template_id: str) -> Optional[Dict]:
         """Get template information by ID"""
@@ -54,6 +64,9 @@ class MontyMobileTemplateService:
         print(f"   language: {language} (type: {type(language)})")
         print(f"   parameters: {parameters}")
         
+        if not self.templates or not self.api_config:
+            print("❌ MontyMobile templates not loaded")
+            return None
         template = self.templates.get(template_id)
         if not template:
             print(f"❌ Template '{template_id}' not found")

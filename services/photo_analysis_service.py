@@ -155,6 +155,8 @@ async def get_bot_photo_analysis_from_gpt(user_id: int, base64_image: str, is_tr
         temperature=0.4,
         max_tokens=1000
     )
+    if not response.choices:
+        raise ValueError("GPT returned no choices for photo analysis")
     gpt_analysis_raw = response.choices[0].message.content.strip()
 
     json_match = re.search(r"```json\n(.*?)```", gpt_analysis_raw, re.DOTALL)

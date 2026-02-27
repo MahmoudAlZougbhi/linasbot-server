@@ -58,9 +58,9 @@ async def _make_api_request(method: str, endpoint: str, params: dict = None, jso
         print(f"  Error Details: {repr(e)}")
         return {"success": False, "message": f"Connection error (Network Error). Please check internet connection.", "details": str(e)}
     except json.JSONDecodeError as e:
-        print(f"API JSON Decode Error for {endpoint}: {e} - Response: {response.text}")
-        # This catch-all for JSONDecodeError is important if the API returns malformed JSON even for 200 responses
-        return {"success": False, "message": f"Error processing system response. Please contact support. Invalid JSON from API.", "details": str(e), "raw_response": response.text}
+        raw = (getattr(response, "text", None) or str(e))[:500]
+        print(f"API JSON Decode Error for {endpoint}: {e} - Response: {raw}")
+        return {"success": False, "message": "Error processing system response. Invalid JSON from API.", "details": str(e), "raw_response": raw}
     except Exception as e:
         print(f"Unexpected API Error for {endpoint}: {e}")
         return {"success": False, "message": f"An unexpected error occurred while connecting to the system: {str(e)}", "details": str(e)}
@@ -111,13 +111,22 @@ async def get_clinic_hours():
         log_report_event("api_call", "System", "N/A", {"api": "get_clinic_hours", "status": "failed", "error": response.get("message")})
     return response
 
-async def send_appointment_reminders(date: str = None, phone: str = None, user_code: str = None):
-    """Triggers the sending of appointment reminders to clients."""
-    print(f"API Call: send_appointment_reminders for date={date}, phone={phone}, user_code={user_code}")
+async def send_appointment_reminders(date: str = None, phone: str = None, user_code: str = None, status: str = None):
+    """
+    Retrieves appointments with optional filters.
+
+    Args:
+        date: Filter by date (YYYY-MM-DD)
+        phone: Filter by phone number
+        user_code: Filter by user code
+        status: Filter by status (done, available, postponed, paused)
+    """
+    print(f"API Call: send_appointment_reminders for date={date}, phone={phone}, user_code={user_code}, status={status}")
     params = {}
     if date: params["date"] = date
     if phone: params["phone"] = phone
     if user_code: params["user_code"] = user_code
+    if status: params["status"] = status
     response = await _make_api_request("GET", "appointments/reminders", params=params)
 
     # DEBUG: Log response structure for first call only
@@ -249,13 +258,38 @@ async def get_missed_appointments(date: str = None):
         log_report_event("api_call", "System", "N/A", {"api": "get_missed_appointments", "status": "failed", "error": response.get("message"), "date": date})
     return response
 
+async def get_paused_appointments_between_dates(start_date: str, end_date: str, service_id: int = None):
+    """
+    Returns a list of paused appointments between two dates.
+
+    Args:
+        start_date: Required. Start date in YYYY-MM-DD format (e.g., "2026-01-01")
+        end_date: Required. End date in YYYY-MM-DD format (e.g., "2026-02-01")
+        service_id: Optional. Filter by service ID
+
+    Returns:
+        API response with paused appointments data
+    """
+    print(f"API Call: get_paused_appointments_between_dates for start_date={start_date}, end_date={end_date}, service_id={service_id}")
+    params = {
+        "start_date": start_date,
+        "end_date": end_date
+    }
+    if service_id is not None:
+        params["service_id"] = service_id
+
+    response = await _make_api_request("GET", "appointments/paused/between-dates", params=params)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "get_paused_appointments_between_dates", "status": "success", "start_date": start_date, "end_date": end_date, "service_id": service_id})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "get_paused_appointments_between_dates", "status": "failed", "error": response.get("message"), "start_date": start_date, "end_date": end_date, "service_id": service_id})
+    return response
+
 async def get_customer_by_phone(phone: str):
-    print(f"API Call: get_customer_by_phone for phone={phone}")
+    """Retrieves customer details by phone number."""
     phone_clean = str(phone).replace("+", "").replace(" ", "")
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]
-
-    """Retrieves customer details by phone number."""
     print(f"API Call: get_customer_by_phone for phone={phone_clean}")
     params = {"phone": phone_clean}
     response = await _make_api_request("GET", "customers/by-phone", params=params) # Assuming this endpoint exists

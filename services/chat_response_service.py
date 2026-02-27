@@ -12,6 +12,14 @@ import re
 
 # Import all API functions from api_integrations
 from services import api_integrations
+from utils.datetime_utils import (
+    BOT_FIXED_TZ,
+    align_datetime_to_day_reference,
+    now_in_bot_tz,
+    parse_datetime_flexible,
+    resolve_relative_datetime,
+    text_mentions_datetime,
+)
 
 # Import local Q&A service for context injection
 from services.local_qa_service import local_qa_service
@@ -19,13 +27,8 @@ from services.local_qa_service import local_qa_service
 # Import dynamic model selector for cost optimization
 from services.dynamic_model_selector import select_optimal_model
 
-# Lebanon timezone - imported once at module level for performance
-try:
-    from zoneinfo import ZoneInfo
-    LEBANON_TZ = ZoneInfo("Asia/Beirut")
-except ImportError:
-    import pytz
-    LEBANON_TZ = pytz.timezone("Asia/Beirut")
+# Fixed bot timezone (UTC+0200) for all booking day comparisons
+BOOKING_TZ = BOT_FIXED_TZ
 
 _custom_qa_cache = {}
 
@@ -104,7 +107,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     # Extract first name only for natural conversation
     customer_first_name = None
     if user_name and user_name != "client":
-        customer_first_name = user_name.split()[0]  # "Nour Jaffala" -> "Nour"
+        parts = user_name.split()
+        customer_first_name = parts[0] if parts else user_name  # "Nour Jaffala" -> "Nour"
     
     # Check rate limits first
     within_limits, limit_message = await check_rate_limits(user_id, 'message')
@@ -170,160 +174,28 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if is_price_question:
         print(f"📄 GPT will receive price_list.txt in context (price-related question detected)")
 
-    # Build name instruction based on whether name is known
+    # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
     name_is_known = user_name and user_name != "client"
-    early_name_instruction = (
-        "**Early Name Capture (CRITICAL FOR NEW USERS):**\n"
-        f"**CURRENT NAME STATUS: {'KNOWN - ' + user_name if name_is_known else 'NOT KNOWN'}**\n\n"
-        + (
-            f"The user's name is already known as '{user_name}'. Do NOT ask for their name again.\n"
-            if name_is_known else
-            "**🚨 NAME IS NOT KNOWN - YOU MUST ASK FOR IT! 🚨**\n"
-            "IMMEDIATELY after the user confirms their gender (says 'male', 'female', 'شاب', 'صبية', etc.), "
-            "your VERY NEXT response MUST ask for their full name. Do NOT skip this step!\n"
-            "Ask politely: 'May I have your full name please?' / 'ممكن اسمك الكامل من فضلك؟'\n"
-            "Do NOT proceed to ask about services, body areas, or booking until you have their name.\n"
-            "The flow for new users is: 1) Gender → 2) Full Name → 3) Service/Booking questions.\n"
-        )
+    current_local_time = now_in_bot_tz()
+    current_date_str = current_local_time.strftime("%Y-%m-%d")
+    current_time_str = current_local_time.strftime("%H:%M:%S")
+    current_day_name = current_local_time.strftime("%A")
+
+    # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
+    dynamic_customer_context = (
+        "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
+        f"- **Customer Name**: {'KNOWN - ' + user_name + ' (First name: ' + str(customer_first_name) + '). Do NOT ask for name again.' if name_is_known else 'NOT KNOWN - You MUST ask for their full name (see Name Capture Rules in Style Guide)'}\n"
+        f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, create_appointment, update_appointment_date). Do NOT ask for phone number.\n"
+        f"- **Gender**: '{current_gender}'"
+        + (" - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n" if current_gender in ['male', 'female'] else " - UNKNOWN. Follow gender collection rules in Style Guide.\n")
+        + f"- **Language**: Detected as '{current_preferred_lang}' - You MUST respond in: '{response_language}'\n"
+        f"- **current_gender_from_config**: '{current_gender}'\n"
+        f"- **detected_language**: '{current_preferred_lang}'\n"
+        f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
     )
 
-    # Get current Lebanon time for GPT to use in date/time calculations
-    current_lebanon_time = datetime.datetime.now(LEBANON_TZ)
-    current_date_str = current_lebanon_time.strftime("%Y-%m-%d")
-    current_time_str = current_lebanon_time.strftime("%H:%M:%S")
-    current_day_name = current_lebanon_time.strftime("%A")
-
-    # Build gender instruction based on whether gender is already known
-    gender_info_line = f"- **Gender**: Current gender is '{current_gender}'. "
-    if current_gender in ['male', 'female']:
-        gender_info_line += f"**GENDER IS ALREADY '{current_gender.upper()}' - NEVER ASK FOR GENDER! Just use '{current_gender}' for pricing and services. DO NOT say 'to give you personalized pricing, are you male or female?' - you already know!**\n"
-    else:
-        gender_info_line += "Only ask if it's 'unknown' AND you need it for the service.\n"
-
-    # Enhanced booking instruction: GPT is responsible for parsing date/time from natural language
-    booking_instruction = (
-        "**BOOKING FLOW - FOLLOW THIS EXACT ORDER:**\n\n"
-        "**STEP 1: CHECK IF NEW OR EXISTING CUSTOMER**\n"
-        "When user wants to book:\n"
-        f"- Call `check_next_appointment(phone='{customer_phone_clean}')` to check for existing appointments\n"
-        "- **CRITICAL: If the response says 'Customer not found' or success=false → This is a NEW customer!**\n"
-        "- For NEW customers: Skip to STEP 3 immediately. Do NOT stop or show an error!\n"
-        "- For EXISTING customers with appointments: Go to STEP 2\n\n"
-        "**STEP 2: HANDLE EXISTING APPOINTMENT (only if found)**\n"
-        "If the tool returns an existing appointment (success=true with appointment data), ask:\n"
-        "'I see you already have an appointment for [service] on [date] at [time]. Would you like to:'\n"
-        "'1. Keep this appointment and add a NEW one'\n"
-        "'2. Change/reschedule this existing appointment'\n"
-        "Wait for their choice before proceeding.\n\n"
-        "**STEP 3: COLLECT ALL REQUIRED BOOKING DETAILS**\n"
-        "Before calling `create_appointment`, you MUST have ALL of these:\n"
-        "1. Service type (hair removal, tattoo removal, CO2, whitening, etc.)\n"
-        "2. **BODY PART (MANDATORY for hair removal & tattoo removal)** - Ask 'Which area would you like to treat?'\n"
-        "3. Machine preference (Neo, Quadro, Trio for hair removal; Pico for tattoo)\n"
-        "4. **BRANCH (MANDATORY)** - You MUST ask which branch. Options: Beirut (Manara) or Antelias (Center Haj). NEVER assume a branch!\n"
-        "5. Date and time\n\n"
-        "**🚨 BODY PART REQUIREMENT:**\n"
-        "- For Laser Hair Removal (service_id 1 or 12): body_part_ids is REQUIRED\n"
-        "- For Tattoo Removal (service_id 13): body_part_ids is REQUIRED\n"
-        "- NEVER call `create_appointment` for these services without body_part_ids!\n"
-        "- If body part is missing, ask: 'Which area would you like the treatment on?'\n\n"
-        "**Appointment Booking Process:**\n"
-        "When the user expresses intent to book an appointment, you are responsible for gathering *all* necessary details for the `create_appointment` tool. These details are: Full Name, Specific Service, **Body Area(s) (REQUIRED for laser hair removal and tattoo removal)**, Preferred Machine (Neo, Quadro, or Trio), Preferred Branch, and an Exact Date and Time.\n"
-        "**IMPORTANT - Information Already Known:**\n"
-        f"- **Customer Name**: {('The customer full name is ' + user_name + '. Their first name is ' + str(customer_first_name) + '. You already know their name, so DO NOT ask for it again. Use ' + str(customer_first_name) + ' when addressing them.') if name_is_known else '**NAME IS NOT KNOWN YET.** You MUST ask for their full name before proceeding with booking. Ask: May I have your full name please? / ممكن اسمك الكامل؟'}\n"
-        f"- **Customer Phone**: The customer's phone number (without country code) is '{customer_phone_clean}'. When using tools like check_next_appointment, update_appointment_date, or create_appointment that require a phone parameter, ALWAYS use '{customer_phone_clean}'. DO NOT ask for phone number, DO NOT extract it from conversation.\n"
-        f"{gender_info_line}"
-        "**Appointment Management:**\n"
-        "- To CHECK appointments: Use `check_next_appointment` tool with phone='{customer_phone_clean}'\n"
-        "- To CREATE new appointment: Use `create_appointment` tool\n"
-        "- To RESCHEDULE/UPDATE appointment (2-step process):\n"
-        "  STEP 1 - When customer asks to change/reschedule:\n"
-        "    1. Call `check_next_appointment(phone='{customer_phone_clean}')` to get current appointment details and appointment_id\n"
-        "    2. Ask customer to CONFIRM the change with a clear message showing OLD time vs NEW time\n"
-        "    3. Set action='confirm_appointment_reschedule'\n"
-        "    Example: 'I see your appointment is on Nov 16 at 10:00 AM. You want to change it to 11:00 AM on the same day, correct?'\n"
-        "  STEP 2 - When customer confirms (says 'yes', 'correct', 'confirm', etc.) AND you just asked for confirmation:\n"
-        "    1. Call `check_next_appointment(phone='{customer_phone_clean}')` FIRST to get current appointment details\n"
-        "    2. Call `update_appointment_date(appointment_id=0, phone='{customer_phone_clean}', date='YYYY-MM-DD HH:MM:SS')` with appointment_id=0 (placeholder)\n"
-        "    3. The system will AUTO-CHAIN the correct appointment_id from check_next_appointment's response\n"
-        "    4. After tools execute, confirm the update to customer\n"
-        "  IMPORTANT: Call BOTH tools together - the system handles getting the correct appointment_id automatically.\n"
-        "- To CANCEL appointment: No API available - offer human handover\n"
-        "**What You MUST Ask For (New Appointments):**\n"
-        "1. Service/treatment they want (if not clear)\n"
-        "2. Body area (for laser hair removal)\n"
-        "3. Preferred machine (Neo, Quadro, or Trio) - or use default\n"
-        "4. **Preferred branch - MUST ASK, NEVER ASSUME!** Options: Beirut (Manara) or Antelias (Center Haj)\n"
-        "5. Date and time\n"
-        f"**🕐 CURRENT DATE AND TIME (Lebanon/Beirut): {current_day_name}, {current_date_str} at {current_time_str}**\n"
-        "**Date and Time Conversion (CRITICAL):** You MUST intelligently convert any natural language date/time expressions (e.g., 'tomorrow at 3 PM', 'next Friday', 'in 3 days', 'tonight at 7:30 PM') into the exact 'YYYY-MM-DD HH:MM:SS' format. "
-        f"Use the CURRENT DATE AND TIME shown above ({current_date_str} {current_time_str}) as your reference point for 'today', 'tomorrow', 'next week', etc. "
-        "The appointment date must be in the future (after the current time shown above) and not more than 365 days from today. If the user provides only a day (e.g., 'tomorrow'), suggest a default time like '10:00:00' or '14:00:00 (2 PM)'. If only a time is given (e.g., 'at 3 PM'), check if that time is AFTER the current time - if yes, use today's date; if no, use tomorrow's date. You must confirm the extracted date and time in your `bot_reply` before trying to book.\n"
-        "**Confirmation and Tool Call:** Do NOT call `create_appointment` until you have *all* required parameters and you have *confirmed them with the user* in your `bot_reply`. If details are missing, your `action` should be `ask_for_details_for_booking`, and your `bot_reply` should ask for the *next specific missing piece of information*. For example, 'طھظ…ط§ظ…طŒ ظˆط£ظٹ ط¬ظ‡ط§ط² ط¨طھظپط¶ظ„طں' or 'ظˆظ…ط§ ظ‡ظˆ ط§ط³ظ…ظƒ ط§ظ„ظƒط§ظ…ظ„طں' (NOT phone or gender if already known). If the user says 'ok book it' but not all info is there, you still ask for the missing parts.\n"
-        "**Example of Confirmation:** If user says 'ok book me for tomorrow 1pm', and you know all other details, your `bot_reply` should be: 'طھظ…ط§ظ…طŒ ط¥ط°ط§ظ‹ ظ…ظˆط¹ط¯ظƒ ط¨ظƒط±ط§ ط§ظ„ط³ط¨طھ 28 طھظ…ظˆط² ط§ظ„ط³ط§ط¹ط© 1:00 ط¨ط¹ط¯ ط§ظ„ط¸ظ‡ط± ظپظٹ ظپط±ط¹ ط§ظ„ظ…ظ†ط§ط±ط© ط¹ظ„ظ‰ ط¬ظ‡ط§ط² ط§ظ„ظ†ظٹظˆطŒ طµط­ظٹط­طں' and `action` should be `confirm_booking_details`. Only call the tool (`create_appointment`) after final confirmation by the user (e.g., 'yes', 'ok', 'confirm'). If you have all information and user confirms, then `action` should be `tool_call` and `bot_reply` should inform the user that you are booking.\n"
-        "**🚨 AFTER SUCCESSFUL BOOKING - Confirmation Message MUST Include:**\n"
-        "When the appointment is successfully created, your confirmation message MUST mention ALL of these details:\n"
-        "1. Date and time of the appointment\n"
-        "2. **Body part/area being treated** (e.g., 'Full Arms', 'Legs', 'Back') - ALWAYS include this!\n"
-        "3. Machine being used (Neo, Quadro, Trio, etc.)\n"
-        "4. Branch location\n"
-        "5. Price (if available in the API response)\n"
-        "Example: 'Your appointment for laser hair removal on your **legs** has been booked for tomorrow at 12:00 PM with the Neo machine at our Beirut branch. The session costs $80.'"
-    )
-
-    # Enhanced gender ask instruction: GPT is responsible for when and how to ask
-    # Language map for gender questions
-    language_map_gender = {
-        "ar": "Arabic",
-        "en": "English",
-        "fr": "French",
-        "franco": "Lebanese Arabic in Arabic script (NOT Latin characters)"
-    }
-    target_lang_gender = language_map_gender.get(current_preferred_lang, current_preferred_lang)
-
-    # Build conditional warning for when gender is already known
-    gender_known_warning = f"**🔴 GENDER IS ALREADY KNOWN AS '{current_gender.upper()}' - DO NOT ASK FOR GENDER! 🔴**\n\n" if current_gender in ['male', 'female'] else ""
-
-    gender_ask_instruction = (
-        "**Gender Clarification Strategy (CRITICAL):**\n"
-        f"**USER'S LANGUAGE: {current_preferred_lang} - You MUST ask for gender in {target_lang_gender}**\n"
-        f"**CURRENT USER GENDER: '{current_gender}'** - This is the KNOWN gender from our database.\n\n"
-        f"{gender_known_warning}"
-        f"**RULES:**\n"
-        f"1. If current_gender is 'male' or 'female' (CURRENT: '{current_gender}'): NEVER use 'ask_gender' or 'initial_greet_and_ask_gender' actions. Proceed directly with the user's request.\n"
-        f"2. If current_gender is 'unknown': You may ask for gender politely in early conversation stages.\n\n"
-        f"The `current_gender_from_config` for this user is '{current_gender}'. " # Explicitly state the known gender to GPT
-        "If `current_gender_from_config` is 'unknown' and the conversation is in its early stages (e.g., first 3-4 interactions), you MUST prioritize politely asking the user for their gender. "
-        "Explain *why* you need this: 'ظ„ظ…ط³ط§ط¹ط¯طھظƒ ط¨ط´ظƒظ„ ط£ظپط¶ظ„ ظˆطھظ‚ط¯ظٹظ… ظ…ط¹ظ„ظˆظ…ط§طھ ط¯ظ‚ظٹظ‚ط© ظˆظ…ط®طµطµط© (ظ…ط«ظ„ ط§ظ„ط£ط³ط¹ط§ط± ط§ظ„ط®ط§طµط© ط¨ط¬ظ†ط³ظƒ ط£ظˆ ط§ظ„ط®ط¯ظ…ط§طھ ط§ظ„ظ…طھط§ط­ط© ظ„ظ„ط±ط¬ط§ظ„/ط§ظ„ظ†ط³ط§ط، ظˆطھط¬ظ†ط¨ ط§ظ„ط£ط®ط·ط§ط، ظپظٹ ظ…ط®ط§ط·ط¨طھظƒ)طŒ ظ‡ظ„ ظٹظ…ظƒظ† ط£ظ† طھط®ط¨ط±ظ†ظٹ ظ…ط§ ط¥ط°ط§ ظƒظ†طھظژ ط´ط§ط¨ط§ظ‹ ط£ظ… طµط¨ظٹط©طں' ('To help you better and provide accurate, personalized information (like gender-specific prices or services, and to address you correctly), could you please tell me if you are male or female?'). "
-        "Your `action` in this case should be `ask_gender`. Prioritize this question over detailed service information or booking if gender is unknown and relevant for a precise answer. **If `current_gender_from_config` is already 'male' or 'female', you MUST NOT use the `ask_gender` or `initial_greet_and_ask_gender` actions. Assume the gender is known and proceed with the user's request, using the appropriate gender phrasing as defined in the system instruction.**"
-    )
-
-    # Language instruction - language already detected, tell GPT to respond in it
-    language_response_instruction = f"""
-**🌐 LANGUAGE RESPONSE - CRITICAL REQUIREMENT 🌐**
-
-User's language detected as: **{current_preferred_lang}**
-You MUST respond in: **{response_language}**
-
-**RESPONSE RULES:**
-- If response_language is "ar": Respond in Arabic script (العربية)
-- If response_language is "en": Respond in English
-- If response_language is "fr": Respond in French
-
-Note: If user wrote in Franco-Arabic (Latin letters for Arabic sounds like "kifak"),
-you still respond in Arabic SCRIPT, not Franco.
-
-**YOUR JSON MUST INCLUDE:**
-- `detected_language`: "{current_preferred_lang}"
-- `bot_reply`: Your response in **{response_language}**
-
-DO NOT detect language yourself - it has already been detected.
-"""
-
-
-    # Combine all system instructions
-    system_instruction_final = system_instruction_core + "\n\n" + early_name_instruction + "\n\n" + booking_instruction + "\n\n" + gender_ask_instruction + "\n\n" + language_response_instruction
-
+    # Combine system instruction with dynamic context
+    system_instruction_final = system_instruction_core + "\n\n" + dynamic_customer_context
 
     messages = [{"role": "system", "content": system_instruction_final}]
     messages.extend(current_context_messages[-config.MAX_CONTEXT_MESSAGES:])
@@ -351,6 +223,8 @@ DO NOT detect language yourself - it has already been detected.
             response_format={"type": "json_object"}
         )
         
+        if not response.choices:
+            raise ValueError("GPT returned no choices")
         first_response_message = response.choices[0].message
         
         gpt_raw_content = first_response_message.content.strip() if first_response_message.content else ""
@@ -366,51 +240,74 @@ DO NOT detect language yourself - it has already been detected.
             # Track check_next_appointment result to auto-chain appointment_id for update_appointment_date
             check_next_appointment_result = None
 
+            def collect_user_datetime_text(context_messages: list, latest_user_input: str) -> str:
+                """Collect current and recent user text for date intent detection."""
+                all_user_text = (latest_user_input or "").strip()
+                for msg in context_messages:
+                    if msg.get("role") == "user":
+                        content = msg.get("content", "")
+                        if isinstance(content, str) and content.strip():
+                            all_user_text += f" {content.strip()}"
+                return all_user_text.strip()
+
+            def normalize_tool_date(function_name: str, function_args: dict, all_user_text: str) -> None:
+                """
+                Normalize tool date using fixed +0200 timezone and multilingual relative phrases.
+                Keeps original date if parsing fails.
+                """
+                if "date" not in function_args:
+                    return
+
+                original_date_str = str(function_args["date"]).strip()
+                if not original_date_str:
+                    return
+
+                now = now_in_bot_tz()
+                dt_obj = resolve_relative_datetime(all_user_text, reference=now)
+                if dt_obj:
+                    print(f"DEBUG: Resolved relative datetime from user text ({function_name}): {all_user_text} -> {dt_obj}")
+                else:
+                    dt_obj = parse_datetime_flexible(original_date_str)
+                    if not dt_obj:
+                        print(f"WARNING: Could not parse tool date '{original_date_str}' for {function_name}. Keeping original.")
+                        return
+                    dt_obj = align_datetime_to_day_reference(dt_obj, all_user_text, reference=now)
+
+                # If GPT provided a past year, keep intent but move to current year.
+                if dt_obj.year < now.year:
+                    dt_obj = dt_obj.replace(year=now.year)
+                    print(f"WARNING: GPT proposed past year. Adjusted to current year: {dt_obj}")
+
+                # Cap to 365 days ahead.
+                max_allowed = now + datetime.timedelta(days=365)
+                if dt_obj > max_allowed:
+                    dt_obj = max_allowed.replace(second=0, microsecond=0)
+                    print(f"WARNING: Date too far in future. Capped to: {dt_obj}")
+
+                # Must stay in the future for API validation.
+                if dt_obj <= now:
+                    dt_obj = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)
+                    print(f"WARNING: Date was not in future. Adjusted to: {dt_obj}")
+
+                function_args["date"] = dt_obj.astimezone(BOOKING_TZ).strftime('%Y-%m-%d %H:%M:%S')
+                print(f"DEBUG: Normalized date for {function_name}: {original_date_str} -> {function_args['date']}")
+
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {} 
+                function_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
+                all_user_text_for_date = collect_user_datetime_text(current_context_messages, user_input)
                 
                 # --- NEW LOGIC: Pre-process date/time for create_appointment tool call ---
                 if function_name == "create_appointment":
                     # === CRITICAL VALIDATION: Ensure user explicitly provided date/time ===
                     # GPT sometimes makes up dates - we must verify the user actually specified one
                     def user_provided_datetime(messages, user_input):
-                        """Check if user explicitly mentioned a date or time in their messages."""
-                        # Date/time patterns that indicate user provided a date
-                        datetime_patterns = [
-                            # Explicit dates
-                            r'\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b',  # 21/01, 21-01-2026, etc.
-                            r'\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b',  # 21st january, 21 jan
-                            r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\b',  # january 21st
-                            # Relative dates
-                            r'\b(?:today|tomorrow|the day after tomorrow|after tomorrow|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|week)|this\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b',
-                            r'\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
-                            # Arabic relative dates
-                            r'\b(?:اليوم|بكرا|غدا|بعد بكرا|بعد غدا|الاثنين|الثلاثاء|الاربعاء|الخميس|الجمعة|السبت|الاحد)\b',
-                            # Franco-Arab dates (expanded)
-                            r'\b(?:bukra|bokra|ba3d bukra|ba3d bokra|lyom|el yom|elyom|alyom)\b',
-                            # Franco-Arab time: "aal 3", "3al 3", "saa 3", "el sa3a 3"
-                            r'\b(?:aal|3al|3a|saa|sa3a|el\s*sa3a)\s*\d{1,2}\b',
-                            # Time patterns
-                            r'\b\d{1,2}\s*(?::\d{2})?\s*(?:am|pm|صباحا|مساء|الصبح|بالليل|noon|midnight)\b',
-                            r'\bat\s+\d{1,2}(?::\d{2})?\b',  # at 11, at 11:00
-                            r'\b(?:morning|afternoon|evening|صباح|مساء)\b',
-                            # Simple time reference after relative date (e.g., "bokra 3", "tomorrow 3")
-                            r'\b(?:bukra|bokra|tomorrow|غدا|بكرا)\s+(?:aal|3al|at|el|)?\s*\d{1,2}\b',
-                        ]
-
-                        # Check user input and recent user messages
-                        all_user_text = user_input.lower()
-                        for msg in messages:
-                            if msg.get("role") == "user":
-                                all_user_text += " " + msg.get("content", "").lower()
-
-                        for pattern in datetime_patterns:
-                            if re.search(pattern, all_user_text, re.IGNORECASE):
-                                print(f"DEBUG: Found date/time pattern in user messages: {pattern}")
-                                return True
-
-                        return False
+                        """Check if user explicitly mentioned date/time in multilingual text."""
+                        all_user_text = collect_user_datetime_text(messages, user_input)
+                        has_datetime_hint = text_mentions_datetime(all_user_text)
+                        if has_datetime_hint:
+                            print(f"DEBUG: Date/time hint detected in user messages: {all_user_text}")
+                        return has_datetime_hint
 
                     # Validate that user actually provided a date/time
                     if not user_provided_datetime(current_context_messages, user_input):
@@ -733,82 +630,17 @@ DO NOT detect language yourself - it has already been detected.
                     function_args["machine_id"] = function_args.get("machine_id", config.DEFAULT_MACHINE_ID)
                     function_args["branch_id"] = function_args.get("branch_id", config.DEFAULT_BRANCH_ID)
 
-                    # Date reformatting and validation
-                    if "date" in function_args:
-                        original_date_str = function_args["date"]
-                        try:
-                            dt_obj = None
-                            # Attempt to parse various common formats GPT might produce given instructions
-                            # Primary expectation is 'YYYY-MM-DD HH:MM:SS' but be flexible for GPT's slight deviations
-                            if re.match(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", original_date_str): # 'YYYY-MM-DD HH:MM:SS'
-                                dt_obj = datetime.datetime.strptime(original_date_str, '%Y-%m-%d %H:%M:%S')
-                            elif 'T' in original_date_str: # 'YYYY-MM-DDTHH:MM:SS' (ISO format)
-                                # Handle timezone info if present by removing it before parsing if not needed
-                                if original_date_str.endswith('Z'): # UTC indicator
-                                    dt_obj = datetime.datetime.fromisoformat(original_date_str[:-1])
-                                else:
-                                    dt_obj = datetime.datetime.fromisoformat(original_date_str)
-                            elif re.match(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", original_date_str): # 'YYYY-MM-DD HH:MM'
-                                dt_obj = datetime.datetime.strptime(original_date_str, '%Y-%m-%d %H:%M')
-                                dt_obj = dt_obj.replace(second=0) # Add seconds if missing
-                            elif re.match(r"\d{4}-\d{2}-\d{2}", original_date_str): # 'YYYY-MM-DD' (only date provided)
-                                dt_obj = datetime.datetime.strptime(original_date_str, '%Y-%m-%d')
-                                # Default to a common clinic opening time if only date is provided
-                                dt_obj = dt_obj.replace(hour=10, minute=0, second=0) # Default to 10:00:00 AM
-
-                            if dt_obj:
-                                # Use Lebanon timezone for all date comparisons
-                                now = datetime.datetime.now(LEBANON_TZ).replace(tzinfo=None)  # Naive datetime in Lebanon time
-                                print(f"DEBUG: Current Lebanon time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-                                # NEW: If the year is in the past, assume current year
-                                if dt_obj.year < now.year:
-                                    dt_obj = dt_obj.replace(year=now.year)
-                                    print(f"WARNING: GPT proposed a past year. Adjusted to current year: {dt_obj}")
-
-                                # If date is today but time is in the past, set to 1 hour from now or next business day morning
-                                if dt_obj.date() == now.date() and dt_obj.time() < now.time():
-                                    print(f"WARNING: GPT proposed a time in the past for today: {original_date_str}. Adjusting to 1 hour from now.")
-                                    dt_obj = now + datetime.timedelta(hours=1)
-                                    dt_obj = dt_obj.replace(second=0, microsecond=0) # Clean up seconds/microseconds
-                                    # Ensure it's within business hours (e.g., 9 AM - 6 PM). If not, move to next day 10 AM.
-                                    if dt_obj.hour < 9 or dt_obj.hour >= 18: 
-                                        dt_obj = (now + datetime.timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
-                                    print(f"DEBUG: Adjusted time for today: {dt_obj}")
-
-                                # If date is in the past (e.g. yesterday), push to tomorrow
-                                elif dt_obj.date() < now.date():
-                                    print(f"WARNING: GPT proposed a past date: {original_date_str}. Adjusting to tomorrow.")
-                                    dt_obj = (now + datetime.timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
-                                    print(f"DEBUG: Adjusted past date to tomorrow: {dt_obj}")
-                                
-                                # Validate: Date not more than 365 days from now
-                                if dt_obj > now + datetime.timedelta(days=365):
-                                    print(f"WARNING: GPT proposed a date too far in the future: {original_date_str}. Capping at 365 days from now.")
-                                    dt_obj = now + datetime.timedelta(days=365) # Max 365 days, keep time
-                                    # If the time on that day is past current time, default to 10 AM for consistency
-                                    if dt_obj.date() == (now + datetime.timedelta(days=365)).date() and dt_obj.time() < now.time():
-                                        dt_obj = dt_obj.replace(hour=10, minute=0, second=0)
-                                
-                                # Final check to ensure it's strictly after 'now'
-                                if dt_obj <= now:
-                                    dt_obj = now + datetime.timedelta(minutes=1) # Ensure at least 1 minute into future for API "after now" check
-                                    print(f"WARNING: Final date check adjusted to 1 minute from now: {dt_obj}")
-
-                                function_args["date"] = dt_obj.strftime('%Y-%m-%d %H:%M:%S')
-                                print(f"DEBUG: Reformatted date for {function_name}: {original_date_str} -> {function_args['date']}")
-                            else:
-                                print(f"WARNING: Could not parse or convert natural language date for strict API format: {original_date_str}. Letting API handle the error.")
-                                # If parsing completely failed, we might want to return an error to GPT or handle it.
-                                # For now, we'll let the API call proceed with GPT's original string and let the API error handler respond.
-
-                        except Exception as e:
-                            print(f"ERROR: Date reformatting/validation exception for '{original_date_str}': {e}. Proceeding with original date string.")
+                    # Date normalization and intent alignment (+0200)
+                    normalize_tool_date(function_name, function_args, all_user_text_for_date)
                     
                     # NEW: Remove 'name' from function_args as create_appointment does not accept it directly.
                     # This resolves the `unexpected keyword argument 'name'` error.
                     if 'name' in function_args:
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
+
+                if function_name == "update_appointment_date":
+                    normalize_tool_date(function_name, function_args, all_user_text_for_date)
 
                 # --- FIX: Auto-chain appointment_id from check_next_appointment to update_appointment_date ---
                 # When GPT calls both tools together, it can't know the real appointment_id until check_next_appointment returns.
@@ -921,6 +753,8 @@ DO NOT detect language yourself - it has already been detected.
                 temperature=0.7,
                 response_format={"type": "json_object"}
             )
+            if not second_response.choices:
+                raise ValueError("GPT returned no choices (after tool call)")
             gpt_raw_content = second_response.choices[0].message.content.strip() if second_response.choices[0].message.content else ""
             print(f"GPT Raw Response (after tool call): {gpt_raw_content}")
 
@@ -980,6 +814,8 @@ Answer the user's question or continue the booking flow. Do NOT ask for gender."
                     temperature=0.7,
                     response_format={"type": "json_object"}
                 )
+                if not recall_response.choices:
+                    raise ValueError("GPT recall returned no choices")
                 recall_content = recall_response.choices[0].message.content.strip()
                 recall_parsed = json.loads(recall_content)
 
@@ -1078,6 +914,8 @@ Return JSON with "action" and "bot_reply" fields."""
                                 temperature=0.7,
                                 response_format={"type": "json_object"}
                             )
+                            if not recall_resp.choices:
+                                raise ValueError("GPT recall returned no choices")
                             recall_data = json.loads(recall_resp.choices[0].message.content.strip())
                             if "bot_reply" in recall_data:
                                 parsed_response["bot_reply"] = recall_data["bot_reply"]
@@ -1145,6 +983,8 @@ Rewrite your response in the correct language. Return ONLY a JSON object with "a
                     temperature=0,
                     response_format={"type": "json_object"}
                 )
+                if not correction_response.choices:
+                    raise ValueError("GPT language correction returned no choices")
                 corrected_content = correction_response.choices[0].message.content.strip()
                 corrected_parsed = json.loads(corrected_content)
                 if "bot_reply" in corrected_parsed:

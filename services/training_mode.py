@@ -185,6 +185,8 @@ class TrainingModeManager:
                 temperature=0.7,
                 max_tokens=200
             )
+            if not response.choices:
+                return answer
             return response.choices[0].message.content.strip()
         except Exception as e:
             print(f"Error rewriting: {e}")
@@ -211,7 +213,8 @@ class TrainingModeManager:
                 max_tokens=500,
                 response_format={"type": "json_object"}
             )
-            
+            if not response.choices:
+                raise ValueError("GPT returned no choices")
             result = json.loads(response.choices[0].message.content)
             return result
         except Exception as e:

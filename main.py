@@ -36,11 +36,17 @@ import modules.media_api  # Audio proxy for voice message playback
 import modules.auth_api  # Dashboard user authentication
 
 if __name__ == "__main__":
-    # Initialize Firebase and load bot assets
-    initialize_firestore()
-    config.load_bot_assets()
-    config.load_training_data()
-    print("🤖 Lina's Laser AI Bot is ready!")
+    try:
+        # Initialize Firebase and load bot assets
+        initialize_firestore()
+        config.load_bot_assets()
+        config.load_training_data()
+        print("🤖 Lina's Laser AI Bot is ready!")
+    except Exception as e:
+        print(f"❌ Startup error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8003)

@@ -1,17 +1,22 @@
 """
 Quick script to test different template names with MontyMobile
+Uses environment variables - no hardcoded credentials.
 """
 import asyncio
+import os
 import httpx
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 
 API_CONFIG = {
-    "base_url": "https://omni-apis.montymobile.com",
+    "base_url": os.getenv("MONTYMOBILE_BASE_URL", "https://omni-apis.montymobile.com"),
     "endpoint": "/notification/api/v2/WhatsappApi/send-whatsapp",
-    "tenant": "98df9ffe-fa84-41ee-9293-33614722d952",
-    "api_key": "8bd7edb95cdd5a9ab70162ada74cd5138837499063f18fac2b99004dbc752088",
-    "api_id": "9db12f0d-3c27-4d9c-b9fd-0227aebfd81d",
-    "source": "96178974402"
+    "tenant": os.getenv("MONTYMOBILE_TENANT_ID", ""),
+    "api_key": os.getenv("MONTYMOBILE_API_KEY", ""),
+    "api_id": os.getenv("MONTYMOBILE_API_ID", ""),
+    "source": os.getenv("MONTYMOBILE_SOURCE_NUMBER", ""),
 }
 
 # Template names to test
@@ -81,7 +86,9 @@ async def main():
     print("=" * 60)
     print("🧪 MONTYMOBILE TEMPLATE NAME TESTER")
     print("=" * 60)
-    
+    if not all([API_CONFIG["api_key"], API_CONFIG["tenant"], API_CONFIG["api_id"], API_CONFIG["source"]]):
+        print("❌ Missing MontyMobile credentials in .env (MONTYMOBILE_API_KEY, MONTYMOBILE_TENANT_ID, MONTYMOBILE_API_ID, MONTYMOBILE_SOURCE_NUMBER)")
+        return
     phone = input("\nEnter your phone number (e.g., 96176466674): ").strip()
     
     if not phone:

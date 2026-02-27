@@ -495,7 +495,7 @@ async def get_scheduler_status():
             if msg_type not in statistics["by_type"]:
                 statistics["by_type"][msg_type] = {"scheduled": 0, "sent": 0}
             
-            if msg_data.get("status") == "scheduled":
+            if msg_data.get("status") in ["scheduled", "pending_approval", "sending"]:
                 statistics["by_type"][msg_type]["scheduled"] += 1
             elif msg_data.get("status") == "sent":
                 statistics["by_type"][msg_type]["sent"] += 1
@@ -525,34 +525,144 @@ async def get_scheduler_status():
         }
 
 
-@app.get("/api/smart-messaging/messages")
-async def get_messages_detail(status: str = "all"):
+@app.get("/api/smart-messaging/counts")
+async def get_message_counts():
     """
-    Get detailed message information
+    Get counts for each message type (FAST endpoint for lazy loading).
+    Only counts in-memory scheduled messages - no Firestore calls.
+    Applies the same date filtering as the frontend dashboard.
+    """
+    try:
+        from services.smart_messaging import smart_messaging
+        from datetime import datetime as dt, timedelta
+
+        # Initialize counts
+        counts = {
+            "reminder_24h": 0,
+            "same_day_checkin": 0,
+            "post_session_feedback": 0,
+            "no_show_followup": 0,
+            "one_month_followup": 0,
+            "missed_yesterday": 0,
+            "missed_this_month": 0,
+            "attended_yesterday": 0
+        }
+
+        # Date calculations for filtering (same as frontend)
+        now = dt.now()
+        today_str = now.strftime('%Y-%m-%d')
+        yesterday = now - timedelta(days=1)
+        yesterday_str = yesterday.strftime('%Y-%m-%d')
+        tomorrow = now + timedelta(days=1)
+        tomorrow_str = tomorrow.strftime('%Y-%m-%d')
+        start_of_month_str = now.replace(day=1).strftime('%Y-%m-%d')
+        # First day of next month
+        if now.month == 12:
+            next_month_start = dt(now.year + 1, 1, 1)
+        else:
+            next_month_start = dt(now.year, now.month + 1, 1)
+        start_of_next_month_str = next_month_start.strftime('%Y-%m-%d')
+
+        # Time boundaries for ±24h filters
+        past_24h = now - timedelta(hours=24)
+        next_24h = now + timedelta(hours=24)
+
+        # Count all messages including sent (in-memory only - FAST)
+        for msg_id, msg_data in smart_messaging.scheduled_messages.items():
+            if msg_data.get("status") not in ["scheduled", "pending_approval", "sent", "sending"]:
+                continue
+
+            msg_type = msg_data.get("message_type", "unknown")
+            if msg_type not in counts:
+                continue
+
+            # Get dates for filtering
+            send_at = msg_data.get("send_at")
+            send_date_str = send_at.strftime('%Y-%m-%d') if send_at else None
+            apt_date = msg_data.get("placeholders", {}).get("appointment_date")
+
+            # Apply date filtering based on message type (same logic as frontend)
+            include = False
+
+            if msg_type == "reminder_24h":
+                # Show messages where send_at is within ±24h from now
+                if send_at:
+                    include = past_24h <= send_at <= next_24h
+                else:
+                    include = True
+
+            elif msg_type == "same_day_checkin":
+                # Show messages where send_at is within ±24h from now
+                if send_at:
+                    include = past_24h <= send_at <= next_24h
+                else:
+                    include = True
+
+            elif msg_type == "post_session_feedback":
+                # Show messages scheduled for today only
+                if send_date_str:
+                    include = send_date_str == today_str
+                else:
+                    include = True
+
+            elif msg_type == "no_show_followup":
+                # Show today's missed appointments
+                include = send_date_str == today_str
+
+            elif msg_type == "missed_yesterday":
+                # Show yesterday's missed appointments
+                include = apt_date == yesterday_str or send_date_str == yesterday_str
+
+            elif msg_type == "missed_this_month":
+                # Show current month's missed appointments
+                check_date = apt_date or send_date_str
+                if check_date:
+                    include = start_of_month_str <= check_date < start_of_next_month_str
+
+            elif msg_type == "one_month_followup":
+                # Show 1-month followups scheduled within current month
+                if send_date_str:
+                    include = start_of_month_str <= send_date_str < start_of_next_month_str
+
+            elif msg_type == "attended_yesterday":
+                # Show messages scheduled for today or tomorrow
+                if send_date_str:
+                    include = send_date_str == today_str or send_date_str == tomorrow_str
+                else:
+                    include = True
+
+            if include:
+                counts[msg_type] += 1
+
+        total = sum(counts.values())
+
+        return {
+            "success": True,
+            "counts": counts,
+            "total": total
+        }
+
+    except Exception as e:
+        print(f"Error getting message counts: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.get("/api/smart-messaging/messages")
+async def get_messages_detail(status: str = "all", message_type: str = None):
+    """
+    Get detailed message information from in-memory scheduled messages.
 
     Args:
         status: "sent", "scheduled", or "all"
+        message_type: Filter by specific message type (e.g., "one_month_followup")
 
     Returns:
-        {
-            "success": true,
-            "messages": [
-                {
-                    "message_id": "reminder_24h_...",
-                    "customer_phone": "+96176466674",
-                    "customer_name": "customer name from placeholders",
-                    "message_type": "reminder_24h",
-                    "language": "ar",
-                    "status": "sent|scheduled",
-                    "reason": "Appointment Reminder - 24 Hours",
-                    "scheduled_for": "2025-10-28T14:00:00",  // for scheduled messages
-                    "send_at": "2025-10-28T14:00:00",
-                    "sent_at": "2025-10-28T14:00:15",  // for sent messages
-                    "content_preview": "مرحباً محمد...",
-                    "template_data": {...}
-                }
-            ]
-        }
+        List of scheduled/sent messages with customer info and content preview
     """
     try:
         from services.smart_messaging import smart_messaging
@@ -573,147 +683,60 @@ async def get_messages_detail(status: str = "all"):
             "attended_yesterday": "Thank You - Attended Yesterday"
         }
 
-        # Get SCHEDULED messages from in-memory (to be sent)
-        if status in ["all", "scheduled"]:
-            for message_id, msg_data in smart_messaging.scheduled_messages.items():
-                if msg_data.get("status") != "scheduled":
-                    continue
+        # Get messages from in-memory scheduled_messages dict
+        # Shows both scheduled and sent messages with their actual status
+        for message_id, msg_data in smart_messaging.scheduled_messages.items():
+            msg_status = msg_data.get("status", "unknown")
 
-                # Extract customer name from placeholders
-                customer_name = msg_data.get("placeholders", {}).get("customer_name", "Unknown")
-                msg_type = msg_data.get("message_type", "unknown")
+            # Filter by status parameter
+            if status == "scheduled" and msg_status not in ["scheduled", "pending_approval", "sending"]:
+                continue
+            if status == "sent" and msg_status != "sent":
+                continue
+            # status == "all" shows everything
 
-                message_entry = {
-                    "message_id": message_id,
-                    "customer_phone": msg_data.get("customer_phone", ""),
-                    "customer_name": customer_name,
-                    "message_type": msg_type,
-                    "language": msg_data.get("language", "ar"),
-                    "status": "scheduled",
-                    "reason": message_type_names.get(msg_type, msg_type),
-                    "scheduled_for": msg_data.get("send_at").isoformat() if msg_data.get("send_at") else None,
-                    "send_at": msg_data.get("send_at").isoformat() if msg_data.get("send_at") else None,
-                    "created_at": msg_data.get("created_at").isoformat() if msg_data.get("created_at") else None,
-                    "template_data": msg_data.get("placeholders", {}),
-                    "time_until_send": str(msg_data.get("send_at") - dt.now()) if msg_data.get("send_at") else None
-                }
+            # Extract customer name from placeholders
+            customer_name = msg_data.get("placeholders", {}).get("customer_name", "Unknown")
+            msg_type = msg_data.get("message_type", "unknown")
 
-                messages.append(message_entry)
-                seen_message_ids.add(message_id)
+            # Filter by message_type if specified
+            if message_type and msg_type != message_type:
+                continue
 
-        # Get SENT messages from in-memory
-        if status in ["all", "sent"]:
-            for sent_msg in smart_messaging.sent_messages_log:
-                msg_type = sent_msg.get("type", "unknown")
+            language = msg_data.get("language", "ar")
+            placeholders = msg_data.get("placeholders", {})
 
-                # Try to get full message data from scheduled_messages history
-                message_id = sent_msg.get("message_id", "")
-                template_data = {}
+            # Render the template content with placeholders
+            content_preview = smart_messaging.get_message_content(
+                msg_type,
+                language,
+                placeholders
+            ) or ""
 
-                if message_id in smart_messaging.scheduled_messages:
-                    template_data = smart_messaging.scheduled_messages[message_id].get("placeholders", {})
+            message_entry = {
+                "message_id": message_id,
+                "customer_phone": msg_data.get("customer_phone", ""),
+                "customer_name": customer_name,
+                "message_type": msg_type,
+                "language": language,
+                "status": msg_status,  # Use actual status (scheduled/sent/pending_approval)
+                "reason": message_type_names.get(msg_type, msg_type),
+                "scheduled_for": msg_data.get("send_at").isoformat() if msg_data.get("send_at") else None,
+                "send_at": msg_data.get("send_at").isoformat() if msg_data.get("send_at") else None,
+                "sent_at": msg_data.get("sent_at").isoformat() if msg_data.get("sent_at") else None,
+                "created_at": msg_data.get("created_at").isoformat() if msg_data.get("created_at") else None,
+                "template_data": placeholders,
+                "content_preview": content_preview[:100] + "..." if len(content_preview) > 100 else content_preview,
+                "full_content": content_preview,
+                "time_until_send": str(msg_data.get("send_at") - dt.now()) if msg_data.get("send_at") and msg_status == "scheduled" else None
+            }
 
-                customer_name = template_data.get("customer_name", "Unknown")
+            messages.append(message_entry)
+            seen_message_ids.add(message_id)
 
-                message_entry = {
-                    "message_id": message_id,
-                    "customer_phone": sent_msg.get("phone", ""),
-                    "customer_name": customer_name,
-                    "message_type": msg_type,
-                    "status": "sent",
-                    "reason": message_type_names.get(msg_type, msg_type),
-                    "sent_at": sent_msg.get("sent_at").isoformat() if isinstance(sent_msg.get("sent_at"), dt) else str(sent_msg.get("sent_at")),
-                    "content_preview": sent_msg.get("content", ""),
-                    "template_data": template_data
-                }
-
-                messages.append(message_entry)
-                seen_message_ids.add(message_id)
-
-        # ========================================================
-        # ALSO read from message_preview_queue.json (persistent storage)
-        # This ensures messages survive server restarts
-        # ========================================================
-        try:
-            from services.message_preview_service import message_preview_service
-
-            # Get ALL messages from the preview queue (not just pending_approval)
-            # Pass status=None to get all statuses
-            preview_messages = message_preview_service.get_pending_messages(status=None)
-
-            for msg in preview_messages:
-                msg_status = msg.get("status", "pending_approval")
-                msg_type = msg.get("template_id", "unknown")  # preview queue uses template_id
-
-                # Map preview queue status to display status
-                if msg_status in ["pending_approval", "approved"]:
-                    display_status = "scheduled"
-                elif msg_status == "sent":
-                    display_status = "sent"
-                elif msg_status == "rejected":
-                    continue  # Skip rejected messages
-                else:
-                    display_status = "scheduled"
-
-                # Filter by status if specified
-                if status == "sent" and display_status != "sent":
-                    continue
-                if status == "scheduled" and display_status != "scheduled":
-                    continue
-
-                # Use message_id from preview queue
-                message_id = msg.get("message_id", "")
-
-                # Skip if already added from in-memory
-                if message_id in seen_message_ids:
-                    continue
-
-                # Parse send datetime
-                send_datetime_str = msg.get("scheduled_send_time")
-                time_until_send = None
-                if send_datetime_str:
-                    try:
-                        # Handle both ISO format and datetime string format
-                        if "T" in str(send_datetime_str):
-                            send_dt = dt.fromisoformat(str(send_datetime_str))
-                        else:
-                            send_dt = dt.strptime(str(send_datetime_str), "%Y-%m-%d %H:%M:%S")
-                        if send_dt > dt.now():
-                            time_until_send = str(send_dt - dt.now())
-                        send_datetime_str = send_dt.isoformat()
-                    except:
-                        pass
-
-                # Get placeholders for template data
-                placeholders = msg.get("placeholders", {})
-
-                full_content = msg.get("rendered_content", "")
-                message_entry = {
-                    "message_id": message_id,
-                    "customer_phone": msg.get("customer_phone", ""),
-                    "customer_name": msg.get("customer_name", "Unknown"),
-                    "message_type": msg_type,
-                    "language": msg.get("language", "ar"),
-                    "status": display_status,
-                    "reason": message_type_names.get(msg_type, msg_type),
-                    "scheduled_for": send_datetime_str,
-                    "send_at": send_datetime_str,
-                    "sent_at": send_datetime_str if display_status == "sent" else None,
-                    "created_at": msg.get("created_at"),
-                    "template_data": placeholders,
-                    "time_until_send": time_until_send,
-                    "content_preview": full_content[:100] + "..." if len(full_content) > 100 else full_content,
-                    "full_content": full_content
-                }
-
-                messages.append(message_entry)
-                seen_message_ids.add(message_id)
-
-        except Exception as persist_error:
-            print(f"⚠️ Could not load preview queue messages: {persist_error}")
-            import traceback
-            traceback.print_exc()
-            # Continue without persisted messages if error
+        # Note: Sent messages are now included from scheduled_messages dict
+        # (status changes from "scheduled" to "sent" when message is sent)
+        # No need for separate sent_messages_log lookup
 
         # Sort by date (newest first)
         messages.sort(

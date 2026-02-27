@@ -10,14 +10,13 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   SparklesIcon,
-  DocumentTextIcon,
   ClockIcon,
   ArrowPathIcon,
   CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
-import BotInstructionsTab from "../components/BotInstructionsTab";
+
 import TrainingFileEditor from "../components/TrainingFileEditor";
 
 const Training = () => {
@@ -27,11 +26,6 @@ const Training = () => {
     updateLocalQAPair,
     deleteLocalQAPair,
     getLocalQAStatistics,
-    getInstructions,
-    updateInstructions,
-    getInstructionsBackups,
-    restoreInstructionsBackup,
-    getInstructionsStats,
     loading,
   } = useApi();
 
@@ -71,12 +65,6 @@ const Training = () => {
       name: "Manage Data",
       icon: BookOpenIcon,
       color: "from-blue-500 to-cyan-500",
-    },
-    {
-      id: "instructions",
-      name: "Bot Instructions",
-      icon: DocumentTextIcon,
-      color: "from-purple-500 to-pink-500",
     },
     {
       id: "knowledge_base",
@@ -829,7 +817,7 @@ const Training = () => {
           </motion.div>
         )}
 
-        {activeTab === "instructions" && <BotInstructionsTab />}
+
 
         {activeTab === "knowledge_base" && (
           <TrainingFileEditor

@@ -118,7 +118,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
   return (
     <div
       className={`flex items-center space-x-2 py-1 px-2 rounded-full ${
-        isUserMessage ? "bg-white bg-opacity-20" : "bg-black bg-opacity-10"
+        isUserMessage ? "bg-slate-200" : "bg-black bg-opacity-10"
       }`}
     >
       {/* Play/Pause Button */}
@@ -126,7 +126,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
         onClick={handlePlayPause}
         className={`flex-shrink-0 p-2 rounded-full transition-all hover:scale-110 ${
           isUserMessage
-            ? "bg-white bg-opacity-30 hover:bg-opacity-50 text-white"
+            ? "bg-slate-400 hover:bg-slate-500 text-white"
             : "bg-white bg-opacity-20 hover:bg-opacity-40 text-white"
         }`}
       >
@@ -149,26 +149,28 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
           max={duration || 0}
           value={currentTime}
           onChange={handleProgressChange}
-          className="w-full h-1 bg-white bg-opacity-30 rounded-full appearance-none cursor-pointer accent-white"
+          className={`w-full h-1 rounded-full appearance-none cursor-pointer ${
+            isUserMessage ? "bg-slate-300 accent-slate-600" : "bg-white bg-opacity-30 accent-white"
+          }`}
           style={{
-            background: `linear-gradient(to right, white ${
-              (currentTime / duration) * 100
-            }%, rgba(255,255,255,0.3) ${(currentTime / duration) * 100}%)`,
+            background: isUserMessage
+              ? `linear-gradient(to right, #475569 ${(currentTime / duration) * 100}%, #cbd5e1 ${(currentTime / duration) * 100}%)`
+              : `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.3) ${(currentTime / duration) * 100}%)`,
           }}
         />
-        <div className="text-xs text-white font-medium">
+        <div className={`text-xs font-medium ${isUserMessage ? "text-slate-600" : "text-white"}`}>
           {formatTime(currentTime)} / {formatTime(duration)}
         </div>
       </div>
 
       {/* Error message */}
       {error && (
-        <span className="text-xs text-red-400 ml-2">Audio unavailable</span>
+        <span className={`text-xs ml-2 ${isUserMessage ? "text-red-600" : "text-red-400"}`}>Audio unavailable</span>
       )}
 
       {/* Loading indicator */}
       {isLoading && !error && (
-        <span className="text-xs opacity-50 ml-2">Loading...</span>
+        <span className={`text-xs ml-2 ${isUserMessage ? "text-slate-500" : "opacity-50"}`}>Loading...</span>
       )}
 
       {/* Hidden audio element - uses proxied URL for external sources */}

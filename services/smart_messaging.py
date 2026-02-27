@@ -17,11 +17,59 @@ class SmartMessagingService:
     - 1-month follow-ups
     """
     
+    SENT_MESSAGES_FILE = 'data/sent_smart_messages.json'
+
     def __init__(self):
         self.message_templates = self._load_templates()
         self.scheduled_messages = {}
         self.sent_messages_log = []
+        self._load_sent_messages()
         
+    # ------------------------------------------------------------------
+    # Persistence helpers — keep sent messages across server restarts
+    # ------------------------------------------------------------------
+
+    def _load_sent_messages(self):
+        """Load previously sent messages from disk into scheduled_messages dict."""
+        if not os.path.exists(self.SENT_MESSAGES_FILE):
+            return
+        try:
+            with open(self.SENT_MESSAGES_FILE, 'r', encoding='utf-8') as f:
+                entries = json.load(f)
+            loaded = 0
+            for message_id, entry in entries.items():
+                # Convert ISO strings back to datetime objects
+                for key in ('send_at', 'sent_at', 'created_at', 'last_attempt'):
+                    if entry.get(key):
+                        try:
+                            entry[key] = datetime.fromisoformat(entry[key])
+                        except (ValueError, TypeError):
+                            pass
+                self.scheduled_messages[message_id] = entry
+                loaded += 1
+            print(f"✅ Loaded {loaded} sent messages from {self.SENT_MESSAGES_FILE}")
+        except Exception as e:
+            print(f"⚠️ Could not load sent messages: {e}")
+
+    def _persist_sent_messages(self):
+        """Save all sent messages to disk so they survive restarts."""
+        try:
+            entries = {}
+            for message_id, msg in self.scheduled_messages.items():
+                if msg.get("status") != "sent":
+                    continue
+                # Shallow copy and serialise datetimes
+                entry = dict(msg)
+                for key in ('send_at', 'sent_at', 'created_at', 'last_attempt'):
+                    if isinstance(entry.get(key), datetime):
+                        entry[key] = entry[key].isoformat()
+                entries[message_id] = entry
+            os.makedirs(os.path.dirname(self.SENT_MESSAGES_FILE), exist_ok=True)
+            with open(self.SENT_MESSAGES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(entries, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️ Could not persist sent messages: {e}")
+
     def _load_templates(self) -> Dict:
         """Load message templates from JSON file or use defaults"""
         template_file = 'data/message_templates.json'
@@ -431,11 +479,6 @@ Des questions? Nous sommes là! 💬
 
         message_id = f"{message_type}_{customer_phone}_{send_at.timestamp()}"
 
-        # Check if smart messaging is enabled before scheduling
-        if not self._is_smart_messaging_enabled():
-            print(f"Smart messaging is disabled globally, not scheduling message {message_id}")
-            return None
-
         # Check service-template mapping
         if service_id and not self._is_template_enabled_for_service(service_id, message_type):
             print(f"Template {message_type} not enabled for service {service_id}, skipping")
@@ -537,20 +580,29 @@ Des questions? Nous sommes là! 💬
         template = self.message_templates[message_type].get(language, 
                    self.message_templates[message_type]["en"])
         
-        # Replace placeholders
+        # Replace placeholders (templates use single braces: {customer_name})
         message = template
         for key, value in placeholders.items():
-            placeholder = f"{{{{{key}}}}}"
+            placeholder = f"{{{key}}}"
             message = message.replace(placeholder, str(value))
         
         return message
     
     async def process_scheduled_messages(self) -> List[Dict]:
-        """Process all due scheduled messages"""
-        
+        """
+        Find all due scheduled messages and mark them as 'sending'.
+        The caller is responsible for calling mark_message_sent() or
+        mark_message_failed() after the actual send attempt.
+        """
+
+        # Don't send messages if smart messaging is disabled
+        if not self._is_smart_messaging_enabled():
+            print("Smart messaging is disabled, skipping message sending")
+            return []
+
         current_time = datetime.now()
         messages_to_send = []
-        
+
         for message_id, message_data in list(self.scheduled_messages.items()):
             if message_data["status"] == "scheduled" and message_data["send_at"] <= current_time:
                 # Get message content
@@ -559,29 +611,52 @@ Des questions? Nous sommes là! 💬
                     message_data["language"],
                     message_data["placeholders"]
                 )
-                
+
                 if content:
                     messages_to_send.append({
                         "phone": message_data["customer_phone"],
                         "content": content,
                         "type": message_data["message_type"],
-                        "message_id": message_id
-                    })
-                    
-                    # Update status
-                    self.scheduled_messages[message_id]["status"] = "sent"
-                    self.scheduled_messages[message_id]["sent_at"] = current_time
-                    
-                    # Log sent message
-                    self.sent_messages_log.append({
                         "message_id": message_id,
-                        "phone": message_data["customer_phone"],
-                        "type": message_data["message_type"],
-                        "sent_at": current_time,
-                        "content": content[:100] + "..."  # Log first 100 chars
+                        "customer_name": message_data.get("placeholders", {}).get("customer_name", "Customer")
                     })
-        
+
+                    # Mark as 'sending' to prevent duplicate processing,
+                    # but do NOT mark 'sent' yet — caller does that after
+                    # confirming the WhatsApp send succeeded.
+                    self.scheduled_messages[message_id]["status"] = "sending"
+
         return messages_to_send
+
+    def mark_message_sent(self, message_id: str):
+        """Mark a single message as successfully sent (called after WhatsApp confirms)."""
+        if message_id in self.scheduled_messages:
+            self.scheduled_messages[message_id]["status"] = "sent"
+            self.scheduled_messages[message_id]["sent_at"] = datetime.now()
+
+            msg_data = self.scheduled_messages[message_id]
+            content = self.get_message_content(
+                msg_data["message_type"],
+                msg_data["language"],
+                msg_data["placeholders"]
+            ) or ""
+            self.sent_messages_log.append({
+                "message_id": message_id,
+                "phone": msg_data["customer_phone"],
+                "type": msg_data["message_type"],
+                "sent_at": datetime.now(),
+                "content": content[:100] + "..."
+            })
+            self._persist_sent_messages()
+
+    def mark_message_failed(self, message_id: str, error: str = ""):
+        """Revert a message back to 'scheduled' so it can be retried next cycle."""
+        if message_id in self.scheduled_messages:
+            msg = self.scheduled_messages[message_id]
+            msg["status"] = "scheduled"
+            msg["last_error"] = error
+            msg["last_attempt"] = datetime.now()
+            print(f"   [RETRY] {message_id} reverted to 'scheduled' — {error}")
     
     def schedule_appointment_reminders(
         self,
@@ -597,63 +672,92 @@ Des questions? Nous sommes là! 💬
         customer_phone = customer_data.get("phone")
         customer_name = customer_data.get("name", "عميلنا العزيز")
         language = customer_data.get("language", "ar")
+        service_id = customer_data.get("service_id")
+        service_name = customer_data.get("service", "جلسة ليزر")
 
         placeholders = {
             "customer_name": customer_name,
             "appointment_date": appointment_date.strftime("%Y-%m-%d"),
             "appointment_time": appointment_date.strftime("%H:%M"),
             "branch_name": customer_data.get("branch", "الفرع الرئيسي"),
-            "service_name": customer_data.get("service", "جلسة ليزر"),
+            "service_name": service_name,
             "phone_number": "01234567"  # Support phone
         }
 
         messages_scheduled = 0
+        now = datetime.now()
+
+        print(f"\n📋 Scheduling reminders for {customer_name} ({customer_phone})")
+        print(f"   Appointment: {appointment_date}")
+        print(f"   Current time: {now}")
 
         # Schedule 24h reminder
         reminder_24h_time = appointment_date - timedelta(hours=24)
-        if reminder_24h_time > datetime.now():
-            self.schedule_message(
+        if reminder_24h_time > now:
+            result = self.schedule_message(
                 customer_phone,
                 "reminder_24h",
                 reminder_24h_time,
                 placeholders,
-                language
+                language,
+                service_id=service_id,
+                service_name=service_name
             )
-            messages_scheduled += 1
+            if result:
+                messages_scheduled += 1
+                print(f"   ✅ reminder_24h scheduled for {reminder_24h_time}")
+            else:
+                print(f"   ❌ reminder_24h FAILED (returned None)")
+        else:
+            print(f"   ⏭️ reminder_24h SKIPPED (time {reminder_24h_time} is in the past)")
 
         # Schedule same-day check-in (morning of appointment)
         checkin_time = appointment_date.replace(hour=9, minute=0, second=0)
-        if checkin_time > datetime.now() and checkin_time < appointment_date:
-            self.schedule_message(
+        if checkin_time > now and checkin_time < appointment_date:
+            result = self.schedule_message(
                 customer_phone,
                 "same_day_checkin",
                 checkin_time,
                 placeholders,
-                language
+                language,
+                service_id=service_id,
+                service_name=service_name
             )
-            messages_scheduled += 1
+            if result:
+                messages_scheduled += 1
+                print(f"   ✅ same_day_checkin scheduled for {checkin_time}")
+            else:
+                print(f"   ❌ same_day_checkin FAILED (returned None)")
+        else:
+            print(f"   ⏭️ same_day_checkin SKIPPED (time {checkin_time} not valid)")
 
-        # Schedule post-session feedback (2 hours after appointment)
-        feedback_time = appointment_date + timedelta(hours=2)
-        self.schedule_message(
-            customer_phone,
-            "post_session_feedback",
-            feedback_time,
-            placeholders,
-            language
-        )
-        messages_scheduled += 1
+        # NOTE: post_session_feedback is NOT scheduled here anymore
+        # It's only scheduled in Phase 2 for DONE appointments
+        # This ensures we only send feedback requests to customers who actually attended
 
         # Schedule 1-month follow-up
-        followup_time = appointment_date + timedelta(days=30)
-        self.schedule_message(
+        followup_time = appointment_date + timedelta(days=17)
+        result = self.schedule_message(
             customer_phone,
             "one_month_followup",
             followup_time,
             placeholders,
-            language
+            language,
+            service_id=service_id,
+            service_name=service_name
         )
-        messages_scheduled += 1
+        if result:
+            messages_scheduled += 1
+            print(f"   ✅ one_month_followup scheduled for {followup_time}")
+        else:
+            print(f"   ❌ one_month_followup FAILED (returned None)")
+
+        # NOTE: attended_yesterday is NOT scheduled here anymore
+        # It's only scheduled in Phase 2 of populate_scheduled_messages_from_appointments()
+        # which fetches DONE appointments from yesterday via the API
+        # This ensures we only send thank-you messages to customers who actually attended
+
+        print(f"   📊 Total scheduled: {messages_scheduled}\n")
 
         return messages_scheduled
     
@@ -712,6 +816,100 @@ Des questions? Nous sommes là! 💬
         
         return summary
     
+    def mark_messages_sent_by_phone(self, customer_phone: str, message_type: str) -> int:
+        """
+        Mark all scheduled messages matching customer_phone + message_type as sent.
+        Called by cron send jobs after successfully sending a message.
+
+        Returns:
+            int: Number of messages marked as sent
+        """
+        updated = 0
+        now = datetime.now()
+
+        # Normalize the input phone for comparison
+        phone_clean = str(customer_phone).replace("+", "").replace(" ", "").replace("-", "")
+
+        for message_id, msg_data in self.scheduled_messages.items():
+            if msg_data.get("message_type") != message_type:
+                continue
+            if msg_data.get("status") not in ("scheduled", "pending_approval"):
+                continue
+
+            # Normalize stored phone for comparison
+            stored_phone = str(msg_data.get("customer_phone", "")).replace("+", "").replace(" ", "").replace("-", "")
+
+            if stored_phone == phone_clean or stored_phone.endswith(phone_clean) or phone_clean.endswith(stored_phone):
+                msg_data["status"] = "sent"
+                msg_data["sent_at"] = now
+                updated += 1
+                print(f"   [SYNC] Marked {message_id} as sent in scheduled_messages dict")
+
+        if updated == 0:
+            print(f"   [SYNC] No matching scheduled message found for {customer_phone} / {message_type}")
+        else:
+            self._persist_sent_messages()
+
+        return updated
+
+    def clear_daily_messages(self) -> Dict:
+        """
+        Clear stale messages from previous days.
+        Called at the start of each day to refresh the dashboard.
+
+        Rules:
+        - Remove all messages where send_at date < today for MOST categories
+        - KEEP all one_month_followup and missed_this_month messages (they show
+          cumulative data for the entire month)
+        - KEEP messages sent today (so user can see what was sent)
+        - Persist sent messages before clearing so history is not lost
+        """
+        preserved_types = {"one_month_followup", "missed_this_month"}
+        today = datetime.now().date()
+
+        # Persist sent messages first so they survive the cleanup
+        self._persist_sent_messages()
+
+        cleared = 0
+        kept = 0
+        new_scheduled = {}
+
+        for message_id, msg_data in self.scheduled_messages.items():
+            msg_type = msg_data.get("message_type", "")
+
+            # Always keep 1-month and missed-month messages
+            if msg_type in preserved_types:
+                new_scheduled[message_id] = msg_data
+                kept += 1
+                continue
+
+            # Keep messages that were sent today (so user can see today's sent messages)
+            status = msg_data.get("status", "")
+            sent_at = msg_data.get("sent_at")
+            if status == "sent" and sent_at:
+                sent_date = sent_at.date() if isinstance(sent_at, datetime) else None
+                if sent_date and sent_date >= today:
+                    new_scheduled[message_id] = msg_data
+                    kept += 1
+                    continue
+
+            # Keep messages whose send_at is today or in the future
+            send_at = msg_data.get("send_at")
+            if send_at:
+                send_date = send_at.date() if isinstance(send_at, datetime) else None
+                if send_date and send_date >= today:
+                    new_scheduled[message_id] = msg_data
+                    kept += 1
+                    continue
+
+            # Otherwise, discard (stale message from a previous day)
+            cleared += 1
+
+        self.scheduled_messages = new_scheduled
+
+        print(f"🧹 Daily cleanup: cleared {cleared} stale messages, kept {kept}")
+        return {"cleared": cleared, "kept": kept}
+
     def cancel_scheduled_messages(self, customer_phone: str, message_type: Optional[str] = None):
         """Cancel scheduled messages for a customer"""
         
@@ -723,6 +921,152 @@ Des questions? Nous sommes là! 💬
                     cancelled.append(message_id)
         
         return cancelled
+
+
+# Mapping of message types to friendly names
+message_type_names = {
+    "reminder_24h": "24-Hour Appointment Reminder",
+    "same_day_checkin": "Same-Day Check-in",
+    "post_session_feedback": "Post-Session Feedback",
+    "no_show_followup": "No-Show Follow-up",
+    "one_month_followup": "One-Month Follow-up",
+    "missed_yesterday": "Missed Yesterday Follow-up",
+    "missed_this_month": "Missed This Month Follow-up",
+    "attended_yesterday": "Thank You - Attended Yesterday"
+}
+
+
+async def get_sent_smart_messages_from_firestore(
+    message_type: str = None,
+    start_date: datetime = None,
+    end_date: datetime = None,
+    limit: int = 200
+) -> List[Dict]:
+    """
+    Query Firestore for sent smart messages by scanning conversations.
+
+    Args:
+        message_type: Filter by message type (e.g., "one_month_followup")
+        start_date: Filter messages sent after this date
+        end_date: Filter messages sent before this date
+        limit: Maximum number of messages to return
+
+    Returns:
+        List of sent message dicts with customer info
+    """
+    from utils.utils import get_firestore_db
+
+    db = get_firestore_db()
+    if not db:
+        return []
+
+    app_id = "linas-ai-bot-backend"
+    users_collection = db.collection("artifacts").document(app_id).collection("users")
+
+    sent_messages = []
+
+    try:
+        # Get all users
+        users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
+
+        for user_doc in users_docs:
+            try:
+                user_id = user_doc.id
+                user_data = user_doc.to_dict() or {}
+
+                conversations_collection = users_collection.document(user_id).collection("conversations")
+                conversations_docs = await asyncio.to_thread(lambda uid=user_id: list(
+                    users_collection.document(uid).collection("conversations").stream()
+                ))
+
+                for conv_doc in conversations_docs:
+                    conv_data = conv_doc.to_dict() or {}
+                    messages = conv_data.get("messages", [])
+                    customer_info = conv_data.get("customer_info", {})
+
+                    for msg in messages:
+                        metadata = msg.get("metadata", {})
+
+                        # Filter by source - only smart messages
+                        if metadata.get("source") != "smart_message":
+                            continue
+
+                        # Filter by type if specified
+                        if message_type and metadata.get("type") != message_type:
+                            continue
+
+                        # Only AI messages (sent by bot)
+                        if msg.get("role") != "ai":
+                            continue
+
+                        # Parse timestamp
+                        timestamp = msg.get("timestamp")
+                        msg_datetime = None
+
+                        if hasattr(timestamp, 'isoformat'):
+                            # Firestore timestamp object
+                            msg_datetime = timestamp
+                        elif isinstance(timestamp, str):
+                            try:
+                                msg_datetime = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            except:
+                                continue
+                        else:
+                            continue
+
+                        # Apply date range filter
+                        if start_date:
+                            # Handle timezone-aware vs naive datetime comparison
+                            start_compare = start_date
+                            msg_compare = msg_datetime
+                            if hasattr(msg_datetime, 'tzinfo') and msg_datetime.tzinfo is not None:
+                                if start_date.tzinfo is None:
+                                    msg_compare = msg_datetime.replace(tzinfo=None)
+                            if msg_compare < start_compare:
+                                continue
+
+                        if end_date:
+                            end_compare = end_date
+                            msg_compare = msg_datetime
+                            if hasattr(msg_datetime, 'tzinfo') and msg_datetime.tzinfo is not None:
+                                if end_date.tzinfo is None:
+                                    msg_compare = msg_datetime.replace(tzinfo=None)
+                            if msg_compare > end_compare:
+                                continue
+
+                        # Build message entry matching API format
+                        msg_type = metadata.get("type", "smart_message")
+                        text_content = msg.get("text", "")
+
+                        sent_messages.append({
+                            "message_id": metadata.get("message_id", f"firestore_{conv_doc.id}_{len(sent_messages)}"),
+                            "customer_phone": customer_info.get("phone_full") or user_data.get("phone_full", ""),
+                            "customer_name": customer_info.get("name") or user_data.get("name", "Unknown"),
+                            "message_type": msg_type,
+                            "language": msg.get("language", "ar"),
+                            "status": "sent",
+                            "reason": message_type_names.get(msg_type, msg_type),
+                            "sent_at": msg_datetime.isoformat() if hasattr(msg_datetime, 'isoformat') else str(msg_datetime),
+                            "content_preview": text_content[:100] + "..." if len(text_content) > 100 else text_content,
+                            "full_content": text_content,
+                            "template_data": {},
+                            "source": "firestore"
+                        })
+
+            except Exception as e:
+                print(f"Error processing user {user_doc.id}: {e}")
+                continue
+
+        # Sort by sent_at descending (newest first)
+        sent_messages.sort(key=lambda x: x.get("sent_at", ""), reverse=True)
+        return sent_messages[:limit]
+
+    except Exception as e:
+        print(f"Error querying Firestore for sent messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
 
 # Global instance
 smart_messaging = SmartMessagingService()

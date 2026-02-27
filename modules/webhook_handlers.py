@@ -4,6 +4,7 @@ Webhook handlers module: Message parsing and processing
 Handles webhook reception, parsing, and routing messages to appropriate handlers.
 """
 
+import asyncio
 import json
 import datetime
 import io
@@ -39,11 +40,18 @@ async def verify_webhook(request: Request):
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
 
-    VERIFY_TOKEN = os.getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "YOUR_SECURE_VERIFY_TOKEN")
+    VERIFY_TOKEN = os.getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN")
+    if not VERIFY_TOKEN or VERIFY_TOKEN == "YOUR_SECURE_VERIFY_TOKEN":
+        raise HTTPException(status_code=500, detail="WHATSAPP_WEBHOOK_VERIFY_TOKEN must be set in .env")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
         print("WEBHOOK_VERIFIED")
-        return int(challenge)
+        if challenge is None or (isinstance(challenge, str) and not challenge.strip()):
+            raise HTTPException(status_code=400, detail="Invalid webhook challenge")
+        try:
+            return int(challenge)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid webhook challenge format")
     else:
         raise HTTPException(status_code=403, detail="Verification token mismatch")
 
@@ -51,41 +59,34 @@ async def verify_webhook(request: Request):
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     """Endpoint for receiving WhatsApp messages from different providers."""
-    # CRITICAL DEBUG: Log EVERYTHING at the start
-    print("\n" + "="*80)
-    print("🚨 WEBHOOK HIT DETECTED!")
-    print("="*80)
-    print(f"⏰ Timestamp: {datetime.datetime.now()}")
-    print(f"🌐 Client IP: {request.client.host if request.client else 'Unknown'}")
-    print(f"📍 URL Path: {request.url.path}")
-    print(f"🔧 Method: {request.method}")
-    print(f"📋 Headers:")
-    for header_name, header_value in request.headers.items():
-        print(f"   {header_name}: {header_value}")
-    print("="*80)
-    
+    _debug = os.getenv("DEBUG_WEBHOOK_LOGGING", "false").lower() == "true"
+    if _debug:
+        print("\n" + "="*80)
+        print("🚨 WEBHOOK HIT DETECTED!")
+        print(f"⏰ {datetime.datetime.now()} | IP: {request.client.host if request.client else 'Unknown'}")
+        print("="*80)
+
     try:
         raw_body = await request.body()
-        print(f"📦 Raw body received: {len(raw_body)} bytes")
-        
+        if _debug:
+            print(f"📦 Raw body: {len(raw_body)} bytes")
+
         try:
             webhook_data = json.loads(raw_body.decode('utf-8'))
-        except UnicodeDecodeError as e:
-            print(f"⚠️ WARNING: Webhook contains binary data, using error handling")
+        except UnicodeDecodeError:
             webhook_data = json.loads(raw_body.decode('utf-8', errors='ignore'))
-        
-        print(f"\n=== WEBHOOK DATA PARSED ===")
-        print(f"📊 Current provider: {WhatsAppFactory.get_current_provider()}")
-        print(f"📄 Webhook JSON data:")
-        print(json.dumps(webhook_data, indent=2, ensure_ascii=False))
-        print("="*80)
+
+        if _debug:
+            print(f"Provider: {WhatsAppFactory.get_current_provider()} | Data: {json.dumps(webhook_data, ensure_ascii=False)[:500]}...")
         
         current_provider = WhatsAppFactory.get_current_provider()
         adapter = WhatsAppFactory.get_adapter(current_provider)
-        print(f"Using adapter: {type(adapter).__name__}")
-        
+        if _debug:
+            print(f"Adapter: {type(adapter).__name__}")
+
         parsed_message = adapter.parse_webhook_message(webhook_data)
-        print(f"Parsed message result: {parsed_message}")
+        if _debug and parsed_message:
+            print(f"Parsed: message_id={parsed_message.get('message_id', 'N/A')}")
         
         if not parsed_message:
             print("Trying Meta fallback parser...")
@@ -115,11 +116,13 @@ async def receive_webhook(request: Request):
         
         if parsed_message:
             print(f"Processing parsed message: {parsed_message}")
-            await process_parsed_message(parsed_message, adapter)
-            print("Message processed successfully")
+            # IMPORTANT: Process in background so we return 200 immediately.
+            # MontyMobile throttles/backs off if webhook responses are slow.
+            asyncio.ensure_future(process_parsed_message(parsed_message, adapter))
+            print("Message queued for processing (background)")
         else:
             print("ERROR: Could not parse webhook from any provider")
-            
+
         return {"status": "success"}
         
     except Exception as e:
@@ -399,9 +402,10 @@ async def start_command_whatsapp(user_whatsapp_id: str, user_name: str):
         config.WELCOME_MESSAGES['ar']
     )
 
-    # Import send function from whatsapp_adapters
-    from modules.whatsapp_adapters import send_whatsapp_message
-    await send_whatsapp_message(user_whatsapp_id, initial_message)
+    # Use current provider's adapter (MontyMobile/Meta/etc.) - not hardcoded Meta
+    current_provider = WhatsAppFactory.get_current_provider()
+    adapter = WhatsAppFactory.get_adapter(current_provider)
+    await adapter.send_text_message(user_whatsapp_id, initial_message)
 
     # NOTE: Removed call to start_command() to prevent:
     # 1. Duplicate welcome messages
@@ -466,7 +470,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             # Production endpoint should be similar pattern
             try:
                 # MontyMobile media download endpoint (CORRECT - as provided by MontyMobile support)
-                media_api_url = f"https://omni-apis.montymobile.com/notification/api/v2/WhatsappApi/get-media?MediaId={image_id}"
+                media_api_url = f"{adapter.base_url}/api/v2/WhatsappApi/get-media?MediaId={image_id}"
                 
                 montymobile_headers = {
                     "Tenant": adapter.tenant_id,
@@ -654,7 +658,7 @@ async def handle_voice_message_whatsapp_with_adapter(user_id: str, audio_id: str
             
             try:
                 # MontyMobile media download endpoint (same as images)
-                media_api_url = f"https://omni-apis.montymobile.com/notification/api/v2/WhatsappApi/get-media?MediaId={audio_id}"
+                media_api_url = f"{adapter.base_url}/api/v2/WhatsappApi/get-media?MediaId={audio_id}"
                 
                 montymobile_headers = {
                     "Tenant": adapter.tenant_id,
@@ -727,9 +731,28 @@ async def handle_voice_message_whatsapp_with_adapter(user_id: str, audio_id: str
                     audio_data_bytes = io.BytesIO(audio_bytes)
                     audio_data_bytes.seek(0)
                     print(f"DEBUG: Created BytesIO object for audio processing")
-                    
-                    # Set audio_url to None for MontyMobile (we have the bytes directly)
-                    audio_url = None
+
+                    # Upload audio to Firebase Storage to get a playable URL for the dashboard
+                    try:
+                        import base64
+                        from utils.utils import upload_base64_to_firebase_storage
+
+                        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+                        file_name = f"voice_{user_id}_{audio_id[:8]}.ogg"
+
+                        audio_url = await upload_base64_to_firebase_storage(
+                            audio_base64,
+                            file_name,
+                            file_type="audio/ogg"
+                        )
+
+                        if audio_url:
+                            print(f"DEBUG: Uploaded audio to Firebase Storage: {audio_url}")
+                        else:
+                            print(f"DEBUG: Failed to upload audio to Firebase Storage, audio_url will be None")
+                    except Exception as upload_error:
+                        print(f"WARNING: Failed to upload audio to Firebase Storage: {upload_error}")
+                        audio_url = None
                     
             except Exception as e:
                 print(f"ERROR: Failed to download audio from MontyMobile: {e}")
@@ -789,58 +812,89 @@ async def handle_voice_message_whatsapp_with_adapter(user_id: str, audio_id: str
 
 async def start_training_mode_whatsapp(user_whatsapp_id: str):
     """Adapts start_training_mode for WhatsApp."""
+    current_provider = WhatsAppFactory.get_current_provider()
+    adapter = WhatsAppFactory.get_adapter(current_provider)
+
+    async def _adapter_send(to: str, msg: str = None, img: str = None, aud: str = None):
+        if msg:
+            return await adapter.send_text_message(to, msg)
+        elif img:
+            return await adapter.send_image_message(to, img)
+        elif aud:
+            return await adapter.send_audio_message(to, aud)
+        return False
+
     if user_whatsapp_id == TRAINER_WHATSAPP_NUMBER:
         if user_whatsapp_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_whatsapp_id] = {'user_preferred_lang': 'ar', 'initial_user_query_to_process': None, 'awaiting_human_handover_confirmation': False, 'current_conversation_id': None}
 
-        from modules.whatsapp_adapters import send_whatsapp_message, send_whatsapp_typing_indicator
+        from modules.whatsapp_adapters import send_whatsapp_typing_indicator
         await start_training_mode(
             user_id=user_whatsapp_id,
             user_data=config.user_data_whatsapp[user_whatsapp_id],
-            send_message_func=send_whatsapp_message,
+            send_message_func=_adapter_send,
             send_action_func=send_whatsapp_typing_indicator
         )
     else:
-        from modules.whatsapp_adapters import send_whatsapp_message
-        await send_whatsapp_message(user_whatsapp_id, "ليس لديك صلاحية لتفعيل وضع التدريب.")
+        await adapter.send_text_message(user_whatsapp_id, "ليس لديك صلاحية لتفعيل وضع التدريب.")
 
 
 async def exit_training_mode_whatsapp(user_whatsapp_id: str):
     """Adapts exit_training_mode for WhatsApp."""
+    current_provider = WhatsAppFactory.get_current_provider()
+    adapter = WhatsAppFactory.get_adapter(current_provider)
+
+    async def _adapter_send(to: str, msg: str = None, img: str = None, aud: str = None):
+        if msg:
+            return await adapter.send_text_message(to, msg)
+        elif img:
+            return await adapter.send_image_message(to, img)
+        elif aud:
+            return await adapter.send_audio_message(to, aud)
+        return False
+
     if user_whatsapp_id == TRAINER_WHATSAPP_NUMBER:
         if user_whatsapp_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_whatsapp_id] = {'user_preferred_lang': 'ar', 'initial_user_query_to_process': None, 'awaiting_human_handover_confirmation': False, 'current_conversation_id': None}
-            
-        from modules.whatsapp_adapters import send_whatsapp_message, send_whatsapp_typing_indicator
+
+        from modules.whatsapp_adapters import send_whatsapp_typing_indicator
         await exit_training_mode(
             user_id=user_whatsapp_id,
             user_data=config.user_data_whatsapp[user_whatsapp_id],
-            send_message_func=send_whatsapp_message,
+            send_message_func=_adapter_send,
             send_action_func=send_whatsapp_typing_indicator
         )
     else:
-        from modules.whatsapp_adapters import send_whatsapp_message
-        await send_whatsapp_message(user_whatsapp_id, "ليس لديك صلاحية لإلغاء تفعيل وضع التدريب.")
+        await adapter.send_text_message(user_whatsapp_id, "ليس لديك صلاحية لإلغاء تفعيل وضع التدريب.")
 
 
 async def generate_daily_report_command_whatsapp(user_whatsapp_id: str):
     """Adapts generate_daily_report_command for WhatsApp."""
+    current_provider = WhatsAppFactory.get_current_provider()
+    adapter = WhatsAppFactory.get_adapter(current_provider)
+
+    async def _adapter_send(to: str, msg: str = None, img: str = None, aud: str = None):
+        if msg:
+            return await adapter.send_text_message(to, msg)
+        elif img:
+            return await adapter.send_image_message(to, img)
+        elif aud:
+            return await adapter.send_audio_message(to, aud)
+        return False
+
     if user_whatsapp_id == TRAINER_WHATSAPP_NUMBER:
-        from modules.whatsapp_adapters import send_whatsapp_message
-        await send_whatsapp_message(user_whatsapp_id, "جارٍ توليد التقرير اليومي... 📊")
-        
+        await adapter.send_text_message(user_whatsapp_id, "جارٍ توليد التقرير اليومي... 📊")
+
         try:
-            report_message = await generate_daily_report_command(
+            await generate_daily_report_command(
                 user_id=user_whatsapp_id,
-                send_message_func=send_whatsapp_message
+                send_message_func=_adapter_send
             )
         except Exception as e:
             print(f"ERROR generating daily report for {user_whatsapp_id}: {e}")
-            from modules.whatsapp_adapters import send_whatsapp_message
-            await send_whatsapp_message(user_whatsapp_id, f"حدث خطأ أثناء توليد التقرير: {str(e)}")
+            await adapter.send_text_message(user_whatsapp_id, f"حدث خطأ أثناء توليد التقرير: {str(e)}")
     else:
-        from modules.whatsapp_adapters import send_whatsapp_message
-        await send_whatsapp_message(user_whatsapp_id, "ليس لديك صلاحية لطلب التقرير اليومي.")
+        await adapter.send_text_message(user_whatsapp_id, "ليس لديك صلاحية لطلب التقرير اليومي.")
 
 
 async def send_whatsapp_typing_indicator(user_whatsapp_id: str):
