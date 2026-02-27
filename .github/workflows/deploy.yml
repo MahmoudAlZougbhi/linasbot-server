@@ -22,29 +22,23 @@ jobs:
       - name: Start deployment
         run: |
           echo "Starting deployment..."
-          echo "Repository: ${GITHUB_REPOSITORY}"
-          echo "Branch: ${GITHUB_REF_NAME}"
-          echo "Commit: ${GITHUB_SHA}"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Commit: $GITHUB_SHA"
 
       - name: Deploy on production server
         uses: appleboy/ssh-action@v1.0.3
         with:
-         host: ${{ secrets.SERVER_HOST }}
-         username: ${{ secrets.SERVER_USER }}
-         key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           script_stop: true
           command_timeout: 30m
           script: |
             set -e
             echo "[deploy] Connected to $(hostname)"
-            echo "[deploy] Entering /opt/linasbot"
             cd /opt/linasbot
-
-            echo "[deploy] Pulling latest code from origin/main"
             git pull --ff-only origin main
-
-            echo "[deploy] Running update script"
             sudo /opt/linasbot/update.sh
-
             echo "[deploy] Deployment completed successfully"
