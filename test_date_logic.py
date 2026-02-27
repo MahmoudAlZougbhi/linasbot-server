@@ -5,6 +5,8 @@ import pytest
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
+    detect_day_reference,
+    detect_relative_intent,
     parse_datetime_flexible,
     resolve_relative_datetime,
     text_mentions_datetime,
@@ -19,6 +21,7 @@ REFERENCE_NOW = datetime.datetime(2026, 2, 27, 10, 0, 0, tzinfo=BOT_FIXED_TZ)
     [
         "اليوم الساعة 3",
         "بكرا الصبح",
+        "بكرة الصبح",
         "later today",
         "tomorrow morning",
         "بعد ساعتين",
@@ -51,6 +54,40 @@ def test_resolve_relative_tomorrow_morning(text):
     resolved = resolve_relative_datetime(text, reference=REFERENCE_NOW)
     assert resolved is not None
     assert resolved.strftime("%Y-%m-%d %H:%M:%S") == "2026-02-28 10:00:00"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("اليوم", "today"),
+        ("بكرا", "tomorrow"),
+        ("today", "today"),
+        ("tomorrow", "tomorrow"),
+        ("بكرا الصبح", "tomorrow"),
+        ("بكرة الصبح", "tomorrow"),
+    ],
+)
+def test_detect_day_reference_core_keywords(text, expected):
+    assert detect_day_reference(text) == expected
+
+
+def test_detect_relative_intent_core_phrases():
+    assert detect_relative_intent("بعد ساعتين") == "after_two_hours"
+    assert detect_relative_intent("later today") == "later_today"
+    assert detect_relative_intent("tomorrow morning") == "tomorrow_morning"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("tomorrow at 5 no later today", "today"),
+        ("later today no tomorrow morning", "tomorrow"),
+        ("بكرا الساعة 5 لا اليوم", "today"),
+        ("اليوم الساعة 5 لا بكرا الصبح", "tomorrow"),
+    ],
+)
+def test_detect_day_reference_prefers_latest_mention(text, expected):
+    assert detect_day_reference(text) == expected
 
 
 def test_align_today_reference_when_candidate_is_tomorrow():

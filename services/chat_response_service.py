@@ -241,14 +241,27 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             check_next_appointment_result = None
 
             def collect_user_datetime_text(context_messages: list, latest_user_input: str) -> str:
-                """Collect current and recent user text for date intent detection."""
-                all_user_text = (latest_user_input or "").strip()
-                for msg in context_messages:
-                    if msg.get("role") == "user":
-                        content = msg.get("content", "")
-                        if isinstance(content, str) and content.strip():
-                            all_user_text += f" {content.strip()}"
-                return all_user_text.strip()
+                """
+                Collect recent user text for date intent detection.
+                Keeps chronology and ends with latest user input so the newest
+                'today/tomorrow' intent wins over stale history.
+                """
+                recent_user_messages = []
+                for msg in context_messages[-12:]:
+                    if msg.get("role") != "user":
+                        continue
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and content.strip():
+                        recent_user_messages.append(content.strip())
+
+                # Keep only the most recent few user turns to avoid stale date leakage.
+                recent_user_messages = recent_user_messages[-4:]
+
+                latest_clean = (latest_user_input or "").strip()
+                if latest_clean and (not recent_user_messages or recent_user_messages[-1] != latest_clean):
+                    recent_user_messages.append(latest_clean)
+
+                return " ".join(recent_user_messages).strip()
 
             def normalize_tool_date(function_name: str, function_args: dict, all_user_text: str) -> None:
                 """

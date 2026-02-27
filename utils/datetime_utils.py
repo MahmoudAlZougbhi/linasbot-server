@@ -43,6 +43,8 @@ _TOMORROW_MORNING_PATTERNS = [
     r"\btomorrow\s+morning\b",
     r"\bdemain\s+matin\b",
     r"\bبكرا\s*الصبح\b",
+    r"\bبكر[اة]\s*الصبح\b",
+    r"\bبكر[اة]\s*صبح(?:ا)?\b",
     r"\bغد[اًا]?\s*صباح(?:ا)?\b",
     r"\bb(?:u|o)kra\s+(?:el\s+)?(?:soboh|sobh|sob7|saba7)\b",
 ]
@@ -56,6 +58,7 @@ _LATER_TODAY_PATTERNS = [
     r"\blyom\s+ba3den\b",
     r"\belyom\s+ba3den\b",
     r"\baujourd['’]hui\s+plus\s+tard\b",
+    r"\bplus\s+tard\s+aujourd['’]hui\b",
     r"\bce\s+soir\b",
 ]
 
@@ -73,6 +76,7 @@ _TOMORROW_PATTERNS = [
     r"\btomorrow\b",
     r"\bdemain\b",
     r"\bبكرا\b",
+    r"\bبكر[اة]\b",
     r"\bغد[اًا]?\b",
     r"\bbukra\b",
     r"\bbokra\b",
@@ -99,12 +103,21 @@ def detect_relative_intent(text: str) -> Optional[str]:
     if not normalized:
         return None
 
-    if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _AFTER_TWO_HOURS_PATTERNS):
-        return "after_two_hours"
-    if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _TOMORROW_MORNING_PATTERNS):
-        return "tomorrow_morning"
-    if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _LATER_TODAY_PATTERNS):
-        return "later_today"
+    def _last_match_pos(patterns: list[str]) -> int:
+        last_pos = -1
+        for pattern in patterns:
+            for match in re.finditer(pattern, normalized, re.IGNORECASE):
+                last_pos = max(last_pos, match.start())
+        return last_pos
+
+    intent_positions = {
+        "after_two_hours": _last_match_pos(_AFTER_TWO_HOURS_PATTERNS),
+        "tomorrow_morning": _last_match_pos(_TOMORROW_MORNING_PATTERNS),
+        "later_today": _last_match_pos(_LATER_TODAY_PATTERNS),
+    }
+    best_intent, best_pos = max(intent_positions.items(), key=lambda item: item[1])
+    if best_pos != -1:
+        return best_intent
     return None
 
 
@@ -114,15 +127,38 @@ def detect_day_reference(text: str) -> Optional[str]:
     if not normalized:
         return None
 
-    if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _TOMORROW_MORNING_PATTERNS):
+    def _last_match_pos(patterns: list[str]) -> int:
+        last_pos = -1
+        for pattern in patterns:
+            for match in re.finditer(pattern, normalized, re.IGNORECASE):
+                last_pos = max(last_pos, match.start())
+        return last_pos
+
+    tomorrow_pos = max(
+        _last_match_pos(_TOMORROW_MORNING_PATTERNS),
+        _last_match_pos(_TOMORROW_PATTERNS),
+    )
+    today_pos = max(
+        _last_match_pos(_LATER_TODAY_PATTERNS),
+        _last_match_pos(_TODAY_PATTERNS),
+    )
+
+    if tomorrow_pos == -1 and today_pos == -1:
+        return None
+    if tomorrow_pos > today_pos:
         return "tomorrow"
-    if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _TOMORROW_PATTERNS):
+    if today_pos > tomorrow_pos:
+        return "today"
+
+    # Tie-breaker: fall back to relative intent (more specific than day keyword).
+    relative_intent = detect_relative_intent(normalized)
+    if relative_intent == "tomorrow_morning":
         return "tomorrow"
-    if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _LATER_TODAY_PATTERNS):
+    if relative_intent in {"after_two_hours", "later_today"}:
         return "today"
-    if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _TODAY_PATTERNS):
-        return "today"
-    return None
+
+    # Stable fallback if both exist at the exact same position.
+    return "today" if today_pos != -1 else "tomorrow"
 
 
 def text_mentions_datetime(text: str) -> bool:
