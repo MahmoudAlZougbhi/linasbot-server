@@ -30,7 +30,7 @@ echo ""
 # Step 1: System dependencies
 echo -e "${YELLOW}[1/7] Installing system dependencies...${NC}"
 apt update -qq
-apt install -y python3 python3-venv python3-pip ffmpeg curl
+apt install -y python3 python3-venv python3-pip ffmpeg curl nodejs npm
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
@@ -58,6 +58,19 @@ echo -e "${YELLOW}[4/7] Installing Python dependencies...${NC}"
 pip install --upgrade pip
 pip install -r requirements.txt
 echo -e "${GREEN}Done!${NC}"
+echo ""
+
+# Step 4b: Build dashboard (React)
+echo -e "${YELLOW}[4b/7] Building dashboard...${NC}"
+if [ -d "$APP_DIR/dashboard" ] && [ -f "$APP_DIR/dashboard/package.json" ]; then
+    cd "$APP_DIR/dashboard"
+    npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps 2>/dev/null || true
+    npm run build 2>/dev/null || echo "⚠️ Dashboard build skipped (npm not available or build failed)"
+    cd "$APP_DIR"
+    echo -e "${GREEN}Done!${NC}"
+else
+    echo "Dashboard folder not found, skipping build."
+fi
 echo ""
 
 # Step 5: Verify .env file exists
