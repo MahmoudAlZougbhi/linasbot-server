@@ -39,6 +39,7 @@ jobs:
             set -e
             echo "[deploy] Connected to $(hostname)"
             cd /opt/linasbot
-            git pull --ff-only origin main
+            git fetch origin main
+            git reset --hard origin/main
             sudo bash /opt/linasbot/deploy.sh
             echo "[deploy] Deployment completed successfully"
