@@ -101,8 +101,10 @@ RestartSec=10
 StandardOutput=append:/var/log/${SERVICE_NAME}.log
 StandardError=append:/var/log/${SERVICE_NAME}.error.log
 
-# Environment
+# Load .env (optional: - means don't fail if missing)
+EnvironmentFile=-${APP_DIR}/.env
 Environment=PYTHONUNBUFFERED=1
+Environment=PATH=${APP_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=multi-user.target
@@ -123,7 +125,10 @@ if systemctl is-active --quiet ${SERVICE_NAME}; then
     echo -e "${GREEN}Service started successfully!${NC}"
 else
     echo -e "${RED}Service failed to start. Check logs:${NC}"
-    journalctl -u ${SERVICE_NAME} -n 20 --no-pager
+    journalctl -u ${SERVICE_NAME} -n 30 --no-pager
+    echo ""
+    echo -e "${YELLOW}Manual debug: cd ${APP_DIR} && source venv/bin/activate && python main.py${NC}"
+    echo -e "${YELLOW}See DEPLOY_TROUBLESHOOT.md for full diagnostic steps.${NC}"
     exit 1
 fi
 echo ""
