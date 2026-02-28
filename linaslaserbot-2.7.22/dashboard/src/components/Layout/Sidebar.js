@@ -6,7 +6,6 @@ import {
   BeakerIcon,
   AcademicCapIcon,
   ChatBubbleLeftRightIcon,
-  ClockIcon,
   ChartBarIcon,
   BellIcon,
   Cog6ToothIcon,
@@ -39,13 +38,6 @@ const navigationItems = [
     icon: ChatBubbleLeftRightIcon,
     badge: "Active",
     permissionKey: "liveChat",
-  },
-  {
-    name: "Chat History",
-    href: "/chat-history",
-    icon: ClockIcon,
-    badge: "Active",
-    permissionKey: "chatHistory",
   },
   {
     name: "Analytics",

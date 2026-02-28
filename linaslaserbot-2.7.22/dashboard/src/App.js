@@ -16,7 +16,6 @@ import SimpleApiTest from './pages/SimpleApiTest';
 import Training from './pages/Training';
 import Analytics from './pages/Analytics';
 import LiveChat from './pages/LiveChat';
-import ChatHistory from './pages/ChatHistory';
 import SmartMessaging from './pages/SmartMessaging';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
@@ -127,11 +126,7 @@ function AppContent() {
                       <LiveChat />
                     </ProtectedRoute>
                   } />
-                  <Route path="/chat-history" element={
-                    <ProtectedRoute>
-                      <ChatHistory />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/chat-history" element={<Navigate to="/live-chat" replace />} />
                   <Route path="/analytics" element={
                     <ProtectedRoute>
                       <Analytics />

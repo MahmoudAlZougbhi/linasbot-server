@@ -420,6 +420,29 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     payload[key] = normalized_metadata[key]
         return payload
 
+    def _build_conversation_summary_fields(message_payload: dict, total_messages: int) -> dict:
+        message_text = str(message_payload.get("text", "")).strip()
+        message_type = str(
+            message_payload.get("type")
+            or message_payload.get("metadata", {}).get("type")
+            or "text"
+        ).strip().lower()
+
+        if not message_text:
+            if message_type == "voice":
+                message_text = "[Voice Message]"
+            elif message_type == "image":
+                message_text = "[Image]"
+
+        return {
+            "message_count": max(0, int(total_messages)),
+            "last_message_preview": message_text,
+            "last_message_text": message_text,
+            "last_message_type": message_type or "text",
+            "last_message_role": message_payload.get("role"),
+            "last_message_timestamp": message_payload.get("timestamp"),
+        }
+
     try:
         if conversation_id:
             # Update existing conversation document
@@ -444,10 +467,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
 
                 current_messages.append(message_data)
+                summary_fields = _build_conversation_summary_fields(
+                    message_payload=message_data,
+                    total_messages=len(current_messages),
+                )
                 await asyncio.to_thread(doc_ref.update, {
                     "messages": current_messages,
                     "customer_info": customer_info,
-                    "last_updated": datetime.datetime.now()
+                    "last_updated": datetime.datetime.now(),
+                    **summary_fields,
                 })
                 _invalidate_live_chat_cache()
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
@@ -468,6 +496,10 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             else:
                 # Conversation not found - create new one
                 message_data = _build_message_data()
+                summary_fields = _build_conversation_summary_fields(
+                    message_payload=message_data,
+                    total_messages=1,
+                )
 
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": user_id,
@@ -477,7 +509,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "status": "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
-                    "last_updated": datetime.datetime.now()
+                    "last_updated": datetime.datetime.now(),
+                    **summary_fields,
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
@@ -533,6 +566,10 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
 
                 current_messages.append(message_data)
+                summary_fields = _build_conversation_summary_fields(
+                    message_payload=message_data,
+                    total_messages=len(current_messages),
+                )
                 # Reopen conversation if it was resolved/archived - any new message should make it active
                 await asyncio.to_thread(doc_ref.update, {
                     "messages": current_messages,
@@ -540,7 +577,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "last_updated": datetime.datetime.now(),
                     "status": "active",
                     "human_takeover_active": False,
-                    "operator_id": None
+                    "operator_id": None,
+                    **summary_fields,
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
@@ -562,6 +600,10 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     pass
             else:
                 # No existing conversation found — create a new one
+                summary_fields = _build_conversation_summary_fields(
+                    message_payload=message_data,
+                    total_messages=1,
+                )
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": user_id,
                     "customer_info": customer_info,
@@ -570,7 +612,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "status": "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
-                    "last_updated": datetime.datetime.now()
+                    "last_updated": datetime.datetime.now(),
+                    **summary_fields,
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}

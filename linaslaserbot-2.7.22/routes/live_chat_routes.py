@@ -146,15 +146,42 @@ class EndConversationRequest(BaseModel):
     operator_id: str
 
 @router.get("/api/live-chat/active-conversations")
-async def get_active_conversations(search: str = Query(default="", description="Search by client name or phone")):
-    """Get active conversations (grouped by client, 6-hour filter) with optional search."""
+async def get_active_conversations(
+    search: str = Query(default="", description="Search by client name or phone"),
+    include_inactive: bool = Query(default=False, description="Include non-live chats in WhatsApp-style inbox"),
+    limit: int = Query(default=30, ge=1, le=200, description="Maximum chats to return"),
+    page: int = Query(default=1, ge=1, description="Page number for inbox pagination"),
+):
+    """Get active conversations or unified inbox view (live + non-live)."""
     try:
+        if include_inactive:
+            inbox_result = await live_chat_service.get_live_chat_inbox(
+                search=search,
+                limit=limit,
+                page=page,
+            )
+            conversations = inbox_result.get("conversations", [])
+            return {
+                "success": inbox_result.get("success", True),
+                "conversations": conversations,
+                "total": inbox_result.get("total", len(conversations)),
+                "search": search,
+                "include_inactive": include_inactive,
+                "limit": inbox_result.get("limit", limit),
+                "page": inbox_result.get("page", page),
+                "has_more": inbox_result.get("has_more", False),
+            }
+
         conversations = await live_chat_service.get_active_conversations(search=search)
         return {
             "success": True,
             "conversations": conversations,
             "total": len(conversations),
-            "search": search
+            "search": search,
+            "include_inactive": include_inactive,
+            "limit": limit,
+            "page": page,
+            "has_more": False,
         }
     except Exception as e:
         print(f"❌ Error in get_active_conversations: {e}")

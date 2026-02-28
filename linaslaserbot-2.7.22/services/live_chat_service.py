@@ -36,6 +36,9 @@ class LiveChatService:
         # Cache for active conversations
         self._conversations_cache = None
         self._conversations_cache_time = None
+        # Cache for unified inbox view (live + non-live)
+        self._inbox_cache = None
+        self._inbox_cache_time = None
         # Cache for waiting queue
         self._queue_cache = None
         self._queue_cache_time = None
@@ -48,6 +51,8 @@ class LiveChatService:
         """Clear service caches so UI reads latest state."""
         self._conversations_cache = None
         self._conversations_cache_time = None
+        self._inbox_cache = None
+        self._inbox_cache_time = None
         self._queue_cache = None
         self._queue_cache_time = None
 
@@ -109,6 +114,36 @@ class LiveChatService:
         start = (safe_page - 1) * safe_page_size
         end = start + safe_page_size
         return items[start:end], total_items, total_pages
+
+    def _extract_last_message_preview(self, conv_data: Dict[str, Any]) -> str:
+        """
+        Build a lightweight preview text without loading/storing full messages array.
+        Supports old/new schema variants and falls back by message type.
+        """
+        candidates = [
+            conv_data.get("last_message_preview"),
+            conv_data.get("last_message_text"),
+        ]
+
+        nested_last_message = conv_data.get("last_message")
+        if isinstance(nested_last_message, dict):
+            candidates.append(nested_last_message.get("content"))
+            candidates.append(nested_last_message.get("text"))
+        elif isinstance(nested_last_message, str):
+            candidates.append(nested_last_message)
+
+        for candidate in candidates:
+            if candidate is not None:
+                text = str(candidate).strip()
+                if text:
+                    return text
+
+        msg_type = str(conv_data.get("last_message_type", "")).strip().lower()
+        if msg_type == "voice":
+            return "[Voice Message]"
+        if msg_type == "image":
+            return "[Image]"
+        return ""
         
     async def get_active_conversations(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -137,168 +172,164 @@ class LiveChatService:
             db = get_firestore_db()
             if not db:
                 return []
-            
-            app_id = "linas-ai-bot-backend"
-            users_collection = db.collection("artifacts").document(app_id).collection("users")
-            
-            # Dictionary to group conversations by client
-            client_conversations = {}
+
             current_time = datetime.datetime.now(datetime.timezone.utc)
+            cutoff_time = current_time - datetime.timedelta(seconds=self.ACTIVE_TIME_WINDOW)
 
-            # Pull all users (no hard cap) so live/history stay consistent.
-            # Try sorted query first; fallback if ordering field is inconsistent.
+            # Only fetch lightweight conversation metadata (no messages array).
+            projection_fields = [
+                "status",
+                "human_takeover_active",
+                "operator_id",
+                "sentiment",
+                "customer_info",
+                "timestamp",
+                "last_updated",
+                "message_count",
+                "last_message_preview",
+                "last_message_text",
+                "last_message_role",
+                "last_message_type",
+                "last_message_timestamp",
+            ]
+
+            conversation_group = db.collection_group(config.FIRESTORE_CONVERSATIONS_COLLECTION).select(projection_fields)
+            docs_by_path: Dict[str, Any] = {}
+
+            # Fast path: recent conversations only.
             try:
-                users_docs = await asyncio.to_thread(
-                    lambda: list(users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).stream())
-                )
-            except Exception:
-                users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
+                recent_query = conversation_group.where("last_updated", ">=", cutoff_time)
+                recent_docs = await asyncio.to_thread(lambda: list(recent_query.stream()))
+                for doc in recent_docs:
+                    docs_by_path[doc.reference.path] = doc
+            except Exception as recent_err:
+                # Fallback path if inequality query/index is unavailable.
+                print(f"⚠️ Falling back to broad live-chat scan: {recent_err}")
+                fallback_docs = await asyncio.to_thread(lambda: list(conversation_group.stream()))
+                for doc in fallback_docs:
+                    docs_by_path[doc.reference.path] = doc
 
-            # Helper function to fetch conversations for a single user
-            async def fetch_user_conversations(user_id):
-                """Fetch all conversations for a user"""
-                try:
-                    conversations_collection = users_collection.document(user_id).collection(
-                        config.FIRESTORE_CONVERSATIONS_COLLECTION
-                    )
-                    # ✅ Use asyncio.to_thread to prevent blocking the event loop
-                    conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
-                    return (user_id, conversations_docs)
-                except Exception as e:
-                    print(f"⚠️ Error fetching conversations for user {user_id}: {e}")
-                    return (user_id, [])
+            # Keep any human-takeover conversations visible even if older than cutoff.
+            try:
+                takeover_query = conversation_group.where("human_takeover_active", "==", True)
+                takeover_docs = await asyncio.to_thread(lambda: list(takeover_query.stream()))
+                for doc in takeover_docs:
+                    docs_by_path[doc.reference.path] = doc
+            except Exception as takeover_err:
+                print(f"⚠️ Could not fetch takeover conversations separately: {takeover_err}")
 
-            # Fetch conversations for all users in parallel
-            user_ids = [doc.id for doc in users_docs]
-            conversation_results = await asyncio.gather(
-                *[fetch_user_conversations(uid) for uid in user_ids],
-                return_exceptions=True
-            )
+            client_conversations: Dict[str, Dict[str, Any]] = {}
 
-            # Process results
-            for result in conversation_results:
-                if isinstance(result, Exception):
-                    print(f"⚠️ Error in parallel fetch: {result}")
+            for conv_doc in docs_by_path.values():
+                conv_data = conv_doc.to_dict() or {}
+
+                # Get user ID from path .../users/{user_id}/conversations/{conversation_id}
+                user_ref = conv_doc.reference.parent.parent
+                user_id = user_ref.id if user_ref else None
+                if not user_id:
                     continue
 
-                user_id, conversations_docs = result
+                conv_status = conv_data.get("status", "active")
+                if conv_status in ["resolved", "archived"]:
+                    continue
 
-                # Collect all conversations for this client
-                client_convs = []
-                for conv_doc in conversations_docs:
-                    conv_data = conv_doc.to_dict()
-                    messages = self._dedupe_messages(conv_data.get("messages", []))
+                human_takeover = bool(conv_data.get("human_takeover_active", False))
+                operator_id = conv_data.get("operator_id")
+                sentiment = conv_data.get("sentiment", "neutral")
 
-                    if not messages:
-                        continue
+                last_activity_dt = self._parse_timestamp(
+                    conv_data.get("last_updated")
+                    or conv_data.get("last_message_timestamp")
+                    or conv_data.get("timestamp")
+                )
 
-                    # Get conversation status
-                    conv_status = conv_data.get("status", "active")
+                time_diff = (current_time - last_activity_dt).total_seconds()
+                if time_diff > self.ACTIVE_TIME_WINDOW and not human_takeover:
+                    continue
 
-                    # Skip resolved or archived conversations
-                    if conv_status in ["resolved", "archived"]:
-                        continue
+                if human_takeover:
+                    status = "human" if operator_id else "waiting_human"
+                else:
+                    status = "bot"
 
-                    # Get last message time (use actual last message for timing)
-                    last_message = messages[-1]
-                    last_message_time = self._parse_timestamp(last_message.get("timestamp"))
+                # Waiting-for-human items are shown in waiting queue only.
+                if status == "waiting_human":
+                    continue
 
-                    # For preview, find the last non-smart message
-                    last_preview_message = last_message
-                    for msg in reversed(messages):
-                        if msg.get("metadata", {}).get("source") != "smart_message":
-                            last_preview_message = msg
-                            break
+                first_message_dt = self._parse_timestamp(conv_data.get("timestamp") or conv_data.get("last_updated"))
+                duration_seconds = max(0, int((last_activity_dt - first_message_dt).total_seconds()))
 
-                    # Apply time filter (read-only; do not mutate status while listing)
-                    time_diff = (current_time - last_message_time).total_seconds()
-                    if time_diff > self.ACTIVE_TIME_WINDOW:
-                        # Keep human/waiting conversations visible even if old.
-                        if not conv_data.get("human_takeover_active", False):
-                            continue
-                    
-                    # Get conversation metadata
-                    human_takeover = conv_data.get("human_takeover_active", False)
-                    operator_id = conv_data.get("operator_id")
-                    sentiment = conv_data.get("sentiment", "neutral")
-                    
-                    # Determine status
-                    if human_takeover:
-                        status = "human" if operator_id else "waiting_human"
-                    else:
-                        status = "bot"
-                    
-                    # Skip conversations waiting for human - they should only appear in waiting queue
-                    if status == "waiting_human":
-                        continue
-                    
-                    # Calculate duration
-                    first_message_time = self._parse_timestamp(messages[0].get("timestamp"))
-                    duration_seconds = int((last_message_time - first_message_time).total_seconds())
-                    
-                    conversation = {
-                        "conversation_id": conv_doc.id,
+                raw_message_count = conv_data.get("message_count", 0)
+                try:
+                    message_count = max(0, int(raw_message_count))
+                except Exception:
+                    message_count = 0
+
+                customer_info = conv_data.get("customer_info", {}) or {}
+                preview_text = self._extract_last_message_preview(conv_data)
+                preview_role = str(conv_data.get("last_message_role", "")).strip().lower()
+                is_user_preview = preview_role == "user"
+
+                conversation = {
+                    "conversation_id": conv_doc.id,
+                    "user_id": user_id,
+                    "status": status,
+                    "message_count": message_count,
+                    "last_activity": last_activity_dt.isoformat(),
+                    "last_activity_dt": last_activity_dt,
+                    "duration_seconds": duration_seconds,
+                    "sentiment": sentiment,
+                    "operator_id": operator_id,
+                    "customer_info": customer_info,
+                    "last_message": {
+                        "content": preview_text,
+                        "is_user": is_user_preview,
+                        "timestamp": last_activity_dt.isoformat(),
+                    },
+                }
+
+                if user_id not in client_conversations:
+                    client_conversations[user_id] = {
                         "user_id": user_id,
-                        "status": status,
-                        "message_count": len(messages),
-                        "last_activity": last_message_time.isoformat(),
-                        "last_activity_dt": last_message_time,
-                        "duration_seconds": duration_seconds,
-                        "sentiment": sentiment,
-                        "operator_id": operator_id,
-                        "customer_info": conv_data.get("customer_info", {}),
-                        "last_message": {
-                            "content": last_preview_message.get("text", ""),
-                            "is_user": last_preview_message.get("role") == "user",
-                            "timestamp": last_message_time.isoformat()
-                        }
+                        "conversations": [],
                     }
-                    
-                    client_convs.append(conversation)
-                
-                # If client has conversations, group them
-                if client_convs:
-                    # Sort by last activity (most recent first)
-                    client_convs.sort(key=lambda x: x["last_activity_dt"], reverse=True)
-                    
-                    # Get latest conversation
-                    latest_conv = client_convs[0]
-                    
-                    # Get user info from latest conversation snapshot.
-                    customer_info = latest_conv.get("customer_info", {}) or {}
-                    user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
-                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+                client_conversations[user_id]["conversations"].append(conversation)
 
-                    language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
+            # Build final grouped payload (one card per client)
+            active_conversations: List[Dict[str, Any]] = []
+            for user_id, grouped_payload in client_conversations.items():
+                client_convs = grouped_payload["conversations"]
+                if not client_convs:
+                    continue
 
-                    # Get gender from customer_info or memory
-                    gender = customer_info.get("gender") or config.user_gender.get(user_id, "unknown")
+                client_convs.sort(key=lambda x: x["last_activity_dt"], reverse=True)
+                latest_conv = client_convs[0]
 
-                    # Create grouped client entry
-                    client_entry = {
-                        "user_id": user_id,
-                        "user_name": user_name,
-                        "user_phone": phone_full,
-                        "phone_clean": phone_clean,
-                        "language": language,
-                        "gender": gender,
-                        "conversation_count": len(client_convs),
-                        "conversations": client_convs,
-                        # Latest conversation details
-                        "conversation_id": latest_conv["conversation_id"],
-                        "status": latest_conv["status"],
-                        "message_count": sum(c["message_count"] for c in client_convs),
-                        "last_activity": latest_conv["last_activity"],
-                        "duration_seconds": latest_conv["duration_seconds"],
-                        "sentiment": latest_conv["sentiment"],
-                        "operator_id": latest_conv["operator_id"],
-                        "last_message": latest_conv["last_message"]
-                    }
-                    
-                    client_conversations[user_id] = client_entry
-            
-            # Convert to list and sort by last activity
-            active_conversations = list(client_conversations.values())
+                customer_info = latest_conv.get("customer_info", {}) or {}
+                user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
+                phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+                language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+                gender = customer_info.get("gender") or config.user_gender.get(user_id, "unknown")
+
+                active_conversations.append({
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "user_phone": phone_full,
+                    "phone_clean": phone_clean,
+                    "language": language,
+                    "gender": gender,
+                    "conversation_count": len(client_convs),
+                    "conversations": client_convs,
+                    "conversation_id": latest_conv["conversation_id"],
+                    "status": latest_conv["status"],
+                    "message_count": sum(c["message_count"] for c in client_convs),
+                    "last_activity": latest_conv["last_activity"],
+                    "duration_seconds": latest_conv["duration_seconds"],
+                    "sentiment": latest_conv["sentiment"],
+                    "operator_id": latest_conv["operator_id"],
+                    "last_message": latest_conv["last_message"],
+                })
+
             active_conversations.sort(key=lambda x: x["last_activity"], reverse=True)
 
             print(f"📊 Active conversations: {len(active_conversations)} clients (6-hour window)")
@@ -319,6 +350,280 @@ class LiveChatService:
             import traceback
             traceback.print_exc()
             return []
+
+    async def get_live_chat_inbox(
+        self,
+        search: Optional[str] = None,
+        limit: int = 30,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        """
+        Unified WhatsApp-style inbox:
+        - One chat card per customer (latest conversation)
+        - Live chats pinned first (green indicator on UI)
+        - Non-live chats below
+        - Default limit (top N) for fast loading
+        - Paginated for "load older chats" UX
+        - Search by name/phone/user_id
+        """
+        normalized_search = (search or "").strip()
+        safe_limit = max(1, min(int(limit), 200))
+        safe_page = max(1, int(page))
+        start_idx = (safe_page - 1) * safe_limit
+        end_idx = start_idx + safe_limit
+        current_time = datetime.datetime.now(datetime.timezone.utc)
+
+        if (
+            not normalized_search
+            and self._inbox_cache is not None
+            and self._inbox_cache_time is not None
+            and (current_time - self._inbox_cache_time).total_seconds() < self.CACHE_TTL
+        ):
+            total_cached = len(self._inbox_cache)
+            return {
+                "success": True,
+                "conversations": self._inbox_cache[start_idx:end_idx],
+                "total": total_cached,
+                "page": safe_page,
+                "limit": safe_limit,
+                "has_more": end_idx < total_cached,
+            }
+
+        try:
+            db = get_firestore_db()
+            if not db:
+                return {
+                    "success": True,
+                    "conversations": [],
+                    "total": 0,
+                    "page": safe_page,
+                    "limit": safe_limit,
+                    "has_more": False,
+                }
+
+            projection_fields = [
+                "status",
+                "human_takeover_active",
+                "operator_id",
+                "sentiment",
+                "customer_info",
+                "timestamp",
+                "last_updated",
+                "message_count",
+                "last_message_preview",
+                "last_message_text",
+                "last_message_role",
+                "last_message_type",
+                "last_message_timestamp",
+            ]
+
+            conversation_group = db.collection_group(
+                config.FIRESTORE_CONVERSATIONS_COLLECTION
+            ).select(projection_fields)
+
+            docs_by_path: Dict[str, Any] = {}
+
+            if normalized_search:
+                search_docs = await asyncio.to_thread(lambda: list(conversation_group.stream()))
+                for doc in search_docs:
+                    docs_by_path[doc.reference.path] = doc
+            else:
+                # Fetch enough rows to support current page + one extra page for has_more.
+                # Multiplier covers users having multiple conversation docs.
+                target_users = end_idx + safe_limit
+                recent_fetch_limit = min(6000, max(500, target_users * 20))
+                try:
+                    recent_query = conversation_group.order_by(
+                        "last_updated", direction=firestore.Query.DESCENDING
+                    ).limit(recent_fetch_limit)
+                    recent_docs = await asyncio.to_thread(lambda: list(recent_query.stream()))
+                    for doc in recent_docs:
+                        docs_by_path[doc.reference.path] = doc
+                except Exception as order_err:
+                    print(f"⚠️ Inbox order query fallback: {order_err}")
+                    fallback_docs = await asyncio.to_thread(lambda: list(conversation_group.stream()))
+                    for doc in fallback_docs:
+                        docs_by_path[doc.reference.path] = doc
+
+                # Ensure human takeover chats stay visible even when old.
+                try:
+                    takeover_query = conversation_group.where("human_takeover_active", "==", True)
+                    takeover_docs = await asyncio.to_thread(lambda: list(takeover_query.stream()))
+                    for doc in takeover_docs:
+                        docs_by_path[doc.reference.path] = doc
+                except Exception as takeover_err:
+                    print(f"⚠️ Inbox takeover query fallback: {takeover_err}")
+
+            latest_by_user: Dict[str, Dict[str, Any]] = {}
+            for conv_doc in docs_by_path.values():
+                conv_data = conv_doc.to_dict() or {}
+                user_ref = conv_doc.reference.parent.parent
+                user_id = user_ref.id if user_ref else None
+                if not user_id:
+                    continue
+
+                last_activity_dt = self._parse_timestamp(
+                    conv_data.get("last_updated")
+                    or conv_data.get("last_message_timestamp")
+                    or conv_data.get("timestamp")
+                )
+
+                current_latest = latest_by_user.get(user_id)
+                if current_latest and current_latest["last_activity_dt"] >= last_activity_dt:
+                    continue
+
+                latest_by_user[user_id] = {
+                    "doc_id": conv_doc.id,
+                    "data": conv_data,
+                    "last_activity_dt": last_activity_dt,
+                }
+
+            inbox_conversations: List[Dict[str, Any]] = []
+            for user_id, payload in latest_by_user.items():
+                conv_data = payload["data"]
+                last_activity_dt = payload["last_activity_dt"]
+                conv_status = str(conv_data.get("status", "active")).strip().lower()
+                human_takeover = bool(conv_data.get("human_takeover_active", False))
+                operator_id = conv_data.get("operator_id")
+                sentiment = conv_data.get("sentiment", "neutral")
+
+                is_recent = (
+                    current_time - last_activity_dt
+                ).total_seconds() <= self.ACTIVE_TIME_WINDOW
+                is_live = (
+                    conv_status not in ["resolved", "archived"]
+                    and (is_recent or human_takeover)
+                )
+
+                if is_live:
+                    if human_takeover and operator_id:
+                        status = "human"
+                    elif human_takeover and not operator_id:
+                        status = "waiting_human"
+                    else:
+                        status = "bot"
+                else:
+                    status = "inactive"
+
+                customer_info = conv_data.get("customer_info", {}) or {}
+                user_name = customer_info.get("name") or config.user_names.get(
+                    user_id, "Unknown Customer"
+                )
+                phone_full, phone_clean = self._resolve_user_phone(
+                    user_id=user_id, customer_info=customer_info
+                )
+                language = config.user_data_whatsapp.get(user_id, {}).get(
+                    "user_preferred_lang", "ar"
+                )
+                gender = customer_info.get("gender") or config.user_gender.get(
+                    user_id, "unknown"
+                )
+
+                raw_message_count = conv_data.get("message_count", 0)
+                try:
+                    message_count = max(0, int(raw_message_count))
+                except Exception:
+                    message_count = 0
+
+                first_message_dt = self._parse_timestamp(
+                    conv_data.get("timestamp") or conv_data.get("last_updated")
+                )
+                duration_seconds = max(
+                    0, int((last_activity_dt - first_message_dt).total_seconds())
+                )
+
+                preview_text = self._extract_last_message_preview(conv_data)
+                preview_role = str(conv_data.get("last_message_role", "")).strip().lower()
+
+                inbox_conversations.append(
+                    {
+                        "conversation_id": payload["doc_id"],
+                        "user_id": user_id,
+                        "user_name": user_name,
+                        "user_phone": phone_full,
+                        "phone_clean": phone_clean,
+                        "language": language,
+                        "gender": gender,
+                        "status": status,
+                        "is_live": is_live,
+                        "live_state": "live" if is_live else "inactive",
+                        "message_count": message_count,
+                        "last_activity": last_activity_dt.isoformat(),
+                        "last_activity_dt": last_activity_dt,
+                        "duration_seconds": duration_seconds,
+                        "sentiment": sentiment,
+                        "operator_id": operator_id,
+                        "last_message": {
+                            "content": preview_text,
+                            "is_user": preview_role == "user",
+                            "timestamp": last_activity_dt.isoformat(),
+                        },
+                    }
+                )
+
+            if normalized_search:
+                lowered_search = normalized_search.lower()
+                has_phone_digits = bool(self._normalize_phone_digits(normalized_search))
+                filtered_inbox = []
+                for conversation in inbox_conversations:
+                    if (
+                        lowered_search in str(conversation.get("user_name", "")).lower()
+                        or lowered_search in str(conversation.get("user_id", "")).lower()
+                    ):
+                        filtered_inbox.append(conversation)
+                        continue
+
+                    if has_phone_digits and self._phone_matches_search(
+                        normalized_search,
+                        conversation.get("user_phone"),
+                        conversation.get("phone_clean"),
+                        conversation.get("user_id"),
+                    ):
+                        filtered_inbox.append(conversation)
+                inbox_conversations = filtered_inbox
+
+            inbox_conversations.sort(
+                key=lambda item: (
+                    1 if item.get("is_live") else 0,
+                    item.get("last_activity_dt"),
+                ),
+                reverse=True,
+            )
+
+            final_payload = []
+            for conversation in inbox_conversations:
+                item = dict(conversation)
+                item.pop("last_activity_dt", None)
+                final_payload.append(item)
+
+            if not normalized_search:
+                self._inbox_cache = final_payload
+                self._inbox_cache_time = current_time
+
+            total_items = len(final_payload)
+            return {
+                "success": True,
+                "conversations": final_payload[start_idx:end_idx],
+                "total": total_items,
+                "page": safe_page,
+                "limit": safe_limit,
+                "has_more": end_idx < total_items,
+            }
+
+        except Exception as e:
+            print(f"❌ Error getting live chat inbox: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return {
+                "success": False,
+                "conversations": [],
+                "total": 0,
+                "page": safe_page,
+                "limit": safe_limit,
+                "has_more": False,
+                "error": str(e),
+            }
 
     async def get_history_customers(
         self,
@@ -643,98 +948,98 @@ class LiveChatService:
     async def get_waiting_queue(self) -> List[Dict[str, Any]]:
         """
         Get conversations waiting for human intervention
-        Queries Firebase directly for conversations with human_takeover_active=True and operator_id=None
+        Uses lightweight conversation metadata scan to avoid loading full message arrays.
         """
         try:
             db = get_firestore_db()
             if not db:
                 return []
 
-            app_id = "linas-ai-bot-backend"
-            users_collection = db.collection("artifacts").document(app_id).collection("users")
+            projection_fields = [
+                "status",
+                "human_takeover_active",
+                "operator_id",
+                "sentiment",
+                "customer_info",
+                "timestamp",
+                "last_updated",
+                "escalation_time",
+                "escalation_reason",
+                "message_count",
+                "last_message_preview",
+                "last_message_text",
+                "last_message_type",
+            ]
+
+            conversation_group = db.collection_group(config.FIRESTORE_CONVERSATIONS_COLLECTION).select(projection_fields)
+            current_time = datetime.datetime.now(datetime.timezone.utc)
+            waiting_docs: List[Any] = []
+
+            # Prefer server-side filtering; fallback gracefully when a composite index is not available.
+            try:
+                waiting_query = conversation_group.where("human_takeover_active", "==", True).where("operator_id", "==", None)
+                waiting_docs = await asyncio.to_thread(lambda: list(waiting_query.stream()))
+            except Exception as waiting_query_err:
+                print(f"⚠️ Waiting queue query fallback (index): {waiting_query_err}")
+                fallback_query = conversation_group.where("human_takeover_active", "==", True)
+                waiting_docs = await asyncio.to_thread(lambda: list(fallback_query.stream()))
 
             waiting_queue = []
-            current_time = datetime.datetime.now(datetime.timezone.utc)
+            for conv_doc in waiting_docs:
+                conv_data = conv_doc.to_dict() or {}
 
-            # ✅ Use asyncio.to_thread to prevent blocking the event loop
-            users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
+                human_takeover = bool(conv_data.get("human_takeover_active", False))
+                operator_id = conv_data.get("operator_id")
+                if not (human_takeover and operator_id is None):
+                    continue
 
-            for user_doc in users_docs:
-                user_id = user_doc.id
+                conv_status = conv_data.get("status", "active")
+                if conv_status in ["resolved", "archived"]:
+                    continue
 
-                conversations_collection = users_collection.document(user_id).collection(
-                    config.FIRESTORE_CONVERSATIONS_COLLECTION
-                )
-                # ✅ Use asyncio.to_thread to prevent blocking the event loop
-                conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
-                
-                for conv_doc in conversations_docs:
-                    conv_data = conv_doc.to_dict()
-                    messages = self._dedupe_messages(conv_data.get("messages", []))
-                    
-                    if not messages:
-                        continue
-                    
-                    # Check if conversation is waiting for human
-                    human_takeover = conv_data.get("human_takeover_active", False)
-                    operator_id = conv_data.get("operator_id")
-                    conv_status = conv_data.get("status", "active")
-                    
-                    # Only include conversations waiting for human (takeover active but no operator assigned)
-                    if not (human_takeover and operator_id is None):
-                        continue
-                    
-                    # Skip resolved/archived
-                    if conv_status in ["resolved", "archived"]:
-                        continue
-                    
-                    # Get last message time (use actual last message for timing)
-                    last_message = messages[-1]
-                    last_message_time = self._parse_timestamp(last_message.get("timestamp"))
+                user_ref = conv_doc.reference.parent.parent
+                user_id = user_ref.id if user_ref else None
+                if not user_id:
+                    continue
 
-                    # For preview, find the last non-smart message
-                    last_preview_message = last_message
-                    for msg in reversed(messages):
-                        if msg.get("metadata", {}).get("source") != "smart_message":
-                            last_preview_message = msg
-                            break
+                last_activity_dt = self._parse_timestamp(conv_data.get("last_updated") or conv_data.get("timestamp"))
 
-                    # Calculate wait time
-                    escalation_time = conv_data.get("escalation_time")
-                    if escalation_time:
-                        escalation_dt = self._parse_timestamp(escalation_time)
-                        wait_time_seconds = int((current_time - escalation_dt).total_seconds())
-                    else:
-                        wait_time_seconds = int((current_time - last_message_time).total_seconds())
-                    
-                    # Get user info from Firebase customer_info first, fallback to config
-                    customer_info = conv_data.get("customer_info", {})
-                    user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
-                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
-                    
-                    language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
-                    sentiment = conv_data.get("sentiment", "neutral")
-                    
-                    # Determine reason and priority
-                    escalation_reason = conv_data.get("escalation_reason", "user_request")
-                    priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
-                    
-                    queue_item = {
-                        "conversation_id": conv_doc.id,
-                        "user_id": user_id,
-                        "user_name": user_name,
-                        "user_phone": phone_full,
-                        "phone_clean": phone_clean,
-                        "language": language,
-                        "reason": escalation_reason,
-                        "wait_time_seconds": wait_time_seconds,
-                        "sentiment": sentiment,
-                        "message_count": len(messages),
-                        "priority": priority,
-                        "last_message": last_preview_message.get("text", "")
-                    }
+                escalation_time = conv_data.get("escalation_time")
+                if escalation_time:
+                    escalation_dt = self._parse_timestamp(escalation_time)
+                    wait_time_seconds = max(0, int((current_time - escalation_dt).total_seconds()))
+                else:
+                    wait_time_seconds = max(0, int((current_time - last_activity_dt).total_seconds()))
 
-                    waiting_queue.append(queue_item)
+                customer_info = conv_data.get("customer_info", {}) or {}
+                user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
+                phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+                language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+                sentiment = conv_data.get("sentiment", "neutral")
+
+                raw_message_count = conv_data.get("message_count", 0)
+                try:
+                    message_count = max(0, int(raw_message_count))
+                except Exception:
+                    message_count = 0
+
+                escalation_reason = conv_data.get("escalation_reason", "user_request")
+                priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
+
+                waiting_queue.append({
+                    "conversation_id": conv_doc.id,
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "user_phone": phone_full,
+                    "phone_clean": phone_clean,
+                    "language": language,
+                    "reason": escalation_reason,
+                    "wait_time_seconds": wait_time_seconds,
+                    "sentiment": sentiment,
+                    "message_count": message_count,
+                    "priority": priority,
+                    "last_message": self._extract_last_message_preview(conv_data),
+                })
             
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
             waiting_queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))

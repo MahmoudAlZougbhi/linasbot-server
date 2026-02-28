@@ -453,10 +453,29 @@ export const useApi = () => {
   );
 
   // Live Chat API functions
-  const getLiveConversations = useCallback(async () => {
+  const getLiveConversations = useCallback(async (options = {}) => {
+    const {
+      search = "",
+      includeInactive = false,
+      limit = 30,
+      page = 1,
+    } = options;
+
     try {
+      const params = new URLSearchParams();
+      const normalizedSearch = String(search || "").trim();
+      if (normalizedSearch) params.append("search", normalizedSearch);
+      if (includeInactive) params.append("include_inactive", "true");
+      if (Number.isFinite(limit)) params.append("limit", String(limit));
+      if (Number.isFinite(page)) params.append("page", String(page));
+
+      const queryString = params.toString();
+      const endpoint = queryString
+        ? `/api/live-chat/active-conversations?${queryString}`
+        : "/api/live-chat/active-conversations";
+
       // Increase timeout for live conversations (can be slow with large datasets)
-      const response = await api.get("/api/live-chat/active-conversations", {
+      const response = await api.get(endpoint, {
         timeout: 60000, // 60 seconds
       });
       return response.data;

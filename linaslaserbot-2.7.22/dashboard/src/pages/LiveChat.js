@@ -190,7 +190,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
 const LiveChat = () => {
   const [activeConversations, setActiveConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
-  const [waitingQueue, setWaitingQueue] = useState([]);
+  const [chatSearchTerm, setChatSearchTerm] = useState("");
   const [messageInput, setMessageInput] = useState("");
   const [operatorStatus, setOperatorStatus] = useState("available");
   const [isLoading, setIsLoading] = useState(true);
@@ -211,6 +211,9 @@ const LiveChat = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
   const [newConversationIds, setNewConversationIds] = useState(new Set()); // Track new conversations
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [inboxPage, setInboxPage] = useState(1);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
+  const [isLoadingMoreChats, setIsLoadingMoreChats] = useState(false);
 
   // ✅ Send button race condition state
   const [isSending, setIsSending] = useState(false);
@@ -222,8 +225,13 @@ const LiveChat = () => {
   const selectedConversationRef = useRef(null);
   const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
+  const chatSearchTermRef = useRef("");
+  const inboxPageRef = useRef(1);
+  const hasMoreChatsRef = useRef(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const conversationMessagesCacheRef = useRef(new Map());
+  const latestMessagesRequestRef = useRef(0);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -239,6 +247,18 @@ const LiveChat = () => {
   }, [useMockData]);
 
   useEffect(() => {
+    chatSearchTermRef.current = chatSearchTerm;
+  }, [chatSearchTerm]);
+
+  useEffect(() => {
+    inboxPageRef.current = inboxPage;
+  }, [inboxPage]);
+
+  useEffect(() => {
+    hasMoreChatsRef.current = hasMoreChats;
+  }, [hasMoreChats]);
+
+  useEffect(() => {
     return () => {
       if (recordedAudio?.url?.startsWith("blob:")) {
         URL.revokeObjectURL(recordedAudio.url);
@@ -248,7 +268,6 @@ const LiveChat = () => {
 
   const {
     getLiveConversations,
-    getWaitingQueue,
     takeoverConversation,
     releaseConversation,
     sendOperatorMessage,
@@ -301,84 +320,178 @@ const LiveChat = () => {
     }
   };
 
+  const loadConversationMessages = async (
+    conversation,
+    { forceRefresh = false } = {}
+  ) => {
+    if (!conversation) return [];
+
+    const conversationId = conversation.conversation_id;
+    if (!conversationId) return [];
+
+    const cachedMessages = conversationMessagesCacheRef.current.get(conversationId);
+    const shouldUseCache = !forceRefresh && Array.isArray(cachedMessages);
+
+    setSelectedConversation({
+      conversation,
+      history: shouldUseCache ? cachedMessages : [],
+    });
+
+    if (shouldUseCache) {
+      return cachedMessages;
+    }
+
+    const requestId = Date.now();
+    latestMessagesRequestRef.current = requestId;
+    setMessagesLoading(true);
+
+    try {
+      const messages = await fetchConversationMessages(
+        conversation.user_id,
+        conversationId
+      );
+
+      if (latestMessagesRequestRef.current !== requestId) {
+        return [];
+      }
+
+      conversationMessagesCacheRef.current.set(conversationId, messages);
+      setSelectedConversation((prev) =>
+        prev?.conversation?.conversation_id === conversationId
+          ? { ...prev, history: messages }
+          : prev
+      );
+      return messages;
+    } finally {
+      if (latestMessagesRequestRef.current === requestId) {
+        setMessagesLoading(false);
+      }
+    }
+  };
+
+  const refreshConversationsList = async ({
+    markRefreshing = false,
+    showToast = false,
+    page = 1,
+    append = false,
+  } = {}) => {
+    if (markRefreshing) {
+      setIsRefreshing(true);
+    }
+    if (append) {
+      setIsLoadingMoreChats(true);
+    }
+
+    try {
+      const normalizedSearch = chatSearchTermRef.current.trim();
+      const targetPage = normalizedSearch ? 1 : Math.max(1, page);
+      const conversationsResponse = await getLiveConversations({
+        includeInactive: true,
+        limit: normalizedSearch ? 100 : 30,
+        search: normalizedSearch,
+        page: targetPage,
+      });
+
+      if (
+        conversationsResponse.success &&
+        Array.isArray(conversationsResponse.conversations)
+      ) {
+        const incomingConversations = conversationsResponse.conversations;
+        const previousIds = new Set(
+          activeConversationsRef.current.map((c) => c.conversation_id)
+        );
+        const newIds = new Set(
+          incomingConversations
+            .filter(
+              (c) => c.is_live && !previousIds.has(c.conversation_id)
+            )
+            .map((c) => c.conversation_id)
+        );
+
+        setActiveConversations((prev) => {
+          if (!append) {
+            return incomingConversations;
+          }
+
+          const existingIds = new Set(prev.map((c) => c.conversation_id));
+          const toAppend = incomingConversations.filter(
+            (c) => !existingIds.has(c.conversation_id)
+          );
+          return [...prev, ...toAppend];
+        });
+        setUseMockData(false);
+        if (!append) {
+          setNewConversationIds(newIds);
+        }
+        setLastRefreshTime(new Date());
+        setInboxPage(targetPage);
+        setHasMoreChats(Boolean(conversationsResponse.has_more));
+
+        const currentSelection = selectedConversationRef.current;
+        if (currentSelection) {
+          const updatedConv = incomingConversations.find(
+            (c) =>
+              c.conversation_id ===
+              currentSelection.conversation.conversation_id
+          );
+
+          if (updatedConv) {
+            setSelectedConversation((prev) =>
+              prev ? { ...prev, conversation: updatedConv } : prev
+            );
+          } else if (!normalizedSearch && !append) {
+            setSelectedConversation(null);
+          }
+        }
+
+        if (!append && newIds.size > 0) {
+          setTimeout(() => setNewConversationIds(new Set()), 10000);
+        }
+
+        if (showToast) {
+          toast.success("Chats refreshed");
+        }
+        return;
+      }
+
+      if (!activeConversationsRef.current.length && !chatSearchTermRef.current) {
+        loadMockData();
+      } else if (!append) {
+        setHasMoreChats(false);
+      }
+    } catch (error) {
+      console.error("Error fetching live chat data:", error);
+      if (!activeConversationsRef.current.length && !chatSearchTermRef.current) {
+        loadMockData();
+      } else if (!append) {
+        setHasMoreChats(false);
+      }
+      if (showToast) {
+        toast.error("Failed to refresh chats");
+      }
+    } finally {
+      if (markRefreshing) {
+        setIsRefreshing(false);
+      }
+      if (append) {
+        setIsLoadingMoreChats(false);
+      }
+    }
+  };
+
   // Fetch real data from API
   useEffect(() => {
     const fetchLiveData = async () => {
       // Only show loading on initial load, not on refresh
-      if (!activeConversations.length) {
+      if (!activeConversationsRef.current.length) {
         setIsLoading(true);
       }
 
       try {
-        // Fetch active conversations
-        const conversationsResponse = await getLiveConversations();
-
-        if (
-          conversationsResponse.success &&
-          conversationsResponse.conversations
-        ) {
-          // ✅ PRIORITY: Display chats immediately without waiting for messages
-          setActiveConversations(conversationsResponse.conversations);
-          setUseMockData(false);
-
-          // Use ref to check current selection (avoids stale closure)
-          const currentSelection = selectedConversationRef.current;
-
-          // Only select first conversation if none selected AND it's the initial load
-          if (
-            !currentSelection &&
-            conversationsResponse.conversations.length > 0 &&
-            !activeConversations.length
-          ) {
-            const firstConv = conversationsResponse.conversations[0];
-            // ✅ Set conversation immediately with empty history (show loading state)
-            setSelectedConversation({
-              conversation: firstConv,
-              history: [],
-            });
-            // ✅ Lazy load messages asynchronously - don't block UI
-            setMessagesLoading(true);
-            fetchConversationMessages(
-              firstConv.user_id,
-              firstConv.conversation_id
-            ).then((messages) => {
-              setSelectedConversation((prev) =>
-                prev?.conversation?.conversation_id === firstConv.conversation_id
-                  ? { ...prev, history: messages }
-                  : prev
-              );
-              setMessagesLoading(false);
-            });
-          } else if (currentSelection) {
-            // If a conversation is selected, update its data but keep it selected
-            const updatedConv = conversationsResponse.conversations.find(
-              (c) =>
-                c.conversation_id ===
-                currentSelection.conversation.conversation_id
-            );
-            if (updatedConv) {
-              // Update the conversation data but keep the same history
-              setSelectedConversation((prev) => ({
-                ...prev,
-                conversation: updatedConv,
-              }));
-            }
-          }
-        } else {
-          // Backend offline - use mock data
-          if (!activeConversations.length) {
-            loadMockData();
-          }
-        }
-
-        // Fetch waiting queue
-        const queueResponse = await getWaitingQueue();
-        if (queueResponse.success && queueResponse.queue) {
-          setWaitingQueue(queueResponse.queue);
-        }
+        await refreshConversationsList({ page: inboxPageRef.current });
       } catch (error) {
         console.error("Error fetching live chat data:", error);
-        if (!activeConversations.length) {
+        if (!activeConversationsRef.current.length) {
           loadMockData();
         }
       } finally {
@@ -417,30 +530,8 @@ const LiveChat = () => {
         };
 
         // Handle conversation list updates
-        eventSource.addEventListener('conversations', (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.conversations) {
-              const previousIds = new Set(
-                activeConversationsRef.current.map((c) => c.conversation_id)
-              );
-              const newIds = new Set(
-                data.conversations
-                  .filter((c) => !previousIds.has(c.conversation_id))
-                  .map((c) => c.conversation_id)
-              );
-
-              setActiveConversations(data.conversations);
-              setNewConversationIds(newIds);
-              setLastRefreshTime(new Date());
-
-              if (newIds.size > 0) {
-                setTimeout(() => setNewConversationIds(new Set()), 10000);
-              }
-            }
-          } catch (e) {
-            console.error('SSE parse error:', e);
-          }
+        eventSource.addEventListener('conversations', () => {
+          refreshConversationsList({ page: inboxPageRef.current });
         });
 
         // Handle new message events
@@ -450,13 +541,7 @@ const LiveChat = () => {
             console.log('📨 SSE: New message received', data);
 
             // Refresh conversation list to update last message preview
-            setIsRefreshing(true);
-            const conversationsResponse = await getLiveConversations();
-            if (conversationsResponse.success && conversationsResponse.conversations) {
-              setActiveConversations(conversationsResponse.conversations);
-              setLastRefreshTime(new Date());
-            }
-            setIsRefreshing(false);
+            await refreshConversationsList({ page: inboxPageRef.current });
 
             // If this message is for the currently selected conversation, fetch new messages
             const currentSelection = selectedConversationRef.current;
@@ -468,6 +553,10 @@ const LiveChat = () => {
                 currentSelection.conversation.conversation_id
               );
               if (messages && messages.length > 0) {
+                conversationMessagesCacheRef.current.set(
+                  currentSelection.conversation.conversation_id,
+                  messages
+                );
                 setSelectedConversation((prev) => {
                   if (!prev) return prev;
                   return { ...prev, history: messages };
@@ -486,15 +575,7 @@ const LiveChat = () => {
             console.log('📡 SSE: New conversation', data);
 
             // Refresh conversation list
-            const conversationsResponse = await getLiveConversations();
-            if (conversationsResponse.success && conversationsResponse.conversations) {
-              const newIds = new Set([data.conversation_id]);
-              setActiveConversations(conversationsResponse.conversations);
-              setNewConversationIds(newIds);
-              setLastRefreshTime(new Date());
-
-              setTimeout(() => setNewConversationIds(new Set()), 10000);
-            }
+            await refreshConversationsList({ page: inboxPageRef.current });
           } catch (e) {
             console.error('SSE new_conversation error:', e);
           }
@@ -514,11 +595,7 @@ const LiveChat = () => {
             fallbackInterval = setInterval(async () => {
               if (useMockDataRef.current) return;
               try {
-                const conversationsResponse = await getLiveConversations();
-                if (conversationsResponse.success && conversationsResponse.conversations) {
-                  setActiveConversations(conversationsResponse.conversations);
-                  setLastRefreshTime(new Date());
-                }
+                await refreshConversationsList({ page: inboxPageRef.current });
               } catch (e) {
                 // Silent fail
               }
@@ -552,35 +629,23 @@ const LiveChat = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - only run once on mount
 
-  // ✅ Fetch messages when selected conversation changes (not polling)
+  // Search by name/phone in unified inbox
   useEffect(() => {
-    // Skip for mock data
-    if (!selectedConversation || useMockData) return;
+    if (useMockDataRef.current) return undefined;
 
-    // Fetch messages once when conversation is selected
-    const fetchMessages = async () => {
-      try {
-        const messages = await fetchConversationMessages(
-          selectedConversation.conversation.user_id,
-          selectedConversation.conversation.conversation_id
-        );
-        if (messages && messages.length > 0) {
-          setSelectedConversation((prev) => {
-            if (!prev) return prev;
-            return { ...prev, history: messages };
-          });
-        }
-      } catch (error) {
-        // Silent fail
-      }
-    };
+    const timeoutId = setTimeout(() => {
+      refreshConversationsList({ page: 1, append: false });
+    }, 300);
 
-    fetchMessages();
-  }, [selectedConversation?.conversation?.conversation_id, useMockData]); // Only fetch when conversation changes
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatSearchTerm]);
 
   // Load mock data fallback
   const loadMockData = () => {
     setUseMockData(true);
+    setInboxPage(1);
+    setHasMoreChats(false);
     const mockConversations = [
       {
         conversation_id: "conv_001",
@@ -588,6 +653,7 @@ const LiveChat = () => {
         user_name: "Sarah Ahmed",
         user_phone: "+961 70 123456",
         status: "bot",
+        is_live: true,
         language: "ar",
         message_count: 12,
         last_activity: new Date().toISOString(),
@@ -605,6 +671,7 @@ const LiveChat = () => {
         user_name: "Marie Dubois",
         user_phone: "+961 71 234567",
         status: "human",
+        is_live: true,
         language: "fr",
         message_count: 8,
         last_activity: new Date(Date.now() - 60000).toISOString(),
@@ -622,7 +689,8 @@ const LiveChat = () => {
         user_id: "mock_user_003",
         user_name: "John Smith",
         user_phone: "+961 76 345678",
-        status: "waiting_human",
+        status: "inactive",
+        is_live: false,
         language: "en",
         message_count: 5,
         last_activity: new Date(Date.now() - 120000).toISOString(),
@@ -636,33 +704,7 @@ const LiveChat = () => {
       },
     ];
 
-    const mockQueue = [
-      {
-        conversation_id: "conv_003",
-        user_id: "mock_user_003",
-        user_name: "John Smith",
-        user_phone: "+961 76 345678",
-        language: "en",
-        reason: "urgent_detected",
-        wait_time_seconds: 120,
-        sentiment: "negative",
-        message_count: 5,
-      },
-      {
-        conversation_id: "conv_004",
-        user_id: "mock_user_004",
-        user_name: "Fatima Hassan",
-        user_phone: "+961 03 456789",
-        language: "ar",
-        reason: "user_request",
-        wait_time_seconds: 45,
-        sentiment: "neutral",
-        message_count: 3,
-      },
-    ];
-
     setActiveConversations(mockConversations);
-    setWaitingQueue(mockQueue);
 
     // Simulate conversation history
     if (!selectedConversation) {
@@ -722,45 +764,26 @@ const LiveChat = () => {
 
   // ✅ Manual refresh handler - allows admin to immediately refresh conversation list
   const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      const conversationsResponse = await getLiveConversations();
-      if (
-        conversationsResponse.success &&
-        conversationsResponse.conversations
-      ) {
-        // ✅ Use ref to get current state (fixes stale closure issue)
-        const previousIds = new Set(
-          activeConversationsRef.current.map((c) => c.conversation_id)
-        );
-        const newIds = new Set(
-          conversationsResponse.conversations
-            .filter((c) => !previousIds.has(c.conversation_id))
-            .map((c) => c.conversation_id)
-        );
+    await refreshConversationsList({
+      markRefreshing: true,
+      showToast: true,
+      page: inboxPageRef.current,
+    });
+  };
 
-        setActiveConversations(conversationsResponse.conversations);
-        setNewConversationIds(newIds);
-        setLastRefreshTime(new Date());
-        toast.success("Conversations refreshed");
-
-        // Auto-clear "new" badge after 10 seconds
-        if (newIds.size > 0) {
-          setTimeout(() => {
-            setNewConversationIds(new Set());
-          }, 10000);
-        }
-      }
-    } catch (error) {
-      console.error("Error refreshing conversations:", error);
-      if (error.code === "ECONNABORTED") {
-        toast.error("Request timeout - server may be busy. Try again.");
-      } else {
-        toast.error("Failed to refresh conversations");
-      }
-    } finally {
-      setIsRefreshing(false);
+  const handleLoadOlderChats = async () => {
+    if (
+      isLoadingMoreChats ||
+      !hasMoreChatsRef.current ||
+      chatSearchTermRef.current.trim()
+    ) {
+      return;
     }
+
+    await refreshConversationsList({
+      page: inboxPageRef.current + 1,
+      append: true,
+    });
   };
 
   // ✅ Format last refresh time as relative time (e.g., "2 seconds ago")
@@ -782,14 +805,10 @@ const LiveChat = () => {
       console.log(
         `Reloading messages for conversation ${selectedConversation.conversation.conversation_id}`
       );
-      const messages = await fetchConversationMessages(
-        selectedConversation.conversation.user_id,
-        selectedConversation.conversation.conversation_id
+      const messages = await loadConversationMessages(
+        selectedConversation.conversation,
+        { forceRefresh: true }
       );
-      setSelectedConversation((prev) => ({
-        ...prev,
-        history: messages,
-      }));
       toast.success(`Loaded ${messages.length} messages`);
     } catch (error) {
       console.error("Error reloading conversation messages:", error);
@@ -843,10 +862,6 @@ const LiveChat = () => {
             },
           }));
         }
-        // Remove from queue
-        setWaitingQueue((prev) =>
-          prev.filter((item) => item.conversation_id !== conversationId)
-        );
       } else {
         console.error("❌ Takeover failed:", result.error);
         toast.error(`Failed to take over: ${result.error || "Unknown error"}`);
@@ -965,10 +980,15 @@ const LiveChat = () => {
           handled_by: "human",
         };
 
-        setSelectedConversation((prev) => ({
-          ...prev,
-          history: [...prev.history, newMessage],
-        }));
+        setSelectedConversation((prev) => {
+          if (!prev) return prev;
+          const updatedHistory = [...prev.history, newMessage];
+          conversationMessagesCacheRef.current.set(
+            prev.conversation.conversation_id,
+            updatedHistory
+          );
+          return { ...prev, history: updatedHistory };
+        });
 
         toast.success("Message sent to customer");
       } else {
@@ -1082,10 +1102,15 @@ const LiveChat = () => {
               handled_by: "human",
             };
 
-            setSelectedConversation((prev) => ({
-              ...prev,
-              history: [...prev.history, newMessage],
-            }));
+            setSelectedConversation((prev) => {
+              if (!prev) return prev;
+              const updatedHistory = [...prev.history, newMessage];
+              conversationMessagesCacheRef.current.set(
+                prev.conversation.conversation_id,
+                updatedHistory
+              );
+              return { ...prev, history: updatedHistory };
+            });
 
             if (localRecordedAudio?.url?.startsWith("blob:")) {
               URL.revokeObjectURL(localRecordedAudio.url);
@@ -1173,10 +1198,15 @@ const LiveChat = () => {
           handled_by: "human",
         };
 
-        setSelectedConversation((prev) => ({
-          ...prev,
-          history: [...prev.history, newMessage],
-        }));
+        setSelectedConversation((prev) => {
+          if (!prev) return prev;
+          const updatedHistory = [...prev.history, newMessage];
+          conversationMessagesCacheRef.current.set(
+            prev.conversation.conversation_id,
+            updatedHistory
+          );
+          return { ...prev, history: updatedHistory };
+        });
 
         discardImage();
         toast.success("Image sent to customer");
@@ -1264,6 +1294,11 @@ const LiveChat = () => {
         icon: CheckCircleIcon,
         text: "Resolved",
       },
+      inactive: {
+        color: "bg-slate-100 text-slate-500",
+        icon: ClockIcon,
+        text: "History",
+      },
     };
 
     const badge = badges[status] || badges.bot;
@@ -1304,11 +1339,11 @@ const LiveChat = () => {
         className="mb-6"
       >
         <h1 className="text-4xl font-bold gradient-text font-display mb-2">
-          Live Chat Monitoring
+          Chat Inbox
         </h1>
         <div className="flex items-center justify-between">
           <p className="text-xl text-slate-600">
-            Monitor and manage live conversations in real-time
+            WhatsApp-style view: live chats first, then history
           </p>
 
           {/* Operator Status + Refresh Button */}
@@ -1367,69 +1402,38 @@ const LiveChat = () => {
           animate={{ opacity: 1, x: 0 }}
           className="col-span-3 space-y-4 h-full overflow-y-auto"
         >
-          {/* Waiting Queue */}
-          {waitingQueue.length > 0 && (
-            <div className="card p-4">
-              <h3 className="font-bold text-slate-800 mb-3 flex items-center">
-                <HandRaisedIcon className="w-5 h-5 mr-2 text-orange-500" />
-                Waiting Queue ({waitingQueue.length})
-              </h3>
-              <div className="space-y-2">
-                {waitingQueue.map((item) => (
-                  <div
-                    key={item.conversation_id}
-                    className="p-3 bg-orange-50 border border-orange-200 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors"
-                    onClick={() => {
-                      const conv = activeConversations.find(
-                        (c) => c.conversation_id === item.conversation_id
-                      );
-                      if (conv)
-                        setSelectedConversation({
-                          conversation: conv,
-                          history: [],
-                        });
-                    }}
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <span className="font-medium text-slate-800 text-sm">
-                        {item.user_name}
-                      </span>
-                      {getSentimentIndicator(item.sentiment)}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>
-                        {Math.floor(item.wait_time_seconds / 60)}m waiting
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTakeOver(item.conversation_id, item.user_id);
-                        }}
-                        className="text-orange-600 hover:text-orange-700 font-medium"
-                      >
-                        Take Over
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Active Conversations */}
+          {/* Unified Inbox (Live + History) */}
           <div className="card p-4 flex-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-slate-800 flex items-center">
                 <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                Active Conversations ({activeConversations.length})
+                Chats ({activeConversations.length})
               </h3>
               {/* ✅ Auto-refresh indicator */}
               <span className="text-xs text-slate-500 flex items-center space-x-1">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                <span>Auto-updating</span>
+                <span>
+                  {chatSearchTerm.trim()
+                    ? "Search mode"
+                    : `Top ${inboxPage * 30}`}
+                </span>
               </span>
             </div>
+            <div className="mb-3">
+              <input
+                type="text"
+                value={chatSearchTerm}
+                onChange={(e) => setChatSearchTerm(e.target.value)}
+                placeholder="Search by name or phone..."
+                className="input-field w-full"
+              />
+            </div>
             <div className="space-y-2">
+              {activeConversations.length === 0 && (
+                <div className="text-center text-sm text-slate-500 py-8">
+                  No chats found
+                </div>
+              )}
               {activeConversations.map((conv) => (
                 <div
                   key={conv.conversation_id}
@@ -1440,33 +1444,24 @@ const LiveChat = () => {
                       : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
                   }`}
                   onClick={() => {
-                    // ✅ PRIORITY: Show conversation immediately with loading state
-                    setSelectedConversation({
-                      conversation: conv,
-                      history: [],
-                    });
-                    // ✅ Lazy load messages asynchronously - don't block UI
-                    setMessagesLoading(true);
-                    fetchConversationMessages(
-                      conv.user_id,
-                      conv.conversation_id
-                    ).then((messages) => {
-                      // Only update if this conversation is still selected
-                      setSelectedConversation((prev) =>
-                        prev?.conversation?.conversation_id === conv.conversation_id
-                          ? { ...prev, history: messages }
-                          : prev
-                      );
-                      setMessagesLoading(false);
-                    });
+                    loadConversationMessages(conv);
                   }}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-wrap">
                         <p className="font-medium text-slate-800 text-sm">
                           {conv.user_name}
                         </p>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            conv.is_live
+                              ? "bg-green-100 text-green-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {conv.is_live ? "● Live" : "Offline"}
+                        </span>
                         {/* ✅ "New" Badge - shows for newly appeared conversations */}
                         {newConversationIds.has(conv.conversation_id) && (
                           <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
@@ -1491,10 +1486,27 @@ const LiveChat = () => {
 
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <span>{conv.message_count} messages</span>
-                    <span>{Math.floor(conv.duration_seconds / 60)}m</span>
+                    <span>
+                      {conv.is_live
+                        ? "Now"
+                        : formatMessageTime(conv.last_activity)}
+                    </span>
                   </div>
                 </div>
               ))}
+              {!chatSearchTerm.trim() && hasMoreChats && (
+                <button
+                  onClick={handleLoadOlderChats}
+                  disabled={isLoadingMoreChats}
+                  className={`w-full mt-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isLoadingMoreChats
+                      ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {isLoadingMoreChats ? "Loading older chats..." : "Load older chats"}
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -1532,7 +1544,9 @@ const LiveChat = () => {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    {selectedConversation.conversation.status === "bot" ? (
+                    {["bot", "waiting_human"].includes(
+                      selectedConversation.conversation.status
+                    ) ? (
                       <button
                         onClick={() =>
                           handleTakeOver(
