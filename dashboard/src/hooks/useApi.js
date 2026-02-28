@@ -453,10 +453,13 @@ export const useApi = () => {
   );
 
   // Live Chat API functions
-  const getLiveConversations = useCallback(async () => {
+  const getLiveConversations = useCallback(async (search = "") => {
     try {
-      // Increase timeout for live conversations (can be slow with large datasets)
-      const response = await api.get("/api/live-chat/active-conversations", {
+      const params = new URLSearchParams();
+      if (search && search.trim()) params.append("search", search.trim());
+      const query = params.toString();
+      const url = query ? `/api/live-chat/active-conversations?${query}` : "/api/live-chat/active-conversations";
+      const response = await api.get(url, {
         timeout: 60000, // 60 seconds
       });
       return response.data;

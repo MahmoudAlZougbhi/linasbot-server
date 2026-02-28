@@ -16,6 +16,7 @@ import {
   XMarkIcon,
   ChartBarIcon,
   MicrophoneIcon,
+  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import { useApi } from "../hooks/useApi";
@@ -218,10 +219,15 @@ const LiveChat = () => {
   // ✅ Messages loading state for lazy loading
   const [messagesLoading, setMessagesLoading] = useState(false);
 
+  // ✅ Search by name or phone (debounced for API calls)
+  const [liveSearchQuery, setLiveSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
   const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
+  const debouncedSearchRef = useRef("");
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -237,6 +243,16 @@ const LiveChat = () => {
   useEffect(() => {
     useMockDataRef.current = useMockData;
   }, [useMockData]);
+
+  // Debounce search input (400ms) before triggering API
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmed = liveSearchQuery.trim();
+      setDebouncedSearch(trimmed);
+      debouncedSearchRef.current = trimmed;
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [liveSearchQuery]);
 
   useEffect(() => {
     return () => {
@@ -310,8 +326,8 @@ const LiveChat = () => {
       }
 
       try {
-        // Fetch active conversations
-        const conversationsResponse = await getLiveConversations();
+        // Fetch active conversations (with optional search)
+        const conversationsResponse = await getLiveConversations(debouncedSearch);
 
         if (
           conversationsResponse.success &&
@@ -417,20 +433,24 @@ const LiveChat = () => {
         };
 
         // Handle conversation list updates
-        eventSource.addEventListener('conversations', (event) => {
+        eventSource.addEventListener('conversations', async (event) => {
           try {
             const data = JSON.parse(event.data);
             if (data.conversations) {
+              // Re-fetch with current search filter (SSE sends unfiltered list)
+              const searchTerm = debouncedSearchRef.current;
+              const convResponse = await getLiveConversations(searchTerm);
+              const conversations = convResponse?.success ? convResponse.conversations : data.conversations;
               const previousIds = new Set(
                 activeConversationsRef.current.map((c) => c.conversation_id)
               );
               const newIds = new Set(
-                data.conversations
+                conversations
                   .filter((c) => !previousIds.has(c.conversation_id))
                   .map((c) => c.conversation_id)
               );
 
-              setActiveConversations(data.conversations);
+              setActiveConversations(conversations);
               setNewConversationIds(newIds);
               setLastRefreshTime(new Date());
 
@@ -451,7 +471,7 @@ const LiveChat = () => {
 
             // Refresh conversation list to update last message preview
             setIsRefreshing(true);
-            const conversationsResponse = await getLiveConversations();
+            const conversationsResponse = await getLiveConversations(debouncedSearchRef.current);
             if (conversationsResponse.success && conversationsResponse.conversations) {
               setActiveConversations(conversationsResponse.conversations);
               setLastRefreshTime(new Date());
@@ -486,7 +506,7 @@ const LiveChat = () => {
             console.log('📡 SSE: New conversation', data);
 
             // Refresh conversation list
-            const conversationsResponse = await getLiveConversations();
+            const conversationsResponse = await getLiveConversations(debouncedSearchRef.current);
             if (conversationsResponse.success && conversationsResponse.conversations) {
               const newIds = new Set([data.conversation_id]);
               setActiveConversations(conversationsResponse.conversations);
@@ -514,7 +534,7 @@ const LiveChat = () => {
             fallbackInterval = setInterval(async () => {
               if (useMockDataRef.current) return;
               try {
-                const conversationsResponse = await getLiveConversations();
+                const conversationsResponse = await getLiveConversations(debouncedSearchRef.current);
                 if (conversationsResponse.success && conversationsResponse.conversations) {
                   setActiveConversations(conversationsResponse.conversations);
                   setLastRefreshTime(new Date());
@@ -550,7 +570,7 @@ const LiveChat = () => {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - only run once on mount
+  }, [debouncedSearch]); // Re-fetch when search changes
 
   // ✅ Fetch messages when selected conversation changes (not polling)
   useEffect(() => {
@@ -724,7 +744,7 @@ const LiveChat = () => {
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const conversationsResponse = await getLiveConversations();
+      const conversationsResponse = await getLiveConversations(debouncedSearch);
       if (
         conversationsResponse.success &&
         conversationsResponse.conversations
@@ -1428,6 +1448,25 @@ const LiveChat = () => {
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                 <span>Auto-updating</span>
               </span>
+            </div>
+            {/* ✅ Search by name or phone */}
+            <div className="relative mb-3">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={liveSearchQuery}
+                onChange={(e) => setLiveSearchQuery(e.target.value)}
+                placeholder="Search by name or phone..."
+                className="input-field w-full pl-9 pr-4 py-2 text-sm"
+              />
+              {liveSearchQuery && (
+                <button
+                  onClick={() => setLiveSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              )}
             </div>
             <div className="space-y-2">
               {activeConversations.map((conv) => (
