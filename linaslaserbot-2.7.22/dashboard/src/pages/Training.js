@@ -560,6 +560,7 @@ const Training = () => {
                       const extraLangs = [...new Set(
                         trainingEntries.flatMap((e) =>
                           Object.keys(e).map((k) => k.match(/^question_(.+)$/)?.[1]).filter(Boolean).filter((l) => !["ar", "en", "fr"].includes(l))
+                        )
                       )];
                       return [
                         { id: "all", label: "All", flag: "🌐" },
