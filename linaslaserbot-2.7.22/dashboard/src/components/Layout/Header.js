@@ -43,6 +43,8 @@ const Header = ({ onMenuClick, botStatus }) => {
     month: 'long',
     day: 'numeric',
   });
+  const deployVersion = process.env.REACT_APP_DEPLOY_VERSION || 'dev';
+  const deployCommit = process.env.REACT_APP_DEPLOY_COMMIT || 'local';
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -97,6 +99,9 @@ const Header = ({ onMenuClick, botStatus }) => {
             </h2>
             <p className="text-sm text-slate-500 mt-1">
               {currentDate} • {currentTime}
+            </p>
+            <p className="text-xs text-slate-400">
+              Build v{deployVersion} • {deployCommit}
             </p>
           </motion.div>
         </div>

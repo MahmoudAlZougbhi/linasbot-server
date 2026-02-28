@@ -7,7 +7,13 @@
 
 set -e
 
-APP_DIR="/opt/linasbot"
+REPO_ROOT="/opt/linasbot"
+CANONICAL_SUBDIR="$REPO_ROOT/linaslaserbot-2.7.22"
+APP_DIR="$REPO_ROOT"
+if [ -f "$CANONICAL_SUBDIR/main.py" ]; then
+  APP_DIR="$CANONICAL_SUBDIR"
+fi
+
 SERVICE_NAME="linasbot"
 PYTHON_CMD="python3"
 command -v python3.11 &>/dev/null && PYTHON_CMD="python3.11"
@@ -19,12 +25,13 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Ensure we're in APP_DIR (cwd can change with sudo)
-cd "$APP_DIR" || { echo -e "${RED}Error: $APP_DIR not found${NC}"; exit 1; }
+cd "$REPO_ROOT" || { echo -e "${RED}Error: $REPO_ROOT not found${NC}"; exit 1; }
 
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${BLUE}  Lina's Laser AI Bot - Deployment${NC}"
 echo -e "${BLUE}==========================================${NC}"
+echo ""
+echo -e "Using app directory: ${YELLOW}$APP_DIR${NC}"
 echo ""
 
 # Step 1: System dependencies
@@ -34,13 +41,13 @@ apt install -y python3 python3-venv python3-pip ffmpeg curl nodejs npm
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 2: Skip copy - git pull already updated files. Only copy when main.py missing (first-time deploy from elsewhere)
+# Step 2: Validate application directory
 echo -e "${YELLOW}[2/8] Checking application directory...${NC}"
 if [ ! -f "$APP_DIR/main.py" ]; then
-    echo -e "${RED}Error: main.py not found. Run 'git pull' in $APP_DIR first.${NC}"
+    echo -e "${RED}Error: main.py not found at $APP_DIR${NC}"
     exit 1
 fi
-echo "Application files OK (git pull updates code)."
+echo "Application files OK."
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
@@ -60,46 +67,58 @@ pip install -r requirements.txt
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 5: Build Dashboard (React)
-echo -e "${YELLOW}[5/8] Building Dashboard...${NC}"
-DASHBOARD_DIR=""
-for d in "$APP_DIR/dashboard" "$APP_DIR/linaslaserbot-2.7.22/dashboard"; do
-  if [ -f "$d/package.json" ]; then
-    DASHBOARD_DIR="$d"
-    break
-  fi
-done
-if [ -n "$DASHBOARD_DIR" ]; then
-  cd "$DASHBOARD_DIR"
+# Step 5: Build dashboard + bump deploy version
+echo -e "${YELLOW}[5/8] Building dashboard...${NC}"
+mkdir -p "$APP_DIR/data"
+VERSION_FILE="$APP_DIR/data/.deploy_version"
+CURRENT_VERSION=""
+if [ -f "$VERSION_FILE" ]; then
+  CURRENT_VERSION="$(sed -n '1p' "$VERSION_FILE" | tr -cd '0-9')"
+fi
+if [ -z "$CURRENT_VERSION" ]; then
+  CURRENT_VERSION=0
+fi
+DEPLOY_VERSION=$((CURRENT_VERSION + 1))
+echo "$DEPLOY_VERSION" > "$VERSION_FILE"
+DEPLOY_COMMIT="$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
+DASH_DIR="$APP_DIR/dashboard"
+if [ -f "$DASH_DIR/package.json" ]; then
+  cd "$DASH_DIR"
   npm install --legacy-peer-deps 2>/dev/null || npm install
-  npm run build
+  CI=false REACT_APP_DEPLOY_VERSION="$DEPLOY_VERSION" REACT_APP_DEPLOY_COMMIT="$DEPLOY_COMMIT" npm run build
   cd "$APP_DIR"
   echo -e "${GREEN}Dashboard built successfully!${NC}"
+  echo "Dashboard version: v$DEPLOY_VERSION ($DEPLOY_COMMIT)"
 else
-  echo -e "${YELLOW}Warning: dashboard/package.json not found, skipping dashboard build${NC}"
+  echo -e "${YELLOW}Warning: dashboard/package.json not found, skipping dashboard build.${NC}"
 fi
 echo ""
 
-# Step 6: Verify .env file exists
+# Step 6: Verify config and credentials
 echo -e "${YELLOW}[6/8] Checking configuration...${NC}"
 if [ ! -f "$APP_DIR/.env" ]; then
-    echo -e "${RED}Warning: .env file not found!${NC}"
-    echo "Creating from .env.example..."
-    if [ -f "$APP_DIR/.env.example" ]; then
+    if [ "$APP_DIR" != "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.env" ]; then
+        cp "$REPO_ROOT/.env" "$APP_DIR/.env"
+        echo ".env copied from repo root to canonical app directory"
+    elif [ -f "$APP_DIR/.env.example" ]; then
         cp "$APP_DIR/.env.example" "$APP_DIR/.env"
-        echo -e "${YELLOW}Please edit $APP_DIR/.env with your actual credentials${NC}"
+        echo -e "${YELLOW}Created .env from .env.example in $APP_DIR${NC}"
     else
-        echo -e "${RED}Error: .env.example not found either!${NC}"
+        echo -e "${RED}Error: .env and .env.example not found in $APP_DIR${NC}"
         exit 1
     fi
 else
     echo ".env file found"
 fi
 
-# Check for Firebase credentials
+if [ ! -f "$APP_DIR/data/firebase_data.json" ] && [ -f "$REPO_ROOT/data/firebase_data.json" ]; then
+    mkdir -p "$APP_DIR/data"
+    cp "$REPO_ROOT/data/firebase_data.json" "$APP_DIR/data/firebase_data.json"
+    echo "firebase_data.json copied from repo root"
+fi
 if [ ! -f "$APP_DIR/data/firebase_data.json" ]; then
-    echo -e "${YELLOW}Warning: Firebase credentials not found at data/firebase_data.json${NC}"
-    echo "Make sure to upload your Firebase service account JSON file"
+    echo -e "${YELLOW}Warning: Firebase credentials not found at $APP_DIR/data/firebase_data.json${NC}"
 fi
 echo -e "${GREEN}Done!${NC}"
 echo ""
@@ -120,9 +139,9 @@ Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/${SERVICE_NAME}.log
 StandardError=append:/var/log/${SERVICE_NAME}.error.log
-
-# Environment
+EnvironmentFile=-${APP_DIR}/.env
 Environment=PYTHONUNBUFFERED=1
+Environment=PATH=${APP_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=multi-user.target
@@ -138,12 +157,18 @@ systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
 sleep 3
 
-# Check status
 if systemctl is-active --quiet ${SERVICE_NAME}; then
     echo -e "${GREEN}Service started successfully!${NC}"
 else
-    echo -e "${RED}Service failed to start. Check logs:${NC}"
-    journalctl -u ${SERVICE_NAME} -n 20 --no-pager
+    echo -e "${RED}Service failed to start. Showing error log:${NC}"
+    echo "=== /var/log/${SERVICE_NAME}.error.log ==="
+    tail -80 /var/log/${SERVICE_NAME}.error.log 2>/dev/null || echo "(log file empty or missing)"
+    echo ""
+    echo "=== journalctl ==="
+    journalctl -u ${SERVICE_NAME} -n 15 --no-pager
+    echo ""
+    echo -e "${YELLOW}Running python main.py to capture traceback:${NC}"
+    cd ${APP_DIR} && ${APP_DIR}/venv/bin/python main.py 2>&1 || true
     exit 1
 fi
 echo ""
@@ -154,6 +179,7 @@ echo -e "${GREEN}  Deployment Complete!${NC}"
 echo -e "${BLUE}==========================================${NC}"
 echo ""
 echo -e "Application directory: ${YELLOW}$APP_DIR${NC}"
+echo -e "Dashboard version: ${YELLOW}v$DEPLOY_VERSION${NC}"
 echo -e "Service name: ${YELLOW}$SERVICE_NAME${NC}"
 echo -e "Log file: ${YELLOW}/var/log/${SERVICE_NAME}.log${NC}"
 echo -e "Error log: ${YELLOW}/var/log/${SERVICE_NAME}.error.log${NC}"
