@@ -1,72 +1,53 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ===========================================
 # Lina's Laser AI Bot - Deployment Script
 # ===========================================
-# Run this script on your DigitalOcean droplet
-# Usage: bash deploy.sh
+# Run with: bash deploy.sh (or: bash /opt/linasbot/deploy.sh)
 # ===========================================
 
-set -e  # Exit on any error
+set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Configuration
 APP_DIR="/opt/linasbot"
 SERVICE_NAME="linasbot"
-# Use python3.11 if available, otherwise fall back to system python3
 PYTHON_CMD="python3"
-if command -v python3.11 &>/dev/null; then
-    PYTHON_CMD="python3.11"
+command -v python3.11 &>/dev/null && PYTHON_CMD="python3.11"
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+
+# Must run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e "${RED}Please run as root (use sudo)${NC}"
+    exit 1
 fi
+
+# Ensure we're in APP_DIR (cwd can change with sudo)
+cd "$APP_DIR" || { echo -e "${RED}Error: $APP_DIR not found${NC}"; exit 1; }
 
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${BLUE}  Lina's Laser AI Bot - Deployment${NC}"
 echo -e "${BLUE}==========================================${NC}"
 echo ""
 
-# Check if running as root (POSIX-compatible)
-if [ "$(id -u)" -ne 0 ]; then
-    echo -e "${RED}Please run as root (use sudo)${NC}"
-    exit 1
-fi
-
-# Step 1: Update system and install dependencies
+# Step 1: System dependencies
 echo -e "${YELLOW}[1/7] Installing system dependencies...${NC}"
-apt update
+apt update -qq
 apt install -y python3 python3-venv python3-pip ffmpeg curl
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 2: Create app directory if it doesn't exist
-echo -e "${YELLOW}[2/7] Setting up application directory...${NC}"
-if [ ! -d "$APP_DIR" ]; then
-    echo "Creating $APP_DIR..."
-    mkdir -p "$APP_DIR"
-fi
-
-# Only copy files if we're NOT already in APP_DIR (e.g. when run from CI after git pull)
-CURRENT_DIR="$(cd . && pwd)"
-if [ "$CURRENT_DIR" != "$APP_DIR" ] && [ -f "./main.py" ]; then
-    echo "Copying files from $CURRENT_DIR to $APP_DIR..."
-    cp -r ./* "$APP_DIR/"
-    cp -r ./.[!.]* "$APP_DIR/" 2>/dev/null || true
-elif [ ! -f "$APP_DIR/main.py" ]; then
-    echo -e "${RED}Error: main.py not found in $APP_DIR${NC}"
+# Step 2: Skip copy - git pull already updated files. Only copy when main.py missing (first-time deploy from elsewhere)
+echo -e "${YELLOW}[2/7] Checking application directory...${NC}"
+if [ ! -f "$APP_DIR/main.py" ]; then
+    echo -e "${RED}Error: main.py not found. Run 'git pull' in $APP_DIR first.${NC}"
     exit 1
-else
-    echo "Already in app directory, skipping copy."
 fi
+echo "Application files OK (git pull updates code)."
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
 # Step 3: Set up Python virtual environment
 echo -e "${YELLOW}[3/7] Setting up Python virtual environment...${NC}"
 cd "$APP_DIR"
+rm -rf venv
 $PYTHON_CMD -m venv venv
 source venv/bin/activate
 echo -e "${GREEN}Done!${NC}"
