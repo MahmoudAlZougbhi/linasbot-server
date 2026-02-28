@@ -6,6 +6,7 @@ Handles initialization of WhatsApp provider and scheduling services.
 
 import datetime
 import asyncio
+import os
 from typing import Any, Dict, Optional
 
 from modules.core import app, PYDUB_AVAILABLE, AudioSegment
