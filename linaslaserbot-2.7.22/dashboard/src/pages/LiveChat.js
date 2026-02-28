@@ -520,6 +520,9 @@ const LiveChat = () => {
         hasMoreDays
       );
 
+      setConversationDayPageMap((prev) => ({ ...prev, [conversationId]: mergedDayPage }));
+      setConversationHasMoreDaysMap((prev) => ({ ...prev, [conversationId]: hasMoreDays }));
+
       setSelectedConversation((prev) =>
         prev?.conversation?.conversation_id === conversationId
           ? { ...prev, conversation, history: mergedHistory }
