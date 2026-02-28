@@ -39,16 +39,22 @@ class AnalyticsEvents:
 
     @staticmethod
     def _normalize_user_id(user_id: Any) -> Optional[str]:
-        """Normalize user IDs for stable deduplication."""
+        """
+        Normalize user IDs for stable deduplication.
+        Ensures +9613000001 and 9613000001 are treated as same user.
+        """
         if user_id is None:
             return None
         normalized = str(user_id).strip()
         if not normalized:
             return None
-        normalized = normalized.replace(" ", "").replace("-", "")
+        normalized = normalized.replace(" ", "").replace("-", "").replace("_", "")
         if normalized.startswith("+"):
             normalized = normalized[1:]
-        return normalized
+        # Lebanese numbers: 961XXXXXXXX -> keep as-is for consistency
+        if normalized.startswith("961") and len(normalized) >= 11:
+            return normalized
+        return normalized if normalized else None
 
     @staticmethod
     def _parse_timestamp(timestamp: Any) -> Optional[datetime.datetime]:

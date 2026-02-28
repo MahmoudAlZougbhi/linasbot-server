@@ -200,6 +200,12 @@ class LocalQAService:
                 "category": category,
                 "timestamp": datetime.now().isoformat(),
             }
+            # Add extra languages (e.g. question_de, answer_de from TRAINING_EXTRA_LANGUAGES)
+            for k, v in trans.items():
+                if k.startswith("question_") or k.startswith("answer_"):
+                    lang = k.split("_", 1)[1]
+                    if lang not in ("ar", "en", "fr") and v:
+                        qa_pair[k] = v
             self.qa_pairs.append(qa_pair)
             if not self.save_to_jsonl():
                 self.qa_pairs.pop()

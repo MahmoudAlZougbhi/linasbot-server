@@ -24,7 +24,6 @@ import ContentFilesPanel from "../components/ContentFilesPanel";
 const Training = () => {
   const {
     getLocalQAPairs,
-    createLocalQAPair,
     createLocalQAPairStructured,
     updateLocalQAPair,
     deleteLocalQAPair,
@@ -40,21 +39,21 @@ const Training = () => {
   } = useApi();
 
   const [activeTab, setActiveTab] = useState("add");
-  const [useStructuredFAQ, setUseStructuredFAQ] = useState(true); // Auto-translate AR/EN/FR
   const [trainingEntries, setTrainingEntries] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredEntries, setFilteredEntries] = useState([]);
+  const [manageViewLang, setManageViewLang] = useState("all"); // all | ar | en | fr - which language section to show
   const [statistics, setStatistics] = useState({
     total: 0,
     by_language: {},
     by_category: {},
   });
 
-  // Add training form
+  // Add training form - Franco only, auto-translates to AR/EN/FR
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("general");
-  const [selectedLanguage, setSelectedLanguage] = useState("ar");
+  const [selectedLanguage, setSelectedLanguage] = useState("ar"); // for edit/delete compatibility
 
   // Edit mode state
   const [editingEntry, setEditingEntry] = useState(null);
@@ -117,13 +116,6 @@ const Training = () => {
     { value: "hours", label: "Working Hours", emoji: "⏰" },
   ];
 
-  const languageOptions = [
-    { value: "ar", label: "Arabic", flag: "🇸🇦" },
-    { value: "en", label: "English", flag: "🇺🇸" },
-    { value: "fr", label: "French", flag: "🇫🇷" },
-    { value: "franco", label: "Franco", flag: "🔤" },
-  ];
-
   useEffect(() => {
     loadStatistics();
   }, []);
@@ -153,9 +145,10 @@ const Training = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    let base = trainingEntries;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const filtered = trainingEntries.filter((entry) => {
+      base = trainingEntries.filter((entry) => {
         const texts = [
           entry.question,
           entry.answer,
@@ -168,10 +161,8 @@ const Training = () => {
         ].filter(Boolean);
         return texts.some((t) => t.toLowerCase().includes(q));
       });
-      setFilteredEntries(filtered);
-    } else {
-      setFilteredEntries(trainingEntries);
     }
+    setFilteredEntries(base);
   }, [searchQuery, trainingEntries]);
 
   const loadTrainingData = async (language = selectedLanguage) => {
@@ -202,7 +193,7 @@ const Training = () => {
 
   const handleAddTraining = async () => {
     if (!newQuestion.trim() || !newAnswer.trim()) {
-      toast.error("Please fill in both question and answer");
+      toast.error("Please fill in both question and answer (Franco)");
       return;
     }
 
@@ -211,19 +202,18 @@ const Training = () => {
         question: newQuestion.trim(),
         answer: newAnswer.trim(),
         category: selectedCategory,
-        auto_translate: useStructuredFAQ,
+        auto_translate: true, // Always: Franco → AR, EN, FR
       };
 
-      const apiCall = useStructuredFAQ ? createLocalQAPairStructured : createLocalQAPair;
-      const response = await apiCall(useStructuredFAQ ? qaData : { ...qaData, language: selectedLanguage });
+      const response = await createLocalQAPairStructured(qaData);
 
       if (response.success) {
-        await loadTrainingData(selectedLanguage);
+        await loadTrainingData();
         await loadStatistics();
         setNewQuestion("");
         setNewAnswer("");
         setSelectedCategory("general");
-        toast.success(useStructuredFAQ ? "✅ FAQ saved with auto-translate (AR/EN/FR)!" : "✅ Q&A saved!");
+        toast.success("✅ Saved! Auto-translated to العربية, English & Français");
       } else {
         toast.error(response.error || "Failed to create Q&A pair");
       }
@@ -335,8 +325,7 @@ const Training = () => {
           AI Training Center
         </h1>
         <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-          Teach your AI assistant with Q&A pairs. Arabic entries are auto-saved
-          in English, French, and Franco too.
+          اكتب السؤال والجواب بالفرانكو — يتم الترجمة تلقائياً للعربية، الإنجليزية والفرنسية
         </p>
       </motion.div>
 
@@ -426,14 +415,14 @@ const Training = () => {
         </motion.div>
       </motion.div>
 
-      {/* Tabs */}
+      {/* Tabs - scroll horizontally on small screens */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.4 }}
-        className="flex justify-center"
+        className="flex justify-center w-full overflow-x-auto pb-2 -mx-2 px-2"
       >
-        <div className="glass rounded-2xl p-2 inline-flex space-x-2">
+        <div className="glass rounded-2xl p-2 inline-flex space-x-2 flex-shrink-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -476,31 +465,31 @@ const Training = () => {
               </h2>
 
               <div className="space-y-6">
-                {/* Question Input */}
+                {/* Question Input - Franco only */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Question (any language)
+                    🔤 السؤال (Franco)
                   </label>
                   <textarea
                     value={newQuestion}
                     onChange={(e) => setNewQuestion(e.target.value)}
-                    placeholder="What question should the AI be able to answer?"
+                    placeholder="e.g. kif fina n7afza? / chou el as3ar? / wen el 3emara?"
                     className="input-field w-full h-24 resize-none"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    💡 Language is auto-detected. Arabic Q&A auto-generates EN/FR/Franco copies.
+                    اكتب بالفرانكو — يتم الترجمة تلقائياً للعربية، الإنجليزية والفرنسية
                   </p>
                 </div>
 
-                {/* Answer Input */}
+                {/* Answer Input - Franco only */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Answer
+                    🔤 الجواب (Franco)
                   </label>
                   <textarea
                     value={newAnswer}
                     onChange={(e) => setNewAnswer(e.target.value)}
-                    placeholder="Provide the correct answer..."
+                    placeholder="e.g. el as3ar mawjouda 3al site..."
                     className="input-field w-full h-32 resize-none"
                   />
                 </div>
@@ -521,20 +510,6 @@ const Training = () => {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* Auto-translate (structured FAQ) */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="useStructuredFAQ"
-                    checked={useStructuredFAQ}
-                    onChange={(e) => setUseStructuredFAQ(e.target.checked)}
-                    className="rounded border-slate-300"
-                  />
-                  <label htmlFor="useStructuredFAQ" className="text-sm text-slate-700">
-                    Auto-translate to Arabic, English & French (structured FAQ)
-                  </label>
                 </div>
 
                 {/* Submit Button */}
@@ -570,13 +545,43 @@ const Training = () => {
             className="space-y-6"
           >
             <div className="card">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <h2 className="text-xl font-bold text-slate-800 font-display flex items-center">
                   <BookOpenIcon className="w-6 h-6 mr-2 text-blue-600" />
-                  Manage Data ({trainingEntries.length}) — AR / EN / FR
+                  Manage Data ({trainingEntries.length})
                 </h2>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Language section tabs */}
+                  <div className="flex gap-1 p-1 bg-slate-100 rounded-lg flex-wrap">
+                    {(() => {
+                      const langMeta = { ar: ["عربي", "🇸🇦"], en: ["English", "🇺🇸"], fr: ["Français", "🇫🇷"], de: ["Deutsch", "🇩🇪"], es: ["Español", "🇪🇸"], tr: ["Türkçe", "🇹🇷"] };
+                      const getMeta = (k) => langMeta[k] ? { label: langMeta[k][0], flag: langMeta[k][1] } : { label: k.toUpperCase(), flag: "🌐" };
+                      const extraLangs = [...new Set(
+                        trainingEntries.flatMap((e) =>
+                          Object.keys(e).map((k) => k.match(/^question_(.+)$/)?.[1]).filter(Boolean).filter((l) => !["ar", "en", "fr"].includes(l))
+                      )];
+                      return [
+                        { id: "all", label: "All", flag: "🌐" },
+                        { id: "ar", ...getMeta("ar") },
+                        { id: "en", ...getMeta("en") },
+                        { id: "fr", ...getMeta("fr") },
+                        ...extraLangs.map((id) => ({ id, ...getMeta(id) })),
+                      ];
+                    })().map(({ id, label, flag }) => (
+                      <button
+                        key={id}
+                        onClick={() => setManageViewLang(id)}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                          manageViewLang === id
+                            ? "bg-white shadow text-blue-600"
+                            : "text-slate-600 hover:text-slate-800"
+                        }`}
+                      >
+                        {flag} {label}
+                      </button>
+                    ))}
+                  </div>
                   {/* Search */}
                   <div className="relative">
                     <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
@@ -584,8 +589,8 @@ const Training = () => {
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search FAQs (AR/EN/FR)..."
-                      className="input-field pl-10 w-64"
+                      placeholder="Search..."
+                      className="input-field pl-10 w-48 sm:w-64"
                     />
                   </div>
                 </div>
@@ -692,28 +697,31 @@ const Training = () => {
                       </div>
 
                       <div className="space-y-6">
-                        {/* Question Input */}
+                        {/* Question Input - Franco for structured, any for legacy */}
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Question
+                            {editingEntry?.question_ar ? "🔤 السؤال (Franco)" : "Question"}
                           </label>
                           <textarea
                             value={editQuestion}
                             onChange={(e) => setEditQuestion(e.target.value)}
-                            placeholder="Enter the question..."
+                            placeholder={editingEntry?.question_ar ? "e.g. kif fina n7afza?" : "Enter the question..."}
                             className="input-field w-full h-24 resize-none"
                           />
+                          {editingEntry?.question_ar && (
+                            <p className="text-xs text-slate-500 mt-1">يُعاد الترجمة تلقائياً للعربية، الإنجليزية والفرنسية</p>
+                          )}
                         </div>
 
                         {/* Answer Input */}
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Answer
+                            {editingEntry?.question_ar ? "🔤 الجواب (Franco)" : "Answer"}
                           </label>
                           <textarea
                             value={editAnswer}
                             onChange={(e) => setEditAnswer(e.target.value)}
-                            placeholder="Enter the answer..."
+                            placeholder={editingEntry?.question_ar ? "e.g. el as3ar mawjouda..." : "Enter the answer..."}
                             className="input-field w-full h-32 resize-none"
                           />
                         </div>
@@ -784,7 +792,9 @@ const Training = () => {
                       <p className="text-slate-500">
                         {searchQuery
                           ? "No entries match your search"
-                          : `No ${selectedLanguage.toUpperCase()} training data yet`}
+                          : manageViewLang === "all"
+                          ? "No training data yet"
+                          : `No ${manageViewLang.toUpperCase()} entries yet`}
                       </p>
                       <p className="text-sm text-slate-400 mt-1">
                         {searchQuery
@@ -795,11 +805,24 @@ const Training = () => {
                   ) : (
                     filteredEntries.map((entry, idx) => {
                       const hasStructured = entry.question_ar || entry.question_en || entry.question_fr;
-                      const langs = [
-                        { key: "ar", label: "عربي", flag: "🇸🇦", q: entry.question_ar || entry.question, a: entry.answer_ar || entry.answer },
-                        { key: "en", label: "English", flag: "🇺🇸", q: entry.question_en || entry.question, a: entry.answer_en || entry.answer },
-                        { key: "fr", label: "Français", flag: "🇫🇷", q: entry.question_fr || entry.question, a: entry.answer_fr || entry.answer },
+                      const langMeta = { ar: ["عربي", "🇸🇦"], en: ["English", "🇺🇸"], fr: ["Français", "🇫🇷"], de: ["Deutsch", "🇩🇪"], es: ["Español", "🇪🇸"], tr: ["Türkçe", "🇹🇷"] };
+                      const getMeta = (k) => langMeta[k] ? { label: langMeta[k][0], flag: langMeta[k][1] } : { label: k.toUpperCase(), flag: "🌐" };
+                      let langs = [
+                        { key: "ar", ...getMeta("ar"), q: entry.question_ar || entry.question, a: entry.answer_ar || entry.answer },
+                        { key: "en", ...getMeta("en"), q: entry.question_en || entry.question, a: entry.answer_en || entry.answer },
+                        { key: "fr", ...getMeta("fr"), q: entry.question_fr || entry.question, a: entry.answer_fr || entry.answer },
                       ];
+                      Object.keys(entry).forEach((k) => {
+                        const m = k.match(/^question_(.+)$/);
+                        if (m && !["ar", "en", "fr"].includes(m[1]) && entry[k]) {
+                          langs.push({ key: m[1], ...getMeta(m[1]), q: entry[k], a: entry[`answer_${m[1]}`] || "" });
+                        }
+                      });
+                      const displayLangs = manageViewLang === "all" ? langs : langs.filter((l) => l.key === manageViewLang);
+                      const hasContent = displayLangs.some((l) => l.q || l.a);
+                      const entryLang = entry.language || "ar";
+                      if (manageViewLang !== "all" && !hasStructured && entryLang !== manageViewLang) return null;
+                      if (!hasContent && manageViewLang !== "all") return null;
                       return (
                       <motion.div
                         key={entry.id || idx}
@@ -824,7 +847,7 @@ const Training = () => {
 
                             {hasStructured ? (
                               <div className="space-y-2">
-                                {langs.map(({ key, label, flag, q, a }) => (q || a) && (
+                                {displayLangs.map(({ key, label, flag, q, a }) => (q || a) && (
                                   <div key={key} className="border border-slate-200 rounded-lg p-3">
                                     <p className="text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
                                       <span>{flag}</span> {label}

@@ -151,6 +151,8 @@ const Analytics = () => {
   const performance = analyticsData?.performance || {};
   const tokens = analyticsData?.token_usage || {};
   const conversions = analyticsData?.conversions || {};
+  const newClients = analyticsData?.new_clients || {};
+  const servicesDiscussedToday = analyticsData?.services_discussed_today || {};
 
   return (
     <div className="space-y-8 pb-8">
@@ -664,6 +666,82 @@ const Analytics = () => {
                   {conversions.conversion_rate || 0}%
                 </span>
               </div>
+            </div>
+          </div>
+        </ChartCard>
+      </div>
+
+      {/* New Client Metrics - Booked vs Asked-Not-Booked */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartCard title="New Clients: Booked vs Asked (Not Booked)" icon={UsersIcon}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                <p className="text-sm font-medium text-green-800">New Clients Booked</p>
+                <p className="text-3xl font-bold text-green-600">
+                  {newClients.booked_count ?? conversions.new_clients_booked ?? 0}
+                </p>
+                <p className="text-xs text-green-600 mt-1">Booked appointment in selected period</p>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <p className="text-sm font-medium text-amber-800">Asked But Did Not Book</p>
+                <p className="text-3xl font-bold text-amber-600">
+                  {newClients.asked_not_booked_count ?? conversions.new_clients_asked_not_booked ?? 0}
+                </p>
+                <p className="text-xs text-amber-600 mt-1">Discussed services, no booking</p>
+              </div>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg text-sm text-slate-600">
+              <strong>Total new clients (first seen in period):</strong> {newClients.total_new_clients ?? 0}
+            </div>
+            {(newClients.booked_details?.length > 0 || newClients.asked_not_booked_details?.length > 0) && (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                <h4 className="text-sm font-semibold text-slate-700">Who booked (new clients only)</h4>
+                {(newClients.booked_details || []).slice(0, 5).map((d, i) => (
+                  <div key={i} className="flex justify-between items-center p-2 bg-green-50 rounded text-xs">
+                    <span className="font-mono text-slate-600">***{String(d.user_id || "").slice(-4)}</span>
+                    <span className="text-green-700">{(d.services || []).join(", ") || "—"}</span>
+                  </div>
+                ))}
+                <h4 className="text-sm font-semibold text-slate-700 mt-2">Who asked but did not book</h4>
+                {(newClients.asked_not_booked_details || []).slice(0, 5).map((d, i) => (
+                  <div key={i} className="flex justify-between items-center p-2 bg-amber-50 rounded text-xs">
+                    <span className="font-mono text-slate-600">***{String(d.user_id || "").slice(-4)}</span>
+                    <span className="text-amber-700">{(d.services || []).join(", ") || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </ChartCard>
+
+        <ChartCard title="Services Discussed Today" icon={SparklesIcon}>
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <p className="text-sm font-medium text-blue-800">Date</p>
+              <p className="text-lg font-bold text-blue-600">
+                {servicesDiscussedToday.date || new Date().toISOString().slice(0, 10)}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                {servicesDiscussedToday.unique_clients ?? 0} unique clients • {servicesDiscussedToday.total_mentions ?? 0} total mentions
+              </p>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(servicesDiscussedToday.by_service || []).length > 0 ? (
+                (servicesDiscussedToday.by_service || []).map((s, i) => (
+                  <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
+                    <span className="font-medium text-slate-700 capitalize">
+                      {String(s.service || "").replace(/_/g, " ")}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-slate-500">{s.mentions ?? 0} mentions</span>
+                      <span className="text-sm font-medium text-primary-600">{s.unique_clients ?? 0} clients</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500 py-4 text-center">No service discussions today yet</p>
+              )}
             </div>
           </div>
         </ChartCard>

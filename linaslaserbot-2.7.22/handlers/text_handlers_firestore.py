@@ -32,6 +32,19 @@ from handlers.training_handlers import handle_training_input, start_training_mod
 # Shared dictionary to hold delayed processing tasks for each user
 _delayed_processing_tasks = {}
 
+# Locks for message merge: concurrency-safe per user when webhook receives rapid messages
+_message_merge_locks = {}
+_message_merge_dict_lock = asyncio.Lock()
+
+
+async def get_message_merge_lock(user_id: str) -> asyncio.Lock:
+    """Get or create asyncio.Lock for user_id. Concurrency-safe."""
+    async with _message_merge_dict_lock:
+        if user_id not in _message_merge_locks:
+            _message_merge_locks[user_id] = asyncio.Lock()
+        return _message_merge_locks[user_id]
+
+
 __all__ = [
     'asyncio', 'datetime', 'random', 'deque', 're', 'config',
     'detect_language', 'notify_human_on_whatsapp', 'count_tokens',
@@ -42,5 +55,6 @@ __all__ = [
     'check_customer_gender', 'get_customer_by_phone', 'create_customer',
     'sentiment_service', 'get_qa_response', 'local_qa_service', 'user_persistence',
     'handle_training_input', 'original_start_training_mode', 'original_exit_training_mode',
-    '_delayed_processing_tasks'
+    '_delayed_processing_tasks',
+    'get_message_merge_lock',
 ]

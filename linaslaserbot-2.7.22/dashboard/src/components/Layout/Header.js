@@ -300,28 +300,31 @@ const Header = ({ onMenuClick, botStatus }) => {
         </motion.div>
       </div>
 
-      {/* Mobile Bot Status */}
+      {/* Mobile Bot Status + Version */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.6 }}
-        className="md:hidden mt-4 flex items-center justify-center space-x-4"
+        className="md:hidden mt-4 flex flex-col items-center justify-center space-y-2"
       >
-        <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
-          <div className={`w-2 h-2 ${
-            botStatus?.status === 'online' ? 'bg-green-400' : 'bg-red-400'
-          } rounded-full animate-pulse`}></div>
-          <span className="text-xs font-medium text-slate-700">
-            Bot {botStatus?.status === 'online' ? 'Online' : 'Offline'}
-          </span>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
+            <div className={`w-2 h-2 ${
+              botStatus?.status === 'online' ? 'bg-green-400' : 'bg-red-400'
+            } rounded-full animate-pulse`}></div>
+            <span className="text-xs font-medium text-slate-700">
+              Bot {botStatus?.status === 'online' ? 'Online' : 'Offline'}
+            </span>
+          </div>
+          <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
+            <GlobeAltIcon className="w-4 h-4 text-secondary-600" />
+            <span className="text-xs font-medium text-slate-700">Multi-Lang</span>
+          </div>
+          <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
+            <span className="text-xs font-medium text-slate-700">~2.1s</span>
+          </div>
         </div>
-        <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
-          <GlobeAltIcon className="w-4 h-4 text-secondary-600" />
-          <span className="text-xs font-medium text-slate-700">Multi-Lang</span>
-        </div>
-        <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
-          <span className="text-xs font-medium text-slate-700">~2.1s</span>
-        </div>
+        <p className="text-xs text-slate-500">Build v{deployVersion} • {deployCommit}</p>
       </motion.div>
     </header>
   );

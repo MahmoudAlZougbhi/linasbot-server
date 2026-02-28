@@ -32,7 +32,11 @@ TESTING_MODE = False  # When True, Firebase saving is disabled for testing
 
 # Smart Retrieval Debug - when True, logs structured JSON per request
 # Can also enable via env: SMART_RETRIEVAL_DEBUG=1
-SMART_RETRIEVAL_DEBUG = os.getenv("SMART_RETRIEVAL_DEBUG", "").lower() in ("1", "true", "yes", "on")
+SMART_RETRIEVAL_DEBUG = os.getenv("SMART_RETRIEVAL_DEBUG", "1").lower() in ("1", "true", "yes", "on")
+
+# Extra languages for FAQ auto-translate (e.g. de,es,tr)
+# Franco/AR/EN/FR are always included; add more via TRAINING_EXTRA_LANGUAGES=de,es,tr
+TRAINING_EXTRA_LANGUAGES = [x.strip().lower() for x in os.getenv("TRAINING_EXTRA_LANGUAGES", "").split(",") if x.strip()]
 
 # --- Bot Operational Settings ---
 # WhatsApp Number for Human Notifications (e.g., your admin/staff number)

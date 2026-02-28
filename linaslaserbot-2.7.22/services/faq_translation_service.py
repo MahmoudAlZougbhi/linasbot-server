@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-FAQ Translation Service - Auto-translate FAQ on save (Franco/Arabic/English/French -> AR/EN/FR).
+FAQ Translation Service - Auto-translate FAQ on save (Franco/Arabic/English/French -> AR/EN/FR + extra).
 """
 
 import re
-from typing import Tuple
+from typing import Tuple, List, Optional
 
 # Franco-Arabic to Arabic character mapping (common)
 FRANCO_TO_AR = {
@@ -53,11 +53,22 @@ def _translate_with_deep_translator(text: str, source: str, target: str) -> str:
         return text
 
 
-def translate_faq_pair(question: str, answer: str) -> dict:
+def translate_faq_pair(
+    question: str,
+    answer: str,
+    extra_targets: Optional[List[str]] = None,
+) -> dict:
     """
     Take question+answer in any language (Franco, AR, EN, FR) and produce structured:
     question_ar, answer_ar, question_en, answer_en, question_fr, answer_fr
+    + question_X, answer_X for each extra_targets (e.g. de, es, tr).
     """
+    try:
+        from config import TRAINING_EXTRA_LANGUAGES
+        extra = extra_targets or TRAINING_EXTRA_LANGUAGES
+    except ImportError:
+        extra = extra_targets or []
+
     detected = _detect_input_language(question)
     if not detected:
         detected = "ar"
@@ -86,11 +97,12 @@ def translate_faq_pair(question: str, answer: str) -> dict:
         result["question_fr"] = source_q
         result["answer_fr"] = source_a
 
-    # Translate to missing languages
-    for target in ["ar", "en", "fr"]:
+    # Translate to missing languages (core + extra)
+    all_targets = ["ar", "en", "fr"] + [t for t in extra if t and t not in ("ar", "en", "fr")]
+    for target in all_targets:
         q_key = f"question_{target}"
         a_key = f"answer_{target}"
-        if result[q_key]:
+        if result.get(q_key):
             continue
         result[q_key] = _translate_with_deep_translator(source_q, src_lang, target)
         result[a_key] = _translate_with_deep_translator(source_a, src_lang, target)

@@ -2,6 +2,7 @@
 # Main message handler for WhatsApp text messages
 
 from handlers.text_handlers_firestore import *
+from handlers.text_handlers_firestore import get_message_merge_lock
 from handlers.text_handlers_delayed import _delayed_process_messages
 
 
@@ -331,14 +332,17 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
     # GPT is then instructed to respond in the detected language
     print(f"[handle_message] 🌐 Language will be detected pre-GPT by language_detection_service for user {user_id}")
 
-    # Message combining logic
-    config.user_pending_messages[user_id].append(raw_msg)
+    # Message combining logic: wait 3s after LAST message, merge all, send ONE reply.
+    # Concurrency-safe for WhatsApp webhook (multiple rapid messages).
+    lock = await get_message_merge_lock(user_id)
+    async with lock:
+        config.user_pending_messages[user_id].append(raw_msg)
 
-    # Cancel any previously scheduled processing task
-    if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
-        _delayed_processing_tasks[user_id].cancel()
+        # Cancel any previously scheduled processing task (reset timer: 3s after THIS last message)
+        if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
+            _delayed_processing_tasks[user_id].cancel()
 
-    # Schedule a new processing task
-    _delayed_processing_tasks[user_id] = asyncio.create_task(
-        _delayed_process_messages(user_id, user_data, send_message_func, send_action_func)
-    )
+        # Schedule a new processing task
+        _delayed_processing_tasks[user_id] = asyncio.create_task(
+            _delayed_process_messages(user_id, user_data, send_message_func, send_action_func)
+        )

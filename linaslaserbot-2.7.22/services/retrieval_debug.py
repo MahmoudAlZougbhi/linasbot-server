@@ -15,7 +15,7 @@ _DEBUG_BUFFER: deque = deque(maxlen=100)
 
 # Enable/disable via env or explicit set
 def is_debug_enabled() -> bool:
-    val = os.getenv("SMART_RETRIEVAL_DEBUG", "").lower()
+    val = os.getenv("SMART_RETRIEVAL_DEBUG", "1").lower()
     if val in ("1", "true", "yes", "on"):
         return True
     try:

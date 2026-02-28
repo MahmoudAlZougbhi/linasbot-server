@@ -300,25 +300,44 @@ async def update_local_qa_pair(qa_id: int, updates: dict):
         
         # Update the Q&A pair (ID is 1-indexed, list is 0-indexed)
         qa_index = qa_id - 1
-        
-        if "question" in updates:
-            qa_pairs[qa_index]["question"] = updates["question"]
-        if "answer" in updates:
-            qa_pairs[qa_index]["answer"] = updates["answer"]
+        entry = qa_pairs[qa_index]
+        is_structured = "question_ar" in entry or "question_en" in entry or "question_fr" in entry
+
+        if "question" in updates and "answer" in updates and is_structured:
+            # Structured entry: re-translate Franco input to AR/EN/FR
+            try:
+                from services.faq_translation_service import translate_faq_pair
+                trans = translate_faq_pair(updates["question"], updates["answer"])
+                entry["question_ar"] = trans.get("question_ar", updates["question"])
+                entry["answer_ar"] = trans.get("answer_ar", updates["answer"])
+                entry["question_en"] = trans.get("question_en", updates["question"])
+                entry["answer_en"] = trans.get("answer_en", updates["answer"])
+                entry["question_fr"] = trans.get("question_fr", updates["question"])
+                entry["answer_fr"] = trans.get("answer_fr", updates["answer"])
+                for k, v in trans.items():
+                    if (k.startswith("question_") or k.startswith("answer_")) and k.split("_", 1)[1] not in ("ar", "en", "fr") and v:
+                        entry[k] = v
+            except Exception as tr_e:
+                print(f"⚠️ Re-translate on edit failed: {tr_e}")
+                entry["question_ar"] = updates["question"]
+                entry["answer_ar"] = updates["answer"]
+                entry["question_en"] = updates["question"]
+                entry["answer_en"] = updates["answer"]
+                entry["question_fr"] = updates["question"]
+                entry["answer_fr"] = updates["answer"]
+        else:
+            if "question" in updates:
+                entry["question"] = updates["question"]
+            if "answer" in updates:
+                entry["answer"] = updates["answer"]
+            if "language" in updates:
+                entry["language"] = language_detection_service.normalize_training_language(updates["language"])
+            if "question" in updates and "language" not in updates:
+                entry["language"] = language_detection_service.detect_training_language(updates["question"])
+
         if "category" in updates:
-            qa_pairs[qa_index]["category"] = updates["category"]
-        if "language" in updates:
-            qa_pairs[qa_index]["language"] = language_detection_service.normalize_training_language(
-                updates["language"]
-            )
-        
-        # Re-detect language only if question changed and language not explicitly provided
-        if "question" in updates and "language" not in updates:
-            qa_pairs[qa_index]["language"] = language_detection_service.detect_training_language(
-                updates["question"]
-            )
-        
-        qa_pairs[qa_index]["timestamp"] = datetime.now().isoformat()
+            entry["category"] = updates["category"]
+        entry["timestamp"] = datetime.now().isoformat()
         
         # Write back to file
         if write_qa_pairs(qa_pairs):
