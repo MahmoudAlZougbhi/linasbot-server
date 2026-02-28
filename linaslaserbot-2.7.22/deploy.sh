@@ -18,15 +18,19 @@ NC='\033[0m' # No Color
 # Configuration
 APP_DIR="/opt/linasbot"
 SERVICE_NAME="linasbot"
-PYTHON_VERSION="python3.11"
+# Use python3.11 if available, otherwise fall back to system python3
+PYTHON_CMD="python3"
+if command -v python3.11 &>/dev/null; then
+    PYTHON_CMD="python3.11"
+fi
 
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${BLUE}  Lina's Laser AI Bot - Deployment${NC}"
 echo -e "${BLUE}==========================================${NC}"
 echo ""
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
+# Check if running as root (POSIX-compatible)
+if [ "$(id -u)" -ne 0 ]; then
     echo -e "${RED}Please run as root (use sudo)${NC}"
     exit 1
 fi
@@ -34,7 +38,7 @@ fi
 # Step 1: Update system and install dependencies
 echo -e "${YELLOW}[1/7] Installing system dependencies...${NC}"
 apt update
-apt install -y python3.11 python3.11-venv python3-pip ffmpeg curl
+apt install -y python3 python3-venv python3-pip ffmpeg curl
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
@@ -45,14 +49,17 @@ if [ ! -d "$APP_DIR" ]; then
     mkdir -p "$APP_DIR"
 fi
 
-# Check if we're running from the project directory
-if [ -f "./main.py" ]; then
-    echo "Copying files to $APP_DIR..."
+# Only copy files if we're NOT already in APP_DIR (e.g. when run from CI after git pull)
+CURRENT_DIR="$(cd . && pwd)"
+if [ "$CURRENT_DIR" != "$APP_DIR" ] && [ -f "./main.py" ]; then
+    echo "Copying files from $CURRENT_DIR to $APP_DIR..."
     cp -r ./* "$APP_DIR/"
     cp -r ./.[!.]* "$APP_DIR/" 2>/dev/null || true
-else
-    echo -e "${RED}Error: main.py not found. Run this script from the project directory.${NC}"
+elif [ ! -f "$APP_DIR/main.py" ]; then
+    echo -e "${RED}Error: main.py not found in $APP_DIR${NC}"
     exit 1
+else
+    echo "Already in app directory, skipping copy."
 fi
 echo -e "${GREEN}Done!${NC}"
 echo ""
@@ -60,7 +67,7 @@ echo ""
 # Step 3: Set up Python virtual environment
 echo -e "${YELLOW}[3/7] Setting up Python virtual environment...${NC}"
 cd "$APP_DIR"
-$PYTHON_VERSION -m venv venv
+$PYTHON_CMD -m venv venv
 source venv/bin/activate
 echo -e "${GREEN}Done!${NC}"
 echo ""
