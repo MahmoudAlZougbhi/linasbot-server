@@ -42,11 +42,13 @@ def log_retrieval(
     faq_matched: bool,
     faq_match_score: Optional[float],
     prompt_token_estimate: Optional[int] = None,
-    source: str = "faq" if faq_matched else "ai",
+    source: Optional[str] = None,
 ) -> None:
     """Log structured retrieval debug info."""
     if not is_debug_enabled():
         return
+
+    resolved_source = source if source is not None else ("faq" if faq_matched else "ai")
 
     entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -58,7 +60,7 @@ def log_retrieval(
         "selected_style_files": [{"id": f.get("id"), "title": f.get("title")} for f in selected_style],
         "faq_matched": faq_matched,
         "faq_match_score": faq_match_score,
-        "source": source,
+        "source": resolved_source,
         "final_prompt_token_estimate": prompt_token_estimate,
     }
 
