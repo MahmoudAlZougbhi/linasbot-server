@@ -23,8 +23,8 @@ google-cloud-firestore==2.11.1
 pydub==0.25.1
 # pyaudioop==0.3.2  # Only needed for Python 3.13+ (using Python 3.11 instead)
 
-# Image Processing
-Pillow==10.1.0
+# Image Processing (>=11.0 for Python 3.13 compatibility)
+Pillow>=11.0.0
 
 # Async Support
 aiofiles==23.2.1
