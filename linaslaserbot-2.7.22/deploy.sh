@@ -28,14 +28,14 @@ echo -e "${BLUE}==========================================${NC}"
 echo ""
 
 # Step 1: System dependencies
-echo -e "${YELLOW}[1/7] Installing system dependencies...${NC}"
+echo -e "${YELLOW}[1/8] Installing system dependencies...${NC}"
 apt update -qq
-apt install -y python3 python3-venv python3-pip ffmpeg curl
+apt install -y python3 python3-venv python3-pip ffmpeg curl nodejs npm
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
 # Step 2: Skip copy - git pull already updated files. Only copy when main.py missing (first-time deploy from elsewhere)
-echo -e "${YELLOW}[2/7] Checking application directory...${NC}"
+echo -e "${YELLOW}[2/8] Checking application directory...${NC}"
 if [ ! -f "$APP_DIR/main.py" ]; then
     echo -e "${RED}Error: main.py not found. Run 'git pull' in $APP_DIR first.${NC}"
     exit 1
@@ -45,7 +45,7 @@ echo -e "${GREEN}Done!${NC}"
 echo ""
 
 # Step 3: Set up Python virtual environment
-echo -e "${YELLOW}[3/7] Setting up Python virtual environment...${NC}"
+echo -e "${YELLOW}[3/8] Setting up Python virtual environment...${NC}"
 cd "$APP_DIR"
 rm -rf venv
 $PYTHON_CMD -m venv venv
@@ -54,14 +54,34 @@ echo -e "${GREEN}Done!${NC}"
 echo ""
 
 # Step 4: Install Python dependencies
-echo -e "${YELLOW}[4/7] Installing Python dependencies...${NC}"
+echo -e "${YELLOW}[4/8] Installing Python dependencies...${NC}"
 pip install --upgrade pip
 pip install -r requirements.txt
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 5: Verify .env file exists
-echo -e "${YELLOW}[5/7] Checking configuration...${NC}"
+# Step 5: Build Dashboard (React)
+echo -e "${YELLOW}[5/8] Building Dashboard...${NC}"
+DASHBOARD_DIR=""
+for d in "$APP_DIR/dashboard" "$APP_DIR/linaslaserbot-2.7.22/dashboard"; do
+  if [ -f "$d/package.json" ]; then
+    DASHBOARD_DIR="$d"
+    break
+  fi
+done
+if [ -n "$DASHBOARD_DIR" ]; then
+  cd "$DASHBOARD_DIR"
+  npm install --legacy-peer-deps 2>/dev/null || npm install
+  npm run build
+  cd "$APP_DIR"
+  echo -e "${GREEN}Dashboard built successfully!${NC}"
+else
+  echo -e "${YELLOW}Warning: dashboard/package.json not found, skipping dashboard build${NC}"
+fi
+echo ""
+
+# Step 6: Verify .env file exists
+echo -e "${YELLOW}[6/8] Checking configuration...${NC}"
 if [ ! -f "$APP_DIR/.env" ]; then
     echo -e "${RED}Warning: .env file not found!${NC}"
     echo "Creating from .env.example..."
@@ -84,8 +104,8 @@ fi
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 6: Create systemd service
-echo -e "${YELLOW}[6/7] Creating systemd service...${NC}"
+# Step 7: Create systemd service
+echo -e "${YELLOW}[7/8] Creating systemd service...${NC}"
 cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Linas Laser AI Bot
@@ -112,8 +132,8 @@ systemctl daemon-reload
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 7: Start the service
-echo -e "${YELLOW}[7/7] Starting the service...${NC}"
+# Step 8: Start the service
+echo -e "${YELLOW}[8/8] Starting the service...${NC}"
 systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
 sleep 3

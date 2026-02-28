@@ -62,14 +62,29 @@ echo ""
 
 # Step 4b: Build dashboard (React)
 echo -e "${YELLOW}[4b/7] Building dashboard...${NC}"
-if [ -d "$APP_DIR/dashboard" ] && [ -f "$APP_DIR/dashboard/package.json" ]; then
-    cd "$APP_DIR/dashboard"
-    npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps 2>/dev/null || true
-    npm run build 2>/dev/null || echo "⚠️ Dashboard build skipped (npm not available or build failed)"
-    cd "$APP_DIR"
-    echo -e "${GREEN}Done!${NC}"
+DASH_DIR=""
+for d in "$APP_DIR/dashboard" "$APP_DIR/linaslaserbot-2.7.22/dashboard"; do
+  if [ -f "$d/package.json" ]; then
+    DASH_DIR="$d"
+    break
+  fi
+done
+if [ -n "$DASH_DIR" ]; then
+  cd "$DASH_DIR"
+  npm install --legacy-peer-deps 2>/dev/null || npm install
+  if npm run build; then
+    # If built in linaslaserbot subdir, ensure root dashboard/build exists for main.py
+    if [ "$DASH_DIR" = "$APP_DIR/linaslaserbot-2.7.22/dashboard" ] && [ -d "$DASH_DIR/build" ]; then
+      mkdir -p "$APP_DIR/dashboard"
+      cp -r "$DASH_DIR/build" "$APP_DIR/dashboard/"
+    fi
+    echo -e "${GREEN}Dashboard built successfully!${NC}"
+  else
+    echo -e "${YELLOW}⚠️ Dashboard build failed - continuing without new build${NC}"
+  fi
+  cd "$APP_DIR"
 else
-    echo "Dashboard folder not found, skipping build."
+  echo "Dashboard package.json not found, skipping build."
 fi
 echo ""
 
