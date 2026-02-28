@@ -1176,6 +1176,19 @@ export const useApi = () => {
     }
   }, []);
 
+  // ✨ Retrieval Debug Logs (SMART_RETRIEVAL_DEBUG must be enabled on server)
+  const getRetrievalDebugLogs = useCallback(async (limit = 50) => {
+    try {
+      const response = await api.get(`/api/retrieval-debug/logs?limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, logs: [], debug_enabled: false, error: "Backend offline" };
+      }
+      return { success: false, logs: [], debug_enabled: false, error: error.message };
+    }
+  }, []);
+
   // ✨ NEW: Bot Instructions Management functions
   const getInstructions = useCallback(async () => {
     try {
@@ -1324,6 +1337,7 @@ export const useApi = () => {
     createContentFile,
     updateContentFile,
     deleteContentFile,
+    getRetrievalDebugLogs,
     // Feedback functions
     submitFeedback,
     getFeedbackStats,

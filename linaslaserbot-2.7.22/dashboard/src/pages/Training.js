@@ -13,6 +13,7 @@ import {
   ClockIcon,
   ArrowPathIcon,
   CurrencyDollarIcon,
+  BugAntIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
@@ -34,6 +35,7 @@ const Training = () => {
     getTrainingFileBackups,
     restoreTrainingFileBackup,
     getTrainingFileStats,
+    getRetrievalDebugLogs,
     loading,
   } = useApi();
 
@@ -62,6 +64,10 @@ const Training = () => {
 
   // Delete confirmation modal state
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState(null);
+
+  // Retrieval debug logs
+  const [retrievalLogs, setRetrievalLogs] = useState([]);
+  const [retrievalLogsLoading, setRetrievalLogsLoading] = useState(false);
 
   const tabs = [
     {
@@ -94,6 +100,12 @@ const Training = () => {
       icon: CurrencyDollarIcon,
       color: "from-emerald-500 to-green-500",
     },
+    {
+      id: "retrieval_debug",
+      name: "Retrieval Debug",
+      icon: BugAntIcon,
+      color: "from-amber-500 to-orange-500",
+    },
   ];
 
   const categories = [
@@ -119,6 +131,26 @@ const Training = () => {
   useEffect(() => {
     loadTrainingData();
   }, []);
+
+  const loadRetrievalLogs = async () => {
+    setRetrievalLogsLoading(true);
+    try {
+      const res = await getRetrievalDebugLogs(50);
+      setRetrievalLogs(res.data || []);
+    } catch (e) {
+      setRetrievalLogs([]);
+    } finally {
+      setRetrievalLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "retrieval_debug") {
+      loadRetrievalLogs();
+      const interval = setInterval(loadRetrievalLogs, 10000); // refresh every 10s
+      return () => clearInterval(interval);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -875,6 +907,66 @@ const Training = () => {
             sectionName="Price List"
             icon={CurrencyDollarIcon}
           />
+        )}
+
+        {activeTab === "retrieval_debug" && (
+          <motion.div
+            key="retrieval_debug"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-4"
+          >
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-slate-800 font-display flex items-center">
+                  <BugAntIcon className="w-6 h-6 mr-2 text-amber-600" />
+                  Retrieval Debug Logs
+                </h2>
+                <button
+                  onClick={loadRetrievalLogs}
+                  disabled={retrievalLogsLoading}
+                  className="btn-ghost flex items-center gap-2"
+                >
+                  <ArrowPathIcon className={`w-5 h-5 ${retrievalLogsLoading ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </div>
+              <p className="text-sm text-slate-600 mb-4">
+                Smart retrieval logs (requires SMART_RETRIEVAL_DEBUG=1 on server). Auto-refreshes every 10s.
+              </p>
+              {retrievalLogsLoading && retrievalLogs.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">Loading logs...</div>
+              ) : retrievalLogs.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  No logs yet. Enable SMART_RETRIEVAL_DEBUG=1 on the server and send messages to the bot.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[500px] overflow-y-auto scrollbar-hide">
+                  {retrievalLogs.map((log, idx) => (
+                    <div
+                      key={idx}
+                      className="border border-slate-200 rounded-lg p-3 text-left text-sm font-mono bg-slate-50"
+                    >
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          log.source === "faq" ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+                        }`}>
+                          {log.source || "ai"}
+                        </span>
+                        {log.faq_matched && <span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">FAQ</span>}
+                        <span className="text-slate-400 text-xs">{log.timestamp}</span>
+                      </div>
+                      <p className="text-slate-700 break-words mb-1"><strong>Message:</strong> {log.user_message}</p>
+                      <p className="text-slate-600 text-xs">Intent: {log.detected_intent} | Gender: {log.detected_gender}</p>
+                      {log.faq_match_score != null && <p className="text-xs text-slate-500">FAQ score: {log.faq_match_score}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
