@@ -88,6 +88,13 @@ if [ -f "$DASH_DIR/package.json" ]; then
   npm install --legacy-peer-deps 2>/dev/null || npm install
   CI=false REACT_APP_DEPLOY_VERSION="$DEPLOY_VERSION" REACT_APP_DEPLOY_COMMIT="$DEPLOY_COMMIT" npm run build
   cd "$APP_DIR"
+  # Compatibility bridge: if an external web server serves /opt/linasbot/dashboard/build,
+  # mirror the canonical build there so UI stays in sync.
+  if [ "$APP_DIR" != "$REPO_ROOT" ] && [ -d "$APP_DIR/dashboard/build" ]; then
+    mkdir -p "$REPO_ROOT/dashboard"
+    rm -rf "$REPO_ROOT/dashboard/build"
+    cp -r "$APP_DIR/dashboard/build" "$REPO_ROOT/dashboard/build"
+  fi
   echo -e "${GREEN}Dashboard built successfully!${NC}"
   echo "Dashboard version: v$DEPLOY_VERSION ($DEPLOY_COMMIT)"
 else
