@@ -15,6 +15,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../contexts/AuthContext";
 import { hasPermission } from "../../utils/permissions";
+import { buildDisplayLabel } from "../../utils/buildInfo";
 
 // Navigation items with permission keys
 const navigationItems = [
@@ -202,6 +203,9 @@ const Sidebar = ({ onClose }) => {
                 </p>
                 <p className="text-xs text-green-600 font-medium">
                   All Systems Online
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Build {buildDisplayLabel}
                 </p>
               </div>
             </div>

@@ -13,6 +13,7 @@ import {
   ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
+import { buildDisplayLabel } from '../../utils/buildInfo';
 
 const Header = ({ onMenuClick, botStatus }) => {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -97,6 +98,9 @@ const Header = ({ onMenuClick, botStatus }) => {
             </h2>
             <p className="text-sm text-slate-500 mt-1">
               {currentDate} • {currentTime}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              Build {buildDisplayLabel}
             </p>
           </motion.div>
         </div>
