@@ -30,6 +30,10 @@ FIRESTORE_METRICS_COLLECTION = "dashboardMetrics"   # Collection for dashboard s
 # Testing Mode Flag (NEW)
 TESTING_MODE = False  # When True, Firebase saving is disabled for testing
 
+# Smart Retrieval Debug - when True, logs structured JSON per request
+# Can also enable via env: SMART_RETRIEVAL_DEBUG=1
+SMART_RETRIEVAL_DEBUG = os.getenv("SMART_RETRIEVAL_DEBUG", "").lower() in ("1", "true", "yes", "on")
+
 # --- Bot Operational Settings ---
 # WhatsApp Number for Human Notifications (e.g., your admin/staff number)
 WHATSAPP_TO = os.getenv("WHATSAPP_TO")

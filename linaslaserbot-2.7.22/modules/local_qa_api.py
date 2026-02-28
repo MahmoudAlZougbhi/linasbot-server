@@ -139,6 +139,29 @@ async def list_local_qa_pairs(language: Optional[str] = None):
         return {"success": False, "error": str(e)}
 
 
+@app.post("/api/local-qa/create-structured")
+async def create_local_qa_pair_structured(qa_data: dict):
+    """Create FAQ with auto-translate to AR/EN/FR (structured schema)."""
+    try:
+        question = qa_data.get("question", "").strip()
+        answer = qa_data.get("answer", "").strip()
+        category = qa_data.get("category", "general")
+        auto_translate = qa_data.get("auto_translate", True)
+        if not question or not answer:
+            return {"success": False, "error": "Question and answer are required"}
+        from services.local_qa_service import local_qa_service
+        result = await local_qa_service.create_qa_pair_structured(
+            question=question, answer=answer, category=category, auto_translate=auto_translate
+        )
+        if result.get("success"):
+            reload_local_qa_cache()
+        return result
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/local-qa/create")
 async def create_local_qa_pair(qa_data: dict):
     """Create a new Q&A pair in local JSON file"""

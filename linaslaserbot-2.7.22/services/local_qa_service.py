@@ -6,7 +6,7 @@ Uses conversation_log.jsonl structure with added 'category' field
 
 import json
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 from difflib import SequenceMatcher
 import re
@@ -160,11 +160,57 @@ class LocalQAService:
                 "success": False,
                 "error": str(e)
             }
-            print(f"❌ Error creating Q&A pair: {e}")
-            return {
-                "success": False,
-                "error": str(e)
+
+    async def create_qa_pair_structured(
+        self,
+        question: str,
+        answer: str,
+        category: str = "general",
+        auto_translate: bool = True,
+    ) -> dict:
+        """
+        Create a new Q&A pair with structured multi-language storage.
+        question_ar, answer_ar, question_en, answer_en, question_fr, answer_fr.
+        If auto_translate=True, translates from input language to the other two.
+        """
+        try:
+            trans = {}
+            if auto_translate:
+                try:
+                    from services.faq_translation_service import translate_faq_pair
+                    trans = translate_faq_pair(question, answer)
+                except Exception as tr_e:
+                    print(f"⚠️ FAQ translation failed, using source for all: {tr_e}")
+            if not trans or not trans.get("question_ar"):
+                trans = {
+                    "question_ar": question,
+                    "answer_ar": answer,
+                    "question_en": question,
+                    "answer_en": answer,
+                    "question_fr": question,
+                    "answer_fr": answer,
+                }
+            qa_pair = {
+                "question_ar": trans.get("question_ar", question),
+                "answer_ar": trans.get("answer_ar", answer),
+                "question_en": trans.get("question_en", question),
+                "answer_en": trans.get("answer_en", answer),
+                "question_fr": trans.get("question_fr", question),
+                "answer_fr": trans.get("answer_fr", answer),
+                "category": category,
+                "timestamp": datetime.now().isoformat(),
             }
+            self.qa_pairs.append(qa_pair)
+            if not self.save_to_jsonl():
+                self.qa_pairs.pop()
+                return {"success": False, "error": "Failed to save"}
+            print(f"✅ Created structured Q&A pair (AR/EN/FR): '{question[:50]}...'")
+            return {"success": True, "message": "Q&A pair created", "data": qa_pair}
+        except Exception as e:
+            import traceback
+            print(f"❌ Error creating structured Q&A pair: {e}")
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
     
     async def update_qa_pair(self, qa_identifier: any, updates: dict) -> dict:
         """Update an existing Q&A pair
@@ -311,6 +357,16 @@ class LocalQAService:
                 "error": str(e)
             }
     
+    # Keywords for intent alignment (hybrid matching)
+    PRICE_KEYWORDS = [
+        "price", "cost", "how much", "pricing", "سعر", "اسعار", "كم", "قديش", "أديش", "تكلفة",
+        "prix", "coût", "combien", "tarif", "adesh", "adde", "kam", "sa3er",
+    ]
+    PRICING_IN_ANSWER_KEYWORDS = [
+        "$", "ليرة", "ل.ل", "lira", "usd", "price", "سعر", "اسعار", "كم", "قديش",
+        "prix", "combien", "cost", "ل.ل", "ل.ل.", "دولار",
+    ]
+
     def normalize_text(self, text: str) -> str:
         """Normalize text for better matching"""
         text = re.sub(r'\s+', ' ', text.strip())
@@ -318,6 +374,32 @@ class LocalQAService:
         text = text.replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
         text = text.replace('ة', 'ه').replace('ى', 'ي')
         return text.lower()
+
+    def _keyword_intent_alignment(self, user_question: str, qa: dict) -> bool:
+        """
+        Hybrid validation: if user asks about price, FAQ must contain pricing-related content.
+        Returns True if match is valid, False if we should reject (e.g. user asks price but FAQ has no price info).
+        """
+        q_norm = self.normalize_text(user_question)
+        user_asks_price = any(kw in q_norm for kw in self.PRICE_KEYWORDS)
+        if not user_asks_price:
+            return True
+
+        answer_text = (
+            qa.get("answer", "")
+            or qa.get("answer_ar", "")
+            or qa.get("answer_en", "")
+            or qa.get("answer_fr", "")
+        )
+        question_text = (
+            qa.get("question", "")
+            or qa.get("question_ar", "")
+            or qa.get("question_en", "")
+            or qa.get("question_fr", "")
+        )
+        combined = self.normalize_text(answer_text + " " + question_text)
+        has_pricing = any(kw in combined for kw in self.PRICING_IN_ANSWER_KEYWORDS)
+        return has_pricing
     
     def calculate_similarity(self, text1: str, text2: str) -> float:
         """Calculate similarity between two texts"""
@@ -410,7 +492,7 @@ class LocalQAService:
     async def get_relevant_qa_pairs(self, question: str, language: str = None, limit: int = 3) -> List[Dict]:
         """
         Get most relevant Q&A pairs for GPT context injection.
-        Returns top matching Q&A pairs regardless of threshold (for context enrichment).
+        Matches against all question variants; returns answer in user's language.
 
         Args:
             question: The user's question
@@ -423,36 +505,68 @@ class LocalQAService:
         results = []
 
         for qa in self.qa_pairs:
-            # Filter by language if specified
-            if language:
-                requested_language = self._normalize_language(language, default="")
-                qa_language = self._normalize_language(qa.get("language"), default="")
-                if qa_language != requested_language:
-                    continue
+            best_sim = 0.0
+            variants = self._get_question_variants(qa)
+            for q_text, _ in variants:
+                if language:
+                    requested = self._normalize_language(language, default="")
+                    qa_lang = self._normalize_language(qa.get("language", ""), default="")
+                    if requested and qa_lang and qa_lang != requested and not (qa.get("question_ar") or qa.get("question_en") or qa.get("question_fr")):
+                        continue
+                sim = self.calculate_similarity(question, q_text)
+                best_sim = max(best_sim, sim)
 
-            similarity = self.calculate_similarity(question, qa.get("question", ""))
-
-            # Include anything moderately relevant (30%+ similarity)
-            if similarity >= 0.3:
+            if best_sim >= 0.3:
+                answer = self._get_answer_for_language(qa, language or "ar")
+                q_display = qa.get("question") or qa.get("question_ar") or qa.get("question_en") or qa.get("question_fr")
                 results.append({
-                    "question": qa.get("question"),
-                    "answer": qa.get("answer"),
-                    "similarity": similarity,
-                    "language": self._normalize_language(qa.get("language"))
+                    "question": q_display,
+                    "answer": answer,
+                    "similarity": best_sim,
+                    "language": language or "ar",
                 })
 
-        # Sort by similarity descending
         results.sort(key=lambda x: x["similarity"], reverse=True)
-
         print(f"📚 Found {len(results)} relevant Q&A pairs for context (returning top {limit})")
         return results[:limit]
+
+    def _get_question_variants(self, qa: dict) -> List[Tuple[str, str]]:
+        """Get all question variants for matching (supports both legacy and structured schema)."""
+        variants = []
+        if qa.get("question_ar"):
+            variants.append((qa["question_ar"], "ar"))
+        if qa.get("question_en"):
+            variants.append((qa["question_en"], "en"))
+        if qa.get("question_fr"):
+            variants.append((qa["question_fr"], "fr"))
+        if not variants and qa.get("question"):
+            lang = qa.get("language", "ar")
+            variants.append((qa["question"], self._normalize_language(lang)))
+        return variants
+
+    def _get_answer_for_language(self, qa: dict, language: str) -> str:
+        """Get answer in user's language (supports both legacy and structured schema)."""
+        requested = self._normalize_language(language)
+        if requested == "franco":
+            requested = "ar"
+        if requested == "ar" and qa.get("answer_ar"):
+            return qa["answer_ar"]
+        if requested == "en" and qa.get("answer_en"):
+            return qa["answer_en"]
+        if requested == "fr" and qa.get("answer_fr"):
+            return qa["answer_fr"]
+        if qa.get("answer"):
+            return qa["answer"]
+        return qa.get("answer_ar") or qa.get("answer_en") or qa.get("answer_fr") or ""
 
     async def find_match_with_tier(self, question: str, language: str = "ar") -> Optional[dict]:
         """
         Find match with simplified matching logic.
+        Matches against ALL language variants (question_ar, question_en, question_fr, or legacy question).
+        Returns answer in user's language.
 
         Matching:
-        - 70%+ : Return Q&A directly (direct tier)
+        - 70%+ : Return Q&A directly (direct tier) - NO AI call
         - <70% : Returns None - GPT handles with top 3 relevant Q&A pairs in context
 
         Args:
@@ -460,38 +574,38 @@ class LocalQAService:
             language: Language preference (default: "ar")
 
         Returns:
-            Dict with qa_pair, match_score, and tier, or None if below 70%
+            Dict with qa_pair, match_score, tier, matched_language; answer in user's lang
         """
         best_match = None
         best_score = 0
-        requested_language = self._normalize_language(language)
 
         if not self.qa_pairs:
             print(f"❌ DEBUG: NO Q&A PAIRS LOADED!")
             return None
 
         for qa in self.qa_pairs:
-            qa_language = self._normalize_language(qa.get("language"))
-            if qa_language != requested_language:
-                continue
+            variants = self._get_question_variants(qa)
+            for q_text, _ in variants:
+                similarity = self.calculate_similarity(question, q_text)
+                if similarity > best_score:
+                    if not self._keyword_intent_alignment(question, qa):
+                        continue
+                    best_score = similarity
+                    best_match = qa
 
-            similarity = self.calculate_similarity(question, qa.get("question", ""))
-
-            if similarity > best_score:
-                best_score = similarity
-                best_match = qa
-
-        # 70%+ threshold for direct Q&A response
-        if best_score >= 0.70:
-            print(f"✅ Q&A Match Found! Score: {best_score:.2%}, Tier: direct")
+        # 70%+ threshold for direct Q&A response - bypass AI (configurable)
+        threshold = getattr(self, "match_threshold", 0.7)
+        if best_match and best_score >= threshold:
+            answer = self._get_answer_for_language(best_match, language)
+            print(f"✅ Q&A Match Found! Score: {best_score:.2%}, Tier: direct (FAQ bypass)")
             return {
-                "qa_pair": best_match,
+                "qa_pair": {**best_match, "answer": answer},
                 "match_score": best_score,
                 "tier": "direct",
-                "matched_language": self._normalize_language(best_match.get("language"), default=requested_language)
+                "matched_language": language,
             }
 
-        print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, needs ≥70%)")
+        print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, needs ≥{threshold:.0%})")
         return None
 
     async def get_statistics(self) -> dict:

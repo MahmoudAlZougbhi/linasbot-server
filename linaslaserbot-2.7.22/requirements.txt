@@ -50,3 +50,9 @@ bcrypt>=4.0.0
 # Language Detection for English/French (used in language_resolver.py)
 # langdetect is pure Python and works reliably
 langdetect>=1.0.9
+
+# Translation for FAQ auto-translate (Franco/Arabic -> AR/EN/FR)
+deep-translator>=1.11.0
+
+# Testing
+pytest>=7.0.0

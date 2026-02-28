@@ -4,6 +4,7 @@
 from handlers.text_handlers_firestore import *
 from services.analytics_events import analytics
 from services.language_detection_service import language_detection_service
+from services.retrieval_debug import log_retrieval as debug_log_retrieval
 from utils.datetime_utils import detect_reschedule_intent
 import time
 
@@ -293,6 +294,23 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             match_score = match_result.get("match_score", 0)
             qa_pair = match_result.get("qa_pair", {})
             qa_response = qa_pair.get("answer", "")
+
+            # Retrieval debug logging (FAQ match path)
+            try:
+                debug_log_retrieval(
+                    user_message=query_to_send_to_gpt,
+                    detected_intent="faq",
+                    detected_gender=current_gender or "unknown",
+                    selected_knowledge=[],
+                    selected_price=[],
+                    selected_style=[],
+                    faq_matched=True,
+                    faq_match_score=match_score,
+                    source="faq",
+                    prompt_token_estimate=0,
+                )
+            except Exception:
+                pass
 
             print(f"[_process_and_respond] ✅ Q&A MATCH FOUND!")
             print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥70% threshold)")

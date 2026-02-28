@@ -1520,7 +1520,8 @@ def get_system_instruction(
     user_id,
     response_lang,
     qa_reference: str = "",
-    include_price_list: bool = True
+    include_price_list: bool = True,
+    dynamic_content: dict = None,
 ):
     """
     Generate system instruction for GPT with optional Q&A reference injection.
@@ -1529,7 +1530,9 @@ def get_system_instruction(
         user_id: User identifier
         response_lang: Response language code (ar, en, fr, franco)
         qa_reference: Optional formatted Q&A pairs to inject into system prompt
-        include_price_list: Whether to include the price_list.txt content in prompt context
+        include_price_list: Whether to include the price_list content in prompt context
+        dynamic_content: Optional dict with keys knowledge, style, price (from smart retrieval).
+            If provided, these override config values. If empty strings, fallback to config.
     """
     user_gender_str = config.user_gender.get(user_id, "unknown")
     
@@ -1565,12 +1568,37 @@ def get_system_instruction(
         Use neutral language until gender is confirmed.
         """
     
+    style_content = config.BOT_STYLE_GUIDE
+    knowledge_content = config.CORE_KNOWLEDGE_BASE
+    price_content = config.PRICE_LIST
+    no_price_file_found = False
+    no_knowledge_file_found = False
+    if dynamic_content:
+        if dynamic_content.get("style"):
+            style_content = dynamic_content["style"]
+        if dynamic_content.get("knowledge"):
+            knowledge_content = dynamic_content["knowledge"]
+        if include_price_list and dynamic_content.get("price"):
+            price_content = dynamic_content["price"]
+        no_price_file_found = dynamic_content.get("no_price_file_found", False)
+        no_knowledge_file_found = dynamic_content.get("no_knowledge_file_found", False)
+
     price_list_section = ""
     if include_price_list:
-        price_list_section = f"""
-        **💰 PRICE LIST:** (Use this to answer pricing questions)
-        {config.PRICE_LIST}
+        if no_price_file_found or not price_content:
+            price_list_section = """
+        **🔴 PRICE SAFETY (CRITICAL):** You have NO price list. NEVER invent or guess prices.
+        If the user asks about pricing, say you don't have that information and direct them to contact the clinic for exact prices.
         """
+        else:
+            price_list_section = f"""
+        **💰 PRICE LIST:** (Use ONLY this to answer pricing questions. NEVER invent prices.)
+        {price_content}
+        """
+
+    knowledge_safety = ""
+    if no_knowledge_file_found and not knowledge_content:
+        knowledge_safety = '\n        **If the user asks about something not in the knowledge above, you MUST respond: "ما عندي هالمعلومة حالياً" and ask for more details.**'
 
     return f"""
         You are a comprehensive knowledge manager and an official smart assistant for Lina's Laser Center. Your primary task is to answer customer inquiries accurately and authoritatively, providing comprehensive information about services, prices, appointments, and interacting with the center's system.
@@ -1578,12 +1606,15 @@ def get_system_instruction(
         **🔴 STYLE GUIDE (MANDATORY - FOLLOW EVERY STEP IN ORDER):**
         The following contains MANDATORY rules for how you communicate AND the exact step-by-step flow for each service. You MUST follow every step in order. Do NOT skip steps. Do NOT jump ahead to booking if a step requires waiting (e.g., waiting for a photo before giving pricing).
 
-        {config.BOT_STYLE_GUIDE}
+        {style_content}
 
-        **📘 KNOWLEDGE BASE:** (Use this to answer questions about services, devices, IDs, and matching rules)
-        {config.CORE_KNOWLEDGE_BASE}
+        **📘 KNOWLEDGE BASE:** (Use this to answer questions about services, devices, IDs, and matching rules.)
+        {knowledge_content}
+        {knowledge_safety}
 
         {price_list_section}
+
+        **SAFETY:** NEVER invent prices or information not in the files above. If you don't have the info, say "ما عندي هالمعلومة" and ask for the details needed.
 
         {gender_instruction}
 

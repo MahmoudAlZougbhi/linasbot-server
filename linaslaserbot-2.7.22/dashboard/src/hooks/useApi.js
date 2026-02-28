@@ -845,6 +845,25 @@ export const useApi = () => {
     }
   }, []);
 
+  const createLocalQAPairStructured = useCallback(async (qaData) => {
+    try {
+      setLoading(true);
+      const response = await api.post("/api/local-qa/create-structured", qaData);
+      if (response.data.success) {
+        toast.success("FAQ saved with auto-translate (AR/EN/FR)!");
+      }
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        toast.error("Backend offline - cannot save FAQ");
+        return { success: false, error: "Backend offline" };
+      }
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const updateLocalQAPair = useCallback(async (qaId, updates) => {
     try {
       setLoading(true);
@@ -1075,6 +1094,88 @@ export const useApi = () => {
     }
   }, []);
 
+  // ✨ NEW: Content Files (Knowledge/Style/Price file system)
+  const getContentFilesList = useCallback(async (section) => {
+    try {
+      const response = await api.get(`/api/content-files/${section}/list`);
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", data: [] };
+      }
+      throw error;
+    }
+  }, []);
+
+  const getContentFile = useCallback(async (section, fileId) => {
+    try {
+      const response = await api.get(`/api/content-files/${section}/${fileId}`);
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      throw error;
+    }
+  }, []);
+
+  const createContentFile = useCallback(async (section, data) => {
+    try {
+      setLoading(true);
+      const response = await api.post(`/api/content-files/${section}/create`, data);
+      if (response.data.success) {
+        toast.success("File created!");
+      }
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        toast.error("Backend offline - cannot create file");
+        return { success: false, error: "Backend offline" };
+      }
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const updateContentFile = useCallback(async (section, fileId, data) => {
+    try {
+      setLoading(true);
+      const response = await api.put(`/api/content-files/${section}/${fileId}`, data);
+      if (response.data.success) {
+        toast.success("File updated!");
+      }
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        toast.error("Backend offline - cannot update file");
+        return { success: false, error: "Backend offline" };
+      }
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const deleteContentFile = useCallback(async (section, fileId) => {
+    try {
+      setLoading(true);
+      const response = await api.delete(`/api/content-files/${section}/${fileId}`);
+      if (response.data.success) {
+        toast.success("File deleted!");
+      }
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        toast.error("Backend offline - cannot delete file");
+        return { success: false, error: "Backend offline" };
+      }
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // ✨ NEW: Bot Instructions Management functions
   const getInstructions = useCallback(async () => {
     try {
@@ -1214,9 +1315,15 @@ export const useApi = () => {
     // Local Q&A Management functions (JSON file-based)
     getLocalQAPairs,
     createLocalQAPair,
+    createLocalQAPairStructured,
     updateLocalQAPair,
     deleteLocalQAPair,
     getLocalQAStatistics,
+    getContentFilesList,
+    getContentFile,
+    createContentFile,
+    updateContentFile,
+    deleteContentFile,
     // Feedback functions
     submitFeedback,
     getFeedbackStats,

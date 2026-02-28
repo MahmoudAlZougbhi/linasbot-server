@@ -18,18 +18,27 @@ import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 
 import TrainingFileEditor from "../components/TrainingFileEditor";
+import ContentFilesPanel from "../components/ContentFilesPanel";
 
 const Training = () => {
   const {
     getLocalQAPairs,
     createLocalQAPair,
+    createLocalQAPairStructured,
     updateLocalQAPair,
     deleteLocalQAPair,
     getLocalQAStatistics,
+    getTrainingFiles,
+    getTrainingFile,
+    updateTrainingFile,
+    getTrainingFileBackups,
+    restoreTrainingFileBackup,
+    getTrainingFileStats,
     loading,
   } = useApi();
 
   const [activeTab, setActiveTab] = useState("add");
+  const [useStructuredFAQ, setUseStructuredFAQ] = useState(true); // Auto-translate AR/EN/FR
   const [trainingEntries, setTrainingEntries] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredEntries, setFilteredEntries] = useState([]);
@@ -108,16 +117,25 @@ const Training = () => {
   }, []);
 
   useEffect(() => {
-    loadTrainingData(selectedLanguage);
-  }, [selectedLanguage]);
+    loadTrainingData();
+  }, []);
 
   useEffect(() => {
     if (searchQuery.trim()) {
-      const filtered = trainingEntries.filter(
-        (entry) =>
-          entry.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          entry.answer.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const q = searchQuery.toLowerCase();
+      const filtered = trainingEntries.filter((entry) => {
+        const texts = [
+          entry.question,
+          entry.answer,
+          entry.question_ar,
+          entry.answer_ar,
+          entry.question_en,
+          entry.answer_en,
+          entry.question_fr,
+          entry.answer_fr,
+        ].filter(Boolean);
+        return texts.some((t) => t.toLowerCase().includes(q));
+      });
       setFilteredEntries(filtered);
     } else {
       setFilteredEntries(trainingEntries);
@@ -126,16 +144,10 @@ const Training = () => {
 
   const loadTrainingData = async (language = selectedLanguage) => {
     try {
-      console.log("🔄 Loading Q&A pairs from local file...");
-      const response = await getLocalQAPairs({ language });
-
-      console.log("📦 Response:", response);
-
+      const response = await getLocalQAPairs({});
       if (response.success && response.data) {
-        console.log(`✅ Loaded ${response.data.length} Q&A pairs (${language})`);
         setTrainingEntries(response.data);
       } else {
-        console.log("⚠️ No data or success=false");
         setTrainingEntries([]);
       }
     } catch (error) {
@@ -163,40 +175,23 @@ const Training = () => {
     }
 
     try {
-      console.log("💾 Saving Q&A pair...");
-      console.log("   Question:", newQuestion);
-      console.log("   Answer:", newAnswer);
-      console.log("   Category:", selectedCategory);
-
       const qaData = {
-        question: newQuestion,
-        answer: newAnswer,
+        question: newQuestion.trim(),
+        answer: newAnswer.trim(),
         category: selectedCategory,
+        auto_translate: useStructuredFAQ,
       };
 
-      const response = await createLocalQAPair(qaData);
-
-      console.log("📤 Response:", response);
+      const apiCall = useStructuredFAQ ? createLocalQAPairStructured : createLocalQAPair;
+      const response = await apiCall(useStructuredFAQ ? qaData : { ...qaData, language: selectedLanguage });
 
       if (response.success) {
-        // Reload data from backend
         await loadTrainingData(selectedLanguage);
         await loadStatistics();
-
-        // Reset form
         setNewQuestion("");
         setNewAnswer("");
         setSelectedCategory("general");
-
-        if ((response.count_created || 1) > 1) {
-          toast.success(
-            `✅ Saved in 4 languages (AR/EN/FR/Franco). Showing ${selectedLanguage.toUpperCase()} view.`
-          );
-        } else {
-          toast.success(
-            `✅ Q&A saved! Language detected: ${response.data.language}`
-          );
-        }
+        toast.success(useStructuredFAQ ? "✅ FAQ saved with auto-translate (AR/EN/FR)!" : "✅ Q&A saved!");
       } else {
         toast.error(response.error || "Failed to create Q&A pair");
       }
@@ -234,10 +229,9 @@ const Training = () => {
       e.preventDefault();
       e.stopPropagation();
     }
-    console.log("✏️ Editing entry:", entry);
     setEditingEntry(entry);
-    setEditQuestion(entry.question);
-    setEditAnswer(entry.answer);
+    setEditQuestion(entry.question || entry.question_ar || entry.question_en || entry.question_fr || "");
+    setEditAnswer(entry.answer || entry.answer_ar || entry.answer_en || entry.answer_fr || "");
     setEditCategory(entry.category || "general");
   };
 
@@ -497,6 +491,20 @@ const Training = () => {
                   </select>
                 </div>
 
+                {/* Auto-translate (structured FAQ) */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="useStructuredFAQ"
+                    checked={useStructuredFAQ}
+                    onChange={(e) => setUseStructuredFAQ(e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                  <label htmlFor="useStructuredFAQ" className="text-sm text-slate-700">
+                    Auto-translate to Arabic, English & French (structured FAQ)
+                  </label>
+                </div>
+
                 {/* Submit Button */}
                 <button
                   onClick={handleAddTraining}
@@ -533,27 +541,10 @@ const Training = () => {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-slate-800 font-display flex items-center">
                   <BookOpenIcon className="w-6 h-6 mr-2 text-blue-600" />
-                  Training Data ({selectedLanguage.toUpperCase()}) ({trainingEntries.length})
+                  Manage Data ({trainingEntries.length}) — AR / EN / FR
                 </h2>
 
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center rounded-xl bg-slate-100 p-1">
-                    {languageOptions.map((lang) => (
-                      <button
-                        key={lang.value}
-                        onClick={() => setSelectedLanguage(lang.value)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          selectedLanguage === lang.value
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "text-slate-600 hover:text-slate-900"
-                        }`}
-                      >
-                        <span className="mr-1">{lang.flag}</span>
-                        {lang.label}
-                      </button>
-                    ))}
-                  </div>
-
                   {/* Search */}
                   <div className="relative">
                     <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
@@ -561,7 +552,7 @@ const Training = () => {
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={`Search ${selectedLanguage.toUpperCase()} entries...`}
+                      placeholder="Search FAQs (AR/EN/FR)..."
                       className="input-field pl-10 w-64"
                     />
                   </div>
@@ -600,17 +591,13 @@ const Training = () => {
                         </p>
 
                         <div className="bg-slate-50 rounded-lg p-3 mb-6 text-left">
-                          <p className="text-xs font-medium text-slate-500 mb-1">
-                            Question:
-                          </p>
+                          <p className="text-xs font-medium text-slate-500 mb-1">Question:</p>
                           <p className="text-sm text-slate-800 mb-2 line-clamp-2">
-                            {deleteConfirmEntry.question}
+                            {deleteConfirmEntry.question || deleteConfirmEntry.question_ar || deleteConfirmEntry.question_en || deleteConfirmEntry.question_fr || "—"}
                           </p>
-                          <p className="text-xs font-medium text-slate-500 mb-1">
-                            Answer:
-                          </p>
+                          <p className="text-xs font-medium text-slate-500 mb-1">Answer:</p>
                           <p className="text-sm text-slate-700 line-clamp-2">
-                            {deleteConfirmEntry.answer}
+                            {deleteConfirmEntry.answer || deleteConfirmEntry.answer_ar || deleteConfirmEntry.answer_en || deleteConfirmEntry.answer_fr || "—"}
                           </p>
                         </div>
 
@@ -774,9 +761,16 @@ const Training = () => {
                       </p>
                     </motion.div>
                   ) : (
-                    filteredEntries.map((entry) => (
+                    filteredEntries.map((entry, idx) => {
+                      const hasStructured = entry.question_ar || entry.question_en || entry.question_fr;
+                      const langs = [
+                        { key: "ar", label: "عربي", flag: "🇸🇦", q: entry.question_ar || entry.question, a: entry.answer_ar || entry.answer },
+                        { key: "en", label: "English", flag: "🇺🇸", q: entry.question_en || entry.question, a: entry.answer_en || entry.answer },
+                        { key: "fr", label: "Français", flag: "🇫🇷", q: entry.question_fr || entry.question, a: entry.answer_fr || entry.answer },
+                      ];
+                      return (
                       <motion.div
-                        key={entry.id}
+                        key={entry.id || idx}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
@@ -785,42 +779,45 @@ const Training = () => {
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 space-y-3">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-lg">
-                                {getLanguageFlag(entry.language)}
-                              </span>
-                              <span className="text-xs font-medium text-slate-500">
-                                {entry.language?.toUpperCase()}
-                              </span>
+                            <div className="flex items-center space-x-2 flex-wrap">
                               <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
-                                {entry.category}
+                                {entry.category || "general"}
                               </span>
                               {entry.timestamp && (
                                 <span className="text-xs text-slate-400">
-                                  {new Date(
-                                    entry.timestamp
-                                  ).toLocaleDateString()}
+                                  {new Date(entry.timestamp).toLocaleDateString()}
                                 </span>
                               )}
                             </div>
 
-                            <div>
-                              <p className="text-sm font-medium text-slate-600 mb-1">
-                                Question:
-                              </p>
-                              <p className="text-slate-800 bg-slate-50 rounded p-2 text-sm">
-                                {entry.question}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-sm font-medium text-slate-600 mb-1">
-                                Answer:
-                              </p>
-                              <p className="text-slate-700 bg-green-50 rounded p-2 text-sm">
-                                {entry.answer}
-                              </p>
-                            </div>
+                            {hasStructured ? (
+                              <div className="space-y-2">
+                                {langs.map(({ key, label, flag, q, a }) => (q || a) && (
+                                  <div key={key} className="border border-slate-200 rounded-lg p-3">
+                                    <p className="text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
+                                      <span>{flag}</span> {label}
+                                    </p>
+                                    <p className="text-slate-700 text-sm mb-1"><strong>Q:</strong> {q || "—"}</p>
+                                    <p className="text-slate-600 text-sm"><strong>A:</strong> {a || "—"}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                            <>
+                              <div>
+                                <p className="text-sm font-medium text-slate-600 mb-1">Question:</p>
+                                <p className="text-slate-800 bg-slate-50 rounded p-2 text-sm">
+                                  {entry.question}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-slate-600 mb-1">Answer:</p>
+                                <p className="text-slate-700 bg-green-50 rounded p-2 text-sm">
+                                  {entry.answer}
+                                </p>
+                              </div>
+                            </>
+                            )}
                           </div>
 
                           <div className="flex space-x-2 ml-4">
@@ -845,7 +842,8 @@ const Training = () => {
                           </div>
                         </div>
                       </motion.div>
-                    ))
+                    );
+                    })
                   )}
                 </AnimatePresence>
               </div>
@@ -856,26 +854,26 @@ const Training = () => {
 
 
         {activeTab === "knowledge_base" && (
-          <TrainingFileEditor
-            fileId="knowledge_base"
-            title="Knowledge Base"
-            description="General knowledge and information the bot can reference"
+          <ContentFilesPanel
+            section="knowledge"
+            sectionName="Knowledge Base"
+            icon={BookOpenIcon}
           />
         )}
 
         {activeTab === "style_guide" && (
-          <TrainingFileEditor
-            fileId="style_guide"
-            title="Style Guide"
-            description="Bot behavior, tone, and response style guidelines"
+          <ContentFilesPanel
+            section="style"
+            sectionName="Style Guide"
+            icon={SparklesIcon}
           />
         )}
 
         {activeTab === "price_list" && (
-          <TrainingFileEditor
-            fileId="price_list"
-            title="Price List"
-            description="Service pricing information"
+          <ContentFilesPanel
+            section="price"
+            sectionName="Price List"
+            icon={CurrencyDollarIcon}
           />
         )}
       </AnimatePresence>

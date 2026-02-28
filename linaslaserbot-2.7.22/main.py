@@ -26,6 +26,7 @@ import modules.qa_api
 import modules.local_qa_api  # NEW: Local JSON-based Q&A
 import modules.instructions_api  # NEW: Bot Instructions Management
 import modules.training_files_api  # Training files (Knowledge Base, Style Guide, Price List)
+import modules.content_files_api  # NEW: File system for Knowledge/Style/Price
 import modules.feedback_api
 import modules.live_chat_api
 import modules.chat_history_api
@@ -41,6 +42,15 @@ if __name__ == "__main__":
         initialize_firestore()
         config.load_bot_assets()
         config.load_training_data()
+        # Migrate legacy single files to new content file system (one-time)
+        try:
+            from services.content_files_service import migrate_from_legacy
+            for section, legacy in [("knowledge", "data/knowledge_base.txt"), ("style", "data/style_guide.txt"), ("price", "data/price_list.txt")]:
+                fid = migrate_from_legacy(section, legacy)
+                if fid:
+                    print(f"✅ Migrated {section} to new file system (id={fid})")
+        except Exception as mig_e:
+            print(f"⚠️ Migration skipped: {mig_e}")
         print("🤖 Lina's Laser AI Bot is ready!")
     except Exception as e:
         print(f"❌ Startup error: {e}")

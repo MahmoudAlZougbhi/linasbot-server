@@ -25,6 +25,9 @@ from utils.datetime_utils import (
 
 # Import local Q&A service for context injection
 from services.local_qa_service import local_qa_service
+from services.smart_retrieval_service import retrieve_content as smart_retrieve_content
+from services.retrieval_debug import log_retrieval as debug_log_retrieval
+from utils.utils import count_tokens
 
 # Import dynamic model selector for cost optimization
 from services.dynamic_model_selector import select_optimal_model
@@ -545,22 +548,23 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     is_price_question = is_price_related_question(user_input)
     body_part_required_service_ids = _get_body_part_required_service_ids()
 
-    # Get the core system instruction from utils.py, with conditional price list loading.
+    # Smart retrieval: load only relevant files (titles -> select -> load content)
+    dynamic_content = smart_retrieve_content(user_input, include_price=is_price_question)
+    print(f"📄 Smart retrieval: loaded {bool(dynamic_content.get('knowledge'))} knowledge, {bool(dynamic_content.get('style'))} style, {bool(dynamic_content.get('price'))} price")
+
+    # Get the core system instruction from utils.py, with dynamic content from smart retrieval
     system_instruction_core = get_system_instruction(
         user_id,
         current_preferred_lang,
         qa_reference_text,
-        include_price_list=is_price_question
+        include_price_list=is_price_question,
+        dynamic_content=dynamic_content,
     )
 
-    # Log which training files GPT is receiving
-    print(f"📄 GPT will receive knowledge_base.txt in context")
-    print(f"📄 GPT will receive style_guide.txt in context")
-
     if is_price_question:
-        print(f"📄 GPT will receive price_list.txt in context (price-related question detected)")
+        print(f"📄 Price-related question: price list included in context")
     else:
-        print("📄 GPT will skip price_list.txt in context (not a price-related question)")
+        print("📄 Non-price question: price list skipped from context")
 
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
     name_is_known = user_name and user_name != "client"
@@ -595,6 +599,25 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     # Combine system instruction with dynamic context
     system_instruction_final = system_instruction_core + "\n\n" + dynamic_customer_context + routing_guardrail
+
+    # Retrieval debug logging (structured JSON, enable via SMART_RETRIEVAL_DEBUG=1)
+    try:
+        full_prompt = system_instruction_final + "\n" + user_input
+        token_est = count_tokens(full_prompt) if full_prompt else 0
+        debug_log_retrieval(
+            user_message=user_input,
+            detected_intent=dynamic_content.get("detected_intent", "unknown"),
+            detected_gender=dynamic_content.get("detected_gender") or current_gender or "unknown",
+            selected_knowledge=dynamic_content.get("selected_files", {}).get("knowledge", []),
+            selected_price=dynamic_content.get("selected_files", {}).get("price", []),
+            selected_style=dynamic_content.get("selected_files", {}).get("style", []),
+            faq_matched=False,
+            faq_match_score=None,
+            source="ai",
+            prompt_token_estimate=token_est,
+        )
+    except Exception:
+        pass
 
     messages = [{"role": "system", "content": system_instruction_final}]
     messages.extend(current_context_messages[-config.MAX_CONTEXT_MESSAGES:])
