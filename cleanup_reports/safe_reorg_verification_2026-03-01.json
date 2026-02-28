@@ -1,0 +1,133 @@
+{
+  "move_checks": [
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/CLAUDE_MEMORY.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/CLAUDE_MEMORY.md",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/DEPLOY_TROUBLESHOOT.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/DEPLOY_TROUBLESHOOT.md",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/LIVE_CHAT_FIX_SUMMARY.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/LIVE_CHAT_FIX_SUMMARY.md",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/notes.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/notes.md",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/bot-chat.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/bot-chat.md",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/pricing_discount_sync_checklist.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/pricing_discount_sync_checklist.md",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/check_provider_status.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/scripts/check_provider_status.py",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/debug_firestore_chats.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/scripts/debug_firestore_chats.py",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_appointment_api.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_appointment_api.py",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_date_logic.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_date_logic.py",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_language_detection.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_language_detection.py",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    },
+    {
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_montymobile.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_montymobile.py",
+      "source_exists_after": false,
+      "destination_exists_after": true,
+      "move_verified": true
+    }
+  ],
+  "frontend_archive_check": {
+    "source": "/Users/mahmoudalzougbhi/linas ai bot/frontend",
+    "destination": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/frontend_snapshot/frontend",
+    "source_exists_after": false,
+    "destination_exists_after": true,
+    "move_verified": true
+  },
+  "stale_reference_hits": [],
+  "syntax_ok_count": 105,
+  "syntax_error_count": 0,
+  "syntax_errors": [],
+  "import_results": [
+    {
+      "module": "main",
+      "status": "fail",
+      "error": "ValueError: Missing API credentials: LINASLASER_API_BASE_URL or LINASLASER_API_TOKEN"
+    },
+    {
+      "module": "modules.content_files_api",
+      "status": "fail",
+      "error": "ValueError: Missing API credentials: LINASLASER_API_BASE_URL or LINASLASER_API_TOKEN"
+    },
+    {
+      "module": "services.content_files_service",
+      "status": "ok"
+    },
+    {
+      "module": "services.faq_translation_service",
+      "status": "ok"
+    },
+    {
+      "module": "services.smart_retrieval_service",
+      "status": "ok"
+    },
+    {
+      "module": "services.retrieval_debug",
+      "status": "ok"
+    }
+  ],
+  "runtime_checks": {
+    "main_py_exists": true,
+    "deploy_sh_exists": true,
+    "workflow_deploy_exists": true,
+    "main_references_dashboard_build": true
+  }
+}

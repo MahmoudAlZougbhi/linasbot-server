@@ -1,0 +1,67 @@
+{
+  "archive_root": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01",
+  "moved_count": 12,
+  "moved": [
+    {
+      "section": "duplicates",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/reports_log.jsonl",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/duplicates/reports_log.jsonl"
+    },
+    {
+      "section": "duplicates",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/conversation_log.jsonl",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/duplicates/conversation_log.jsonl"
+    },
+    {
+      "section": "backup_variants",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/data/style_guide_backup_20260115_112923.txt",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/backup_variants/data/style_guide_backup_20260115_112923.txt"
+    },
+    {
+      "section": "backup_variants",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/data/style_guide_backup_20260116_191526.txt",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/backup_variants/data/style_guide_backup_20260116_191526.txt"
+    },
+    {
+      "section": "backup_variants",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/data/knowledge_base_backup_20260116_191704.txt",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/backup_variants/data/knowledge_base_backup_20260116_191704.txt"
+    },
+    {
+      "section": "unused_scripts",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/analyze_knowledge_base.py",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/unused_scripts/analyze_knowledge_base.py"
+    },
+    {
+      "section": "unused_scripts",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/check_routes.py",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/unused_scripts/check_routes.py"
+    },
+    {
+      "section": "unused_scripts",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/check_template_names.py",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/unused_scripts/check_template_names.py"
+    },
+    {
+      "section": "unused_scripts",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/debug_routes.py",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/unused_scripts/debug_routes.py"
+    },
+    {
+      "section": "unused_scripts",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/live_chat_endpoints.py",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/unused_scripts/live_chat_endpoints.py"
+    },
+    {
+      "section": "unused_scripts",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/add_missing_qas.py",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/unused_scripts/add_missing_qas.py"
+    },
+    {
+      "section": "unused_scripts",
+      "from": "/Users/mahmoudalzougbhi/linas ai bot/migrate_qa_to_database.py",
+      "to": "/Users/mahmoudalzougbhi/linas ai bot/_archive_cleanup_2026-03-01/unused_scripts/migrate_qa_to_database.py"
+    }
+  ],
+  "skipped_missing": []
+}

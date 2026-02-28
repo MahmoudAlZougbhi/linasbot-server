@@ -1,0 +1,89 @@
+{
+  "root": "/Users/mahmoudalzougbhi/linas ai bot",
+  "planned_moves": [
+    {
+      "category": "docs",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/CLAUDE_MEMORY.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/CLAUDE_MEMORY.md",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "docs",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/DEPLOY_TROUBLESHOOT.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/DEPLOY_TROUBLESHOOT.md",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "docs",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/LIVE_CHAT_FIX_SUMMARY.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/LIVE_CHAT_FIX_SUMMARY.md",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "docs",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/notes.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/notes.md",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "docs",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/bot-chat.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/bot-chat.md",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "docs",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/pricing_discount_sync_checklist.md",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/docs/pricing_discount_sync_checklist.md",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "scripts",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/check_provider_status.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/scripts/check_provider_status.py",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "scripts",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/debug_firestore_chats.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/scripts/debug_firestore_chats.py",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "tests",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_appointment_api.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_appointment_api.py",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "tests",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_date_logic.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_date_logic.py",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "tests",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_language_detection.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_language_detection.py",
+      "source_exists": true,
+      "destination_exists_before": false
+    },
+    {
+      "category": "tests",
+      "source": "/Users/mahmoudalzougbhi/linas ai bot/test_montymobile.py",
+      "destination": "/Users/mahmoudalzougbhi/linas ai bot/tests/test_montymobile.py",
+      "source_exists": true,
+      "destination_exists_before": false
+    }
+  ]
+}

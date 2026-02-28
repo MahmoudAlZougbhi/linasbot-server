@@ -1,0 +1,936 @@
+{
+  "root": "/Users/mahmoudalzougbhi/linas ai bot",
+  "scan_file_count": 588,
+  "duplicate_groups": [
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/test_montymobile.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/test_montymobile.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/test_appointment_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/test_appointment_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/bot-chat.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/bot-chat.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/language_resolver.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/language_resolver.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/CLAUDE_MEMORY.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/CLAUDE_MEMORY.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/check_template_names.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/check_template_names.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/LIVE_CHAT_FIX_SUMMARY.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/LIVE_CHAT_FIX_SUMMARY.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/debug_routes.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/debug_routes.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/live_chat_endpoints.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/live_chat_endpoints.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/analyze_knowledge_base.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/analyze_knowledge_base.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/test_date_logic.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/test_date_logic.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/test_language_detection.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/test_language_detection.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/check_routes.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/check_routes.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.gitignore",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.gitignore"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/api_config.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/api_config.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/add_missing_qas.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/add_missing_qas.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/deploy.sh",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/deploy.sh"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/docker-compose.yml",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/docker-compose.yml"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/reports_log.jsonl",
+      "/Users/mahmoudalzougbhi/linas ai bot/reports_log.jsonl"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/migrate_qa_to_database.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/migrate_qa_to_database.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/check_provider_status.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/check_provider_status.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/notes.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/notes.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/pricing_discount_sync_checklist.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/pricing_discount_sync_checklist.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/debug_firestore_chats.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/debug_firestore_chats.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/conversation_log.jsonl",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/conversation_log.jsonl"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/frontend/Dockerfile",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/frontend/Dockerfile"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/frontend/package-lock.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/frontend/package-lock.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/frontend/package.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/frontend/package.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/config/montymobile_templates.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/config/montymobile_templates.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/web/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/web/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/utils/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/utils/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/utils/datetime_utils.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/utils/datetime_utils.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/backend/requirements.txt",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/backend/requirements.txt"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/backend/Dockerfile",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/backend/Dockerfile"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/backend/Dockerfile.simple",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/backend/Dockerfile.simple"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/tailwind.config.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/tailwind.config.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/README.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/README.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/package.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/package.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/postcss.config.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/postcss.config.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/public/index.html",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/public/index.html"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/public/manifest.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/public/manifest.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/setupProxy.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/setupProxy.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/index.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/index.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/index.css",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/index.css"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/contexts/PermissionsContext.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/contexts/PermissionsContext.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/contexts/AuthContext.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/contexts/AuthContext.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/constants/permissions.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/constants/permissions.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/utils/permissions.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/utils/permissions.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/utils/dateUtils.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/utils/dateUtils.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/TrainingFileEditor.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/TrainingFileEditor.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/BotInstructionsTab.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/BotInstructionsTab.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/FeedbackModal.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/FeedbackModal.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/UserManagement/UserList.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/UserManagement/UserList.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/UserManagement/PermissionMatrix.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/UserManagement/PermissionMatrix.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/UserManagement/RoleManager.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/UserManagement/RoleManager.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/UserManagement/UserForm.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/UserManagement/UserForm.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/UserManagement/UserManagement.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/UserManagement/UserManagement.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/Auth/ProtectedRoute.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/Auth/ProtectedRoute.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/Auth/PermissionGate.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/Auth/PermissionGate.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/Common/LoadingScreen.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/Common/LoadingScreen.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/components/Common/ErrorBoundary.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/components/Common/ErrorBoundary.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/hooks/usePermissions.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/hooks/usePermissions.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/SmartMessaging.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/SmartMessaging.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/Register.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/Register.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/ChatHistory.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/ChatHistory.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/SimpleApiTest.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/SimpleApiTest.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/Testing.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/Testing.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/Login.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/Login.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/Dashboard.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/Dashboard.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/dashboard/src/pages/Settings.js",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/dashboard/src/pages/Settings.js"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/logs/content_violations.jsonl",
+      "/Users/mahmoudalzougbhi/linas ai bot/logs/content_violations.jsonl"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/operator.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/operator.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/operator.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/site.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/site.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/site.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/stat.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/stat.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/stat.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/reprlib.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/reprlib.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/reprlib.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_compile.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_compile.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_compile.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_sitebuiltins.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_sitebuiltins.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_sitebuiltins.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/runpy.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/runpy.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/runpy.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/re.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/re.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/re.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/functools.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/functools.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/functools.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/io.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/io.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/io.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/abc.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/warnings.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/warnings.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/warnings.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/genericpath.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/genericpath.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/genericpath.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/copyreg.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/copyreg.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/copyreg.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/enum.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/enum.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/enum.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pkgutil.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pkgutil.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pkgutil.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_bootlocale.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_bootlocale.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_bootlocale.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/traceback.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/traceback.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/traceback.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/posixpath.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/posixpath.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/posixpath.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_parse.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_parse.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_parse.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/py_compile.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/py_compile.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/py_compile.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tokenize.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tokenize.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/tokenize.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/weakref.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/weakref.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/weakref.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/types.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/types.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/types.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/linecache.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/linecache.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/linecache.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/os.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/os.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/os.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_constants.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_constants.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/sre_constants.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_collections_abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_collections_abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_collections_abc.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/token.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/token.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/token.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/heapq.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/heapq.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/heapq.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/keyword.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/keyword.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/keyword.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_weakrefset.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_weakrefset.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_weakrefset.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/codecs.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/codecs.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/codecs.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/__init__.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/__init__.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/__init__.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/aliases.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/aliases.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/aliases.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/cp437.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/cp437.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/cp437.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/utf_8.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/utf_8.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/utf_8.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/latin_1.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/latin_1.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/encodings/latin_1.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/__init__.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/__init__.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/__init__.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/abc.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/machinery.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/machinery.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/machinery.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/util.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/util.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/util.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/collections/__init__.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/collections/__init__.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/collections/__init__.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/collections/abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/collections/abc.cpython-39.pyc",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/collections/abc.cpython-39.pyc"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.planning/codebase/STACK.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.planning/codebase/STACK.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.planning/codebase/ARCHITECTURE.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.planning/codebase/ARCHITECTURE.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.planning/codebase/STRUCTURE.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.planning/codebase/STRUCTURE.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.planning/codebase/CONVENTIONS.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.planning/codebase/CONVENTIONS.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.planning/codebase/INTEGRATIONS.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.planning/codebase/INTEGRATIONS.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.planning/codebase/TESTING.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.planning/codebase/TESTING.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/.planning/codebase/CONCERNS.md",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.planning/codebase/CONCERNS.md"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/smart_messaging_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/smart_messaging_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/feedback_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/feedback_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/settings_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/settings_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/models.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/models.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/chat_history_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/chat_history_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/event_handlers.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/event_handlers.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/core.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/core.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/webhook_handlers.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/webhook_handlers.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/analytics_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/analytics_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/training_files_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/training_files_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/qa_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/qa_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/media_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/media_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/dashboard_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/dashboard_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/auth_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/auth_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/instructions_api.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/instructions_api.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/modules/whatsapp_adapters.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/modules/whatsapp_adapters.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/price_list.txt",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/price_list.txt"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/style_guide_backup_20260116_191526.txt",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/style_guide_backup_20260116_191526.txt"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/analytics_events.jsonl",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/analytics_events.jsonl"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/qa_pairs.jsonl",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/qa_pairs.jsonl"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/phone_to_room_mapping.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/phone_to_room_mapping.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/qa_database.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/qa_database.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/message_templates.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/message_templates.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/style_guide_backup_20260115_112923.txt",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/style_guide_backup_20260115_112923.txt"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/style_guide.txt",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/style_guide.txt"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/knowledge_base_backup_20260116_191704.txt",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/knowledge_base_backup_20260116_191704.txt"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/reports_log.jsonl",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/reports_log.jsonl"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/app_settings.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/app_settings.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/analytics_daily.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/analytics_daily.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/message_preview_queue.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/message_preview_queue.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/service_template_mapping.json",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/service_template_mapping.json"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/conversation_log.jsonl",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/conversation_log.jsonl"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/data/knowledge_base.txt",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/knowledge_base.txt"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/routes/webhook_routes.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/routes/webhook_routes.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/routes/qa_routes.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/routes/qa_routes.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/routes/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/routes/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/routes/analytics_routes.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/routes/analytics_routes.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/routes/testing_routes.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/routes/testing_routes.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/routes/chat_history_routes.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/routes/chat_history_routes.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/handlers/VERSION.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/handlers/VERSION.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/handlers/text_handlers_start.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/handlers/text_handlers_start.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/handlers/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/handlers/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/handlers/text_handlers.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/handlers/text_handlers.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/handlers/training_handlers.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/handlers/training_handlers.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/handlers/photo_handlers.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/handlers/photo_handlers.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/handlers/voice_handlers.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/handlers/voice_handlers.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/conversation_feedback_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/conversation_feedback_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/analytics_manager.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/analytics_manager.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/montymobile_template_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/montymobile_template_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/moderation_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/moderation_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/scheduled_messages_collector.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/scheduled_messages_collector.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/dynamic_model_selector.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/dynamic_model_selector.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/training_response_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/training_response_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/service_template_mapping_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/service_template_mapping_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/openai_usage_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/openai_usage_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/smart_messaging.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/smart_messaging.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/message_preview_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/message_preview_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/settings_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/settings_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/api_integrations.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/api_integrations.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/training_mode.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/training_mode.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/qa_database_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/qa_database_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/language_detection_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/language_detection_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/llm_core_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/llm_core_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/photo_analysis_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/photo_analysis_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/appointment_scheduler.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/appointment_scheduler.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/message_sync_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/message_sync_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/gender_detection.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/gender_detection.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/gender_recognition_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/gender_recognition_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/sentiment_escalation_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/sentiment_escalation_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/booking_service_mapping.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/booking_service_mapping.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/live_monitoring.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/live_monitoring.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/qa_manager_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/qa_manager_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/user_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/user_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/message_queue_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/message_queue_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/enhanced_message_handler.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/enhanced_message_handler.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/human_takeover_notification_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/human_takeover_notification_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/bot_data_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/bot_data_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/media_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/media_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/user_persistence_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/user_persistence_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/analytics_service.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/analytics_service.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/montymobile_adapter.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/montymobile_adapter.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/__init__.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/__init__.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/dialog360_adapter.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/dialog360_adapter.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/third_provider_adapter.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/third_provider_adapter.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/base_adapter.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/base_adapter.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/qiscus_adapter.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/qiscus_adapter.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/meta_adapter.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/meta_adapter.py"
+    ],
+    [
+      "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/services/whatsapp_adapters/whatsapp_factory.py",
+      "/Users/mahmoudalzougbhi/linas ai bot/services/whatsapp_adapters/whatsapp_factory.py"
+    ]
+  ],
+  "backup_variants": [
+    "/Users/mahmoudalzougbhi/linas ai bot/data/knowledge_base_backup_20260116_191704.txt",
+    "/Users/mahmoudalzougbhi/linas ai bot/data/style_guide_backup_20260115_112923.txt",
+    "/Users/mahmoudalzougbhi/linas ai bot/data/style_guide_backup_20260116_191526.txt",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/copyreg.cpython-39.pyc",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_local/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/copyreg.cpython-39.pyc",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/.pycache_tmp/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/copyreg.cpython-39.pyc",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/knowledge_base_backup_20260116_191704.txt",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/style_guide_backup_20260115_112923.txt",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/data/style_guide_backup_20260116_191526.txt"
+  ],
+  "unused_scripts_high_confidence": [
+    "/Users/mahmoudalzougbhi/linas ai bot/analyze_knowledge_base.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/check_routes.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/check_template_names.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/debug_routes.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/analyze_knowledge_base.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/check_routes.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/check_template_names.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/debug_routes.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/live_chat_endpoints.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/live_chat_endpoints.py"
+  ],
+  "unused_scripts_medium_confidence": [
+    "/Users/mahmoudalzougbhi/linas ai bot/add_missing_qas.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/add_missing_qas.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/linaslaserbot-2.7.22/migrate_qa_to_database.py",
+    "/Users/mahmoudalzougbhi/linas ai bot/migrate_qa_to_database.py"
+  ]
+}

@@ -1,0 +1,7 @@
+PRICING SYNC RULES (SYSTEM SOURCE OF TRUTH)
+------------------------------------------
+1) Do not provide prices from memory.
+2) For all pricing requests, use the system API (`get_pricing_details`).
+3) For services 1, 12, and 13, body part selection is mandatory before pricing.
+4) If discount fields are present in API response, show original + discounted totals exactly as returned.
+5) If required details are missing (service/body part), ask the customer first.

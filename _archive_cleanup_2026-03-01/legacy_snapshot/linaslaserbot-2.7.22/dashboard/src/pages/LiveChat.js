@@ -1,0 +1,2340 @@
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ChatBubbleLeftRightIcon,
+  UserIcon,
+  ClockIcon,
+  PhoneIcon,
+  GlobeAltIcon,
+  HandRaisedIcon,
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+  ArrowRightIcon,
+  PaperAirplaneIcon,
+  UserGroupIcon,
+  SignalIcon,
+  XMarkIcon,
+  ChartBarIcon,
+  MicrophoneIcon,
+} from "@heroicons/react/24/outline";
+import toast from "react-hot-toast";
+import { useApi } from "../hooks/useApi";
+import { formatMessageTime, formatDuration } from "../utils/dateUtils";
+import FeedbackModal from "../components/FeedbackModal";
+
+// ✅ Helper function to get proxied audio URL for external sources
+const getProxiedAudioUrl = (url) => {
+  if (!url) return url;
+
+  // Check if the URL is external (needs proxy)
+  const isExternal = url.includes('whatsapp') ||
+                     url.includes('mmc.api.montymobile.com') ||
+                     url.includes('firebasestorage.googleapis.com') ||
+                     url.includes('mmg.whatsapp.net') ||
+                     (url.startsWith('http') && !url.includes(window.location.hostname));
+
+  if (isExternal) {
+    const baseURL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:8003'
+      : window.location.origin;
+    return `${baseURL}/api/media/audio?url=${encodeURIComponent(url)}`;
+  }
+
+  return url;
+};
+
+// ✅ Modern WhatsApp-style audio player component
+const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [error, setError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const audioRef = useRef(null);
+
+  // Get the proxied URL for external audio sources
+  const proxiedAudioUrl = getProxiedAudioUrl(audioUrl);
+
+  const handlePlayPause = () => {
+    if (audioRef.current && !error) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch((e) => {
+          console.error("Audio play error:", e);
+          setError(true);
+        });
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleError = (e) => {
+    console.error("Audio load error:", e, "URL:", audioUrl);
+    setError(true);
+    setIsLoading(false);
+  };
+
+  const handleCanPlay = () => {
+    setIsLoading(false);
+    setError(false);
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleEnded = () => {
+    setIsPlaying(false);
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      setCurrentTime(0);
+    }
+  };
+
+  const handleProgressChange = (e) => {
+    const newTime = parseFloat(e.target.value);
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
+  };
+
+  const formatTime = (time) => {
+    if (isNaN(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  return (
+    <div
+      className={`flex items-center space-x-2 py-1 px-2 rounded-full ${
+        isUserMessage ? "bg-slate-200" : "bg-black bg-opacity-10"
+      }`}
+    >
+      {/* Play/Pause Button */}
+      <button
+        onClick={handlePlayPause}
+        className={`flex-shrink-0 p-2 rounded-full transition-all hover:scale-110 ${
+          isUserMessage
+            ? "bg-slate-400 hover:bg-slate-500 text-white"
+            : "bg-white bg-opacity-20 hover:bg-opacity-40 text-white"
+        }`}
+      >
+        {isPlaying ? (
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M5 4a1 1 0 00-1 1v10a1 1 0 001 1h2a1 1 0 001-1V5a1 1 0 00-1-1H5zm8 0a1 1 0 00-1 1v10a1 1 0 001 1h2a1 1 0 001-1V5a1 1 0 00-1-1h-2z" clipRule="evenodd" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M5.75 1.172A.5.5 0 005 1.65v16.7a.5.5 0 00.75.478l10.67-8.35a.5.5 0 000-.796L5.75 1.172z" />
+          </svg>
+        )}
+      </button>
+
+      {/* Progress Bar */}
+      <div className="flex-1 flex flex-col space-y-1 min-w-[120px]">
+        <input
+          type="range"
+          min="0"
+          max={duration || 0}
+          value={currentTime}
+          onChange={handleProgressChange}
+          className={`w-full h-1 rounded-full appearance-none cursor-pointer ${
+            isUserMessage ? "bg-slate-300 accent-slate-600" : "bg-white bg-opacity-30 accent-white"
+          }`}
+          style={{
+            background: isUserMessage
+              ? `linear-gradient(to right, #475569 ${(currentTime / duration) * 100}%, #cbd5e1 ${(currentTime / duration) * 100}%)`
+              : `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.3) ${(currentTime / duration) * 100}%)`,
+          }}
+        />
+        <div className={`text-xs font-medium ${isUserMessage ? "text-slate-600" : "text-white"}`}>
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </div>
+      </div>
+
+      {/* Error message */}
+      {error && (
+        <span className={`text-xs ml-2 ${isUserMessage ? "text-red-600" : "text-red-400"}`}>Audio unavailable</span>
+      )}
+
+      {/* Loading indicator */}
+      {isLoading && !error && (
+        <span className={`text-xs ml-2 ${isUserMessage ? "text-slate-500" : "opacity-50"}`}>Loading...</span>
+      )}
+
+      {/* Hidden audio element - uses proxied URL for external sources */}
+      <audio
+        ref={audioRef}
+        src={proxiedAudioUrl}
+        onLoadedMetadata={handleLoadedMetadata}
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={handleEnded}
+        onError={handleError}
+        onCanPlay={handleCanPlay}
+      />
+    </div>
+  );
+};
+
+const LiveChat = () => {
+  const [activeConversations, setActiveConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [chatSearchTerm, setChatSearchTerm] = useState("");
+  const [messageInput, setMessageInput] = useState("");
+  const [operatorStatus, setOperatorStatus] = useState("available");
+  const [isLoading, setIsLoading] = useState(true);
+  const [useMockData, setUseMockData] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState(null);
+
+  // ✅ Voice recording state for operator
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedAudio, setRecordedAudio] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isSendingVoice, setIsSendingVoice] = useState(false);
+
+  // ✅ Image Upload State
+  const [selectedImage, setSelectedImage] = useState(null);
+  const imageInputRef = useRef(null);
+
+  // ✅ Auto-refresh state (Solution 1 + 4: Smart refresh with badges)
+  const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+  const [newConversationIds, setNewConversationIds] = useState(new Set()); // Track new conversations
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [inboxPage, setInboxPage] = useState(1);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
+  const [isLoadingMoreChats, setIsLoadingMoreChats] = useState(false);
+
+  // ✅ Send button race condition state
+  const [isSending, setIsSending] = useState(false);
+
+  // ✅ Messages loading state for lazy loading
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [conversationDayPageMap, setConversationDayPageMap] = useState({});
+  const [conversationHasMoreDaysMap, setConversationHasMoreDaysMap] = useState(
+    {}
+  );
+
+  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const selectedConversationRef = useRef(null);
+  const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
+  const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
+  const chatSearchTermRef = useRef("");
+  const inboxPageRef = useRef(1);
+  const hasMoreChatsRef = useRef(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const conversationMessagesCacheRef = useRef(new Map());
+  const latestMessagesRequestRef = useRef(0);
+  const conversationDayPageMapRef = useRef({});
+  const conversationHasMoreDaysMapRef = useRef({});
+  const isLoadingOlderMessagesRef = useRef(false);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    activeConversationsRef.current = activeConversations;
+  }, [activeConversations]);
+
+  useEffect(() => {
+    useMockDataRef.current = useMockData;
+  }, [useMockData]);
+
+  useEffect(() => {
+    chatSearchTermRef.current = chatSearchTerm;
+  }, [chatSearchTerm]);
+
+  useEffect(() => {
+    inboxPageRef.current = inboxPage;
+  }, [inboxPage]);
+
+  useEffect(() => {
+    hasMoreChatsRef.current = hasMoreChats;
+  }, [hasMoreChats]);
+
+  useEffect(() => {
+    conversationDayPageMapRef.current = conversationDayPageMap;
+  }, [conversationDayPageMap]);
+
+  useEffect(() => {
+    conversationHasMoreDaysMapRef.current = conversationHasMoreDaysMap;
+  }, [conversationHasMoreDaysMap]);
+
+  useEffect(() => {
+    return () => {
+      if (recordedAudio?.url?.startsWith("blob:")) {
+        URL.revokeObjectURL(recordedAudio.url);
+      }
+    };
+  }, [recordedAudio]);
+
+  const {
+    getLiveConversations,
+    takeoverConversation,
+    releaseConversation,
+    sendOperatorMessage,
+    updateOperatorStatus,
+    submitFeedback,
+  } = useApi();
+
+  const getMessageKey = (msg = {}) =>
+    [
+      msg.timestamp || "",
+      msg.is_user ? "user" : "bot",
+      msg.type || "text",
+      msg.audio_url || "",
+      msg.image_url || "",
+      msg.content || msg.text || "",
+    ].join("|");
+
+  const mergeMessagesChronologically = (existing = [], incoming = []) => {
+    const mergedMap = new Map();
+
+    existing.forEach((msg) => {
+      mergedMap.set(getMessageKey(msg), msg);
+    });
+    incoming.forEach((msg) => {
+      mergedMap.set(getMessageKey(msg), msg);
+    });
+
+    return Array.from(mergedMap.values()).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+  };
+
+  const readConversationCache = (conversationId) => {
+    const rawCache = conversationMessagesCacheRef.current.get(conversationId);
+    if (Array.isArray(rawCache)) {
+      return {
+        messages: rawCache,
+        dayPage: 1,
+        hasMoreDays: false,
+      };
+    }
+
+    if (rawCache && typeof rawCache === "object") {
+      return {
+        messages: Array.isArray(rawCache.messages) ? rawCache.messages : [],
+        dayPage: Math.max(1, Number(rawCache.dayPage) || 1),
+        hasMoreDays: Boolean(rawCache.hasMoreDays),
+      };
+    }
+
+    return {
+      messages: [],
+      dayPage: 1,
+      hasMoreDays: false,
+    };
+  };
+
+  const writeConversationCache = (
+    conversationId,
+    messages,
+    dayPage,
+    hasMoreDays
+  ) => {
+    conversationMessagesCacheRef.current.set(conversationId, {
+      messages,
+      dayPage,
+      hasMoreDays,
+    });
+    setConversationDayPageMap((prev) => ({ ...prev, [conversationId]: dayPage }));
+    setConversationHasMoreDaysMap((prev) => ({
+      ...prev,
+      [conversationId]: hasMoreDays,
+    }));
+  };
+
+  // Fetch conversation messages with timeout
+  const fetchConversationMessages = async (
+    userId,
+    conversationId,
+    { dayPage = 1, dayWindowDays = 1 } = {}
+  ) => {
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+    try {
+      const safeDayPage = Math.max(1, Number(dayPage) || 1);
+      const safeDayWindow = Math.max(1, Number(dayWindowDays) || 1);
+
+      // Use the same base URL logic as useApi
+      const baseURL =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+          ? "http://localhost:8003"
+          : window.location.origin;
+
+      console.log(
+        `Fetching messages for user ${userId}, conversation ${conversationId}, day_page=${safeDayPage}`
+      );
+      const queryParams = new URLSearchParams({
+        day_page: String(safeDayPage),
+        day_window_days: String(safeDayWindow),
+      });
+      const response = await fetch(
+        `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}?${queryParams.toString()}`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      console.log("API Response:", data);
+
+      if (data.success && Array.isArray(data.messages)) {
+        console.log(
+          `Loaded ${data.messages.length} messages (day_page=${data.day_page || safeDayPage}, has_more_days=${Boolean(data.has_more_days)})`
+        );
+        return {
+          messages: data.messages,
+          hasMoreDays: Boolean(data.has_more_days),
+          dayPage: data.day_page || safeDayPage,
+        };
+      }
+      console.warn("No messages found or API error:", data);
+      return {
+        messages: [],
+        hasMoreDays: false,
+        dayPage: safeDayPage,
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error("Message fetch timed out after 60 seconds");
+        toast.error("Loading messages timed out - conversation may have too many messages");
+      } else {
+        console.error("Error fetching conversation messages:", error);
+      }
+      return {
+        messages: [],
+        hasMoreDays: false,
+        dayPage: Math.max(1, Number(dayPage) || 1),
+      };
+    }
+  };
+
+  const loadConversationMessages = async (
+    conversation,
+    { forceRefresh = false, dayPage = 1, append = false } = {}
+  ) => {
+    if (!conversation) return [];
+
+    const conversationId = conversation.conversation_id;
+    if (!conversationId) return [];
+
+    const safeDayPage = Math.max(1, Number(dayPage) || 1);
+    const cachedConversation = readConversationCache(conversationId);
+    const shouldUseCache =
+      !forceRefresh &&
+      !append &&
+      safeDayPage === 1 &&
+      cachedConversation.messages.length > 0;
+
+    if (!append) {
+      setSelectedConversation({
+        conversation,
+        history: shouldUseCache ? cachedConversation.messages : [],
+      });
+    }
+
+    if (shouldUseCache) {
+      setConversationDayPageMap((prev) => ({
+        ...prev,
+        [conversationId]: cachedConversation.dayPage,
+      }));
+      setConversationHasMoreDaysMap((prev) => ({
+        ...prev,
+        [conversationId]: cachedConversation.hasMoreDays,
+      }));
+      return cachedConversation.messages;
+    }
+
+    const requestId = Date.now();
+    latestMessagesRequestRef.current = requestId;
+    if (append) {
+      isLoadingOlderMessagesRef.current = true;
+      setLoadingOlderMessages(true);
+    } else {
+      setMessagesLoading(true);
+    }
+
+    try {
+      const result = await fetchConversationMessages(
+        conversation.user_id,
+        conversationId,
+        { dayPage: safeDayPage, dayWindowDays: 1 }
+      );
+
+      if (latestMessagesRequestRef.current !== requestId) {
+        return [];
+      }
+
+      const fetchedMessages = Array.isArray(result.messages) ? result.messages : [];
+      const fetchedHasMoreDays = Boolean(result.hasMoreDays);
+
+      let mergedHistory = fetchedMessages;
+      let mergedDayPage = safeDayPage;
+
+      if (append) {
+        const baseHistory =
+          cachedConversation.messages.length > 0
+            ? cachedConversation.messages
+            : selectedConversationRef.current?.history || [];
+        mergedHistory = mergeMessagesChronologically(baseHistory, fetchedMessages);
+        mergedDayPage = Math.max(cachedConversation.dayPage, safeDayPage);
+      } else if (
+        forceRefresh &&
+        cachedConversation.dayPage > 1 &&
+        cachedConversation.messages.length > 0 &&
+        safeDayPage === 1
+      ) {
+        // Keep already loaded older days while refreshing the latest day.
+        mergedHistory = mergeMessagesChronologically(
+          cachedConversation.messages,
+          fetchedMessages
+        );
+        mergedDayPage = cachedConversation.dayPage;
+      }
+
+      const hasMoreDays = fetchedHasMoreDays;
+      writeConversationCache(
+        conversationId,
+        mergedHistory,
+        mergedDayPage,
+        hasMoreDays
+      );
+
+      setConversationDayPageMap((prev) => ({ ...prev, [conversationId]: mergedDayPage }));
+      setConversationHasMoreDaysMap((prev) => ({ ...prev, [conversationId]: hasMoreDays }));
+
+      setSelectedConversation((prev) =>
+        prev?.conversation?.conversation_id === conversationId
+          ? { ...prev, conversation, history: mergedHistory }
+          : prev
+      );
+
+      // When loading older days, scroll to top so user sees the newly loaded messages
+      if (append && mergedHistory.length > 0) {
+        setTimeout(() => {
+          messagesContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+        }, 100);
+      }
+
+      return mergedHistory;
+    } finally {
+      if (latestMessagesRequestRef.current === requestId && !append) {
+        setMessagesLoading(false);
+      }
+      if (append) {
+        setLoadingOlderMessages(false);
+        isLoadingOlderMessagesRef.current = false;
+      }
+    }
+  };
+
+  const refreshConversationsList = async ({
+    markRefreshing = false,
+    showToast = false,
+    page = 1,
+    append = false,
+  } = {}) => {
+    if (markRefreshing) {
+      setIsRefreshing(true);
+    }
+    if (append) {
+      setIsLoadingMoreChats(true);
+    }
+
+    try {
+      const normalizedSearch = chatSearchTermRef.current.trim();
+      const targetPage = normalizedSearch ? 1 : Math.max(1, page);
+      const conversationsResponse = await getLiveConversations({
+        includeInactive: true,
+        limit: normalizedSearch ? 100 : 30,
+        search: normalizedSearch,
+        page: targetPage,
+      });
+
+      if (
+        conversationsResponse.success &&
+        Array.isArray(conversationsResponse.conversations)
+      ) {
+        const incomingConversations = conversationsResponse.conversations;
+        const previousIds = new Set(
+          activeConversationsRef.current.map((c) => c.conversation_id)
+        );
+        const newIds = new Set(
+          incomingConversations
+            .filter(
+              (c) => c.is_live && !previousIds.has(c.conversation_id)
+            )
+            .map((c) => c.conversation_id)
+        );
+
+        setActiveConversations((prev) => {
+          if (!append) {
+            return incomingConversations;
+          }
+
+          const existingIds = new Set(prev.map((c) => c.conversation_id));
+          const toAppend = incomingConversations.filter(
+            (c) => !existingIds.has(c.conversation_id)
+          );
+          return [...prev, ...toAppend];
+        });
+        setUseMockData(false);
+        if (!append) {
+          setNewConversationIds(newIds);
+        }
+        setLastRefreshTime(new Date());
+        setInboxPage(targetPage);
+        setHasMoreChats(Boolean(conversationsResponse.has_more));
+
+        const currentSelection = selectedConversationRef.current;
+        if (currentSelection) {
+          const updatedConv = incomingConversations.find(
+            (c) =>
+              c.conversation_id ===
+              currentSelection.conversation.conversation_id
+          );
+
+          if (updatedConv) {
+            setSelectedConversation((prev) =>
+              prev ? { ...prev, conversation: updatedConv } : prev
+            );
+          } else if (!normalizedSearch && !append) {
+            setSelectedConversation(null);
+          }
+        }
+
+        if (!append && newIds.size > 0) {
+          setTimeout(() => setNewConversationIds(new Set()), 10000);
+        }
+
+        if (showToast) {
+          toast.success("Chats refreshed");
+        }
+        return;
+      }
+
+      if (!activeConversationsRef.current.length && !chatSearchTermRef.current) {
+        loadMockData();
+      } else if (!append) {
+        setHasMoreChats(false);
+      }
+    } catch (error) {
+      console.error("Error fetching live chat data:", error);
+      if (!activeConversationsRef.current.length && !chatSearchTermRef.current) {
+        loadMockData();
+      } else if (!append) {
+        setHasMoreChats(false);
+      }
+      if (showToast) {
+        toast.error("Failed to refresh chats");
+      }
+    } finally {
+      if (markRefreshing) {
+        setIsRefreshing(false);
+      }
+      if (append) {
+        setIsLoadingMoreChats(false);
+      }
+    }
+  };
+
+  // Fetch real data from API
+  useEffect(() => {
+    const fetchLiveData = async () => {
+      // Only show loading on initial load, not on refresh
+      if (!activeConversationsRef.current.length) {
+        setIsLoading(true);
+      }
+
+      try {
+        await refreshConversationsList({ page: inboxPageRef.current });
+      } catch (error) {
+        console.error("Error fetching live chat data:", error);
+        if (!activeConversationsRef.current.length) {
+          loadMockData();
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLiveData();
+
+    // ============================================================
+    // 📡 SSE (Server-Sent Events) for Real-Time Updates
+    // Replaces polling with efficient server-push notifications
+    // ============================================================
+    let eventSource = null;
+    let reconnectTimeout = null;
+    let fallbackInterval = null;
+
+    const connectSSE = () => {
+      // Skip SSE if using mock data
+      if (useMockDataRef.current) return;
+
+      const baseURL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:8003'
+        : '';
+
+      try {
+        eventSource = new EventSource(`${baseURL}/api/live-chat/events`);
+
+        eventSource.onopen = () => {
+          console.log('📡 SSE connected - real-time updates enabled');
+          // Clear fallback polling when SSE connects
+          if (fallbackInterval) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = null;
+          }
+        };
+
+        // Handle conversation list updates
+        eventSource.addEventListener('conversations', () => {
+          refreshConversationsList({ page: inboxPageRef.current });
+        });
+
+        // Handle new message events
+        eventSource.addEventListener('new_message', async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('📨 SSE: New message received', data);
+
+            // Refresh conversation list to update last message preview
+            await refreshConversationsList({ page: inboxPageRef.current });
+
+            // If this message is for the currently selected conversation, fetch new messages
+            const currentSelection = selectedConversationRef.current;
+            if (currentSelection &&
+                (currentSelection.conversation.user_id === data.user_id ||
+                 currentSelection.conversation.conversation_id === data.conversation_id)) {
+              const currentConversationId =
+                currentSelection.conversation.conversation_id;
+              const currentDayPage =
+                conversationDayPageMapRef.current[currentConversationId] || 1;
+              const latestDayResult = await fetchConversationMessages(
+                currentSelection.conversation.user_id,
+                currentConversationId,
+                { dayPage: 1, dayWindowDays: 1 }
+              );
+
+              const latestDayMessages = Array.isArray(latestDayResult.messages)
+                ? latestDayResult.messages
+                : [];
+              const cachedConversation = readConversationCache(currentConversationId);
+              const mergedHistory =
+                currentDayPage > 1
+                  ? mergeMessagesChronologically(
+                      cachedConversation.messages,
+                      latestDayMessages
+                    )
+                  : latestDayMessages;
+
+              writeConversationCache(
+                currentConversationId,
+                mergedHistory,
+                currentDayPage,
+                Boolean(latestDayResult.hasMoreDays)
+              );
+
+              setSelectedConversation((prev) => {
+                if (!prev) return prev;
+                return { ...prev, history: mergedHistory };
+              });
+            }
+          } catch (e) {
+            console.error('SSE new_message error:', e);
+          }
+        });
+
+        // Handle new conversation events
+        eventSource.addEventListener('new_conversation', async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('📡 SSE: New conversation', data);
+
+            // Refresh conversation list
+            await refreshConversationsList({ page: inboxPageRef.current });
+          } catch (e) {
+            console.error('SSE new_conversation error:', e);
+          }
+        });
+
+        // Handle heartbeat (keep-alive)
+        eventSource.addEventListener('heartbeat', () => {
+          // Connection is alive, nothing to do
+        });
+
+        eventSource.onerror = (error) => {
+          console.warn('📡 SSE connection error, falling back to polling');
+          eventSource.close();
+
+          // Start fallback polling
+          if (!fallbackInterval) {
+            fallbackInterval = setInterval(async () => {
+              if (useMockDataRef.current) return;
+              try {
+                await refreshConversationsList({ page: inboxPageRef.current });
+              } catch (e) {
+                // Silent fail
+              }
+            }, 10000); // Slower fallback polling (10s)
+          }
+
+          // Try to reconnect SSE after 5 seconds
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        };
+
+      } catch (error) {
+        console.error('SSE initialization error:', error);
+      }
+    };
+
+    // Start SSE connection
+    connectSSE();
+
+    // Cleanup on unmount
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (fallbackInterval) {
+        clearInterval(fallbackInterval);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run once on mount
+
+  // Search by name/phone in unified inbox
+  useEffect(() => {
+    if (useMockDataRef.current) return undefined;
+
+    const timeoutId = setTimeout(() => {
+      refreshConversationsList({ page: 1, append: false });
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatSearchTerm]);
+
+  // Load mock data fallback
+  const loadMockData = () => {
+    setUseMockData(true);
+    setInboxPage(1);
+    setHasMoreChats(false);
+    const mockConversations = [
+      {
+        conversation_id: "conv_001",
+        user_id: "mock_user_001",
+        user_name: "Sarah Ahmed",
+        user_phone: "+961 70 123456",
+        status: "bot",
+        is_live: true,
+        language: "ar",
+        message_count: 12,
+        last_activity: new Date().toISOString(),
+        duration_seconds: 245,
+        sentiment: "positive",
+        last_message: {
+          content: "متى يمكنني الحجز؟",
+          is_user: true,
+          timestamp: new Date().toISOString(),
+        },
+      },
+      {
+        conversation_id: "conv_002",
+        user_id: "mock_user_002",
+        user_name: "Marie Dubois",
+        user_phone: "+961 71 234567",
+        status: "human",
+        is_live: true,
+        language: "fr",
+        message_count: 8,
+        last_activity: new Date(Date.now() - 60000).toISOString(),
+        duration_seconds: 180,
+        operator_id: "op_001",
+        sentiment: "neutral",
+        last_message: {
+          content: "Combien coûte le traitement?",
+          is_user: true,
+          timestamp: new Date(Date.now() - 60000).toISOString(),
+        },
+      },
+      {
+        conversation_id: "conv_003",
+        user_id: "mock_user_003",
+        user_name: "John Smith",
+        user_phone: "+961 76 345678",
+        status: "inactive",
+        is_live: false,
+        language: "en",
+        message_count: 5,
+        last_activity: new Date(Date.now() - 120000).toISOString(),
+        duration_seconds: 120,
+        sentiment: "negative",
+        last_message: {
+          content: "I need urgent help!",
+          is_user: true,
+          timestamp: new Date(Date.now() - 120000).toISOString(),
+        },
+      },
+    ];
+
+    setActiveConversations(mockConversations);
+
+    // Simulate conversation history
+    if (!selectedConversation) {
+      const mockHistory = [
+        {
+          timestamp: new Date(Date.now() - 300000).toISOString(),
+          is_user: true,
+          content: "مرحبا، أريد معلومات عن إزالة الشعر بالليزر",
+          type: "text",
+        },
+        {
+          timestamp: new Date(Date.now() - 280000).toISOString(),
+          is_user: false,
+          content:
+            "أهلاً وسهلاً! يسعدني مساع��تك. لدينا أحدث أجهزة الليزر لإزالة الشعر بفعالية وأمان.",
+          type: "text",
+          handled_by: "bot",
+        },
+        {
+          timestamp: new Date(Date.now() - 250000).toISOString(),
+          is_user: true,
+          content: "كم عدد الجلسات المطلوبة؟",
+          type: "text",
+        },
+        {
+          timestamp: new Date(Date.now() - 240000).toISOString(),
+          is_user: false,
+          content:
+            "عادة ما تحتاج إلى 6-8 جلسات للحصول على نتائج مثالية، مع فاصل 4-6 أسابيع بين كل جلسة.",
+          type: "text",
+          handled_by: "bot",
+        },
+        {
+          timestamp: new Date(Date.now() - 200000).toISOString(),
+          is_user: true,
+          content: "والأسعار؟",
+          type: "text",
+        },
+        {
+          timestamp: new Date(Date.now() - 180000).toISOString(),
+          is_user: false,
+          content:
+            "الأسعار تختلف حسب المنطقة المراد معالجتها. يمكنك زيارتنا للحصول على استشارة مجانية وعرض سعر مخصص.",
+          type: "text",
+          handled_by: "bot",
+        },
+      ];
+
+      if (mockConversations[0]) {
+        setSelectedConversation({
+          conversation: mockConversations[0],
+          history: mockHistory,
+        });
+        writeConversationCache(
+          mockConversations[0].conversation_id,
+          mockHistory,
+          1,
+          false
+        );
+      }
+    }
+  };
+
+  // ✅ Manual refresh handler - allows admin to immediately refresh conversation list
+  const handleManualRefresh = async () => {
+    await refreshConversationsList({
+      markRefreshing: true,
+      showToast: true,
+      page: inboxPageRef.current,
+    });
+  };
+
+  const handleLoadOlderChats = async () => {
+    if (
+      isLoadingMoreChats ||
+      !hasMoreChatsRef.current ||
+      chatSearchTermRef.current.trim()
+    ) {
+      return;
+    }
+
+    await refreshConversationsList({
+      page: inboxPageRef.current + 1,
+      append: true,
+    });
+  };
+
+  // ✅ Format last refresh time as relative time (e.g., "2 seconds ago")
+  const formatLastRefreshTime = () => {
+    const now = new Date();
+    const diff = Math.floor((now - lastRefreshTime) / 1000); // seconds
+
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  };
+
+  // ✅ Reload messages for currently selected conversation
+  // Useful when admin wants to see latest messages without clicking away and back
+  const reloadSelectedConversationMessages = async () => {
+    if (!selectedConversation) return;
+
+    try {
+      console.log(
+        `Reloading messages for conversation ${selectedConversation.conversation.conversation_id}`
+      );
+      const messages = await loadConversationMessages(
+        selectedConversation.conversation,
+        { forceRefresh: true }
+      );
+      toast.success(`Loaded ${messages.length} messages`);
+    } catch (error) {
+      console.error("Error reloading conversation messages:", error);
+      toast.error("Failed to reload messages");
+    }
+  };
+
+  const handleLoadPreviousDay = async () => {
+    if (!selectedConversation || loadingOlderMessages) return;
+
+    const conversationId = selectedConversation.conversation.conversation_id;
+    const hasMoreDays = conversationHasMoreDaysMapRef.current[conversationId];
+    if (!hasMoreDays) return;
+
+    const nextDayPage =
+      (conversationDayPageMapRef.current[conversationId] || 1) + 1;
+    await loadConversationMessages(selectedConversation.conversation, {
+      forceRefresh: true,
+      dayPage: nextDayPage,
+      append: true,
+    });
+  };
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    if (isLoadingOlderMessagesRef.current) {
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [
+    selectedConversation?.conversation?.conversation_id,
+    selectedConversation?.history?.length,
+  ]);
+
+  const handleTakeOver = async (conversationId, userId) => {
+    console.log("🔄 handleTakeOver called with:", { conversationId, userId });
+
+    if (!conversationId || !userId) {
+      console.error("❌ Missing conversationId or userId:", { conversationId, userId });
+      toast.error("Cannot take over: missing conversation or user ID");
+      return;
+    }
+
+    try {
+      const result = await takeoverConversation(
+        conversationId,
+        userId,
+        "operator_001"
+      );
+
+      console.log("📋 Takeover result:", result);
+
+      if (result.success) {
+        toast.success("Conversation taken over successfully");
+        // Update conversation status locally
+        setActiveConversations((prev) =>
+          prev.map((conv) =>
+            conv.conversation_id === conversationId
+              ? { ...conv, status: "human", operator_id: "operator_001" }
+              : conv
+          )
+        );
+        // Update selected conversation if it's the one we took over
+        if (
+          selectedConversation?.conversation?.conversation_id === conversationId
+        ) {
+          setSelectedConversation((prev) => ({
+            ...prev,
+            conversation: {
+              ...prev.conversation,
+              status: "human",
+              operator_id: "operator_001",
+            },
+          }));
+        }
+      } else {
+        console.error("❌ Takeover failed:", result.error);
+        toast.error(`Failed to take over: ${result.error || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("❌ Error taking over conversation:", error);
+      toast.error(`Error: ${error.message || "Unknown error"}`);
+    }
+  };
+
+  const handleReleaseToBot = async (conversationId, userId) => {
+    try {
+      const result = await releaseConversation(conversationId, userId);
+
+      if (result.success) {
+        toast.success("Conversation released to bot");
+        // Update conversation status locally
+        setActiveConversations((prev) =>
+          prev.map((conv) =>
+            conv.conversation_id === conversationId
+              ? { ...conv, status: "bot", operator_id: null }
+              : conv
+          )
+        );
+        // Update selected conversation if it's the one we released
+        if (
+          selectedConversation?.conversation?.conversation_id === conversationId
+        ) {
+          setSelectedConversation((prev) => ({
+            ...prev,
+            conversation: {
+              ...prev.conversation,
+              status: "bot",
+              operator_id: null,
+            },
+          }));
+        }
+      } else {
+        toast.error("Failed to release conversation");
+      }
+    } catch (error) {
+      console.error("Error releasing conversation:", error);
+      toast.error("Error releasing conversation");
+    }
+  };
+
+  const handleEndConversation = async (conversationId, userId) => {
+    try {
+      const baseURL =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+          ? "http://localhost:8003"
+          : window.location.origin;
+
+      const response = await fetch(
+        `${baseURL}/api/live-chat/end-conversation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            conversation_id: conversationId,
+            user_id: userId,
+            operator_id: "operator_001",
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success("Conversation ended successfully");
+        // Remove from active conversations
+        setActiveConversations((prev) =>
+          prev.filter((conv) => conv.conversation_id !== conversationId)
+        );
+        // Clear selection if it was the ended conversation
+        if (
+          selectedConversation?.conversation?.conversation_id === conversationId
+        ) {
+          setSelectedConversation(null);
+        }
+      } else {
+        toast.error("Failed to end conversation");
+      }
+    } catch (error) {
+      console.error("Error ending conversation:", error);
+      toast.error("Error ending conversation");
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageInput.trim() || !selectedConversation || isSending) return;
+
+    setIsSending(true);
+    const messageToSend = messageInput.trim();
+    setMessageInput(""); // Clear immediately to prevent duplicate sends
+
+    try {
+      // Call API to send message via WhatsApp
+      const result = await sendOperatorMessage(
+        selectedConversation.conversation.conversation_id,
+        selectedConversation.conversation.user_id,
+        messageToSend,
+        "operator_001"
+      );
+
+      if (result.success) {
+        // Add message to UI
+        const newMessage = {
+          timestamp: new Date().toISOString(),
+          is_user: false,
+          content: messageToSend,
+          type: "text",
+          handled_by: "human",
+        };
+
+        setSelectedConversation((prev) => {
+          if (!prev) return prev;
+          const updatedHistory = [...prev.history, newMessage];
+          const cachedConversation = readConversationCache(
+            prev.conversation.conversation_id
+          );
+          conversationMessagesCacheRef.current.set(
+            prev.conversation.conversation_id,
+            {
+              messages: updatedHistory,
+              dayPage: cachedConversation.dayPage,
+              hasMoreDays: cachedConversation.hasMoreDays,
+            }
+          );
+          return { ...prev, history: updatedHistory };
+        });
+
+        toast.success("Message sent to customer");
+      } else {
+        toast.error("Failed to send message");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Error sending message");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+
+
+  // ✅ Voice Recording Handlers
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setRecordedAudio({ blob: audioBlob, url: audioUrl });
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      // Timer for recording duration
+      const interval = setInterval(() => {
+        setRecordingTime((prev) => {
+          if (prev >= 300) {
+            // 5 minutes max
+            stopRecording();
+            clearInterval(interval);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (error) {
+      console.error("Error accessing microphone:", error);
+      toast.error("Could not access microphone");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream
+        .getTracks()
+        .forEach((track) => track.stop());
+      setIsRecording(false);
+    }
+  };
+
+  const discardRecording = () => {
+    if (recordedAudio?.url?.startsWith("blob:")) {
+      URL.revokeObjectURL(recordedAudio.url);
+    }
+    setRecordedAudio(null);
+    setRecordingTime(0);
+  };
+
+  const sendVoiceMessage = async () => {
+    if (!recordedAudio || !selectedConversation || isSendingVoice) return;
+
+    setIsSendingVoice(true);
+    const localRecordedAudio = recordedAudio;
+
+    try {
+      // Convert blob to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Audio = reader.result.split(",")[1];
+
+          // Call API to send voice message
+          const result = await sendOperatorMessage(
+            selectedConversation.conversation.conversation_id,
+            selectedConversation.conversation.user_id,
+            base64Audio,
+            "operator_001",
+            "voice"
+          );
+
+          if (result.success) {
+            // Use persisted URL from backend so playback remains available after refresh.
+            const persistedAudioUrl =
+              result.storage_url || result.whatsapp_audio_url || localRecordedAudio.url;
+
+            const newMessage = {
+              timestamp: new Date().toISOString(),
+              is_user: false,
+              content: "[رسالة صوتية]",
+              text: "[رسالة صوتية]",
+              type: "voice",
+              audio_url: persistedAudioUrl,
+              handled_by: "human",
+            };
+
+            setSelectedConversation((prev) => {
+              if (!prev) return prev;
+              const updatedHistory = [...prev.history, newMessage];
+              const cachedConversation = readConversationCache(
+                prev.conversation.conversation_id
+              );
+              conversationMessagesCacheRef.current.set(
+                prev.conversation.conversation_id,
+                {
+                  messages: updatedHistory,
+                  dayPage: cachedConversation.dayPage,
+                  hasMoreDays: cachedConversation.hasMoreDays,
+                }
+              );
+              return { ...prev, history: updatedHistory };
+            });
+
+            if (localRecordedAudio?.url?.startsWith("blob:")) {
+              URL.revokeObjectURL(localRecordedAudio.url);
+            }
+            setRecordedAudio(null);
+            setRecordingTime(0);
+            toast.success("Voice message sent to customer");
+          } else {
+            toast.error("Failed to send voice message");
+          }
+        } catch (sendError) {
+          console.error("Error sending voice message:", sendError);
+          toast.error("Error sending voice message");
+        } finally {
+          setIsSendingVoice(false);
+        }
+      };
+      reader.onerror = () => {
+        setIsSendingVoice(false);
+        toast.error("Failed to process recorded audio");
+      };
+      reader.readAsDataURL(recordedAudio.blob);
+    } catch (error) {
+      console.error("Error sending voice message:", error);
+      toast.error("Error sending voice message");
+      setIsSendingVoice(false);
+    }
+  };
+
+  const formatRecordingTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // ✅ Image Upload Handlers
+  const handleImageSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setSelectedImage({
+          file: file,
+          preview: e.target?.result,
+          name: file.name,
+        });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      toast.error("Please select a valid image file");
+    }
+  };
+
+  const discardImage = () => {
+    setSelectedImage(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
+  };
+
+  const sendImageMessage = async () => {
+    if (!selectedImage || !selectedConversation) return;
+
+    try {
+      // Convert to base64
+      const base64Image = selectedImage.preview.split(",")[1];
+
+      // Call API to send image message
+      const result = await sendOperatorMessage(
+        selectedConversation.conversation.conversation_id,
+        selectedConversation.conversation.user_id,
+        base64Image,
+        "operator_001",
+        "image"
+      );
+
+      if (result.success) {
+        // Add image message to UI
+        const newMessage = {
+          timestamp: new Date().toISOString(),
+          is_user: false,
+          content: "[صورة]",
+          type: "image",
+          image_url: selectedImage.preview,
+          handled_by: "human",
+        };
+
+        setSelectedConversation((prev) => {
+          if (!prev) return prev;
+          const updatedHistory = [...prev.history, newMessage];
+          const cachedConversation = readConversationCache(
+            prev.conversation.conversation_id
+          );
+          conversationMessagesCacheRef.current.set(
+            prev.conversation.conversation_id,
+            {
+              messages: updatedHistory,
+              dayPage: cachedConversation.dayPage,
+              hasMoreDays: cachedConversation.hasMoreDays,
+            }
+          );
+          return { ...prev, history: updatedHistory };
+        });
+
+        discardImage();
+        toast.success("Image sent to customer");
+      } else {
+        toast.error("Failed to send image");
+      }
+    } catch (error) {
+      console.error("Error sending image:", error);
+      toast.error("Error sending image");
+    }
+  };
+
+  // Feedback handlers
+  const handleFeedback = (message, feedbackType) => {
+    if (feedbackType === "good") {
+      // Submit positive feedback immediately
+      submitFeedback({
+        conversation_id: selectedConversation.conversation.conversation_id,
+        message_id: message.id || `msg_${Date.now()}`,
+        user_question: getPreviousUserMessage(message),
+        bot_response: message.content,
+        feedback_type: "good",
+        language: selectedConversation.conversation.language,
+      });
+      toast.success("👍 Thanks for your feedback!");
+    } else if (feedbackType === "wrong") {
+      // Show modal to get correct answer
+      setFeedbackModal({
+        message,
+        feedbackType,
+      });
+    }
+  };
+
+  const getPreviousUserMessage = (botMessage) => {
+    const messages = selectedConversation.history;
+    const botIndex = messages.findIndex((m) => m === botMessage);
+
+    // Find the previous user message
+    for (let i = botIndex - 1; i >= 0; i--) {
+      if (messages[i].is_user) {
+        return messages[i].content;
+      }
+    }
+
+    return "Unknown question";
+  };
+
+  const submitCorrection = async (correctAnswer, feedbackReason) => {
+    const result = await submitFeedback({
+      conversation_id: selectedConversation.conversation.conversation_id,
+      message_id: feedbackModal.message.id || `msg_${Date.now()}`,
+      user_question: getPreviousUserMessage(feedbackModal.message),
+      bot_response: feedbackModal.message.content,
+      feedback_type: "wrong",
+      correct_answer: correctAnswer,
+      feedback_reason: feedbackReason,
+      language: selectedConversation.conversation.language,
+    });
+
+    if (result.success) {
+      setFeedbackModal(null);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    const badges = {
+      bot: {
+        color: "bg-blue-100 text-blue-700",
+        icon: CheckCircleIcon,
+        text: "Bot Handling",
+      },
+      human: {
+        color: "bg-green-100 text-green-700",
+        icon: UserIcon,
+        text: "Human Handling",
+      },
+      waiting_human: {
+        color: "bg-orange-100 text-orange-700",
+        icon: ClockIcon,
+        text: "Waiting",
+      },
+      resolved: {
+        color: "bg-slate-100 text-slate-700",
+        icon: CheckCircleIcon,
+        text: "Resolved",
+      },
+      inactive: {
+        color: "bg-slate-100 text-slate-500",
+        icon: ClockIcon,
+        text: "History",
+      },
+    };
+
+    const badge = badges[status] || badges.bot;
+    const Icon = badge.icon;
+
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}
+      >
+        <Icon className="w-3 h-3 mr-1" />
+        {badge.text}
+      </span>
+    );
+  };
+
+  const getSentimentIndicator = (sentiment) => {
+    const indicators = {
+      positive: { color: "text-green-500", emoji: "😊" },
+      neutral: { color: "text-slate-500", emoji: "😐" },
+      negative: { color: "text-red-500", emoji: "😟" },
+    };
+
+    const indicator = indicators[sentiment] || indicators.neutral;
+
+    return (
+      <span className={`text-lg ${indicator.color}`} title={sentiment}>
+        {indicator.emoji}
+      </span>
+    );
+  };
+
+  return (
+    <div className="h-[calc(100vh-8rem)]">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-6"
+      >
+        <h1 className="text-4xl font-bold gradient-text font-display mb-2">
+          Chat Inbox
+        </h1>
+        <div className="flex items-center justify-between">
+          <p className="text-xl text-slate-600">
+            WhatsApp-style view: live chats first, then history
+          </p>
+
+          {/* Operator Status + Refresh Button */}
+          <div className="flex items-center space-x-4">
+            <select
+              value={operatorStatus}
+              onChange={(e) => setOperatorStatus(e.target.value)}
+              className="input-field"
+            >
+              <option value="available">🟢 Available</option>
+              <option value="busy">🟡 Busy</option>
+              <option value="away">🔴 Away</option>
+            </select>
+
+            {/* ✅ Manual Refresh Button */}
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${
+                isRefreshing
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-blue-50 text-blue-600 hover:bg-blue-100 active:scale-95"
+              }`}
+              title="Manually refresh conversations list"
+            >
+              <svg
+                className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span className="text-xs font-medium">
+                {formatLastRefreshTime()}
+              </span>
+            </button>
+
+            <div className="flex items-center space-x-2 text-sm">
+              <SignalIcon className="w-4 h-4 text-green-500 animate-pulse" />
+              <span className="text-slate-600">Live</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="grid grid-cols-12 gap-6 h-[calc(100%-8rem)]">
+        {/* Conversations List */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="col-span-3 space-y-4 h-full overflow-y-auto"
+        >
+          {/* Unified Inbox (Live + History) */}
+          <div className="card p-4 flex-1 overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-slate-800 flex items-center">
+                <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
+                Chats ({activeConversations.length})
+              </h3>
+              {/* ✅ Auto-refresh indicator */}
+              <span className="text-xs text-slate-500 flex items-center space-x-1">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span>
+                  {chatSearchTerm.trim()
+                    ? "Search mode"
+                    : `Top ${inboxPage * 30}`}
+                </span>
+              </span>
+            </div>
+            <div className="mb-3">
+              <input
+                type="text"
+                value={chatSearchTerm}
+                onChange={(e) => setChatSearchTerm(e.target.value)}
+                placeholder="Search by name or phone..."
+                className="input-field w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              {activeConversations.length === 0 && (
+                <div className="text-center text-sm text-slate-500 py-8">
+                  No chats found
+                </div>
+              )}
+              {activeConversations.map((conv) => (
+                <div
+                  key={conv.conversation_id}
+                  className={`p-3 rounded-lg cursor-pointer transition-all ${
+                    selectedConversation?.conversation?.conversation_id ===
+                    conv.conversation_id
+                      ? "bg-primary-50 border-2 border-primary-300"
+                      : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                  }`}
+                  onClick={() => {
+                    loadConversationMessages(conv);
+                  }}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 flex-wrap">
+                        <p className="font-medium text-slate-800 text-sm">
+                          {conv.user_name}
+                        </p>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            conv.is_live
+                              ? "bg-green-100 text-green-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {conv.is_live ? "● Live" : "Offline"}
+                        </span>
+                        {/* ✅ "New" Badge - shows for newly appeared conversations */}
+                        {newConversationIds.has(conv.conversation_id) && (
+                          <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
+                            New
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {conv.user_phone}
+                      </p>
+                    </div>
+                    {getSentimentIndicator(conv.sentiment)}
+                  </div>
+
+                  <div className="mb-2">{getStatusBadge(conv.status)}</div>
+
+                  {conv.last_message && (
+                    <p className="text-xs text-slate-600 truncate mb-1">
+                      {conv.last_message.content}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>{conv.message_count} messages</span>
+                    <span>
+                      {conv.is_live
+                        ? "Now"
+                        : formatMessageTime(conv.last_activity)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {!chatSearchTerm.trim() && hasMoreChats && (
+                <button
+                  onClick={handleLoadOlderChats}
+                  disabled={isLoadingMoreChats}
+                  className={`w-full mt-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isLoadingMoreChats
+                      ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {isLoadingMoreChats ? "Loading older chats..." : "Load older chats"}
+                </button>
+              )}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Chat Window */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="col-span-6 card flex flex-col h-full overflow-hidden"
+        >
+          {selectedConversation ? (
+            <>
+              {/* Chat Header - Fixed Height */}
+              <div className="p-4 border-b border-slate-200 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gradient-to-r from-primary-400 to-secondary-400 rounded-full flex items-center justify-center text-white font-bold">
+                      {selectedConversation.conversation.user_name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800">
+                        {selectedConversation.conversation.user_name}
+                      </p>
+                      <div className="flex items-center space-x-3 text-xs text-slate-500">
+                        <span className="flex items-center">
+                          <PhoneIcon className="w-3 h-3 mr-1" />
+                          {selectedConversation.conversation.user_phone}
+                        </span>
+                        <span className="flex items-center">
+                          <GlobeAltIcon className="w-3 h-3 mr-1" />
+                          {selectedConversation.conversation.language.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {["bot", "waiting_human"].includes(
+                      selectedConversation.conversation.status
+                    ) ? (
+                      <button
+                        onClick={() =>
+                          handleTakeOver(
+                            selectedConversation.conversation.conversation_id,
+                            selectedConversation.conversation.user_id
+                          )
+                        }
+                        className="btn-primary text-sm"
+                      >
+                        <HandRaisedIcon className="w-4 h-4 mr-1" />
+                        Take Over
+                      </button>
+                    ) : (
+                      selectedConversation.conversation.status === "human" && (
+                        <button
+                          onClick={() =>
+                            handleReleaseToBot(
+                              selectedConversation.conversation.conversation_id,
+                              selectedConversation.conversation.user_id
+                            )
+                          }
+                          className="btn-secondary text-sm"
+                        >
+                          <ArrowRightIcon className="w-4 h-4 mr-1" />
+                          Release to Bot
+                        </button>
+                      )
+                    )}
+                    {getStatusBadge(selectedConversation.conversation.status)}
+
+                    {/* ✅ Reload Messages Button */}
+                    <button
+                      onClick={reloadSelectedConversationMessages}
+                      title="Reload conversation messages"
+                      className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-700 transition-all"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Messages - Fixed Height with Internal Scroll */}
+              <div
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
+              >
+                {/* ✅ Loading indicator for messages */}
+                {messagesLoading && selectedConversation.history.length === 0 && (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <svg
+                        className="animate-spin h-8 w-8 mx-auto mb-3 text-primary-500"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <p className="text-slate-500 text-sm">Loading messages...</p>
+                    </div>
+                  </div>
+                )}
+                {selectedConversation?.conversation?.conversation_id && (
+                  <div className="flex flex-col items-center space-y-2">
+                    {conversationHasMoreDaysMap[
+                      selectedConversation.conversation.conversation_id
+                    ] && (
+                      <button
+                        onClick={handleLoadPreviousDay}
+                        disabled={loadingOlderMessages}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          loadingOlderMessages
+                            ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        }`}
+                      >
+                        {loadingOlderMessages
+                          ? "Loading previous day..."
+                          : "Load previous day"}
+                      </button>
+                    )}
+                    <span className="text-[11px] text-slate-400">
+                      Showing last{" "}
+                      {conversationDayPageMap[
+                        selectedConversation.conversation.conversation_id
+                      ] || 1}{" "}
+                      day(s)
+                    </span>
+                  </div>
+                )}
+                {selectedConversation.history.map((msg, index) => {
+                  // ✅ Check if this is a voice message - Updated to use new Firebase structure
+                  // First check msg.type (preferred), fallback to old content-based detection
+                  const isVoiceMessage =
+                    msg.type === "voice" ||
+                    msg.content === "[رسالة صوتية]" ||
+                    msg.content === "رسالة صوتية" ||
+                    msg.audio_url;
+
+                  // ✅ Check if this is an image message - Use new Firebase structure
+                  const isImageMessage =
+                    msg.type === "image" ||
+                    msg.content === "[صورة]" ||
+                    msg.image_url;
+
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`flex ${
+                        msg.is_user ? "justify-start" : "justify-end"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[70%] ${
+                          msg.is_user ? "order-2" : "order-1"
+                        }`}
+                      >
+                        <div
+                          className={`rounded-2xl px-4 py-2 ${
+                            msg.is_user
+                              ? "bg-slate-100 text-slate-800"
+                              : "bg-gradient-to-r from-primary-500 to-secondary-500 text-white"
+                          }`}
+                        >
+                          {isImageMessage ? (
+                            <div className="flex flex-col space-y-2">
+                              {msg.image_url ? (
+                                <div className="max-w-xs">
+                                  <img
+                                    src={msg.image_url}
+                                    alt="User image"
+                                    className="rounded-lg max-w-full h-auto object-cover"
+                                    onError={(e) => {
+                                      e.target.src =
+                                        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23e5e7eb' width='100' height='100'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3EImage unavailable%3C/text%3E%3C/svg%3E";
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm">صورة</span>
+                                  <span className="text-xs opacity-75">
+                                    (رابط غير متاح)
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : isVoiceMessage ? (
+                            <div className="flex items-start space-x-3">
+                              <div className="flex-shrink-0">
+                                <svg
+                                  className="w-8 h-8"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </div>
+                              <div className="flex-1">
+                                {msg.audio_url ? (
+                                  <div>
+                                    {/* ✅ Modern WhatsApp-style audio player */}
+                                    <ModernAudioPlayer
+                                      audioUrl={msg.audio_url}
+                                      isUserMessage={msg.is_user}
+                                    />
+                                    {/* ✅ Show transcribed text below audio player */}
+                                    {msg.text &&
+                                      msg.text !== "[رسالة صوتية]" &&
+                                      msg.text !== "رسالة صوتية" && (
+                                        <p className="text-xs mt-2 opacity-90">
+                                          {msg.text}
+                                        </p>
+                                      )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-sm">رسالة صوتية</span>
+                                    <span className="text-xs opacity-75">
+                                      (URL not available)
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm">{msg.content}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2 mt-1 px-2">
+                          <span className="text-xs text-slate-400">
+                            {formatMessageTime(msg.timestamp)}
+                          </span>
+                          {!msg.is_user && msg.handled_by && (
+                            <>
+                              <span className="text-xs text-slate-500">
+                                •{" "}
+                                {msg.handled_by === "bot"
+                                  ? "🤖 Bot"
+                                  : "👤 Human"}
+                              </span>
+                              {msg.handled_by === "bot" &&
+                                !isVoiceMessage &&
+                                !isImageMessage && (
+                                  <div className="flex items-center space-x-1 ml-2">
+                                    <button
+                                      onClick={() =>
+                                        handleFeedback(msg, "good")
+                                      }
+                                      className="text-xs hover:scale-125 transition-transform"
+                                      title="Good response"
+                                    >
+                                      ��
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleFeedback(msg, "wrong")
+                                      }
+                                      className="text-xs hover:scale-125 transition-transform"
+                                      title="Wrong answer - train bot"
+                                    >
+                                      👎
+                                    </button>
+                                  </div>
+                                )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Message Input - Fixed Height - Text + Voice */}
+              {selectedConversation.conversation.status === "human" && (
+                <div className="p-4 border-t border-slate-200 flex-shrink-0">
+                  {/* Voice Recording Preview */}
+                  {recordedAudio && (
+                    <div className="mb-3 p-3 bg-slate-100 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <MicrophoneIcon className="w-5 h-5 text-primary-600" />
+                          <audio
+                            src={recordedAudio.url}
+                            controls
+                            className="h-8"
+                          />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={discardRecording}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Discard recording"
+                          >
+                            <XMarkIcon className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={sendVoiceMessage}
+                            disabled={isSendingVoice}
+                            className="btn-primary flex items-center space-x-1 disabled:opacity-50"
+                          >
+                            <PaperAirplaneIcon className="w-4 h-4" />
+                            <span>{isSendingVoice ? "Sending..." : "Send"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recording in Progress */}
+                  {isRecording && (
+                    <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                          <span className="text-red-700 font-medium">
+                            Recording... {formatRecordingTime(recordingTime)}
+                          </span>
+                        </div>
+                        <button
+                          onClick={stopRecording}
+                          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center space-x-2"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <rect x="6" y="6" width="8" height="8" rx="1" />
+                          </svg>
+                          <span>Stop</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Text Message Input with Voice Button */}
+                  {!isRecording && !recordedAudio && (
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={messageInput}
+                        onChange={(e) => setMessageInput(e.target.value)}
+                        onKeyPress={(e) =>
+                          e.key === "Enter" && !isSending && handleSendMessage()
+                        }
+                        placeholder="Type your message..."
+                        className="input-field flex-1"
+                        disabled={isSending}
+                      />
+                      {/* Voice Recording Button */}
+                      <button
+                        onClick={startRecording}
+                        className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+                        title="Record voice message"
+                      >
+                        <MicrophoneIcon className="w-5 h-5" />
+                      </button>
+                      {/* Send Text Button */}
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={isSending || !messageInput.trim()}
+                        className={`btn-primary disabled:opacity-50 ${
+                          isSending ? "cursor-not-allowed" : ""
+                        }`}
+                      >
+                        {isSending ? (
+                          <span className="flex items-center">
+                            <svg
+                              className="animate-spin -ml-1 mr-2 h-5 w-5"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
+                            </svg>
+                            Sending...
+                          </span>
+                        ) : (
+                          <PaperAirplaneIcon className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-slate-400">
+              <div className="text-center">
+                <ChatBubbleLeftRightIcon className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                <p className="text-lg font-medium">
+                  Select a conversation to view
+                </p>
+              </div>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Conversation Details */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="col-span-3 space-y-4 h-full overflow-y-auto"
+        >
+          {selectedConversation ? (
+            <>
+              {/* User Info */}
+              <div className="card p-4">
+                <h3 className="font-bold text-slate-800 mb-3 flex items-center">
+                  <UserIcon className="w-5 h-5 mr-2 text-primary-600" />
+                  User Information
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs text-slate-500">Name</p>
+                    <p className="font-medium text-slate-800">
+                      {selectedConversation.conversation.user_name}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Phone</p>
+                    <p className="font-medium text-slate-800">
+                      {selectedConversation.conversation.user_phone}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Language</p>
+                    <p className="font-medium text-slate-800">
+                      {selectedConversation.conversation.language.toUpperCase()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Gender</p>
+                    <p className="font-medium text-slate-800 capitalize">
+                      {selectedConversation.conversation.gender || "Unknown"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Sentiment</p>
+                    <div className="flex items-center space-x-2">
+                      {getSentimentIndicator(
+                        selectedConversation.conversation.sentiment
+                      )}
+                      <span className="font-medium text-slate-800 capitalize">
+                        {selectedConversation.conversation.sentiment}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Conversation Stats */}
+              <div className="card p-4">
+                <h3 className="font-bold text-slate-800 mb-3 flex items-center">
+                  <ChartBarIcon className="w-5 h-5 mr-2 text-secondary-600" />
+                  Conversation Stats
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-600">Messages</span>
+                    <span className="font-medium text-slate-800">
+                      {selectedConversation.conversation.message_count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-600">Duration</span>
+                    <span className="font-medium text-slate-800">
+                      {Math.floor(
+                        selectedConversation.conversation.duration_seconds / 60
+                      )}
+                      m{" "}
+                      {selectedConversation.conversation.duration_seconds % 60}s
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-600">Status</span>
+                    {getStatusBadge(selectedConversation.conversation.status)}
+                  </div>
+                  {selectedConversation.conversation.operator_id && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-slate-600">Operator</span>
+                      <span className="font-medium text-slate-800">
+                        {selectedConversation.conversation.operator_id}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="card p-4">
+                <h3 className="font-bold text-slate-800 mb-3">Quick Actions</h3>
+                <div className="space-y-2">
+                  <button className="w-full btn-ghost text-left text-sm">
+                    <UserGroupIcon className="w-4 h-4 mr-2" />
+                    Transfer to Another Operator
+                  </button>
+                  <button className="w-full btn-ghost text-left text-sm">
+                    <ExclamationCircleIcon className="w-4 h-4 mr-2" />
+                    Mark as Priority
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleEndConversation(
+                        selectedConversation.conversation.conversation_id,
+                        selectedConversation.conversation.user_id
+                      )
+                    }
+                    className="w-full btn-ghost text-left text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <XMarkIcon className="w-4 h-4 mr-2" />
+                    End Conversation
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="card p-4">
+              <p className="text-center text-slate-500">
+                Select a conversation to view details
+              </p>
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Feedback Modal */}
+      {feedbackModal && (
+        <FeedbackModal
+          message={feedbackModal.message}
+          conversation={selectedConversation.conversation}
+          onClose={() => setFeedbackModal(null)}
+          onSubmit={submitCorrection}
+        />
+      )}
+    </div>
+  );
+};
+
+export default LiveChat;

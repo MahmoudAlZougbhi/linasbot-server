@@ -1,0 +1,222 @@
+{
+  "qa_pairs": [
+    {
+      "id": "45b4dd2e3dd5",
+      "ar": {
+        "question": "ما هي أسعار إزالة الشعر بالليزر؟",
+        "answer": "تختلف الأسعار حسب المنطقة. استشارة مجانية متاحة."
+      },
+      "en": {
+        "question": "What are laser hair removal prices?",
+        "answer": "Prices vary by area. Free consultation available."
+      },
+      "fr": {
+        "question": "Quels sont les prix?",
+        "answer": "Les prix varient. Consultation gratuite."
+      },
+      "franco": {
+        "question": "Shou el as3ar?",
+        "answer": "El as3ar btekhtalef."
+      },
+      "category": "pricing",
+      "tags": [
+        "prices",
+        "laser"
+      ],
+      "created_at": "2025-09-02T20:43:55.132909",
+      "updated_at": "2025-09-02T20:43:55.132922",
+      "usage_count": 2,
+      "match_count": 2,
+      "is_active": true
+    },
+    {
+      "id": "bcb43729e743",
+      "ar": {
+        "question": "كم سعر الليزر؟",
+        "answer": "الأسعار تختلف حسب المنطقة. نقدم استشارة مجانية لتحديد التكلفة الدقيقة."
+      },
+      "en": {
+        "question": "How much does laser cost?",
+        "answer": "Prices vary by area. We offer free consultation to determine exact cost."
+      },
+      "fr": {
+        "question": "Combien coûte le laser?",
+        "answer": "Les prix varient selon la zone. Consultation gratuite pour déterminer le coût exact."
+      },
+      "franco": {
+        "question": "Addesh el laser?",
+        "answer": "El as3ar btekhtalef. 3andna consultation majene."
+      },
+      "category": "pricing",
+      "tags": [
+        "price",
+        "cost",
+        "laser"
+      ],
+      "created_at": "2025-09-02T20:46:13.297741",
+      "updated_at": "2025-09-02T20:46:13.297745",
+      "usage_count": 0,
+      "match_count": 0,
+      "is_active": true
+    },
+    {
+      "id": "f95a9e41807a",
+      "ar": {
+        "question": "كيف احجز موعد؟",
+        "answer": "يمكنك الحجز عبر الواتساب أو زيارة المركز مباشرة. نحن متاحون من 9 صباحاً حتى 8 مساءً."
+      },
+      "en": {
+        "question": "How to book appointment?",
+        "answer": "Book via WhatsApp or visit us directly. We're open 9 AM to 8 PM."
+      },
+      "fr": {
+        "question": "Comment réserver?",
+        "answer": "Réservez via WhatsApp ou visitez-nous. Ouvert de 9h à 20h."
+      },
+      "franco": {
+        "question": "Kif a7jez?",
+        "answer": "Via WhatsApp aw zourna. Maftouh min 9 sa 8."
+      },
+      "category": "appointments",
+      "tags": [
+        "booking",
+        "appointment",
+        "schedule"
+      ],
+      "created_at": "2025-09-02T20:46:13.299622",
+      "updated_at": "2025-09-02T20:46:13.299625",
+      "usage_count": 1,
+      "match_count": 1,
+      "is_active": true
+    },
+    {
+      "id": "3cac28a93d48",
+      "ar": {
+        "question": "ما هي الخدمات المتاحة؟",
+        "answer": "نقدم إزالة الشعر بالليزر وإزالة الوشم بأحدث التقنيات. جميع الخدمات آمنة ومعتمدة."
+      },
+      "en": {
+        "question": "What services do you offer?",
+        "answer": "We offer laser hair removal and tattoo removal with latest technology. All services are safe and certified."
+      },
+      "fr": {
+        "question": "Quels services offrez-vous?",
+        "answer": "Épilation laser et détatouage avec la dernière technologie. Services sûrs et certifiés."
+      },
+      "franco": {
+        "question": "Shou el khadamet?",
+        "answer": "Izalit sha3er w tattoo bel laser. Kello amen w mo3tamad."
+      },
+      "category": "services",
+      "tags": [
+        "services",
+        "laser",
+        "hair removal",
+        "tattoo"
+      ],
+      "created_at": "2025-09-02T20:46:13.300260",
+      "updated_at": "2025-09-02T20:46:13.300262",
+      "usage_count": 0,
+      "match_count": 0,
+      "is_active": true
+    },
+    {
+      "id": "f53069cc9226",
+      "ar": {
+        "question": "وين المركز؟",
+        "answer": "مركز لينا ليزر في بيروت. للعنوان الدقيق والاتجاهات، تواصل معنا عبر الواتساب."
+      },
+      "en": {
+        "question": "Where is the center?",
+        "answer": "Lina's Laser Center is in Beirut. For exact address and directions, contact us via WhatsApp."
+      },
+      "fr": {
+        "question": "Où est le centre?",
+        "answer": "Centre Laser de Lina à Beyrouth. Pour l'adresse exacte, contactez-nous via WhatsApp."
+      },
+      "franco": {
+        "question": "Wayn el markaz?",
+        "answer": "Markaz Lina Laser bi Beirut. Lal 3onwan el da2i2, tawasalo ma3na."
+      },
+      "category": "location",
+      "tags": [
+        "location",
+        "address",
+        "beirut"
+      ],
+      "created_at": "2025-09-02T20:46:13.301104",
+      "updated_at": "2025-09-02T20:46:13.301107",
+      "usage_count": 4,
+      "match_count": 4,
+      "is_active": true
+    },
+    {
+      "id": "006798b4455e",
+      "ar": {
+        "question": "هل الليزر مؤلم؟",
+        "answer": "الليزر الحديث مريح جداً. نستخدم تقنيات تبريد متقدمة لتقليل أي إزعاج. معظم العملاء يشعرون بوخز خفيف فقط."
+      },
+      "en": {
+        "question": "Is laser painful?",
+        "answer": "Modern laser is very comfortable. We use advanced cooling technology to minimize discomfort. Most clients feel only mild tingling."
+      },
+      "fr": {
+        "question": "Le laser fait-il mal?",
+        "answer": "Le laser moderne est très confortable. Technologie de refroidissement avancée. Sensation de picotement léger seulement."
+      },
+      "franco": {
+        "question": "Biwaja3 el laser?",
+        "answer": "El laser el 7adis muri7. Nesta3mil taknia tabrid. Bas wakhz khafif."
+      },
+      "category": "safety",
+      "tags": [
+        "pain",
+        "comfort",
+        "safety"
+      ],
+      "created_at": "2025-09-02T20:46:13.301943",
+      "updated_at": "2025-09-02T20:46:13.301946",
+      "usage_count": 0,
+      "match_count": 0,
+      "is_active": true
+    },
+    {
+      "id": "e21f1c2c252b",
+      "ar": {
+        "question": "كم جلسة احتاج؟",
+        "answer": "عادة 6-8 جلسات للنتائج المثلى، حسب نوع الشعر ولونه. سنحدد العدد الدقيق في الاستشارة."
+      },
+      "en": {
+        "question": "How many sessions needed?",
+        "answer": "Usually 6-8 sessions for optimal results, depending on hair type and color. We'll determine exact number during consultation."
+      },
+      "fr": {
+        "question": "Combien de séances?",
+        "answer": "Habituellement 6-8 séances pour des résultats optimaux. Nombre exact déterminé lors de la consultation."
+      },
+      "franco": {
+        "question": "Kam jalse?",
+        "answer": "3adatan 6-8 jalset lal nata2ej el mithla. Ra7 n7added el 3adad bil consultation."
+      },
+      "category": "treatment",
+      "tags": [
+        "sessions",
+        "results",
+        "treatment"
+      ],
+      "created_at": "2025-09-02T20:46:13.319622",
+      "updated_at": "2025-09-02T20:46:13.319629",
+      "usage_count": 0,
+      "match_count": 0,
+      "is_active": true
+    }
+  ],
+  "categories": [
+    "general",
+    "pricing",
+    "services",
+    "appointments",
+    "medical"
+  ],
+  "last_updated": "2025-09-02T20:55:38.998367"
+}

@@ -1,0 +1,160 @@
+<Lina_Knowledge_Base_Content>
+
+About_Us_Details
+- Center Name: Lina's Laser
+- Specialization: A beauty center specialized in advanced laser treatments.
+- Number of Branches: Two
+- Branch 1 Location: Beirut – Manara
+- Branch 2 Location: Antelias – Center Haj Building
+- Founding Year: 2008 (Over 17 years of experience as of 2025)
+- License: Licensed by the Ministry of Health.
+- Team Training: Our team is trained under the supervision of Dr. Khaled Ghotmi.
+</About_Us_Details>
+
+<Services_Offered>
+- Service: Laser Hair Removal
+- Service: Laser Tattoo Removal (using Pico Laser)
+- Service: Laser Scar Removal (using CO2 Laser)
+- Service: Laser Acne Scar Removal (CO2 Laser)
+- Service: Laser Stretch Mark Removal (CO2 Laser)
+- Service: Laser Whitening (using DPL)
+- Note: All devices are from Med Art Technology.
+</Services_Offered>
+
+<Laser_Hair_Removal_Device_Neo>
+- Device Name: Neo
+- Service Type: Laser Hair Removal
+- Sessions (for light skin): 6
+- Result Percentage: 80% – 90%
+- Interval between Sessions: Every 45 days
+- Pain Level: 1/10
+- Results visible after: 10–15 days
+- Sessions (for dark skin): 8–9
+- Effectiveness for Blonde or Red Hair: 50% – 70%
+- Effectiveness for White Hair: Not treatable
+</Laser_Hair_Removal_Device_Neo>
+
+<Laser_Hair_Removal_Device_Quadro>
+- Device Name: Quadro
+- Service Type: Laser Hair Removal
+- Sessions: 8
+- Result Percentage: 80% – 85%
+- Interval between Sessions: Every 21 days
+- Pain Level: 2/10
+- Results visible after: 10–15 days
+- Sessions (for dark skin): 11
+- Effectiveness for Blonde or Red Hair: 50% – 70%
+- Effectiveness for White Hair: Not treatable
+</Laser_Hair_Removal_Device_Quadro>
+
+<Laser_Hair_Removal_Device_Trio>
+- Device Name: Trio
+- Service Type: Laser Hair Removal
+- Sessions: 12–15
+- Result Percentage: Around 70%
+- Interval between Sessions: Every 21 days
+- Pain Level: 6/10
+- Sessions (for dark skin): 20
+- Effectiveness for Blonde or Red Hair: Not effective
+- Effectiveness for White Hair: Not treatable
+</Laser_Hair_Removal_Device_Trio>
+
+<Pre_Post_Laser_Hair_Removal_Instructions>
+- General Instructions:
+    - Shaving must be done one day before the session only.
+    - Avoid sun exposure or tanning (including solarium) for 3 days before the session.
+- For Men (Specific Instructions):
+    - Laser should not be applied to areas without hair or with fine hair (peach fuzz).
+    - Avoid shaving areas with fine hair, as it may activate follicles and cause unwanted hair growth.
+- For Women (Specific Instructions):
+    - Shaving is allowed in all areas, even those with fine hair, as long as it’s done one day before the session.
+- After the session (General Care):
+    - No shaving at all except one day before the next session.
+    - Avoid: Sports, hot water, creams, perfumes, or chemicals for 24 hours.
+    - Avoid sun or tanning for 3 days after the session.
+    - If redness or small bumps appear, apply Fucidin cream twice daily for 3 days.
+</Pre_Post_Laser_Hair_Removal_Instructions>
+
+<Tattoo_Removal_Details>
+- Service Name: Laser Tattoo Removal
+- Device Used: Pico Laser
+- Minimum Sessions: 4
+- Removal Guarantee: 100% guaranteed removal
+- Note on Colored Tattoos: Colored tattoos (red, blue, yellow) have a 70% removal rate.
+- Aftercare:
+    - Apply Mebo Scar cream twice daily for 3 days.
+    - No water contact for 24 hours.
+    - Avoid rubbing or sun exposure for one week.
+    - Sessions must be spaced at least 1 month apart to be effective.
+</Tattoo_Removal_Details>
+
+<Scar_Removal_Details>
+- Service Name: Laser Scar Removal
+- Device Used: CO2 Laser
+- Treats (conditions): Stretch Marks, Acne Scars, Surgery Scars.
+- Minimum Sessions: 4
+- Result Improvement: 50% – 70% improvement
+- Aftercare:
+    - Apply Mebo Scar cream twice daily for 1 week.
+    - No water contact for 24 hours.
+    - Avoid rubbing or sun exposure for 1 week.
+    - Sessions spaced at least 1 month apart.
+</Scar_Removal_Details>
+
+<Dark_Area_Whitening_Details>
+- Service Name: Dark Area Whitening Laser
+- Device Used: DPL
+- Minimum Sessions: 4
+- Result Percentage: 50% – 70% lightening
+- Interval between Sessions: Every 21 days
+</Dark_Area_Whitening_Details>
+
+<General_Important_Notes_for_AI>
+- White hair is not treatable with any of our lasers.
+- Blonde and red hair respond partially to Neo and Quadro only.
+- Each treatment requires a specific number of sessions and a strict timing schedule (21, 30, or 45 days depending on the device).
+- Strict adherence to pre- and post-session instructions is essential for best results.
+</General_Important_Notes_for_AI>
+
+<Booking_System_IDs>
+
+⚠️ These IDs are used by the booking system. When calling create_appointment or other tools, use these EXACT values.
+
+SERVICE IDs:
+- service_id = 1: Laser Hair Removal (Men) - إزالة الشعر بالليزر للرجال
+- service_id = 11: CO2 Laser (Scar Removal, Acne Scars, Stretch Marks) - ليزر CO2
+- service_id = 12: Laser Hair Removal (Women) - إزالة الشعر بالليزر للنساء
+- service_id = 13: Laser Tattoo Removal - إزالة الوشم بالليزر
+- service_id = 14: Whitening (Dark Area Lightening) - تفتيح المناطق الداكنة
+- service_id = 15: Hifo
+- service_id = 16: Eye Brows Extension
+- service_id = 17: Full Hydro Facial
+- service_id = 19: Half Hydro Facial
+- service_id = 20: Manual Hydro Facial
+- service_id = 21: Facial Micro Needling
+
+MACHINE IDs:
+- machine_id = 13: Neo (for laser hair removal - light skin)
+- machine_id = 9: Quadro (for laser hair removal)
+- machine_id = 10: Trio (for laser hair removal)
+- machine_id = 15: Candela (for laser tattoo removal)
+- machine_id = 14: DPL (for whitening/dark area lightening)
+
+SERVICE-MACHINE MATCHING RULES:
+- Laser Tattoo Removal (service_id=13) → MUST use Candela (machine_id=15)
+- Hair Removal Men (service_id=1) or Women (service_id=12) → Use Neo (machine_id=13), Quadro (machine_id=9), or Trio (machine_id=10)
+- CO2 Laser treatments (service_id=11) → MUST use CO2 Laser (machine_id=14)
+- Whitening (service_id=14) → MUST use DPL (machine_id=14)
+- Eye brows extension (service_id=16) → No machine required
+- Full hydro facial (service_id=17) → No machine required
+- Half hydro facial (service_id=19) → No machine required
+- Manual hydro facial (service_id=20) → No machine required
+- Facial micro needling (service_id=21) → No machine required
+
+BRANCH IDs:
+- branch_id = 1: Beirut - Manara (Main Branch)
+- branch_id = 2: Antelias - Center Haj Building
+
+</Booking_System_IDs>
+
+</Lina_Knowledge_Base_Content>
