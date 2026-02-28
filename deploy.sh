@@ -124,11 +124,15 @@ sleep 3
 if systemctl is-active --quiet ${SERVICE_NAME}; then
     echo -e "${GREEN}Service started successfully!${NC}"
 else
-    echo -e "${RED}Service failed to start. Check logs:${NC}"
-    journalctl -u ${SERVICE_NAME} -n 30 --no-pager
+    echo -e "${RED}Service failed to start. Showing error log:${NC}"
+    echo "=== /var/log/${SERVICE_NAME}.error.log ==="
+    tail -80 /var/log/${SERVICE_NAME}.error.log 2>/dev/null || echo "(log file empty or missing)"
     echo ""
-    echo -e "${YELLOW}Manual debug: cd ${APP_DIR} && source venv/bin/activate && python main.py${NC}"
-    echo -e "${YELLOW}See DEPLOY_TROUBLESHOOT.md for full diagnostic steps.${NC}"
+    echo "=== journalctl ==="
+    journalctl -u ${SERVICE_NAME} -n 15 --no-pager
+    echo ""
+    echo -e "${YELLOW}Running python main.py to capture traceback:${NC}"
+    cd ${APP_DIR} && ${APP_DIR}/venv/bin/python main.py 2>&1 || true
     exit 1
 fi
 echo ""
