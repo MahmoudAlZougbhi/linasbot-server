@@ -292,12 +292,21 @@ async def get_live_chat_metrics():
 
 
 @app.get("/api/live-chat/conversation/{user_id}/{conversation_id}")
-async def get_conversation_details(user_id: str, conversation_id: str):
+async def get_conversation_details(
+    user_id: str,
+    conversation_id: str,
+    day_page: int = Query(default=1, ge=1, description="Day page number (1 = last day, 2 = previous day, etc.)"),
+    day_window_days: int = Query(default=1, ge=1, le=30, description="Number of days per page"),
+    max_messages: int = Query(default=1000, ge=1, le=5000, description="Hard cap for messages returned per request"),
+):
     """Get detailed conversation history"""
     try:
         details = await live_chat_service.get_conversation_details(
             user_id=user_id,
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            day_page=day_page,
+            day_window_days=day_window_days,
+            max_messages=max_messages,
         )
         return details
     except Exception as e:

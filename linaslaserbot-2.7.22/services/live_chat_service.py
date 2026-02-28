@@ -1496,18 +1496,27 @@ class LiveChatService:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    async def get_conversation_details(self, user_id: str, conversation_id: str, max_messages: int = 100) -> Dict[str, Any]:
-        """Get detailed conversation history
+    async def get_conversation_details(
+        self,
+        user_id: str,
+        conversation_id: str,
+        max_messages: int = 1000,
+        day_window_days: int = 1,
+        day_page: int = 1,
+    ) -> Dict[str, Any]:
+        """Get paginated conversation history by day windows.
 
-        Args:
-            user_id: The user's ID
-            conversation_id: The conversation document ID
-            max_messages: Maximum number of messages to return (default 100, prevents timeout on large conversations)
+        Default behavior returns only the latest day of messages (day_page=1, day_window_days=1).
+        Each increment of day_page moves one day further back in history.
         """
         try:
             db = get_firestore_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
+
+            safe_max_messages = max(1, min(int(max_messages), 5000))
+            safe_day_window_days = max(1, min(int(day_window_days), 30))
+            safe_day_page = max(1, int(day_page))
 
             app_id = "linas-ai-bot-backend"
             conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
@@ -1519,38 +1528,60 @@ class LiveChatService:
             if not conv_doc.exists:
                 return {"success": False, "error": "Conversation not found"}
 
-            conv_data = conv_doc.to_dict()
+            conv_data = conv_doc.to_dict() or {}
             messages = self._dedupe_messages(conv_data.get("messages", []))
 
-            # ✅ Limit messages to prevent timeout on large conversations
-            total_messages = len(messages)
-            if total_messages > max_messages:
-                print(f"⚠️ Conversation {conversation_id} has {total_messages} messages, returning last {max_messages}")
-                messages = messages[-max_messages:]  # Get last N messages
-
-            formatted_messages = []
-
+            # Ignore smart reminders for live operator view.
+            non_smart_messages = []
             for msg in messages:
-                # Skip smart messages (automated reminders) - they shouldn't appear in live chat
                 if msg.get("metadata", {}).get("source") == "smart_message":
                     continue
+                msg_ts = self._parse_timestamp(msg.get("timestamp"))
+                non_smart_messages.append((msg, msg_ts))
 
+            total_messages = len(non_smart_messages)
+
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            window_end = now_utc - datetime.timedelta(
+                days=safe_day_window_days * (safe_day_page - 1)
+            )
+            window_start = now_utc - datetime.timedelta(
+                days=safe_day_window_days * safe_day_page
+            )
+
+            has_more_days = False
+            window_messages = []
+            for msg, msg_ts in non_smart_messages:
+                if msg_ts < window_start:
+                    has_more_days = True
+                if window_start <= msg_ts < window_end:
+                    window_messages.append((msg, msg_ts))
+
+            # Keep chronological order and apply hard cap safety.
+            window_messages.sort(key=lambda item: item[1])
+            if len(window_messages) > safe_max_messages:
+                print(
+                    f"⚠️ Day window for {conversation_id} has {len(window_messages)} messages, "
+                    f"returning last {safe_max_messages}"
+                )
+                window_messages = window_messages[-safe_max_messages:]
+
+            formatted_messages = []
+            for msg, msg_ts in window_messages:
                 msg_data = {
-                    "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
+                    "timestamp": msg_ts.isoformat(),
                     "is_user": msg.get("role") == "user",
                     "content": msg.get("text", ""),
                     "text": msg.get("text", ""),
                     "type": msg.get("type", "text"),
                     "handled_by": msg.get("metadata", {}).get("handled_by", "bot"),
-                    "role": msg.get("role")
+                    "role": msg.get("role"),
                 }
 
-                # Add audio_url if it exists (for voice messages) - check both top level and metadata
                 audio_url = msg.get("audio_url") or msg.get("metadata", {}).get("audio_url")
                 if audio_url:
                     msg_data["audio_url"] = audio_url
 
-                # Add image_url if it exists (for image messages) - check both top level and metadata
                 image_url = msg.get("image_url") or msg.get("metadata", {}).get("image_url")
                 if image_url:
                     msg_data["image_url"] = image_url
@@ -1563,8 +1594,13 @@ class LiveChatService:
                 "messages": formatted_messages,
                 "total_messages": total_messages,
                 "returned_messages": len(formatted_messages),
+                "day_page": safe_day_page,
+                "day_window_days": safe_day_window_days,
+                "window_start": window_start.isoformat(),
+                "window_end": window_end.isoformat(),
+                "has_more_days": has_more_days,
                 "sentiment": conv_data.get("sentiment", "neutral"),
-                "status": conv_data.get("status", "active")
+                "status": conv_data.get("status", "active"),
             }
 
         except Exception as e:

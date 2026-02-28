@@ -220,6 +220,11 @@ const LiveChat = () => {
 
   // ✅ Messages loading state for lazy loading
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [conversationDayPageMap, setConversationDayPageMap] = useState({});
+  const [conversationHasMoreDaysMap, setConversationHasMoreDaysMap] = useState(
+    {}
+  );
 
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
@@ -232,6 +237,9 @@ const LiveChat = () => {
   const audioChunksRef = useRef([]);
   const conversationMessagesCacheRef = useRef(new Map());
   const latestMessagesRequestRef = useRef(0);
+  const conversationDayPageMapRef = useRef({});
+  const conversationHasMoreDaysMapRef = useRef({});
+  const isLoadingOlderMessagesRef = useRef(false);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -259,6 +267,14 @@ const LiveChat = () => {
   }, [hasMoreChats]);
 
   useEffect(() => {
+    conversationDayPageMapRef.current = conversationDayPageMap;
+  }, [conversationDayPageMap]);
+
+  useEffect(() => {
+    conversationHasMoreDaysMapRef.current = conversationHasMoreDaysMap;
+  }, [conversationHasMoreDaysMap]);
+
+  useEffect(() => {
     return () => {
       if (recordedAudio?.url?.startsWith("blob:")) {
         URL.revokeObjectURL(recordedAudio.url);
@@ -275,13 +291,88 @@ const LiveChat = () => {
     submitFeedback,
   } = useApi();
 
+  const getMessageKey = (msg = {}) =>
+    [
+      msg.timestamp || "",
+      msg.is_user ? "user" : "bot",
+      msg.type || "text",
+      msg.audio_url || "",
+      msg.image_url || "",
+      msg.content || msg.text || "",
+    ].join("|");
+
+  const mergeMessagesChronologically = (existing = [], incoming = []) => {
+    const mergedMap = new Map();
+
+    existing.forEach((msg) => {
+      mergedMap.set(getMessageKey(msg), msg);
+    });
+    incoming.forEach((msg) => {
+      mergedMap.set(getMessageKey(msg), msg);
+    });
+
+    return Array.from(mergedMap.values()).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+  };
+
+  const readConversationCache = (conversationId) => {
+    const rawCache = conversationMessagesCacheRef.current.get(conversationId);
+    if (Array.isArray(rawCache)) {
+      return {
+        messages: rawCache,
+        dayPage: 1,
+        hasMoreDays: false,
+      };
+    }
+
+    if (rawCache && typeof rawCache === "object") {
+      return {
+        messages: Array.isArray(rawCache.messages) ? rawCache.messages : [],
+        dayPage: Math.max(1, Number(rawCache.dayPage) || 1),
+        hasMoreDays: Boolean(rawCache.hasMoreDays),
+      };
+    }
+
+    return {
+      messages: [],
+      dayPage: 1,
+      hasMoreDays: false,
+    };
+  };
+
+  const writeConversationCache = (
+    conversationId,
+    messages,
+    dayPage,
+    hasMoreDays
+  ) => {
+    conversationMessagesCacheRef.current.set(conversationId, {
+      messages,
+      dayPage,
+      hasMoreDays,
+    });
+    setConversationDayPageMap((prev) => ({ ...prev, [conversationId]: dayPage }));
+    setConversationHasMoreDaysMap((prev) => ({
+      ...prev,
+      [conversationId]: hasMoreDays,
+    }));
+  };
+
   // Fetch conversation messages with timeout
-  const fetchConversationMessages = async (userId, conversationId) => {
+  const fetchConversationMessages = async (
+    userId,
+    conversationId,
+    { dayPage = 1, dayWindowDays = 1 } = {}
+  ) => {
     // Create AbortController for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
     try {
+      const safeDayPage = Math.max(1, Number(dayPage) || 1);
+      const safeDayWindow = Math.max(1, Number(dayWindowDays) || 1);
+
       // Use the same base URL logic as useApi
       const baseURL =
         window.location.hostname === "localhost" ||
@@ -290,10 +381,14 @@ const LiveChat = () => {
           : window.location.origin;
 
       console.log(
-        `Fetching messages for user ${userId}, conversation ${conversationId}`
+        `Fetching messages for user ${userId}, conversation ${conversationId}, day_page=${safeDayPage}`
       );
+      const queryParams = new URLSearchParams({
+        day_page: String(safeDayPage),
+        day_window_days: String(safeDayWindow),
+      });
       const response = await fetch(
-        `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}`,
+        `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}?${queryParams.toString()}`,
         { signal: controller.signal }
       );
       clearTimeout(timeoutId);
@@ -302,12 +397,22 @@ const LiveChat = () => {
 
       console.log("API Response:", data);
 
-      if (data.success && data.messages) {
-        console.log(`Loaded ${data.messages.length} messages (${data.returned_messages || data.messages.length} of ${data.total_messages || data.messages.length} total)`);
-        return data.messages;
+      if (data.success && Array.isArray(data.messages)) {
+        console.log(
+          `Loaded ${data.messages.length} messages (day_page=${data.day_page || safeDayPage}, has_more_days=${Boolean(data.has_more_days)})`
+        );
+        return {
+          messages: data.messages,
+          hasMoreDays: Boolean(data.has_more_days),
+          dayPage: data.day_page || safeDayPage,
+        };
       }
       console.warn("No messages found or API error:", data);
-      return [];
+      return {
+        messages: [],
+        hasMoreDays: false,
+        dayPage: safeDayPage,
+      };
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -316,55 +421,118 @@ const LiveChat = () => {
       } else {
         console.error("Error fetching conversation messages:", error);
       }
-      return [];
+      return {
+        messages: [],
+        hasMoreDays: false,
+        dayPage: Math.max(1, Number(dayPage) || 1),
+      };
     }
   };
 
   const loadConversationMessages = async (
     conversation,
-    { forceRefresh = false } = {}
+    { forceRefresh = false, dayPage = 1, append = false } = {}
   ) => {
     if (!conversation) return [];
 
     const conversationId = conversation.conversation_id;
     if (!conversationId) return [];
 
-    const cachedMessages = conversationMessagesCacheRef.current.get(conversationId);
-    const shouldUseCache = !forceRefresh && Array.isArray(cachedMessages);
+    const safeDayPage = Math.max(1, Number(dayPage) || 1);
+    const cachedConversation = readConversationCache(conversationId);
+    const shouldUseCache =
+      !forceRefresh &&
+      !append &&
+      safeDayPage === 1 &&
+      cachedConversation.messages.length > 0;
 
-    setSelectedConversation({
-      conversation,
-      history: shouldUseCache ? cachedMessages : [],
-    });
+    if (!append) {
+      setSelectedConversation({
+        conversation,
+        history: shouldUseCache ? cachedConversation.messages : [],
+      });
+    }
 
     if (shouldUseCache) {
-      return cachedMessages;
+      setConversationDayPageMap((prev) => ({
+        ...prev,
+        [conversationId]: cachedConversation.dayPage,
+      }));
+      setConversationHasMoreDaysMap((prev) => ({
+        ...prev,
+        [conversationId]: cachedConversation.hasMoreDays,
+      }));
+      return cachedConversation.messages;
     }
 
     const requestId = Date.now();
     latestMessagesRequestRef.current = requestId;
-    setMessagesLoading(true);
+    if (append) {
+      isLoadingOlderMessagesRef.current = true;
+      setLoadingOlderMessages(true);
+    } else {
+      setMessagesLoading(true);
+    }
 
     try {
-      const messages = await fetchConversationMessages(
+      const result = await fetchConversationMessages(
         conversation.user_id,
-        conversationId
+        conversationId,
+        { dayPage: safeDayPage, dayWindowDays: 1 }
       );
 
       if (latestMessagesRequestRef.current !== requestId) {
         return [];
       }
 
-      conversationMessagesCacheRef.current.set(conversationId, messages);
+      const fetchedMessages = Array.isArray(result.messages) ? result.messages : [];
+      const fetchedHasMoreDays = Boolean(result.hasMoreDays);
+
+      let mergedHistory = fetchedMessages;
+      let mergedDayPage = safeDayPage;
+
+      if (append) {
+        const baseHistory =
+          cachedConversation.messages.length > 0
+            ? cachedConversation.messages
+            : selectedConversationRef.current?.history || [];
+        mergedHistory = mergeMessagesChronologically(baseHistory, fetchedMessages);
+        mergedDayPage = Math.max(cachedConversation.dayPage, safeDayPage);
+      } else if (
+        forceRefresh &&
+        cachedConversation.dayPage > 1 &&
+        cachedConversation.messages.length > 0 &&
+        safeDayPage === 1
+      ) {
+        // Keep already loaded older days while refreshing the latest day.
+        mergedHistory = mergeMessagesChronologically(
+          cachedConversation.messages,
+          fetchedMessages
+        );
+        mergedDayPage = cachedConversation.dayPage;
+      }
+
+      const hasMoreDays = fetchedHasMoreDays || mergedDayPage > 1;
+      writeConversationCache(
+        conversationId,
+        mergedHistory,
+        mergedDayPage,
+        hasMoreDays
+      );
+
       setSelectedConversation((prev) =>
         prev?.conversation?.conversation_id === conversationId
-          ? { ...prev, history: messages }
+          ? { ...prev, conversation, history: mergedHistory }
           : prev
       );
-      return messages;
+      return mergedHistory;
     } finally {
-      if (latestMessagesRequestRef.current === requestId) {
+      if (latestMessagesRequestRef.current === requestId && !append) {
         setMessagesLoading(false);
+      }
+      if (append) {
+        setLoadingOlderMessages(false);
+        isLoadingOlderMessagesRef.current = false;
       }
     }
   };
@@ -548,20 +716,39 @@ const LiveChat = () => {
             if (currentSelection &&
                 (currentSelection.conversation.user_id === data.user_id ||
                  currentSelection.conversation.conversation_id === data.conversation_id)) {
-              const messages = await fetchConversationMessages(
+              const currentConversationId =
+                currentSelection.conversation.conversation_id;
+              const currentDayPage =
+                conversationDayPageMapRef.current[currentConversationId] || 1;
+              const latestDayResult = await fetchConversationMessages(
                 currentSelection.conversation.user_id,
-                currentSelection.conversation.conversation_id
+                currentConversationId,
+                { dayPage: 1, dayWindowDays: 1 }
               );
-              if (messages && messages.length > 0) {
-                conversationMessagesCacheRef.current.set(
-                  currentSelection.conversation.conversation_id,
-                  messages
-                );
-                setSelectedConversation((prev) => {
-                  if (!prev) return prev;
-                  return { ...prev, history: messages };
-                });
-              }
+
+              const latestDayMessages = Array.isArray(latestDayResult.messages)
+                ? latestDayResult.messages
+                : [];
+              const cachedConversation = readConversationCache(currentConversationId);
+              const mergedHistory =
+                currentDayPage > 1
+                  ? mergeMessagesChronologically(
+                      cachedConversation.messages,
+                      latestDayMessages
+                    )
+                  : latestDayMessages;
+
+              writeConversationCache(
+                currentConversationId,
+                mergedHistory,
+                currentDayPage,
+                Boolean(latestDayResult.hasMoreDays) || currentDayPage > 1
+              );
+
+              setSelectedConversation((prev) => {
+                if (!prev) return prev;
+                return { ...prev, history: mergedHistory };
+              });
             }
           } catch (e) {
             console.error('SSE new_message error:', e);
@@ -758,6 +945,12 @@ const LiveChat = () => {
           conversation: mockConversations[0],
           history: mockHistory,
         });
+        writeConversationCache(
+          mockConversations[0].conversation_id,
+          mockHistory,
+          1,
+          false
+        );
       }
     }
   };
@@ -816,10 +1009,32 @@ const LiveChat = () => {
     }
   };
 
+  const handleLoadPreviousDay = async () => {
+    if (!selectedConversation || loadingOlderMessages) return;
+
+    const conversationId = selectedConversation.conversation.conversation_id;
+    const hasMoreDays = conversationHasMoreDaysMapRef.current[conversationId];
+    if (!hasMoreDays) return;
+
+    const nextDayPage =
+      (conversationDayPageMapRef.current[conversationId] || 1) + 1;
+    await loadConversationMessages(selectedConversation.conversation, {
+      forceRefresh: true,
+      dayPage: nextDayPage,
+      append: true,
+    });
+  };
+
   // Auto-scroll to bottom of messages
   useEffect(() => {
+    if (isLoadingOlderMessagesRef.current) {
+      return;
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selectedConversation]);
+  }, [
+    selectedConversation?.conversation?.conversation_id,
+    selectedConversation?.history?.length,
+  ]);
 
   const handleTakeOver = async (conversationId, userId) => {
     console.log("🔄 handleTakeOver called with:", { conversationId, userId });
@@ -983,9 +1198,16 @@ const LiveChat = () => {
         setSelectedConversation((prev) => {
           if (!prev) return prev;
           const updatedHistory = [...prev.history, newMessage];
+          const cachedConversation = readConversationCache(
+            prev.conversation.conversation_id
+          );
           conversationMessagesCacheRef.current.set(
             prev.conversation.conversation_id,
-            updatedHistory
+            {
+              messages: updatedHistory,
+              dayPage: cachedConversation.dayPage,
+              hasMoreDays: cachedConversation.hasMoreDays,
+            }
           );
           return { ...prev, history: updatedHistory };
         });
@@ -1105,9 +1327,16 @@ const LiveChat = () => {
             setSelectedConversation((prev) => {
               if (!prev) return prev;
               const updatedHistory = [...prev.history, newMessage];
+              const cachedConversation = readConversationCache(
+                prev.conversation.conversation_id
+              );
               conversationMessagesCacheRef.current.set(
                 prev.conversation.conversation_id,
-                updatedHistory
+                {
+                  messages: updatedHistory,
+                  dayPage: cachedConversation.dayPage,
+                  hasMoreDays: cachedConversation.hasMoreDays,
+                }
               );
               return { ...prev, history: updatedHistory };
             });
@@ -1201,9 +1430,16 @@ const LiveChat = () => {
         setSelectedConversation((prev) => {
           if (!prev) return prev;
           const updatedHistory = [...prev.history, newMessage];
+          const cachedConversation = readConversationCache(
+            prev.conversation.conversation_id
+          );
           conversationMessagesCacheRef.current.set(
             prev.conversation.conversation_id,
-            updatedHistory
+            {
+              messages: updatedHistory,
+              dayPage: cachedConversation.dayPage,
+              hasMoreDays: cachedConversation.hasMoreDays,
+            }
           );
           return { ...prev, history: updatedHistory };
         });
@@ -1629,6 +1865,34 @@ const LiveChat = () => {
                       </svg>
                       <p className="text-slate-500 text-sm">Loading messages...</p>
                     </div>
+                  </div>
+                )}
+                {selectedConversation?.conversation?.conversation_id && (
+                  <div className="flex flex-col items-center space-y-2">
+                    {conversationHasMoreDaysMap[
+                      selectedConversation.conversation.conversation_id
+                    ] && (
+                      <button
+                        onClick={handleLoadPreviousDay}
+                        disabled={loadingOlderMessages}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          loadingOlderMessages
+                            ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        }`}
+                      >
+                        {loadingOlderMessages
+                          ? "Loading previous day..."
+                          : "Load previous day"}
+                      </button>
+                    )}
+                    <span className="text-[11px] text-slate-400">
+                      Showing last{" "}
+                      {conversationDayPageMap[
+                        selectedConversation.conversation.conversation_id
+                      ] || 1}{" "}
+                      day(s)
+                    </span>
                   </div>
                 )}
                 {selectedConversation.history.map((msg, index) => {
