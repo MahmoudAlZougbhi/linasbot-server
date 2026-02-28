@@ -1,1 +1,0 @@
-# Data directory - contains configuration files and knowledge base

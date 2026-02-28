@@ -19,8 +19,8 @@ COPY . .
 # Create data directory
 RUN mkdir -p /app/data
 
-# Expose port
-EXPOSE 8000
+# Expose backend port
+EXPOSE 8003
 
 # Run the application
 CMD ["python", "main.py"]

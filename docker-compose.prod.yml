@@ -1,36 +1,29 @@
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15
-    container_name: linas_postgres
+    container_name: linas_postgres_prod
     environment:
       POSTGRES_DB: linasbot
       POSTGRES_USER: botuser
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     restart: unless-stopped
     networks:
       - linas_network
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: linas_redis
-    ports:
-      - "6379:6379"
+    container_name: linas_redis_prod
     restart: unless-stopped
     networks:
       - linas_network
 
-  # Backend (Python Bot + API)
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
-    container_name: linas_backend
+      dockerfile: backend/Dockerfile.prod
+    container_name: linas_backend_prod
     environment:
       - DATABASE_URL=postgresql://botuser:${DB_PASSWORD}@postgres:5432/linasbot
       - REDIS_URL=redis://redis:6379
@@ -46,31 +39,27 @@ services:
       - WHATSAPP_WEBHOOK_VERIFY_TOKEN=${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
       - LINASLASER_API_BASE_URL=${LINASLASER_API_BASE_URL}
       - LINASLASER_API_TOKEN=${LINASLASER_API_TOKEN}
-    volumes:
-      - ./:/app
-      - ./data:/app/data
-    ports:
-      - "8003:8003"
     depends_on:
       - postgres
       - redis
+    ports:
+      - "8003:8003"
     restart: unless-stopped
     networks:
       - linas_network
 
-  # Dashboard (React Frontend)
   dashboard:
     build:
       context: ./dashboard
-      dockerfile: Dockerfile
-    container_name: linas_dashboard
-    environment:
-      - REACT_APP_API_URL=https://bot.tradershubs.site/api
-      - REACT_APP_WS_URL=wss://bot.tradershubs.site/ws
-    ports:
-      - "3000:3000"
+      dockerfile: Dockerfile.prod
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8003}
+        REACT_APP_WS_URL: ${REACT_APP_WS_URL:-ws://localhost:8003}
+    container_name: linas_dashboard_prod
     depends_on:
       - backend
+    ports:
+      - "3000:80"
     restart: unless-stopped
     networks:
       - linas_network

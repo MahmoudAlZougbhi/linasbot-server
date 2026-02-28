@@ -1,0 +1,17 @@
+.git
+.cursor
+.planning
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+venv
+node_modules
+dashboard/node_modules
+dashboard/build
+frontend/node_modules
+frontend/build
+logs
+cleanup_reports
+_archive_cleanup_2026-03-01

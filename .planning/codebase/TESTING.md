@@ -6,7 +6,7 @@
 
 **Backend (Python):**
 - No formal test framework configured
-- Manual test scripts in project root
+- Manual test scripts in `tests/`
 - Test endpoints via `routes/testing_routes.py`
 
 **Dashboard (JavaScript):**
@@ -22,15 +22,15 @@ cd dashboard && npm test                # Run Jest tests
 cd dashboard && npm test -- --coverage  # With coverage
 
 # Backend manual tests
-python test_montymobile.py              # MontyMobile API test
+python tests/test_montymobile.py        # MontyMobile API test
 python test_live_chat_simple.py         # Live chat test
-python test_appointment_api.py          # Appointment API test
+python tests/test_appointment_api.py    # Appointment API test
 ```
 
 ## Test File Organization
 
 **Backend:**
-- Location: Manual test scripts in project root
+- Location: Manual test scripts in `tests/`
 - No `tests/` directory with automated tests
 - Pattern: `test_*.py` scripts for manual execution
 
@@ -42,9 +42,9 @@ python test_appointment_api.py          # Appointment API test
 **Structure:**
 ```
 linaslaserbot-2.7.22/
-├── test_montymobile.py        # Manual: MontyMobile API testing
-├── test_live_chat_simple.py   # Manual: Live chat flow testing
-├── test_appointment_api.py    # Manual: Appointment scheduling test
+├── tests/test_montymobile.py  # Manual: MontyMobile API testing
+├── tests/test_live_chat_simple.py # Manual: Live chat flow testing
+├── tests/test_appointment_api.py # Manual: Appointment scheduling test
 ├── test_live_conversation.py  # Manual: Full conversation test
 ├── routes/testing_routes.py   # API: Test endpoints
 ├── dashboard/src/pages/Testing.js  # UI: Interactive test dashboard
@@ -125,7 +125,7 @@ jest.mock('./api', () => ({
 - No shared fixtures directory
 - Example data inline in test files
 
-**Example from test_montymobile.py:**
+**Example from tests/test_montymobile.py:**
 ```python
 TEST_PHONE = "96170XXXXXX"
 TEST_MESSAGE = "Hello, this is a test message"
@@ -192,7 +192,7 @@ async with httpx.AsyncClient() as client:
 
 **WhatsApp Provider Testing:**
 ```python
-# From test_montymobile.py
+# From tests/test_montymobile.py
 async def test_send_message():
     adapter = WhatsAppFactory.get_adapter("montymobile")
     result = await adapter.send_text_message(phone, message)

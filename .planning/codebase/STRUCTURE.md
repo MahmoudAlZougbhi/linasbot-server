@@ -21,8 +21,8 @@ linaslaserbot-2.7.22/
 │   │   ├── hooks/         # Custom React hooks
 │   │   └── utils/         # Frontend utilities
 │   └── public/            # Static assets
-├── frontend/              # Alternative/legacy frontend (minimal)
-├── tests/                 # Test directory (minimal)
+├── _archive_cleanup_2026-03-01/ # Archived snapshots and removed files
+├── tests/                 # Manual test scripts and test utilities
 ├── config/                # Configuration directory
 ├── logs/                  # Runtime logs
 ├── venv/                  # Python virtual environment
@@ -151,14 +151,14 @@ linaslaserbot-2.7.22/
 - `handlers/text_handlers_respond.py` - Text response logic
 
 **Testing:**
-- `test_montymobile.py` - MontyMobile API tests
+- `tests/test_montymobile.py` - MontyMobile API tests
 - `test_live_chat_simple.py` - Live chat tests
 - `routes/testing_routes.py` - Test API endpoints
 - `dashboard/src/pages/Testing.js` - Dashboard test UI
 
 **Documentation:**
-- `CLAUDE_MEMORY.md` - Development notes
-- `bot-chat.md` - Bot conversation examples
+- `docs/CLAUDE_MEMORY.md` - Development notes
+- `docs/bot-chat.md` - Bot conversation examples
 - `.env.example` - Environment setup guide
 
 ## Naming Conventions
@@ -189,7 +189,7 @@ linaslaserbot-2.7.22/
 **New Message Handler:**
 - Implementation: `handlers/{type}_handlers.py`
 - Registration: Add import in `main.py`, route in `modules/event_handlers.py`
-- Tests: Manual test scripts in root
+- Tests: Manual test scripts in `tests/`
 
 **New Service:**
 - Implementation: `services/{name}_service.py`

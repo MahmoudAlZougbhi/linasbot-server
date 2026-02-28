@@ -1,8 +1,0 @@
-{
-  "phone_to_room_mapping": {
-    "76466674": "353568587",
-    "+96176466674": "353568587",
-    "96176466674": "353568587"
-  },
-  "notes": "Temporary mapping because Firebase phone_full and phone_clean fields are corrupted (storing user_id instead of actual phone). Add entries here as: 'phone_number': 'room_id'"
-}
