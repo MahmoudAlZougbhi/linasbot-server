@@ -51,6 +51,14 @@ class AnalyticsEvents:
         return normalized
 
     @staticmethod
+    def _is_test_user_id(user_id: Optional[str]) -> bool:
+        """Exclude known test/internal user IDs from new client metrics."""
+        if not user_id:
+            return True
+        lower = str(user_id).lower()
+        return lower in ("training", "test", "debug", "internal")
+
+    @staticmethod
     def _parse_timestamp(timestamp: Any) -> Optional[datetime.datetime]:
         """
         Parse supported timestamp formats into naive local datetime.
@@ -650,7 +658,7 @@ class AnalyticsEvents:
                 if user_id:
                     stats["overview"]["unique_users"].add(user_id)
                     first_seen = first_seen_by_user.get(user_id)
-                    if first_seen and range_start <= first_seen <= now:
+                    if first_seen and range_start <= first_seen <= now and not self._is_test_user_id(user_id):
                         stats["new_client_metrics"]["all_new_users"].add(user_id)
                 
                 # Parse timestamp for time-based stats
@@ -739,7 +747,7 @@ class AnalyticsEvents:
                             if user_id:
                                 stats["services_today"]["users_by_service"][service].add(user_id)
                                 stats["services_today"]["all_users"].add(user_id)
-                    if user_id and user_id in stats["new_client_metrics"]["all_new_users"]:
+                    if user_id and user_id in stats["new_client_metrics"]["all_new_users"] and not self._is_test_user_id(user_id):
                         stats["new_client_metrics"]["asked_users"].add(user_id)
                         if service:
                             stats["new_client_metrics"]["services_by_user"][user_id].add(service)
@@ -758,7 +766,7 @@ class AnalyticsEvents:
                         messages_count = max(self._safe_int(event.get("messages_count")), 0)
                         if messages_count > 0:
                             stats["conversions"]["messages_to_booking"].append(messages_count)
-                        if user_id and user_id in stats["new_client_metrics"]["all_new_users"]:
+                        if user_id and user_id in stats["new_client_metrics"]["all_new_users"] and not self._is_test_user_id(user_id):
                             stats["new_client_metrics"]["booked_users"].add(user_id)
                             if service:
                                 stats["new_client_metrics"]["booked_services_by_user"][user_id].add(service)
@@ -900,6 +908,7 @@ class AnalyticsEvents:
             booked = set(new_client_metrics["booked_services_by_user"].get(user_id, set()))
             booked_details.append({
                 "user_id": user_id,
+                "user_id_masked": self._mask_user_id(user_id),
                 "services": sorted(discussed | booked)
             })
 
@@ -908,6 +917,7 @@ class AnalyticsEvents:
             discussed = sorted(new_client_metrics["services_by_user"].get(user_id, set()))
             not_booked_details.append({
                 "user_id": user_id,
+                "user_id_masked": self._mask_user_id(user_id),
                 "services": discussed
             })
 
@@ -916,6 +926,7 @@ class AnalyticsEvents:
             discussed = sorted(new_client_metrics["services_by_user"].get(user_id, set()))
             asked_not_booked_details.append({
                 "user_id": user_id,
+                "user_id_masked": self._mask_user_id(user_id),
                 "services": discussed
             })
 

@@ -93,17 +93,17 @@ const toDate = (timestamp) => {
  * Format timestamp for message bubbles - consistent format in Asia/Beirut
  * Uses explicit format to avoid locale/variant changes on Load More
  * @param {string|Date|number} timestamp - ISO timestamp, Date, or epoch ms
- * @returns {string} Formatted string like "1/3/2026, 3:45 PM" (Beirut time)
+ * @returns {string} Formatted string like "Mar 1, 2026, 3:45 PM" (Beirut time)
  */
 export const formatMessageTime = (timestamp) => {
   const date = toDate(timestamp);
   if (!date) return '';
 
   try {
-    return new Intl.DateTimeFormat('en-GB', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: TIMEZONE,
+      month: 'short',
       day: 'numeric',
-      month: 'numeric',
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',

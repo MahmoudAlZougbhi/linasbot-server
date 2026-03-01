@@ -151,6 +151,8 @@ const Analytics = () => {
   const performance = analyticsData?.performance || {};
   const tokens = analyticsData?.token_usage || {};
   const conversions = analyticsData?.conversions || {};
+  const newClients = analyticsData?.new_clients || {};
+  const servicesDiscussedToday = analyticsData?.services_discussed_today || {};
 
   return (
     <div className="space-y-8 pb-8">
@@ -223,6 +225,115 @@ const Analytics = () => {
           color="from-orange-500 to-red-500"
         />
       </div>
+
+      {/* New Client Metrics */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <UsersIcon className="w-7 h-7 text-primary-500" />
+          New Client Metrics
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            icon={CalendarIcon}
+            title="New Clients Booked"
+            value={conversions.new_clients_booked ?? newClients.booked_count ?? 0}
+            subtitle="First-time clients who completed booking"
+            color="from-green-500 to-emerald-500"
+          />
+          <StatCard
+            icon={UsersIcon}
+            title="Asked But Did Not Book"
+            value={conversions.new_clients_asked_not_booked ?? newClients.asked_not_booked_count ?? 0}
+            subtitle="New clients who inquired but didn't book"
+            color="from-amber-500 to-orange-500"
+          />
+          <StatCard
+            icon={SparklesIcon}
+            title="Services Discussed Today"
+            value={servicesDiscussedToday.total_mentions ?? 0}
+            subtitle={`${servicesDiscussedToday.unique_clients ?? 0} unique clients`}
+            color="from-purple-500 to-pink-500"
+          />
+          <StatCard
+            icon={ChartBarIcon}
+            title="Total New Clients"
+            value={newClients.total_new_clients ?? 0}
+            subtitle={`${newClients.booked_count ?? 0} booked · ${newClients.not_booked_count ?? 0} not booked`}
+            color="from-blue-500 to-cyan-500"
+          />
+        </div>
+
+        {/* Services Discussed Today */}
+        {servicesDiscussedToday.by_service?.length > 0 && (
+          <ChartCard title="Services Discussed Today" icon={SparklesIcon}>
+            <div className="space-y-3">
+              {servicesDiscussedToday.by_service.map((item, index) => (
+                <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg">
+                  <span className="text-sm font-medium text-slate-700 capitalize">
+                    {item.service?.replace(/_/g, " ")}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500">{item.mentions} mentions</span>
+                    <span className="text-sm font-bold text-primary-600">
+                      {item.unique_clients} clients
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ChartCard>
+        )}
+
+        {/* Who Booked vs Who Did Not (New Clients Only) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartCard title="Who Booked (New Clients)" icon={CalendarIcon}>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(newClients.booked_details || []).length === 0 ? (
+                <p className="text-sm text-slate-500">No new client bookings in this period.</p>
+              ) : (
+                (newClients.booked_details || []).map((item, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-green-50 rounded-lg border border-green-100"
+                  >
+                    <p className="text-xs font-mono text-slate-600 mb-1">
+                      {item.user_id_masked ?? `...${String(item.user_id || "").slice(-4)}`}
+                    </p>
+                    <p className="text-xs text-green-700">
+                      Services: {(item.services || []).join(", ").replace(/_/g, " ") || "—"}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </ChartCard>
+          <ChartCard title="Who Asked But Did Not Book (New Clients)" icon={UsersIcon}>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(newClients.asked_not_booked_details || []).length === 0 ? (
+                <p className="text-sm text-slate-500">No new clients in this category.</p>
+              ) : (
+                (newClients.asked_not_booked_details || []).map((item, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-amber-50 rounded-lg border border-amber-100"
+                  >
+                    <p className="text-xs font-mono text-slate-600 mb-1">
+                      {item.user_id_masked ?? `...${String(item.user_id || "").slice(-4)}`}
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      Services: {(item.services || []).join(", ").replace(/_/g, " ") || "—"}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </ChartCard>
+        </div>
+      </motion.div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

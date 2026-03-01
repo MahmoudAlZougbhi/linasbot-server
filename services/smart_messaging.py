@@ -8,6 +8,9 @@ import json
 import os
 from pathlib import Path
 
+from services.message_logs_service import message_logs_service
+from services.smart_messaging_catalog import normalize_template_id
+
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _DATA_DIR = _BASE_DIR / "data"
 
@@ -89,10 +92,22 @@ class SmartMessagingService:
                 # Extract only the language templates (ar, en, fr) from each template
                 templates = {}
                 for template_id, template_data in templates_data.items():
-                    templates[template_id] = {
+                    canonical_id = normalize_template_id(template_id)
+                    if canonical_id in {"same_day_checkin", "no_show_followup"}:
+                        # Deprecated templates stay editable in file, but are not loaded into runtime.
+                        continue
+
+                    current = templates.get(canonical_id, {})
+                    normalized = {
                         'ar': template_data.get('ar', ''),
                         'en': template_data.get('en', ''),
                         'fr': template_data.get('fr', '')
+                    }
+                    # Preserve whichever variant has richer text per language.
+                    templates[canonical_id] = {
+                        "ar": normalized["ar"] or current.get("ar", ""),
+                        "en": normalized["en"] or current.get("en", ""),
+                        "fr": normalized["fr"] or current.get("fr", ""),
                     }
                 
                 print(f"✅ Loaded {len(templates)} message templates from {template_file}")
@@ -471,6 +486,24 @@ Des questions? Nous sommes là! 💬
 {{phone_number}}"""
             }
         }
+
+    def _resolve_template_key(self, template_id: str) -> str:
+        """
+        Resolve canonical template IDs with backwards-compatible fallbacks.
+        """
+        canonical = normalize_template_id(template_id)
+        if canonical in self.message_templates:
+            return canonical
+
+        legacy_fallbacks = {
+            "twenty_day_followup": "one_month_followup",
+            "missed_paused_appointment": "missed_this_month",
+        }
+        fallback = legacy_fallbacks.get(canonical)
+        if fallback and fallback in self.message_templates:
+            return fallback
+
+        return canonical
     
     def schedule_message(
         self,
@@ -480,27 +513,30 @@ Des questions? Nous sommes là! 💬
         placeholders: Dict[str, str],
         language: str = "ar",
         service_id: int = None,
-        service_name: str = None
+        service_name: str = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Schedule a message to be sent at specific time with service context"""
 
-        message_id = f"{message_type}_{customer_phone}_{send_at.timestamp()}"
+        canonical_type = normalize_template_id(message_type)
+        message_id = f"{canonical_type}_{customer_phone}_{send_at.timestamp()}"
 
         # Check service-template mapping
-        if service_id and not self._is_template_enabled_for_service(service_id, message_type):
-            print(f"Template {message_type} not enabled for service {service_id}, skipping")
+        if service_id and not self._is_template_enabled_for_service(service_id, canonical_type):
+            print(f"Template {canonical_type} not enabled for service {service_id}, skipping")
             return None
 
         self.scheduled_messages[message_id] = {
             "customer_phone": customer_phone,
-            "message_type": message_type,
+            "message_type": canonical_type,
             "send_at": send_at,
             "placeholders": placeholders,
             "language": language,
             "service_id": service_id,
             "service_name": service_name or "Unknown Service",
             "status": "scheduled",
-            "created_at": datetime.now()
+            "created_at": datetime.now(),
+            "metadata": metadata or {},
         }
 
         # If preview mode is enabled, also add to preview queue
@@ -536,6 +572,7 @@ Des questions? Nous sommes là! 💬
     def _is_template_enabled_for_service(self, service_id: int, template_id: str) -> bool:
         """Check if template is enabled for a specific service"""
         try:
+            template_id = normalize_template_id(template_id)
             mapping_file = self.mapping_file
             if os.path.exists(mapping_file):
                 with open(mapping_file, 'r', encoding='utf-8') as f:
@@ -580,12 +617,15 @@ Des questions? Nous sommes là! 💬
         placeholders: Dict[str, str]
     ) -> str:
         """Get message content with placeholders replaced"""
-        
-        if message_type not in self.message_templates:
+
+        template_key = self._resolve_template_key(message_type)
+        if template_key not in self.message_templates:
             return None
-        
-        template = self.message_templates[message_type].get(language, 
-                   self.message_templates[message_type]["en"])
+
+        template = self.message_templates[template_key].get(
+            language,
+            self.message_templates[template_key].get("en", ""),
+        )
         
         # Replace placeholders (templates use single braces: {customer_name})
         message = template
@@ -620,10 +660,11 @@ Des questions? Nous sommes là! 💬
                 )
 
                 if content:
+                    canonical_type = normalize_template_id(message_data["message_type"])
                     messages_to_send.append({
                         "phone": message_data["customer_phone"],
                         "content": content,
-                        "type": message_data["message_type"],
+                        "type": canonical_type,
                         "message_id": message_id,
                         "customer_name": message_data.get("placeholders", {}).get("customer_name", "Customer")
                     })
@@ -642,18 +683,53 @@ Des questions? Nous sommes là! 💬
             self.scheduled_messages[message_id]["sent_at"] = datetime.now()
 
             msg_data = self.scheduled_messages[message_id]
+            metadata = msg_data.get("metadata", {}) if isinstance(msg_data.get("metadata"), dict) else {}
+            canonical_type = normalize_template_id(msg_data["message_type"])
             content = self.get_message_content(
-                msg_data["message_type"],
+                canonical_type,
                 msg_data["language"],
                 msg_data["placeholders"]
             ) or ""
             self.sent_messages_log.append({
                 "message_id": message_id,
                 "phone": msg_data["customer_phone"],
-                "type": msg_data["message_type"],
+                "type": canonical_type,
                 "sent_at": datetime.now(),
                 "content": content[:100] + "..."
             })
+
+            reference_date = (
+                metadata.get("reference_date")
+                or msg_data.get("placeholders", {}).get("reference_date")
+                or msg_data.get("placeholders", {}).get("appointment_date")
+            )
+            appointment_id = metadata.get("appointment_id") or msg_data.get("placeholders", {}).get("appointment_id")
+            customer_id = metadata.get("customer_id") or msg_data.get("customer_phone")
+            campaign_id = metadata.get("campaign_id")
+
+            try:
+                if not message_logs_service.was_message_sent(
+                    customer_id=customer_id,
+                    template_type=canonical_type,
+                    reference_date=reference_date,
+                    appointment_id=appointment_id,
+                    campaign_id=campaign_id,
+                ):
+                    message_logs_service.log_message(
+                        customer_id=customer_id,
+                        template_type=canonical_type,
+                        appointment_id=appointment_id,
+                        campaign_id=campaign_id,
+                        reference_date=reference_date,
+                        extra={
+                            "phone": msg_data.get("customer_phone"),
+                            "service_name": msg_data.get("service_name"),
+                            "source": metadata.get("source", "scheduler"),
+                        },
+                    )
+            except Exception as log_exc:
+                print(f"⚠️ Failed to write message log for {message_id}: {log_exc}")
+
             self._persist_sent_messages()
 
     def mark_message_failed(self, message_id: str, error: str = ""):
@@ -718,35 +794,14 @@ Des questions? Nous sommes là! 💬
         else:
             print(f"   ⏭️ reminder_24h SKIPPED (time {reminder_24h_time} is in the past)")
 
-        # Schedule same-day check-in (morning of appointment)
-        checkin_time = appointment_date.replace(hour=9, minute=0, second=0)
-        if checkin_time > now and checkin_time < appointment_date:
-            result = self.schedule_message(
-                customer_phone,
-                "same_day_checkin",
-                checkin_time,
-                placeholders,
-                language,
-                service_id=service_id,
-                service_name=service_name
-            )
-            if result:
-                messages_scheduled += 1
-                print(f"   ✅ same_day_checkin scheduled for {checkin_time}")
-            else:
-                print(f"   ❌ same_day_checkin FAILED (returned None)")
-        else:
-            print(f"   ⏭️ same_day_checkin SKIPPED (time {checkin_time} not valid)")
+        # NOTE: same_day_checkin/no_show_followup are deprecated.
+        # NOTE: post_session_feedback is handled by fixed-time daily jobs.
 
-        # NOTE: post_session_feedback is NOT scheduled here anymore
-        # It's only scheduled in Phase 2 for DONE appointments
-        # This ensures we only send feedback requests to customers who actually attended
-
-        # Schedule 1-month follow-up
-        followup_time = appointment_date + timedelta(days=17)
+        # Schedule 20-day follow-up (legacy one_month_followup replacement)
+        followup_time = appointment_date + timedelta(days=20)
         result = self.schedule_message(
             customer_phone,
-            "one_month_followup",
+            "twenty_day_followup",
             followup_time,
             placeholders,
             language,
@@ -755,9 +810,9 @@ Des questions? Nous sommes là! 💬
         )
         if result:
             messages_scheduled += 1
-            print(f"   ✅ one_month_followup scheduled for {followup_time}")
+            print(f"   ✅ twenty_day_followup scheduled for {followup_time}")
         else:
-            print(f"   ❌ one_month_followup FAILED (returned None)")
+            print(f"   ❌ twenty_day_followup FAILED (returned None)")
 
         # NOTE: attended_yesterday is NOT scheduled here anymore
         # It's only scheduled in Phase 2 of populate_scheduled_messages_from_appointments()
@@ -837,8 +892,10 @@ Des questions? Nous sommes là! 💬
         # Normalize the input phone for comparison
         phone_clean = str(customer_phone).replace("+", "").replace(" ", "").replace("-", "")
 
+        normalized_type = normalize_template_id(message_type)
+
         for message_id, msg_data in self.scheduled_messages.items():
-            if msg_data.get("message_type") != message_type:
+            if normalize_template_id(msg_data.get("message_type")) != normalized_type:
                 continue
             if msg_data.get("status") not in ("scheduled", "pending_approval"):
                 continue
@@ -850,6 +907,38 @@ Des questions? Nous sommes là! 💬
                 msg_data["status"] = "sent"
                 msg_data["sent_at"] = now
                 updated += 1
+                metadata = msg_data.get("metadata", {}) if isinstance(msg_data.get("metadata"), dict) else {}
+                reference_date = (
+                    metadata.get("reference_date")
+                    or msg_data.get("placeholders", {}).get("reference_date")
+                    or msg_data.get("placeholders", {}).get("appointment_date")
+                )
+                appointment_id = metadata.get("appointment_id")
+                customer_id = metadata.get("customer_id") or customer_phone
+                campaign_id = metadata.get("campaign_id")
+
+                try:
+                    if not message_logs_service.was_message_sent(
+                        customer_id=customer_id,
+                        template_type=normalized_type,
+                        reference_date=reference_date,
+                        appointment_id=appointment_id,
+                        campaign_id=campaign_id,
+                    ):
+                        message_logs_service.log_message(
+                            customer_id=customer_id,
+                            template_type=normalized_type,
+                            appointment_id=appointment_id,
+                            campaign_id=campaign_id,
+                            reference_date=reference_date,
+                            extra={
+                                "phone": msg_data.get("customer_phone"),
+                                "service_name": msg_data.get("service_name"),
+                                "source": metadata.get("source", "sync_mark_sent"),
+                            },
+                        )
+                except Exception as log_exc:
+                    print(f"⚠️ Failed to write message log while syncing {message_id}: {log_exc}")
                 print(f"   [SYNC] Marked {message_id} as sent in scheduled_messages dict")
 
         if updated == 0:
@@ -866,12 +955,12 @@ Des questions? Nous sommes là! 💬
 
         Rules:
         - Remove all messages where send_at date < today for MOST categories
-        - KEEP all one_month_followup and missed_this_month messages (they show
+        - KEEP all twenty_day_followup and missed_paused_appointment messages (they show
           cumulative data for the entire month)
         - KEEP messages sent today (so user can see what was sent)
         - Persist sent messages before clearing so history is not lost
         """
-        preserved_types = {"one_month_followup", "missed_this_month"}
+        preserved_types = {"twenty_day_followup", "missed_paused_appointment"}
         today = datetime.now().date()
 
         # Persist sent messages first so they survive the cleanup
@@ -884,7 +973,7 @@ Des questions? Nous sommes là! 💬
         for message_id, msg_data in self.scheduled_messages.items():
             msg_type = msg_data.get("message_type", "")
 
-            # Always keep 1-month and missed-month messages
+            # Always keep long-horizon follow-up and campaign messages
             if msg_type in preserved_types:
                 new_scheduled[message_id] = msg_data
                 kept += 1
@@ -933,12 +1022,10 @@ Des questions? Nous sommes là! 💬
 # Mapping of message types to friendly names
 message_type_names = {
     "reminder_24h": "24-Hour Appointment Reminder",
-    "same_day_checkin": "Same-Day Check-in",
     "post_session_feedback": "Post-Session Feedback",
-    "no_show_followup": "No-Show Follow-up",
-    "one_month_followup": "One-Month Follow-up",
+    "twenty_day_followup": "20-Day Follow-up",
     "missed_yesterday": "Missed Yesterday Follow-up",
-    "missed_this_month": "Missed This Month Follow-up",
+    "missed_paused_appointment": "Missed Paused Appointment Campaign",
     "attended_yesterday": "Thank You - Attended Yesterday"
 }
 
@@ -953,7 +1040,7 @@ async def get_sent_smart_messages_from_firestore(
     Query Firestore for sent smart messages by scanning conversations.
 
     Args:
-        message_type: Filter by message type (e.g., "one_month_followup")
+        message_type: Filter by message type (e.g., "twenty_day_followup")
         start_date: Filter messages sent after this date
         end_date: Filter messages sent before this date
         limit: Maximum number of messages to return

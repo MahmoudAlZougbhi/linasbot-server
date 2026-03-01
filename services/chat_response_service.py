@@ -1709,8 +1709,10 @@ Return JSON with "action" and "bot_reply" fields."""
 
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
-        usage = getattr(response, "usage", None)
-        tokens_val = (usage.total_tokens or getattr(usage, "prompt_tokens", None)) if usage else None
+        usage = (getattr(second_response, "usage", None) if tool_calls else getattr(response, "usage", None))
+        tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
+        prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
+        completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
         context_count = len(current_context_messages) if current_context_messages else 0
         sys_len = len(system_instruction_final) if system_instruction_final else 0
         ai_query_summary = (
@@ -1729,6 +1731,8 @@ Return JSON with "action" and "bot_reply" fields."""
             "bot_sent_to_ai": ai_query_summary,
             "tool_calls": tool_names if tool_names else None,
             "tokens": tokens_val,
+            "prompt_tokens": prompt_tokens_val,
+            "completion_tokens": completion_tokens_val,
         }
         if tool_calls and tool_round_trips:
             flow_meta["ai_first_response"] = ai_first_response_with_tools[:1500] if ai_first_response_with_tools else None

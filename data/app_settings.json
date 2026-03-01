@@ -27,6 +27,33 @@
       "requiredVariables": [
         "customer_name"
       ]
+    },
+    "templateSchedules": {
+      "reminder_24h": {
+        "enabled": true,
+        "sendTime": "15:00",
+        "timezone": "Asia/Beirut"
+      },
+      "post_session_feedback": {
+        "enabled": true,
+        "sendTime": "20:00",
+        "timezone": "Asia/Beirut"
+      },
+      "missed_yesterday": {
+        "enabled": true,
+        "sendTime": "10:00",
+        "timezone": "Asia/Beirut"
+      },
+      "attended_yesterday": {
+        "enabled": true,
+        "sendTime": "21:00",
+        "timezone": "Asia/Beirut"
+      },
+      "twenty_day_followup": {
+        "enabled": true,
+        "sendTime": "14:00",
+        "timezone": "Asia/Beirut"
+      }
     }
   },
   "pricingSync": {

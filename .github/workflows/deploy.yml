@@ -39,7 +39,25 @@ jobs:
             set -e
             echo "[deploy] Connected to $(hostname)"
             cd /opt/linasbot
+
+            # Backup entire data/ before git reset (Q&A, knowledge, style, price, content files, settings)
+            DATA_BACKUP="/tmp/linasbot_data_backup_$$"
+            if [ -d data ]; then
+              echo "[deploy] Backing up data/ (knowledge, style, Q&A, settings, content files...)"
+              cp -a data "$DATA_BACKUP"
+            fi
+
             git fetch origin main
             git reset --hard origin/main
+
+            # Restore user data so dashboard saves persist across deploys
+            if [ -d "$DATA_BACKUP" ]; then
+              echo "[deploy] Restoring user data..."
+              mkdir -p data
+              cp -a "$DATA_BACKUP"/* data/ 2>/dev/null || true
+              rm -rf "$DATA_BACKUP"
+              echo "[deploy] User data restored."
+            fi
+
             sudo bash /opt/linasbot/deploy.sh
             echo "[deploy] Deployment completed successfully"

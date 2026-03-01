@@ -9,11 +9,21 @@ import tempfile
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 from datetime import datetime
 
 from modules.core import app
 from utils.utils import save_conversation_message_to_firestore
+from services.message_logs_service import message_logs_service
+from services.missed_paused_campaign_service import missed_paused_campaign_service
+from services.smart_messaging_catalog import (
+    CAMPAIGN_TEMPLATE_IDS,
+    DAILY_TEMPLATE_IDS,
+    DEPRECATED_TEMPLATE_IDS,
+    TEMPLATE_METADATA,
+    normalize_template_id,
+)
+from services.template_schedule_service import template_schedule_service
 
 try:
     import fcntl
@@ -79,12 +89,69 @@ def _save_templates_to_disk(templates: Dict[str, Any]) -> None:
                 pass
 
 
+def _default_template_ids() -> List[str]:
+    return list(DAILY_TEMPLATE_IDS) + list(CAMPAIGN_TEMPLATE_IDS)
+
+
+def _build_template_record(template_id: str, source: Dict[str, Any] = None) -> Dict[str, Any]:
+    source = source or {}
+    meta = TEMPLATE_METADATA.get(template_id, {})
+    record = {
+        "name": str(source.get("name") or meta.get("name") or template_id),
+        "description": str(source.get("description") or meta.get("description") or ""),
+        "ar": str(source.get("ar", "")),
+        "en": str(source.get("en", "")),
+        "fr": str(source.get("fr", "")),
+    }
+    if source.get("isCustom"):
+        record["isCustom"] = True
+    if source.get("createdAt"):
+        record["createdAt"] = source["createdAt"]
+    if source.get("updatedAt"):
+        record["updatedAt"] = source["updatedAt"]
+    return record
+
+
+def _migrate_templates(templates: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+    """
+    Canonicalize legacy template IDs and hide deprecated defaults.
+    """
+    changed = False
+    migrated: Dict[str, Any] = {}
+
+    for template_id, template_data in (templates or {}).items():
+        if not isinstance(template_data, dict):
+            continue
+        canonical_id = normalize_template_id(template_id)
+        if canonical_id in DEPRECATED_TEMPLATE_IDS:
+            changed = True
+            continue
+
+        existing = migrated.get(canonical_id, {})
+        merged_source = dict(existing)
+        merged_source.update(template_data)
+        migrated[canonical_id] = _build_template_record(canonical_id, merged_source)
+
+        if canonical_id != template_id:
+            changed = True
+
+    for template_id in _default_template_ids():
+        if template_id not in migrated:
+            migrated[template_id] = _build_template_record(template_id, {})
+            changed = True
+
+    return migrated, changed
+
+
 @app.get("/api/smart-messaging/templates")
 async def get_message_templates():
     """Get all message templates from JSON file"""
     try:
         with _template_store_lock():
             templates = _load_templates_from_disk()
+            templates, changed = _migrate_templates(templates)
+            if changed:
+                _save_templates_to_disk(templates)
 
         return {
             "success": True,
@@ -102,23 +169,35 @@ async def get_message_templates():
 async def update_message_template(template_id: str, template_data: Dict[str, Any]):
     """Update or create a message template"""
     try:
+        template_id = normalize_template_id(template_id)
+        if template_id in DEPRECATED_TEMPLATE_IDS:
+            return {
+                "success": False,
+                "error": f"Template '{template_id}' is deprecated and cannot be updated"
+            }
+
         with _template_store_lock():
             templates = _load_templates_from_disk()
+            templates, _ = _migrate_templates(templates)
 
             is_new = bool(template_data.get('isNew', False)) or template_id not in templates
             now_iso = datetime.now().isoformat()
 
             # Check if creating a new template
             if is_new:
-                templates[template_id] = {
-                    'name': str(template_data.get('name', template_id)),
-                    'description': str(template_data.get('description', '')),
-                    'ar': str(template_data.get('ar', '')),
-                    'en': str(template_data.get('en', '')),
-                    'fr': str(template_data.get('fr', '')),
-                    'isCustom': True,
-                    'createdAt': now_iso
-                }
+                base_template = _build_template_record(
+                    template_id,
+                    {
+                        "name": template_data.get("name", template_id),
+                        "description": template_data.get("description", ""),
+                        "ar": template_data.get("ar", ""),
+                        "en": template_data.get("en", ""),
+                        "fr": template_data.get("fr", ""),
+                    },
+                )
+                base_template["isCustom"] = bool(template_data.get("isCustom", template_id not in _default_template_ids()))
+                base_template["createdAt"] = now_iso
+                templates[template_id] = base_template
                 action = "created"
             else:
                 # Merge updates so partial payloads never wipe other languages/fields
@@ -165,12 +244,9 @@ async def update_message_template(template_id: str, template_data: Dict[str, Any
 async def delete_message_template(template_id: str):
     """Delete a custom message template"""
     try:
+        template_id = normalize_template_id(template_id)
         # Default templates that cannot be deleted
-        default_templates = [
-            "reminder_24h", "same_day_checkin", "post_session_feedback",
-            "no_show_followup", "one_month_followup", "missed_yesterday",
-            "missed_this_month", "attended_yesterday"
-        ]
+        default_templates = _default_template_ids()
 
         if template_id in default_templates:
             return {
@@ -180,6 +256,7 @@ async def delete_message_template(template_id: str):
 
         with _template_store_lock():
             templates = _load_templates_from_disk()
+            templates, _ = _migrate_templates(templates)
 
             if template_id not in templates:
                 return {
@@ -220,7 +297,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
     try:
         from services.montymobile_template_service import montymobile_template_service
         
-        template_id = request_data.get('template_id', '').strip()
+        template_id = normalize_template_id(request_data.get('template_id', '').strip())
         phone_number = request_data.get('phone_number', '').strip()
         language = request_data.get('language', 'ar')
         
@@ -528,7 +605,9 @@ async def get_scheduler_status():
         
         # Count by message type
         for msg_id, msg_data in smart_messaging.scheduled_messages.items():
-            msg_type = msg_data.get("message_type", "unknown")
+            msg_type = normalize_template_id(msg_data.get("message_type", "unknown"))
+            if msg_type in DEPRECATED_TEMPLATE_IDS:
+                continue
             if msg_type not in statistics["by_type"]:
                 statistics["by_type"][msg_type] = {"scheduled": 0, "sent": 0}
             
@@ -539,7 +618,9 @@ async def get_scheduler_status():
         
         # Add sent messages statistics
         for sent_msg in smart_messaging.sent_messages_log:
-            msg_type = sent_msg.get("type", "unknown")
+            msg_type = normalize_template_id(sent_msg.get("type", "unknown"))
+            if msg_type in DEPRECATED_TEMPLATE_IDS:
+                continue
             if msg_type not in statistics["by_type"]:
                 statistics["by_type"][msg_type] = {"scheduled": 0, "sent": 0}
             statistics["by_type"][msg_type]["sent"] += 1
@@ -576,13 +657,11 @@ async def get_message_counts():
         # Initialize counts
         counts = {
             "reminder_24h": 0,
-            "same_day_checkin": 0,
             "post_session_feedback": 0,
-            "no_show_followup": 0,
-            "one_month_followup": 0,
+            "twenty_day_followup": 0,
             "missed_yesterday": 0,
-            "missed_this_month": 0,
-            "attended_yesterday": 0
+            "attended_yesterday": 0,
+            "missed_paused_appointment": 0,
         }
 
         # Date calculations for filtering (same as frontend)
@@ -590,8 +669,6 @@ async def get_message_counts():
         today_str = now.strftime('%Y-%m-%d')
         yesterday = now - timedelta(days=1)
         yesterday_str = yesterday.strftime('%Y-%m-%d')
-        tomorrow = now + timedelta(days=1)
-        tomorrow_str = tomorrow.strftime('%Y-%m-%d')
         start_of_month_str = now.replace(day=1).strftime('%Y-%m-%d')
         # First day of next month
         if now.month == 12:
@@ -609,7 +686,9 @@ async def get_message_counts():
             if msg_data.get("status") not in ["scheduled", "pending_approval", "sent", "sending"]:
                 continue
 
-            msg_type = msg_data.get("message_type", "unknown")
+            msg_type = normalize_template_id(msg_data.get("message_type", "unknown"))
+            if msg_type in DEPRECATED_TEMPLATE_IDS:
+                continue
             if msg_type not in counts:
                 continue
 
@@ -622,14 +701,7 @@ async def get_message_counts():
             include = False
 
             if msg_type == "reminder_24h":
-                # Show messages where send_at is within ±24h from now
-                if send_at:
-                    include = past_24h <= send_at <= next_24h
-                else:
-                    include = True
-
-            elif msg_type == "same_day_checkin":
-                # Show messages where send_at is within ±24h from now
+                # Tomorrow reminders are generated daily; keep a 24h window view.
                 if send_at:
                     include = past_24h <= send_at <= next_24h
                 else:
@@ -642,31 +714,24 @@ async def get_message_counts():
                 else:
                     include = True
 
-            elif msg_type == "no_show_followup":
-                # Show today's missed appointments
-                include = send_date_str == today_str
-
             elif msg_type == "missed_yesterday":
                 # Show yesterday's missed appointments
                 include = apt_date == yesterday_str or send_date_str == yesterday_str
 
-            elif msg_type == "missed_this_month":
-                # Show current month's missed appointments
-                check_date = apt_date or send_date_str
-                if check_date:
-                    include = start_of_month_str <= check_date < start_of_next_month_str
-
-            elif msg_type == "one_month_followup":
-                # Show 1-month followups scheduled within current month
+            elif msg_type == "twenty_day_followup":
+                # Show 20-day follow-ups scheduled within current month
                 if send_date_str:
                     include = start_of_month_str <= send_date_str < start_of_next_month_str
 
             elif msg_type == "attended_yesterday":
-                # Show messages scheduled for today or tomorrow
+                # Show messages scheduled for today
                 if send_date_str:
-                    include = send_date_str == today_str or send_date_str == tomorrow_str
+                    include = send_date_str == today_str
                 else:
                     include = True
+
+            elif msg_type == "missed_paused_appointment":
+                include = True
 
             if include:
                 counts[msg_type] += 1
@@ -696,7 +761,7 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
 
     Args:
         status: "sent", "scheduled", or "all"
-        message_type: Filter by specific message type (e.g., "one_month_followup")
+        message_type: Filter by specific message type (e.g., "twenty_day_followup")
 
     Returns:
         List of scheduled/sent messages with customer info and content preview
@@ -711,13 +776,11 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
         # Mapping of message types to friendly names and reasons
         message_type_names = {
             "reminder_24h": "24-Hour Appointment Reminder",
-            "same_day_checkin": "Same-Day Check-in",
             "post_session_feedback": "Post-Session Feedback",
-            "no_show_followup": "No-Show Follow-up",
-            "one_month_followup": "One-Month Follow-up",
+            "twenty_day_followup": "20-Day Follow-up",
             "missed_yesterday": "Missed Yesterday Follow-up",
-            "missed_this_month": "Missed This Month Follow-up",
-            "attended_yesterday": "Thank You - Attended Yesterday"
+            "attended_yesterday": "Thank You - Attended Yesterday",
+            "missed_paused_appointment": "Missed Paused Appointment Campaign",
         }
 
         # Get messages from in-memory scheduled_messages dict
@@ -734,10 +797,12 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
 
             # Extract customer name from placeholders
             customer_name = msg_data.get("placeholders", {}).get("customer_name", "Unknown")
-            msg_type = msg_data.get("message_type", "unknown")
+            msg_type = normalize_template_id(msg_data.get("message_type", "unknown"))
+            if msg_type in DEPRECATED_TEMPLATE_IDS:
+                continue
 
             # Filter by message_type if specified
-            if message_type and msg_type != message_type:
+            if message_type and msg_type != normalize_template_id(message_type):
                 continue
 
             language = msg_data.get("language", "ar")
@@ -958,6 +1023,104 @@ async def toggle_smart_messaging(request_data: Dict[str, Any]):
         return result
     except Exception as e:
         print(f"Error toggling smart messaging: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ==========================================
+# TEMPLATE SCHEDULE SETTINGS
+# ==========================================
+
+@app.get("/api/smart-messaging/template-schedules")
+async def get_template_schedules():
+    """Get per-template daily schedule settings."""
+    try:
+        schedules = template_schedule_service.get_all_schedules()
+        enriched = {}
+        for template_id, cfg in schedules.items():
+            meta = TEMPLATE_METADATA.get(template_id, {})
+            enriched[template_id] = {
+                **cfg,
+                "name": meta.get("name", template_id),
+                "description": meta.get("description", ""),
+            }
+
+        return {
+            "success": True,
+            "timezone_default": "Asia/Beirut",
+            "schedules": enriched,
+        }
+    except Exception as e:
+        print(f"Error getting template schedules: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/smart-messaging/template-schedules/{template_id}")
+async def update_template_schedule(template_id: str, request_data: Dict[str, Any]):
+    """Update enable/time/timezone for a template's daily schedule."""
+    try:
+        canonical_id = normalize_template_id(template_id)
+        updated = template_schedule_service.update_schedule(canonical_id, request_data or {})
+        return {
+            "success": True,
+            "template_id": canonical_id,
+            "schedule": updated,
+        }
+    except Exception as e:
+        print(f"Error updating template schedule: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ==========================================
+# CAMPAIGN BUILDER (MISSED PAUSED APPOINTMENT)
+# ==========================================
+
+@app.post("/api/smart-messaging/campaigns/missed-paused/preview")
+async def preview_missed_paused_campaign(filters: Dict[str, Any]):
+    """Preview recipients for Missed Paused Appointment campaign."""
+    try:
+        result = await missed_paused_campaign_service.preview(filters or {})
+        return result
+    except Exception as e:
+        print(f"Error previewing missed paused campaign: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/smart-messaging/campaigns/missed-paused/send")
+async def send_missed_paused_campaign(request_data: Dict[str, Any]):
+    """Send now or schedule a Missed Paused Appointment campaign."""
+    try:
+        filters = request_data.get("filters", {}) if isinstance(request_data, dict) else {}
+        send_mode = request_data.get("send_mode", "send_now")
+        schedule_time = request_data.get("schedule_time")
+        language = request_data.get("language", "ar")
+        result = await missed_paused_campaign_service.send_or_schedule(
+            filters=filters,
+            send_mode=send_mode,
+            schedule_time=schedule_time,
+            language=language,
+        )
+        return result
+    except Exception as e:
+        print(f"Error sending missed paused campaign: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/smart-messaging/campaign-logs")
+async def get_campaign_logs(limit: int = 50):
+    """Get recent campaign logs."""
+    try:
+        logs = message_logs_service.get_campaign_logs(limit=limit)
+        return {
+            "success": True,
+            "total": len(logs),
+            "campaign_logs": logs,
+        }
+    except Exception as e:
+        print(f"Error fetching campaign logs: {e}")
         return {"success": False, "error": str(e)}
 
 

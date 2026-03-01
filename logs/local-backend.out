@@ -1,0 +1,134 @@
+✅ تم تحميل قائمة الأسعار من data/price_list.txt
+✅ تم تحميل دليل الأسلوب من data/style_guide.txt
+✅ تم تحميل قاعدة المعرفة الأساسية من data/knowledge_base.txt
+/Users/mahmoudalzougbhi/linas ai bot/venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/mahmoudalzougbhi/linas ai bot/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+/Users/mahmoudalzougbhi/linas ai bot/venv/lib/python3.9/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/mahmoudalzougbhi/linas ai bot/venv/lib/python3.9/site-packages/google/api_core/_python_version_support.py:246: FutureWarning: You are using a non-supported Python version (3.9.6). Google will not post any further updates to google.api_core supporting this Python version. Please upgrade to the latest Python version, or at least Python 3.10, and then update google.api_core.
+  warnings.warn(message, FutureWarning)
+================================================================================
+🚀 TEXT HANDLERS MODULE LOADED
+   Version: 2.1.0
+   Build ID: NAME_COLLECTION_v1
+   Last Modified: 2025-01-24 22:00:00
+   Loaded At: 2026-03-01 01:43:47
+   Architecture: Modular (5 split files)
+================================================================================
+✅ Loaded 14 Q&A pairs from JSONL
+✅ LocalQAService initialized with 14 Q&A pairs from /Users/mahmoudalzougbhi/linas ai bot/data/qa_pairs.jsonl
+🤖 QADatabaseService initialized with API: https://your-api-url.com
+✅ Loaded 9 message templates from /Users/mahmoudalzougbhi/linas ai bot/data/message_templates.json
+✅ Loaded 0 sent messages from /Users/mahmoudalzougbhi/linas ai bot/data/sent_smart_messages.json
+🎓 ConversationFeedbackService initialized
+✅ Loaded settings from data/app_settings.json
+✅ Settings Service initialized
+✅ Firebase Admin SDK initialized successfully!
+📦 Storage bucket configured: linas-ai-bot.firebasestorage.app
+✅ Firestore client initialized successfully!
+💾 Chat history will be saved to Firestore.
+✅ تم تحميل قائمة الأسعار من data/price_list.txt
+✅ تم تحميل دليل الأسلوب من data/style_guide.txt
+✅ تم تحميل قاعدة المعرفة الأساسية من data/knowledge_base.txt
+ℹ️ load_training_data() is deprecated - Q&A now managed via API database
+🤖 Lina's Laser AI Bot is ready!
+INFO:     Started server process [89640]
+INFO:     Waiting for application startup.
+============================================================
+🚀 INITIALIZING WHATSAPP PROVIDER
+============================================================
+✅ MontyMobile adapter initialized
+   Base URL: https://whatsapp-notification.montymobile.com
+   Tenant: 98df9ffe-fa84-41ee-9293-33614722d952
+   API ID: 9db12f0d-3c27-4d9c-b9fd-0227aebfd81d
+   Source: 96178974402
+✅ MontyMobile adapter initialized: MontyMobileAdapter
+✅ Current provider: montymobile
+============================================================
+============================================================
+📅 INITIALIZING SMART MESSAGING SCHEDULER
+============================================================
+
+🚀 SCHEDULING INITIAL APPOINTMENT POPULATION (running in background)...
+🚨 SCHEDULING INITIAL NO-SHOW MESSAGES POPULATION (running in background)...
+📅 SCHEDULING INITIAL 1-MONTH FOLLOW-UP POPULATION (running in background)...
+📅 SCHEDULING INITIAL MISSED-MONTH POPULATION (running in background)...
+📅 SCHEDULING INITIAL MISSED-YESTERDAY POPULATION (running in background)...
+✅ Background tasks scheduled - startup will complete immediately
+✅ Smart Messaging Scheduler started successfully
+📅 Scheduled jobs:
+   - Daily refresh (clear stale + re-populate): Daily at 00:01 AM
+   - Populate messages from appointments: Every 2 hours (+ on startup)
+   - Populate no-show messages from missed: Every 1 hour (+ on startup)
+   - Populate 1-month follow-ups: Daily at 6 AM (+ on startup)
+   - Populate missed-yesterday messages: Daily at 6:15 AM (+ on startup)
+   - Populate missed-month messages: Daily at 6:30 AM (+ on startup)
+   - Monitor messages: Every 10 minutes
+   - Appointment reminders: Every 30 minutes
+   - Missed yesterday follow-ups: Daily at 10:00 AM
+   - Missed this month follow-ups: 1st of month at 11:00 AM
+   - Attended yesterday thank you: Daily at 9:00 PM
+============================================================
+🔄 POPULATING SCHEDULED MESSAGES FROM REAL APPOINTMENTS
+================================================================================
+🧹 Daily cleanup: cleared 0 stale messages, kept 0
+🚨 POPULATING NO-SHOW FOLLOW-UP MESSAGES FROM MISSED APPOINTMENTS
+================================================================================
+
+================================================================================
+🔍 NO-SHOW: Fetching appointments with status=Available
+   API call: /appointments/reminders?status=Available&date=2026-03-01
+================================================================================
+API Call: send_appointment_reminders for date=2026-03-01, phone=None, user_code=None, status=Available
+📅 POPULATING 1-MONTH FOLLOW-UP MESSAGES
+================================================================================
+📅 POPULATING MISSED-MONTH MESSAGES
+================================================================================
+API Call: get_paused_appointments_between_dates for start_date=2026-03-01, end_date=2026-03-31, service_id=None
+📅 POPULATING MISSED-YESTERDAY MESSAGES
+================================================================================
+
+================================================================================
+🔍 MISSED YESTERDAY: Fetching appointments with status=Available
+   API call: /appointments/reminders?status=Available&date=2026-02-28
+================================================================================
+API Call: send_appointment_reminders for date=2026-02-28, phone=None, user_code=None, status=Available
+INFO:     Application startup complete.
+API Call: send_appointment_reminders for date=2026-02-28, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-03-01, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-03-02, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-01, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-02, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-03, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-04, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-05, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-06, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-07, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-08, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-09, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-10, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-11, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-12, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-13, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-14, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-15, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-16, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-17, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-18, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-19, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-20, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-21, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-22, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-23, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-24, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-25, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-26, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-27, phone=None, user_code=None, status=None
+API Call: send_appointment_reminders for date=2026-02-28, phone=None, user_code=None, status=None
+ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8003): address already in use
+INFO:     Waiting for application shutdown.
+🛑 Shutting down Smart Messaging Scheduler...
+✅ Scheduler shut down successfully
+INFO:     Application shutdown complete.

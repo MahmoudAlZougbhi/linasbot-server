@@ -288,8 +288,8 @@ const LiveChat = () => {
     submitFeedback,
   } = useApi();
 
-  // Fetch conversation messages - 1 day initially for speed, Load More with before
-  const fetchConversationMessages = async (userId, conversationId, days = 1, before = null) => {
+  // Fetch conversation messages - newest window initially, Load More with before
+  const fetchConversationMessages = async (userId, conversationId, days = 0, before = null) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 90000);
 
@@ -312,15 +312,20 @@ const LiveChat = () => {
       console.log("API Response:", data);
 
       if (data.success && data.messages) {
-        console.log(`Loaded ${data.messages.length} messages (${data.returned_messages || data.messages.length} of ${data.total_messages || data.messages.length} total)`);
-        return data.messages;
+        const normalized = [...data.messages].sort((a, b) => {
+          const ta = new Date(a?.timestamp || 0).getTime();
+          const tb = new Date(b?.timestamp || 0).getTime();
+          return ta - tb;
+        });
+        console.log(`Loaded ${normalized.length} messages (${data.returned_messages || normalized.length} of ${data.total_messages || normalized.length} total)`);
+        return normalized;
       }
       console.warn("No messages found or API error:", data);
       return [];
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        console.error("Message fetch timed out after 60 seconds");
+        console.error("Message fetch timed out after 90 seconds");
         toast.error("Loading messages timed out - conversation may have too many messages");
       } else {
         console.error("Error fetching conversation messages:", error);
@@ -386,7 +391,7 @@ const LiveChat = () => {
             });
             // ✅ Lazy load messages asynchronously - don't block UI
             setMessagesLoading(true);
-            fetchConversationMessages(firstConv.user_id, firstConv.conversation_id, 1).then((messages) => {
+            fetchConversationMessages(firstConv.user_id, firstConv.conversation_id, 0).then((messages) => {
               if (!isMountedRef.current) return;
               setSelectedConversation((prev) =>
                 prev?.conversation?.conversation_id === firstConv.conversation_id
@@ -415,12 +420,17 @@ const LiveChat = () => {
           }
         }
 
-        // Fetch waiting queue
-        if (!isMountedRef.current) return;
-        const queueResponse = await getWaitingQueue();
-        if (isMountedRef.current && queueResponse.success && queueResponse.queue) {
-          setWaitingQueue(queueResponse.queue);
-        }
+        // Fetch waiting queue in background (do not block initial Live Chat render)
+        getWaitingQueue()
+          .then((queueResponse) => {
+            if (!isMountedRef.current) return;
+            if (queueResponse?.success && queueResponse.queue) {
+              setWaitingQueue(queueResponse.queue);
+            }
+          })
+          .catch(() => {
+            // Silent fail - chats list already rendered
+          });
       } catch (error) {
         if (!isMountedRef.current) return;
         console.error("Error fetching live chat data:", error);
@@ -622,7 +632,7 @@ const LiveChat = () => {
         const messages = await fetchConversationMessages(
           selectedConversation.conversation.user_id,
           selectedConversation.conversation.conversation_id,
-          1
+          0
         );
         if (!isMountedRef.current) return;
         if (messages && messages.length > 0) {
@@ -1573,7 +1583,8 @@ const LiveChat = () => {
                     });
                     // ✅ Lazy load messages asynchronously - don't block UI
                     setMessagesLoading(true);
-                    fetchConversationMessages(conv.user_id, conv.conversation_id, 1).then((messages) => {
+                    fetchConversationMessages(conv.user_id, conv.conversation_id, 0).then((messages) => {
+                      if (!isMountedRef.current) return;
                       // Only update if this conversation is still selected
                       setSelectedConversation((prev) =>
                         prev?.conversation?.conversation_id === conv.conversation_id

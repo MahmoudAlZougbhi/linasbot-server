@@ -464,7 +464,7 @@ export const useApi = () => {
       params.append("page", String(page));
       params.append("page_size", String(pageSize));
       const response = await api.get(`/api/live-chat/unified-chats?${params.toString()}`, {
-        timeout: 90000,
+        timeout: 30000,
       });
       return response.data;
     } catch (error) {
@@ -482,7 +482,7 @@ export const useApi = () => {
       const query = params.toString();
       const url = query ? `/api/live-chat/active-conversations?${query}` : "/api/live-chat/active-conversations";
       const response = await api.get(url, {
-        timeout: 60000, // 60 seconds
+        timeout: 25000,
       });
       return response.data;
     } catch (error) {
@@ -495,11 +495,17 @@ export const useApi = () => {
 
   const getWaitingQueue = useCallback(async () => {
     try {
-      const response = await api.get("/api/live-chat/waiting-queue");
+      const response = await api.get("/api/live-chat/waiting-queue", {
+        timeout: 15000,
+      });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
-        return { success: false, queue: [], error: "Backend offline" };
+      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+        return {
+          success: false,
+          queue: [],
+          error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline",
+        };
       }
       throw error;
     }

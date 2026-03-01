@@ -27,7 +27,7 @@ class LiveChatService:
     ACTIVE_TIME_WINDOW = 2 * 60 * 60  # 2 hours
 
     # Cache configuration
-    CACHE_TTL = 5  # seconds - short cache for near real-time updates
+    CACHE_TTL = 20  # seconds - reduce expensive cold reads while keeping near real-time updates
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
 
     def __init__(self):
@@ -831,6 +831,15 @@ class LiveChatService:
         Queries Firebase directly for conversations with human_takeover_active=True and operator_id=None
         """
         try:
+            current_time = datetime.datetime.now(datetime.timezone.utc)
+            # Use short cache to keep UI responsive while staying near real-time.
+            if (
+                self._queue_cache is not None
+                and self._queue_cache_time is not None
+                and (current_time - self._queue_cache_time).total_seconds() < self.CACHE_TTL
+            ):
+                return self._queue_cache
+
             db = get_firestore_db()
             if not db:
                 return []
@@ -839,7 +848,6 @@ class LiveChatService:
             users_collection = db.collection("artifacts").document(app_id).collection("users")
 
             waiting_queue = []
-            current_time = datetime.datetime.now(datetime.timezone.utc)
 
             # ✅ Use asyncio.to_thread to prevent blocking the event loop
             users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
@@ -924,6 +932,10 @@ class LiveChatService:
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
             waiting_queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
             
+            # Update cache
+            self._queue_cache = waiting_queue
+            self._queue_cache_time = current_time
+
             print(f"📊 Waiting queue: {len(waiting_queue)} conversations")
             
             return waiting_queue

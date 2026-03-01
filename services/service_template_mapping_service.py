@@ -8,6 +8,14 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from services.smart_messaging_catalog import (
+    DAILY_TEMPLATE_IDS,
+    CAMPAIGN_TEMPLATE_IDS,
+    DEPRECATED_TEMPLATE_IDS,
+    TEMPLATE_METADATA,
+    normalize_template_id,
+)
+
 _BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 _DATA_DIR = os.path.join(_BASE_DIR, 'data')
 
@@ -31,22 +39,82 @@ class ServiceTemplateMappingService:
 
         try:
             with open(self.mapping_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                mappings = json.load(f)
+            migrated, changed = self._migrate_mappings(mappings)
+            if changed:
+                self._save_mappings(migrated)
+            return migrated
         except Exception as e:
             print(f"Error loading service-template mappings: {e}")
             return self._create_default_mappings()
 
+    def _migrate_mappings(self, mappings: Dict) -> tuple[Dict, bool]:
+        """
+        Migrate legacy template IDs and remove deprecated defaults.
+        """
+        changed = False
+        if not isinstance(mappings, dict):
+            return self._create_default_mappings(), True
+
+        default_mapping = mappings.get("default_mapping", {})
+        if not isinstance(default_mapping, dict):
+            default_mapping = {}
+
+        normalized_default = {}
+        for template_id, enabled in default_mapping.items():
+            canonical = normalize_template_id(template_id)
+            if canonical in DEPRECATED_TEMPLATE_IDS:
+                changed = True
+                continue
+            normalized_default[canonical] = bool(enabled)
+            if canonical != template_id:
+                changed = True
+
+        for template_id in (*DAILY_TEMPLATE_IDS, *CAMPAIGN_TEMPLATE_IDS):
+            if template_id not in normalized_default:
+                normalized_default[template_id] = True
+                changed = True
+
+        mappings["default_mapping"] = normalized_default
+
+        service_mappings = mappings.get("service_mappings", {})
+        if not isinstance(service_mappings, dict):
+            service_mappings = {}
+            mappings["service_mappings"] = service_mappings
+            changed = True
+
+        for service_key, service_data in service_mappings.items():
+            templates = service_data.get("templates", {})
+            if not isinstance(templates, dict):
+                templates = {}
+                changed = True
+
+            normalized_templates = {}
+            for template_id, enabled in templates.items():
+                canonical = normalize_template_id(template_id)
+                if canonical in DEPRECATED_TEMPLATE_IDS:
+                    changed = True
+                    continue
+                normalized_templates[canonical] = bool(enabled)
+                if canonical != template_id:
+                    changed = True
+
+            for template_id, default_enabled in normalized_default.items():
+                if template_id not in normalized_templates:
+                    normalized_templates[template_id] = default_enabled
+                    changed = True
+
+            service_data["templates"] = normalized_templates
+            service_mappings[service_key] = service_data
+
+        mappings["last_updated"] = mappings.get("last_updated", datetime.now().isoformat())
+        return mappings, changed
+
     def _create_default_mappings(self) -> Dict:
         """Create default mappings with all templates enabled for all services"""
         default_templates = {
-            "reminder_24h": True,
-            "same_day_checkin": True,
-            "post_session_feedback": True,
-            "no_show_followup": True,
-            "one_month_followup": True,
-            "missed_yesterday": True,
-            "missed_this_month": True,
-            "attended_yesterday": True
+            template_id: True
+            for template_id in (*DAILY_TEMPLATE_IDS, *CAMPAIGN_TEMPLATE_IDS)
         }
 
         services = [
@@ -156,8 +224,19 @@ class ServiceTemplateMappingService:
                 'templates': {}
             }
 
+        # Normalize template IDs and drop deprecated entries
+        normalized_templates = {}
+        for template_id, enabled in (templates or {}).items():
+            canonical = normalize_template_id(template_id)
+            if canonical in DEPRECATED_TEMPLATE_IDS:
+                continue
+            normalized_templates[canonical] = bool(enabled)
+
+        for template_id, default_enabled in self.mappings.get('default_mapping', {}).items():
+            normalized_templates.setdefault(template_id, bool(default_enabled))
+
         # Update templates
-        self.mappings['service_mappings'][service_key]['templates'] = templates
+        self.mappings['service_mappings'][service_key]['templates'] = normalized_templates
 
         # Update service name if provided
         if service_name:
@@ -185,6 +264,9 @@ class ServiceTemplateMappingService:
             Dict with success status
         """
         service_key = str(service_id)
+        template_id = normalize_template_id(template_id)
+        if template_id in DEPRECATED_TEMPLATE_IDS:
+            return {'success': False, 'error': f'Template {template_id} is deprecated'}
 
         if service_key not in self.mappings.get('service_mappings', {}):
             # Create entry with defaults
@@ -218,6 +300,7 @@ class ServiceTemplateMappingService:
             True if template is enabled for the service
         """
         service_key = str(service_id)
+        template_id = normalize_template_id(template_id)
         service_mappings = self.mappings.get('service_mappings', {})
 
         if service_key in service_mappings:
@@ -243,17 +326,14 @@ class ServiceTemplateMappingService:
 
     def get_available_templates(self) -> List[Dict]:
         """Get list of all available template types (including custom templates)"""
-        # Default templates
-        templates = [
-            {'id': 'reminder_24h', 'name': '24-Hour Reminder', 'isDefault': True},
-            {'id': 'same_day_checkin', 'name': 'Same Day Check-in', 'isDefault': True},
-            {'id': 'post_session_feedback', 'name': 'Post-Session Feedback', 'isDefault': True},
-            {'id': 'no_show_followup', 'name': 'No-Show Follow-up', 'isDefault': True},
-            {'id': 'one_month_followup', 'name': 'One Month Follow-up', 'isDefault': True},
-            {'id': 'missed_yesterday', 'name': 'Missed Yesterday', 'isDefault': True},
-            {'id': 'missed_this_month', 'name': 'Missed This Month', 'isDefault': True},
-            {'id': 'attended_yesterday', 'name': 'Attended Yesterday', 'isDefault': True}
-        ]
+        templates = []
+        for template_id in (*DAILY_TEMPLATE_IDS, *CAMPAIGN_TEMPLATE_IDS):
+            meta = TEMPLATE_METADATA.get(template_id, {})
+            templates.append({
+                "id": template_id,
+                "name": meta.get("name", template_id),
+                "isDefault": True,
+            })
 
         # Add custom templates from message_templates.json
         try:
@@ -264,13 +344,17 @@ class ServiceTemplateMappingService:
 
                 default_ids = {t['id'] for t in templates}
                 for template_id, template_data in all_templates.items():
-                    if template_id not in default_ids:
+                    canonical_id = normalize_template_id(template_id)
+                    if canonical_id in DEPRECATED_TEMPLATE_IDS:
+                        continue
+                    if canonical_id not in default_ids:
                         templates.append({
-                            'id': template_id,
+                            'id': canonical_id,
                             'name': template_data.get('name', template_id),
                             'isDefault': False,
                             'isCustom': True
                         })
+                        default_ids.add(canonical_id)
         except Exception as e:
             print(f"Error loading custom templates: {e}")
 

@@ -177,6 +177,19 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                 />
               </div>
             )}
+
+            {(entry.source === "gpt" || entry.source === "dynamic_retrieval") && (entry.tokens != null || entry.prompt_tokens != null || entry.completion_tokens != null || entry.model) && (
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">GPT usage</p>
+                <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 text-sm text-slate-700 space-y-1">
+                  {entry.model && <p>Model: <code className="bg-violet-100 px-1 rounded">{entry.model}</code></p>}
+                  {entry.prompt_tokens != null && <p>Prompt tokens: <strong>{entry.prompt_tokens}</strong></p>}
+                  {entry.completion_tokens != null && <p>Completion tokens: <strong>{entry.completion_tokens}</strong></p>}
+                  {entry.tokens != null && <p>Total tokens: <strong>{entry.tokens}</strong></p>}
+                  {entry.response_time_ms != null && <p>Response time: <strong>{Math.round(entry.response_time_ms)}ms</strong></p>}
+                </div>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

@@ -9,6 +9,8 @@ import json
 import os
 from typing import Dict, List, Optional
 
+from services.smart_messaging_catalog import normalize_template_id
+
 
 class MontyMobileTemplateService:
     """Service for sending WhatsApp template messages via MontyMobile"""
@@ -36,7 +38,16 @@ class MontyMobileTemplateService:
     
     def get_template_info(self, template_id: str) -> Optional[Dict]:
         """Get template information by ID"""
-        return self.templates.get(template_id)
+        canonical = normalize_template_id(template_id)
+        template = self.templates.get(canonical)
+        if template:
+            return template
+
+        legacy_fallbacks = {
+            "twenty_day_followup": "one_month_followup",
+            "missed_paused_appointment": "missed_this_month",
+        }
+        return self.templates.get(legacy_fallbacks.get(canonical, canonical))
     
     def build_template_payload(
         self,
@@ -64,12 +75,14 @@ class MontyMobileTemplateService:
         print(f"   language: {language} (type: {type(language)})")
         print(f"   parameters: {parameters}")
         
+        canonical_template_id = normalize_template_id(template_id)
+
         if not self.templates or not self.api_config:
             print("❌ MontyMobile templates not loaded")
             return None
-        template = self.templates.get(template_id)
+        template = self.get_template_info(canonical_template_id)
         if not template:
-            print(f"❌ Template '{template_id}' not found")
+            print(f"❌ Template '{canonical_template_id}' not found")
             return None
         
         # Ensure language is a string, not a dict

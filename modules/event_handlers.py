@@ -21,6 +21,7 @@ from services.appointment_scheduler import (
     populate_missed_month_messages,
     populate_missed_yesterday_messages
 )
+from services.daily_template_dispatcher import daily_template_dispatcher
 
 
 @app.on_event("startup")
@@ -227,6 +228,7 @@ async def startup_event():
 
                                         if result.get('success'):
                                             message_preview_service.mark_as_sent(message_id)
+                                            smart_messaging.mark_messages_sent_by_phone(phone, template_id)
                                             print(f"   Sent message {message_id} to {phone}")
 
                                             # Save to conversation history for continuous context
@@ -668,26 +670,16 @@ async def startup_event():
         # Job 5: Daily refresh - clear stale messages and re-populate fresh ones
         async def daily_refresh_messages_job():
             """
-            Runs at midnight each day to:
-            1. Clear stale messages from previous days (except 1-month and missed-month)
-            2. Re-populate all message categories with fresh data
+            Runs daily to clear stale queue entries while preserving
+            long-horizon follow-ups and campaign messages.
             """
             try:
                 print("\n" + "=" * 80)
-                print("🌅 DAILY MESSAGE REFRESH - Clearing stale messages and re-populating")
+                print("🌅 DAILY MESSAGE REFRESH - Clearing stale queue entries")
                 print("=" * 80)
 
-                # Step 1: Clear stale messages
                 result = smart_messaging.clear_daily_messages()
                 print(f"   🧹 Cleared {result['cleared']} stale messages, kept {result['kept']}")
-
-                # Step 2: Re-populate all categories with fresh data
-                print("   🔄 Re-populating scheduled messages...")
-                await populate_messages_job()
-                await populate_no_show_messages_job()
-                await populate_one_month_job()
-                await populate_missed_month_job()
-                await populate_missed_yesterday_job()
 
                 print("=" * 80)
                 print("✅ DAILY REFRESH COMPLETE")
@@ -697,150 +689,71 @@ async def startup_event():
                 import traceback
                 traceback.print_exc()
 
+        async def run_daily_template_dispatcher_job():
+            """
+            Minute-level runner that dispatches enabled template jobs
+            when local time matches configured HH:MM.
+            """
+            try:
+                dispatch_result = await daily_template_dispatcher.tick()
+                run_count = dispatch_result.get("run_count", 0)
+                if run_count:
+                    print(f"📅 Daily template dispatcher ran {run_count} template job(s)")
+                    for item in dispatch_result.get("jobs_run", []):
+                        result = item.get("result", {})
+                        print(
+                            f"   - {item.get('template_id')}: "
+                            f"{result.get('scheduled_count', 0)} queued "
+                            f"(candidates={result.get('total_candidates', 0)})"
+                        )
+            except Exception as e:
+                print(f"❌ Error in daily template dispatcher: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Schedule jobs
-        # DAILY REFRESH: Clear stale messages and re-populate at midnight
+        # DAILY REFRESH: Clear stale in-memory queue once a day
         scheduler.add_job(
             daily_refresh_messages_job,
             'cron',
             hour=0,
             minute=1,
             id='daily_refresh_messages',
-            name='Daily Refresh - Clear Stale Messages & Re-populate',
+            name='Daily Refresh - Clear Stale Scheduled Messages',
             replace_existing=True
         )
 
-        # FIRST: Populate scheduled messages from real appointments (runs immediately on startup, then every 2 hours)
+        # Template dispatcher checks configured HH:MM every minute
         scheduler.add_job(
-            populate_messages_job,
+            run_daily_template_dispatcher_job,
             'interval',
-            minutes=120,
-            id='populate_appointments',
-            name='Populate Scheduled Messages from Real Appointments',
-            replace_existing=True
-        )
-        
-        # FIRST-B: Populate NO-SHOW follow-up messages from missed appointments (runs immediately on startup, then every 1 hour)
-        scheduler.add_job(
-            populate_no_show_messages_job,
-            'interval',
-            minutes=60,
-            id='populate_no_show_messages',
-            name='Populate No-Show Follow-Up Messages from Missed Appointments',
+            minutes=1,
+            id='daily_template_dispatcher',
+            name='Daily Template Dispatcher (Config-Driven)',
             replace_existing=True
         )
 
-        # FIRST-C: Populate 1-MONTH FOLLOW-UP messages (daily at 6 AM - from last month's appointments)
-        scheduler.add_job(
-            populate_one_month_job,
-            'cron',
-            hour=6,
-            minute=0,
-            id='populate_one_month_followups',
-            name='Populate 1-Month Follow-Up Messages',
-            replace_existing=True
-        )
-
-        # FIRST-D: Populate MISSED-MONTH messages (daily at 6:30 AM - from this month's missed appointments)
-        scheduler.add_job(
-            populate_missed_month_job,
-            'cron',
-            hour=6,
-            minute=30,
-            id='populate_missed_month_messages',
-            name='Populate Missed-Month Messages',
-            replace_existing=True
-        )
-
-        # FIRST-E: Populate MISSED-YESTERDAY messages (daily at 6:15 AM - from yesterday's paused appointments)
-        scheduler.add_job(
-            populate_missed_yesterday_job,
-            'cron',
-            hour=6,
-            minute=15,
-            id='populate_missed_yesterday_messages',
-            name='Populate Missed-Yesterday Messages',
-            replace_existing=True
-        )
-
-        # SECOND: Monitor Smart Messaging scheduled messages every 10 minutes (VERIFICATION MODE - NOT SENDING)
+        # Monitor queue and send due messages every minute
         scheduler.add_job(
             monitor_smart_messages_job,
             'interval',
-            minutes=10,
+            minutes=1,
             id='monitor_smart_messages',
-            name='Monitor Smart Messaging Scheduled Messages (NOT SENDING)',
+            name='Monitor Smart Messaging Scheduled Messages',
             replace_existing=True
         )
-        
-        scheduler.add_job(
-            send_appointment_reminders_job,
-            'interval',
-            minutes=30,
-            id='appointment_reminders',
-            name='Send Appointment Reminders',
-            replace_existing=True
-        )
-        
-        scheduler.add_job(
-            send_missed_yesterday_followups,
-            'cron',
-            hour=10,
-            minute=0,
-            id='missed_yesterday',
-            name='Send Missed Yesterday Follow-ups',
-            replace_existing=True
-        )
-        
-        scheduler.add_job(
-            send_missed_this_month_followups,
-            'cron',
-            day=1,
-            hour=11,
-            minute=0,
-            id='missed_this_month',
-            name='Send Missed This Month Follow-ups',
-            replace_existing=True
-        )
-        
-        scheduler.add_job(
-            send_attended_yesterday_messages,
-            'cron',
-            hour=21,
-            minute=0,
-            id='attended_yesterday',
-            name='Send Attended Yesterday Thank You',
-            replace_existing=True
-        )
-        
+
         scheduler.start()
 
-        # OPTIMIZATION: Run populate_messages in BACKGROUND (don't block startup)
-        # These API calls can take 10-30 seconds, so run them asynchronously
-        print("\n🚀 SCHEDULING INITIAL APPOINTMENT POPULATION (running in background)...")
-        asyncio.create_task(populate_messages_job())
-        print("🚨 SCHEDULING INITIAL NO-SHOW MESSAGES POPULATION (running in background)...")
-        asyncio.create_task(populate_no_show_messages_job())
-        print("📅 SCHEDULING INITIAL 1-MONTH FOLLOW-UP POPULATION (running in background)...")
-        asyncio.create_task(populate_one_month_job())
-        print("📅 SCHEDULING INITIAL MISSED-MONTH POPULATION (running in background)...")
-        asyncio.create_task(populate_missed_month_job())
-        print("📅 SCHEDULING INITIAL MISSED-YESTERDAY POPULATION (running in background)...")
-        asyncio.create_task(populate_missed_yesterday_job())
-        print("✅ Background tasks scheduled - startup will complete immediately")
+        print("\n🚀 Running initial daily template dispatcher check...")
+        asyncio.create_task(run_daily_template_dispatcher_job())
+        print("✅ Initial dispatcher check queued")
 
         print("✅ Smart Messaging Scheduler started successfully")
         print("📅 Scheduled jobs:")
-        print("   - Daily refresh (clear stale + re-populate): Daily at 00:01 AM")
-        print("   - Populate messages from appointments: Every 2 hours (+ on startup)")
-        print("   - Populate no-show messages from missed: Every 1 hour (+ on startup)")
-        print("   - Populate 1-month follow-ups: Daily at 6 AM (+ on startup)")
-        print("   - Populate missed-yesterday messages: Daily at 6:15 AM (+ on startup)")
-        print("   - Populate missed-month messages: Daily at 6:30 AM (+ on startup)")
-        print("   - Monitor messages: Every 10 minutes")
-        print("   - Appointment reminders: Every 30 minutes")
-        print("   - Missed yesterday follow-ups: Daily at 10:00 AM")
-        print("   - Missed this month follow-ups: 1st of month at 11:00 AM")
-        print("   - Attended yesterday thank you: Daily at 9:00 PM")
+        print("   - Daily refresh: Daily at 00:01")
+        print("   - Template dispatcher: Every 1 minute (HH:MM per template from dashboard)")
+        print("   - Queue monitor/sender: Every 1 minute")
         print("=" * 60)
         
         app.state.scheduler = scheduler

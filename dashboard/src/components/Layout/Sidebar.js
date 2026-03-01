@@ -51,6 +51,12 @@ const navigationItems = [
     permissionKey: "analytics",
   },
   {
+    name: "Analytics",
+    href: "/analytics",
+    icon: ChartBarIcon,
+    permissionKey: "analytics",
+  },
+  {
     name: "Live Chat",
     href: "/live-chat",
     icon: ChatBubbleLeftRightIcon,

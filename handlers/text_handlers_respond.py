@@ -688,6 +688,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         ai_raw_response=flow_meta.get("ai_raw_response"),
         model=flow_meta.get("model"),
         tokens=flow_meta.get("tokens"),
+        prompt_tokens=flow_meta.get("prompt_tokens"),
+        completion_tokens=flow_meta.get("completion_tokens"),
         response_time_ms=response_time_ms,
         tool_calls=flow_meta.get("tool_calls"),
         flow_steps=flow_steps,

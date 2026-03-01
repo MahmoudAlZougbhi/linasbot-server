@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MagnifyingGlassIcon,
-  CalendarIcon,
   ClockIcon,
   EnvelopeIcon,
   PaperAirplaneIcon,
@@ -35,7 +34,8 @@ const SmartMessaging = () => {
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [sendingTest, setSendingTest] = useState(false);
-  const [templateStates, setTemplateStates] = useState({});
+  const [templateSchedules, setTemplateSchedules] = useState({});
+  const [savingTemplateSchedule, setSavingTemplateSchedule] = useState(null);
 
   // NEW: Filter and pagination state
   const [selectedMessageType, setSelectedMessageType] = useState("all");
@@ -55,6 +55,21 @@ const SmartMessaging = () => {
   const [serviceMappings, setServiceMappings] = useState({});
   const [availableServices, setAvailableServices] = useState([]);
   const [availableTemplates, setAvailableTemplates] = useState([]);
+
+  // Campaign Builder: Missed Paused Appointment
+  const [campaignFilters, setCampaignFilters] = useState({
+    service_ids: [],
+    from_date: "",
+    to_date: "",
+    lookback_months: 3,
+    paused_only: true,
+  });
+  const [campaignScheduleTime, setCampaignScheduleTime] = useState("");
+  const [campaignPreviewRecipients, setCampaignPreviewRecipients] = useState([]);
+  const [campaignPreviewCount, setCampaignPreviewCount] = useState(0);
+  const [campaignLoading, setCampaignLoading] = useState(false);
+  const [campaignSending, setCampaignSending] = useState(false);
+  const [campaignLogs, setCampaignLogs] = useState([]);
 
   // NEW: Edit modals state
   const [editingScheduledMessage, setEditingScheduledMessage] = useState(null);
@@ -77,6 +92,8 @@ const SmartMessaging = () => {
     fetchSmartMessagingSettings();
     fetchPendingMessages();
     fetchServiceMappings();
+    fetchTemplateSchedules();
+    fetchCampaignLogs();
   }, []);
 
   // Fetch smart messaging settings (global toggle, preview mode)
@@ -126,6 +143,30 @@ const SmartMessaging = () => {
       }
     } catch (error) {
       console.error("Error fetching service mappings:", error);
+    }
+  };
+
+  const fetchTemplateSchedules = async () => {
+    try {
+      const response = await fetch("/api/smart-messaging/template-schedules");
+      const result = await response.json();
+      if (result.success) {
+        setTemplateSchedules(result.schedules || {});
+      }
+    } catch (error) {
+      console.error("Error fetching template schedules:", error);
+    }
+  };
+
+  const fetchCampaignLogs = async () => {
+    try {
+      const response = await fetch("/api/smart-messaging/campaign-logs?limit=20");
+      const result = await response.json();
+      if (result.success) {
+        setCampaignLogs(result.campaign_logs || []);
+      }
+    } catch (error) {
+      console.error("Error fetching campaign logs:", error);
     }
   };
 
@@ -288,6 +329,119 @@ const SmartMessaging = () => {
     } catch (error) {
       console.error("Error saving service mappings:", error);
       toast.error("Failed to save service mappings");
+    }
+  };
+
+  const handleTemplateScheduleChange = (templateId, field, value) => {
+    setTemplateSchedules((prev) => ({
+      ...prev,
+      [templateId]: {
+        ...(prev[templateId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveTemplateSchedule = async (templateId) => {
+    const schedule = templateSchedules[templateId];
+    if (!schedule) return;
+
+    setSavingTemplateSchedule(templateId);
+    try {
+      const response = await fetch(`/api/smart-messaging/template-schedules/${templateId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: !!schedule.enabled,
+          sendTime: schedule.sendTime || "15:00",
+          timezone: schedule.timezone || "Asia/Beirut",
+        }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Template schedule saved");
+        fetchTemplateSchedules();
+      } else {
+        toast.error(result.error || "Failed to save schedule");
+      }
+    } catch (error) {
+      console.error("Error saving template schedule:", error);
+      toast.error("Failed to save schedule");
+    } finally {
+      setSavingTemplateSchedule(null);
+    }
+  };
+
+  const handleCampaignServicesChange = (event) => {
+    const selected = Array.from(event.target.selectedOptions || []).map((option) =>
+      Number(option.value)
+    );
+    setCampaignFilters((prev) => ({ ...prev, service_ids: selected }));
+  };
+
+  const handleCampaignFilterChange = (field, value) => {
+    setCampaignFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePreviewCampaignRecipients = async () => {
+    setCampaignLoading(true);
+    try {
+      const response = await fetch("/api/smart-messaging/campaigns/missed-paused/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(campaignFilters),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setCampaignPreviewRecipients(result.recipients || []);
+        setCampaignPreviewCount(result.count || 0);
+        toast.success(`Preview ready: ${result.count || 0} recipients`);
+      } else {
+        toast.error(result.error || "Failed to preview recipients");
+      }
+    } catch (error) {
+      console.error("Error previewing campaign:", error);
+      toast.error("Failed to preview campaign");
+    } finally {
+      setCampaignLoading(false);
+    }
+  };
+
+  const handleSendCampaign = async (sendMode) => {
+    if (sendMode === "schedule" && !campaignScheduleTime) {
+      toast.error("Please select schedule date/time");
+      return;
+    }
+
+    setCampaignSending(true);
+    try {
+      const response = await fetch("/api/smart-messaging/campaigns/missed-paused/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filters: campaignFilters,
+          send_mode: sendMode,
+          schedule_time: sendMode === "schedule" ? campaignScheduleTime : null,
+          language: selectedLanguage || "ar",
+        }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(
+          sendMode === "schedule"
+            ? `Campaign queued (${result.queued_count || 0})`
+            : `Campaign sent (${result.sent_count || 0})`
+        );
+        fetchCampaignLogs();
+        fetchSmartMessagingData();
+      } else {
+        toast.error(result.error || "Campaign execution failed");
+      }
+    } catch (error) {
+      console.error("Error sending campaign:", error);
+      toast.error("Campaign execution failed");
+    } finally {
+      setCampaignSending(false);
     }
   };
 
@@ -586,6 +740,8 @@ const SmartMessaging = () => {
       } else if (templatesResult) {
         console.warn("Failed to fetch templates:", templatesResult.error);
       }
+
+      fetchTemplateSchedules();
     } catch (error) {
       console.error("Error fetching smart messaging data:", error);
       toast.error("Failed to load smart messaging data");
@@ -716,36 +872,22 @@ const SmartMessaging = () => {
         const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         return sendTime >= past24h && sendTime <= next24h;
-      case "same_day_checkin":
-        // Show messages where send_at is within ±24h from now
-        if (isNaN(sendTime.getTime())) return true;
-        const checkinPast = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        const checkinFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-        return sendTime >= checkinPast && sendTime <= checkinFuture;
       case "post_session_feedback":
         // Show messages scheduled for today only
         if (!sendDateStr) return true;
         return sendDateStr === todayStr;
-      case "no_show_followup":
-        // Show today's missed appointments (sent same day as appointment)
-        return sendDateStr === todayStr;
       case "missed_yesterday":
         // Show yesterday's missed appointments
         return appointmentDate === yesterdayStr || sendDateStr === yesterdayStr;
-      case "missed_this_month":
-        // Show current month's missed appointments
-        const missedDate = appointmentDate || sendDateStr;
-        return missedDate >= startOfMonthStr && missedDate < startOfNextMonthStr;
-      case "one_month_followup":
-        // Show 1-month followups scheduled within current month
+      case "twenty_day_followup":
+        // Show 20-day followups scheduled within current month
         return sendDateStr >= startOfMonthStr && sendDateStr < startOfNextMonthStr;
       case "attended_yesterday":
-        // Show messages scheduled for today or tomorrow
+        // Show messages scheduled for today
         if (!sendDateStr) return true;
-        const thankYouTomorrow = new Date(now);
-        thankYouTomorrow.setDate(thankYouTomorrow.getDate() + 1);
-        const thankYouTomorrowStr = `${thankYouTomorrow.getFullYear()}-${String(thankYouTomorrow.getMonth() + 1).padStart(2, "0")}-${String(thankYouTomorrow.getDate()).padStart(2, "0")}`;
-        return sendDateStr === todayStr || sendDateStr === thankYouTomorrowStr;
+        return sendDateStr === todayStr;
+      case "missed_paused_appointment":
+        return true;
       default:
         return true;
     }
@@ -855,13 +997,11 @@ const SmartMessaging = () => {
   const messageTypesCounts = {
     all: Object.values(messageCounts).reduce((sum, count) => sum + count, 0),
     reminder_24h: messageCounts.reminder_24h || 0,
-    same_day_checkin: messageCounts.same_day_checkin || 0,
     post_session_feedback: messageCounts.post_session_feedback || 0,
-    one_month_followup: messageCounts.one_month_followup || 0,
-    no_show_followup: messageCounts.no_show_followup || 0,
+    twenty_day_followup: messageCounts.twenty_day_followup || 0,
     missed_yesterday: messageCounts.missed_yesterday || 0,
-    missed_this_month: messageCounts.missed_this_month || 0,
     attended_yesterday: messageCounts.attended_yesterday || 0,
+    missed_paused_appointment: messageCounts.missed_paused_appointment || 0,
   };
 
   const getMessageTypeInfo = (type) => {
@@ -871,23 +1011,13 @@ const SmartMessaging = () => {
         color: "bg-blue-100 text-blue-700",
         icon: ClockIcon,
       },
-      same_day_checkin: {
-        name: "Same Day",
-        color: "bg-purple-100 text-purple-700",
-        icon: CalendarIcon,
-      },
       post_session_feedback: {
         name: "Feedback",
         color: "bg-green-100 text-green-700",
         icon: CheckCircleIcon,
       },
-      no_show_followup: {
-        name: "No-Show",
-        color: "bg-red-100 text-red-700",
-        icon: ExclamationTriangleIcon,
-      },
-      one_month_followup: {
-        name: "1-Month",
+      twenty_day_followup: {
+        name: "20-Day",
         color: "bg-indigo-100 text-indigo-700",
         icon: SparklesIcon,
       },
@@ -896,9 +1026,9 @@ const SmartMessaging = () => {
         color: "bg-orange-100 text-orange-700",
         icon: ExclamationTriangleIcon,
       },
-      missed_this_month: {
-        name: "Missed Month",
-        color: "bg-red-100 text-red-700",
+      missed_paused_appointment: {
+        name: "Missed Paused",
+        color: "bg-pink-100 text-pink-700",
         icon: ExclamationTriangleIcon,
       },
       attended_yesterday: {
@@ -918,12 +1048,10 @@ const SmartMessaging = () => {
   const getTemplateIcon = (templateId) => {
     const icons = {
       reminder_24h: ClockIcon,
-      same_day_checkin: CalendarIcon,
       post_session_feedback: CheckCircleIcon,
-      no_show_followup: ExclamationTriangleIcon,
-      one_month_followup: SparklesIcon,
+      twenty_day_followup: SparklesIcon,
       missed_yesterday: ExclamationTriangleIcon,
-      missed_this_month: ExclamationTriangleIcon,
+      missed_paused_appointment: ExclamationTriangleIcon,
       attended_yesterday: CheckCircleIcon,
     };
     // Return default icon for custom templates
@@ -933,12 +1061,10 @@ const SmartMessaging = () => {
   const getTemplateColor = (templateId) => {
     const colors = {
       reminder_24h: "from-blue-500 to-cyan-500",
-      same_day_checkin: "from-purple-500 to-pink-500",
       post_session_feedback: "from-green-500 to-emerald-500",
-      no_show_followup: "from-orange-500 to-red-500",
-      one_month_followup: "from-indigo-500 to-purple-500",
+      twenty_day_followup: "from-indigo-500 to-purple-500",
       missed_yesterday: "from-orange-400 to-orange-600",
-      missed_this_month: "from-red-400 to-red-600",
+      missed_paused_appointment: "from-pink-500 to-rose-600",
       attended_yesterday: "from-green-400 to-green-600",
     };
     // Return a purple gradient for custom templates
@@ -1123,6 +1249,16 @@ const SmartMessaging = () => {
         >
           Service Mappings
         </button>
+        <button
+          onClick={() => setActiveTab("campaigns")}
+          className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+            activeTab === "campaigns"
+              ? "bg-white text-primary-600 shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
+          }`}
+        >
+          Campaign Builder
+        </button>
       </div>
 
       {/* Content */}
@@ -1193,25 +1329,6 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* Same Day Check-in */}
-                <button
-                  onClick={() => handleCategorySelect("same_day_checkin")}
-                  className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "same_day_checkin"
-                      ? "ring-2 ring-offset-2 ring-purple-500 shadow-lg"
-                      : "hover:shadow"
-                  } ${
-                    selectedMessageType === "same_day_checkin"
-                      ? "bg-gradient-to-br from-purple-500 to-purple-600 text-white"
-                      : "bg-purple-100 text-purple-700 border border-purple-300"
-                  }`}
-                >
-                  <div className="font-bold text-sm">Same Day</div>
-                  <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.same_day_checkin}
-                  </div>
-                </button>
-
                 {/* Post Session Feedback */}
                 <button
                   onClick={() => handleCategorySelect("post_session_feedback")}
@@ -1231,41 +1348,22 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* 1-Month Follow-up */}
+                {/* 20-Day Follow-up */}
                 <button
-                  onClick={() => handleCategorySelect("one_month_followup")}
+                  onClick={() => handleCategorySelect("twenty_day_followup")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "one_month_followup"
+                    selectedMessageType === "twenty_day_followup"
                       ? "ring-2 ring-offset-2 ring-indigo-500 shadow-lg"
                       : "hover:shadow"
                   } ${
-                    selectedMessageType === "one_month_followup"
+                    selectedMessageType === "twenty_day_followup"
                       ? "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white"
                       : "bg-indigo-100 text-indigo-700 border border-indigo-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">1-Month</div>
+                  <div className="font-bold text-sm">20-Day</div>
                   <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.one_month_followup}
-                  </div>
-                </button>
-
-                {/* No-Show Follow-up */}
-                <button
-                  onClick={() => handleCategorySelect("no_show_followup")}
-                  className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "no_show_followup"
-                      ? "ring-2 ring-offset-2 ring-red-500 shadow-lg"
-                      : "hover:shadow"
-                  } ${
-                    selectedMessageType === "no_show_followup"
-                      ? "bg-gradient-to-br from-red-500 to-red-600 text-white"
-                      : "bg-red-100 text-red-700 border border-red-300"
-                  }`}
-                >
-                  <div className="font-bold text-sm">No-Show</div>
-                  <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.no_show_followup}
+                    {messageTypesCounts.twenty_day_followup}
                   </div>
                 </button>
 
@@ -1288,22 +1386,22 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* Missed This Month */}
+                {/* Missed Paused Appointment */}
                 <button
-                  onClick={() => handleCategorySelect("missed_this_month")}
+                  onClick={() => handleCategorySelect("missed_paused_appointment")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "missed_this_month"
+                    selectedMessageType === "missed_paused_appointment"
                       ? "ring-2 ring-offset-2 ring-pink-500 shadow-lg"
                       : "hover:shadow"
                   } ${
-                    selectedMessageType === "missed_this_month"
+                    selectedMessageType === "missed_paused_appointment"
                       ? "bg-gradient-to-br from-pink-500 to-pink-600 text-white"
                       : "bg-pink-100 text-pink-700 border border-pink-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">Missed Month</div>
+                  <div className="font-bold text-sm">Missed Paused</div>
                   <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.missed_this_month}
+                    {messageTypesCounts.missed_paused_appointment}
                   </div>
                 </button>
 
@@ -1790,9 +1888,28 @@ const SmartMessaging = () => {
                 ([templateId, templateData]) => {
                   const Icon = getTemplateIcon(templateId);
                   const color = getTemplateColor(templateId);
-                  const isActive = templateStates[templateId] !== false; // Default to true
+                  const scheduleConfig = templateSchedules[templateId] || {
+                    enabled: true,
+                    sendTime: "15:00",
+                    timezone: "Asia/Beirut",
+                  };
+                  const isDailyTemplate = [
+                    "reminder_24h",
+                    "post_session_feedback",
+                    "missed_yesterday",
+                    "attended_yesterday",
+                    "twenty_day_followup",
+                  ].includes(templateId);
+                  const isActive = isDailyTemplate ? scheduleConfig.enabled !== false : true;
                   // Check if this is a custom template (not one of the default ones)
-                  const defaultTemplates = ["reminder_24h", "same_day_checkin", "post_session_feedback", "no_show_followup", "one_month_followup", "missed_yesterday", "missed_this_month", "attended_yesterday"];
+                  const defaultTemplates = [
+                    "reminder_24h",
+                    "post_session_feedback",
+                    "twenty_day_followup",
+                    "missed_yesterday",
+                    "attended_yesterday",
+                    "missed_paused_appointment",
+                  ];
                   const isCustomTemplate = !defaultTemplates.includes(templateId);
 
                   return (
@@ -1845,43 +1962,76 @@ const SmartMessaging = () => {
                         </button>
                       </div>
 
-                      {/* Active/Inactive Switch */}
-                      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border-2 border-slate-200">
-                        <div>
-                          <p className="font-semibold text-slate-800">
-                            {isActive ? "✅ Active" : "⏸️ Inactive"}
-                          </p>
-                          <p className="text-xs text-slate-600">
-                            {isActive
-                              ? "Periodic messages enabled"
-                              : "Periodic messages disabled"}
+                      {isDailyTemplate ? (
+                        <div className="p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border-2 border-slate-200 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold text-slate-800">
+                                {isActive ? "✅ Daily Job Enabled" : "⏸️ Daily Job Disabled"}
+                              </p>
+                              <p className="text-xs text-slate-600">Timezone: {scheduleConfig.timezone || "Asia/Beirut"}</p>
+                            </div>
+                            <button
+                              onClick={() =>
+                                handleTemplateScheduleChange(templateId, "enabled", !isActive)
+                              }
+                              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                                isActive
+                                  ? "bg-green-500 focus:ring-green-500"
+                                  : "bg-slate-300 focus:ring-slate-400"
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                                  isActive ? "translate-x-7" : "translate-x-1"
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">Send Time</label>
+                              <input
+                                type="time"
+                                value={scheduleConfig.sendTime || "15:00"}
+                                onChange={(e) =>
+                                  handleTemplateScheduleChange(templateId, "sendTime", e.target.value)
+                                }
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">Timezone</label>
+                              <input
+                                type="text"
+                                value={scheduleConfig.timezone || "Asia/Beirut"}
+                                onChange={(e) =>
+                                  handleTemplateScheduleChange(templateId, "timezone", e.target.value)
+                                }
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleSaveTemplateSchedule(templateId)}
+                            disabled={savingTemplateSchedule === templateId}
+                            className={`w-full px-3 py-2 rounded-lg text-sm font-medium ${
+                              savingTemplateSchedule === templateId
+                                ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                                : "bg-indigo-600 text-white hover:bg-indigo-700"
+                            }`}
+                          >
+                            {savingTemplateSchedule === templateId ? "Saving..." : "Save Schedule"}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                          <p className="text-sm font-semibold text-slate-800">Manual Campaign Template</p>
+                          <p className="text-xs text-slate-600 mt-1">
+                            This template is used via Campaign Builder (Preview + Send Now/Schedule).
                           </p>
                         </div>
-                        <button
-                          onClick={() => {
-                            setTemplateStates((prev) => ({
-                              ...prev,
-                              [templateId]: !isActive,
-                            }));
-                            toast.success(
-                              isActive
-                                ? `${templateData.name} deactivated`
-                                : `${templateData.name} activated`
-                            );
-                          }}
-                          className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                            isActive
-                              ? "bg-green-500 focus:ring-green-500"
-                              : "bg-slate-300 focus:ring-slate-400"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                              isActive ? "translate-x-7" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
+                      )}
 
                       {/* Delete Button for Custom Templates */}
                       {isCustomTemplate && (
@@ -1898,6 +2048,188 @@ const SmartMessaging = () => {
                     </div>
                   );
                 }
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === "campaigns" && (
+          <motion.div
+            key="campaigns"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800">Missed Paused Appointment</h3>
+                  <p className="text-sm text-slate-600">
+                    Build a manual campaign with filters, preview recipients, then send now or schedule.
+                  </p>
+                </div>
+                <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                  Paused Only
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-2">Services</label>
+                  <select
+                    multiple
+                    value={(campaignFilters.service_ids || []).map((id) => String(id))}
+                    onChange={handleCampaignServicesChange}
+                    className="w-full min-h-[120px] px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    {availableServices.map((service) => (
+                      <option key={service.service_id} value={service.service_id}>
+                        {service.service_name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">Hold Ctrl/Cmd to select multiple services.</p>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-2">From Date</label>
+                    <input
+                      type="date"
+                      value={campaignFilters.from_date || ""}
+                      onChange={(e) => handleCampaignFilterChange("from_date", e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-2">To Date</label>
+                    <input
+                      type="date"
+                      value={campaignFilters.to_date || ""}
+                      onChange={(e) => handleCampaignFilterChange("to_date", e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-2">Lookback (months)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="24"
+                      value={campaignFilters.lookback_months || 3}
+                      onChange={(e) => handleCampaignFilterChange("lookback_months", Number(e.target.value || 3))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-2">Schedule Time (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={campaignScheduleTime}
+                      onChange={(e) => setCampaignScheduleTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handlePreviewCampaignRecipients}
+                  disabled={campaignLoading}
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    campaignLoading
+                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  }`}
+                >
+                  {campaignLoading ? "Loading Preview..." : "Preview Recipients"}
+                </button>
+                <button
+                  onClick={() => handleSendCampaign("send_now")}
+                  disabled={campaignSending}
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    campaignSending
+                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                      : "bg-green-600 text-white hover:bg-green-700"
+                  }`}
+                >
+                  {campaignSending ? "Sending..." : "Send Now"}
+                </button>
+                <button
+                  onClick={() => handleSendCampaign("schedule")}
+                  disabled={campaignSending}
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    campaignSending
+                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {campaignSending ? "Scheduling..." : "Schedule"}
+                </button>
+                <span className="text-sm text-slate-600">
+                  Preview Count: <span className="font-bold">{campaignPreviewCount}</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="card">
+              <h4 className="text-lg font-semibold text-slate-800 mb-3">Preview Recipients</h4>
+              {campaignPreviewRecipients.length === 0 ? (
+                <p className="text-sm text-slate-500">No recipients previewed yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="text-left py-2 px-3">Name</th>
+                        <th className="text-left py-2 px-3">Phone</th>
+                        <th className="text-left py-2 px-3">Service</th>
+                        <th className="text-left py-2 px-3">Last Appointment</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campaignPreviewRecipients.slice(0, 100).map((recipient, idx) => (
+                        <tr key={`${recipient.phone}-${idx}`} className="border-b border-slate-100">
+                          <td className="py-2 px-3">{recipient.customer_name || "-"}</td>
+                          <td className="py-2 px-3">{recipient.phone || "-"}</td>
+                          <td className="py-2 px-3">{recipient.service_name || "-"}</td>
+                          <td className="py-2 px-3">{recipient.appointment_date || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="card">
+              <h4 className="text-lg font-semibold text-slate-800 mb-3">Recent Campaign Logs</h4>
+              {campaignLogs.length === 0 ? (
+                <p className="text-sm text-slate-500">No campaign logs found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {campaignLogs.map((log) => (
+                    <div
+                      key={log.campaign_id}
+                      className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{log.template_type}</p>
+                        <p className="text-xs text-slate-500">Campaign ID: {log.campaign_id}</p>
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        Status: <span className="font-semibold">{log.status}</span> | Sent:{" "}
+                        <span className="font-semibold">{log.sent_count || 0}</span> / Preview:{" "}
+                        <span className="font-semibold">{log.preview_count || 0}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </motion.div>
