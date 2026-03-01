@@ -2,6 +2,7 @@
 """
 Interaction Flow Logger - Tracks User ↔ Bot ↔ AI message flow for dashboard transparency.
 Enable via INTERACTION_FLOW_DEBUG=1 or config.INTERACTION_FLOW_DEBUG.
+Persists to LINASBOT_DATA_ROOT/logs/activity_flow.jsonl so data survives deploy/rebuild.
 """
 
 import json
@@ -10,8 +11,54 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from collections import deque
 
-# In-memory buffer for dashboard (last N entries)
-_FLOW_BUFFER: deque = deque(maxlen=200)
+from storage.persistent_storage import ACTIVITY_FLOW_FILE, ensure_dirs
+
+FLOW_LOG_FILE = str(ACTIVITY_FLOW_FILE)
+_BUFFER_MAXLEN = 500
+
+# In-memory buffer for dashboard (last N entries) - loaded from file on startup
+_FLOW_BUFFER: deque = deque(maxlen=_BUFFER_MAXLEN)
+_INITIALIZED = False
+
+
+def _ensure_data_dir() -> None:
+    """Ensure persistent logs directory exists."""
+    ensure_dirs()
+
+
+def _load_from_file() -> None:
+    """Load last N entries from disk into buffer (called on first use)."""
+    global _INITIALIZED
+    if _INITIALIZED:
+        return
+    _INITIALIZED = True
+    if not os.path.isfile(FLOW_LOG_FILE):
+        return
+    try:
+        with open(FLOW_LOG_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        # Last N lines (newest at end)
+        for line in lines[-_BUFFER_MAXLEN * 2:]:  # Read more, buffer will trim
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                _FLOW_BUFFER.append(entry)
+            except json.JSONDecodeError:
+                continue
+    except OSError as e:
+        print(f"⚠️ Could not load activity flow from {FLOW_LOG_FILE}: {e}")
+
+
+def _append_to_file(entry: Dict[str, Any]) -> None:
+    """Append one entry to the persistent log file."""
+    _ensure_data_dir()
+    try:
+        with open(FLOW_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print(f"⚠️ Could not append to activity flow file: {e}")
 
 
 def is_flow_logging_enabled() -> bool:
@@ -72,6 +119,8 @@ def log_interaction(
     if not is_flow_logging_enabled():
         return
 
+    _load_from_file()
+
     phone = user_phone or user_id
     entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -96,10 +145,12 @@ def log_interaction(
     }
 
     _FLOW_BUFFER.append(entry)
+    _append_to_file(entry)
 
 
 def get_recent_flows(limit: int = 50, search_phone: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get recent flow entries for dashboard. Optionally filter by phone (partial match)."""
+    _load_from_file()
     entries = list(_FLOW_BUFFER)[-limit * 3:]  # Fetch more when filtering
     if search_phone and search_phone.strip():
         q = search_phone.strip().replace(" ", "").replace("+", "").replace("-", "")

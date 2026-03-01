@@ -207,7 +207,9 @@ def _message_to_dashboard_format(msg: dict) -> dict:
     ts_str = ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else utc_now().isoformat())
     role = str(msg.get("role", "")).strip().lower()
     meta = msg.get("metadata") or {}
-    handled = meta.get("handled_by") or ("human" if role == "operator" else "bot")
+    handled = meta.get("handled_by")
+    if not handled:
+        handled = "human" if role == "operator" else ("bot" if meta.get("source") == "qa_database" else "ai")
     out = {
         "timestamp": ts_str,
         "is_user": role == "user",

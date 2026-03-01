@@ -12,7 +12,8 @@ export const fetchLiveChatConversationMessages = async ({
   conversationId,
   days = 0,
   before = null,
-  timeoutMs = 90000,
+  limit = 50,
+  timeoutMs = 45000,
 }) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -21,10 +22,11 @@ export const fetchLiveChatConversationMessages = async ({
     const params = new URLSearchParams();
     if (days > 0) params.append("days", String(days));
     if (before) params.append("before", before);
+    params.append("limit", String(Math.min(100, Math.max(1, limit))));
 
     const query = params.toString();
     const baseURL = getApiAbsoluteBaseUrl();
-    const url = `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}${query ? `?${query}` : ""}`;
+    const url = `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}?${query}`;
     const response = await fetch(url, { signal: controller.signal });
     const data = await response.json();
 
@@ -33,6 +35,7 @@ export const fetchLiveChatConversationMessages = async ({
       messages: data?.success && Array.isArray(data.messages)
         ? normalizeConversationMessages(data.messages)
         : [],
+      has_more: data?.has_more ?? false,
     };
   } finally {
     clearTimeout(timeoutId);

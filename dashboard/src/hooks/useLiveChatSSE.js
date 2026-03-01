@@ -75,10 +75,12 @@ export const useLiveChatSSE = ({
         : selected.conversation.user_id === eventData.user_id;
       if (!isSameConversation) return;
 
-      const messages = await fetchConversationMessages(
+      const { messages } = await fetchConversationMessages(
         selected.conversation.user_id,
         selected.conversation.conversation_id,
-        1
+        1,
+        null,
+        50
       );
       if (!isMountedRef.current || !messages?.length) return;
 

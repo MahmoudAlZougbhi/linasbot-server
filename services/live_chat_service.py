@@ -1446,19 +1446,31 @@ class LiveChatService:
                 # Sort by timestamp ascending (oldest first) for display
                 messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
 
+            # WhatsApp-style: cap at max_messages (default 50) for fast load
+            messages_before_slice = len(messages)
             if len(messages) > max_messages:
                 messages = messages[-max_messages:]
 
             formatted_messages = []
 
             for msg in messages:
+                meta = msg.get("metadata") or {}
+                handled = meta.get("handled_by")
+                if not handled:
+                    # Fallback for old messages: qa_database=bot, operator=human, else ai
+                    if meta.get("source") == "qa_database":
+                        handled = "bot"
+                    elif msg.get("role") == "operator":
+                        handled = "human"
+                    else:
+                        handled = "ai"  # role=ai without metadata = GPT
                 msg_data = {
                     "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
                     "is_user": msg.get("role") == "user",
                     "content": msg.get("text", ""),
                     "text": msg.get("text", ""),
                     "type": msg.get("type", "text"),
-                    "handled_by": msg.get("metadata", {}).get("handled_by", "bot"),
+                    "handled_by": handled,
                     "role": msg.get("role")
                 }
 
@@ -1474,12 +1486,19 @@ class LiveChatService:
 
                 formatted_messages.append(msg_data)
 
+            # WhatsApp-style: has_more = more older messages available (for Load More)
+            has_more = (
+                messages_before_slice > max_messages if before
+                else total_messages > max_messages
+            )
+
             return {
                 "success": True,
                 "conversation_id": conversation_id,
                 "messages": formatted_messages,
                 "total_messages": total_messages,
                 "returned_messages": len(formatted_messages),
+                "has_more": has_more,
                 "sentiment": conv_data.get("sentiment", "neutral"),
                 "status": conv_data.get("status", "active")
             }

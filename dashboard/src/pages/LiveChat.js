@@ -96,13 +96,13 @@ const LiveChat = () => {
     };
   }, []);
 
-  // Debounce search input (400ms) before triggering API
+  // Debounce search input (250ms) - WhatsApp-style snappy
   useEffect(() => {
     const timer = setTimeout(() => {
       const trimmed = liveSearchQuery.trim();
       setDebouncedSearch(trimmed);
       debouncedSearchRef.current = trimmed;
-    }, 400);
+    }, 250);
     return () => clearTimeout(timer);
   }, [liveSearchQuery]);
 
@@ -123,29 +123,30 @@ const LiveChat = () => {
     });
   }, [operatorStatus, updateOperatorStatus]);
 
-  // Fetch conversation messages - newest window initially, Load More with before
-  const fetchConversationMessages = async (userId, conversationId, days = 0, before = null) => {
+  // Fetch conversation messages - WhatsApp-style: last 50 initially, Load More with before
+  const fetchConversationMessages = async (userId, conversationId, days = 0, before = null, limit = 50) => {
     try {
       const data = await fetchLiveChatConversationMessages({
         userId,
         conversationId,
         days,
         before,
+        limit,
       });
 
       if (data.success && data.messages) {
-        return data.messages;
+        return { messages: data.messages, hasMore: data.has_more ?? false };
       }
       console.warn("No messages found or API error:", data);
-      return [];
+      return { messages: [], hasMore: false };
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error("Message fetch timed out after 90 seconds");
-        toast.error("Loading messages timed out - conversation may have too many messages");
+        console.error("Message fetch timed out");
+        toast.error("Loading messages timed out - try again");
       } else {
         console.error("Error fetching conversation messages:", error);
       }
-      return [];
+      return { messages: [], hasMore: false };
     }
   };
 
@@ -314,12 +315,13 @@ const LiveChat = () => {
     let cancelled = false;
     const fetchMessages = async () => {
       setMessagesLoading(true);
-      setHasMoreMessages(true);
       try {
-        const messages = await fetchConversationMessages(
+        const { messages, hasMore } = await fetchConversationMessages(
           selectedConversationUserId,
           selectedConversationId,
-          0
+          0,
+          null,
+          50
         );
         if (!isMountedRef.current || cancelled) return;
 
@@ -329,6 +331,7 @@ const LiveChat = () => {
           }
           return { ...prev, history: messages || [] };
         });
+        setHasMoreMessages(hasMore);
       } catch (error) {
         // Silent fail
       } finally {
@@ -556,7 +559,7 @@ const LiveChat = () => {
     return `${Math.floor(diff / 3600)}h ago`;
   };
 
-  // ✅ Load more (older) messages - for pagination by day
+  // ✅ Load more (older) messages - WhatsApp-style: 50 at a time
   const loadMoreMessages = async () => {
     if (!selectedConversation || loadingMoreMessages || !hasMoreMessages) return;
     const history = selectedConversation.history || [];
@@ -565,11 +568,12 @@ const LiveChat = () => {
       : new Date().toISOString();
     setLoadingMoreMessages(true);
     try {
-      const older = await fetchConversationMessages(
+      const { messages: older, hasMore } = await fetchConversationMessages(
         selectedConversation.conversation.user_id,
         selectedConversation.conversation.conversation_id,
         0,
-        beforeTs
+        beforeTs,
+        50
       );
       if (older && older.length > 0) {
         setSelectedConversation((prev) => ({
@@ -577,7 +581,7 @@ const LiveChat = () => {
           history: [...older, ...(prev.history || [])],
         }));
       }
-      if (!older || older.length === 0) setHasMoreMessages(false);
+      setHasMoreMessages(hasMore);
     } catch (e) {
       console.error("Load more messages error:", e);
     } finally {
@@ -585,24 +589,24 @@ const LiveChat = () => {
     }
   };
 
-  // ✅ Reload messages for currently selected conversation
+  // ✅ Reload messages for currently selected conversation (WhatsApp-style: last 50)
   const reloadSelectedConversationMessages = async () => {
     if (!selectedConversation) return;
 
     try {
-      console.log(
-        `Reloading messages for conversation ${selectedConversation.conversation.conversation_id}`
-      );
-      const messages = await fetchConversationMessages(
+      const { messages, hasMore } = await fetchConversationMessages(
         selectedConversation.conversation.user_id,
         selectedConversation.conversation.conversation_id,
-        0
+        0,
+        null,
+        50
       );
       setSelectedConversation((prev) => ({
         ...prev,
-        history: messages,
+        history: messages || [],
       }));
-      toast.success(`Loaded ${messages.length} messages`);
+      setHasMoreMessages(hasMore);
+      toast.success(`Loaded ${(messages || []).length} messages`);
     } catch (error) {
       console.error("Error reloading conversation messages:", error);
       toast.error("Failed to reload messages");

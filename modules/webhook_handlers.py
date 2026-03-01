@@ -202,8 +202,10 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
             if d and raw_user_id in d and user_id not in d:
                 d[user_id] = d[raw_user_id]
 
-    # Mandatory external resolve before naming: set name only if customer exists in CRM
-    if normalized_phone:
+    # For text: defer external lookup so user message can save+broadcast first (instant in Live Chat)
+    message_type = parsed_message.get("type", "")
+    defer_external = message_type == "text" and bool(normalized_phone)
+    if normalized_phone and not defer_external:
         try:
             external = await resolve_customer_from_external(normalized_phone)
             print(f"DEBUG: external_lookup normalized_phone={normalized_phone} exists={external.get('exists')} name={external.get('name')}")
@@ -212,11 +214,9 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
                 user_name = external["name"]
                 parsed_message["user_name"] = user_name
             else:
-                # Not in CRM: show phone only in Live Chat (no name)
                 config.user_names.pop(user_id, None)
                 user_name = ""
                 parsed_message["user_name"] = user_name
-            # Set gender from external when available
             if external.get("gender") and external["gender"] in ("male", "female"):
                 config.user_gender[user_id] = external["gender"]
                 if config.user_greeting_stage.get(user_id, 0) <= 1:
@@ -225,6 +225,22 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
             print(f"WARNING: External resolve failed for {normalized_phone}: {e}; using phone only")
             config.user_names.pop(user_id, None)
             parsed_message["user_name"] = ""
+    elif defer_external:
+        user_name = parsed_message.get("user_name") or config.user_names.get(user_id) or ""
+        parsed_message["user_name"] = user_name
+        # Resolve CRM name in background (user message will show in Live Chat immediately)
+        async def _set_name_from_external():
+            try:
+                ext = await resolve_customer_from_external(normalized_phone)
+                if ext.get("exists") and ext.get("name"):
+                    config.user_names[user_id] = ext["name"]
+                else:
+                    config.user_names.pop(user_id, None)
+                if ext.get("gender") and ext["gender"] in ("male", "female"):
+                    config.user_gender[user_id] = ext["gender"]
+            except Exception:
+                pass
+        asyncio.create_task(_set_name_from_external())
 
     message_type = parsed_message["type"]
     content = parsed_message["content"]

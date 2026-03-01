@@ -206,10 +206,21 @@ const ChatHistory = () => {
   const [feedbackModal, setFeedbackModal] = useState(null);
   const messagesEndRef = useRef(null);
 
-  // Load customers on component mount
+  // WhatsApp-style: Load More for customers, conversations, messages
+  const [customerPage, setCustomerPage] = useState(1);
+  const [hasMoreCustomers, setHasMoreCustomers] = useState(false);
+  const [loadingMoreCustomers, setLoadingMoreCustomers] = useState(false);
+  const [conversationPage, setConversationPage] = useState(1);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
+  const [messagePage, setMessagePage] = useState(1);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
+
+  // Load customers on mount and when filter/search changes (WhatsApp-style: top 30)
   useEffect(() => {
-    loadCustomers();
-  }, []);
+    loadCustomers(1, false);
+  }, [filterBy, searchTerm]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -220,14 +231,27 @@ const ChatHistory = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const loadCustomers = async () => {
-    setIsLoadingCustomers(true);
+  const loadCustomers = async (page = 1, append = false) => {
+    if (!append) setIsLoadingCustomers(true);
     try {
-      const response = await fetch("/api/chat-history/customers");
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: "30",
+        filter_by: filterBy,
+      });
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
+      const response = await fetch(`/api/chat-history/customers?${params}`);
       const data = await response.json();
 
       if (data.success) {
-        setCustomers(data.customers || []);
+        const list = data.customers || [];
+        if (append) {
+          setCustomers((prev) => [...prev, ...list]);
+        } else {
+          setCustomers(list);
+        }
+        setCustomerPage(page);
+        setHasMoreCustomers(page < (data.total_pages || 1));
       } else {
         toast.error("Failed to load customers");
       }
@@ -239,26 +263,56 @@ const ChatHistory = () => {
     }
   };
 
-  const loadConversations = async (customerId) => {
-    setIsLoadingConversations(true);
+  const loadMoreCustomers = async () => {
+    if (loadingMoreCustomers || !hasMoreCustomers) return;
+    setLoadingMoreCustomers(true);
+    try {
+      const nextPage = customerPage + 1;
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        page_size: "30",
+        filter_by: filterBy,
+      });
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
+      const response = await fetch(`/api/chat-history/customers?${params}`);
+      const data = await response.json();
+      if (data.success && data.customers?.length) {
+        setCustomers((prev) => [...prev, ...data.customers]);
+        setCustomerPage(nextPage);
+        setHasMoreCustomers(nextPage < (data.total_pages || 1));
+      } else {
+        setHasMoreCustomers(false);
+      }
+    } catch (error) {
+      console.error("Error loading more customers:", error);
+    } finally {
+      setLoadingMoreCustomers(false);
+    }
+  };
+
+  const loadConversations = async (customerId, page = 1, append = false) => {
+    if (!append) setIsLoadingConversations(true);
     try {
       const response = await fetch(
-        `/api/chat-history/conversations/${customerId}`
+        `/api/chat-history/conversations/${customerId}?page=${page}&page_size=30`
       );
       const data = await response.json();
 
       if (data.success) {
         const convList = data.conversations || [];
-        // ✅ PRIORITY: Display conversations immediately
-        setConversations(convList);
+        if (append) {
+          setConversations((prev) => [...prev, ...convList]);
+        } else {
+          setConversations(convList);
+        }
+        setConversationPage(page);
+        setHasMoreConversations(page < (data.total_pages || 1));
         setIsLoadingConversations(false);
 
-        // Auto-select and lazy load first conversation if available
-        if (convList.length > 0) {
+        if (!append && convList.length > 0) {
           const firstConvId = convList[0].id;
           setSelectedConversationId(firstConvId);
-          // ✅ Lazy load messages asynchronously - don't block UI
-          loadConversationMessages(customerId, firstConvId);
+          loadConversationMessages(customerId, firstConvId, 1);
         }
       } else {
         toast.error("Failed to load conversations");
@@ -271,65 +325,100 @@ const ChatHistory = () => {
     }
   };
 
-  const loadConversationMessages = async (userId, conversationId) => {
-    // Check cache first for instant loading
-    if (messageCache[conversationId]) {
+  const loadMoreConversations = async () => {
+    if (!selectedCustomer || loadingMoreConversations || !hasMoreConversations) return;
+    setLoadingMoreConversations(true);
+    try {
+      const nextPage = conversationPage + 1;
+      const response = await fetch(
+        `/api/chat-history/conversations/${selectedCustomer.user_id}?page=${nextPage}&page_size=30`
+      );
+      const data = await response.json();
+      if (data.success && data.conversations?.length) {
+        setConversations((prev) => [...prev, ...data.conversations]);
+        setConversationPage(nextPage);
+        setHasMoreConversations(nextPage < (data.total_pages || 1));
+      } else {
+        setHasMoreConversations(false);
+      }
+    } catch (error) {
+      console.error("Error loading more conversations:", error);
+    } finally {
+      setLoadingMoreConversations(false);
+    }
+  };
+
+  const loadConversationMessages = async (userId, conversationId, page = 1, append = false) => {
+    const cacheKey = `${conversationId}_${page}`;
+    if (page === 1 && messageCache[conversationId]) {
       setConversationMessages(messageCache[conversationId]);
       return;
     }
 
-    // Create AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-    setIsLoadingMessages(true);
+    if (!append) setIsLoadingMessages(true);
+    else setLoadingMoreMessages(true);
     try {
+      const params = new URLSearchParams({ page: String(page), page_size: "50", sort: "asc" });
       const response = await fetch(
-        `/api/chat-history/messages/${userId}/${conversationId}`,
+        `/api/chat-history/messages/${userId}/${conversationId}?${params}`,
         { signal: controller.signal }
       );
       clearTimeout(timeoutId);
-
       const data = await response.json();
 
       if (data.success) {
         const messages = data.messages || [];
-        // Cache the messages
-        setMessageCache((prev) => ({
-          ...prev,
-          [conversationId]: messages,
-        }));
-        setConversationMessages(messages);
+        const hasMore = page < (data.total_pages || 1);
+        setHasMoreMessages(hasMore);
+        setMessagePage(page);
+        if (append) {
+          setConversationMessages((prev) => [...messages, ...prev]);
+        } else {
+          if (page === 1) {
+            setMessageCache((prev) => ({ ...prev, [conversationId]: messages }));
+          }
+          setConversationMessages(messages);
+        }
       } else {
         toast.error("Failed to load messages");
-        setConversationMessages([]);
+        if (!append) setConversationMessages([]);
       }
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        console.error("Message fetch timed out after 60 seconds");
-        toast.error("Loading messages timed out - conversation may have too many messages");
+        toast.error("Loading timed out - try again");
       } else {
         console.error("Error loading messages:", error);
-        toast.error("Error loading messages");
       }
-      setConversationMessages([]);
+      if (!append) setConversationMessages([]);
     } finally {
       setIsLoadingMessages(false);
+      setLoadingMoreMessages(false);
     }
+  };
+
+  const loadMoreChatHistoryMessages = async () => {
+    if (!selectedCustomer || loadingMoreMessages || !hasMoreMessages) return;
+    const nextPage = messagePage + 1;
+    await loadConversationMessages(selectedCustomer.user_id, selectedConversationId, nextPage, true);
   };
 
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
     setSelectedConversationId(null);
     setConversationMessages([]);
-    loadConversations(customer.user_id);
+    setMessagePage(1);
+    loadConversations(customer.user_id, 1, false);
   };
 
   const handleConversationSelect = (conversationId) => {
     if (conversationId === selectedConversationId) return;
     setSelectedConversationId(conversationId);
-    loadConversationMessages(selectedCustomer.user_id, conversationId);
+    setMessagePage(1);
+    loadConversationMessages(selectedCustomer.user_id, conversationId, 1, false);
   };
 
   const formatTime = (timestamp) => {
@@ -428,32 +517,8 @@ const ChatHistory = () => {
     }
   };
 
-  const filteredCustomers = customers.filter((customer) => {
-    const matchesSearch =
-      customer.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.user_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone_full?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone_clean?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (!matchesSearch) return false;
-
-    if (filterBy === "all") return true;
-
-    const lastMessageTime = new Date(customer.last_message_time);
-    const now = new Date();
-    const diffInHours = (now - lastMessageTime) / (1000 * 60 * 60);
-
-    switch (filterBy) {
-      case "today":
-        return diffInHours < 24;
-      case "week":
-        return diffInHours < 168; // 7 days
-      case "month":
-        return diffInHours < 720; // 30 days
-      default:
-        return true;
-    }
-  });
+  // API returns filtered customers (search + filter_by), no client-side filter needed
+  const displayedCustomers = customers;
 
   return (
     <div className="h-screen flex flex-col">
@@ -474,7 +539,7 @@ const ChatHistory = () => {
             </p>
           </div>
           <button
-            onClick={loadCustomers}
+            onClick={() => loadCustomers(1, false)}
             disabled={isLoadingCustomers}
             className="btn-secondary flex items-center space-x-2"
           >
@@ -536,14 +601,14 @@ const ChatHistory = () => {
               <div className="flex items-center justify-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
               </div>
-            ) : filteredCustomers.length === 0 ? (
+            ) : displayedCustomers.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 text-slate-500">
                 <ChatBubbleLeftIcon className="w-8 h-8 mb-2" />
                 <p className="text-sm">No conversations found</p>
               </div>
             ) : (
               <div className="space-y-1 p-2">
-                {filteredCustomers.map((customer) => (
+                {displayedCustomers.map((customer) => (
                   <motion.div
                     key={customer.user_id}
                     initial={{ opacity: 0, y: 10 }}
@@ -594,6 +659,15 @@ const ChatHistory = () => {
                     </div>
                   </motion.div>
                 ))}
+                {hasMoreCustomers && (
+                  <button
+                    onClick={loadMoreCustomers}
+                    disabled={loadingMoreCustomers}
+                    className="w-full py-3 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 transition"
+                  >
+                    {loadingMoreCustomers ? "Loading..." : "Load More"}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -637,10 +711,10 @@ const ChatHistory = () => {
                 </div>
               </div>
 
-              {/* Conversation Selector - only show if multiple conversations */}
-              {conversations.length > 1 && (
+              {/* Conversation Selector - WhatsApp-style: Load More */}
+              {conversations.length > 0 && (
                 <div className="bg-white border-b border-slate-200 px-4 py-2">
-                  <div className="flex space-x-2 overflow-x-auto">
+                  <div className="flex flex-wrap gap-2">
                     {conversations.map((conv, idx) => (
                       <button
                         key={conv.id}
@@ -654,12 +728,21 @@ const ChatHistory = () => {
                         Conv {idx + 1} ({conv.message_count} msgs)
                       </button>
                     ))}
+                    {hasMoreConversations && (
+                      <button
+                        onClick={loadMoreConversations}
+                        disabled={loadingMoreConversations}
+                        className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium text-primary-600 hover:bg-primary-50 border border-primary-200"
+                      >
+                        {loadingMoreConversations ? "..." : "Load More"}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Messages - WhatsApp-style: Load More for older */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
                 {isLoadingConversations || isLoadingMessages ? (
                   <div className="flex items-center justify-center h-32">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -670,6 +753,16 @@ const ChatHistory = () => {
                     <p className="text-sm">No messages found</p>
                   </div>
                 ) : (
+                  <>
+                  {hasMoreMessages && (
+                    <button
+                      onClick={loadMoreChatHistoryMessages}
+                      disabled={loadingMoreMessages}
+                      className="self-center py-2 px-4 text-sm text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 mb-2"
+                    >
+                      {loadingMoreMessages ? "Loading..." : "Load More (older)"}
+                    </button>
+                  )}
                   <div className="space-y-3">
                     {conversationMessages.map((message, index) => {
                       // Check if this is a voice message
@@ -842,6 +935,7 @@ const ChatHistory = () => {
                       );
                     })}
                   </div>
+                  </>
                 )}
                 <div ref={messagesEndRef} />
               </div>

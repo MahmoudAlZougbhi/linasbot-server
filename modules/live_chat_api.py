@@ -223,15 +223,17 @@ async def get_conversation_details(
     user_id: str,
     conversation_id: str,
     days: int = Query(default=0, description="Return only last N days (0=all)"),
-    before: str = Query(default=None, description="Load messages older than this ISO timestamp"),
+    before: str = Query(default=None, description="Load messages older than this ISO timestamp (Load More)"),
+    limit: int = Query(default=50, ge=1, le=100, description="Max messages per request (WhatsApp-style: 50)"),
 ):
-    """Get detailed conversation history. Use days=1 for initial load, before=... for Load More."""
+    """Get detailed conversation history. Initial: last 50. Load More: before=oldest_ts, limit=50."""
     try:
         details = await live_chat_service.get_conversation_details(
             user_id=user_id,
             conversation_id=conversation_id,
             days=days,
             before=before,
+            max_messages=limit,
         )
         return details
     except Exception as e:

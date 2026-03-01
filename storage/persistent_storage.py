@@ -39,6 +39,10 @@ PRICE_FILES_DIR = CONTENT_DIR / "price_files"
 # Settings
 APP_SETTINGS_FILE = SETTINGS_DIR / "app_settings.json"
 
+# Logs (Activity Flow, etc. – survives deploy)
+LOGS_DIR = _DATA_ROOT / "logs"
+ACTIVITY_FLOW_FILE = LOGS_DIR / "activity_flow.jsonl"
+
 # Smart Messaging
 MESSAGE_TEMPLATES_FILE = SMART_MESSAGING_DIR / "message_templates.json"
 MESSAGE_TEMPLATES_LOCK_FILE = SMART_MESSAGING_DIR / ".message_templates.lock"
@@ -75,7 +79,7 @@ def get_smart_messaging_path(relative: str) -> Path:
 
 def ensure_dirs():
     """Create all persistent data directories."""
-    for d in (QA_DIR, CONTENT_DIR, SETTINGS_DIR, SMART_MESSAGING_DIR,
+    for d in (QA_DIR, CONTENT_DIR, SETTINGS_DIR, SMART_MESSAGING_DIR, LOGS_DIR,
               KNOWLEDGE_FILES_DIR, STYLE_FILES_DIR, PRICE_FILES_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -164,6 +168,10 @@ def migrate_from_legacy():
 
     # Settings
     if _safe_migrate_file(_LEGACY_DATA / "app_settings.json", APP_SETTINGS_FILE):
+        migrated_any = True
+
+    # Logs (Activity Flow)
+    if _safe_migrate_file(_LEGACY_DATA / "activity_flow.jsonl", ACTIVITY_FLOW_FILE):
         migrated_any = True
 
     # Smart messaging
