@@ -23,8 +23,8 @@ from services.media_service import build_whatsapp_audio_delivery_url
 class LiveChatService:
     """Service for managing live chat operations with hybrid approach"""
 
-    # Time window for active conversations (6 hours in seconds)
-    ACTIVE_TIME_WINDOW = 6 * 60 * 60  # 6 hours
+    # Time window for active conversations (2 hours - "live" = currently with AI)
+    ACTIVE_TIME_WINDOW = 2 * 60 * 60  # 2 hours
 
     # Cache configuration
     CACHE_TTL = 5  # seconds - short cache for near real-time updates
@@ -43,6 +43,9 @@ class LiveChatService:
         self._phone_to_room_cache = {}
         self._room_to_phone_cache = {}
         self._phone_mapping_cache_time = None
+        # Cache for unified chats (WhatsApp-style list)
+        self._unified_chats_cache = []
+        self._unified_chats_cache_time = None
 
     def invalidate_cache(self):
         """Clear service caches so UI reads latest state."""
@@ -50,6 +53,8 @@ class LiveChatService:
         self._conversations_cache_time = None
         self._queue_cache = None
         self._queue_cache_time = None
+        self._unified_chats_cache = []
+        self._unified_chats_cache_time = None
 
     def _dedupe_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -328,11 +333,35 @@ class LiveChatService:
     ) -> Dict[str, Any]:
         """
         WhatsApp-style unified chat list: live at top, history below.
-        - Live = last 6h, not resolved/archived
+        - Live = last 6h, not resolved/archived (chats currently with AI)
         - History = older or resolved
         - Returns top page_size (default 30) per page
         - Search by name or phone
         """
+        search_val = (search or "").strip().lower()
+        current_time = datetime.datetime.now(datetime.timezone.utc)
+
+        if not search_val and page == 1:
+            now_ts = current_time.timestamp()
+            if (
+                self._unified_chats_cache
+                and self._unified_chats_cache_time
+                and (now_ts - self._unified_chats_cache_time) < self.CACHE_TTL
+            ):
+                all_chats = self._unified_chats_cache
+                total = len(all_chats)
+                start = 0
+                end = min(page_size, total)
+                paged = all_chats[start:end]
+                return {
+                    "success": True,
+                    "chats": paged,
+                    "total": total,
+                    "page": 1,
+                    "page_size": page_size,
+                    "has_more": end < total,
+                }
+
         try:
             db = get_firestore_db()
             if not db:
@@ -359,6 +388,8 @@ class LiveChatService:
                     return (user_id, [])
 
             user_ids = [doc.id for doc in users_docs]
+            if len(user_ids) > 200:
+                user_ids = user_ids[:200]
             results = await asyncio.gather(*[fetch_user_conversations(uid) for uid in user_ids], return_exceptions=True)
 
             all_chats: List[Dict[str, Any]] = []
@@ -372,7 +403,7 @@ class LiveChatService:
 
                 for conv_doc in conv_docs:
                     conv_data = conv_doc.to_dict()
-                    messages = self._dedupe_messages(conv_data.get("messages", []))
+                    messages = conv_data.get("messages", []) or []
                     if not messages:
                         continue
                     last_msg = messages[-1]
@@ -454,6 +485,11 @@ class LiveChatService:
             end = start + safe_size
             paged = all_chats[start:end]
             has_more = end < total
+
+            if not search_val and safe_page == 1:
+                import time
+                self._unified_chats_cache = all_chats
+                self._unified_chats_cache_time = time.time()
 
             return {
                 "success": True,

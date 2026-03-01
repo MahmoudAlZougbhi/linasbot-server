@@ -58,13 +58,6 @@ const navigationItems = [
     permissionKey: "liveChat",
   },
   {
-    name: "Analytics",
-    href: "/analytics",
-    icon: ChartBarIcon,
-    badge: "Active",
-    permissionKey: "analytics",
-  },
-  {
     name: "Smart Messaging",
     href: "/smart-messaging",
     icon: BellIcon,

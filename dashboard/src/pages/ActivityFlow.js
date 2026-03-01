@@ -95,75 +95,75 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
         >
           <div className="p-4 space-y-4">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-2">
-              <ListBulletIcon className="w-4 h-4" /> Detailed interaction flow (English)
+              <ListBulletIcon className="w-4 h-4" /> {entry.flow_steps?.length ? "Step-by-step flow" : "Detailed interaction flow (English)"}
             </p>
 
-            <div className="grid gap-4">
-              {/* Step 1: User → Bot */}
-              <FlowStep
-                step={1}
-                title="User sent to Bot"
-                content={entry.user_message || "(no message)"}
-              />
-
-              {/* Step 2: Bot → AI (what bot forwarded to AI) */}
-              <FlowStep
-                step={2}
-                title="Bot sent to AI"
-                content={
-                  entry.ai_query_summary ||
-                  (entry.source === "qa_database"
-                    ? "Bot matched from Q&A database (no AI call)."
-                    : entry.source === "dynamic_retrieval"
-                    ? "Bot used dynamic retrieval (no GPT call)."
-                    : entry.source === "rate_limit"
-                    ? "Rate limit applied (no AI call)."
-                    : entry.source === "moderation"
-                    ? "Content moderated (no AI call)."
-                    : "User query + context messages.")
-                }
-              />
-
-              {/* Step 3: AI processed (model, tokens, tool calls) */}
-              {isGptFlow && (
+            {entry.flow_steps?.length > 0 ? (
+              <div className="grid gap-4">
+                {entry.flow_steps.map((s) => (
+                  <FlowStep
+                    key={s.step}
+                    step={s.step}
+                    title={s.title}
+                    content={typeof s.content === "string" ? s.content : String(s.content ?? "")}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                <FlowStep step={1} title="User sent to Bot" content={entry.user_message || "(no message)"} />
                 <FlowStep
-                  step={3}
-                  title="AI processed"
+                  step={2}
+                  title="Bot sent to AI"
                   content={
-                    <span>
-                      {entry.model && <span>Model: <code className="bg-slate-100 px-1 rounded">{entry.model}</code> </span>}
-                      {entry.tokens != null && <span>• Tokens: {entry.tokens} </span>}
-                      {entry.response_time_ms != null && <span>• Response time: {Math.round(entry.response_time_ms)}ms </span>}
-                      {entry.qa_match_score != null && <span>• Q&A match: {(entry.qa_match_score * 100).toFixed(0)}% </span>}
-                      {entry.tool_calls?.length > 0 && (
-                        <span>• AI requested tools: <code className="bg-violet-100 px-1 rounded">{entry.tool_calls.join(", ")}</code></span>
-                      )}
-                      {!entry.model && !entry.tokens && !entry.tool_calls?.length && "(No metadata)"}
-                    </span>
+                    entry.ai_query_summary ||
+                    (entry.source === "qa_database"
+                      ? "Bot matched from Q&A database (no AI call)."
+                      : entry.source === "dynamic_retrieval"
+                      ? "Bot used dynamic retrieval (no GPT call)."
+                      : entry.source === "rate_limit"
+                      ? "Rate limit applied (no AI call)."
+                      : entry.source === "moderation"
+                      ? "Content moderated (no AI call)."
+                      : "User query + context messages.")
                   }
                 />
-              )}
-
-              {/* Step 4: AI returned (raw response / tool results) */}
-              {isGptFlow && entry.ai_raw_response && (
+                {isGptFlow && (
+                  <FlowStep
+                    step={3}
+                    title="AI processed"
+                    content={
+                      <span>
+                        {entry.model && <span>Model: <code className="bg-slate-100 px-1 rounded">{entry.model}</code> </span>}
+                        {entry.tokens != null && <span>• Tokens: {entry.tokens} </span>}
+                        {entry.response_time_ms != null && <span>• Response time: {Math.round(entry.response_time_ms)}ms </span>}
+                        {entry.qa_match_score != null && <span>• Q&A match: {(entry.qa_match_score * 100).toFixed(0)}% </span>}
+                        {entry.tool_calls?.length > 0 && (
+                          <span>• AI requested tools: <code className="bg-violet-100 px-1 rounded">{entry.tool_calls.join(", ")}</code></span>
+                        )}
+                        {!entry.model && !entry.tokens && !entry.tool_calls?.length && "(No metadata)"}
+                      </span>
+                    }
+                  />
+                )}
+                {isGptFlow && entry.ai_raw_response && (
+                  <FlowStep
+                    step={4}
+                    title="AI returned to Bot"
+                    content={
+                      <pre className="text-xs overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap m-0" dir="auto">
+                        {entry.ai_raw_response}
+                      </pre>
+                    }
+                  />
+                )}
                 <FlowStep
-                  step={4}
-                  title="AI returned to Bot"
-                  content={
-                    <pre className="text-xs overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap m-0" dir="auto">
-                      {entry.ai_raw_response}
-                    </pre>
-                  }
+                  step={isGptFlow && entry.ai_raw_response ? 5 : (isGptFlow ? 4 : 3)}
+                  title="Bot sent to User"
+                  content={entry.bot_to_user || "(no response)"}
                 />
-              )}
-
-              {/* Step 5: Bot sent to User */}
-              <FlowStep
-                step={isGptFlow && entry.ai_raw_response ? 5 : (isGptFlow ? 4 : 3)}
-                title="Bot sent to User"
-                content={entry.bot_to_user || "(no response)"}
-              />
-            </div>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

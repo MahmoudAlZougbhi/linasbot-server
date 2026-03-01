@@ -279,10 +279,10 @@ const LiveChat = () => {
     submitFeedback,
   } = useApi();
 
-  // Fetch conversation messages - 1 day initially for speed
+  // Fetch conversation messages - 1 day initially for speed, Load More with before
   const fetchConversationMessages = async (userId, conversationId, days = 1, before = null) => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
 
     try {
       const baseURL =
@@ -329,11 +329,32 @@ const LiveChat = () => {
       }
 
       try {
-        // WhatsApp-style: unified chats (live + history), top 30
-        const chatsResponse = await getUnifiedChats(debouncedSearch, 1, 30);
-
-        if (chatsResponse.success && chatsResponse.chats) {
-          const chats = chatsResponse.chats;
+        let chatsResponse;
+        try {
+          chatsResponse = await getUnifiedChats(debouncedSearch, 1, 30);
+        } catch (err) {
+          if (err?.response?.status === 504 || err?.code === "ECONNABORTED") {
+            try {
+              const fallback = await getLiveConversations(debouncedSearch);
+              chatsResponse = fallback.success && fallback.conversations
+                ? { success: true, chats: fallback.conversations, has_more: false }
+                : { success: false, chats: [] };
+              if (chatsResponse.success) {
+                toast("Showing live chats only (server busy)", { icon: "⚡" });
+              } else {
+                throw new Error("Fallback failed");
+              }
+            } catch (fallbackErr) {
+              // 504 / timeout: do NOT switch to mock data - keep existing conversations
+              toast.error("Server is busy. Data will refresh when available.");
+              return; // Exit without changing conversations or loading mock
+            }
+          } else {
+            throw err;
+          }
+        }
+        if (chatsResponse?.success) {
+          const chats = chatsResponse.chats || chatsResponse.conversations || [];
           setActiveConversations(chats);
           setChatPage(1);
           setHasMoreChats(chatsResponse.has_more || false);
@@ -377,7 +398,7 @@ const LiveChat = () => {
             }
           }
         } else {
-          // Backend offline - use mock data
+          // Backend returned failure - use mock only for true offline (ERR_NETWORK)
           if (!activeConversations.length) {
             loadMockData();
           }
@@ -390,7 +411,12 @@ const LiveChat = () => {
         }
       } catch (error) {
         console.error("Error fetching live chat data:", error);
-        if (!activeConversations.length) {
+        // 504 / timeout: don't switch to mock - keep existing data
+        const is504OrTimeout = error?.response?.status === 504 || error?.code === "ECONNABORTED";
+        if (is504OrTimeout) {
+          toast.error("Server is busy. Will retry automatically.");
+          // Keep existing conversations - do NOT load mock data
+        } else if (!activeConversations.length) {
           loadMockData();
         }
       } finally {
@@ -1546,7 +1572,12 @@ const LiveChat = () => {
                         <p className="font-medium text-slate-800 text-sm">
                           {conv.user_name}
                         </p>
-                        {/* ✅ "New" Badge - shows for newly appeared conversations */}
+                        {/* ✅ "Live" Badge - currently chatting with AI */}
+                        {conv.is_live && (
+                          <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
+                            Live
+                          </span>
+                        )}
                         {newConversationIds.has(conv.conversation_id) && (
                           <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
                             New

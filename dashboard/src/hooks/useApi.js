@@ -43,7 +43,11 @@ api.interceptors.response.use(
     // Handle timeout errors gracefully (silent)
     if (error.code === "ECONNABORTED") {
       // Silent - no console logs for timeout errors
-      // These are expected for slow Firestore queries
+      return Promise.reject(error);
+    }
+
+    // 504 Gateway Timeout - let the calling component show a friendly message
+    if (error.response?.status === 504) {
       return Promise.reject(error);
     }
 
@@ -460,7 +464,7 @@ export const useApi = () => {
       params.append("page", String(page));
       params.append("page_size", String(pageSize));
       const response = await api.get(`/api/live-chat/unified-chats?${params.toString()}`, {
-        timeout: 60000,
+        timeout: 90000,
       });
       return response.data;
     } catch (error) {

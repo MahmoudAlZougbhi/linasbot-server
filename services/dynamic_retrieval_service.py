@@ -192,44 +192,55 @@ def _ensure_style_included(merged: str, has_style: bool) -> str:
 async def retrieve_and_merge(
     user_message: str,
     include_price_hint: bool = False,
-) -> Tuple[str, Optional[str], str]:
+) -> Tuple[str, Optional[str], str, Dict]:
     """
     Main entry: Select files via LLM, load content, merge.
 
-    Returns: (merged_content, clarification_question, action)
+    Returns: (merged_content, clarification_question, action, flow_meta)
     - If action=ask_clarification: merged_content is empty, clarification_question has the question.
     - If action=fallback_to_general: merged_content has default general + style.
     - If action=normal: merged_content has selected file content.
+    - flow_meta: {"titles_sent": [...], "selected_files": [...], "action": ...} for Activity Flow.
     """
+    flow_meta: Dict = {"titles_sent": [], "selected_files": [], "action": "fallback_to_general"}
+
     if not _has_any_content_files():
-        # No content files - use legacy config
-        return _get_default_general_and_style(), None, "fallback_to_general"
+        return _get_default_general_and_style(), None, "fallback_to_general", flow_meta
+
+    k_titles, p_titles, s_titles = _get_all_titles()
+    all_titles = []
+    for t in k_titles + p_titles + s_titles:
+        tid = t.get("id", "")
+        ttitle = t.get("title", "Untitled")
+        all_titles.append({"id": tid, "title": ttitle})
+    flow_meta["titles_sent"] = all_titles
 
     result = await select_files_llm(user_message)
     action = result.get("action", "normal")
     files = result.get("files", [])
+    flow_meta["action"] = action
+    flow_meta["selected_files"] = files
 
     if action == "ask_clarification":
         clarification = (
             "Could you provide more details so I can give you an accurate answer? "
             "For example: which service are you asking about? (hair removal, tattoo removal, whitening, etc.)"
         )
-        return "", clarification, "ask_clarification"
+        return "", clarification, "ask_clarification", flow_meta
 
     if action == "fallback_to_general":
         merged = _get_default_general_and_style()
         merged = _ensure_style_included(merged, False)
-        return merged, None, "fallback_to_general"
+        return merged, None, "fallback_to_general", flow_meta
 
     # action == normal: load selected files
     merged, has_style = _load_content_by_ids(files)
     merged = _ensure_style_included(merged, has_style)
 
-    # If price-related and no price content loaded, append config price list
     if include_price_hint and config.PRICE_LIST and "price" not in merged.lower()[:200]:
         merged += "\n\n--- Price List ---\n" + config.PRICE_LIST
 
-    return merged, None, action
+    return merged, None, action, flow_meta
 
 
 def is_dynamic_retrieval_available() -> bool:

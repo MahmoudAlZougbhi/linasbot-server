@@ -45,7 +45,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     """
     # Start timing for response time tracking
     start_time = time.time()
-    
+    _dynamic_retrieval_flow_meta = None  # Set when dynamic retrieval is used (for Activity Flow)
+
     current_gender = config.user_gender.get(user_id, "unknown")
     current_preferred_lang = user_data.get('user_preferred_lang', 'ar')
     current_conversation_id = user_data.get('current_conversation_id')
@@ -317,7 +318,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             await update_dashboard_metric_in_firestore(user_id, "qa_responses_used", 1)
             config.user_greeting_stage[user_id] = 2
             save_for_training_conversation_log(query_to_send_to_gpt, qa_response)
-            log_interaction(user_id, query_to_send_to_gpt, qa_response, "qa_database", qa_match_score=match_score)
+            flow_steps = [
+                {"step": 1, "title": "User → Bot", "content": query_to_send_to_gpt},
+                {"step": 2, "title": "Q&A Match (≥90%)", "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
+                {"step": 3, "title": "Bot → User", "content": qa_response},
+            ]
+            log_interaction(user_id, query_to_send_to_gpt, qa_response, "qa_database", qa_match_score=match_score, flow_steps=flow_steps)
             return
         else:
             # <90% match: GPT + knowledge + style + top 3 relevant Q&A pairs
@@ -332,17 +338,25 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     retrieve_and_merge,
                 )
                 if is_dynamic_retrieval_available() and not is_reschedule_intent:
-                    merged, clarification, action = await retrieve_and_merge(
+                    merged, clarification, action, dr_flow_meta = await retrieve_and_merge(
                         query_to_send_to_gpt,
                         include_price_hint=is_price_intent,
                     )
                     if action == "ask_clarification" and clarification:
+                        titles_str = ", ".join(t.get("title", "") for t in (dr_flow_meta.get("titles_sent") or [])[:10])
+                        flow_steps = [
+                            {"step": 1, "title": "User → Bot", "content": query_to_send_to_gpt},
+                            {"step": 2, "title": "Bot → AI (Selector)", "content": f"Bot sent file titles: {titles_str or '(none)'}"},
+                            {"step": 3, "title": "AI → Bot", "content": "AI requested clarification (action: ask_clarification)."},
+                            {"step": 4, "title": "Bot → User", "content": clarification},
+                        ]
                         await send_message_func(user_id, clarification)
                         await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"))
                         save_for_training_conversation_log(query_to_send_to_gpt, clarification)
-                        log_interaction(user_id, query_to_send_to_gpt, clarification, "dynamic_retrieval")
+                        log_interaction(user_id, query_to_send_to_gpt, clarification, "dynamic_retrieval", flow_steps=flow_steps)
                         return
                     custom_context = merged
+                    _dynamic_retrieval_flow_meta = dr_flow_meta
                     print(f"[_process_and_respond] 📂 Dynamic retrieval: action={action}, context_len={len(merged) if merged else 0}")
             except Exception as e:
                 print(f"[_process_and_respond] ⚠️ Dynamic retrieval fallback: {e}")
@@ -591,6 +605,27 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # Flow logging for dashboard transparency
     response_time_ms = (time.time() - start_time) * 1000
     flow_source = "rate_limit" if action == "rate_limit_exceeded" else "moderation" if action == "content_moderated" else "gpt"
+    flow_steps = None
+    if _dynamic_retrieval_flow_meta:
+        dr = _dynamic_retrieval_flow_meta
+        titles_str = ", ".join(t.get("title", "") for t in (dr.get("titles_sent") or [])[:8])
+        selected_str = ", ".join(dr.get("selected_files") or [])
+        flow_steps = [
+            {"step": 1, "title": "User → Bot", "content": user_input_to_process},
+            {"step": 2, "title": "Bot → AI (Selector)", "content": f"Bot sent file titles to AI: {titles_str or '(none)'}"},
+            {"step": 3, "title": "AI selected files", "content": f"AI returned file IDs: {selected_str or '(none)'}"},
+            {"step": 4, "title": "Bot loaded content", "content": f"Bot loaded and merged selected files. Action: {dr.get('action', 'normal')}."},
+            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT."},
+            {"step": 6, "title": "AI responded", "content": f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"},
+            {"step": 7, "title": "Bot → User", "content": sent_reply or "(no response)"},
+        ]
+    else:
+        flow_steps = [
+            {"step": 1, "title": "User → Bot", "content": user_input_to_process},
+            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("ai_query_summary") or "Query + context sent to GPT."},
+            {"step": 3, "title": "AI processed", "content": f"Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"},
+            {"step": 4, "title": "Bot → User", "content": sent_reply or "(no response)"},
+        ]
     log_interaction(
         user_id,
         user_input_to_process,
@@ -602,6 +637,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         tokens=flow_meta.get("tokens"),
         response_time_ms=response_time_ms,
         tool_calls=flow_meta.get("tool_calls"),
+        flow_steps=flow_steps,
     )
 
     # Token counting and cost calculation

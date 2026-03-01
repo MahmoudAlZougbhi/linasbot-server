@@ -47,6 +47,7 @@ def log_interaction(
     response_time_ms: Optional[float] = None,
     qa_match_score: Optional[float] = None,
     tool_calls: Optional[List[str]] = None,
+    flow_steps: Optional[List[Dict]] = None,
 ) -> None:
     """
     Log one interaction in the User → Bot → AI → Bot → User flow.
@@ -81,6 +82,7 @@ def log_interaction(
         "response_time_ms": response_time_ms,
         "qa_match_score": qa_match_score,
         "tool_calls": tool_calls,
+        "flow_steps": flow_steps[:20] if flow_steps else None,
     }
 
     _FLOW_BUFFER.append(entry)
