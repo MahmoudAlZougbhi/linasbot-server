@@ -40,6 +40,8 @@ def log_interaction(
     bot_to_user: str,
     source: str,
     *,
+    user_name: Optional[str] = None,
+    user_phone: Optional[str] = None,
     ai_query_summary: Optional[str] = None,
     ai_raw_response: Optional[str] = None,
     model: Optional[str] = None,
@@ -68,29 +70,38 @@ def log_interaction(
     if not is_flow_logging_enabled():
         return
 
+    phone = user_phone or user_id
     entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "user_id": user_id,
         "user_id_masked": _mask_user_id(user_id),
+        "user_name": (user_name or "").strip() or None,
+        "user_phone": phone,
+        "user_phone_masked": _mask_user_id(phone) if phone else None,
         "user_message": (user_message or "")[:500],
         "bot_to_user": (bot_to_user or "")[:1000],
         "source": source,
-        "ai_query_summary": (ai_query_summary or "")[:200] if ai_query_summary else None,
-        "ai_raw_response": (ai_raw_response or "")[:800] if ai_raw_response else None,
+        "ai_query_summary": (ai_query_summary or "")[:1500] if ai_query_summary else None,
+        "ai_raw_response": (ai_raw_response or "")[:2000] if ai_raw_response else None,
         "model": model,
         "tokens": tokens,
         "response_time_ms": response_time_ms,
         "qa_match_score": qa_match_score,
         "tool_calls": tool_calls,
-        "flow_steps": flow_steps[:20] if flow_steps else None,
+        "flow_steps": flow_steps[:35] if flow_steps else None,
     }
 
     _FLOW_BUFFER.append(entry)
 
 
-def get_recent_flows(limit: int = 50) -> List[Dict[str, Any]]:
-    """Get recent flow entries for dashboard."""
-    return list(_FLOW_BUFFER)[-limit:]
+def get_recent_flows(limit: int = 50, search_phone: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get recent flow entries for dashboard. Optionally filter by phone (partial match)."""
+    entries = list(_FLOW_BUFFER)[-limit * 3:]  # Fetch more when filtering
+    if search_phone and search_phone.strip():
+        q = search_phone.strip().replace(" ", "").replace("+", "").replace("-", "")
+        if q:
+            entries = [e for e in entries if q in (e.get("user_phone") or "").replace(" ", "").replace("+", "").replace("-", "") or q in (e.get("user_id") or "").replace(" ", "").replace("+", "").replace("-", "")]
+    return entries[-limit:]
 
 
 def clear_flows() -> None:

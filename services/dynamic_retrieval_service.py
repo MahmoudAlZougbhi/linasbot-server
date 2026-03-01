@@ -66,7 +66,7 @@ PRICES:
 STYLE:
 {{STYLE_TITLES}}"""
 
-ANSWER_PROMPT = """You are Lina's Laser AI assistant.
+ANSWER_PROMPT = """You are Marwa AI Assistant – the smart assistant for Lina's Laser Center. When asked "who is with me" or "من معي", respond that you are Marwa AI Assistant.
 
 Use ONLY the provided information to answer.
 Do NOT invent details.
@@ -119,7 +119,7 @@ def _has_any_content_files() -> bool:
 async def select_files_llm(user_message: str) -> Dict:
     """
     Step 1: LLM selects which file IDs are needed.
-    Returns: {"files": [id1, id2], "action": "normal"|"ask_clarification"|"fallback_to_general"}
+    Returns: {"files": [id1, id2], "action": str, "raw_response": str} for Activity Flow.
     """
     k_titles, p_titles, s_titles = _get_all_titles()
 
@@ -135,17 +135,18 @@ async def select_files_llm(user_message: str) -> Dict:
             temperature=0.1,
         )
         text = response.choices[0].message.content.strip()
-        # Extract JSON (handle markdown code blocks)
+        raw_response = text
         m = re.search(r"\{[\s\S]*\}", text)
         if m:
             data = json.loads(m.group())
             return {
                 "files": data.get("files", []) if isinstance(data.get("files"), list) else [],
                 "action": data.get("action", "normal"),
+                "raw_response": raw_response[:600] if raw_response else None,
             }
     except Exception as e:
         print(f"⚠️ Dynamic retrieval select_files_llm error: {e}")
-    return {"files": [], "action": "fallback_to_general"}
+    return {"files": [], "action": "fallback_to_general", "raw_response": None}
 
 
 def _load_content_by_ids(files: List[str]) -> Tuple[str, bool]:
@@ -220,6 +221,14 @@ async def retrieve_and_merge(
     files = result.get("files", [])
     flow_meta["action"] = action
     flow_meta["selected_files"] = files
+    flow_meta["selector_ai_raw_response"] = result.get("raw_response")
+    id_to_title = {t.get("id", ""): t.get("title", "Untitled") for t in all_titles}
+    flow_meta["selected_titles"] = [id_to_title.get(fid, fid) for fid in files]
+    flow_meta["bot_sent_to_selector"] = (
+        f"User message: {user_message[:300]}{'...' if len(user_message) > 300 else ''}\n\n"
+        + "Titles the Bot sent to AI (knowledge/price/style):\n"
+        + "\n".join(f"  • {t.get('title', '')} (id: {t.get('id', '')})" for t in all_titles[:25])
+    )
 
     if action == "ask_clarification":
         clarification = (

@@ -1201,9 +1201,11 @@ export const useApi = () => {
   }, []);
 
   // Activity Flow API (User ↔ Bot ↔ AI transparency)
-  const getFlowLogs = useCallback(async (limit = 50) => {
+  const getFlowLogs = useCallback(async (limit = 50, search = "") => {
     try {
-      const response = await api.get(`/api/flow/logs?limit=${limit}`);
+      const params = new URLSearchParams({ limit });
+      if (search && search.trim()) params.set("search", search.trim());
+      const response = await api.get(`/api/flow/logs?${params.toString()}`);
       return response.data;
     } catch (error) {
       console.error("Error getting flow logs:", error);

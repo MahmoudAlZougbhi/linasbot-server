@@ -1736,24 +1736,25 @@ class LiveChatService:
     
     def _parse_timestamp(self, timestamp) -> datetime.datetime:
         """Parse various timestamp formats - always returns UTC-aware datetime"""
+        if timestamp is None:
+            return datetime.datetime.now(datetime.timezone.utc)
         if isinstance(timestamp, str):
             try:
-                # Handle ISO format strings
                 dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                # If naive (no timezone), assume it's UTC
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=datetime.timezone.utc)
                 return dt
-            except:
+            except Exception:
                 return datetime.datetime.now(datetime.timezone.utc)
-        elif hasattr(timestamp, 'timestamp'):
-            # Firestore timestamp object - .timestamp() returns UTC epoch seconds
+        if isinstance(timestamp, (int, float)):
+            # Epoch seconds (if < 1e12) or milliseconds
+            secs = timestamp / 1000.0 if timestamp >= 1e12 else float(timestamp)
+            return datetime.datetime.fromtimestamp(secs, tz=datetime.timezone.utc)
+        if hasattr(timestamp, 'timestamp'):
             return datetime.datetime.fromtimestamp(timestamp.timestamp(), tz=datetime.timezone.utc)
-        elif hasattr(timestamp, 'seconds'):
-            # Firestore timestamp with seconds attribute - epoch seconds are always UTC
+        if hasattr(timestamp, 'seconds'):
             return datetime.datetime.fromtimestamp(timestamp.seconds, tz=datetime.timezone.utc)
-        else:
-            return datetime.datetime.now(datetime.timezone.utc)
+        return datetime.datetime.now(datetime.timezone.utc)
 
 
 # Global instance

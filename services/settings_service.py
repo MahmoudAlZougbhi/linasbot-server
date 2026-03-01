@@ -39,7 +39,7 @@ class SettingsService:
         """Get default settings"""
         return {
             "general": {
-                "botName": "Lina's Laser Bot",
+                "botName": "Marwa AI Assistant",
                 "defaultLanguage": "ar",
                 "responseTimeout": 5,
                 "enableVoice": True,

@@ -9,6 +9,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   ListBulletIcon,
+  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 
@@ -20,20 +21,31 @@ const SOURCE_LABELS = {
   moderation: { label: "Moderation", color: "bg-rose-100 text-rose-700", icon: "🛡" },
 };
 
-/** Step block for the flow breakdown */
-const FlowStep = ({ step, title, content }) => (
-  <div className="flex gap-3">
-    <div className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-sm">
-      {step}
-    </div>
-    <div className="flex-1 min-w-0">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{title}</p>
-      <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm text-slate-700" dir="auto">
-        {content}
+/** Step block for the flow breakdown - supports long content with scroll */
+const FlowStep = ({ step, title, content }) => {
+  const str = typeof content === "string" ? content : String(content ?? "");
+  const isJsonLike = str.trim().startsWith("{") || str.trim().startsWith("[");
+  return (
+    <div className="flex gap-3">
+      <div className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-sm">
+        {step}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{title}</p>
+        <div
+          className="p-3 bg-white rounded-lg border border-slate-200 text-sm text-slate-700 max-h-48 overflow-y-auto overflow-x-auto"
+          dir="auto"
+        >
+          {isJsonLike ? (
+            <pre className="text-xs whitespace-pre-wrap m-0 font-mono">{str}</pre>
+          ) : (
+            <pre className="text-sm whitespace-pre-wrap m-0 font-sans">{str}</pre>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const FlowCard = ({ entry, isExpanded, onToggle }) => {
   const meta = SOURCE_LABELS[entry.source] || { label: entry.source, color: "bg-slate-100 text-slate-700", icon: "?" };
@@ -58,7 +70,8 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
             <div className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${meta.color}`}>
               {meta.icon} {meta.label}
             </div>
-            <span className="text-xs text-slate-500">{entry.user_id_masked || "..."}</span>
+            <span className="text-xs font-medium text-slate-700">{entry.user_name || "—"}</span>
+            <span className="text-xs text-slate-500">{entry.user_phone_masked ?? entry.user_id_masked ?? "..."}</span>
             <span className="text-xs text-slate-400">{time}</span>
           </div>
           <div className="shrink-0 text-slate-400">
@@ -177,11 +190,12 @@ const ActivityFlow = () => {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [limit, setLimit] = useState(30);
+  const [searchPhone, setSearchPhone] = useState("");
 
   const fetchFlows = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await getFlowLogs(limit);
+      const res = await getFlowLogs(limit, searchPhone);
       if (res.success && res.data) {
         setFlows(res.data.slice().reverse());
       } else {
@@ -192,13 +206,19 @@ const ActivityFlow = () => {
     } finally {
       setLoading(false);
     }
-  }, [getFlowLogs, limit]);
+  }, [getFlowLogs, limit, searchPhone]);
 
   useEffect(() => {
     fetchFlows();
     const interval = setInterval(fetchFlows, 8000);
     return () => clearInterval(interval);
   }, [fetchFlows]);
+
+  // Refetch when search changes (debounced)
+  useEffect(() => {
+    const t = setTimeout(fetchFlows, 400);
+    return () => clearTimeout(t);
+  }, [searchPhone, fetchFlows]);
 
   return (
     <div className="space-y-6">
@@ -209,19 +229,31 @@ const ActivityFlow = () => {
         </p>
       </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-slate-600">Show:</label>
-          <select
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
-            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
-          >
-            <option value={15}>15</option>
-            <option value={30}>30</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <MagnifyingGlassIcon className="w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by phone..."
+              value={searchPhone}
+              onChange={(e) => setSearchPhone(e.target.value)}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm w-40"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-600">Show:</label>
+            <select
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
+            >
+              <option value={15}>15</option>
+              <option value={30}>30</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
         </div>
         <button
           onClick={fetchFlows}

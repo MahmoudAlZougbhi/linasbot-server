@@ -323,7 +323,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 {"step": 2, "title": "Q&A Match (≥90%)", "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
                 {"step": 3, "title": "Bot → User", "content": qa_response},
             ]
-            log_interaction(user_id, query_to_send_to_gpt, qa_response, "qa_database", qa_match_score=match_score, flow_steps=flow_steps)
+            log_interaction(user_id, query_to_send_to_gpt, qa_response, "qa_database", user_name=user_name, user_phone=user_data.get("phone_number"), qa_match_score=match_score, flow_steps=flow_steps)
             return
         else:
             # <90% match: GPT + knowledge + style + top 3 relevant Q&A pairs
@@ -343,17 +343,22 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         include_price_hint=is_price_intent,
                     )
                     if action == "ask_clarification" and clarification:
-                        titles_str = ", ".join(t.get("title", "") for t in (dr_flow_meta.get("titles_sent") or [])[:10])
+                        bot_sent = dr_flow_meta.get("bot_sent_to_selector", "")
+                        ai_returned = dr_flow_meta.get("selector_ai_raw_response", '{"action": "ask_clarification"}')
+                        sel_titles = dr_flow_meta.get("selected_titles") or []
+                        ai_sel = f"AI selected: {', '.join(sel_titles)}" if sel_titles else "AI requested clarification."
+                        if ai_returned:
+                            ai_sel += f"\n\nRaw:\n{ai_returned}"
                         flow_steps = [
                             {"step": 1, "title": "User → Bot", "content": query_to_send_to_gpt},
-                            {"step": 2, "title": "Bot → AI (Selector)", "content": f"Bot sent file titles: {titles_str or '(none)'}"},
-                            {"step": 3, "title": "AI → Bot", "content": "AI requested clarification (action: ask_clarification)."},
+                            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent or "User message + file titles."},
+                            {"step": 3, "title": "AI → Bot", "content": ai_sel},
                             {"step": 4, "title": "Bot → User", "content": clarification},
                         ]
                         await send_message_func(user_id, clarification)
                         await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"))
                         save_for_training_conversation_log(query_to_send_to_gpt, clarification)
-                        log_interaction(user_id, query_to_send_to_gpt, clarification, "dynamic_retrieval", flow_steps=flow_steps)
+                        log_interaction(user_id, query_to_send_to_gpt, clarification, "dynamic_retrieval", user_name=user_name, user_phone=user_data.get("phone_number"), flow_steps=flow_steps)
                         return
                     custom_context = merged
                     _dynamic_retrieval_flow_meta = dr_flow_meta
@@ -608,29 +613,77 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     flow_steps = None
     if _dynamic_retrieval_flow_meta:
         dr = _dynamic_retrieval_flow_meta
-        titles_str = ", ".join(t.get("title", "") for t in (dr.get("titles_sent") or [])[:8])
-        selected_str = ", ".join(dr.get("selected_files") or [])
-        flow_steps = [
+        bot_sent_selector = dr.get("bot_sent_to_selector", "")
+        ai_selector_return = dr.get("selector_ai_raw_response", "")
+        tool_round_trips = flow_meta.get("tool_round_trips") or []
+        ai_first = flow_meta.get("ai_first_response")
+        selected_titles = dr.get("selected_titles") or []
+        ai_selected_str = f"AI selected from knowledge/price/style:\n  • " + "\n  • ".join(selected_titles) if selected_titles else ""
+        if ai_selector_return:
+            ai_selected_str += f"\n\nRaw AI response:\n{ai_selector_return}"
+        elif not ai_selected_str:
+            ai_selected_str = f"Files: {', '.join(dr.get('selected_files') or [])}, action: {dr.get('action', 'normal')}"
+        steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process},
-            {"step": 2, "title": "Bot → AI (Selector)", "content": f"Bot sent file titles to AI: {titles_str or '(none)'}"},
-            {"step": 3, "title": "AI selected files", "content": f"AI returned file IDs: {selected_str or '(none)'}"},
-            {"step": 4, "title": "Bot loaded content", "content": f"Bot loaded and merged selected files. Action: {dr.get('action', 'normal')}."},
-            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT."},
-            {"step": 6, "title": "AI responded", "content": f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"},
-            {"step": 7, "title": "Bot → User", "content": sent_reply or "(no response)"},
+            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles."},
+            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned."},
+            {"step": 4, "title": "Bot loaded content", "content": (f"Bot loaded from knowledge/price/style:\n  • " + "\n  • ".join(selected_titles)) if selected_titles else f"Bot used default/general content. Action: {dr.get('action', 'normal')}."},
+            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("ai_query_summary") or flow_meta.get("bot_sent_to_ai") or "Merged content + user query sent to GPT."},
         ]
+        step_num = 6
+        if tool_round_trips:
+            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls."})
+            step_num += 1
+            for tr in tool_round_trips:
+                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}"})
+                step_num += 1
+                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", "")})
+                step_num += 1
+            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": flow_meta.get("ai_raw_response") or "(no content)"})
+            step_num += 1
+        else:
+            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": flow_meta.get("ai_raw_response") or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
+            step_num += 1
+        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
+        flow_steps = steps
     else:
-        flow_steps = [
+        tool_round_trips = flow_meta.get("tool_round_trips") or []
+        ai_first = flow_meta.get("ai_first_response")
+        steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process},
-            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("ai_query_summary") or "Query + context sent to GPT."},
-            {"step": 3, "title": "AI processed", "content": f"Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"},
-            {"step": 4, "title": "Bot → User", "content": sent_reply or "(no response)"},
+            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("ai_query_summary") or flow_meta.get("bot_sent_to_ai") or "Query + context sent to GPT."},
         ]
+        step_num = 3
+        if tool_round_trips:
+            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls."})
+            step_num += 1
+            for i, tr in enumerate(tool_round_trips):
+                steps.append({
+                    "step": step_num,
+                    "title": f"AI requested: {tr.get('ai_requested', '?')}",
+                    "content": f"Args: {tr.get('args', '{}')}",
+                })
+                step_num += 1
+                steps.append({
+                    "step": step_num,
+                    "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})",
+                    "content": tr.get("bot_returned", ""),
+                })
+                step_num += 1
+            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": flow_meta.get("ai_raw_response") or "(no content)"})
+            step_num += 1
+        else:
+            steps.append({"step": step_num, "title": "AI → Bot", "content": flow_meta.get("ai_raw_response") or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
+            step_num += 1
+        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
+        flow_steps = steps
     log_interaction(
         user_id,
         user_input_to_process,
         sent_reply or "",
         flow_source,
+        user_name=user_name,
+        user_phone=user_data.get("phone_number"),
         ai_query_summary=flow_meta.get("ai_query_summary"),
         ai_raw_response=flow_meta.get("ai_raw_response"),
         model=flow_meta.get("model"),

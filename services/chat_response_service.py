@@ -638,6 +638,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         if tool_calls:
             messages.append(first_response_message)
+            tool_round_trips = []  # For Activity Flow: AI request → Bot response
+            ai_first_response_with_tools = gpt_raw_content  # Save before overwrite
 
             # Track check_next_appointment result to auto-chain appointment_id for update_appointment_date
             check_next_appointment_result = None
@@ -1197,11 +1199,17 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     print(f"DEBUG: Successfully created new customer {customer_name} in API.")
                                 else:
                                     print(f"ERROR: Failed to create customer {customer_name}: {create_customer_response.get('message', 'Unknown error')}")
+                                    err_content = json.dumps({"success": False, "message": f"Failed to create customer: {create_customer_response.get('message', 'Unknown error')}"})
+                                    tool_round_trips.append({
+                                        "ai_requested": "create_customer",
+                                        "args": json.dumps(function_args)[:300],
+                                        "bot_returned": err_content[:600],
+                                    })
                                     messages.append({
                                         "tool_call_id": tool_call.id,
                                         "role": "tool",
                                         "name": "create_customer_failed",
-                                        "content": json.dumps({"success": False, "message": f"Failed to create customer: {create_customer_response.get('message', 'Unknown error')}"}),
+                                        "content": err_content,
                                     })
                                     # Indicate that booking failed because customer creation failed
                                     parsed_response = {
@@ -1210,6 +1218,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                         "detected_language": current_preferred_lang,
                                         "detected_gender": current_gender,
                                         "current_gender_from_config": current_gender
+                                    }
+                                    parsed_response["_flow_meta"] = {
+                                        "ai_first_response": gpt_raw_content[:1500] if gpt_raw_content else None,
+                                        "tool_round_trips": tool_round_trips,
+                                        "tool_calls": ["create_customer"],
                                     }
                                     return parsed_response
                             else:
@@ -1429,32 +1442,50 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             )
                             print(f"📊 Analytics: Appointment rescheduled - {service_name}")
                         
+                        tool_content = json.dumps(tool_output)
+                        tool_round_trips.append({
+                            "ai_requested": function_name,
+                            "args": json.dumps(function_args)[:300],
+                            "bot_returned": (tool_content[:600] + "...") if len(tool_content) > 600 else tool_content,
+                        })
                         messages.append(
                             {
                                 "tool_call_id": tool_call.id,
                                 "role": "tool",
                                 "name": function_name,
-                                "content": json.dumps(tool_output),
+                                "content": tool_content,
                             }
                         )
                     except Exception as tool_e:
                         print(f"â‌Œ ERROR executing tool {function_name}: {tool_e}")
+                        err_content = json.dumps({"success": False, "message": f"Error executing tool: {tool_e}"})
+                        tool_round_trips.append({
+                            "ai_requested": function_name,
+                            "args": json.dumps(function_args)[:300],
+                            "bot_returned": err_content[:600],
+                        })
                         messages.append(
                             {
                                 "tool_call_id": tool_call.id,
                                 "role": "tool",
                                 "name": function_name,
-                                "content": json.dumps({"success": False, "message": f"Error executing tool: {tool_e}"}),
+                                "content": err_content,
                             }
                         )
                 else:
                     print(f"â‌Œ ERROR: Tool function '{function_name}' not found in api_integrations.")
+                    err_content = json.dumps({"success": False, "message": f"Tool function '{function_name}' not implemented."})
+                    tool_round_trips.append({
+                        "ai_requested": function_name,
+                        "args": json.dumps(function_args)[:300],
+                        "bot_returned": err_content[:600],
+                    })
                     messages.append(
                         {
                             "tool_call_id": tool_call.id,
                             "role": "tool",
                             "name": function_name,
-                            "content": json.dumps({"success": False, "message": f"Tool function '{function_name}' not implemented."}),
+                            "content": err_content,
                         }
                     )
 
@@ -1507,7 +1538,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
             # Build a focused re-call prompt that preserves context
             gender_word = "male" if current_gender == "male" else "female"
-            recall_system_prompt = f"""You are a helpful assistant for Lina's Laser Center.
+            recall_system_prompt = f"""You are Marwa AI Assistant – the smart assistant for Lina's Laser Center. When asked "who is with me" or "من معي", respond that you are Marwa AI Assistant.
 
 CRITICAL: The user's gender is ALREADY KNOWN as {gender_word.upper()}. Do NOT ask for gender.
 
@@ -1620,7 +1651,7 @@ Answer the user's question or continue the booking flow. Do NOT ask for gender."
 
                         # Build a focused re-call prompt
                         gender_word = "male" if current_gender == "male" else "female"
-                        recall_system = f"""You are a helpful assistant for Lina's Laser Center.
+                        recall_system = f"""You are Marwa AI Assistant – the smart assistant for Lina's Laser Center. When asked "who is with me" or "من معي", respond that you are Marwa AI Assistant.
 The user's gender is ALREADY KNOWN as {gender_word.upper()}. Do NOT ask for gender.
 Answer the user's question directly. Respond in {response_language}.
 Return JSON with "action" and "bot_reply" fields."""
@@ -1676,21 +1707,33 @@ Return JSON with "action" and "bot_reply" fields."""
         if "action" not in parsed_response or "bot_reply" not in parsed_response:
             raise ValueError("GPT response missing required fields (action or bot_reply)")
 
-        # Flow logging metadata for dashboard transparency
+        # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
         usage = getattr(response, "usage", None)
         tokens_val = (usage.total_tokens or getattr(usage, "prompt_tokens", None)) if usage else None
         context_count = len(current_context_messages) if current_context_messages else 0
-        ai_query_summary = f"User query: {user_input[:150]}{'...' if len(user_input) > 150 else ''}"
-        if context_count:
-            ai_query_summary += f" (+ {context_count} context messages)"
-        parsed_response["_flow_meta"] = {
+        sys_len = len(system_instruction_final) if system_instruction_final else 0
+        ai_query_summary = (
+            f"Bot sent to AI (GPT):\n"
+            f"- System prompt: {sys_len} chars (knowledge + style + customer context)\n"
+            f"- Context messages: {context_count}\n"
+            f"- User query: {user_input[:400]}{'...' if len(user_input) > 400 else ''}"
+        )
+        if custom_knowledge_context:
+            preview = (custom_knowledge_context[:300] + "...") if len(custom_knowledge_context) > 300 else custom_knowledge_context
+            ai_query_summary += f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, preview:\n{preview}"
+        flow_meta = {
             "model": selected_model,
-            "ai_raw_response": gpt_raw_content[:800] if gpt_raw_content else None,
+            "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
             "ai_query_summary": ai_query_summary,
+            "bot_sent_to_ai": ai_query_summary,
             "tool_calls": tool_names if tool_names else None,
             "tokens": tokens_val,
         }
+        if tool_calls and tool_round_trips:
+            flow_meta["ai_first_response"] = ai_first_response_with_tools[:1500] if ai_first_response_with_tools else None
+            flow_meta["tool_round_trips"] = tool_round_trips
+        parsed_response["_flow_meta"] = flow_meta
 
         # ============================================================
         # PRICING SYNC: WhatsApp price must mirror system price exactly

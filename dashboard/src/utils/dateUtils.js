@@ -68,18 +68,51 @@ export const formatDateTime = (timestamp, options = {}) => {
 };
 
 /**
- * Format timestamp for message bubbles (date + time)
- * @param {string|Date} timestamp - ISO timestamp or Date object
- * @returns {string} Formatted string like "12/10/2025, 3:45 PM"
+ * Normalize timestamp to Date - handles ISO string, epoch ms/seconds, Firestore {seconds}
+ */
+const toDate = (timestamp) => {
+  if (!timestamp) return null;
+  if (timestamp instanceof Date) return isNaN(timestamp.getTime()) ? null : timestamp;
+  if (typeof timestamp === 'number') {
+    const ms = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof timestamp === 'string') {
+    const d = new Date(timestamp);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (timestamp && typeof timestamp.seconds === 'number') {
+    const d = new Date(timestamp.seconds * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
+
+/**
+ * Format timestamp for message bubbles - consistent format in Asia/Beirut
+ * Uses explicit format to avoid locale/variant changes on Load More
+ * @param {string|Date|number} timestamp - ISO timestamp, Date, or epoch ms
+ * @returns {string} Formatted string like "1/3/2026, 3:45 PM" (Beirut time)
  */
 export const formatMessageTime = (timestamp) => {
-  return formatDateTime(timestamp, {
-    showDate: true,
-    showTime: true,
-    dateStyle: 'short',
-    timeStyle: 'short',
-    showSeconds: false,
-  });
+  const date = toDate(timestamp);
+  if (!date) return '';
+
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: TIMEZONE,
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  } catch (error) {
+    console.error('Error formatting message time:', error);
+    return '';
+  }
 };
 
 /**
@@ -163,23 +196,17 @@ export const getRelativeTime = (timestamp) => {
 };
 
 /**
- * Check if timestamp is today
- * @param {string|Date} timestamp - ISO timestamp or Date object
- * @returns {boolean} True if timestamp is today
+ * Check if timestamp is today (in app timezone Asia/Beirut)
  */
 export const isToday = (timestamp) => {
-  if (!timestamp) return false;
-  
+  const date = toDate(timestamp);
+  if (!date) return false;
   try {
-    const date = new Date(timestamp);
-    const today = new Date();
-    
-    return (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    );
-  } catch (error) {
+    const opts = { timeZone: TIMEZONE, day: 'numeric', month: 'numeric', year: 'numeric' };
+    const dateStr = new Intl.DateTimeFormat('en-CA', opts).format(date);
+    const todayStr = new Intl.DateTimeFormat('en-CA', opts).format(new Date());
+    return dateStr === todayStr;
+  } catch {
     return false;
   }
 };

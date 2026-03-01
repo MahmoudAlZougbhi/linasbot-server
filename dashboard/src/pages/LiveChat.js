@@ -234,6 +234,7 @@ const LiveChat = () => {
   const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
   const debouncedSearchRef = useRef("");
+  const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -249,6 +250,14 @@ const LiveChat = () => {
   useEffect(() => {
     useMockDataRef.current = useMockData;
   }, [useMockData]);
+
+  // Track mount state to avoid setState after unmount (fixes slowdown on repeated open/close)
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Debounce search input (400ms) before triggering API
   useEffect(() => {
@@ -323,15 +332,17 @@ const LiveChat = () => {
   // Fetch real data from API
   useEffect(() => {
     const fetchLiveData = async () => {
+      if (!isMountedRef.current) return;
       // Only show loading on initial load, not on refresh
       if (!activeConversations.length) {
-        setIsLoading(true);
+        if (isMountedRef.current) setIsLoading(true);
       }
 
       try {
         let chatsResponse;
         try {
           chatsResponse = await getUnifiedChats(debouncedSearch, 1, 30);
+          if (!isMountedRef.current) return;
         } catch (err) {
           if (err?.response?.status === 504 || err?.code === "ECONNABORTED") {
             try {
@@ -353,7 +364,7 @@ const LiveChat = () => {
             throw err;
           }
         }
-        if (chatsResponse?.success) {
+        if (chatsResponse?.success && isMountedRef.current) {
           const chats = chatsResponse.chats || chatsResponse.conversations || [];
           setActiveConversations(chats);
           setChatPage(1);
@@ -376,6 +387,7 @@ const LiveChat = () => {
             // ✅ Lazy load messages asynchronously - don't block UI
             setMessagesLoading(true);
             fetchConversationMessages(firstConv.user_id, firstConv.conversation_id, 1).then((messages) => {
+              if (!isMountedRef.current) return;
               setSelectedConversation((prev) =>
                 prev?.conversation?.conversation_id === firstConv.conversation_id
                   ? { ...prev, history: messages }
@@ -389,15 +401,14 @@ const LiveChat = () => {
                 c.conversation_id ===
                 currentSelection.conversation.conversation_id
             );
-            if (updatedConv) {
-              // Update the conversation data but keep the same history
+            if (updatedConv && isMountedRef.current) {
               setSelectedConversation((prev) => ({
                 ...prev,
                 conversation: updatedConv,
               }));
             }
           }
-        } else {
+        } else if (isMountedRef.current) {
           // Backend returned failure - use mock only for true offline (ERR_NETWORK)
           if (!activeConversations.length) {
             loadMockData();
@@ -405,22 +416,22 @@ const LiveChat = () => {
         }
 
         // Fetch waiting queue
+        if (!isMountedRef.current) return;
         const queueResponse = await getWaitingQueue();
-        if (queueResponse.success && queueResponse.queue) {
+        if (isMountedRef.current && queueResponse.success && queueResponse.queue) {
           setWaitingQueue(queueResponse.queue);
         }
       } catch (error) {
+        if (!isMountedRef.current) return;
         console.error("Error fetching live chat data:", error);
-        // 504 / timeout: don't switch to mock - keep existing data
         const is504OrTimeout = error?.response?.status === 504 || error?.code === "ECONNABORTED";
         if (is504OrTimeout) {
           toast.error("Server is busy. Will retry automatically.");
-          // Keep existing conversations - do NOT load mock data
         } else if (!activeConversations.length) {
           loadMockData();
         }
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) setIsLoading(false);
       }
     };
 
@@ -457,10 +468,12 @@ const LiveChat = () => {
         // Handle conversation list updates
         eventSource.addEventListener('conversations', async (event) => {
           try {
+            if (!isMountedRef.current) return;
             const data = JSON.parse(event.data);
             if (data.conversations) {
               const searchTerm = debouncedSearchRef.current;
               const chatsResponse = await getUnifiedChats(searchTerm, 1, 30);
+              if (!isMountedRef.current) return;
               const conversations = chatsResponse?.success ? chatsResponse.chats : data.conversations;
               const previousIds = new Set(
                 activeConversationsRef.current.map((c) => c.conversation_id)
@@ -487,12 +500,13 @@ const LiveChat = () => {
         // Handle new message events
         eventSource.addEventListener('new_message', async (event) => {
           try {
+            if (!isMountedRef.current) return;
             const data = JSON.parse(event.data);
             console.log('📨 SSE: New message received', data);
 
-            // Refresh conversation list to update last message preview
             setIsRefreshing(true);
             const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
+            if (!isMountedRef.current) return;
             if (chatsResponse.success && chatsResponse.chats) {
               setActiveConversations(chatsResponse.chats);
               setLastRefreshTime(new Date());
@@ -509,6 +523,7 @@ const LiveChat = () => {
                 currentSelection.conversation.conversation_id,
                 1
               );
+              if (!isMountedRef.current) return;
               if (messages && messages.length > 0) {
                 setSelectedConversation((prev) => {
                   if (!prev) return prev;
@@ -524,11 +539,12 @@ const LiveChat = () => {
         // Handle new conversation events
         eventSource.addEventListener('new_conversation', async (event) => {
           try {
+            if (!isMountedRef.current) return;
             const data = JSON.parse(event.data);
             console.log('📡 SSE: New conversation', data);
 
-            // Refresh conversation list
             const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
+            if (!isMountedRef.current) return;
             if (chatsResponse.success && chatsResponse.chats) {
               const newIds = new Set([data.conversation_id]);
               setActiveConversations(chatsResponse.chats);
@@ -554,9 +570,10 @@ const LiveChat = () => {
           // Start fallback polling
           if (!fallbackInterval) {
             fallbackInterval = setInterval(async () => {
-              if (useMockDataRef.current) return;
+              if (!isMountedRef.current || useMockDataRef.current) return;
               try {
                 const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
+                if (!isMountedRef.current) return;
                 if (chatsResponse.success && chatsResponse.chats) {
                   setActiveConversations(chatsResponse.chats);
                   setLastRefreshTime(new Date());
@@ -607,6 +624,7 @@ const LiveChat = () => {
           selectedConversation.conversation.conversation_id,
           1
         );
+        if (!isMountedRef.current) return;
         if (messages && messages.length > 0) {
           setSelectedConversation((prev) => {
             if (!prev) return prev;
