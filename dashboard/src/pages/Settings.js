@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Cog6ToothIcon,
@@ -42,6 +42,38 @@ const Settings = () => {
     emailAlerts: true,
     humanTakeoverNotifyMobiles: '',
   });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Load settings from API on mount and when page is shown/refreshed
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (data.success && data.settings) {
+          const s = data.settings;
+          const general = s.general || {};
+          const notifications = s.notifications || {};
+          setSettings({
+            botName: general.botName ?? 'Lina\'s Laser Bot',
+            defaultLanguage: general.defaultLanguage ?? 'ar',
+            responseTimeout: general.responseTimeout ?? 5,
+            enableVoice: general.enableVoice ?? true,
+            enableImages: general.enableImages ?? true,
+            enableTraining: general.enableTraining ?? true,
+            notificationsEnabled: notifications.notificationsEnabled ?? true,
+            emailAlerts: notifications.emailAlerts ?? true,
+            humanTakeoverNotifyMobiles: notifications.humanTakeoverNotifyMobiles ?? '',
+          });
+        }
+      } catch (e) {
+        console.error('Error loading settings:', e);
+      } finally {
+        setSettingsLoaded(true);
+      }
+    };
+    loadSettings();
+  }, []);
 
   // Check if user can manage users
   const canManageUsers = user?.role === 'admin' || user?.resolvedPermissions?.userManagement === true;

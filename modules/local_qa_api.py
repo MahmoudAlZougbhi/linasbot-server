@@ -6,6 +6,7 @@ Handles CRUD operations for local qa_pairs.jsonl file
 
 import json
 import os
+import re
 from datetime import datetime
 from typing import Optional
 import uuid
@@ -97,6 +98,13 @@ def reload_local_qa_cache():
         print(f"⚠️ Failed to reload local_qa_service cache: {e}")
 
 
+def _answer_in_arabic_script(text: str) -> bool:
+    """True if text contains Arabic script (not Franco/Latin only)."""
+    if not text:
+        return False
+    return bool(re.search(r"[\u0600-\u06FF]", text))
+
+
 async def create_local_qa_pair_internal(
     question: str,
     answer: str,
@@ -105,7 +113,7 @@ async def create_local_qa_pair_internal(
 ) -> dict:
     """
     Create Q&A pair in local JSON file (used by Save to FAQ from Live Chat).
-    Saves to Manage Data / Bot Training so it appears in the dashboard.
+    Rule: question follows input (Arabic → Arabic, Franco → Franco). Answer always in Arabic.
     """
     question = (question or "").strip()
     answer = (answer or "").strip()
@@ -116,13 +124,28 @@ async def create_local_qa_pair_internal(
         language,
         default=language_detection_service.detect_training_language(question),
     )
+    # Answer must always be in Arabic for ar/franco display
+    answer_ar_canonical = answer
+    if not _answer_in_arabic_script(answer):
+        ar_answer_result = await language_detection_service.translate_training_pair(
+            question=answer, answer=answer, source_language=detected_language, target_languages=["ar"]
+        )
+        # Use "question" as the translated field (we only asked for answer->ar, but API returns question+answer per lang)
+        ar_trans = ar_answer_result.get("translations", {}).get("ar", {})
+        if ar_trans.get("answer"):
+            answer_ar_canonical = ar_trans["answer"]
+        elif ar_trans.get("question"):
+            answer_ar_canonical = ar_trans["question"]
+        if not answer_ar_canonical:
+            answer_ar_canonical = answer
+
     qa_group_id = f"qa_{uuid.uuid4().hex[:10]}"
     created_entries = []
 
     target_languages_all = ["ar", "en", "fr", "franco"]
     translation_result = await language_detection_service.translate_training_pair(
         question=question,
-        answer=answer,
+        answer=answer_ar_canonical,
         source_language=detected_language,
         target_languages=target_languages_all,
     )
@@ -136,7 +159,11 @@ async def create_local_qa_pair_internal(
     for lang in target_languages_all:
         translated = translations.get(lang, {})
         q_text = translated.get("question", "") or question
-        a_text = translated.get("answer", "") or answer
+        # Answer: always Arabic for ar and franco (Manage Data shows answer in Arabic)
+        if lang in ("ar", "franco"):
+            a_text = translations.get("ar", {}).get("answer", "") or answer_ar_canonical
+        else:
+            a_text = translated.get("answer", "") or answer_ar_canonical
         if not q_text or not a_text:
             continue
         created_entries.append(
