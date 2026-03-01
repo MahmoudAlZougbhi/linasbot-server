@@ -113,9 +113,13 @@ def normalize_message(message: Dict[str, Any]) -> Dict[str, Any]:
         if media_value:
             normalized[media_key] = media_value
 
-    for passthrough_key in ("handled_by", "transcribed", "transcribed_at"):
+    for passthrough_key in ("handled_by", "transcribed", "transcribed_at", "message_id"):
         if passthrough_key in payload:
             normalized[passthrough_key] = payload[passthrough_key]
+    if "message_id" not in normalized and metadata.get("message_id"):
+        normalized["message_id"] = metadata["message_id"]
+    if "message_id" not in normalized and metadata.get("source_message_id"):
+        normalized["message_id"] = metadata["source_message_id"]
 
     return normalized
 
@@ -174,14 +178,14 @@ def dedupe_messages(messages: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     for raw_message in list(messages or []):
         message = normalize_message(raw_message or {})
-        source_message_id = extract_source_message_id(message.get("metadata", {}) or {})
-        if source_message_id:
-            if source_message_id in seen_source_ids:
+        message_id = message.get("message_id") or extract_source_message_id(message.get("metadata", {}) or {})
+        if message_id:
+            if message_id in seen_source_ids:
                 continue
-            seen_source_ids.add(source_message_id)
+            seen_source_ids.add(message_id)
 
         signature = _build_message_signature(message)
-        if not source_message_id and signature in seen_signatures:
+        if not message_id and signature in seen_signatures:
             continue
 
         seen_signatures.add(signature)

@@ -117,6 +117,9 @@ export const useLiveChatSSE = ({
       eventSource.onopen = () => {
         reconnectAttempt = 0;
         stopFallbackPolling();
+        if (process.env.NODE_ENV === "development") {
+          console.log("[SSE] connected");
+        }
       };
 
       eventSource.addEventListener("conversations", async (event) => {
@@ -141,7 +144,9 @@ export const useLiveChatSSE = ({
           const userId = data?.user_id;
           const message = data?.message;
 
-          // INSTANT: If we have full message and it matches selected conversation, append directly (no API call)
+          // Dedupe and merge by message_id (never timestamp+content - unstable for rapid messages)
+          const msgId = message?.message_id;
+
           const isMatch =
             selected &&
             ((convId && selected.conversation?.conversation_id === convId) ||
@@ -149,21 +154,26 @@ export const useLiveChatSSE = ({
           if (isMatch && message && typeof message === "object" && message.timestamp) {
             setSelectedConversation((prev) => {
               if (!prev || !prev.history) return prev;
-              const exists = prev.history.some(
-                (m) =>
+              // Dedupe by message_id; fallback to content+ts only when message_id absent (legacy)
+              const exists = prev.history.some((m) => {
+                if (msgId && m.message_id) return m.message_id === msgId;
+                if (msgId && !m.message_id) return false;
+                return (
                   m.timestamp === message.timestamp &&
                   String(m.content || m.text || "") === String(message.content || message.text || "")
-              );
+                );
+              });
               if (exists) return prev;
               return { ...prev, history: [...prev.history, message] };
             });
+            if (process.env.NODE_ENV === "development") {
+              console.log("[SSE] new_message merged", { convId, msgId });
+            }
           }
 
-          // Refresh conversation list in background (for last_message, badge updates)
           setIsRefreshing(true);
           refreshChats().finally(() => setIsRefreshing(false));
 
-          // If we didn't have message payload or didn't match, refetch messages
           if (!isMatch || !message) {
             await refreshSelectedConversationIfMatched(data);
           }
@@ -196,9 +206,11 @@ export const useLiveChatSSE = ({
           eventSource.close();
         }
         startFallbackPolling();
-
         reconnectAttempt += 1;
-        const reconnectDelayMs = Math.min(30000, 5000 * reconnectAttempt);
+        const reconnectDelayMs = Math.min(30000, 1000 * Math.min(reconnectAttempt, 10));
+        if (process.env.NODE_ENV === "development") {
+          console.log("[SSE] error, reconnect in", reconnectDelayMs, "ms, attempt", reconnectAttempt);
+        }
         reconnectTimeout = setTimeout(connectSSE, reconnectDelayMs);
       };
     };

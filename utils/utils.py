@@ -2,6 +2,7 @@
 import re
 import json
 import os
+import uuid
 import datetime
 import logging
 from difflib import SequenceMatcher
@@ -210,7 +211,9 @@ def _message_to_dashboard_format(msg: dict) -> dict:
     handled = meta.get("handled_by")
     if not handled:
         handled = "human" if role == "operator" else ("bot" if meta.get("source") == "qa_database" else "ai")
+    message_id = msg.get("message_id") or meta.get("message_id") or meta.get("source_message_id") or f"ts_{ts_str}"
     out = {
+        "message_id": str(message_id),
         "timestamp": ts_str,
         "is_user": role == "user",
         "content": msg.get("text", ""),
@@ -296,20 +299,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     # Use a fixed string for the backend's app ID in Firestore path for consistency.
     app_id_for_firestore = "linas-ai-bot-backend"
 
-    # Resolve phone_number using fallback chain if not provided (before canonical resolution).
-    # Priority:
-    # 1) provided phone_number
-    # 2) existing conversation
-    # 3) user document
-    # 4) static room->phone mapping file
-    # 5) user_id if it looks like a phone
-    # 6) room-id fallback token (never skip save)
+    # ✅ FIX: Resolve canonical + refs FIRST (can work with phone_number=None).
+    # Then resolve phone from conversation/user if not provided.
+    canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id, phone_number)
+    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id)
+    conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+
+    # Resolve phone_number using fallback chain if not provided.
+    # Priority: 1) provided 2) existing conversation 3) user document 4) room mapping 5) user_id fallback
     if not phone_number:
         # Try to get phone from existing conversation
         if conversation_id:
             try:
                 existing_conv_ref = conversations_collection_for_user.document(conversation_id)
-                # ✅ Use asyncio.to_thread to prevent blocking
                 existing_conv_snap = await asyncio.to_thread(existing_conv_ref.get)
                 if existing_conv_snap.exists:
                     existing_phone = existing_conv_snap.to_dict().get('customer_info', {}).get('phone_full')
@@ -318,25 +320,21 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             except Exception as e:
                 print(f"⚠️ Could not retrieve phone from conversation: {e}")
 
-        # Try to get from user document
         if not phone_number:
             try:
-                # ✅ Use asyncio.to_thread to prevent blocking
                 user_doc_check = await asyncio.to_thread(user_doc_ref.get)
                 if user_doc_check.exists:
                     existing_phone = user_doc_check.to_dict().get('phone_full')
                     if existing_phone:
                         phone_number = existing_phone
-            except Exception as e:
-                pass  # Silent fail, will try user_id next
+            except Exception:
+                pass
 
-        # Try static room->phone mapping
         if not phone_number:
             mapped_phone = _resolve_phone_from_room_mapping(user_id)
             if mapped_phone:
                 phone_number = mapped_phone
 
-        # Fall back to user_id if it looks like a phone number
         if not phone_number:
             is_likely_phone = (user_id.startswith('+961') or
                               user_id.startswith('961') or
@@ -344,17 +342,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             is_likely_room_id = (user_id.isdigit() and len(user_id) >= 8 and not user_id.startswith('7'))
 
             if is_likely_room_id or (user_id.isdigit() and len(user_id) >= 9):
-                # This looks like a room_id (Qiscus), not a phone.
-                # Do not skip save; keep a deterministic placeholder and resolve later.
                 phone_number = f"room:{user_id}"
             else:
-                # user_id looks like a phone number (Meta/360Dialog)
                 phone_number = user_id
 
-    # Unified identity: canonical user = normalized phone (E.164) so same number = same user/thread
-    canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id, phone_number)
-    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id)
-    conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+        # Re-resolve canonical if we found phone (for E.164 normalization)
+        if phone_number and phone_number != f"room:{user_id}":
+            canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id, phone_number)
+            user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id)
+            conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
 
     _log.info(
         "identity raw_phone=%s normalized_phone=%s canonical_user_id=%s user_id_arg=%s",
@@ -475,6 +471,14 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             "language": detected_language,
             "metadata": normalized_metadata,
         })
+        # Stable unique message_id: use source_message_id from webhook when available, else generate
+        if source_message_id:
+            payload["message_id"] = str(source_message_id)
+        else:
+            payload["message_id"] = f"msg_{utc_now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        if "metadata" not in payload:
+            payload["metadata"] = {}
+        payload["metadata"]["message_id"] = payload["message_id"]
         return payload
 
     saved_conv_id = None  # for deferred external name update (user role)
@@ -516,8 +520,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 if not is_smart_source:
                     try:
                         from modules.live_chat_api import broadcast_sse_event
-                        # Include full message for instant append (no API refetch)
                         dash_msg = _message_to_dashboard_format(message_data)
+                        _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
+                            conversation_id, role, dash_msg.get("message_id", ""))
                         asyncio.create_task(broadcast_sse_event("new_message", {
                             "user_id": canonical_user_id,
                             "conversation_id": conversation_id,
@@ -527,7 +532,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "message": dash_msg,
                         }))
                     except Exception as sse_err:
-                        print(f"❌ SSE Broadcast error: {sse_err}")
+                        _log.exception("SSE broadcast error after save: %s", sse_err)
             else:
                 # Conversation not found - create new one
                 message_data = _build_message_data()
@@ -624,6 +629,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     try:
                         from modules.live_chat_api import broadcast_sse_event
                         dash_msg = _message_to_dashboard_format(message_data)
+                        _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
+                            resolved_conversation_id, role, dash_msg.get("message_id", ""))
                         asyncio.create_task(broadcast_sse_event("new_message", {
                             "user_id": canonical_user_id,
                             "conversation_id": resolved_conversation_id,
@@ -632,8 +639,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "phone": customer_info.get("phone_full"),
                             "message": dash_msg,
                         }))
-                    except Exception:
-                        pass
+                    except Exception as sse_err:
+                        _log.exception("SSE broadcast error: %s", sse_err)
             else:
                 # No existing conversation found — create a new one
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {

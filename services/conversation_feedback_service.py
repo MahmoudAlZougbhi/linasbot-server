@@ -232,10 +232,41 @@ class ConversationFeedbackService:
                 "tags": ["operator_trained", "save_to_faq", "live_chat"]
             }
             
-            # Ensure we have at least Arabic or source language
-            if not qa_data["question_ar"] and not qa_data["question_en"]:
+            # Arabic section MUST be Arabic script, never Franco. If source was Franco and ar is missing/Franco, translate franco->ar.
+            def _looks_franco(text: str) -> bool:
+                if not text or not isinstance(text, str):
+                    return False
+                # Franco = Latin chars; Arabic = Arabic script. Simple heuristic.
+                arabic_range = range(0x0600, 0x06FF + 1)
+                has_arabic = any(ord(c) in arabic_range for c in text)
+                return not has_arabic and any(c.isalpha() for c in text)
+            
+            if (not qa_data["question_ar"] or _looks_franco(qa_data["question_ar"])) and norm_source == "franco":
+                ar_result = await language_detection_service.translate_training_pair(
+                    question=user_question, answer=correct_answer,
+                    source_language="franco", target_languages=["ar"]
+                )
+                ar_trans = ar_result.get("translations", {}).get("ar", {})
+                if ar_trans.get("question") and ar_trans.get("answer"):
+                    qa_data["question_ar"] = ar_trans["question"]
+                    qa_data["answer_ar"] = ar_trans["answer"]
+            
+            # Fallback only when source is Arabic (question_ar can use source)
+            if not qa_data["question_ar"] and norm_source == "ar":
                 qa_data["question_ar"] = user_question
                 qa_data["answer_ar"] = correct_answer
+            elif not qa_data["question_ar"] and not qa_data["question_en"]:
+                # Last resort: translate source -> ar (never put Franco in Arabic)
+                fallback = await language_detection_service.translate_training_pair(
+                    question=user_question, answer=correct_answer,
+                    source_language=norm_source, target_languages=["ar"]
+                )
+                ar_trans = fallback.get("translations", {}).get("ar", {})
+                if ar_trans.get("question") and ar_trans.get("answer"):
+                    qa_data["question_ar"] = ar_trans["question"]
+                    qa_data["answer_ar"] = ar_trans["answer"]
+                else:
+                    return {"success": False, "error": "Could not produce Arabic script for FAQ (ar must not be Franco)"}
             
             result = await qa_db_service.create_qa_pair(**qa_data)
             

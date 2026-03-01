@@ -1457,15 +1457,17 @@ class LiveChatService:
                 meta = msg.get("metadata") or {}
                 handled = meta.get("handled_by")
                 if not handled:
-                    # Fallback for old messages: qa_database=bot, operator=human, else ai
                     if meta.get("source") == "qa_database":
                         handled = "bot"
                     elif msg.get("role") == "operator":
                         handled = "human"
                     else:
-                        handled = "ai"  # role=ai without metadata = GPT
+                        handled = "ai"
+                ts_str = self._parse_timestamp(msg.get("timestamp")).isoformat()
+                message_id = msg.get("message_id") or meta.get("message_id") or meta.get("source_message_id") or f"ts_{ts_str}"
                 msg_data = {
-                    "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
+                    "message_id": str(message_id),
+                    "timestamp": ts_str,
                     "is_user": msg.get("role") == "user",
                     "content": msg.get("text", ""),
                     "text": msg.get("text", ""),

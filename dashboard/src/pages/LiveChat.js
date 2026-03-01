@@ -559,12 +559,15 @@ const LiveChat = () => {
     return `${Math.floor(diff / 3600)}h ago`;
   };
 
-  // ✅ Load more (older) messages - WhatsApp-style: 50 at a time
+  // ✅ Load more (older) messages - cursor-based: before=oldest loaded timestamp
   const loadMoreMessages = async () => {
     if (!selectedConversation || loadingMoreMessages || !hasMoreMessages) return;
     const history = selectedConversation.history || [];
-    const beforeTs = history.length > 0 && history[0]?.timestamp
-      ? history[0].timestamp
+    const sorted = [...history].sort(
+      (a, b) => new Date(a?.timestamp || 0).getTime() - new Date(b?.timestamp || 0).getTime()
+    );
+    const beforeTs = sorted.length > 0 && sorted[0]?.timestamp
+      ? sorted[0].timestamp
       : new Date().toISOString();
     setLoadingMoreMessages(true);
     try {
@@ -576,10 +579,21 @@ const LiveChat = () => {
         50
       );
       if (older && older.length > 0) {
-        setSelectedConversation((prev) => ({
-          ...prev,
-          history: [...older, ...(prev.history || [])],
-        }));
+        // Prepend older messages; dedupe by message_id
+        setSelectedConversation((prev) => {
+          const prevHistory = prev?.history || [];
+          const seen = new Set(prevHistory.map((m) => m.message_id).filter(Boolean));
+          const newOlder = older.filter((m) => !m.message_id || !seen.has(m.message_id));
+          const combined = [...newOlder, ...prevHistory];
+          const deduped = combined
+            .filter((m, i, arr) => {
+              const id = m.message_id;
+              if (!id) return true;
+              return arr.findIndex((x) => x.message_id === id) === i;
+            })
+            .sort((a, b) => new Date(a?.timestamp || 0).getTime() - new Date(b?.timestamp || 0).getTime());
+          return { ...prev, history: deduped };
+        });
       }
       setHasMoreMessages(hasMore);
     } catch (e) {
@@ -1248,8 +1262,8 @@ const LiveChat = () => {
                   return (
                     <div
                       key={
-                        msg.id ||
                         msg.message_id ||
+                        msg.id ||
                         `${msg.timestamp || "no-ts"}-${msg.type || "text"}-${msg.is_user ? "u" : "a"}-${String(
                           msg.audio_url || msg.image_url || msg.text || msg.content || ""
                         ).slice(0, 60)}-${index}`

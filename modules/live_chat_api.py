@@ -5,10 +5,23 @@ Handles conversation takeover, operator management, and real-time communication.
 Includes SSE (Server-Sent Events) for real-time dashboard updates.
 """
 
+import logging
+
 from fastapi import Request, Query
 from fastapi.responses import StreamingResponse
 
 from modules.core import app
+
+_log = logging.getLogger(__name__)
+
+
+def _log_sse(action: str, **kwargs):
+    """Instrumentation for SSE operations."""
+    parts = [f"SSE {action}"]
+    for k, v in kwargs.items():
+        if v is not None:
+            parts.append(f"{k}={v}")
+    _log.info(" | ".join(parts))
 from modules.models import (
     TakeoverRequest,
     ReleaseRequest,
@@ -34,7 +47,7 @@ async def broadcast_sse_event(event_type: str, data: dict):
     client_count = await live_chat_sse_broadcaster.active_clients_count()
     if client_count == 0:
         return
-
+    _log_sse("broadcast", event_type=event_type, client_count=client_count, conv_id=data.get("conversation_id"))
     await live_chat_sse_broadcaster.publish(event_type, data)
 
 @app.get("/api/live-chat/events")
@@ -50,11 +63,13 @@ async def live_chat_events(request: Request):
     - new_conversation: New conversation created
     - heartbeat: Keep-alive ping every 30s
     """
+    _log_sse("client_connect")
     return StreamingResponse(
         live_chat_sse_broadcaster.stream(request, initial_payload_loader=_load_initial_sse_payload),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "Access-Control-Allow-Origin": "*",
