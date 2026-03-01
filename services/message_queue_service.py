@@ -15,11 +15,18 @@ logger = logging.getLogger(__name__)
 
 class MessageQueueService:
     """Persistent message queue with sync capabilities"""
-    
+
     def __init__(self):
-        self.queue_file = 'data/message_queue.json'
-        self.fingerprints_file = 'data/appointment_fingerprints.json'
-        self.template_status_file = 'data/template_activation_status.json'
+        from storage.persistent_storage import (
+            MESSAGE_QUEUE_FILE,
+            APPOINTMENT_FINGERPRINTS_FILE,
+            TEMPLATE_ACTIVATION_STATUS_FILE,
+            ensure_dirs,
+        )
+        ensure_dirs()
+        self.queue_file = str(MESSAGE_QUEUE_FILE)
+        self.fingerprints_file = str(APPOINTMENT_FINGERPRINTS_FILE)
+        self.template_status_file = str(TEMPLATE_ACTIVATION_STATUS_FILE)
         
         self.messages = {}
         self.fingerprints = {}
@@ -159,7 +166,8 @@ class MessageQueueService:
     def _is_smart_messaging_enabled(self):
         """Check if smart messaging is globally enabled"""
         try:
-            settings_file = 'data/app_settings.json'
+            from storage.persistent_storage import APP_SETTINGS_FILE
+            settings_file = str(APP_SETTINGS_FILE)
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
@@ -171,7 +179,8 @@ class MessageQueueService:
     def _is_preview_mode_enabled(self):
         """Check if preview mode is enabled"""
         try:
-            settings_file = 'data/app_settings.json'
+            from storage.persistent_storage import APP_SETTINGS_FILE
+            settings_file = str(APP_SETTINGS_FILE)
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
@@ -183,7 +192,8 @@ class MessageQueueService:
     def _is_template_enabled_for_service(self, service_id, template_id):
         """Check if template is enabled for a specific service"""
         try:
-            mapping_file = 'data/service_template_mapping.json'
+            from storage.persistent_storage import SERVICE_TEMPLATE_MAPPING_FILE
+            mapping_file = str(SERVICE_TEMPLATE_MAPPING_FILE)
             if os.path.exists(mapping_file):
                 with open(mapping_file, 'r', encoding='utf-8') as f:
                     mappings = json.load(f)

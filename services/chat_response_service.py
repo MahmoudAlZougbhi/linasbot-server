@@ -193,7 +193,8 @@ def _normalize_body_part_ids(raw_value: Any) -> List[int]:
 def _get_body_part_required_service_ids() -> set:
     configured_ids = set(DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS)
     try:
-        with open("data/app_settings.json", "r", encoding="utf-8") as settings_file:
+        from storage.persistent_storage import APP_SETTINGS_FILE
+        with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as settings_file:
             app_settings = json.load(settings_file)
         configured_list = app_settings.get("pricingSync", {}).get("requireBodyPartServiceIds", [])
         normalized = {_safe_int(item) for item in configured_list}

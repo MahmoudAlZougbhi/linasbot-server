@@ -13,14 +13,14 @@ from fastapi import HTTPException
 
 from modules.core import app
 from services.language_detection_service import language_detection_service
+from storage.persistent_storage import QA_PAIRS_FILE, ensure_dirs
 
-# Path to local Q&A file
-QA_FILE_PATH = "data/qa_pairs.jsonl"
+QA_FILE_PATH = str(QA_PAIRS_FILE)
 
 
 def ensure_qa_file_exists():
     """Ensure the Q&A file exists"""
-    os.makedirs("data", exist_ok=True)
+    ensure_dirs()
     if not os.path.exists(QA_FILE_PATH):
         with open(QA_FILE_PATH, 'w', encoding='utf-8') as f:
             pass  # Create empty file

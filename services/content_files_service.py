@@ -11,34 +11,27 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 
+from storage.persistent_storage import (
+    CONTENT_DIR,
+    KNOWLEDGE_FILES_DIR,
+    STYLE_FILES_DIR,
+    PRICE_FILES_DIR,
+    ensure_dirs,
+)
 
 CONTENT_SECTIONS = {
-    "knowledge": {
-        "dir": "data/knowledge_files",
-        "name": "Knowledge Base",
-    },
-    "style": {
-        "dir": "data/style_files",
-        "name": "Style Guide",
-    },
-    "price": {
-        "dir": "data/price_files",
-        "name": "Price List",
-    },
+    "knowledge": {"dir": str(KNOWLEDGE_FILES_DIR), "name": "Knowledge Base"},
+    "style": {"dir": str(STYLE_FILES_DIR), "name": "Style Guide"},
+    "price": {"dir": str(PRICE_FILES_DIR), "name": "Price List"},
 }
 
 
-def _get_base_dir() -> str:
-    """Return project base directory."""
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
 def _section_path(section: str) -> str:
-    """Get full path for a section's directory."""
+    """Get full path for a section's directory (persistent storage)."""
     if section not in CONTENT_SECTIONS:
         raise ValueError(f"Unknown section: {section}")
-    base = _get_base_dir()
-    return os.path.join(base, CONTENT_SECTIONS[section]["dir"])
+    ensure_dirs()
+    return CONTENT_SECTIONS[section]["dir"]
 
 
 def _ensure_section_dir(section: str) -> str:
@@ -263,11 +256,21 @@ def migrate_from_legacy(section: str, legacy_path: str) -> Optional[str]:
     """
     Migrate from legacy single .txt file to new file system.
     Creates one file with content from legacy file.
+    legacy_path: absolute or project-relative path (e.g. data/knowledge_base.txt).
     Returns the new file_id if migration was performed, else None.
     """
-    base = _get_base_dir()
-    full_path = os.path.join(base, legacy_path)
-    if not os.path.exists(full_path):
+    from pathlib import Path
+    full_path = Path(legacy_path)
+    if not full_path.is_absolute():
+        base = Path(__file__).resolve().parent.parent
+        full_path = base / legacy_path
+    # Fallback: check persistent content dir (e.g. /opt/linasbot_data/content/knowledge_base.txt)
+    if not full_path.exists() and section in CONTENT_SECTIONS:
+        legacy_name = Path(legacy_path).name
+        persistent_legacy = CONTENT_DIR / legacy_name
+        if persistent_legacy.exists():
+            full_path = persistent_legacy
+    if not full_path.exists():
         return None
     if _list_json_files(section):
         return None  # Already has files, skip migration

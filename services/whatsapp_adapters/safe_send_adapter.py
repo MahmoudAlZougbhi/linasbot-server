@@ -14,9 +14,9 @@ from typing import Dict, Any, Optional
 
 import config
 from .base_adapter import WhatsAppAdapter
+from storage.persistent_storage import DRY_RUN_MESSAGES_FILE, ensure_dirs
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
-_DRY_RUN_LOG = _DATA_DIR / "dry_run_messages.jsonl"
+_DRY_RUN_LOG = DRY_RUN_MESSAGES_FILE
 
 
 def _should_dry_run(to_number: str) -> bool:
@@ -32,8 +32,8 @@ def _should_dry_run(to_number: str) -> bool:
 
 
 def _log_dry_run(to_number: str, message_type: str, payload: Dict[str, Any]) -> None:
-    """Append one dry-run entry to data/dry_run_messages.jsonl."""
-    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+    """Append one dry-run entry to persistent dry_run_messages.jsonl."""
+    ensure_dirs()
     entry = {
         "at": datetime.utcnow().isoformat() + "Z",
         "to": to_number,
@@ -41,7 +41,7 @@ def _log_dry_run(to_number: str, message_type: str, payload: Dict[str, Any]) -> 
         "payload": payload,
     }
     try:
-        with open(_DRY_RUN_LOG, "a", encoding="utf-8") as f:
+        with open(str(_DRY_RUN_LOG), "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         print(f"⚠️ Could not write dry-run log: {e}")

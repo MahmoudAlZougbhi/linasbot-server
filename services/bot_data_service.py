@@ -267,7 +267,8 @@ class BotDataService:
     def _get_fallback_knowledge_base(self) -> str:
         """Fallback knowledge base if APIs fail"""
         try:
-            with open('data/knowledge_base.txt', 'r', encoding='utf-8') as f:
+            from storage.persistent_storage import KNOWLEDGE_BASE_FILE
+            with open(KNOWLEDGE_BASE_FILE, 'r', encoding='utf-8') as f:
                 print("⚠️ Using fallback local knowledge base")
                 return f.read()
         except FileNotFoundError:
@@ -277,7 +278,8 @@ class BotDataService:
     async def get_style_guide(self) -> str:
         """Get bot style guide (still from local file for now)"""
         try:
-            with open('data/style_guide.txt', 'r', encoding='utf-8') as f:
+            from storage.persistent_storage import STYLE_GUIDE_FILE
+            with open(STYLE_GUIDE_FILE, 'r', encoding='utf-8') as f:
                 return f.read()
         except FileNotFoundError:
             return "Style guide not available."
@@ -285,7 +287,8 @@ class BotDataService:
     async def get_pricing_info(self) -> str:
         """Get pricing information (still from local file for now)"""
         try:
-            with open('data/price_list.txt', 'r', encoding='utf-8') as f:
+            from storage.persistent_storage import PRICE_LIST_FILE
+            with open(PRICE_LIST_FILE, 'r', encoding='utf-8') as f:
                 return f.read()
         except FileNotFoundError:
             return "Pricing information not available."

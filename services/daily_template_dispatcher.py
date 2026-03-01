@@ -66,8 +66,14 @@ class DailyTemplateDispatcher:
     """Runs template jobs once per local day at configured HH:MM."""
 
     def __init__(self):
-        self.state_file = Path(__file__).resolve().parent.parent / "data" / "daily_template_dispatch_state.json"
-        self.settings_file = Path(__file__).resolve().parent.parent / "data" / "app_settings.json"
+        from storage.persistent_storage import (
+            DAILY_TEMPLATE_DISPATCH_STATE_FILE,
+            APP_SETTINGS_FILE,
+            ensure_dirs,
+        )
+        ensure_dirs()
+        self.state_file = DAILY_TEMPLATE_DISPATCH_STATE_FILE
+        self.settings_file = APP_SETTINGS_FILE
         self._lock = threading.Lock()
         self.last_runs = self._load_state()
 

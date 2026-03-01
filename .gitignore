@@ -133,6 +133,9 @@ yarn-error.log*
 # Sensitive Data
 #-------------------------
 data/firebase_data.json
+
+# Persistent data (dev fallback when LINASBOT_DATA_ROOT=./linasbot_data)
+linasbot_data/
 *.log
 backend.log
 

@@ -28,8 +28,9 @@ class TemplateScheduleService:
     """Manage per-template daily schedule settings under app_settings.smartMessaging."""
 
     def __init__(self):
-        base_dir = Path(__file__).resolve().parent.parent
-        self.settings_file = base_dir / "data" / "app_settings.json"
+        from storage.persistent_storage import APP_SETTINGS_FILE, ensure_dirs
+        ensure_dirs()
+        self.settings_file = APP_SETTINGS_FILE
         self._lock = threading.Lock()
 
     def _load_settings(self) -> Dict[str, Any]:

@@ -101,7 +101,9 @@ class ScheduledMessagesCollector:
     """
     
     def __init__(self):
-        self.log_file = 'data/scheduled_messages_to_be_sent.json'
+        from storage.persistent_storage import SCHEDULED_MESSAGES_FILE, ensure_dirs
+        ensure_dirs()
+        self.log_file = str(SCHEDULED_MESSAGES_FILE)
         self.messages_to_send = []
         
     def load_or_create_log(self) -> List[Dict]:

@@ -11,33 +11,39 @@ from fastapi import HTTPException
 
 from modules.core import app
 import config
+from storage.persistent_storage import (
+    KNOWLEDGE_BASE_FILE,
+    STYLE_GUIDE_FILE,
+    PRICE_LIST_FILE,
+    CONTENT_DIR,
+    ensure_dirs,
+)
 
-
-# Supported training files configuration
 TRAINING_FILES = {
     "knowledge_base": {
-        "path": "data/knowledge_base.txt",
+        "path": str(KNOWLEDGE_BASE_FILE),
         "name": "Knowledge Base",
         "description": "General knowledge and information the bot can reference",
-        "config_attr": "CORE_KNOWLEDGE_BASE"
+        "config_attr": "CORE_KNOWLEDGE_BASE",
     },
     "style_guide": {
-        "path": "data/style_guide.txt",
+        "path": str(STYLE_GUIDE_FILE),
         "name": "Style Guide",
         "description": "Bot behavior, tone, and response style guidelines",
-        "config_attr": "BOT_STYLE_GUIDE"
+        "config_attr": "BOT_STYLE_GUIDE",
     },
     "price_list": {
-        "path": "data/price_list.txt",
+        "path": str(PRICE_LIST_FILE),
         "name": "Price List",
         "description": "Service pricing information",
-        "config_attr": "PRICE_LIST"
-    }
+        "config_attr": "PRICE_LIST",
+    },
 }
 
 
 def ensure_file_exists(file_path: str) -> None:
     """Ensure the file exists, create it with empty content if it doesn't"""
+    ensure_dirs()
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     if not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -149,7 +155,7 @@ async def update_training_file(file_id: str, request: dict):
         backup_path = None
         if os.path.exists(file_path):
             backup_filename = f"{os.path.basename(file_path).replace('.txt', '')}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            backup_path = os.path.join(os.path.dirname(file_path), backup_filename)
+            backup_path = str(CONTENT_DIR / backup_filename)
             with open(file_path, 'r', encoding='utf-8') as f:
                 backup_content = f.read()
             with open(backup_path, 'w', encoding='utf-8') as f:
@@ -199,8 +205,8 @@ async def list_training_file_backups(file_id: str):
             }
 
         file_config = TRAINING_FILES[file_id]
-        data_dir = os.path.dirname(file_config["path"])
-        base_name = os.path.basename(file_config["path"]).replace('.txt', '')
+        data_dir = str(CONTENT_DIR)
+        base_name = os.path.basename(file_config["path"]).replace(".txt", "")
 
         backups = []
 
@@ -251,7 +257,7 @@ async def restore_training_file_backup(file_id: str, request: dict):
 
         file_config = TRAINING_FILES[file_id]
         file_path = file_config["path"]
-        backup_path = os.path.join(os.path.dirname(file_path), backup_filename)
+        backup_path = str(CONTENT_DIR / backup_filename)
 
         if not os.path.exists(backup_path):
             return {
@@ -263,10 +269,9 @@ async def restore_training_file_backup(file_id: str, request: dict):
         with open(backup_path, 'r', encoding='utf-8') as f:
             backup_content = f.read()
 
-        # Create a backup of current before restoring
         if os.path.exists(file_path):
             current_backup_filename = f"{os.path.basename(file_path).replace('.txt', '')}_backup_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            current_backup_path = os.path.join(os.path.dirname(file_path), current_backup_filename)
+            current_backup_path = str(CONTENT_DIR / current_backup_filename)
             with open(file_path, 'r', encoding='utf-8') as f:
                 current_content = f.read()
             with open(current_backup_path, 'w', encoding='utf-8') as f:

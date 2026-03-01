@@ -119,8 +119,13 @@ async def get_retrieval_debug_logs(limit: int = 50):
 @app.post("/api/content-files/migrate-legacy")
 async def migrate_legacy():
     """Migrate from legacy single .txt files to new file system (one-time)."""
+    from storage.persistent_storage import KNOWLEDGE_BASE_FILE, STYLE_GUIDE_FILE, PRICE_LIST_FILE
     results = {}
-    for section, legacy in [("knowledge", "data/knowledge_base.txt"), ("style", "data/style_guide.txt"), ("price", "data/price_list.txt")]:
+    for section, legacy in [
+        ("knowledge", str(KNOWLEDGE_BASE_FILE)),
+        ("style", str(STYLE_GUIDE_FILE)),
+        ("price", str(PRICE_LIST_FILE)),
+    ]:
         try:
             file_id = cfs.migrate_from_legacy(section, legacy)
             results[section] = {"migrated": file_id is not None, "file_id": file_id}

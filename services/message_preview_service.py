@@ -10,8 +10,12 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-_DATA_DIR = os.path.join(_BASE_DIR, 'data')
+from storage.persistent_storage import (
+    MESSAGE_PREVIEW_QUEUE_FILE,
+    APP_SETTINGS_FILE,
+    MESSAGE_TEMPLATES_FILE,
+    ensure_dirs,
+)
 
 
 class MessagePreviewService:
@@ -20,9 +24,10 @@ class MessagePreviewService:
     """
 
     def __init__(self):
-        self.preview_queue_file = os.path.join(_DATA_DIR, 'message_preview_queue.json')
-        self.app_settings_file = os.path.join(_DATA_DIR, 'app_settings.json')
-        self.templates_file = os.path.join(_DATA_DIR, 'message_templates.json')
+        ensure_dirs()
+        self.preview_queue_file = str(MESSAGE_PREVIEW_QUEUE_FILE)
+        self.app_settings_file = str(APP_SETTINGS_FILE)
+        self.templates_file = str(MESSAGE_TEMPLATES_FILE)
         self.preview_queue = self._load_preview_queue()
         print(f"MessagePreviewService initialized with {len(self.preview_queue)} pending messages")
 

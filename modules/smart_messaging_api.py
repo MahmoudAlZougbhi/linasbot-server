@@ -31,17 +31,22 @@ except ImportError:
     fcntl = None
 
 
-_BASE_DIR = Path(__file__).resolve().parent.parent
-_DATA_DIR = _BASE_DIR / "data"
-_TEMPLATE_FILE = _DATA_DIR / "message_templates.json"
-_TEMPLATE_LOCK_FILE = _DATA_DIR / ".message_templates.lock"
+from storage.persistent_storage import (
+    MESSAGE_TEMPLATES_FILE,
+    MESSAGE_TEMPLATES_LOCK_FILE,
+    SMART_MESSAGING_DIR,
+    ensure_dirs,
+)
+
+_TEMPLATE_FILE = MESSAGE_TEMPLATES_FILE
+_TEMPLATE_LOCK_FILE = MESSAGE_TEMPLATES_LOCK_FILE
 _PROCESS_TEMPLATE_LOCK = threading.Lock()
 
 
 @contextmanager
 def _template_store_lock():
     """Lock template read/write across threads and (on Unix) processes."""
-    os.makedirs(_DATA_DIR, exist_ok=True)
+    ensure_dirs()
     with _PROCESS_TEMPLATE_LOCK:
         with open(_TEMPLATE_LOCK_FILE, "a+", encoding="utf-8") as lock_handle:
             if fcntl is not None:
@@ -67,9 +72,9 @@ def _load_templates_from_disk() -> Dict[str, Any]:
 
 
 def _save_templates_to_disk(templates: Dict[str, Any]) -> None:
-    os.makedirs(_DATA_DIR, exist_ok=True)
+    ensure_dirs()
     temp_fd, temp_path = tempfile.mkstemp(
-        dir=str(_DATA_DIR),
+        dir=str(SMART_MESSAGING_DIR),
         prefix="message_templates_",
         suffix=".json"
     )

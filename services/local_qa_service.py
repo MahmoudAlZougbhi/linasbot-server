@@ -12,18 +12,18 @@ from difflib import SequenceMatcher
 import re
 from pathlib import Path
 from services.language_detection_service import language_detection_service
+from storage.persistent_storage import QA_PAIRS_FILE, ensure_dirs
 
 
 class LocalQAService:
     """Manages Q&A pairs using local JSONL file (no backend dependency)"""
     
     def __init__(self, data_path: str = None):
-        # Use absolute path for production compatibility
+        # Use persistent storage (survives deploy/rebuild)
         if data_path is None:
-            # Try to use absolute path first, fallback to relative
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            data_path = os.path.join(base_dir, "data", "qa_pairs.jsonl")
-        
+            ensure_dirs()
+            data_path = str(QA_PAIRS_FILE)
+
         self.data_path = data_path
         self.match_threshold = 0.9  # 90% similarity threshold
         self.qa_pairs = self.load_from_jsonl()
@@ -35,15 +35,7 @@ class LocalQAService:
         
         if not os.path.exists(self.data_path):
             print(f"❌ Q&A file NOT FOUND at: {self.data_path}")
-            print(f"   Current working directory: {os.getcwd()}")
-            print(f"   Script directory: {os.path.dirname(os.path.abspath(__file__))}")
-            # Try alternative path as fallback
-            alt_path = "data/qa_pairs.jsonl"
-            if os.path.exists(alt_path):
-                print(f"   ⚠️ Found alternative at: {alt_path}, using that instead")
-                self.data_path = alt_path
-            else:
-                return qa_pairs
+            return qa_pairs
         
         try:
             with open(self.data_path, 'r', encoding='utf-8') as f:

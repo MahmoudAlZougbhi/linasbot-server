@@ -9,12 +9,15 @@ import os
 import re
 from typing import Dict, Any
 
+from storage.persistent_storage import APP_SETTINGS_FILE, ensure_dirs
+
 
 class SettingsService:
     """Service for managing application settings"""
-    
+
     def __init__(self):
-        self.settings_file = 'data/app_settings.json'
+        ensure_dirs()
+        self.settings_file = str(APP_SETTINGS_FILE)
         self.settings = self._load_settings()
         print(f"✅ Settings Service initialized")
     

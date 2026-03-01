@@ -12,11 +12,16 @@ import hashlib
 from difflib import SequenceMatcher
 import re
 from services.language_detection_service import language_detection_service
+from storage.persistent_storage import QA_DATABASE_FILE, ensure_dirs
+
 
 class QAManager:
     """Manages Q&A pairs with multi-language support and fuzzy matching"""
     
-    def __init__(self, data_path: str = "data/qa_database.json"):
+    def __init__(self, data_path: str = None):
+        if data_path is None:
+            ensure_dirs()
+            data_path = str(QA_DATABASE_FILE)
         self.data_path = data_path
         self.qa_database = self.load_database()
         self.match_threshold = 0.7  # 70% similarity threshold (more practical)

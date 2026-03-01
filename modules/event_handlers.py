@@ -175,7 +175,8 @@ async def startup_event():
                 import os
 
                 # Check if smart messaging is globally enabled
-                settings_file = 'data/app_settings.json'
+                from storage.persistent_storage import APP_SETTINGS_FILE
+                settings_file = str(APP_SETTINGS_FILE)
                 smart_messaging_enabled = True
                 preview_mode_enabled = True
 
@@ -358,7 +359,8 @@ async def startup_event():
                 print("📨 Running missed yesterday follow-ups job...")
 
                 # Check if smart messaging is globally enabled
-                settings_file = 'data/app_settings.json'
+                from storage.persistent_storage import APP_SETTINGS_FILE
+                settings_file = str(APP_SETTINGS_FILE)
                 smart_messaging_enabled = True
 
                 if os.path.exists(settings_file):
@@ -460,7 +462,8 @@ async def startup_event():
                 print("📨 Running missed this month follow-ups job...")
 
                 # Check if smart messaging is globally enabled
-                settings_file = 'data/app_settings.json'
+                from storage.persistent_storage import APP_SETTINGS_FILE
+                settings_file = str(APP_SETTINGS_FILE)
                 smart_messaging_enabled = True
 
                 if os.path.exists(settings_file):

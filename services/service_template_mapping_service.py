@@ -16,8 +16,11 @@ from services.smart_messaging_catalog import (
     normalize_template_id,
 )
 
-_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-_DATA_DIR = os.path.join(_BASE_DIR, 'data')
+from storage.persistent_storage import (
+    SERVICE_TEMPLATE_MAPPING_FILE,
+    MESSAGE_TEMPLATES_FILE,
+    ensure_dirs,
+)
 
 
 class ServiceTemplateMappingService:
@@ -26,8 +29,9 @@ class ServiceTemplateMappingService:
     """
 
     def __init__(self):
-        self.mapping_file = os.path.join(_DATA_DIR, 'service_template_mapping.json')
-        self.templates_file = os.path.join(_DATA_DIR, 'message_templates.json')
+        ensure_dirs()
+        self.mapping_file = str(SERVICE_TEMPLATE_MAPPING_FILE)
+        self.templates_file = str(MESSAGE_TEMPLATES_FILE)
         self.mappings = self._load_mappings()
         print(f"ServiceTemplateMappingService initialized with {len(self.mappings.get('service_mappings', {}))} services")
 

@@ -10,9 +10,14 @@ from pathlib import Path
 
 from services.message_logs_service import message_logs_service
 from services.smart_messaging_catalog import normalize_template_id
+from storage.persistent_storage import (
+    SENT_SMART_MESSAGES_FILE,
+    MESSAGE_TEMPLATES_FILE,
+    APP_SETTINGS_FILE,
+    SERVICE_TEMPLATE_MAPPING_FILE,
+    ensure_dirs,
+)
 
-_BASE_DIR = Path(__file__).resolve().parent.parent
-_DATA_DIR = _BASE_DIR / "data"
 
 class SmartMessagingService:
     """
@@ -24,12 +29,13 @@ class SmartMessagingService:
     - 1-month follow-ups
     """
     
-    SENT_MESSAGES_FILE = str(_DATA_DIR / "sent_smart_messages.json")
+    SENT_MESSAGES_FILE = str(SENT_SMART_MESSAGES_FILE)
 
     def __init__(self):
-        self.templates_file = str(_DATA_DIR / "message_templates.json")
-        self.settings_file = str(_DATA_DIR / "app_settings.json")
-        self.mapping_file = str(_DATA_DIR / "service_template_mapping.json")
+        ensure_dirs()
+        self.templates_file = str(MESSAGE_TEMPLATES_FILE)
+        self.settings_file = str(APP_SETTINGS_FILE)
+        self.mapping_file = str(SERVICE_TEMPLATE_MAPPING_FILE)
         self.message_templates = self._load_templates()
         self.scheduled_messages = {}
         self.sent_messages_log = []

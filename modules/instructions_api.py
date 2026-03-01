@@ -11,14 +11,15 @@ from fastapi import HTTPException
 
 from modules.core import app
 import config
+from storage.persistent_storage import STYLE_GUIDE_FILE, CONTENT_DIR, ensure_dirs
 
 
 @app.get("/api/instructions/get")
 async def get_instructions():
     """Get current bot instructions"""
     try:
-        # Read from file
-        instructions_path = 'data/style_guide.txt'
+        ensure_dirs()
+        instructions_path = str(STYLE_GUIDE_FILE)
         
         if not os.path.exists(instructions_path):
             return {
@@ -56,10 +57,8 @@ async def update_instructions(request: dict):
                 "error": "Instructions cannot be empty"
             }
         
-        instructions_path = 'data/style_guide.txt'
-        
-        # Create backup before updating
-        backup_path = f'data/style_guide_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
+        instructions_path = str(STYLE_GUIDE_FILE)
+        backup_path = str(CONTENT_DIR / f'style_guide_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
         if os.path.exists(instructions_path):
             with open(instructions_path, 'r', encoding='utf-8') as f:
                 backup_content = f.read()
@@ -95,7 +94,7 @@ async def update_instructions(request: dict):
 async def list_backups():
     """List all instruction backups"""
     try:
-        data_dir = 'data'
+        data_dir = str(CONTENT_DIR)
         backups = []
         
         if os.path.exists(data_dir):
@@ -136,7 +135,7 @@ async def restore_backup(request: dict):
                 "error": "Backup filename is required"
             }
         
-        backup_path = os.path.join('data', backup_filename)
+        backup_path = str(CONTENT_DIR / backup_filename)
         
         if not os.path.exists(backup_path):
             return {
@@ -148,10 +147,9 @@ async def restore_backup(request: dict):
         with open(backup_path, 'r', encoding='utf-8') as f:
             backup_content = f.read()
         
-        # Create a backup of current before restoring
-        instructions_path = 'data/style_guide.txt'
+        instructions_path = str(STYLE_GUIDE_FILE)
         if os.path.exists(instructions_path):
-            current_backup_path = f'data/style_guide_backup_before_restore_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
+            current_backup_path = str(CONTENT_DIR / f'style_guide_backup_before_restore_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
             with open(instructions_path, 'r', encoding='utf-8') as f:
                 current_content = f.read()
             with open(current_backup_path, 'w', encoding='utf-8') as f:
@@ -185,7 +183,7 @@ async def restore_backup(request: dict):
 async def get_instructions_stats():
     """Get statistics about current instructions"""
     try:
-        instructions_path = 'data/style_guide.txt'
+        instructions_path = str(STYLE_GUIDE_FILE)
         
         if not os.path.exists(instructions_path):
             return {

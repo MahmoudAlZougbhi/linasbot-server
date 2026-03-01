@@ -1,5 +1,11 @@
 # config.py
 import os
+from storage.persistent_storage import (
+    KNOWLEDGE_BASE_FILE,
+    PRICE_LIST_FILE,
+    STYLE_GUIDE_FILE,
+    ensure_dirs,
+)
 from collections import defaultdict, deque
 import json
 import datetime
@@ -166,43 +172,43 @@ CUSTOM_TRAINING_DATA_MAP = {} # Map for quick lookup of custom Q&A by (question,
 
 def load_bot_assets():
     """
-    Loads static bot assets (price list, style guide, knowledge base) from text files.
+    Loads static bot assets (price list, style guide, knowledge base) from persistent storage.
     """
     global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE
 
+    ensure_dirs()
     try:
-        os.makedirs('data', exist_ok=True) # Ensure 'data' directory exists
-        with open('data/price_list.txt', 'r', encoding='utf-8') as f:
+        with open(PRICE_LIST_FILE, 'r', encoding='utf-8') as f:
             PRICE_LIST = f.read().strip()
-        print("✅ تم تحميل قائمة الأسعار من data/price_list.txt")
+        print("✅ تم تحميل قائمة الأسعار من " + str(PRICE_LIST_FILE))
     except FileNotFoundError:
         PRICE_LIST = "قائمة الأسعار غير متوفرة. الرجاء إبلاغ المسؤول."
-        print("❌ تحذير: ملف data/price_list.txt غير موجود. الرجاء إنشاءه.")
+        print("❌ تحذير: ملف قائمة الأسعار غير موجود. الرجاء إنشاءه.")
     except Exception as e:
         PRICE_LIST = "خطأ في تحميل قائمة الأسعار."
-        print(f"❌ خطأ في تحميل data/price_list.txt: {e}")
+        print(f"❌ خطأ في تحميل قائمة الأسعار: {e}")
 
     try:
-        with open('data/style_guide.txt', 'r', encoding='utf-8') as f:
+        with open(STYLE_GUIDE_FILE, 'r', encoding='utf-8') as f:
             BOT_STYLE_GUIDE = f.read().strip()
-        print("✅ تم تحميل دليل الأسلوب من data/style_guide.txt")
+        print("✅ تم تحميل دليل الأسلوب من " + str(STYLE_GUIDE_FILE))
     except FileNotFoundError:
         BOT_STYLE_GUIDE = "الردود يجب أن تكون ودودة، حماسية، ومرحة، وأن تعكس خبرة واحترافية المركز."
-        print("❌ تحذير: ملف data/style_guide.txt غير موجود. الرجاء إنشاءه.")
+        print("❌ تحذير: ملف دليل الأسلوب غير موجود. الرجاء إنشاءه.")
     except Exception as e:
         BOT_STYLE_GUIDE = "خطأ في تحميل دليل الأسلوب."
-        print(f"❌ خطأ في تحميل data/style_guide.txt: {e}")
+        print(f"❌ خطأ في تحميل دليل الأسلوب: {e}")
 
     try:
-        with open('data/knowledge_base.txt', 'r', encoding='utf-8') as f:
+        with open(KNOWLEDGE_BASE_FILE, 'r', encoding='utf-8') as f:
             CORE_KNOWLEDGE_BASE = f.read().strip()
-        print("✅ تم تحميل قاعدة المعرفة الأساسية من data/knowledge_base.txt")
+        print("✅ تم تحميل قاعدة المعرفة الأساسية من " + str(KNOWLEDGE_BASE_FILE))
     except FileNotFoundError:
         CORE_KNOWLEDGE_BASE = "خدمات الليزر: إزالة شعر وتاتو فقط. لا تقدم علاجات جلدية أخرى. مواعيد العمل من 10 صباحًا حتى 6 مساءً يومياً ما عدا الأحد (عطلة)."
-        print("❌ تحذير: ملف data/knowledge_base.txt غير موجود. الرجاء إنشاءه.")
+        print("❌ تحذير: ملف قاعدة المعرفة غير موجود. الرجاء إنشاءه.")
     except Exception as e:
         CORE_KNOWLEDGE_BASE = "خطأ في تحميل قاعدة المعرفة الأساسية."
-        print(f"❌ خطأ في تحميل data/knowledge_base.txt: {e}")
+        print(f"❌ خطأ في تحميل قاعدة المعرفة: {e}")
 
 def load_training_data():
     """

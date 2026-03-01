@@ -5,6 +5,12 @@ Loads all modular components and starts the FastAPI server.
 """
 
 import os
+
+# Run migration first: copy data from project/data/ to persistent dir if needed.
+# Must run before any service reads data (e.g. config.load_bot_assets).
+from storage.persistent_storage import migrate_from_legacy
+migrate_from_legacy()
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from modules.core import app
