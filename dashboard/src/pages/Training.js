@@ -309,8 +309,8 @@ const Training = () => {
           AI Training Center
         </h1>
         <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-          Teach your AI assistant with Q&A pairs. Arabic entries are auto-saved
-          in English, French, and Franco too.
+          Teach your AI assistant with Q&A pairs. Q&A in any language (Arabic,
+          English, French, Franco) is auto-translated to all 4 languages.
         </p>
       </motion.div>
 
@@ -462,7 +462,7 @@ const Training = () => {
                     className="input-field w-full h-24 resize-none"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    💡 Language is auto-detected. Arabic Q&A auto-generates EN/FR/Franco copies.
+                    💡 Language is auto-detected. Q&A in any language auto-translates to all 4 (ar, en, fr, franco).
                   </p>
                 </div>
 

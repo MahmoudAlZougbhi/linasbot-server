@@ -4,7 +4,7 @@ Content Files API - CRUD for Knowledge, Style, and Price List files.
 Each section is a file system with Create (+) button.
 """
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Body
 from modules.core import app
 from services import content_files_service as cfs
 from services.smart_retrieval_service import invalidate_titles_cache
@@ -51,7 +51,7 @@ async def get_content_file(section: str, file_id: str):
 
 
 @app.post("/api/content-files/{section}/create")
-async def create_content_file(section: str, request: dict):
+async def create_content_file(section: str, request: dict = Body(default={})):
     """Create a new content file."""
     _validate_section(section)
     title = request.get("title", "").strip()
@@ -73,7 +73,7 @@ async def create_content_file(section: str, request: dict):
 
 
 @app.put("/api/content-files/{section}/{file_id}")
-async def update_content_file(section: str, file_id: str, request: dict):
+async def update_content_file(section: str, file_id: str, request: dict = Body(default={})):
     """Update an existing content file."""
     _validate_section(section)
     data = cfs.get_file(section, file_id)

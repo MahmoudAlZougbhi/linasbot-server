@@ -14,6 +14,7 @@ from services.llm_core_service import client as openai_client
 
 
 SUPPORTED_TRAINING_LANGUAGES = {"ar", "en", "fr", "franco"}
+TRAINING_LANGUAGE_ORDER = ["ar", "en", "fr", "franco"]
 FRENCH_MARKERS = ("bonjour", "merci", "salut", "s'il", "vous", "comment")
 FRANCO_MARKERS = (
     "kif",
@@ -144,35 +145,64 @@ class LanguageDetectionService:
         Translate Arabic Q&A into EN/FR/Franco for training storage.
         """
         target_languages = target_languages or ["en", "fr", "franco"]
-        normalized_targets = []
-        for lang in target_languages:
+        return await self.translate_training_pair(
+            question=question_ar,
+            answer=answer_ar,
+            source_language="ar",
+            target_languages=target_languages,
+        )
+
+    async def translate_training_pair(
+        self,
+        question: str,
+        answer: str,
+        source_language: Optional[str] = None,
+        target_languages: Optional[List[str]] = None,
+    ) -> Dict:
+        """
+        Translate a Q&A pair from any supported source language into requested target languages.
+        Supported languages: ar, en, fr, franco.
+        """
+        normalized_targets: List[str] = []
+        requested_targets = target_languages or TRAINING_LANGUAGE_ORDER
+        for lang in requested_targets:
             normalized = self.normalize_training_language(lang, default="")
-            if normalized and normalized != "ar" and normalized not in normalized_targets:
+            if normalized and normalized not in normalized_targets:
                 normalized_targets.append(normalized)
 
-        if not question_ar or not answer_ar or not normalized_targets:
+        if not question or not answer or not normalized_targets:
             return {"success": False, "translations": {}, "missing_languages": normalized_targets}
+
+        normalized_source = self.normalize_training_language(source_language, default="")
+        source_for_model = normalized_source or "auto"
+        target_languages_str = ", ".join(normalized_targets)
 
         prompt = (
             "You are an expert translator for a laser clinic customer-service bot.\n"
-            "Translate the Arabic question and answer into requested target languages.\n"
+            "Translate the input question and answer into the requested target languages.\n"
             "Return strict JSON object only.\n"
             "JSON shape:\n"
             "{\n"
+            '  "ar": {"question": "...", "answer": "..."},\n'
             '  "en": {"question": "...", "answer": "..."},\n'
             '  "fr": {"question": "...", "answer": "..."},\n'
             '  "franco": {"question": "...", "answer": "..."}\n'
             "}\n"
             "Rules:\n"
+            f"- Only include keys requested in target_languages: {target_languages_str}.\n"
             "- Keep meaning and details unchanged.\n"
-            "- Franco must be Lebanese Arabic written with Latin characters.\n"
-            "- Franco answer must also be Latin-script Franco (no Arabic script).\n"
+            "- Keep service names, numbers, and facts intact.\n"
+            "- ar must be natural Arabic script.\n"
+            "- en must be natural English.\n"
+            "- fr must be natural French.\n"
+            "- franco must be Lebanese Arabic in Latin characters only (no Arabic script).\n"
             "- Do not include markdown or extra keys."
         )
 
         user_payload = {
-            "question_ar": question_ar,
-            "answer_ar": answer_ar,
+            "source_language": source_for_model,
+            "question": question,
+            "answer": answer,
             "target_languages": normalized_targets,
         }
 
@@ -189,7 +219,7 @@ class LanguageDetectionService:
             content = response.choices[0].message.content.strip() if response.choices else "{}"
             parsed = json.loads(content)
         except Exception as error:
-            print(f"❌ translate_arabic_training_pair failed: {error}")
+            print(f"❌ translate_training_pair failed: {error}")
             return {
                 "success": False,
                 "translations": {},
@@ -200,16 +230,27 @@ class LanguageDetectionService:
         translations: Dict[str, Dict[str, str]] = {}
         for lang in normalized_targets:
             lang_payload = parsed.get(lang, {})
-            question = str(lang_payload.get("question", "")).strip()
-            answer = str(lang_payload.get("answer", "")).strip()
-            if question and answer:
-                translations[lang] = {"question": question, "answer": answer}
+            translated_question = str(lang_payload.get("question", "")).strip()
+            translated_answer = str(lang_payload.get("answer", "")).strip()
+            if translated_question and translated_answer:
+                translations[lang] = {
+                    "question": translated_question,
+                    "answer": translated_answer,
+                }
+
+        # Preserve source text exactly for source language when it is part of targets.
+        if normalized_source and normalized_source in normalized_targets:
+            translations[normalized_source] = {
+                "question": question.strip(),
+                "answer": answer.strip(),
+            }
 
         missing = [lang for lang in normalized_targets if lang not in translations]
         return {
             "success": len(missing) == 0,
             "translations": translations,
             "missing_languages": missing,
+            "source_language": normalized_source or "auto",
         }
 
 

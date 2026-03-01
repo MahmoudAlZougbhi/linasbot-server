@@ -168,56 +168,37 @@ async def create_local_qa_pair(qa_data: dict):
         qa_group_id = qa_data.get("qa_group_id") or f"qa_{uuid.uuid4().hex[:10]}"
         created_entries = []
 
-        if detected_language == "ar":
-            # Arabic source entries must save EN/FR/Franco variants too.
-            translation_result = await language_detection_service.translate_arabic_training_pair(
-                question_ar=question,
-                answer_ar=answer,
-                target_languages=["en", "fr", "franco"],
-            )
-            if not translation_result.get("success"):
-                return {
-                    "success": False,
-                    "error": "Failed to auto-translate Arabic Q&A to all target languages",
-                    "missing_languages": translation_result.get("missing_languages", []),
-                }
+        # Auto-translate from ANY language to all 4 (ar, en, fr, franco)
+        target_languages_all = ["ar", "en", "fr", "franco"]
+        translation_result = await language_detection_service.translate_training_pair(
+            question=question,
+            answer=answer,
+            source_language=detected_language,
+            target_languages=target_languages_all,
+        )
+        if not translation_result.get("success"):
+            return {
+                "success": False,
+                "error": "Failed to auto-translate Q&A to all 4 languages",
+                "missing_languages": translation_result.get("missing_languages", []),
+            }
 
+        translations = translation_result.get("translations", {})
+        for lang in target_languages_all:
+            translated = translations.get(lang, {})
+            q_text = translated.get("question", "") or question
+            a_text = translated.get("answer", "") or answer
+            if not q_text or not a_text:
+                continue
             created_entries.append(
                 build_qa_entry(
-                    question=question,
-                    answer=answer,
-                    language="ar",
-                    category=category,
-                    qa_group_id=qa_group_id,
-                    source_language="ar",
-                    is_auto_translated=False,
-                )
-            )
-
-            translations = translation_result.get("translations", {})
-            for target_lang in ["en", "fr", "franco"]:
-                translated = translations.get(target_lang, {})
-                created_entries.append(
-                    build_qa_entry(
-                        question=translated.get("question", ""),
-                        answer=translated.get("answer", ""),
-                        language=target_lang,
-                        category=category,
-                        qa_group_id=qa_group_id,
-                        source_language="ar",
-                        is_auto_translated=True,
-                    )
-                )
-        else:
-            created_entries.append(
-                build_qa_entry(
-                    question=question,
-                    answer=answer,
-                    language=detected_language,
+                    question=q_text,
+                    answer=a_text,
+                    language=lang,
                     category=category,
                     qa_group_id=qa_group_id,
                     source_language=detected_language,
-                    is_auto_translated=False,
+                    is_auto_translated=(lang != detected_language),
                 )
             )
         
@@ -439,7 +420,7 @@ async def test_local_qa_match(test_data: dict):
             return {
                 "success": True,
                 "match_found": False,
-                "message": "No matching Q&A pair found (threshold: 70%)"
+                "message": "No matching Q&A pair found (threshold: 90%)"
             }
     except Exception as e:
         print(f"❌ Error testing Q&A match: {e}")

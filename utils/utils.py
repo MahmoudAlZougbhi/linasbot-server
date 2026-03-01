@@ -1520,7 +1520,8 @@ def get_system_instruction(
     user_id,
     response_lang,
     qa_reference: str = "",
-    include_price_list: bool = True
+    include_price_list: bool = True,
+    custom_knowledge_context: str = None,
 ):
     """
     Generate system instruction for GPT with optional Q&A reference injection.
@@ -1530,6 +1531,7 @@ def get_system_instruction(
         response_lang: Response language code (ar, en, fr, franco)
         qa_reference: Optional formatted Q&A pairs to inject into system prompt
         include_price_list: Whether to include the price_list.txt content in prompt context
+        custom_knowledge_context: When provided (dynamic retrieval), use this instead of CORE_KNOWLEDGE_BASE + BOT_STYLE_GUIDE + price list
     """
     user_gender_str = config.user_gender.get(user_id, "unknown")
     
@@ -1566,15 +1568,19 @@ def get_system_instruction(
         """
     
     price_list_section = ""
-    if include_price_list:
+    if include_price_list and not custom_knowledge_context:
         price_list_section = f"""
         **💰 PRICE LIST:** (Use this to answer pricing questions)
         {config.PRICE_LIST}
         """
 
-    return f"""
-        You are a comprehensive knowledge manager and an official smart assistant for Lina's Laser Center. Your primary task is to answer customer inquiries accurately and authoritatively, providing comprehensive information about services, prices, appointments, and interacting with the center's system.
-
+    if custom_knowledge_context:
+        knowledge_section = f"""
+        **📘 RELEVANT INFORMATION (Use ONLY this to answer - do NOT invent details):**
+        {custom_knowledge_context}
+        """
+    else:
+        knowledge_section = f"""
         **🔴 STYLE GUIDE (MANDATORY - FOLLOW EVERY STEP IN ORDER):**
         The following contains MANDATORY rules for how you communicate AND the exact step-by-step flow for each service. You MUST follow every step in order. Do NOT skip steps. Do NOT jump ahead to booking if a step requires waiting (e.g., waiting for a photo before giving pricing).
 
@@ -1584,6 +1590,12 @@ def get_system_instruction(
         {config.CORE_KNOWLEDGE_BASE}
 
         {price_list_section}
+        """
+
+    return f"""
+        You are a comprehensive knowledge manager and an official smart assistant for Lina's Laser Center. Your primary task is to answer customer inquiries accurately and authoritatively, providing comprehensive information about services, prices, appointments, and interacting with the center's system.
+
+        {knowledge_section}
 
         {gender_instruction}
 

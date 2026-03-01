@@ -5,6 +5,7 @@ import {
   HomeIcon,
   BeakerIcon,
   AcademicCapIcon,
+  FolderIcon,
   ChatBubbleLeftRightIcon,
   ClockIcon,
   ChartBarIcon,
@@ -32,6 +33,13 @@ const navigationItems = [
     href: "/training",
     icon: AcademicCapIcon,
     badge: "Active",
+    permissionKey: "training",
+  },
+  {
+    name: "Content Managers",
+    href: "/content-managers",
+    icon: FolderIcon,
+    badge: "New",
     permissionKey: "training",
   },
   {

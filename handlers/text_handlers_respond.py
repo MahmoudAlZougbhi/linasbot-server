@@ -272,7 +272,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             await save_conversation_message_to_firestore(user_id, "ai", f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.", current_conversation_id, user_name, user_data.get('phone_number'))
 
         # Check Q&A Database before calling GPT-4
-        # Decision flow: 70%+ returns Q&A directly, <70% passes to GPT with top 3 relevant Q&A pairs
+        # Decision flow: 90%+ returns Q&A directly, <90% passes to GPT with top 3 relevant Q&A pairs
         print(f"[_process_and_respond] 🔍 Checking Q&A DATABASE for: '{query_to_send_to_gpt}'")
 
         is_reschedule_intent = detect_reschedule_intent(query_to_send_to_gpt)
@@ -289,13 +289,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             match_result = await local_qa_service.find_match_with_tier(query_to_send_to_gpt, current_preferred_lang)
 
         if match_result:
-            # 70%+ match: Return Q&A directly
+            # 90%+ match: Return Q&A directly
             match_score = match_result.get("match_score", 0)
             qa_pair = match_result.get("qa_pair", {})
             qa_response = qa_pair.get("answer", "")
 
             print(f"[_process_and_respond] ✅ Q&A MATCH FOUND!")
-            print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥70% threshold)")
+            print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥90% threshold)")
             print(f"[_process_and_respond] 🎯 Returning Q&A directly")
             print(f"[_process_and_respond] 💰 AI CREDITS SAVED: $0.02-0.05 (NO GPT-4 CALL)")
             print(f"[_process_and_respond] ⚡ Response Time: ~100-200ms (vs 2-5s with GPT-4)")
@@ -318,9 +318,31 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             save_for_training_conversation_log(query_to_send_to_gpt, qa_response)
             return
         else:
-            # <70% match: GPT + knowledge + style + top 3 relevant Q&A pairs
-            print(f"[_process_and_respond] ℹ️ No Q&A match found (below 70%). Proceeding with GPT-4...")
+            # <90% match: GPT + knowledge + style + top 3 relevant Q&A pairs
+            print(f"[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
             print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
+
+            # Dynamic retrieval: if content files exist, use file selection + merged content (reduces tokens)
+            custom_context = None
+            try:
+                from services.dynamic_retrieval_service import (
+                    is_dynamic_retrieval_available,
+                    retrieve_and_merge,
+                )
+                if is_dynamic_retrieval_available() and not is_reschedule_intent:
+                    merged, clarification, action = await retrieve_and_merge(
+                        query_to_send_to_gpt,
+                        include_price_hint=is_price_intent,
+                    )
+                    if action == "ask_clarification" and clarification:
+                        await send_message_func(user_id, clarification)
+                        await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"))
+                        save_for_training_conversation_log(query_to_send_to_gpt, clarification)
+                        return
+                    custom_context = merged
+                    print(f"[_process_and_respond] 📂 Dynamic retrieval: action={action}, context_len={len(merged) if merged else 0}")
+            except Exception as e:
+                print(f"[_process_and_respond] ⚠️ Dynamic retrieval fallback: {e}")
 
             conversation_history = await get_conversation_history_from_firestore(user_id, current_conversation_id, max_messages=10)
 
@@ -332,7 +354,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 current_preferred_lang=current_preferred_lang,
                 response_language=response_language,
                 is_initial_message_after_start=is_initial_message_for_gpt,
-                initial_user_query_to_process=None
+                initial_user_query_to_process=None,
+                custom_knowledge_context=custom_context,
             )
 
     action = gpt_response_data.get("action")

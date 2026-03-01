@@ -3,6 +3,8 @@ Auth API Module
 Handles authentication and user management endpoints for the dashboard
 """
 
+import asyncio
+
 from fastapi import HTTPException
 from pydantic import BaseModel, EmailStr
 from typing import Dict, Any, Optional, List
@@ -51,7 +53,14 @@ class ChangePasswordRequest(BaseModel):
 async def ensure_default_admin():
     """Ensure default admin exists on startup"""
     try:
-        user_service.ensure_default_admin()
+        # Firestore calls are synchronous; run them off the event loop and
+        # fail open on timeout so API startup never hangs.
+        await asyncio.wait_for(
+            asyncio.to_thread(user_service.ensure_default_admin),
+            timeout=10.0
+        )
+    except asyncio.TimeoutError:
+        print("Warning: ensure_default_admin timed out after 10s; startup will continue.")
     except Exception as e:
         print(f"Warning: Could not ensure default admin: {e}")
 
@@ -68,7 +77,10 @@ async def login(request: LoginRequest):
     Returns user data (without password) on success
     """
     try:
-        user = user_service.authenticate(request.email, request.password)
+        user = await asyncio.wait_for(
+            asyncio.to_thread(user_service.authenticate, request.email, request.password),
+            timeout=12.0
+        )
 
         if not user:
             return {
@@ -84,6 +96,11 @@ async def login(request: LoginRequest):
         return {
             "success": False,
             "error": str(e)
+        }
+    except asyncio.TimeoutError:
+        return {
+            "success": False,
+            "error": "Authentication service timeout. Please try again."
         }
     except Exception as e:
         print(f"Login error: {e}")

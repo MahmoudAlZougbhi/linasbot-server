@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard';
 import Testing from './pages/Testing';
 import SimpleApiTest from './pages/SimpleApiTest';
 import Training from './pages/Training';
+import ContentManagers from './pages/ContentManagers';
 import Analytics from './pages/Analytics';
 import LiveChat from './pages/LiveChat';
 import ChatHistory from './pages/ChatHistory';
@@ -120,6 +121,11 @@ function AppContent() {
                   <Route path="/training" element={
                     <ProtectedRoute>
                       <Training />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/content-managers" element={
+                    <ProtectedRoute>
+                      <ContentManagers />
                     </ProtectedRoute>
                   } />
                   <Route path="/live-chat" element={

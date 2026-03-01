@@ -469,7 +469,7 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     return "\n".join(lines)
 
 # user_id is the WhatsApp phone number
-async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None) -> dict:
+async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None) -> dict:
     user_name = config.user_names.get(user_id, "client") 
     current_gender_attempts = config.gender_attempts.get(user_id, 0)
     
@@ -546,11 +546,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     body_part_required_service_ids = _get_body_part_required_service_ids()
 
     # Get the core system instruction from utils.py, with conditional price list loading.
+    # When custom_knowledge_context is provided (from dynamic retrieval), use it instead of config files.
     system_instruction_core = get_system_instruction(
         user_id,
         current_preferred_lang,
         qa_reference_text,
-        include_price_list=is_price_question
+        include_price_list=is_price_question,
+        custom_knowledge_context=custom_knowledge_context
     )
 
     # Log which training files GPT is receiving

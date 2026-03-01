@@ -17,7 +17,26 @@ export const AuthProvider = ({ children }) => {
 
   // Check for existing session on mount
   useEffect(() => {
-    checkSession();
+    let cancelled = false;
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false);
+        cancelled = true;
+      }
+    }, 5000); // Never block more than 5s - show login if backend unreachable
+
+    checkSession()
+      .finally(() => {
+        if (!cancelled) {
+          clearTimeout(safetyTimeout);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   const checkSession = async () => {
@@ -31,8 +50,13 @@ export const AuthProvider = ({ children }) => {
 
         // Check if session is less than 24 hours old
         if (hoursDiff < 24 && sessionData.user?.id) {
-          // Validate session with backend and get fresh user data
-          const response = await fetch(`${API_BASE}/session/${sessionData.user.id}`);
+          // Validate session with backend and get fresh user data (5s timeout for local)
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const response = await fetch(`${API_BASE}/session/${sessionData.user.id}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
           const data = await response.json();
 
           if (data.success && data.user && data.user.status === 'active') {
@@ -56,8 +80,6 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Session check failed:', error);
       localStorage.removeItem('auth_session');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -78,13 +100,17 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const response = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -108,8 +134,11 @@ export const AuthProvider = ({ children }) => {
 
       return userData;
     } catch (error) {
-      toast.error(error.message || 'Login failed');
-      throw error;
+      const msg = error.name === 'AbortError'
+        ? 'Connection timed out. Is the backend running on port 8003?'
+        : (error.message || 'Login failed');
+      toast.error(msg);
+      throw new Error(msg);
     }
   };
 

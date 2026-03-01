@@ -1179,6 +1179,72 @@ export const useApi = () => {
     }
   }, []);
 
+  // Content Files API (Knowledge, Price, Style managers - dynamic retrieval)
+  const getContentFilesList = useCallback(async (section) => {
+    try {
+      const response = await api.get(`/api/content-files/${section}/list`);
+      return response.data;
+    } catch (error) {
+      console.error("Error getting content files list:", error);
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", data: [], count: 0 };
+      }
+      return { success: false, error: error.message, data: [], count: 0 };
+    }
+  }, []);
+
+  const getContentFile = useCallback(async (section, fileId) => {
+    try {
+      const response = await api.get(`/api/content-files/${section}/${fileId}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error getting content file:", error);
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: error.message };
+    }
+  }, []);
+
+  const createContentFile = useCallback(async (section, payload) => {
+    try {
+      const response = await api.post(`/api/content-files/${section}/create`, payload);
+      return response.data;
+    } catch (error) {
+      console.error("Error creating content file:", error);
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: error.response?.data?.detail || error.message };
+    }
+  }, []);
+
+  const updateContentFile = useCallback(async (section, fileId, payload) => {
+    try {
+      const response = await api.put(`/api/content-files/${section}/${fileId}`, payload);
+      return response.data;
+    } catch (error) {
+      console.error("Error updating content file:", error);
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: error.response?.data?.detail || error.message };
+    }
+  }, []);
+
+  const deleteContentFile = useCallback(async (section, fileId) => {
+    try {
+      const response = await api.delete(`/api/content-files/${section}/${fileId}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error deleting content file:", error);
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: error.response?.data?.detail || error.message };
+    }
+  }, []);
+
   return {
     loading,
     currentProvider,
@@ -1237,5 +1303,11 @@ export const useApi = () => {
     getTrainingFileBackups,
     restoreTrainingFileBackup,
     getTrainingFileStats,
+    // Content Files (Knowledge, Price, Style managers)
+    getContentFilesList,
+    getContentFile,
+    createContentFile,
+    updateContentFile,
+    deleteContentFile,
   };
 };

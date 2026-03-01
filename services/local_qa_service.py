@@ -25,7 +25,7 @@ class LocalQAService:
             data_path = os.path.join(base_dir, "data", "qa_pairs.jsonl")
         
         self.data_path = data_path
-        self.match_threshold = 0.7  # 70% similarity threshold
+        self.match_threshold = 0.9  # 90% similarity threshold
         self.qa_pairs = self.load_from_jsonl()
         print(f"✅ LocalQAService initialized with {len(self.qa_pairs)} Q&A pairs from {self.data_path}")
     
@@ -452,15 +452,15 @@ class LocalQAService:
         Find match with simplified matching logic.
 
         Matching:
-        - 70%+ : Return Q&A directly (direct tier)
-        - <70% : Returns None - GPT handles with top 3 relevant Q&A pairs in context
+        - 90%+ : Return Q&A directly (direct tier)
+        - <90% : Returns None - GPT handles with top 3 relevant Q&A pairs in context
 
         Args:
             question: The user's question
             language: Language preference (default: "ar")
 
         Returns:
-            Dict with qa_pair, match_score, and tier, or None if below 70%
+            Dict with qa_pair, match_score, and tier, or None if below 90%
         """
         best_match = None
         best_score = 0
@@ -481,8 +481,8 @@ class LocalQAService:
                 best_score = similarity
                 best_match = qa
 
-        # 70%+ threshold for direct Q&A response
-        if best_score >= 0.70:
+        # 90%+ threshold for direct Q&A response
+        if best_score >= 0.90:
             print(f"✅ Q&A Match Found! Score: {best_score:.2%}, Tier: direct")
             return {
                 "qa_pair": best_match,
@@ -491,7 +491,7 @@ class LocalQAService:
                 "matched_language": self._normalize_language(best_match.get("language"), default=requested_language)
             }
 
-        print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, needs ≥70%)")
+        print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, needs ≥90%)")
         return None
 
     async def get_statistics(self) -> dict:
