@@ -596,6 +596,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         user_input_to_process,
         sent_reply or "",
         flow_source,
+        ai_query_summary=flow_meta.get("ai_query_summary"),
         ai_raw_response=flow_meta.get("ai_raw_response"),
         model=flow_meta.get("model"),
         tokens=flow_meta.get("tokens"),

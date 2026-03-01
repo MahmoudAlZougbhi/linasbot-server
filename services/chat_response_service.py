@@ -1680,9 +1680,14 @@ Return JSON with "action" and "bot_reply" fields."""
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
         usage = getattr(response, "usage", None)
         tokens_val = (usage.total_tokens or getattr(usage, "prompt_tokens", None)) if usage else None
+        context_count = len(current_context_messages) if current_context_messages else 0
+        ai_query_summary = f"User query: {user_input[:150]}{'...' if len(user_input) > 150 else ''}"
+        if context_count:
+            ai_query_summary += f" (+ {context_count} context messages)"
         parsed_response["_flow_meta"] = {
             "model": selected_model,
             "ai_raw_response": gpt_raw_content[:800] if gpt_raw_content else None,
+            "ai_query_summary": ai_query_summary,
             "tool_calls": tool_names if tool_names else None,
             "tokens": tokens_val,
         }

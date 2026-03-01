@@ -8,6 +8,7 @@ import {
   ArrowRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ListBulletIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 
@@ -19,9 +20,27 @@ const SOURCE_LABELS = {
   moderation: { label: "Moderation", color: "bg-rose-100 text-rose-700", icon: "🛡" },
 };
 
+/** Step block for the flow breakdown */
+const FlowStep = ({ step, title, content }) => (
+  <div className="flex gap-3">
+    <div className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-sm">
+      {step}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{title}</p>
+      <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm text-slate-700" dir="auto">
+        {content}
+      </div>
+    </div>
+  </div>
+);
+
 const FlowCard = ({ entry, isExpanded, onToggle }) => {
   const meta = SOURCE_LABELS[entry.source] || { label: entry.source, color: "bg-slate-100 text-slate-700", icon: "?" };
-  const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString("ar-LB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+
+  const isGptFlow = entry.source === "gpt";
+  const hasAiDetails = isGptFlow && (entry.ai_query_summary || entry.ai_raw_response || entry.tool_calls?.length);
 
   return (
     <motion.div
@@ -74,25 +93,76 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
           exit={{ height: 0, opacity: 0 }}
           className="border-t border-slate-100 bg-slate-50/50"
         >
-          <div className="p-4 space-y-3 text-sm">
-            {entry.ai_raw_response && (
-              <div>
-                <p className="font-medium text-slate-600 mb-1 flex items-center gap-2">
-                  <CpuChipIcon className="w-4 h-4" /> AI Raw Response
-                </p>
-                <pre className="p-3 bg-white rounded-lg border border-slate-200 text-xs overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap" dir="auto">
-                  {entry.ai_raw_response}
-                </pre>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-4 text-slate-600">
-              {entry.model && <span>Model: <code className="bg-white px-1 rounded">{entry.model}</code></span>}
-              {entry.tokens != null && <span>Tokens: {entry.tokens}</span>}
-              {entry.response_time_ms != null && <span>Response: {Math.round(entry.response_time_ms)}ms</span>}
-              {entry.qa_match_score != null && <span>Q&A Match: {(entry.qa_match_score * 100).toFixed(0)}%</span>}
-              {entry.tool_calls?.length > 0 && (
-                <span>Tools: {entry.tool_calls.join(", ")}</span>
+          <div className="p-4 space-y-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+              <ListBulletIcon className="w-4 h-4" /> Detailed interaction flow (English)
+            </p>
+
+            <div className="grid gap-4">
+              {/* Step 1: User → Bot */}
+              <FlowStep
+                step={1}
+                title="User sent to Bot"
+                content={entry.user_message || "(no message)"}
+              />
+
+              {/* Step 2: Bot → AI (what bot forwarded to AI) */}
+              <FlowStep
+                step={2}
+                title="Bot sent to AI"
+                content={
+                  entry.ai_query_summary ||
+                  (entry.source === "qa_database"
+                    ? "Bot matched from Q&A database (no AI call)."
+                    : entry.source === "dynamic_retrieval"
+                    ? "Bot used dynamic retrieval (no GPT call)."
+                    : entry.source === "rate_limit"
+                    ? "Rate limit applied (no AI call)."
+                    : entry.source === "moderation"
+                    ? "Content moderated (no AI call)."
+                    : "User query + context messages.")
+                }
+              />
+
+              {/* Step 3: AI processed (model, tokens, tool calls) */}
+              {isGptFlow && (
+                <FlowStep
+                  step={3}
+                  title="AI processed"
+                  content={
+                    <span>
+                      {entry.model && <span>Model: <code className="bg-slate-100 px-1 rounded">{entry.model}</code> </span>}
+                      {entry.tokens != null && <span>• Tokens: {entry.tokens} </span>}
+                      {entry.response_time_ms != null && <span>• Response time: {Math.round(entry.response_time_ms)}ms </span>}
+                      {entry.qa_match_score != null && <span>• Q&A match: {(entry.qa_match_score * 100).toFixed(0)}% </span>}
+                      {entry.tool_calls?.length > 0 && (
+                        <span>• AI requested tools: <code className="bg-violet-100 px-1 rounded">{entry.tool_calls.join(", ")}</code></span>
+                      )}
+                      {!entry.model && !entry.tokens && !entry.tool_calls?.length && "(No metadata)"}
+                    </span>
+                  }
+                />
               )}
+
+              {/* Step 4: AI returned (raw response / tool results) */}
+              {isGptFlow && entry.ai_raw_response && (
+                <FlowStep
+                  step={4}
+                  title="AI returned to Bot"
+                  content={
+                    <pre className="text-xs overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap m-0" dir="auto">
+                      {entry.ai_raw_response}
+                    </pre>
+                  }
+                />
+              )}
+
+              {/* Step 5: Bot sent to User */}
+              <FlowStep
+                step={isGptFlow && entry.ai_raw_response ? 5 : (isGptFlow ? 4 : 3)}
+                title="Bot sent to User"
+                content={entry.bot_to_user || "(no response)"}
+              />
             </div>
           </div>
         </motion.div>
@@ -135,13 +205,13 @@ const ActivityFlow = () => {
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Activity Flow</h1>
         <p className="text-slate-600 mt-1">
-          شوف شو عم يصير بين المستخدم، البوت، والـ AI — شو طلب المستخدم، شو بعت البوت للـ AI، شو رجع الـ AI، وشو بعت البوت للمستخدم.
+          See what happens between the user, bot, and AI — what the user asked, what the bot sent to the AI, what the AI returned, and what the bot sent to the user.
         </p>
       </div>
 
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm text-slate-600">عرض:</label>
+          <label className="text-sm text-slate-600">Show:</label>
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
@@ -159,56 +229,62 @@ const ActivityFlow = () => {
           className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 transition"
         >
           <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          تحديث
+          Refresh
         </button>
       </div>
 
-      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-            <UserIcon className="w-4 h-4 text-blue-600" />
+      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Interaction flow</p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <UserIcon className="w-4 h-4 text-blue-600" />
+            </div>
+            <span className="text-sm font-medium text-slate-700">User</span>
           </div>
-          <span className="text-sm font-medium text-slate-700">المستخدم</span>
-        </div>
-        <ArrowRightIcon className="w-5 h-5 text-slate-400" />
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-            <ChatBubbleLeftRightIcon className="w-4 h-4 text-slate-600" />
+          <ArrowRightIcon className="w-5 h-5 text-slate-400" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+              <ChatBubbleLeftRightIcon className="w-4 h-4 text-slate-600" />
+            </div>
+            <span className="text-sm font-medium text-slate-700">Bot</span>
           </div>
-          <span className="text-sm font-medium text-slate-700">البوت</span>
-        </div>
-        <ArrowRightIcon className="w-5 h-5 text-slate-400" />
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center">
-            <CpuChipIcon className="w-4 h-4 text-violet-600" />
+          <ArrowRightIcon className="w-5 h-5 text-slate-400" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center">
+              <CpuChipIcon className="w-4 h-4 text-violet-600" />
+            </div>
+            <span className="text-sm font-medium text-slate-700">AI</span>
           </div>
-          <span className="text-sm font-medium text-slate-700">الـ AI</span>
-        </div>
-        <ArrowRightIcon className="w-5 h-5 text-slate-400" />
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-            <ChatBubbleLeftRightIcon className="w-4 h-4 text-slate-600" />
+          <ArrowRightIcon className="w-5 h-5 text-slate-400" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+              <ChatBubbleLeftRightIcon className="w-4 h-4 text-slate-600" />
+            </div>
+            <span className="text-sm font-medium text-slate-700">Bot</span>
           </div>
-          <span className="text-sm font-medium text-slate-700">البوت</span>
-        </div>
-        <ArrowRightIcon className="w-5 h-5 text-slate-400" />
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-            <UserIcon className="w-4 h-4 text-blue-600" />
+          <ArrowRightIcon className="w-5 h-5 text-slate-400" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <UserIcon className="w-4 h-4 text-blue-600" />
+            </div>
+            <span className="text-sm font-medium text-slate-700">User</span>
           </div>
-          <span className="text-sm font-medium text-slate-700">المستخدم</span>
         </div>
+        <p className="text-xs text-slate-500">
+          User sends → Bot forwards to AI → AI processes (may request tools) → Bot executes and relays → User receives reply
+        </p>
       </div>
 
       {loading && flows.length === 0 ? (
         <div className="card p-12 text-center text-slate-500">
           <ArrowPathIcon className="w-12 h-12 mx-auto animate-spin text-primary-500 mb-4" />
-          <p>جاري تحميل التدفق...</p>
+          <p>Loading flow...</p>
         </div>
       ) : flows.length === 0 ? (
         <div className="card p-12 text-center text-slate-500">
           <ChatBubbleLeftRightIcon className="w-16 h-16 mx-auto opacity-50 mb-4" />
-          <p>ما في تفاعلات جديدة. التفاعلات رح تظهر هون لما يرسل المستخدمين رسائل.</p>
+          <p>No new interactions. Interactions will appear here when users send messages.</p>
         </div>
       ) : (
         <div className="space-y-3">
