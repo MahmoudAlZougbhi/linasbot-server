@@ -64,12 +64,15 @@ const LiveChat = () => {
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
 
+  const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
   const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
   const debouncedSearchRef = useRef("");
   const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
+  const previousConversationIdRef = useRef(null);
+  const previousMessageCountRef = useRef(0);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -129,12 +132,8 @@ const LiveChat = () => {
         before,
       });
 
-      console.log("API Response:", data);
-
       if (data.success && data.messages) {
-        const normalized = data.messages;
-        console.log(`Loaded ${normalized.length} messages (${data.returned_messages || normalized.length} of ${data.total_messages || normalized.length} total)`);
-        return normalized;
+        return data.messages;
       }
       console.warn("No messages found or API error:", data);
       return [];
@@ -235,17 +234,7 @@ const LiveChat = () => {
               conversation: firstConv,
               history: [],
             });
-            // ✅ Lazy load messages asynchronously - don't block UI
             setMessagesLoading(true);
-            fetchConversationMessages(firstConv.user_id, firstConv.conversation_id, 0).then((messages) => {
-              if (!isMountedRef.current) return;
-              setSelectedConversation((prev) =>
-                prev?.conversation?.conversation_id === firstConv.conversation_id
-                  ? { ...prev, history: messages }
-                  : prev
-              );
-              setMessagesLoading(false);
-            });
           } else if (currentSelection) {
             const updatedConv = chats.find(
               (c) =>
@@ -311,34 +300,49 @@ const LiveChat = () => {
     setSelectedConversation,
   });
 
+  const selectedConversationId = selectedConversation?.conversation?.conversation_id;
+  const selectedConversationUserId = selectedConversation?.conversation?.user_id;
+
   // ✅ Fetch messages when selected conversation changes (not polling)
   useEffect(() => {
-    // Skip for mock data
-    if (!selectedConversation || useMockData) return;
+    if (!selectedConversationId || !selectedConversationUserId || useMockData) {
+      setMessagesLoading(false);
+      return;
+    }
 
-    // Fetch messages once when conversation is selected
+    let cancelled = false;
     const fetchMessages = async () => {
+      setMessagesLoading(true);
+      setHasMoreMessages(true);
       try {
         const messages = await fetchConversationMessages(
-          selectedConversation.conversation.user_id,
-          selectedConversation.conversation.conversation_id,
+          selectedConversationUserId,
+          selectedConversationId,
           0
         );
-        if (!isMountedRef.current) return;
-        if (messages && messages.length > 0) {
-          setSelectedConversation((prev) => {
-            if (!prev) return prev;
-            return { ...prev, history: messages };
-          });
-        }
+        if (!isMountedRef.current || cancelled) return;
+
+        setSelectedConversation((prev) => {
+          if (!prev || prev.conversation?.conversation_id !== selectedConversationId) {
+            return prev;
+          }
+          return { ...prev, history: messages || [] };
+        });
       } catch (error) {
         // Silent fail
+      } finally {
+        if (isMountedRef.current && !cancelled) {
+          setMessagesLoading(false);
+        }
       }
     };
 
-    setHasMoreMessages(true);
     fetchMessages();
-  }, [selectedConversation, selectedConversation?.conversation?.conversation_id, useMockData]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedConversationId, selectedConversationUserId, useMockData]);
 
   // Load mock data fallback
   const loadMockData = () => {
@@ -604,10 +608,30 @@ const LiveChat = () => {
     }
   };
 
-  // Auto-scroll to bottom of messages
+  // Auto-scroll only on conversation switch or when user is near bottom.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selectedConversation]);
+    const conversationId = selectedConversation?.conversation?.conversation_id || null;
+    const messageCount = selectedConversation?.history?.length || 0;
+    const previousConversationId = previousConversationIdRef.current;
+    const previousMessageCount = previousMessageCountRef.current;
+
+    const hasConversationChanged =
+      conversationId && conversationId !== previousConversationId;
+    const hasNewMessages = messageCount > previousMessageCount;
+
+    const container = messagesContainerRef.current;
+    const nearBottom = container
+      ? container.scrollHeight - container.scrollTop - container.clientHeight < 120
+      : true;
+
+    if (hasConversationChanged || (hasNewMessages && nearBottom)) {
+      const behavior = hasConversationChanged ? "auto" : "smooth";
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
+
+    previousConversationIdRef.current = conversationId;
+    previousMessageCountRef.current = messageCount;
+  }, [selectedConversation?.conversation?.conversation_id, selectedConversation?.history?.length]);
 
   const handleTakeOver = async (conversationId, userId) => {
     console.log("🔄 handleTakeOver called with:", { conversationId, userId });
@@ -905,7 +929,9 @@ const LiveChat = () => {
                     className="p-3 bg-orange-50 border border-orange-200 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors"
                     onClick={() => {
                       const conv = activeConversations.find(
-                        (c) => c.conversation_id === item.conversation_id
+                        (c) =>
+                          c.conversation_id === item.conversation_id &&
+                          c.user_id === item.user_id
                       );
                       if (conv)
                         setSelectedConversation({
@@ -991,18 +1017,7 @@ const LiveChat = () => {
                       conversation: conv,
                       history: [],
                     });
-                    // ✅ Lazy load messages asynchronously - don't block UI
                     setMessagesLoading(true);
-                    fetchConversationMessages(conv.user_id, conv.conversation_id, 0).then((messages) => {
-                      if (!isMountedRef.current) return;
-                      // Only update if this conversation is still selected
-                      setSelectedConversation((prev) =>
-                        prev?.conversation?.conversation_id === conv.conversation_id
-                          ? { ...prev, history: messages }
-                          : prev
-                      );
-                      setMessagesLoading(false);
-                    });
                   }}
                 >
                   <div className="flex items-start justify-between mb-2">
@@ -1146,7 +1161,10 @@ const LiveChat = () => {
               </div>
 
               {/* Messages - Fixed Height with Internal Scroll */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 flex flex-col">
+              <div
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 flex flex-col"
+              >
                 {hasMoreMessages && (
                   <button
                     onClick={loadMoreMessages}
@@ -1200,11 +1218,14 @@ const LiveChat = () => {
                     msg.image_url;
 
                   return (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
+                    <div
+                      key={
+                        msg.id ||
+                        msg.message_id ||
+                        `${msg.timestamp || "no-ts"}-${msg.type || "text"}-${msg.is_user ? "u" : "a"}-${String(
+                          msg.audio_url || msg.image_url || msg.text || msg.content || ""
+                        ).slice(0, 60)}-${index}`
+                      }
                       className={`flex ${
                         msg.is_user ? "justify-start" : "justify-end"
                       }`}
@@ -1330,7 +1351,7 @@ const LiveChat = () => {
                           )}
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
                 <div ref={messagesEndRef} />

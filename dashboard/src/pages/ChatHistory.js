@@ -16,8 +16,7 @@ import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 import {
   formatMessageTime,
-  formatCompactDateTime,
-  getRelativeTime,
+  getTimezoneName,
 } from "../utils/dateUtils";
 import FeedbackModal from "../components/FeedbackModal";
 
@@ -192,6 +191,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
 
 const ChatHistory = () => {
   const { loading, submitFeedback } = useApi();
+  const appTimezone = getTimezoneName();
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [conversations, setConversations] = useState([]); // Conversation metadata only
@@ -335,23 +335,29 @@ const ChatHistory = () => {
   const formatTime = (timestamp) => {
     if (!timestamp) return "";
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return "";
     const now = new Date();
     const diffInHours = (now - date) / (1000 * 60 * 60);
 
     if (diffInHours < 24) {
-      return date.toLocaleTimeString("en-US", {
+      return new Intl.DateTimeFormat("en-US", {
+        timeZone: appTimezone,
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
-      });
+      }).format(date);
     } else if (diffInHours < 168) {
       // 7 days
-      return date.toLocaleDateString("en-US", { weekday: "short" });
+      return new Intl.DateTimeFormat("en-US", {
+        timeZone: appTimezone,
+        weekday: "short",
+      }).format(date);
     } else {
-      return date.toLocaleDateString("en-US", {
+      return new Intl.DateTimeFormat("en-US", {
+        timeZone: appTimezone,
         month: "short",
         day: "numeric",
-      });
+      }).format(date);
     }
   };
 

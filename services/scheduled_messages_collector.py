@@ -1,12 +1,88 @@
 # Scheduled Messages Collector Service
 # Collects all future appointments and generates to-be-sent messages log
 # Saves to data/scheduled_messages_to_be_sent.json
+# Uses send_appointment_reminders (by date/status) since get_all_customers is not available in the API.
 
 import json
 import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-from services.api_integrations import get_customer_appointments, get_all_customers
+from services.api_integrations import send_appointment_reminders
+
+
+def _extract_appointments(result: Dict) -> List[Dict]:
+    """Extract appointments list from API response."""
+    if not isinstance(result, dict) or not result.get("success"):
+        return []
+    data = result.get("data", {})
+    if isinstance(data, dict):
+        return data.get("appointments", []) or []
+    if isinstance(data, list):
+        return data
+    return []
+
+
+def _parse_apt_datetime(apt: Dict) -> Optional[datetime]:
+    """Parse appointment datetime from reminders API or customer appointments format."""
+    # Format 1: appointment_details.date (e.g. "15/01/2026 10:00:00 AM" or "2026-01-15 10:00:00")
+    apt_details = apt.get("appointment_details") or {}
+    if isinstance(apt_details, dict):
+        date_str = apt_details.get("date")
+        if date_str:
+            s = str(date_str).strip()
+            for fmt in ("%d/%m/%Y %I:%M:%S %p", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(s, fmt)
+                except (ValueError, TypeError):
+                    continue
+    # Format 2: date + time fields (YYYY-MM-DD, HH:MM)
+    apt_date = apt.get("date")
+    apt_time = apt.get("time", "00:00")
+    if apt_date:
+        try:
+            return datetime.fromisoformat(f"{apt_date}T{apt_time}")
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _normalize_apt_for_collector(apt: Dict) -> Optional[Dict]:
+    """Convert reminders API format to collector format (id, date, time, status, phone, name)."""
+    apt_details = apt.get("appointment_details") or {}
+    if isinstance(apt_details, dict):
+        apt_id = apt_details.get("id") or apt.get("appointment_id")
+        apt_datetime = _parse_apt_datetime(apt)
+        if not apt_datetime:
+            return None
+        # Map API status to collector status
+        status = str(apt.get("status") or apt_details.get("status") or "Available").strip()
+        customer_phone = apt.get("phone") or ""
+        customer_name = apt.get("name") or "Unknown"
+        return {
+            "id": apt_id,
+            "date": apt_datetime.strftime("%Y-%m-%d"),
+            "time": apt_datetime.strftime("%H:%M"),
+            "status": status,
+            "phone": customer_phone,
+            "name": customer_name,
+            "apt_datetime": apt_datetime,
+        }
+    # Already in customer appointments format
+    apt_date = apt.get("date")
+    apt_time = apt.get("time", "00:00")
+    apt_datetime = _parse_apt_datetime(apt)
+    if not apt_datetime:
+        return None
+    return {
+        "id": apt.get("id"),
+        "date": apt_date,
+        "time": apt_time,
+        "status": apt.get("status", "Available"),
+        "phone": apt.get("phone", ""),
+        "name": apt.get("name", "Unknown"),
+        "apt_datetime": apt_datetime,
+    }
+
 
 class ScheduledMessagesCollector:
     """
@@ -75,56 +151,40 @@ class ScheduledMessagesCollector:
         
         current_time = datetime.now()
         messages_to_send = []
-        
+        seen_keys = set()  # Avoid duplicates (same apt from multiple status calls)
+
         try:
-            # Get all customers
-            customers_response = await get_all_customers()
-            if not customers_response.get('success'):
-                print(f"❌ Failed to get customers: {customers_response.get('message')}")
-                return messages_to_send
-            
-            customers = customers_response.get('data', [])
-            print(f"🔍 Found {len(customers)} customers")
-            
-            # For each customer, get their appointments
-            for customer in customers:
-                customer_id = customer.get('id')
-                customer_name = customer.get('name', 'Unknown')
-                customer_phone = customer.get('phone', '')
-                
-                # Get appointments for this customer
-                appointments_response = await get_customer_appointments(customer_phone)
-                if not appointments_response.get('success'):
-                    print(f"⚠️ Failed to get appointments for {customer_name}")
-                    continue
-                
-                appointments = appointments_response.get('data', [])
-                print(f"\n📅 Customer: {customer_name} ({customer_phone})")
-                print(f"   Found {len(appointments)} appointments")
-                
-                # Analyze each appointment
+            # Use send_appointment_reminders by date (API has no get_all_customers)
+            # Scan date range: 2 days ago to 35 days ahead
+            start_date = (current_time - timedelta(days=2)).date()
+            end_date = (current_time + timedelta(days=35)).date()
+            total_appointments = 0
+
+            d = start_date
+            while d <= end_date:
+                date_str = d.strftime("%Y-%m-%d")
+                result = await send_appointment_reminders(date=date_str)
+                appointments = _extract_appointments(result)
                 for apt in appointments:
-                    apt_id = apt.get('id')
-                    apt_date = apt.get('date')  # Format: YYYY-MM-DD
-                    apt_time = apt.get('time', '00:00')  # Format: HH:MM
-                    apt_status = apt.get('status', 'Available')  # Available, Done, Missed, etc.
-                    
-                    try:
-                        apt_datetime = datetime.fromisoformat(f"{apt_date}T{apt_time}")
-                    except:
-                        print(f"   ⚠️ Invalid appointment datetime: {apt_date} {apt_time}")
-                        continue
-                    
-                    # Calculate time differences
-                    time_until_apt = apt_datetime - current_time
-                    time_since_apt = current_time - apt_datetime
-                    
-                    messages = self._generate_messages_for_appointment(
-                        apt_id, customer_name, customer_phone,
-                        apt_datetime, apt_status, current_time, time_until_apt, time_since_apt
-                    )
-                    
-                    messages_to_send.extend(messages)
+                        norm = _normalize_apt_for_collector(apt)
+                        if not norm or not norm.get("phone"):
+                            continue
+                        key = (norm.get("id"), norm["date"], norm["time"], norm.get("phone", ""))
+                        if key in seen_keys:
+                            continue
+                        seen_keys.add(key)
+                        total_appointments += 1
+                        apt_datetime = norm["apt_datetime"]
+                        time_until_apt = apt_datetime - current_time
+                        time_since_apt = current_time - apt_datetime
+                        messages = self._generate_messages_for_appointment(
+                            norm.get("id"), norm["name"], norm["phone"],
+                            apt_datetime, norm["status"], current_time, time_until_apt, time_since_apt
+                        )
+                        messages_to_send.extend(messages)
+                d += timedelta(days=1)
+
+            print(f"🔍 Scanned {total_appointments} unique appointments from reminders API")
             
             # Save all collected messages
             self.save_log(messages_to_send)

@@ -384,6 +384,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 doc_data = doc_snap.to_dict() or {}
                 current_messages = doc_data.get("messages", [])
                 message_data = _build_message_data()
+                is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
 
                 if _is_duplicate_message(current_messages, message_data):
                     print(f"🔁 Duplicate message skipped for conversation {conversation_id}")
@@ -407,27 +408,29 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event for real-time dashboard updates
-                try:
-                    from modules.live_chat_api import broadcast_sse_event
-                    asyncio.create_task(broadcast_sse_event("new_message", {
-                        "user_id": user_id,
-                        "conversation_id": conversation_id,
-                        "role": role,
-                        "text": text[:100] + "..." if len(text) > 100 else text,
-                        "phone": customer_info.get("phone_full")
-                    }))
-                except Exception as sse_err:
-                    print(f"❌ SSE Broadcast error: {sse_err}")
+                if not is_smart_source:
+                    try:
+                        from modules.live_chat_api import broadcast_sse_event
+                        asyncio.create_task(broadcast_sse_event("new_message", {
+                            "user_id": user_id,
+                            "conversation_id": conversation_id,
+                            "role": role,
+                            "text": text[:100] + "..." if len(text) > 100 else text,
+                            "phone": customer_info.get("phone_full")
+                        }))
+                    except Exception as sse_err:
+                        print(f"❌ SSE Broadcast error: {sse_err}")
             else:
                 # Conversation not found - create new one
                 message_data = _build_message_data()
+                is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
 
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": user_id,
                     "customer_info": customer_info,
                     "messages": [message_data],
                     "timestamp": utc_now(),
-                    "status": "active",
+                    "status": "archived" if is_smart_source else "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
                     "last_updated": utc_now()
@@ -465,6 +468,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     print(f"⚠️ Could not query existing conversations: {q_err}")
 
             message_data = _build_message_data()
+            is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
 
             if resolved_conversation_id:
                 # Append to existing conversation
@@ -486,15 +490,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
 
                 current_messages.append(message_data)
-                # Reopen conversation if it was resolved/archived - any new message should make it active
-                await asyncio.to_thread(doc_ref.update, {
+                update_payload = {
                     "messages": current_messages,
                     "customer_info": customer_info,
                     "last_updated": utc_now(),
-                    "status": "active",
-                    "human_takeover_active": False,
-                    "operator_id": None
-                })
+                }
+                # Smart campaign messages should not reopen/take over live conversations.
+                if not is_smart_source:
+                    update_payload.update({
+                        "status": "active",
+                        "human_takeover_active": False,
+                        "operator_id": None
+                    })
+                await asyncio.to_thread(doc_ref.update, update_payload)
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
                 config.user_data_whatsapp[user_id]["current_conversation_id"] = resolved_conversation_id
@@ -502,17 +510,18 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {user_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event
-                try:
-                    from modules.live_chat_api import broadcast_sse_event
-                    asyncio.create_task(broadcast_sse_event("new_message", {
-                        "user_id": user_id,
-                        "conversation_id": resolved_conversation_id,
-                        "role": role,
-                        "text": text[:100] + "..." if len(text) > 100 else text,
-                        "phone": customer_info.get("phone_full")
-                    }))
-                except Exception:
-                    pass
+                if not is_smart_source:
+                    try:
+                        from modules.live_chat_api import broadcast_sse_event
+                        asyncio.create_task(broadcast_sse_event("new_message", {
+                            "user_id": user_id,
+                            "conversation_id": resolved_conversation_id,
+                            "role": role,
+                            "text": text[:100] + "..." if len(text) > 100 else text,
+                            "phone": customer_info.get("phone_full")
+                        }))
+                    except Exception:
+                        pass
             else:
                 # No existing conversation found — create a new one
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
@@ -520,7 +529,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "customer_info": customer_info,
                     "messages": [message_data],
                     "timestamp": utc_now(),
-                    "status": "active",
+                    "status": "archived" if is_smart_source else "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
                     "last_updated": utc_now()
@@ -532,16 +541,17 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
 
                 # 📡 Broadcast SSE event for new conversation
-                try:
-                    from modules.live_chat_api import broadcast_sse_event
-                    asyncio.create_task(broadcast_sse_event("new_conversation", {
-                        "user_id": user_id,
-                        "conversation_id": new_doc_ref.id,
-                        "phone": customer_info.get("phone_full"),
-                        "name": customer_name
-                    }))
-                except Exception:
-                    pass
+                if not is_smart_source:
+                    try:
+                        from modules.live_chat_api import broadcast_sse_event
+                        asyncio.create_task(broadcast_sse_event("new_conversation", {
+                            "user_id": user_id,
+                            "conversation_id": new_doc_ref.id,
+                            "phone": customer_info.get("phone_full"),
+                            "name": customer_name
+                        }))
+                    except Exception:
+                        pass
 
     except Exception as e:
         print(f"❌ ERROR saving conversation message to Firestore for user {user_id}: {e}")

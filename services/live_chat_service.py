@@ -68,6 +68,17 @@ class LiveChatService:
     def _dedupe_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return contract_dedupe_messages(messages)
 
+    def _is_smart_message(self, message: Dict[str, Any]) -> bool:
+        metadata = (message or {}).get("metadata", {}) or {}
+        return metadata.get("source") == "smart_message"
+
+    def _visible_chat_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Live Chat UI should show only human/bot conversation content.
+        Automated smart messaging entries are excluded from operator views.
+        """
+        return [msg for msg in (messages or []) if not self._is_smart_message(msg)]
+
     def _is_cache_fresh(self, cache_time: Optional[datetime.datetime], ttl_seconds: Optional[int] = None) -> bool:
         if cache_time is None:
             return False
@@ -190,8 +201,9 @@ class LiveChatService:
                         payload=conv_doc.to_dict() or {},
                     )
                     messages = conv_data.get("messages", [])
+                    visible_messages = self._visible_chat_messages(messages)
 
-                    if not messages:
+                    if not visible_messages:
                         continue
 
                     # Get conversation status
@@ -202,15 +214,11 @@ class LiveChatService:
                         continue
 
                     # Get last message time (use actual last message for timing)
-                    last_message = messages[-1]
+                    last_message = visible_messages[-1]
                     last_message_time = self._parse_timestamp(last_message.get("timestamp"))
 
-                    # For preview, find the last non-smart message
-                    last_preview_message = last_message
-                    for msg in reversed(messages):
-                        if msg.get("metadata", {}).get("source") != "smart_message":
-                            last_preview_message = msg
-                            break
+                    # Preview always uses visible (non-smart) messages.
+                    last_preview_message = visible_messages[-1]
 
                     # Apply time filter (read-only; do not mutate status while listing)
                     time_diff = (current_time - last_message_time).total_seconds()
@@ -235,14 +243,14 @@ class LiveChatService:
                         continue
                     
                     # Calculate duration
-                    first_message_time = self._parse_timestamp(messages[0].get("timestamp"))
+                    first_message_time = self._parse_timestamp(visible_messages[0].get("timestamp"))
                     duration_seconds = int((last_message_time - first_message_time).total_seconds())
                     
                     conversation = {
                         "conversation_id": conv_doc.id,
                         "user_id": user_id,
                         "status": status,
-                        "message_count": len(messages),
+                        "message_count": len(visible_messages),
                         "last_activity": last_message_time.isoformat(),
                         "last_activity_dt": last_message_time,
                         "duration_seconds": duration_seconds,
@@ -382,15 +390,16 @@ class LiveChatService:
                         payload=conv_doc.to_dict() or {},
                     )
                     messages = conv_data.get("messages", []) or []
-                    if not messages:
+                    visible_messages = self._visible_chat_messages(messages)
+                    if not visible_messages:
                         continue
-                    last_msg = messages[-1]
+                    last_msg = visible_messages[-1]
                     ts = self._parse_timestamp(last_msg.get("timestamp"))
                     if best_ts is None or ts > best_ts:
                         best_ts = ts
                         best_conv = conv_data
                         best_conv["_id"] = conv_data.get("conversation_id", conv_doc.id)
-                        best_messages = messages
+                        best_messages = visible_messages
 
                 if best_conv is None:
                     continue
@@ -410,10 +419,6 @@ class LiveChatService:
                 phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=cust)
 
                 preview = best_messages[-1] if best_messages else {}
-                for m in reversed(best_messages):
-                    if m.get("metadata", {}).get("source") != "smart_message":
-                        preview = m
-                        break
 
                 first_ts = self._parse_timestamp(best_messages[0].get("timestamp")) if best_messages else best_ts
                 duration_seconds = int((best_ts - first_ts).total_seconds()) if best_messages else 0
@@ -520,11 +525,12 @@ class LiveChatService:
                         payload=conv_doc.to_dict() or {},
                     )
                     messages = conv_data.get("messages", [])
-                    if not messages:
+                    visible_messages = self._visible_chat_messages(messages)
+                    if not visible_messages:
                         continue
 
-                    total_messages += len(messages)
-                    last_message = messages[-1]
+                    total_messages += len(visible_messages)
+                    last_message = visible_messages[-1]
                     candidate_ts = self._parse_timestamp(last_message.get("timestamp"))
 
                     if latest_timestamp is None or candidate_ts > latest_timestamp:
@@ -625,13 +631,14 @@ class LiveChatService:
                     payload=conv_doc.to_dict() or {},
                 )
                 messages = conv_data.get("messages", [])
-                message_count = len(messages)
+                visible_messages = self._visible_chat_messages(messages)
+                message_count = len(visible_messages)
                 total_messages += message_count
 
                 last_timestamp = self._parse_timestamp(conv_data.get("timestamp"))
                 last_message = None
-                if messages:
-                    raw_last = messages[-1]
+                if visible_messages:
+                    raw_last = visible_messages[-1]
                     last_timestamp = self._parse_timestamp(raw_last.get("timestamp"))
                     last_message = {
                         "role": raw_last.get("role"),
@@ -713,8 +720,9 @@ class LiveChatService:
                 payload=conv_data,
             )
             messages = conv_data.get("messages", [])
+            visible_messages = self._visible_chat_messages(messages)
             normalized_messages = []
-            for msg in messages:
+            for msg in visible_messages:
                 normalized_messages.append({
                     **msg,
                     "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
@@ -782,16 +790,17 @@ class LiveChatService:
                     payload=conv_doc.to_dict() or {},
                 )
                 messages = conv_data.get("messages", [])
+                visible_messages = self._visible_chat_messages(messages)
                 
-                if not messages:
+                if not visible_messages:
                     continue
                 
-                last_message = messages[-1]
+                last_message = visible_messages[-1]
                 last_message_time = self._parse_timestamp(last_message.get("timestamp"))
                 
                 conversations.append({
                     "conversation_id": conv_doc.id,
-                    "message_count": len(messages),
+                    "message_count": len(visible_messages),
                     "last_activity": last_message_time.isoformat(),
                     "status": conv_data.get("status", "active"),
                     "sentiment": conv_data.get("sentiment", "neutral"),
@@ -840,8 +849,9 @@ class LiveChatService:
                         payload=conv_doc.to_dict() or {},
                     )
                     messages = conv_data.get("messages", [])
+                    visible_messages = self._visible_chat_messages(messages)
                     
-                    if not messages:
+                    if not visible_messages:
                         continue
                     
                     # Check if conversation is waiting for human
@@ -858,15 +868,11 @@ class LiveChatService:
                         continue
                     
                     # Get last message time (use actual last message for timing)
-                    last_message = messages[-1]
+                    last_message = visible_messages[-1]
                     last_message_time = self._parse_timestamp(last_message.get("timestamp"))
 
-                    # For preview, find the last non-smart message
-                    last_preview_message = last_message
-                    for msg in reversed(messages):
-                        if msg.get("metadata", {}).get("source") != "smart_message":
-                            last_preview_message = msg
-                            break
+                    # Preview uses visible message set only.
+                    last_preview_message = visible_messages[-1]
 
                     # Calculate wait time
                     escalation_time = conv_data.get("escalation_time")
@@ -898,7 +904,7 @@ class LiveChatService:
                         "reason": escalation_reason,
                         "wait_time_seconds": wait_time_seconds,
                         "sentiment": sentiment,
-                        "message_count": len(messages),
+                        "message_count": len(visible_messages),
                         "priority": priority,
                         "last_message": last_preview_message.get("text", "")
                     }
@@ -1402,6 +1408,7 @@ class LiveChatService:
                 payload=conv_doc.to_dict() or {},
             )
             messages = conv_data.get("messages", [])
+            messages = self._visible_chat_messages(messages)
 
             total_messages = len(messages)
 
@@ -1429,10 +1436,6 @@ class LiveChatService:
             formatted_messages = []
 
             for msg in messages:
-                # Skip smart messages (automated reminders) - they shouldn't appear in live chat
-                if msg.get("metadata", {}).get("source") == "smart_message":
-                    continue
-
                 msg_data = {
                     "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
                     "is_user": msg.get("role") == "user",

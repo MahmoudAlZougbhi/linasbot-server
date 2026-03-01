@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildDisplayLabel } from '../../utils/buildInfo';
+import { getTimezoneName } from '../../utils/dateUtils';
 
 const Header = ({ onMenuClick, botStatus }) => {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -22,6 +23,7 @@ const Header = ({ onMenuClick, botStatus }) => {
   const notificationsRef = useRef(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const appTimezone = getTimezoneName();
 
   // Sample notifications - in a real app, these would come from an API/context
   const notifications = [
@@ -32,18 +34,20 @@ const Header = ({ onMenuClick, botStatus }) => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const currentTime = new Date().toLocaleTimeString('en-US', {
+  const currentTime = new Intl.DateTimeFormat('en-US', {
+    timeZone: appTimezone,
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
-  });
+  }).format(new Date());
 
-  const currentDate = new Date().toLocaleDateString('en-US', {
+  const currentDate = new Intl.DateTimeFormat('en-US', {
+    timeZone: appTimezone,
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  });
+  }).format(new Date());
 
   // Close dropdowns when clicking outside
   useEffect(() => {

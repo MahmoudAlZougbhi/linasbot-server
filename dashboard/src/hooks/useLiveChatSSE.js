@@ -26,6 +26,7 @@ export const useLiveChatSSE = ({
     let fallbackInterval = null;
     let clearNewBadgeTimeout = null;
     let reconnectAttempt = 0;
+    let handlingNewMessageEvent = false;
 
     const clearNewBadgesSoon = () => {
       if (clearNewBadgeTimeout) {
@@ -68,9 +69,10 @@ export const useLiveChatSSE = ({
       const selected = selectedConversationRef.current;
       if (!selected || !isMountedRef.current) return;
 
-      const isSameConversation =
-        selected.conversation.user_id === eventData.user_id ||
-        selected.conversation.conversation_id === eventData.conversation_id;
+      const hasConversationId = Boolean(eventData?.conversation_id);
+      const isSameConversation = hasConversationId
+        ? selected.conversation.conversation_id === eventData.conversation_id
+        : selected.conversation.user_id === eventData.user_id;
       if (!isSameConversation) return;
 
       const messages = await fetchConversationMessages(
@@ -128,6 +130,8 @@ export const useLiveChatSSE = ({
 
       eventSource.addEventListener("new_message", async (event) => {
         if (!isMountedRef.current) return;
+        if (handlingNewMessageEvent) return;
+        handlingNewMessageEvent = true;
         try {
           const data = JSON.parse(event.data || "{}");
           setIsRefreshing(true);
@@ -137,6 +141,8 @@ export const useLiveChatSSE = ({
         } catch (error) {
           setIsRefreshing(false);
           console.error("SSE new_message handler error:", error);
+        } finally {
+          handlingNewMessageEvent = false;
         }
       });
 
