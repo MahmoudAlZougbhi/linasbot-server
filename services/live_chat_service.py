@@ -320,6 +320,155 @@ class LiveChatService:
             traceback.print_exc()
             return []
 
+    async def get_unified_chats(
+        self,
+        search: str = "",
+        page: int = 1,
+        page_size: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        WhatsApp-style unified chat list: live at top, history below.
+        - Live = last 6h, not resolved/archived
+        - History = older or resolved
+        - Returns top page_size (default 30) per page
+        - Search by name or phone
+        """
+        try:
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "chats": [], "total": 0, "has_more": False}
+
+            app_id = "linas-ai-bot-backend"
+            users_collection = db.collection("artifacts").document(app_id).collection("users")
+            current_time = datetime.datetime.now(datetime.timezone.utc)
+
+            try:
+                users_docs = await asyncio.to_thread(
+                    lambda: list(users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).stream())
+                )
+            except Exception:
+                users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
+
+            async def fetch_user_conversations(user_id):
+                try:
+                    conv_col = users_collection.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                    docs = await asyncio.to_thread(lambda: list(conv_col.stream()))
+                    return (user_id, docs)
+                except Exception as e:
+                    print(f"⚠️ Error fetching convos for {user_id}: {e}")
+                    return (user_id, [])
+
+            user_ids = [doc.id for doc in users_docs]
+            results = await asyncio.gather(*[fetch_user_conversations(uid) for uid in user_ids], return_exceptions=True)
+
+            all_chats: List[Dict[str, Any]] = []
+            for r in results:
+                if isinstance(r, Exception):
+                    continue
+                user_id, conv_docs = r
+                best_conv = None
+                best_ts = None
+                best_messages = []
+
+                for conv_doc in conv_docs:
+                    conv_data = conv_doc.to_dict()
+                    messages = self._dedupe_messages(conv_data.get("messages", []))
+                    if not messages:
+                        continue
+                    last_msg = messages[-1]
+                    ts = self._parse_timestamp(last_msg.get("timestamp"))
+                    if best_ts is None or ts > best_ts:
+                        best_ts = ts
+                        best_conv = conv_data
+                        best_conv["_id"] = conv_doc.id
+                        best_messages = messages
+
+                if best_conv is None:
+                    continue
+
+                conv_status = best_conv.get("status", "active")
+                time_diff = (current_time - best_ts).total_seconds()
+                is_live = (
+                    time_diff <= self.ACTIVE_TIME_WINDOW
+                    and conv_status not in ("resolved", "archived")
+                    and not best_conv.get("human_takeover_active", False)
+                )
+                if best_conv.get("human_takeover_active") and not best_conv.get("operator_id"):
+                    continue  # waiting_human - skip from main list
+
+                cust = best_conv.get("customer_info", {}) or {}
+                user_name = cust.get("name") or config.user_names.get(user_id, "Unknown")
+                phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=cust)
+
+                preview = best_messages[-1] if best_messages else {}
+                for m in reversed(best_messages):
+                    if m.get("metadata", {}).get("source") != "smart_message":
+                        preview = m
+                        break
+
+                first_ts = self._parse_timestamp(best_messages[0].get("timestamp")) if best_messages else best_ts
+                duration_seconds = int((best_ts - first_ts).total_seconds()) if best_messages else 0
+                language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+                entry = {
+                    "user_id": user_id,
+                    "conversation_id": best_conv["_id"],
+                    "user_name": user_name,
+                    "user_phone": phone_full,
+                    "language": language,
+                    "phone_clean": phone_clean,
+                    "last_message": {
+                        "content": str(preview.get("text", "")),
+                        "is_user": preview.get("role") == "user",
+                        "timestamp": best_ts.isoformat(),
+                    },
+                    "last_activity": best_ts.isoformat(),
+                    "status": "human" if best_conv.get("operator_id") else ("bot" if not best_conv.get("human_takeover_active") else "waiting_human"),
+                    "message_count": len(best_messages),
+                    "duration_seconds": duration_seconds,
+                    "is_live": is_live,
+                    "customer_info": cust,
+                }
+                all_chats.append(entry)
+
+            # Live at top, then by last_activity newest first
+            def _sort_key(c):
+                ts_str = c.get("last_activity", "") or ""
+                ts_val = self._parse_timestamp(ts_str).timestamp() if ts_str else 0
+                return (not c.get("is_live", False), -ts_val)
+            all_chats.sort(key=_sort_key)
+
+            search_val = (search or "").strip().lower()
+            if search_val:
+                all_chats = [
+                    c for c in all_chats
+                    if search_val in str(c.get("user_name", "")).lower()
+                    or search_val in str(c.get("user_id", "")).lower()
+                    or search_val in str(c.get("user_phone", "")).lower()
+                    or search_val in str(c.get("phone_clean", "")).lower()
+                ]
+
+            total = len(all_chats)
+            safe_page = max(1, int(page))
+            safe_size = max(1, min(int(page_size), 100))
+            start = (safe_page - 1) * safe_size
+            end = start + safe_size
+            paged = all_chats[start:end]
+            has_more = end < total
+
+            return {
+                "success": True,
+                "chats": paged,
+                "total": total,
+                "page": safe_page,
+                "page_size": safe_size,
+                "has_more": has_more,
+            }
+        except Exception as e:
+            print(f"❌ Error in get_unified_chats: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "chats": [], "total": 0, "has_more": False}
+
     async def get_history_customers(
         self,
         search: str = "",
@@ -1191,13 +1340,22 @@ class LiveChatService:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    async def get_conversation_details(self, user_id: str, conversation_id: str, max_messages: int = 100) -> Dict[str, Any]:
-        """Get detailed conversation history
+    async def get_conversation_details(
+        self,
+        user_id: str,
+        conversation_id: str,
+        max_messages: int = 100,
+        days: int = 0,
+        before: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get detailed conversation history.
 
         Args:
             user_id: The user's ID
             conversation_id: The conversation document ID
-            max_messages: Maximum number of messages to return (default 100, prevents timeout on large conversations)
+            max_messages: Max messages to return (default 100)
+            days: If > 0, return only messages from last N days (default 0 = no day limit)
+            before: If provided (ISO timestamp), return only messages older than this (for Load More)
         """
         try:
             db = get_firestore_db()
@@ -1217,11 +1375,28 @@ class LiveChatService:
             conv_data = conv_doc.to_dict()
             messages = self._dedupe_messages(conv_data.get("messages", []))
 
-            # ✅ Limit messages to prevent timeout on large conversations
             total_messages = len(messages)
-            if total_messages > max_messages:
-                print(f"⚠️ Conversation {conversation_id} has {total_messages} messages, returning last {max_messages}")
-                messages = messages[-max_messages:]  # Get last N messages
+
+            # Filter by days or before (for Load More)
+            if days > 0 or before:
+                now = datetime.datetime.now(datetime.timezone.utc)
+                cutoff = now - datetime.timedelta(days=days) if days > 0 else None
+                before_dt = self._parse_timestamp(before) if before else None
+
+                filtered = []
+                for msg in messages:
+                    ts = self._parse_timestamp(msg.get("timestamp"))
+                    if days > 0 and ts < cutoff:
+                        continue
+                    if before_dt and ts >= before_dt:
+                        continue
+                    filtered.append(msg)
+                messages = filtered
+                # Sort by timestamp ascending (oldest first) for display
+                messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
+
+            if len(messages) > max_messages:
+                messages = messages[-max_messages:]
 
             formatted_messages = []
 

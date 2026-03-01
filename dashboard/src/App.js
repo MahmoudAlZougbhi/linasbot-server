@@ -18,7 +18,6 @@ import ContentManagers from './pages/ContentManagers';
 import ActivityFlow from './pages/ActivityFlow';
 import Analytics from './pages/Analytics';
 import LiveChat from './pages/LiveChat';
-import ChatHistory from './pages/ChatHistory';
 import SmartMessaging from './pages/SmartMessaging';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
@@ -137,11 +136,6 @@ function AppContent() {
                   <Route path="/live-chat" element={
                     <ProtectedRoute>
                       <LiveChat />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/chat-history" element={
-                    <ProtectedRoute>
-                      <ChatHistory />
                     </ProtectedRoute>
                   } />
                   <Route path="/analytics" element={

@@ -125,6 +125,23 @@ async def live_chat_events(request: Request):
     )
 
 
+@app.get("/api/live-chat/unified-chats")
+async def get_unified_chats(
+    search: str = Query(default="", description="Search by name or phone"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+):
+    """WhatsApp-style: live chats at top, history below. Top 30 per page, Load More for more."""
+    try:
+        result = await live_chat_service.get_unified_chats(search=search, page=page, page_size=page_size)
+        return result
+    except Exception as e:
+        print(f"❌ Error in get_unified_chats: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "chats": [], "total": 0, "has_more": False}
+
+
 @app.get("/api/live-chat/active-conversations")
 async def get_active_conversations(search: str = Query(default="", description="Search by client name or phone")):
     """Get active conversations with optional client search."""
@@ -265,12 +282,19 @@ async def get_live_chat_metrics():
 
 
 @app.get("/api/live-chat/conversation/{user_id}/{conversation_id}")
-async def get_conversation_details(user_id: str, conversation_id: str):
-    """Get detailed conversation history"""
+async def get_conversation_details(
+    user_id: str,
+    conversation_id: str,
+    days: int = Query(default=0, description="Return only last N days (0=all)"),
+    before: str = Query(default=None, description="Load messages older than this ISO timestamp"),
+):
+    """Get detailed conversation history. Use days=1 for initial load, before=... for Load More."""
     try:
         details = await live_chat_service.get_conversation_details(
             user_id=user_id,
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            days=days,
+            before=before,
         )
         return details
     except Exception as e:

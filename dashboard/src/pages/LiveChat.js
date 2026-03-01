@@ -218,10 +218,16 @@ const LiveChat = () => {
 
   // ✅ Messages loading state for lazy loading
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
 
   // ✅ Search by name or phone (debounced for API calls)
   const [liveSearchQuery, setLiveSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  // ✅ WhatsApp-style: top 30, Load More
+  const [chatPage, setChatPage] = useState(1);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
+  const [loadingMoreChats, setLoadingMoreChats] = useState(false);
 
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
@@ -263,6 +269,7 @@ const LiveChat = () => {
   }, [recordedAudio]);
 
   const {
+    getUnifiedChats,
     getLiveConversations,
     getWaitingQueue,
     takeoverConversation,
@@ -272,27 +279,23 @@ const LiveChat = () => {
     submitFeedback,
   } = useApi();
 
-  // Fetch conversation messages with timeout
-  const fetchConversationMessages = async (userId, conversationId) => {
-    // Create AbortController for timeout
+  // Fetch conversation messages - 1 day initially for speed
+  const fetchConversationMessages = async (userId, conversationId, days = 1, before = null) => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      // Use the same base URL logic as useApi
       const baseURL =
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1"
+        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
           ? "http://localhost:8003"
           : window.location.origin;
 
-      console.log(
-        `Fetching messages for user ${userId}, conversation ${conversationId}`
-      );
-      const response = await fetch(
-        `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}`,
-        { signal: controller.signal }
-      );
+      const params = new URLSearchParams();
+      if (days > 0) params.append("days", String(days));
+      if (before) params.append("before", before);
+      const url = `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}${params.toString() ? "?" + params.toString() : ""}`;
+
+      const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       const data = await response.json();
@@ -326,27 +329,24 @@ const LiveChat = () => {
       }
 
       try {
-        // Fetch active conversations (with optional search)
-        const conversationsResponse = await getLiveConversations(debouncedSearch);
+        // WhatsApp-style: unified chats (live + history), top 30
+        const chatsResponse = await getUnifiedChats(debouncedSearch, 1, 30);
 
-        if (
-          conversationsResponse.success &&
-          conversationsResponse.conversations
-        ) {
-          // ✅ PRIORITY: Display chats immediately without waiting for messages
-          setActiveConversations(conversationsResponse.conversations);
+        if (chatsResponse.success && chatsResponse.chats) {
+          const chats = chatsResponse.chats;
+          setActiveConversations(chats);
+          setChatPage(1);
+          setHasMoreChats(chatsResponse.has_more || false);
           setUseMockData(false);
 
-          // Use ref to check current selection (avoids stale closure)
           const currentSelection = selectedConversationRef.current;
 
-          // Only select first conversation if none selected AND it's the initial load
           if (
             !currentSelection &&
-            conversationsResponse.conversations.length > 0 &&
+            chats.length > 0 &&
             !activeConversations.length
           ) {
-            const firstConv = conversationsResponse.conversations[0];
+            const firstConv = chats[0];
             // ✅ Set conversation immediately with empty history (show loading state)
             setSelectedConversation({
               conversation: firstConv,
@@ -354,10 +354,7 @@ const LiveChat = () => {
             });
             // ✅ Lazy load messages asynchronously - don't block UI
             setMessagesLoading(true);
-            fetchConversationMessages(
-              firstConv.user_id,
-              firstConv.conversation_id
-            ).then((messages) => {
+            fetchConversationMessages(firstConv.user_id, firstConv.conversation_id, 1).then((messages) => {
               setSelectedConversation((prev) =>
                 prev?.conversation?.conversation_id === firstConv.conversation_id
                   ? { ...prev, history: messages }
@@ -366,8 +363,7 @@ const LiveChat = () => {
               setMessagesLoading(false);
             });
           } else if (currentSelection) {
-            // If a conversation is selected, update its data but keep it selected
-            const updatedConv = conversationsResponse.conversations.find(
+            const updatedConv = chats.find(
               (c) =>
                 c.conversation_id ===
                 currentSelection.conversation.conversation_id
@@ -437,10 +433,9 @@ const LiveChat = () => {
           try {
             const data = JSON.parse(event.data);
             if (data.conversations) {
-              // Re-fetch with current search filter (SSE sends unfiltered list)
               const searchTerm = debouncedSearchRef.current;
-              const convResponse = await getLiveConversations(searchTerm);
-              const conversations = convResponse?.success ? convResponse.conversations : data.conversations;
+              const chatsResponse = await getUnifiedChats(searchTerm, 1, 30);
+              const conversations = chatsResponse?.success ? chatsResponse.chats : data.conversations;
               const previousIds = new Set(
                 activeConversationsRef.current.map((c) => c.conversation_id)
               );
@@ -471,9 +466,9 @@ const LiveChat = () => {
 
             // Refresh conversation list to update last message preview
             setIsRefreshing(true);
-            const conversationsResponse = await getLiveConversations(debouncedSearchRef.current);
-            if (conversationsResponse.success && conversationsResponse.conversations) {
-              setActiveConversations(conversationsResponse.conversations);
+            const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
+            if (chatsResponse.success && chatsResponse.chats) {
+              setActiveConversations(chatsResponse.chats);
               setLastRefreshTime(new Date());
             }
             setIsRefreshing(false);
@@ -485,7 +480,8 @@ const LiveChat = () => {
                  currentSelection.conversation.conversation_id === data.conversation_id)) {
               const messages = await fetchConversationMessages(
                 currentSelection.conversation.user_id,
-                currentSelection.conversation.conversation_id
+                currentSelection.conversation.conversation_id,
+                1
               );
               if (messages && messages.length > 0) {
                 setSelectedConversation((prev) => {
@@ -506,10 +502,10 @@ const LiveChat = () => {
             console.log('📡 SSE: New conversation', data);
 
             // Refresh conversation list
-            const conversationsResponse = await getLiveConversations(debouncedSearchRef.current);
-            if (conversationsResponse.success && conversationsResponse.conversations) {
+            const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
+            if (chatsResponse.success && chatsResponse.chats) {
               const newIds = new Set([data.conversation_id]);
-              setActiveConversations(conversationsResponse.conversations);
+              setActiveConversations(chatsResponse.chats);
               setNewConversationIds(newIds);
               setLastRefreshTime(new Date());
 
@@ -534,9 +530,9 @@ const LiveChat = () => {
             fallbackInterval = setInterval(async () => {
               if (useMockDataRef.current) return;
               try {
-                const conversationsResponse = await getLiveConversations(debouncedSearchRef.current);
-                if (conversationsResponse.success && conversationsResponse.conversations) {
-                  setActiveConversations(conversationsResponse.conversations);
+                const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
+                if (chatsResponse.success && chatsResponse.chats) {
+                  setActiveConversations(chatsResponse.chats);
                   setLastRefreshTime(new Date());
                 }
               } catch (e) {
@@ -582,7 +578,8 @@ const LiveChat = () => {
       try {
         const messages = await fetchConversationMessages(
           selectedConversation.conversation.user_id,
-          selectedConversation.conversation.conversation_id
+          selectedConversation.conversation.conversation_id,
+          1
         );
         if (messages && messages.length > 0) {
           setSelectedConversation((prev) => {
@@ -595,8 +592,9 @@ const LiveChat = () => {
       }
     };
 
+    setHasMoreMessages(true);
     fetchMessages();
-  }, [selectedConversation?.conversation?.conversation_id, useMockData]); // Only fetch when conversation changes
+  }, [selectedConversation?.conversation?.conversation_id, useMockData]);
 
   // Load mock data fallback
   const loadMockData = () => {
@@ -740,26 +738,42 @@ const LiveChat = () => {
     }
   };
 
-  // ✅ Manual refresh handler - allows admin to immediately refresh conversation list
+  // ✅ Load more chats (WhatsApp-style pagination)
+  const loadMoreChats = async () => {
+    if (loadingMoreChats || !hasMoreChats) return;
+    setLoadingMoreChats(true);
+    try {
+      const nextPage = chatPage + 1;
+      const chatsResponse = await getUnifiedChats(debouncedSearch, nextPage, 30);
+      if (chatsResponse.success && chatsResponse.chats) {
+        setActiveConversations((prev) => [...prev, ...chatsResponse.chats]);
+        setChatPage(nextPage);
+        setHasMoreChats(chatsResponse.has_more || false);
+      }
+    } catch (error) {
+      console.error("Error loading more chats:", error);
+    } finally {
+      setLoadingMoreChats(false);
+    }
+  };
+
+  // ✅ Manual refresh handler
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const conversationsResponse = await getLiveConversations(debouncedSearch);
-      if (
-        conversationsResponse.success &&
-        conversationsResponse.conversations
-      ) {
-        // ✅ Use ref to get current state (fixes stale closure issue)
+      const chatsResponse = await getUnifiedChats(debouncedSearch, 1, 30);
+      if (chatsResponse.success && chatsResponse.chats) {
+        const chats = chatsResponse.chats;
         const previousIds = new Set(
           activeConversationsRef.current.map((c) => c.conversation_id)
         );
         const newIds = new Set(
-          conversationsResponse.conversations
-            .filter((c) => !previousIds.has(c.conversation_id))
-            .map((c) => c.conversation_id)
+          chats.filter((c) => !previousIds.has(c.conversation_id)).map((c) => c.conversation_id)
         );
 
-        setActiveConversations(conversationsResponse.conversations);
+        setActiveConversations(chats);
+        setChatPage(1);
+        setHasMoreChats(chatsResponse.has_more || false);
         setNewConversationIds(newIds);
         setLastRefreshTime(new Date());
         toast.success("Conversations refreshed");
@@ -793,8 +807,36 @@ const LiveChat = () => {
     return `${Math.floor(diff / 3600)}h ago`;
   };
 
+  // ✅ Load more (older) messages - for pagination by day
+  const loadMoreMessages = async () => {
+    if (!selectedConversation || loadingMoreMessages || !hasMoreMessages) return;
+    const history = selectedConversation.history || [];
+    const beforeTs = history.length > 0 && history[0]?.timestamp
+      ? history[0].timestamp
+      : new Date().toISOString();
+    setLoadingMoreMessages(true);
+    try {
+      const older = await fetchConversationMessages(
+        selectedConversation.conversation.user_id,
+        selectedConversation.conversation.conversation_id,
+        0,
+        beforeTs
+      );
+      if (older && older.length > 0) {
+        setSelectedConversation((prev) => ({
+          ...prev,
+          history: [...older, ...(prev.history || [])],
+        }));
+      }
+      if (!older || older.length === 0) setHasMoreMessages(false);
+    } catch (e) {
+      console.error("Load more messages error:", e);
+    } finally {
+      setLoadingMoreMessages(false);
+    }
+  };
+
   // ✅ Reload messages for currently selected conversation
-  // Useful when admin wants to see latest messages without clicking away and back
   const reloadSelectedConversationMessages = async () => {
     if (!selectedConversation) return;
 
@@ -804,7 +846,8 @@ const LiveChat = () => {
       );
       const messages = await fetchConversationMessages(
         selectedConversation.conversation.user_id,
-        selectedConversation.conversation.conversation_id
+        selectedConversation.conversation.conversation_id,
+        0
       );
       setSelectedConversation((prev) => ({
         ...prev,
@@ -1486,10 +1529,7 @@ const LiveChat = () => {
                     });
                     // ✅ Lazy load messages asynchronously - don't block UI
                     setMessagesLoading(true);
-                    fetchConversationMessages(
-                      conv.user_id,
-                      conv.conversation_id
-                    ).then((messages) => {
+                    fetchConversationMessages(conv.user_id, conv.conversation_id, 1).then((messages) => {
                       // Only update if this conversation is still selected
                       setSelectedConversation((prev) =>
                         prev?.conversation?.conversation_id === conv.conversation_id
@@ -1530,10 +1570,19 @@ const LiveChat = () => {
 
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <span>{conv.message_count} messages</span>
-                    <span>{Math.floor(conv.duration_seconds / 60)}m</span>
+                    <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
                   </div>
                 </div>
               ))}
+              {hasMoreChats && (
+                <button
+                  onClick={loadMoreChats}
+                  disabled={loadingMoreChats}
+                  className="w-full py-3 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 transition"
+                >
+                  {loadingMoreChats ? "Loading..." : "Load More"}
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -1627,7 +1676,16 @@ const LiveChat = () => {
               </div>
 
               {/* Messages - Fixed Height with Internal Scroll */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 flex flex-col">
+                {hasMoreMessages && (
+                  <button
+                    onClick={loadMoreMessages}
+                    disabled={loadingMoreMessages}
+                    className="self-center py-2 px-4 text-sm text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 mb-2"
+                  >
+                    {loadingMoreMessages ? "Loading..." : "Load More (older)"}
+                  </button>
+                )}
                 {/* ✅ Loading indicator for messages */}
                 {messagesLoading && selectedConversation.history.length === 0 && (
                   <div className="flex items-center justify-center h-full">

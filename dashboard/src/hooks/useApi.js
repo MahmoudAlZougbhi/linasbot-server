@@ -452,7 +452,25 @@ export const useApi = () => {
     [currentProvider]
   );
 
-  // Live Chat API functions
+  // Live Chat API functions - WhatsApp-style: unified chats (live + history)
+  const getUnifiedChats = useCallback(async (search = "", page = 1, pageSize = 30) => {
+    try {
+      const params = new URLSearchParams();
+      if (search && search.trim()) params.append("search", search.trim());
+      params.append("page", String(page));
+      params.append("page_size", String(pageSize));
+      const response = await api.get(`/api/live-chat/unified-chats?${params.toString()}`, {
+        timeout: 60000,
+      });
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+        return { success: false, chats: [], total: 0, has_more: false, error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline" };
+      }
+      throw error;
+    }
+  }, []);
+
   const getLiveConversations = useCallback(async (search = "") => {
     try {
       const params = new URLSearchParams();
@@ -464,7 +482,6 @@ export const useApi = () => {
       });
       return response.data;
     } catch (error) {
-      // Silent fallback for network/timeout errors (expected for slow queries)
       if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
         return { success: false, conversations: [], error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline" };
       }
@@ -1277,6 +1294,7 @@ export const useApi = () => {
     testMessageWithProvider,
     testWebhookSimulation,
     // Live Chat functions
+    getUnifiedChats,
     getLiveConversations,
     getWaitingQueue,
     takeoverConversation,
