@@ -9,7 +9,6 @@ import {
   ChatBubbleLeftRightIcon,
   ArrowPathRoundedSquareIcon,
   ClockIcon,
-  ChartBarIcon,
   BellIcon,
   Cog6ToothIcon,
   XMarkIcon,
@@ -48,12 +47,6 @@ const navigationItems = [
     href: "/activity-flow",
     icon: ArrowPathRoundedSquareIcon,
     badge: "New",
-    permissionKey: "analytics",
-  },
-  {
-    name: "Analytics",
-    href: "/analytics",
-    icon: ChartBarIcon,
     permissionKey: "analytics",
   },
   {

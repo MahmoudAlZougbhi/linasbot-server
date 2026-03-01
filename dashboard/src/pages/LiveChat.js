@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ChatBubbleLeftRightIcon,
   UserIcon,
-  ClockIcon,
   PhoneIcon,
   GlobeAltIcon,
   HandRaisedIcon,
-  CheckCircleIcon,
   ExclamationCircleIcon,
   ArrowRightIcon,
   PaperAirplaneIcon,
@@ -16,177 +14,24 @@ import {
   XMarkIcon,
   ChartBarIcon,
   MicrophoneIcon,
+  PhotoIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import { useApi } from "../hooks/useApi";
-import { formatMessageTime, formatDuration } from "../utils/dateUtils";
+import { formatMessageTime } from "../utils/dateUtils";
 import FeedbackModal from "../components/FeedbackModal";
-
-// ✅ Helper function to get proxied audio URL for external sources
-const getProxiedAudioUrl = (url) => {
-  if (!url) return url;
-
-  // Check if the URL is external (needs proxy)
-  const isExternal = url.includes('whatsapp') ||
-                     url.includes('mmc.api.montymobile.com') ||
-                     url.includes('firebasestorage.googleapis.com') ||
-                     url.includes('mmg.whatsapp.net') ||
-                     (url.startsWith('http') && !url.includes(window.location.hostname));
-
-  if (isExternal) {
-    const baseURL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:8003'
-      : window.location.origin;
-    return `${baseURL}/api/media/audio?url=${encodeURIComponent(url)}`;
-  }
-
-  return url;
-};
-
-// ✅ Modern WhatsApp-style audio player component
-const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [error, setError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const audioRef = useRef(null);
-
-  // Get the proxied URL for external audio sources
-  const proxiedAudioUrl = getProxiedAudioUrl(audioUrl);
-
-  const handlePlayPause = () => {
-    if (audioRef.current && !error) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch((e) => {
-          console.error("Audio play error:", e);
-          setError(true);
-        });
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  const handleError = (e) => {
-    console.error("Audio load error:", e, "URL:", audioUrl);
-    setError(true);
-    setIsLoading(false);
-  };
-
-  const handleCanPlay = () => {
-    setIsLoading(false);
-    setError(false);
-  };
-
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
-    }
-  };
-
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  const handleEnded = () => {
-    setIsPlaying(false);
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      setCurrentTime(0);
-    }
-  };
-
-  const handleProgressChange = (e) => {
-    const newTime = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
-    }
-  };
-
-  const formatTime = (time) => {
-    if (isNaN(time)) return "0:00";
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  };
-
-  return (
-    <div
-      className={`flex items-center space-x-2 py-1 px-2 rounded-full ${
-        isUserMessage ? "bg-slate-200" : "bg-black bg-opacity-10"
-      }`}
-    >
-      {/* Play/Pause Button */}
-      <button
-        onClick={handlePlayPause}
-        className={`flex-shrink-0 p-2 rounded-full transition-all hover:scale-110 ${
-          isUserMessage
-            ? "bg-slate-400 hover:bg-slate-500 text-white"
-            : "bg-white bg-opacity-20 hover:bg-opacity-40 text-white"
-        }`}
-      >
-        {isPlaying ? (
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 4a1 1 0 00-1 1v10a1 1 0 001 1h2a1 1 0 001-1V5a1 1 0 00-1-1H5zm8 0a1 1 0 00-1 1v10a1 1 0 001 1h2a1 1 0 001-1V5a1 1 0 00-1-1h-2z" clipRule="evenodd" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M5.75 1.172A.5.5 0 005 1.65v16.7a.5.5 0 00.75.478l10.67-8.35a.5.5 0 000-.796L5.75 1.172z" />
-          </svg>
-        )}
-      </button>
-
-      {/* Progress Bar */}
-      <div className="flex-1 flex flex-col space-y-1 min-w-[120px]">
-        <input
-          type="range"
-          min="0"
-          max={duration || 0}
-          value={currentTime}
-          onChange={handleProgressChange}
-          className={`w-full h-1 rounded-full appearance-none cursor-pointer ${
-            isUserMessage ? "bg-slate-300 accent-slate-600" : "bg-white bg-opacity-30 accent-white"
-          }`}
-          style={{
-            background: isUserMessage
-              ? `linear-gradient(to right, #475569 ${(currentTime / duration) * 100}%, #cbd5e1 ${(currentTime / duration) * 100}%)`
-              : `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.3) ${(currentTime / duration) * 100}%)`,
-          }}
-        />
-        <div className={`text-xs font-medium ${isUserMessage ? "text-slate-600" : "text-white"}`}>
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </div>
-      </div>
-
-      {/* Error message */}
-      {error && (
-        <span className={`text-xs ml-2 ${isUserMessage ? "text-red-600" : "text-red-400"}`}>Audio unavailable</span>
-      )}
-
-      {/* Loading indicator */}
-      {isLoading && !error && (
-        <span className={`text-xs ml-2 ${isUserMessage ? "text-slate-500" : "opacity-50"}`}>Loading...</span>
-      )}
-
-      {/* Hidden audio element - uses proxied URL for external sources */}
-      <audio
-        ref={audioRef}
-        src={proxiedAudioUrl}
-        onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
-        onEnded={handleEnded}
-        onError={handleError}
-        onCanPlay={handleCanPlay}
-      />
-    </div>
-  );
-};
+import ModernAudioPlayer from "../components/LiveChat/ModernAudioPlayer";
+import {
+  SentimentIndicator,
+  StatusBadge,
+} from "../components/LiveChat/ConversationIndicators";
+import { useLiveChatSSE } from "../hooks/useLiveChatSSE";
+import { useLiveChatMediaComposer } from "../hooks/useLiveChatMediaComposer";
+import {
+  endLiveChatConversation,
+  fetchLiveChatConversationMessages,
+} from "../utils/liveChatApi";
 
 const LiveChat = () => {
   const [activeConversations, setActiveConversations] = useState([]);
@@ -197,16 +42,6 @@ const LiveChat = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [useMockData, setUseMockData] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState(null);
-
-  // ✅ Voice recording state for operator
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedAudio, setRecordedAudio] = useState(null);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [isSendingVoice, setIsSendingVoice] = useState(false);
-
-  // ✅ Image Upload State
-  const [selectedImage, setSelectedImage] = useState(null);
-  const imageInputRef = useRef(null);
 
   // ✅ Auto-refresh state (Solution 1 + 4: Smart refresh with badges)
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
@@ -235,8 +70,6 @@ const LiveChat = () => {
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
   const debouncedSearchRef = useRef("");
   const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -269,14 +102,6 @@ const LiveChat = () => {
     return () => clearTimeout(timer);
   }, [liveSearchQuery]);
 
-  useEffect(() => {
-    return () => {
-      if (recordedAudio?.url?.startsWith("blob:")) {
-        URL.revokeObjectURL(recordedAudio.url);
-      }
-    };
-  }, [recordedAudio]);
-
   const {
     getUnifiedChats,
     getLiveConversations,
@@ -288,42 +113,32 @@ const LiveChat = () => {
     submitFeedback,
   } = useApi();
 
+  useEffect(() => {
+    updateOperatorStatus("operator_001", operatorStatus).catch(() => {
+      // Keep UI responsive even if status update endpoint is temporarily unavailable.
+    });
+  }, [operatorStatus, updateOperatorStatus]);
+
   // Fetch conversation messages - newest window initially, Load More with before
   const fetchConversationMessages = async (userId, conversationId, days = 0, before = null) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000);
-
     try {
-      const baseURL =
-        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-          ? "http://localhost:8003"
-          : window.location.origin;
-
-      const params = new URLSearchParams();
-      if (days > 0) params.append("days", String(days));
-      if (before) params.append("before", before);
-      const url = `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}${params.toString() ? "?" + params.toString() : ""}`;
-
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      const data = await response.json();
+      const data = await fetchLiveChatConversationMessages({
+        userId,
+        conversationId,
+        days,
+        before,
+      });
 
       console.log("API Response:", data);
 
       if (data.success && data.messages) {
-        const normalized = [...data.messages].sort((a, b) => {
-          const ta = new Date(a?.timestamp || 0).getTime();
-          const tb = new Date(b?.timestamp || 0).getTime();
-          return ta - tb;
-        });
+        const normalized = data.messages;
         console.log(`Loaded ${normalized.length} messages (${data.returned_messages || normalized.length} of ${data.total_messages || normalized.length} total)`);
         return normalized;
       }
       console.warn("No messages found or API error:", data);
       return [];
     } catch (error) {
-      clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
         console.error("Message fetch timed out after 90 seconds");
         toast.error("Loading messages timed out - conversation may have too many messages");
@@ -333,6 +148,37 @@ const LiveChat = () => {
       return [];
     }
   };
+
+  const appendMessageToSelectedConversation = (newMessage) => {
+    setSelectedConversation((previous) => {
+      if (!previous) return previous;
+      return {
+        ...previous,
+        history: [...(previous.history || []), newMessage],
+      };
+    });
+  };
+
+  const {
+    isRecording,
+    recordedAudio,
+    recordingTime,
+    isSendingVoice,
+    selectedImage,
+    imageInputRef,
+    startRecording,
+    stopRecording,
+    discardRecording,
+    sendVoiceMessage,
+    formatRecordingTime,
+    handleImageSelect,
+    discardImage,
+    sendImageMessage,
+  } = useLiveChatMediaComposer({
+    selectedConversation,
+    sendOperatorMessage,
+    onAppendMessage: appendMessageToSelectedConversation,
+  });
 
   // Fetch real data from API
   useEffect(() => {
@@ -446,180 +292,24 @@ const LiveChat = () => {
     };
 
     fetchLiveData();
-
-    // ============================================================
-    // 📡 SSE (Server-Sent Events) for Real-Time Updates
-    // Replaces polling with efficient server-push notifications
-    // ============================================================
-    let eventSource = null;
-    let reconnectTimeout = null;
-    let fallbackInterval = null;
-
-    const connectSSE = () => {
-      // Skip SSE if using mock data
-      if (useMockDataRef.current) return;
-
-      const baseURL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:8003'
-        : '';
-
-      try {
-        eventSource = new EventSource(`${baseURL}/api/live-chat/events`);
-
-        eventSource.onopen = () => {
-          console.log('📡 SSE connected - real-time updates enabled');
-          // Clear fallback polling when SSE connects
-          if (fallbackInterval) {
-            clearInterval(fallbackInterval);
-            fallbackInterval = null;
-          }
-        };
-
-        // Handle conversation list updates
-        eventSource.addEventListener('conversations', async (event) => {
-          try {
-            if (!isMountedRef.current) return;
-            const data = JSON.parse(event.data);
-            if (data.conversations) {
-              const searchTerm = debouncedSearchRef.current;
-              const chatsResponse = await getUnifiedChats(searchTerm, 1, 30);
-              if (!isMountedRef.current) return;
-              const conversations = chatsResponse?.success ? chatsResponse.chats : data.conversations;
-              const previousIds = new Set(
-                activeConversationsRef.current.map((c) => c.conversation_id)
-              );
-              const newIds = new Set(
-                conversations
-                  .filter((c) => !previousIds.has(c.conversation_id))
-                  .map((c) => c.conversation_id)
-              );
-
-              setActiveConversations(conversations);
-              setNewConversationIds(newIds);
-              setLastRefreshTime(new Date());
-
-              if (newIds.size > 0) {
-                setTimeout(() => setNewConversationIds(new Set()), 10000);
-              }
-            }
-          } catch (e) {
-            console.error('SSE parse error:', e);
-          }
-        });
-
-        // Handle new message events
-        eventSource.addEventListener('new_message', async (event) => {
-          try {
-            if (!isMountedRef.current) return;
-            const data = JSON.parse(event.data);
-            console.log('📨 SSE: New message received', data);
-
-            setIsRefreshing(true);
-            const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
-            if (!isMountedRef.current) return;
-            if (chatsResponse.success && chatsResponse.chats) {
-              setActiveConversations(chatsResponse.chats);
-              setLastRefreshTime(new Date());
-            }
-            setIsRefreshing(false);
-
-            // If this message is for the currently selected conversation, fetch new messages
-            const currentSelection = selectedConversationRef.current;
-            if (currentSelection &&
-                (currentSelection.conversation.user_id === data.user_id ||
-                 currentSelection.conversation.conversation_id === data.conversation_id)) {
-              const messages = await fetchConversationMessages(
-                currentSelection.conversation.user_id,
-                currentSelection.conversation.conversation_id,
-                1
-              );
-              if (!isMountedRef.current) return;
-              if (messages && messages.length > 0) {
-                setSelectedConversation((prev) => {
-                  if (!prev) return prev;
-                  return { ...prev, history: messages };
-                });
-              }
-            }
-          } catch (e) {
-            console.error('SSE new_message error:', e);
-          }
-        });
-
-        // Handle new conversation events
-        eventSource.addEventListener('new_conversation', async (event) => {
-          try {
-            if (!isMountedRef.current) return;
-            const data = JSON.parse(event.data);
-            console.log('📡 SSE: New conversation', data);
-
-            const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
-            if (!isMountedRef.current) return;
-            if (chatsResponse.success && chatsResponse.chats) {
-              const newIds = new Set([data.conversation_id]);
-              setActiveConversations(chatsResponse.chats);
-              setNewConversationIds(newIds);
-              setLastRefreshTime(new Date());
-
-              setTimeout(() => setNewConversationIds(new Set()), 10000);
-            }
-          } catch (e) {
-            console.error('SSE new_conversation error:', e);
-          }
-        });
-
-        // Handle heartbeat (keep-alive)
-        eventSource.addEventListener('heartbeat', () => {
-          // Connection is alive, nothing to do
-        });
-
-        eventSource.onerror = (error) => {
-          console.warn('📡 SSE connection error, falling back to polling');
-          eventSource.close();
-
-          // Start fallback polling
-          if (!fallbackInterval) {
-            fallbackInterval = setInterval(async () => {
-              if (!isMountedRef.current || useMockDataRef.current) return;
-              try {
-                const chatsResponse = await getUnifiedChats(debouncedSearchRef.current, 1, 30);
-                if (!isMountedRef.current) return;
-                if (chatsResponse.success && chatsResponse.chats) {
-                  setActiveConversations(chatsResponse.chats);
-                  setLastRefreshTime(new Date());
-                }
-              } catch (e) {
-                // Silent fail
-              }
-            }, 10000); // Slower fallback polling (10s)
-          }
-
-          // Try to reconnect SSE after 5 seconds
-          reconnectTimeout = setTimeout(connectSSE, 5000);
-        };
-
-      } catch (error) {
-        console.error('SSE initialization error:', error);
-      }
-    };
-
-    // Start SSE connection
-    connectSSE();
-
-    // Cleanup on unmount
-    return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-      if (fallbackInterval) {
-        clearInterval(fallbackInterval);
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]); // Re-fetch when search changes
+
+  useLiveChatSSE({
+    enabled: !useMockData,
+    isMountedRef,
+    useMockDataRef,
+    activeConversationsRef,
+    selectedConversationRef,
+    debouncedSearchRef,
+    getUnifiedChats,
+    fetchConversationMessages,
+    setActiveConversations,
+    setNewConversationIds,
+    setLastRefreshTime,
+    setIsRefreshing,
+    setSelectedConversation,
+  });
 
   // ✅ Fetch messages when selected conversation changes (not polling)
   useEffect(() => {
@@ -648,7 +338,7 @@ const LiveChat = () => {
 
     setHasMoreMessages(true);
     fetchMessages();
-  }, [selectedConversation?.conversation?.conversation_id, useMockData]);
+  }, [selectedConversation, selectedConversation?.conversation?.conversation_id, useMockData]);
 
   // Load mock data fallback
   const loadMockData = () => {
@@ -1012,28 +702,11 @@ const LiveChat = () => {
 
   const handleEndConversation = async (conversationId, userId) => {
     try {
-      const baseURL =
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1"
-          ? "http://localhost:8003"
-          : window.location.origin;
-
-      const response = await fetch(
-        `${baseURL}/api/live-chat/end-conversation`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            conversation_id: conversationId,
-            user_id: userId,
-            operator_id: "operator_001",
-          }),
-        }
-      );
-
-      const result = await response.json();
+      const result = await endLiveChatConversation({
+        conversationId,
+        userId,
+        operatorId: "operator_001",
+      });
 
       if (result.success) {
         toast.success("Conversation ended successfully");
@@ -1074,18 +747,13 @@ const LiveChat = () => {
 
       if (result.success) {
         // Add message to UI
-        const newMessage = {
+        appendMessageToSelectedConversation({
           timestamp: new Date().toISOString(),
           is_user: false,
           content: messageToSend,
           type: "text",
           handled_by: "human",
-        };
-
-        setSelectedConversation((prev) => ({
-          ...prev,
-          history: [...prev.history, newMessage],
-        }));
+        });
 
         toast.success("Message sent to customer");
       } else {
@@ -1098,214 +766,6 @@ const LiveChat = () => {
       setIsSending(false);
     }
   };
-
-
-
-  // ✅ Voice Recording Handlers
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordedAudio({ blob: audioBlob, url: audioUrl });
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-
-      // Timer for recording duration
-      const interval = setInterval(() => {
-        setRecordingTime((prev) => {
-          if (prev >= 300) {
-            // 5 minutes max
-            stopRecording();
-            clearInterval(interval);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    } catch (error) {
-      console.error("Error accessing microphone:", error);
-      toast.error("Could not access microphone");
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream
-        .getTracks()
-        .forEach((track) => track.stop());
-      setIsRecording(false);
-    }
-  };
-
-  const discardRecording = () => {
-    if (recordedAudio?.url?.startsWith("blob:")) {
-      URL.revokeObjectURL(recordedAudio.url);
-    }
-    setRecordedAudio(null);
-    setRecordingTime(0);
-  };
-
-  const sendVoiceMessage = async () => {
-    if (!recordedAudio || !selectedConversation || isSendingVoice) return;
-
-    setIsSendingVoice(true);
-    const localRecordedAudio = recordedAudio;
-
-    try {
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64Audio = reader.result.split(",")[1];
-
-          // Call API to send voice message
-          const result = await sendOperatorMessage(
-            selectedConversation.conversation.conversation_id,
-            selectedConversation.conversation.user_id,
-            base64Audio,
-            "operator_001",
-            "voice"
-          );
-
-          if (result.success) {
-            // Use persisted URL from backend so playback remains available after refresh.
-            const persistedAudioUrl =
-              result.storage_url || result.whatsapp_audio_url || localRecordedAudio.url;
-
-            const newMessage = {
-              timestamp: new Date().toISOString(),
-              is_user: false,
-              content: "[رسالة صوتية]",
-              text: "[رسالة صوتية]",
-              type: "voice",
-              audio_url: persistedAudioUrl,
-              handled_by: "human",
-            };
-
-            setSelectedConversation((prev) => ({
-              ...prev,
-              history: [...prev.history, newMessage],
-            }));
-
-            if (localRecordedAudio?.url?.startsWith("blob:")) {
-              URL.revokeObjectURL(localRecordedAudio.url);
-            }
-            setRecordedAudio(null);
-            setRecordingTime(0);
-            toast.success("Voice message sent to customer");
-          } else {
-            toast.error("Failed to send voice message");
-          }
-        } catch (sendError) {
-          console.error("Error sending voice message:", sendError);
-          toast.error("Error sending voice message");
-        } finally {
-          setIsSendingVoice(false);
-        }
-      };
-      reader.onerror = () => {
-        setIsSendingVoice(false);
-        toast.error("Failed to process recorded audio");
-      };
-      reader.readAsDataURL(recordedAudio.blob);
-    } catch (error) {
-      console.error("Error sending voice message:", error);
-      toast.error("Error sending voice message");
-      setIsSendingVoice(false);
-    }
-  };
-
-  const formatRecordingTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // ✅ Image Upload Handlers
-  const handleImageSelect = (event) => {
-    const file = event.target.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImage({
-          file: file,
-          preview: e.target?.result,
-          name: file.name,
-        });
-      };
-      reader.readAsDataURL(file);
-    } else {
-      toast.error("Please select a valid image file");
-    }
-  };
-
-  const discardImage = () => {
-    setSelectedImage(null);
-    if (imageInputRef.current) {
-      imageInputRef.current.value = "";
-    }
-  };
-
-  const sendImageMessage = async () => {
-    if (!selectedImage || !selectedConversation) return;
-
-    try {
-      // Convert to base64
-      const base64Image = selectedImage.preview.split(",")[1];
-
-      // Call API to send image message
-      const result = await sendOperatorMessage(
-        selectedConversation.conversation.conversation_id,
-        selectedConversation.conversation.user_id,
-        base64Image,
-        "operator_001",
-        "image"
-      );
-
-      if (result.success) {
-        // Add image message to UI
-        const newMessage = {
-          timestamp: new Date().toISOString(),
-          is_user: false,
-          content: "[صورة]",
-          type: "image",
-          image_url: selectedImage.preview,
-          handled_by: "human",
-        };
-
-        setSelectedConversation((prev) => ({
-          ...prev,
-          history: [...prev.history, newMessage],
-        }));
-
-        discardImage();
-        toast.success("Image sent to customer");
-      } else {
-        toast.error("Failed to send image");
-      }
-    } catch (error) {
-      console.error("Error sending image:", error);
-      toast.error("Error sending image");
-    }
-  };
-
   // Feedback handlers
   const handleFeedback = (message, feedbackType) => {
     if (feedbackType === "good") {
@@ -1357,59 +817,6 @@ const LiveChat = () => {
     if (result.success) {
       setFeedbackModal(null);
     }
-  };
-
-  const getStatusBadge = (status) => {
-    const badges = {
-      bot: {
-        color: "bg-blue-100 text-blue-700",
-        icon: CheckCircleIcon,
-        text: "Bot Handling",
-      },
-      human: {
-        color: "bg-green-100 text-green-700",
-        icon: UserIcon,
-        text: "Human Handling",
-      },
-      waiting_human: {
-        color: "bg-orange-100 text-orange-700",
-        icon: ClockIcon,
-        text: "Waiting",
-      },
-      resolved: {
-        color: "bg-slate-100 text-slate-700",
-        icon: CheckCircleIcon,
-        text: "Resolved",
-      },
-    };
-
-    const badge = badges[status] || badges.bot;
-    const Icon = badge.icon;
-
-    return (
-      <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}
-      >
-        <Icon className="w-3 h-3 mr-1" />
-        {badge.text}
-      </span>
-    );
-  };
-
-  const getSentimentIndicator = (sentiment) => {
-    const indicators = {
-      positive: { color: "text-green-500", emoji: "😊" },
-      neutral: { color: "text-slate-500", emoji: "😐" },
-      negative: { color: "text-red-500", emoji: "😟" },
-    };
-
-    const indicator = indicators[sentiment] || indicators.neutral;
-
-    return (
-      <span className={`text-lg ${indicator.color}`} title={sentiment}>
-        {indicator.emoji}
-      </span>
-    );
   };
 
   return (
@@ -1511,7 +918,7 @@ const LiveChat = () => {
                       <span className="font-medium text-slate-800 text-sm">
                         {item.user_name}
                       </span>
-                      {getSentimentIndicator(item.sentiment)}
+                      <SentimentIndicator sentiment={item.sentiment} />
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-600">
                       <span>
@@ -1545,6 +952,9 @@ const LiveChat = () => {
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                 <span>Auto-updating</span>
               </span>
+              {isLoading && (
+                <span className="text-xs text-slate-400">Loading...</span>
+              )}
             </div>
             {/* ✅ Search by name or phone */}
             <div className="relative mb-3">
@@ -1617,10 +1027,10 @@ const LiveChat = () => {
                         {conv.user_phone}
                       </p>
                     </div>
-                    {getSentimentIndicator(conv.sentiment)}
+                    <SentimentIndicator sentiment={conv.sentiment} />
                   </div>
 
-                  <div className="mb-2">{getStatusBadge(conv.status)}</div>
+                  <div className="mb-2"><StatusBadge status={conv.status} /></div>
 
                   {conv.last_message && (
                     <p className="text-xs text-slate-600 truncate mb-1">
@@ -1709,7 +1119,7 @@ const LiveChat = () => {
                         </button>
                       )
                     )}
-                    {getStatusBadge(selectedConversation.conversation.status)}
+                    <StatusBadge status={selectedConversation.conversation.status} />
 
                     {/* ✅ Reload Messages Button */}
                     <button
@@ -1817,7 +1227,7 @@ const LiveChat = () => {
                                 <div className="max-w-xs">
                                   <img
                                     src={msg.image_url}
-                                    alt="User image"
+                                    alt="Attachment"
                                     className="rounded-lg max-w-full h-auto object-cover"
                                     onError={(e) => {
                                       e.target.src =
@@ -1929,6 +1339,39 @@ const LiveChat = () => {
               {/* Message Input - Fixed Height - Text + Voice */}
               {selectedConversation.conversation.status === "human" && (
                 <div className="p-4 border-t border-slate-200 flex-shrink-0">
+                  {selectedImage && (
+                    <div className="mb-3 p-3 bg-slate-100 rounded-lg">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={selectedImage.preview}
+                            alt={selectedImage.name || "Selected image"}
+                            className="w-12 h-12 rounded object-cover"
+                          />
+                          <p className="text-sm text-slate-700 truncate">
+                            {selectedImage.name || "Image selected"}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={discardImage}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Discard image"
+                          >
+                            <XMarkIcon className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={sendImageMessage}
+                            className="btn-primary flex items-center space-x-1"
+                          >
+                            <PaperAirplaneIcon className="w-4 h-4" />
+                            <span>Send</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Voice Recording Preview */}
                   {recordedAudio && (
                     <div className="mb-3 p-3 bg-slate-100 rounded-lg">
@@ -1989,6 +1432,13 @@ const LiveChat = () => {
                   {!isRecording && !recordedAudio && (
                     <div className="flex space-x-2">
                       <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageSelect}
+                      />
+                      <input
                         type="text"
                         value={messageInput}
                         onChange={(e) => setMessageInput(e.target.value)}
@@ -2006,6 +1456,13 @@ const LiveChat = () => {
                         title="Record voice message"
                       >
                         <MicrophoneIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => imageInputRef.current?.click()}
+                        className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+                        title="Send image"
+                      >
+                        <PhotoIcon className="w-5 h-5" />
                       </button>
                       {/* Send Text Button */}
                       <button
@@ -2102,9 +1559,7 @@ const LiveChat = () => {
                   <div>
                     <p className="text-xs text-slate-500">Sentiment</p>
                     <div className="flex items-center space-x-2">
-                      {getSentimentIndicator(
-                        selectedConversation.conversation.sentiment
-                      )}
+                      <SentimentIndicator sentiment={selectedConversation.conversation.sentiment} />
                       <span className="font-medium text-slate-800 capitalize">
                         {selectedConversation.conversation.sentiment}
                       </span>
@@ -2138,7 +1593,7 @@ const LiveChat = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-slate-600">Status</span>
-                    {getStatusBadge(selectedConversation.conversation.status)}
+                    <StatusBadge status={selectedConversation.conversation.status} />
                   </div>
                   {selectedConversation.conversation.operator_id && (
                     <div className="flex justify-between">

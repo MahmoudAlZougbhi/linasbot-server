@@ -643,15 +643,39 @@ async def get_scheduler_status():
         }
 
 
+def _apply_count_date_filter(msg_type: str, send_date_str, apt_date, send_at, now, today_str,
+                             yesterday_str, start_of_month_str, start_of_next_month_str,
+                             past_24h, next_24h) -> bool:
+    """Apply same date filtering as frontend for a message."""
+    if msg_type == "reminder_24h":
+        if send_at:
+            return past_24h <= send_at <= next_24h
+        return True
+    if msg_type == "post_session_feedback":
+        return (send_date_str or "") == today_str or not send_date_str
+    if msg_type == "missed_yesterday":
+        return apt_date == yesterday_str or send_date_str == yesterday_str
+    if msg_type == "twenty_day_followup":
+        if send_date_str:
+            return start_of_month_str <= send_date_str < start_of_next_month_str
+        return False
+    if msg_type == "attended_yesterday":
+        return (send_date_str or "") == today_str or not send_date_str
+    if msg_type == "missed_paused_appointment":
+        return True
+    return True
+
+
 @app.get("/api/smart-messaging/counts")
 async def get_message_counts():
     """
     Get counts for each message type (FAST endpoint for lazy loading).
-    Only counts in-memory scheduled messages - no Firestore calls.
-    Applies the same date filtering as the frontend dashboard.
+    Counts from: (1) in-memory scheduled_messages, (2) collector log (scheduled_messages_to_be_sent.json).
+    Merges both sources so counts reflect messages that will be sent (e.g. tomorrow's reminders).
     """
     try:
         from services.smart_messaging import smart_messaging
+        from services.scheduled_messages_collector import scheduled_messages_collector
         from datetime import datetime as dt, timedelta
 
         # Initialize counts
@@ -670,74 +694,72 @@ async def get_message_counts():
         yesterday = now - timedelta(days=1)
         yesterday_str = yesterday.strftime('%Y-%m-%d')
         start_of_month_str = now.replace(day=1).strftime('%Y-%m-%d')
-        # First day of next month
         if now.month == 12:
             next_month_start = dt(now.year + 1, 1, 1)
         else:
             next_month_start = dt(now.year, now.month + 1, 1)
         start_of_next_month_str = next_month_start.strftime('%Y-%m-%d')
-
-        # Time boundaries for ±24h filters
         past_24h = now - timedelta(hours=24)
         next_24h = now + timedelta(hours=24)
 
-        # Count all messages including sent (in-memory only - FAST)
+        # Source 1: in-memory scheduled_messages
         for msg_id, msg_data in smart_messaging.scheduled_messages.items():
             if msg_data.get("status") not in ["scheduled", "pending_approval", "sent", "sending"]:
                 continue
-
             msg_type = normalize_template_id(msg_data.get("message_type", "unknown"))
-            if msg_type in DEPRECATED_TEMPLATE_IDS:
+            if msg_type in DEPRECATED_TEMPLATE_IDS or msg_type not in counts:
                 continue
-            if msg_type not in counts:
-                continue
-
-            # Get dates for filtering
             send_at = msg_data.get("send_at")
             send_date_str = send_at.strftime('%Y-%m-%d') if send_at else None
             apt_date = msg_data.get("placeholders", {}).get("appointment_date")
-
-            # Apply date filtering based on message type (same logic as frontend)
-            include = False
-
-            if msg_type == "reminder_24h":
-                # Tomorrow reminders are generated daily; keep a 24h window view.
-                if send_at:
-                    include = past_24h <= send_at <= next_24h
-                else:
-                    include = True
-
-            elif msg_type == "post_session_feedback":
-                # Show messages scheduled for today only
-                if send_date_str:
-                    include = send_date_str == today_str
-                else:
-                    include = True
-
-            elif msg_type == "missed_yesterday":
-                # Show yesterday's missed appointments
-                include = apt_date == yesterday_str or send_date_str == yesterday_str
-
-            elif msg_type == "twenty_day_followup":
-                # Show 20-day follow-ups scheduled within current month
-                if send_date_str:
-                    include = start_of_month_str <= send_date_str < start_of_next_month_str
-
-            elif msg_type == "attended_yesterday":
-                # Show messages scheduled for today
-                if send_date_str:
-                    include = send_date_str == today_str
-                else:
-                    include = True
-
-            elif msg_type == "missed_paused_appointment":
-                include = True
-
-            if include:
+            if _apply_count_date_filter(msg_type, send_date_str, apt_date, send_at, now, today_str,
+                                        yesterday_str, start_of_month_str, start_of_next_month_str,
+                                        past_24h, next_24h):
                 counts[msg_type] += 1
 
-        total = sum(counts.values())
+        # Source 2: collector log (scheduled_messages_to_be_sent.json) - messages to be sent
+        try:
+            collector_log = scheduled_messages_collector.load_or_create_log()
+            collector_counts = {k: 0 for k in counts}
+            for msg in collector_log:
+                if msg.get("status") != "pending":
+                    continue
+                msg_type = normalize_template_id(msg.get("message_type", "unknown"))
+                if msg_type in DEPRECATED_TEMPLATE_IDS or msg_type not in collector_counts:
+                    continue
+                send_datetime_str = msg.get("send_datetime")
+                send_at = None
+                send_date_str = None
+                if send_datetime_str:
+                    try:
+                        send_at = dt.fromisoformat(send_datetime_str.replace("Z", "+00:00"))
+                        if send_at.tzinfo:
+                            send_at = send_at.replace(tzinfo=None)
+                        send_date_str = send_at.strftime('%Y-%m-%d')
+                    except (ValueError, TypeError):
+                        pass
+                apt_datetime = msg.get("appointment_datetime")
+                apt_date = None
+                if apt_datetime:
+                    try:
+                        s = str(apt_datetime).replace("Z", "+00:00")
+                        apt_dt = dt.fromisoformat(s)
+                        if apt_dt.tzinfo:
+                            apt_dt = apt_dt.replace(tzinfo=None)
+                        apt_date = apt_dt.strftime('%Y-%m-%d')
+                    except (ValueError, TypeError):
+                        pass
+                if _apply_count_date_filter(msg_type, send_date_str, apt_date, send_at, now, today_str,
+                                            yesterday_str, start_of_month_str, start_of_next_month_str,
+                                            past_24h, next_24h):
+                    collector_counts[msg_type] += 1
+            # Merge: take max per type to avoid double-counting (same msg may be in both)
+            for k in counts:
+                counts[k] = max(counts[k], collector_counts[k])
+        except Exception as coll_e:
+            print(f"⚠️ Could not merge collector log into counts: {coll_e}")
 
+        total = sum(counts.values())
         return {
             "success": True,
             "counts": counts,

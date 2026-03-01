@@ -16,6 +16,12 @@ from typing import List, Dict, Optional, Any, Tuple
 from collections import defaultdict
 from google.cloud import firestore
 import config
+from services.live_chat_contracts import (
+    dedupe_messages as contract_dedupe_messages,
+    normalize_conversation_document,
+    parse_timestamp_utc,
+    utc_now,
+)
 from utils.utils import get_firestore_db, set_human_takeover_status
 from services.media_service import build_whatsapp_audio_delivery_url
 
@@ -23,12 +29,15 @@ from services.media_service import build_whatsapp_audio_delivery_url
 class LiveChatService:
     """Service for managing live chat operations with hybrid approach"""
 
+    APP_ID = "linas-ai-bot-backend"
+
     # Time window for active conversations (2 hours - "live" = currently with AI)
     ACTIVE_TIME_WINDOW = 2 * 60 * 60  # 2 hours
 
     # Cache configuration
     CACHE_TTL = 20  # seconds - reduce expensive cold reads while keeping near real-time updates
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
+    FIRESTORE_FETCH_PARALLELISM = 24
 
     def __init__(self):
         self.operator_sessions = {}
@@ -57,45 +66,60 @@ class LiveChatService:
         self._unified_chats_cache_time = None
 
     def _dedupe_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        De-duplicate messages for idempotent read paths.
-        Uses source_message_id when available, otherwise falls back to a content signature.
-        """
-        if not messages:
+        return contract_dedupe_messages(messages)
+
+    def _is_cache_fresh(self, cache_time: Optional[datetime.datetime], ttl_seconds: Optional[int] = None) -> bool:
+        if cache_time is None:
+            return False
+        ttl = ttl_seconds or self.CACHE_TTL
+        return (utc_now() - cache_time).total_seconds() < ttl
+
+    def _get_users_collection(self):
+        db = get_firestore_db()
+        if not db:
+            return None
+        return db.collection("artifacts").document(self.APP_ID).collection("users")
+
+    async def _stream_user_docs(self, users_collection):
+        if users_collection is None:
             return []
+        try:
+            return await asyncio.to_thread(
+                lambda: list(
+                    users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).stream()
+                )
+            )
+        except Exception:
+            return await asyncio.to_thread(lambda: list(users_collection.stream()))
 
-        deduped: List[Dict[str, Any]] = []
-        seen_source_ids = set()
-        seen_signatures = set()
+    async def _stream_user_conversations(self, users_collection, user_id: str):
+        try:
+            conversations_collection = users_collection.document(user_id).collection(
+                config.FIRESTORE_CONVERSATIONS_COLLECTION
+            )
+            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
+            return user_id, conversations_docs
+        except Exception as e:
+            print(f"⚠️ Error fetching conversations for user {user_id}: {e}")
+            return user_id, []
 
-        for msg in messages:
-            metadata = msg.get("metadata", {}) or {}
-            source_message_id = str(metadata.get("source_message_id", "")).strip()
+    async def _stream_conversations_for_users(self, users_collection, user_ids: List[str]):
+        semaphore = asyncio.Semaphore(self.FIRESTORE_FETCH_PARALLELISM)
 
-            if source_message_id:
-                if source_message_id in seen_source_ids:
-                    continue
-                seen_source_ids.add(source_message_id)
+        async def _bounded_fetch(uid: str):
+            async with semaphore:
+                return await self._stream_user_conversations(users_collection, uid)
 
-            msg_role = str(msg.get("role", "")).strip().lower()
-            msg_type = str(msg.get("type") or metadata.get("type") or "text").strip().lower()
-            msg_text = str(msg.get("text", "")).strip()
-            msg_ts = self._parse_timestamp(msg.get("timestamp")).replace(microsecond=0).isoformat()
-            signature = (msg_role, msg_type, msg_text, msg_ts)
-
-            if not source_message_id and signature in seen_signatures:
-                continue
-
-            seen_signatures.add(signature)
-            deduped.append(msg)
-
-        return deduped
+        return await asyncio.gather(
+            *[_bounded_fetch(uid) for uid in user_ids],
+            return_exceptions=True,
+        )
 
     def _history_filter_match(self, dt: datetime.datetime, filter_by: str) -> bool:
         if filter_by == "all":
             return True
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = utc_now()
         age_hours = (now - dt).total_seconds() / 3600.0
 
         if filter_by == "today":
@@ -127,10 +151,8 @@ class LiveChatService:
         normalized_search = (search or "").strip()
 
         # Check cache first
-        current_time = datetime.datetime.now(datetime.timezone.utc)
-        if (self._conversations_cache is not None and
-            self._conversations_cache_time is not None and
-            (current_time - self._conversations_cache_time).total_seconds() < self.CACHE_TTL):
+        current_time = utc_now()
+        if self._conversations_cache is not None and self._is_cache_fresh(self._conversations_cache_time):
             print(f"📦 Returning cached active conversations ({len(self._conversations_cache)} clients)")
             if normalized_search:
                 filtered_cached = self._filter_conversations(self._conversations_cache, normalized_search)
@@ -139,46 +161,17 @@ class LiveChatService:
             return self._conversations_cache
 
         try:
-            db = get_firestore_db()
-            if not db:
+            users_collection = self._get_users_collection()
+            if users_collection is None:
                 return []
-            
-            app_id = "linas-ai-bot-backend"
-            users_collection = db.collection("artifacts").document(app_id).collection("users")
-            
+
             # Dictionary to group conversations by client
             client_conversations = {}
-            current_time = datetime.datetime.now(datetime.timezone.utc)
+            current_time = utc_now()
 
-            # Pull all users (no hard cap) so live/history stay consistent.
-            # Try sorted query first; fallback if ordering field is inconsistent.
-            try:
-                users_docs = await asyncio.to_thread(
-                    lambda: list(users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).stream())
-                )
-            except Exception:
-                users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
-
-            # Helper function to fetch conversations for a single user
-            async def fetch_user_conversations(user_id):
-                """Fetch all conversations for a user"""
-                try:
-                    conversations_collection = users_collection.document(user_id).collection(
-                        config.FIRESTORE_CONVERSATIONS_COLLECTION
-                    )
-                    # ✅ Use asyncio.to_thread to prevent blocking the event loop
-                    conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
-                    return (user_id, conversations_docs)
-                except Exception as e:
-                    print(f"⚠️ Error fetching conversations for user {user_id}: {e}")
-                    return (user_id, [])
-
-            # Fetch conversations for all users in parallel
+            users_docs = await self._stream_user_docs(users_collection)
             user_ids = [doc.id for doc in users_docs]
-            conversation_results = await asyncio.gather(
-                *[fetch_user_conversations(uid) for uid in user_ids],
-                return_exceptions=True
-            )
+            conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
 
             # Process results
             for result in conversation_results:
@@ -191,8 +184,12 @@ class LiveChatService:
                 # Collect all conversations for this client
                 client_convs = []
                 for conv_doc in conversations_docs:
-                    conv_data = conv_doc.to_dict()
-                    messages = self._dedupe_messages(conv_data.get("messages", []))
+                    conv_data = normalize_conversation_document(
+                        conversation_id=conv_doc.id,
+                        user_id=user_id,
+                        payload=conv_doc.to_dict() or {},
+                    )
+                    messages = conv_data.get("messages", [])
 
                     if not messages:
                         continue
@@ -339,15 +336,9 @@ class LiveChatService:
         - Search by name or phone
         """
         search_val = (search or "").strip().lower()
-        current_time = datetime.datetime.now(datetime.timezone.utc)
+        current_time = utc_now()
 
-        if not search_val and page == 1:
-            now_ts = current_time.timestamp()
-            if (
-                self._unified_chats_cache
-                and self._unified_chats_cache_time
-                and (now_ts - self._unified_chats_cache_time) < self.CACHE_TTL
-            ):
+        if not search_val and page == 1 and self._unified_chats_cache and self._is_cache_fresh(self._unified_chats_cache_time):
                 all_chats = self._unified_chats_cache
                 total = len(all_chats)
                 start = 0
@@ -363,34 +354,17 @@ class LiveChatService:
                 }
 
         try:
-            db = get_firestore_db()
-            if not db:
+            users_collection = self._get_users_collection()
+            if users_collection is None:
                 return {"success": False, "chats": [], "total": 0, "has_more": False}
 
-            app_id = "linas-ai-bot-backend"
-            users_collection = db.collection("artifacts").document(app_id).collection("users")
-            current_time = datetime.datetime.now(datetime.timezone.utc)
+            current_time = utc_now()
 
-            try:
-                users_docs = await asyncio.to_thread(
-                    lambda: list(users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).stream())
-                )
-            except Exception:
-                users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
-
-            async def fetch_user_conversations(user_id):
-                try:
-                    conv_col = users_collection.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-                    docs = await asyncio.to_thread(lambda: list(conv_col.stream()))
-                    return (user_id, docs)
-                except Exception as e:
-                    print(f"⚠️ Error fetching convos for {user_id}: {e}")
-                    return (user_id, [])
-
+            users_docs = await self._stream_user_docs(users_collection)
             user_ids = [doc.id for doc in users_docs]
             if len(user_ids) > 200:
                 user_ids = user_ids[:200]
-            results = await asyncio.gather(*[fetch_user_conversations(uid) for uid in user_ids], return_exceptions=True)
+            results = await self._stream_conversations_for_users(users_collection, user_ids)
 
             all_chats: List[Dict[str, Any]] = []
             for r in results:
@@ -402,7 +376,11 @@ class LiveChatService:
                 best_messages = []
 
                 for conv_doc in conv_docs:
-                    conv_data = conv_doc.to_dict()
+                    conv_data = normalize_conversation_document(
+                        conversation_id=conv_doc.id,
+                        user_id=user_id,
+                        payload=conv_doc.to_dict() or {},
+                    )
                     messages = conv_data.get("messages", []) or []
                     if not messages:
                         continue
@@ -411,7 +389,7 @@ class LiveChatService:
                     if best_ts is None or ts > best_ts:
                         best_ts = ts
                         best_conv = conv_data
-                        best_conv["_id"] = conv_doc.id
+                        best_conv["_id"] = conv_data.get("conversation_id", conv_doc.id)
                         best_messages = messages
 
                 if best_conv is None:
@@ -487,9 +465,8 @@ class LiveChatService:
             has_more = end < total
 
             if not search_val and safe_page == 1:
-                import time
                 self._unified_chats_cache = all_chats
-                self._unified_chats_cache_time = time.time()
+                self._unified_chats_cache_time = current_time
 
             return {
                 "success": True,
@@ -514,26 +491,13 @@ class LiveChatService:
     ) -> Dict[str, Any]:
         """Canonical customer list for chat history."""
         try:
-            db = get_firestore_db()
-            if not db:
+            users_collection = self._get_users_collection()
+            if users_collection is None:
                 return {"success": False, "error": "Firestore not initialized"}
 
-            app_id = "linas-ai-bot-backend"
-            users_collection = db.collection("artifacts").document(app_id).collection("users")
-            users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
-
-            async def fetch_user_conversations(user_doc):
-                user_id = user_doc.id
-                conversations_collection = users_collection.document(user_id).collection(
-                    config.FIRESTORE_CONVERSATIONS_COLLECTION
-                )
-                conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
-                return user_id, conversations_docs
-
-            fetch_results = await asyncio.gather(
-                *[fetch_user_conversations(doc) for doc in users_docs],
-                return_exceptions=True
-            )
+            users_docs = await self._stream_user_docs(users_collection)
+            user_ids = [doc.id for doc in users_docs]
+            fetch_results = await self._stream_conversations_for_users(users_collection, user_ids)
 
             customers: List[Dict[str, Any]] = []
             for result in fetch_results:
@@ -550,8 +514,12 @@ class LiveChatService:
 
                 for conv_doc in conversations_docs:
                     conversation_count += 1
-                    conv_data = conv_doc.to_dict() or {}
-                    messages = self._dedupe_messages(conv_data.get("messages", []))
+                    conv_data = normalize_conversation_document(
+                        conversation_id=conv_doc.id,
+                        user_id=user_id,
+                        payload=conv_doc.to_dict() or {},
+                    )
+                    messages = conv_data.get("messages", [])
                     if not messages:
                         continue
 
@@ -651,8 +619,12 @@ class LiveChatService:
             conversations: List[Dict[str, Any]] = []
             total_messages = 0
             for conv_doc in conversations_docs:
-                conv_data = conv_doc.to_dict() or {}
-                messages = self._dedupe_messages(conv_data.get("messages", []))
+                conv_data = normalize_conversation_document(
+                    conversation_id=conv_doc.id,
+                    user_id=user_id,
+                    payload=conv_doc.to_dict() or {},
+                )
+                messages = conv_data.get("messages", [])
                 message_count = len(messages)
                 total_messages += message_count
 
@@ -735,7 +707,12 @@ class LiveChatService:
                 return {"success": False, "error": "Conversation not found", "messages": []}
 
             conv_data = conv_doc.to_dict() or {}
-            messages = self._dedupe_messages(conv_data.get("messages", []))
+            conv_data = normalize_conversation_document(
+                conversation_id=conv_doc.id,
+                user_id=user_id,
+                payload=conv_data,
+            )
+            messages = conv_data.get("messages", [])
             normalized_messages = []
             for msg in messages:
                 normalized_messages.append({
@@ -799,8 +776,12 @@ class LiveChatService:
             conversations = []
             
             for conv_doc in conversations_docs:
-                conv_data = conv_doc.to_dict()
-                messages = self._dedupe_messages(conv_data.get("messages", []))
+                conv_data = normalize_conversation_document(
+                    conversation_id=conv_doc.id,
+                    user_id=user_id,
+                    payload=conv_doc.to_dict() or {},
+                )
+                messages = conv_data.get("messages", [])
                 
                 if not messages:
                     continue
@@ -831,39 +812,34 @@ class LiveChatService:
         Queries Firebase directly for conversations with human_takeover_active=True and operator_id=None
         """
         try:
-            current_time = datetime.datetime.now(datetime.timezone.utc)
+            current_time = utc_now()
             # Use short cache to keep UI responsive while staying near real-time.
-            if (
-                self._queue_cache is not None
-                and self._queue_cache_time is not None
-                and (current_time - self._queue_cache_time).total_seconds() < self.CACHE_TTL
-            ):
+            if self._queue_cache is not None and self._is_cache_fresh(self._queue_cache_time):
                 return self._queue_cache
 
-            db = get_firestore_db()
-            if not db:
+            users_collection = self._get_users_collection()
+            if users_collection is None:
                 return []
-
-            app_id = "linas-ai-bot-backend"
-            users_collection = db.collection("artifacts").document(app_id).collection("users")
 
             waiting_queue = []
 
-            # ✅ Use asyncio.to_thread to prevent blocking the event loop
-            users_docs = await asyncio.to_thread(lambda: list(users_collection.stream()))
+            users_docs = await self._stream_user_docs(users_collection)
+            user_ids = [doc.id for doc in users_docs]
+            conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
 
-            for user_doc in users_docs:
-                user_id = user_doc.id
+            for result in conversation_results:
+                if isinstance(result, Exception):
+                    print(f"⚠️ Error in waiting queue parallel fetch: {result}")
+                    continue
 
-                conversations_collection = users_collection.document(user_id).collection(
-                    config.FIRESTORE_CONVERSATIONS_COLLECTION
-                )
-                # ✅ Use asyncio.to_thread to prevent blocking the event loop
-                conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
-                
+                user_id, conversations_docs = result
                 for conv_doc in conversations_docs:
-                    conv_data = conv_doc.to_dict()
-                    messages = self._dedupe_messages(conv_data.get("messages", []))
+                    conv_data = normalize_conversation_document(
+                        conversation_id=conv_doc.id,
+                        user_id=user_id,
+                        payload=conv_doc.to_dict() or {},
+                    )
+                    messages = conv_data.get("messages", [])
                     
                     if not messages:
                         continue
@@ -913,7 +889,7 @@ class LiveChatService:
                     priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
                     
                     queue_item = {
-                        "conversation_id": conv_doc.id,
+                        "conversation_id": conv_data.get("conversation_id", conv_doc.id),
                         "user_id": user_id,
                         "user_name": user_name,
                         "user_phone": phone_full,
@@ -968,7 +944,7 @@ class LiveChatService:
             # Update conversation status
             update_data = {
                 "status": "resolved",
-                "resolved_at": datetime.datetime.now(),
+                "resolved_at": utc_now(),
                 "resolved_by": operator_id,
                 "human_takeover_active": False,
                 "operator_id": None
@@ -1063,7 +1039,7 @@ class LiveChatService:
             # Reopen conversation - use asyncio.to_thread to prevent blocking
             await asyncio.to_thread(conv_ref.update, {
                 "status": "active",
-                "reopened_at": datetime.datetime.now(),
+                "reopened_at": utc_now(),
                 "resolved_at": None,
                 "resolved_by": None
             })
@@ -1100,7 +1076,7 @@ class LiveChatService:
             # ✅ Use asyncio.to_thread to prevent blocking the event loop
             await asyncio.to_thread(conv_ref.update, {
                 "status": "archived",
-                "archived_at": datetime.datetime.now(),
+                "archived_at": utc_now(),
                 "archived_reason": "auto_6h_timeout"
             })
 
@@ -1420,14 +1396,18 @@ class LiveChatService:
             if not conv_doc.exists:
                 return {"success": False, "error": "Conversation not found"}
 
-            conv_data = conv_doc.to_dict()
-            messages = self._dedupe_messages(conv_data.get("messages", []))
+            conv_data = normalize_conversation_document(
+                conversation_id=conv_doc.id,
+                user_id=user_id,
+                payload=conv_doc.to_dict() or {},
+            )
+            messages = conv_data.get("messages", [])
 
             total_messages = len(messages)
 
             # Filter by days or before (for Load More)
             if days > 0 or before:
-                now = datetime.datetime.now(datetime.timezone.utc)
+                now = utc_now()
                 cutoff = now - datetime.timedelta(days=days) if days > 0 else None
                 before_dt = self._parse_timestamp(before) if before else None
 
@@ -1524,7 +1504,7 @@ class LiveChatService:
                     "active_operators": len([op for op, status in self.operator_status.items() if status == "available"]),
                     "time_window_hours": 6
                 },
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": utc_now().isoformat()
             }
             
         except Exception as e:
@@ -1640,7 +1620,7 @@ class LiveChatService:
 
     def _load_phone_room_mapping(self) -> Dict[str, str]:
         """Load `data/phone_to_room_mapping.json` with short TTL cache."""
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = utc_now()
         if (
             self._phone_mapping_cache_time is not None
             and (now - self._phone_mapping_cache_time).total_seconds() < self.PHONE_MAPPING_CACHE_TTL
@@ -1748,25 +1728,7 @@ class LiveChatService:
     
     def _parse_timestamp(self, timestamp) -> datetime.datetime:
         """Parse various timestamp formats - always returns UTC-aware datetime"""
-        if timestamp is None:
-            return datetime.datetime.now(datetime.timezone.utc)
-        if isinstance(timestamp, str):
-            try:
-                dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=datetime.timezone.utc)
-                return dt
-            except Exception:
-                return datetime.datetime.now(datetime.timezone.utc)
-        if isinstance(timestamp, (int, float)):
-            # Epoch seconds (if < 1e12) or milliseconds
-            secs = timestamp / 1000.0 if timestamp >= 1e12 else float(timestamp)
-            return datetime.datetime.fromtimestamp(secs, tz=datetime.timezone.utc)
-        if hasattr(timestamp, 'timestamp'):
-            return datetime.datetime.fromtimestamp(timestamp.timestamp(), tz=datetime.timezone.utc)
-        if hasattr(timestamp, 'seconds'):
-            return datetime.datetime.fromtimestamp(timestamp.seconds, tz=datetime.timezone.utc)
-        return datetime.datetime.now(datetime.timezone.utc)
+        return parse_timestamp_utc(timestamp)
 
 
 # Global instance

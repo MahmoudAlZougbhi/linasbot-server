@@ -5,18 +5,8 @@ Handles conversation takeover, operator management, and real-time communication.
 Includes SSE (Server-Sent Events) for real-time dashboard updates.
 """
 
-import asyncio
-import json
-from datetime import datetime
 from fastapi import Request, Query
 from fastapi.responses import StreamingResponse
-
-
-def json_serializer(obj):
-    """Custom JSON serializer for objects not serializable by default json code"""
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 from modules.core import app
 from modules.models import (
@@ -26,80 +16,26 @@ from modules.models import (
     OperatorStatusRequest
 )
 from services.live_chat_service import live_chat_service
+from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 # ============================================================
 # SSE (Server-Sent Events) for Real-Time Updates
 # ============================================================
-# Global set to track connected SSE clients
-_sse_clients: set = set()
-
-async def sse_event_generator(request: Request):
-    """
-    Generator that yields SSE events to connected clients.
-    Keeps connection alive and sends updates when available.
-    """
-    client_queue = asyncio.Queue()
-    _sse_clients.add(client_queue)
-    print(f"📡 SSE client connected. Active clients: {len(_sse_clients)}")
-
-    try:
-        # Send initial connection event
-        yield f"event: connected\ndata: {json.dumps({'status': 'connected'})}\n\n"
-
-        # Send current conversations immediately
-        try:
-            conversations = await live_chat_service.get_active_conversations()
-            yield f"event: conversations\ndata: {json.dumps({'conversations': conversations, 'total': len(conversations)}, default=json_serializer)}\n\n"
-        except Exception as e:
-            print(f"⚠️ SSE: Error sending initial conversations: {e}")
-
-        # Keep connection alive and send updates
-        while True:
-            # Check if client disconnected
-            if await request.is_disconnected():
-                break
-
-            try:
-                # Wait for an event with timeout (for heartbeat)
-                event = await asyncio.wait_for(client_queue.get(), timeout=30.0)
-                print(f"📡 SSE: Got event from queue: {event['type']}")
-                event_data = json.dumps(event['data'], default=json_serializer)
-                print(f"📡 SSE: Yielding event to client: {event['type']}")
-                yield f"event: {event['type']}\ndata: {event_data}\n\n"
-            except asyncio.TimeoutError:
-                # Send heartbeat to keep connection alive
-                print(f"📡 SSE: Sending heartbeat")
-                yield f"event: heartbeat\ndata: {json.dumps({'timestamp': asyncio.get_event_loop().time()})}\n\n"
-    except asyncio.CancelledError:
-        pass
-    finally:
-        _sse_clients.discard(client_queue)
-        print(f"📡 SSE client disconnected. Active clients: {len(_sse_clients)}")
+async def _load_initial_sse_payload():
+    conversations = await live_chat_service.get_active_conversations()
+    return {"conversations": conversations, "total": len(conversations)}
 
 async def broadcast_sse_event(event_type: str, data: dict):
     """
     Broadcast an event to all connected SSE clients.
     Called when new messages arrive or conversations change.
     """
-    print(f"📡 SSE broadcast called: {event_type}, clients: {len(_sse_clients)}")
-    if not _sse_clients:
-        print(f"📡 SSE: No clients connected, skipping broadcast")
+    client_count = await live_chat_sse_broadcaster.active_clients_count()
+    if client_count == 0:
         return
 
-    event = {"type": event_type, "data": data}
-    disconnected = set()
-
-    for client_queue in _sse_clients:
-        try:
-            client_queue.put_nowait(event)
-            print(f"📡 SSE: Event queued successfully for client")
-        except Exception as e:
-            print(f"📡 SSE: Error queuing event: {e}")
-            disconnected.add(client_queue)
-
-    # Clean up disconnected clients
-    _sse_clients.difference_update(disconnected)
+    await live_chat_sse_broadcaster.publish(event_type, data)
 
 @app.get("/api/live-chat/events")
 async def live_chat_events(request: Request):
@@ -115,7 +51,7 @@ async def live_chat_events(request: Request):
     - heartbeat: Keep-alive ping every 30s
     """
     return StreamingResponse(
-        sse_event_generator(request),
+        live_chat_sse_broadcaster.stream(request, initial_payload_loader=_load_initial_sse_payload),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

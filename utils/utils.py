@@ -7,6 +7,13 @@ from difflib import SequenceMatcher
 
 import config
 from openai import AsyncOpenAI
+from services.live_chat_contracts import (
+    extract_source_message_id as contract_extract_source_message_id,
+    is_duplicate_message as contract_is_duplicate_message,
+    normalize_message as contract_normalize_message,
+    parse_timestamp_utc,
+    utc_now,
+)
 
 # NEW: Firebase Admin SDK Imports
 import firebase_admin
@@ -159,70 +166,19 @@ def _resolve_phone_from_room_mapping(user_id: str) -> str:
 
 
 def _extract_source_message_id(metadata: dict) -> str:
-    if not isinstance(metadata, dict):
-        return ""
-    for key in ("source_message_id", "message_id", "webhook_message_id", "wamid"):
-        value = metadata.get(key)
-        if value:
-            return str(value).strip()
-    return ""
+    return contract_extract_source_message_id(metadata)
 
 
 def _parse_timestamp_for_dedupe(timestamp) -> datetime.datetime:
-    if isinstance(timestamp, datetime.datetime):
-        dt = timestamp
-    elif isinstance(timestamp, str):
-        try:
-            dt = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        except Exception:
-            dt = datetime.datetime.now(datetime.timezone.utc)
-    elif hasattr(timestamp, "timestamp"):
-        dt = datetime.datetime.fromtimestamp(timestamp.timestamp(), tz=datetime.timezone.utc)
-    elif hasattr(timestamp, "seconds"):
-        dt = datetime.datetime.fromtimestamp(timestamp.seconds, tz=datetime.timezone.utc)
-    else:
-        dt = datetime.datetime.now(datetime.timezone.utc)
-
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
-    return dt
+    return parse_timestamp_utc(timestamp)
 
 
 def _is_duplicate_message(existing_messages: list, new_message: dict) -> bool:
-    if not existing_messages:
-        return False
-
-    new_metadata = new_message.get("metadata", {}) or {}
-    new_source_id = _extract_source_message_id(new_metadata)
-    if new_source_id:
-        for existing_msg in reversed(existing_messages[-100:]):
-            existing_source_id = _extract_source_message_id(existing_msg.get("metadata", {}) or {})
-            if existing_source_id and existing_source_id == new_source_id:
-                return True
-
-    new_role = str(new_message.get("role", "")).strip().lower()
-    new_text = str(new_message.get("text", "")).strip()
-    new_type = str(new_message.get("type") or new_metadata.get("type") or "text").strip().lower()
-    new_ts = _parse_timestamp_for_dedupe(new_message.get("timestamp"))
-
-    # Content/time fallback dedupe is only applied to user messages.
-    if new_role != "user":
-        return False
-
-    for existing_msg in reversed(existing_messages[-20:]):
-        existing_metadata = existing_msg.get("metadata", {}) or {}
-        existing_role = str(existing_msg.get("role", "")).strip().lower()
-        existing_text = str(existing_msg.get("text", "")).strip()
-        existing_type = str(existing_msg.get("type") or existing_metadata.get("type") or "text").strip().lower()
-
-        if existing_role != new_role or existing_text != new_text or existing_type != new_type:
-            continue
-
-        existing_ts = _parse_timestamp_for_dedupe(existing_msg.get("timestamp"))
-        if abs((new_ts - existing_ts).total_seconds()) <= MESSAGE_DEDUPE_WINDOW_SECONDS:
-            return True
-
-    return False
+    return contract_is_duplicate_message(
+        existing_messages,
+        new_message,
+        dedupe_window_seconds=MESSAGE_DEDUPE_WINDOW_SECONDS,
+    )
 
 
 def _invalidate_live_chat_cache():
@@ -342,8 +298,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             "name": customer_name,
             "gender": current_gender,
             "greeting_stage": current_greeting_stage,
-            "created_at": datetime.datetime.now(),
-            "last_activity": datetime.datetime.now()
+            "created_at": utc_now(),
+            "last_activity": utc_now()
         }
         if not placeholder_phone:
             user_doc_payload["phone_full"] = phone_number
@@ -352,7 +308,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     else:
         # Update last activity and phone info
         update_data = {
-            "last_activity": datetime.datetime.now(),
+            "last_activity": utc_now(),
             "name": customer_name
         }
         if not placeholder_phone:
@@ -398,26 +354,24 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         "name": customer_name,
         "gender": user_gender_value,
         "greeting_stage": user_greeting_stage_value,
-        "last_updated": datetime.datetime.now()
+        "last_updated": utc_now()
     }
 
     def _build_message_data() -> dict:
         safe_text = text if isinstance(text, str) else str(text or "")
-        payload = {
-            "role": role,
-            "text": safe_text,
-            "timestamp": datetime.datetime.now(),
-            "language": detect_language(safe_text)["language"]
-        }
+        detected_language = detect_language(safe_text)["language"]
         normalized_metadata = dict(metadata or {})
         source_message_id = _extract_source_message_id(normalized_metadata)
         if source_message_id:
             normalized_metadata["source_message_id"] = source_message_id
-        if normalized_metadata:
-            payload["metadata"] = normalized_metadata
-            for key in ["type", "audio_url", "image_url"]:
-                if key in normalized_metadata:
-                    payload[key] = normalized_metadata[key]
+
+        payload = contract_normalize_message({
+            "role": role,
+            "text": safe_text,
+            "timestamp": utc_now(),
+            "language": detected_language,
+            "metadata": normalized_metadata,
+        })
         return payload
 
     try:
@@ -447,15 +401,14 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 await asyncio.to_thread(doc_ref.update, {
                     "messages": current_messages,
                     "customer_info": customer_info,
-                    "last_updated": datetime.datetime.now()
+                    "last_updated": utc_now()
                 })
                 _invalidate_live_chat_cache()
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event for real-time dashboard updates
                 try:
-                    from modules.live_chat_api import broadcast_sse_event, _sse_clients
-                    print(f"📡 SSE Broadcast: new_message for {user_id}, connected clients: {len(_sse_clients)}")
+                    from modules.live_chat_api import broadcast_sse_event
                     asyncio.create_task(broadcast_sse_event("new_message", {
                         "user_id": user_id,
                         "conversation_id": conversation_id,
@@ -473,11 +426,11 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "user_id": user_id,
                     "customer_info": customer_info,
                     "messages": [message_data],
-                    "timestamp": datetime.datetime.now(),
+                    "timestamp": utc_now(),
                     "status": "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
-                    "last_updated": datetime.datetime.now()
+                    "last_updated": utc_now()
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
@@ -537,7 +490,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 await asyncio.to_thread(doc_ref.update, {
                     "messages": current_messages,
                     "customer_info": customer_info,
-                    "last_updated": datetime.datetime.now(),
+                    "last_updated": utc_now(),
                     "status": "active",
                     "human_takeover_active": False,
                     "operator_id": None
@@ -566,11 +519,11 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "user_id": user_id,
                     "customer_info": customer_info,
                     "messages": [message_data],
-                    "timestamp": datetime.datetime.now(),
+                    "timestamp": utc_now(),
                     "status": "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
-                    "last_updated": datetime.datetime.now()
+                    "last_updated": utc_now()
                 })
                 if user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[user_id] = {}
@@ -663,12 +616,12 @@ async def update_voice_message_with_transcription(user_id: str, conversation_id:
         message["type"] = "voice"
         message["audio_url"] = audio_url
         message["transcribed"] = True
-        message["transcribed_at"] = datetime.datetime.now()
+        message["transcribed_at"] = utc_now()
 
         # Update conversation
         doc_ref.update({
             "messages": current_messages,
-            "last_updated": datetime.datetime.now()
+            "last_updated": utc_now()
         })
         _invalidate_live_chat_cache()
 
@@ -874,13 +827,13 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
     try:
         update_data = {
             "human_takeover_active": status,
-            "last_updated": datetime.datetime.now()
+            "last_updated": utc_now()
         }
 
         if status and operator_id:
             # Taking over - set operator_id, operator_name, and change status to "human"
             update_data["operator_id"] = operator_id
-            update_data["takeover_time"] = datetime.datetime.now()
+            update_data["takeover_time"] = utc_now()
             update_data["status"] = "human"  # ✅ CRITICAL: Set status to "human" so it appears in active conversations
             if operator_name:
                 update_data["operator_name"] = operator_name
@@ -891,7 +844,7 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
             # Releasing - remove operator_id, operator_name and change status back to "active"
             update_data["operator_id"] = None
             update_data["operator_name"] = None
-            update_data["release_time"] = datetime.datetime.now()
+            update_data["release_time"] = utc_now()
             update_data["status"] = "active"  # ✅ Set status back to "active" when released
             print(f"🔄 Setting conversation status to 'active' for bot release")
 

@@ -1,14 +1,11 @@
 import { useState, useCallback } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { getApiBaseUrl } from "../utils/apiBaseUrl";
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL:
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-      ? "http://localhost:8003" // Local development
-      : "", // Production - use same origin (works on any domain)
+  baseURL: getApiBaseUrl(),
   timeout: 90000, // 90 seconds - increased for slow GPT responses
   headers: {
     "Content-Type": "application/json",

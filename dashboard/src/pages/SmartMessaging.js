@@ -18,6 +18,7 @@ import {
   PencilIcon,
   PlusIcon,
   TrashIcon,
+  ArrowPathRoundedSquareIcon,
 } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 
@@ -31,9 +32,6 @@ const SmartMessaging = () => {
   const [editedTemplates, setEditedTemplates] = useState({});
   const [savingTemplate, setSavingTemplate] = useState(null);
   const [selectedLanguage, setSelectedLanguage] = useState("ar");
-  const [testPhoneNumber, setTestPhoneNumber] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [sendingTest, setSendingTest] = useState(false);
   const [templateSchedules, setTemplateSchedules] = useState({});
   const [savingTemplateSchedule, setSavingTemplateSchedule] = useState(null);
 
@@ -56,21 +54,6 @@ const SmartMessaging = () => {
   const [availableServices, setAvailableServices] = useState([]);
   const [availableTemplates, setAvailableTemplates] = useState([]);
 
-  // Campaign Builder: Missed Paused Appointment
-  const [campaignFilters, setCampaignFilters] = useState({
-    service_ids: [],
-    from_date: "",
-    to_date: "",
-    lookback_months: 3,
-    paused_only: true,
-  });
-  const [campaignScheduleTime, setCampaignScheduleTime] = useState("");
-  const [campaignPreviewRecipients, setCampaignPreviewRecipients] = useState([]);
-  const [campaignPreviewCount, setCampaignPreviewCount] = useState(0);
-  const [campaignLoading, setCampaignLoading] = useState(false);
-  const [campaignSending, setCampaignSending] = useState(false);
-  const [campaignLogs, setCampaignLogs] = useState([]);
-
   // NEW: Edit modals state
   const [editingScheduledMessage, setEditingScheduledMessage] = useState(null);
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -85,6 +68,7 @@ const SmartMessaging = () => {
   });
   const [savingScheduledEdit, setSavingScheduledEdit] = useState(false);
   const [viewingMessage, setViewingMessage] = useState(null);
+  const [collectingCounts, setCollectingCounts] = useState(false);
 
   // Fetch real data from API
   useEffect(() => {
@@ -93,7 +77,6 @@ const SmartMessaging = () => {
     fetchPendingMessages();
     fetchServiceMappings();
     fetchTemplateSchedules();
-    fetchCampaignLogs();
   }, []);
 
   // Fetch smart messaging settings (global toggle, preview mode)
@@ -155,18 +138,6 @@ const SmartMessaging = () => {
       }
     } catch (error) {
       console.error("Error fetching template schedules:", error);
-    }
-  };
-
-  const fetchCampaignLogs = async () => {
-    try {
-      const response = await fetch("/api/smart-messaging/campaign-logs?limit=20");
-      const result = await response.json();
-      if (result.success) {
-        setCampaignLogs(result.campaign_logs || []);
-      }
-    } catch (error) {
-      console.error("Error fetching campaign logs:", error);
     }
   };
 
@@ -369,79 +340,6 @@ const SmartMessaging = () => {
       toast.error("Failed to save schedule");
     } finally {
       setSavingTemplateSchedule(null);
-    }
-  };
-
-  const handleCampaignServicesChange = (event) => {
-    const selected = Array.from(event.target.selectedOptions || []).map((option) =>
-      Number(option.value)
-    );
-    setCampaignFilters((prev) => ({ ...prev, service_ids: selected }));
-  };
-
-  const handleCampaignFilterChange = (field, value) => {
-    setCampaignFilters((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handlePreviewCampaignRecipients = async () => {
-    setCampaignLoading(true);
-    try {
-      const response = await fetch("/api/smart-messaging/campaigns/missed-paused/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(campaignFilters),
-      });
-      const result = await response.json();
-      if (result.success) {
-        setCampaignPreviewRecipients(result.recipients || []);
-        setCampaignPreviewCount(result.count || 0);
-        toast.success(`Preview ready: ${result.count || 0} recipients`);
-      } else {
-        toast.error(result.error || "Failed to preview recipients");
-      }
-    } catch (error) {
-      console.error("Error previewing campaign:", error);
-      toast.error("Failed to preview campaign");
-    } finally {
-      setCampaignLoading(false);
-    }
-  };
-
-  const handleSendCampaign = async (sendMode) => {
-    if (sendMode === "schedule" && !campaignScheduleTime) {
-      toast.error("Please select schedule date/time");
-      return;
-    }
-
-    setCampaignSending(true);
-    try {
-      const response = await fetch("/api/smart-messaging/campaigns/missed-paused/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filters: campaignFilters,
-          send_mode: sendMode,
-          schedule_time: sendMode === "schedule" ? campaignScheduleTime : null,
-          language: selectedLanguage || "ar",
-        }),
-      });
-      const result = await response.json();
-      if (result.success) {
-        toast.success(
-          sendMode === "schedule"
-            ? `Campaign queued (${result.queued_count || 0})`
-            : `Campaign sent (${result.sent_count || 0})`
-        );
-        fetchCampaignLogs();
-        fetchSmartMessagingData();
-      } else {
-        toast.error(result.error || "Campaign execution failed");
-      }
-    } catch (error) {
-      console.error("Error sending campaign:", error);
-      toast.error("Campaign execution failed");
-    } finally {
-      setCampaignSending(false);
     }
   };
 
@@ -750,6 +648,32 @@ const SmartMessaging = () => {
     }
   };
 
+  // Collect scheduled messages from appointments API, then refresh counts
+  const handleCollectAndRefresh = async () => {
+    try {
+      setCollectingCounts(true);
+      const baseURL =
+        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+          ? "http://localhost:8003"
+          : window.location.origin;
+      const response = await fetch(`${baseURL}/api/smart-messaging/collect-scheduled`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(`Collected ${result.total_messages || 0} messages to be sent`);
+        await fetchSmartMessagingData();
+      } else {
+        toast.error(result.error || "Failed to collect");
+      }
+    } catch (error) {
+      console.error("Error collecting:", error);
+      toast.error("Failed to collect scheduled messages");
+    } finally {
+      setCollectingCounts(false);
+    }
+  };
+
   // ✅ LAZY LOADING: Fetch messages for a specific category
   const fetchMessagesForCategory = async (category) => {
     // Skip if already loaded or currently loading
@@ -886,8 +810,6 @@ const SmartMessaging = () => {
         // Show messages scheduled for today
         if (!sendDateStr) return true;
         return sendDateStr === todayStr;
-      case "missed_paused_appointment":
-        return true;
       default:
         return true;
     }
@@ -1001,7 +923,6 @@ const SmartMessaging = () => {
     twenty_day_followup: messageCounts.twenty_day_followup || 0,
     missed_yesterday: messageCounts.missed_yesterday || 0,
     attended_yesterday: messageCounts.attended_yesterday || 0,
-    missed_paused_appointment: messageCounts.missed_paused_appointment || 0,
   };
 
   const getMessageTypeInfo = (type) => {
@@ -1026,11 +947,6 @@ const SmartMessaging = () => {
         color: "bg-orange-100 text-orange-700",
         icon: ExclamationTriangleIcon,
       },
-      missed_paused_appointment: {
-        name: "Missed Paused",
-        color: "bg-pink-100 text-pink-700",
-        icon: ExclamationTriangleIcon,
-      },
       attended_yesterday: {
         name: "Thank You",
         color: "bg-green-100 text-green-700",
@@ -1051,7 +967,6 @@ const SmartMessaging = () => {
       post_session_feedback: CheckCircleIcon,
       twenty_day_followup: SparklesIcon,
       missed_yesterday: ExclamationTriangleIcon,
-      missed_paused_appointment: ExclamationTriangleIcon,
       attended_yesterday: CheckCircleIcon,
     };
     // Return default icon for custom templates
@@ -1064,7 +979,6 @@ const SmartMessaging = () => {
       post_session_feedback: "from-green-500 to-emerald-500",
       twenty_day_followup: "from-indigo-500 to-purple-500",
       missed_yesterday: "from-orange-400 to-orange-600",
-      missed_paused_appointment: "from-pink-500 to-rose-600",
       attended_yesterday: "from-green-400 to-green-600",
     };
     // Return a purple gradient for custom templates
@@ -1249,16 +1163,6 @@ const SmartMessaging = () => {
         >
           Service Mappings
         </button>
-        <button
-          onClick={() => setActiveTab("campaigns")}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
-            activeTab === "campaigns"
-              ? "bg-white text-primary-600 shadow-sm"
-              : "text-slate-600 hover:text-slate-800"
-          }`}
-        >
-          Campaign Builder
-        </button>
       </div>
 
       {/* Content */}
@@ -1271,9 +1175,9 @@ const SmartMessaging = () => {
             exit={{ opacity: 0, y: -20 }}
             className="card"
           >
-            {/* Search Bar */}
-            <div className="mb-4">
-              <div className="relative">
+            {/* Search Bar + Refresh Counts */}
+            <div className="mb-4 flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="text"
@@ -1283,6 +1187,23 @@ const SmartMessaging = () => {
                   className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
+              <button
+                onClick={handleCollectAndRefresh}
+                disabled={collectingCounts}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                {collectingCounts ? (
+                  <>
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Collecting...
+                  </>
+                ) : (
+                  <>
+                    <ArrowPathRoundedSquareIcon className="w-5 h-5" />
+                    Refresh Counts
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Message Type Filter (Colored Buttons) */}
@@ -1383,25 +1304,6 @@ const SmartMessaging = () => {
                   <div className="font-bold text-sm">Missed Yesterday</div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.missed_yesterday}
-                  </div>
-                </button>
-
-                {/* Missed Paused Appointment */}
-                <button
-                  onClick={() => handleCategorySelect("missed_paused_appointment")}
-                  className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "missed_paused_appointment"
-                      ? "ring-2 ring-offset-2 ring-pink-500 shadow-lg"
-                      : "hover:shadow"
-                  } ${
-                    selectedMessageType === "missed_paused_appointment"
-                      ? "bg-gradient-to-br from-pink-500 to-pink-600 text-white"
-                      : "bg-pink-100 text-pink-700 border border-pink-300"
-                  }`}
-                >
-                  <div className="font-bold text-sm">Missed Paused</div>
-                  <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.missed_paused_appointment}
                   </div>
                 </button>
 
@@ -1736,156 +1638,11 @@ const SmartMessaging = () => {
               </button>
             </div>
 
-            {/* Testing Lab Section */}
-            <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
-              <div className="mb-4">
-                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
-                  <SparklesIcon className="w-6 h-6 mr-2 text-blue-600" />
-                  Testing Lab
-                </h3>
-                <p className="text-sm text-slate-600">
-                  Test any template with any phone number before sending to
-                  customers
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Template Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    📋 Select Template
-                  </label>
-                  <select
-                    value={selectedTemplate}
-                    onChange={(e) => setSelectedTemplate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                  >
-                    <option value="">Choose template...</option>
-                    {Object.entries(messageTemplates).map(([id, data]) => (
-                      <option key={id} value={id}>
-                        {data.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Language Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    🌐 Language
-                  </label>
-                  <select
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                  >
-                    <option value="ar">🇸🇦 Arabic</option>
-                    <option value="en">🇬🇧 English</option>
-                    <option value="fr">🇫🇷 French</option>
-                  </select>
-                </div>
-
-                {/* Phone Number Input */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    📱 Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="+961 XX XXX XXXX"
-                    value={testPhoneNumber}
-                    onChange={(e) => setTestPhoneNumber(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                {/* Send Test Button */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    &nbsp;
-                  </label>
-                  <button
-                    onClick={async () => {
-                      if (!selectedTemplate) {
-                        toast.error("Please select a template");
-                        return;
-                      }
-                      if (!testPhoneNumber) {
-                        toast.error("Please enter a phone number");
-                        return;
-                      }
-
-                      setSendingTest(true);
-                      try {
-                        const baseURL =
-                          window.location.hostname === "localhost" ||
-                          window.location.hostname === "127.0.0.1"
-                            ? "http://localhost:8003"
-                            : window.location.origin;
-
-                        const response = await fetch(
-                          `${baseURL}/api/smart-messaging/send-test-template`,
-                          {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                              template_id: selectedTemplate,
-                              phone_number: testPhoneNumber,
-                              language: selectedLanguage,
-                            }),
-                          }
-                        );
-
-                        const result = await response.json();
-
-                        if (result.success) {
-                          toast.success(
-                            `✅ Template sent to ${testPhoneNumber}!`
-                          );
-                        } else {
-                          toast.error(`❌ ${result.error || "Failed to send"}`);
-                        }
-                      } catch (error) {
-                        console.error("Error sending test:", error);
-                        toast.error("Failed to send test message");
-                      } finally {
-                        setSendingTest(false);
-                      }
-                    }}
-                    disabled={
-                      sendingTest || !selectedTemplate || !testPhoneNumber
-                    }
-                    className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
-                      sendingTest || !selectedTemplate || !testPhoneNumber
-                        ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                        : "bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl"
-                    }`}
-                  >
-                    {sendingTest ? "📤 Sending..." : "📤 Send Test"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Preview Section */}
-              {selectedTemplate && (
-                <div className="mt-4 p-4 bg-white rounded-lg border border-slate-200">
-                  <p className="text-xs font-semibold text-slate-600 mb-2">
-                    PREVIEW:
-                  </p>
-                  <div className="text-sm text-slate-700 whitespace-pre-wrap font-mono">
-                    {messageTemplates[selectedTemplate]?.[selectedLanguage] ||
-                      "No content"}
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Template Status Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {Object.entries(messageTemplates).map(
-                ([templateId, templateData]) => {
+              {Object.entries(messageTemplates)
+                .filter(([templateId]) => templateId !== "missed_paused_appointment")
+                .map(([templateId, templateData]) => {
                   const Icon = getTemplateIcon(templateId);
                   const color = getTemplateColor(templateId);
                   const scheduleConfig = templateSchedules[templateId] || {
@@ -1908,7 +1665,6 @@ const SmartMessaging = () => {
                     "twenty_day_followup",
                     "missed_yesterday",
                     "attended_yesterday",
-                    "missed_paused_appointment",
                   ];
                   const isCustomTemplate = !defaultTemplates.includes(templateId);
 
@@ -2048,188 +1804,6 @@ const SmartMessaging = () => {
                     </div>
                   );
                 }
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {activeTab === "campaigns" && (
-          <motion.div
-            key="campaigns"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
-          >
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800">Missed Paused Appointment</h3>
-                  <p className="text-sm text-slate-600">
-                    Build a manual campaign with filters, preview recipients, then send now or schedule.
-                  </p>
-                </div>
-                <span className="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
-                  Paused Only
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-2">Services</label>
-                  <select
-                    multiple
-                    value={(campaignFilters.service_ids || []).map((id) => String(id))}
-                    onChange={handleCampaignServicesChange}
-                    className="w-full min-h-[120px] px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  >
-                    {availableServices.map((service) => (
-                      <option key={service.service_id} value={service.service_id}>
-                        {service.service_name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1">Hold Ctrl/Cmd to select multiple services.</p>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-2">From Date</label>
-                    <input
-                      type="date"
-                      value={campaignFilters.from_date || ""}
-                      onChange={(e) => handleCampaignFilterChange("from_date", e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-2">To Date</label>
-                    <input
-                      type="date"
-                      value={campaignFilters.to_date || ""}
-                      onChange={(e) => handleCampaignFilterChange("to_date", e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-2">Lookback (months)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="24"
-                      value={campaignFilters.lookback_months || 3}
-                      onChange={(e) => handleCampaignFilterChange("lookback_months", Number(e.target.value || 3))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-2">Schedule Time (optional)</label>
-                    <input
-                      type="datetime-local"
-                      value={campaignScheduleTime}
-                      onChange={(e) => setCampaignScheduleTime(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={handlePreviewCampaignRecipients}
-                  disabled={campaignLoading}
-                  className={`px-4 py-2 rounded-lg font-medium ${
-                    campaignLoading
-                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                      : "bg-indigo-600 text-white hover:bg-indigo-700"
-                  }`}
-                >
-                  {campaignLoading ? "Loading Preview..." : "Preview Recipients"}
-                </button>
-                <button
-                  onClick={() => handleSendCampaign("send_now")}
-                  disabled={campaignSending}
-                  className={`px-4 py-2 rounded-lg font-medium ${
-                    campaignSending
-                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                      : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
-                >
-                  {campaignSending ? "Sending..." : "Send Now"}
-                </button>
-                <button
-                  onClick={() => handleSendCampaign("schedule")}
-                  disabled={campaignSending}
-                  className={`px-4 py-2 rounded-lg font-medium ${
-                    campaignSending
-                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                >
-                  {campaignSending ? "Scheduling..." : "Schedule"}
-                </button>
-                <span className="text-sm text-slate-600">
-                  Preview Count: <span className="font-bold">{campaignPreviewCount}</span>
-                </span>
-              </div>
-            </div>
-
-            <div className="card">
-              <h4 className="text-lg font-semibold text-slate-800 mb-3">Preview Recipients</h4>
-              {campaignPreviewRecipients.length === 0 ? (
-                <p className="text-sm text-slate-500">No recipients previewed yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
-                        <th className="text-left py-2 px-3">Name</th>
-                        <th className="text-left py-2 px-3">Phone</th>
-                        <th className="text-left py-2 px-3">Service</th>
-                        <th className="text-left py-2 px-3">Last Appointment</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {campaignPreviewRecipients.slice(0, 100).map((recipient, idx) => (
-                        <tr key={`${recipient.phone}-${idx}`} className="border-b border-slate-100">
-                          <td className="py-2 px-3">{recipient.customer_name || "-"}</td>
-                          <td className="py-2 px-3">{recipient.phone || "-"}</td>
-                          <td className="py-2 px-3">{recipient.service_name || "-"}</td>
-                          <td className="py-2 px-3">{recipient.appointment_date || "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="card">
-              <h4 className="text-lg font-semibold text-slate-800 mb-3">Recent Campaign Logs</h4>
-              {campaignLogs.length === 0 ? (
-                <p className="text-sm text-slate-500">No campaign logs found.</p>
-              ) : (
-                <div className="space-y-2">
-                  {campaignLogs.map((log) => (
-                    <div
-                      key={log.campaign_id}
-                      className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">{log.template_type}</p>
-                        <p className="text-xs text-slate-500">Campaign ID: {log.campaign_id}</p>
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        Status: <span className="font-semibold">{log.status}</span> | Sent:{" "}
-                        <span className="font-semibold">{log.sent_count || 0}</span> / Preview:{" "}
-                        <span className="font-semibold">{log.preview_count || 0}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               )}
             </div>
           </motion.div>
