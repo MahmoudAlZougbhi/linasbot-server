@@ -70,6 +70,8 @@ const SmartMessaging = () => {
   });
   const [savingScheduledEdit, setSavingScheduledEdit] = useState(false);
   const [viewingMessage, setViewingMessage] = useState(null);
+  const [viewingMessageEdit, setViewingMessageEdit] = useState({ content: "", sendTime: "" });
+  const [savingViewEdit, setSavingViewEdit] = useState(false);
   const [collectingCounts, setCollectingCounts] = useState(false);
 
   // Fetch real data from API
@@ -345,7 +347,7 @@ const SmartMessaging = () => {
     }
   };
 
-  // View a message's full content
+  // View a message's full content (Eye icon) - for scheduled messages also allows inline edit
   const handleViewMessage = async (message) => {
     let fullContent = message.full_content || message.content_preview || "";
 
@@ -362,10 +364,42 @@ const SmartMessaging = () => {
       }
     }
 
-    setViewingMessage({
-      ...message,
-      fullContent
+    const isScheduled = message.status === "scheduled" || message.status === "pending_approval";
+    setViewingMessage({ ...message, fullContent });
+    setViewingMessageEdit({
+      content: fullContent,
+      sendTime: message.send_at ? new Date(message.send_at).toISOString().slice(0, 16) : ""
     });
+  };
+
+  // Save edits from the View modal (Eye modal) - for scheduled messages
+  const handleSaveViewModalEdit = async () => {
+    if (!viewingMessage || !viewingMessage.message_id) return;
+    setSavingViewEdit(true);
+    try {
+      const response = await fetch(`/api/smart-messaging/preview-queue/${viewingMessage.message_id}/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rendered_content: viewingMessageEdit.content,
+          scheduled_send_time: viewingMessageEdit.sendTime
+        })
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Message updated!");
+        setViewingMessage({ ...viewingMessage, fullContent: viewingMessageEdit.content, send_at: viewingMessageEdit.sendTime });
+        fetchSmartMessagingData();
+        setViewingMessage(null);
+      } else {
+        toast.error(result.error || "Failed to update message");
+      }
+    } catch (error) {
+      console.error("Error saving message edit:", error);
+      toast.error("Failed to update message");
+    } finally {
+      setSavingViewEdit(false);
+    }
   };
 
   // Edit a scheduled message - use full_content if available, otherwise fetch
@@ -1348,7 +1382,7 @@ const SmartMessaging = () => {
                       Customer
                     </th>
                     <th className="text-left py-3 px-4 font-medium text-slate-700">
-                      Reason
+                      Template
                     </th>
                     <th className="text-left py-3 px-4 font-medium text-slate-700">
                       Type
@@ -1458,7 +1492,7 @@ const SmartMessaging = () => {
                           </td>
                           <td className="py-3 px-4">
                             <div className="text-sm">
-                              <p className="font-medium text-slate-700">
+                              <p className="font-medium text-slate-700" title="Template used for this message">
                                 {message.reason}
                               </p>
                               {isScheduled && message.time_until_send && (
@@ -2021,28 +2055,53 @@ const SmartMessaging = () => {
                   </div>
                 </div>
 
-                {/* Message Content */}
+                {/* Message Content - editable for scheduled, read-only for sent */}
                 <div>
-                  <p className="text-sm font-medium text-slate-700 mb-2">Message Content</p>
-                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                    <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">
-                      {viewingMessage.fullContent || viewingMessage.content_preview || "No content available"}
-                    </pre>
-                  </div>
+                  <p className="text-sm font-medium text-slate-700 mb-2">
+                    {(viewingMessage.status === "scheduled" || viewingMessage.status === "pending_approval")
+                      ? "Message (editable)"
+                      : "Message Content"}
+                  </p>
+                  {(viewingMessage.status === "scheduled" || viewingMessage.status === "pending_approval") ? (
+                    <textarea
+                      value={viewingMessageEdit.content}
+                      onChange={(e) => setViewingMessageEdit((prev) => ({ ...prev, content: e.target.value }))}
+                      rows={8}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
+                      placeholder="Message content..."
+                    />
+                  ) : (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">
+                        {viewingMessage.fullContent || viewingMessage.content_preview || "No content available"}
+                      </pre>
+                    </div>
+                  )}
                 </div>
+
+                {/* Scheduled time - editable for scheduled messages */}
+                {(viewingMessage.status === "scheduled" || viewingMessage.status === "pending_approval") && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Scheduled Send Time</label>
+                    <input
+                      type="datetime-local"
+                      value={viewingMessageEdit.sendTime}
+                      onChange={(e) => setViewingMessageEdit((prev) => ({ ...prev, sendTime: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="p-6 border-t border-slate-200 flex justify-end space-x-3">
                 {(viewingMessage.status === "scheduled" || viewingMessage.status === "pending_approval") && (
                   <button
-                    onClick={() => {
-                      setViewingMessage(null);
-                      handleEditScheduledMessage(viewingMessage);
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                    onClick={handleSaveViewModalEdit}
+                    disabled={savingViewEdit}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
                   >
-                    <PencilIcon className="w-4 h-4" />
-                    <span>Edit Message</span>
+                    <CheckIcon className="w-4 h-4" />
+                    <span>{savingViewEdit ? "Saving..." : "Save Changes"}</span>
                   </button>
                 )}
                 <button

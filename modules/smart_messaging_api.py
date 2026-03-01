@@ -812,12 +812,14 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
             language = msg_data.get("language", "ar")
             placeholders = msg_data.get("placeholders", {})
 
-            # Render the template content with placeholders
-            content_preview = smart_messaging.get_message_content(
-                msg_type,
-                language,
-                placeholders
-            ) or ""
+            # Use edited content if present, otherwise render from template
+            content_preview = msg_data.get("content")
+            if not content_preview:
+                content_preview = smart_messaging.get_message_content(
+                    msg_type,
+                    language,
+                    placeholders
+                ) or ""
 
             message_entry = {
                 "message_id": message_id,

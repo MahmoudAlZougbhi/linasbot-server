@@ -658,12 +658,14 @@ Des questions? Nous sommes là! 💬
 
         for message_id, message_data in list(self.scheduled_messages.items()):
             if message_data["status"] == "scheduled" and message_data["send_at"] <= current_time:
-                # Get message content
-                content = self.get_message_content(
-                    message_data["message_type"],
-                    message_data["language"],
-                    message_data["placeholders"]
-                )
+                # Use edited content if present, otherwise render from template
+                content = message_data.get("content")
+                if not content:
+                    content = self.get_message_content(
+                        message_data["message_type"],
+                        message_data["language"],
+                        message_data["placeholders"]
+                    )
 
                 if content:
                     canonical_type = normalize_template_id(message_data["message_type"])
