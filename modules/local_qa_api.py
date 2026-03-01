@@ -105,6 +105,23 @@ def _answer_in_arabic_script(text: str) -> bool:
     return bool(re.search(r"[\u0600-\u06FF]", text))
 
 
+async def _translate_to_arabic_script(text: str, source_language: str) -> str:
+    """
+    Translate a single text to Arabic script (for Franco/Latin input).
+    Returns the same text if already in Arabic script.
+    """
+    if not text or _answer_in_arabic_script(text):
+        return text or ""
+    result = await language_detection_service.translate_training_pair(
+        question=text, answer=text, source_language=source_language, target_languages=["ar"]
+    )
+    ar_trans = result.get("translations", {}).get("ar", {})
+    out = ar_trans.get("answer") or ar_trans.get("question") or ""
+    if out and _answer_in_arabic_script(out):
+        return out
+    return text
+
+
 async def create_local_qa_pair_internal(
     question: str,
     answer: str,
@@ -113,7 +130,9 @@ async def create_local_qa_pair_internal(
 ) -> dict:
     """
     Create Q&A pair in local JSON file (used by Save to FAQ from Live Chat).
-    Rule: question follows input (Arabic → Arabic, Franco → Franco). Answer always in Arabic.
+    Rule:
+    - AR: question in Arabic script, answer in Arabic script.
+    - Franco: question in Franco (Latin), answer always in Arabic script.
     """
     question = (question or "").strip()
     answer = (answer or "").strip()
@@ -124,20 +143,15 @@ async def create_local_qa_pair_internal(
         language,
         default=language_detection_service.detect_training_language(question),
     )
-    # Answer must always be in Arabic for ar/franco display
+    # Answer must ALWAYS be in Arabic script for both AR and Franco
     answer_ar_canonical = answer
     if not _answer_in_arabic_script(answer):
-        ar_answer_result = await language_detection_service.translate_training_pair(
-            question=answer, answer=answer, source_language=detected_language, target_languages=["ar"]
-        )
-        # Use "question" as the translated field (we only asked for answer->ar, but API returns question+answer per lang)
-        ar_trans = ar_answer_result.get("translations", {}).get("ar", {})
-        if ar_trans.get("answer"):
-            answer_ar_canonical = ar_trans["answer"]
-        elif ar_trans.get("question"):
-            answer_ar_canonical = ar_trans["question"]
-        if not answer_ar_canonical:
-            answer_ar_canonical = answer
+        answer_ar_canonical = await _translate_to_arabic_script(answer, detected_language)
+        # Retry with explicit franco if still not Arabic (e.g. detected_language was wrong)
+        if not _answer_in_arabic_script(answer_ar_canonical):
+            answer_ar_canonical = await _translate_to_arabic_script(answer, "franco")
+        if not _answer_in_arabic_script(answer_ar_canonical):
+            answer_ar_canonical = answer  # fallback only if translation fails
 
     qa_group_id = f"qa_{uuid.uuid4().hex[:10]}"
     created_entries = []
@@ -158,22 +172,27 @@ async def create_local_qa_pair_internal(
     translations = translation_result.get("translations", {})
     for lang in target_languages_all:
         translated = translations.get(lang, {})
+        # Question: AR = Arabic script only; Franco = Franco (Latin) only
         q_text = translated.get("question", "") or question
-        # Answer: always Arabic for ar and franco (never store Franco in answer)
+        # Answer: always Arabic script for ar and franco
         if lang in ("ar", "franco"):
             a_text = answer_ar_canonical
         else:
             a_text = translated.get("answer", "") or answer_ar_canonical
-        # Arabic section question must be in Arabic script; if Franco, translate
+        # AR row: question MUST be in Arabic script (never Franco in AR view)
         if lang == "ar" and q_text and not _answer_in_arabic_script(q_text):
-            ar_q_result = await language_detection_service.translate_training_pair(
-                question=q_text, answer=answer_ar_canonical,
-                source_language=detected_language, target_languages=["ar"],
-            )
-            ar_q = ar_q_result.get("translations", {}).get("ar", {})
-            if ar_q.get("question"):
-                q_text = ar_q["question"]
+            q_text = await _translate_to_arabic_script(q_text, detected_language)
+            if not _answer_in_arabic_script(q_text):
+                q_text = await _translate_to_arabic_script(q_text, "franco")
+        # Franco row: question in Franco; keep as from translation or original if source was Franco
+        if lang == "franco":
+            if not q_text or _answer_in_arabic_script(q_text):
+                franco_trans = translations.get("franco", {})
+                q_text = franco_trans.get("question", "") or (question if detected_language == "franco" else "")
         if not q_text or not a_text:
+            continue
+        # Do not save AR entry with Franco script (would show wrong in Manage Data)
+        if lang == "ar" and not _answer_in_arabic_script(q_text):
             continue
         created_entries.append(
             build_qa_entry(

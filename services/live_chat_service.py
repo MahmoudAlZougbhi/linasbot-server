@@ -36,7 +36,7 @@ class LiveChatService:
     ACTIVE_TIME_WINDOW = 2 * 60 * 60  # 2 hours
 
     # Cache configuration (short TTL for real-time feel; invalidated on every message save)
-    CACHE_TTL = 5  # seconds - near-instant updates when SSE broadcasts
+    CACHE_TTL = 15  # seconds - reuse across initial load + SSE so open feels fast
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
     FIRESTORE_FETCH_PARALLELISM = 24
 

@@ -38,11 +38,17 @@ export const useLiveChatSSE = ({
     const refreshChats = async ({ preferredConversations = null, announceNewIds = null } = {}) => {
       if (!isMountedRef.current) return null;
       const searchTerm = debouncedSearchRef.current;
-      const chatsResponse = await getUnifiedChats(searchTerm, 1, 30);
-      if (!isMountedRef.current) return null;
-
-      const conversations =
-        chatsResponse?.success && chatsResponse?.chats ? chatsResponse.chats : preferredConversations;
+      let conversations = null;
+      // Use SSE payload when no search to avoid duplicate API call on initial connect (faster open)
+      if (!searchTerm && preferredConversations != null && Array.isArray(preferredConversations)) {
+        conversations = preferredConversations;
+      }
+      if (conversations == null) {
+        const chatsResponse = await getUnifiedChats(searchTerm, 1, 30);
+        if (!isMountedRef.current) return null;
+        conversations =
+          chatsResponse?.success && chatsResponse?.chats ? chatsResponse.chats : preferredConversations;
+      }
       if (!conversations) return null;
 
       const previousIds = new Set(

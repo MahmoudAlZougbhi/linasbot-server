@@ -36,8 +36,10 @@ from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 # SSE (Server-Sent Events) for Real-Time Updates
 # ============================================================
 async def _load_initial_sse_payload():
-    conversations = await live_chat_service.get_active_conversations()
-    return {"conversations": conversations, "total": len(conversations)}
+    """Use same get_unified_chats as the main list so we hit cache (avoids duplicate Firestore scan on open)."""
+    result = await live_chat_service.get_unified_chats(search="", page=1, page_size=30)
+    chats = result.get("chats", []) if result.get("success") else []
+    return {"conversations": chats, "total": result.get("total", len(chats))}
 
 async def broadcast_sse_event(event_type: str, data: dict):
     """
