@@ -1676,6 +1676,17 @@ Return JSON with "action" and "bot_reply" fields."""
         if "action" not in parsed_response or "bot_reply" not in parsed_response:
             raise ValueError("GPT response missing required fields (action or bot_reply)")
 
+        # Flow logging metadata for dashboard transparency
+        tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
+        usage = getattr(response, "usage", None)
+        tokens_val = (usage.total_tokens or getattr(usage, "prompt_tokens", None)) if usage else None
+        parsed_response["_flow_meta"] = {
+            "model": selected_model,
+            "ai_raw_response": gpt_raw_content[:800] if gpt_raw_content else None,
+            "tool_calls": tool_names if tool_names else None,
+            "tokens": tokens_val,
+        }
+
         # ============================================================
         # PRICING SYNC: WhatsApp price must mirror system price exactly
         # ============================================================

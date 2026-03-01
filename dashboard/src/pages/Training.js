@@ -17,8 +17,6 @@ import {
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 
-import TrainingFileEditor from "../components/TrainingFileEditor";
-
 const Training = () => {
   const {
     getLocalQAPairs,
@@ -66,24 +64,6 @@ const Training = () => {
       name: "Manage Data",
       icon: BookOpenIcon,
       color: "from-blue-500 to-cyan-500",
-    },
-    {
-      id: "knowledge_base",
-      name: "Knowledge Base",
-      icon: BookOpenIcon,
-      color: "from-blue-500 to-indigo-500",
-    },
-    {
-      id: "style_guide",
-      name: "Style Guide",
-      icon: SparklesIcon,
-      color: "from-violet-500 to-purple-500",
-    },
-    {
-      id: "price_list",
-      name: "Price List",
-      icon: CurrencyDollarIcon,
-      color: "from-emerald-500 to-green-500",
     },
   ];
 
@@ -851,32 +831,6 @@ const Training = () => {
               </div>
             </div>
           </motion.div>
-        )}
-
-
-
-        {activeTab === "knowledge_base" && (
-          <TrainingFileEditor
-            fileId="knowledge_base"
-            title="Knowledge Base"
-            description="General knowledge and information the bot can reference"
-          />
-        )}
-
-        {activeTab === "style_guide" && (
-          <TrainingFileEditor
-            fileId="style_guide"
-            title="Style Guide"
-            description="Bot behavior, tone, and response style guidelines"
-          />
-        )}
-
-        {activeTab === "price_list" && (
-          <TrainingFileEditor
-            fileId="price_list"
-            title="Price List"
-            description="Service pricing information"
-          />
         )}
       </AnimatePresence>
     </div>

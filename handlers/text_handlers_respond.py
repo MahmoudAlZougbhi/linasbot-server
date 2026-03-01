@@ -4,6 +4,7 @@
 from handlers.text_handlers_firestore import *
 from services.analytics_events import analytics
 from services.language_detection_service import language_detection_service
+from services.interaction_flow_logger import log_interaction
 from utils.datetime_utils import detect_reschedule_intent
 import time
 
@@ -316,6 +317,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             await update_dashboard_metric_in_firestore(user_id, "qa_responses_used", 1)
             config.user_greeting_stage[user_id] = 2
             save_for_training_conversation_log(query_to_send_to_gpt, qa_response)
+            log_interaction(user_id, query_to_send_to_gpt, qa_response, "qa_database", qa_match_score=match_score)
             return
         else:
             # <90% match: GPT + knowledge + style + top 3 relevant Q&A pairs
@@ -338,6 +340,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         await send_message_func(user_id, clarification)
                         await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"))
                         save_for_training_conversation_log(query_to_send_to_gpt, clarification)
+                        log_interaction(user_id, query_to_send_to_gpt, clarification, "dynamic_retrieval")
                         return
                     custom_context = merged
                     print(f"[_process_and_respond] 📂 Dynamic retrieval: action={action}, context_len={len(merged) if merged else 0}")
@@ -363,6 +366,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     detected_gender_from_gpt = gpt_response_data.get("detected_gender")
     detected_language = gpt_response_data.get("detected_language")
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
+    flow_meta = gpt_response_data.get("_flow_meta") or {}
 
     async def _activate_ai_handover(escalation_reason: str, trigger_source: str):
         """Switch conversation to waiting_human, notify admins from settings, and write audit."""
@@ -434,6 +438,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         config.user_greeting_stage[user_id] = 2
         await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=user_name)
 
+    # Track what we send for flow logging
+    sent_reply = bot_reply_text
+
     # Process the action requested by GPT
     if action in ["initial_greet_and_ask_gender", "ask_gender"]:
         if current_gender in ["male", "female"]:
@@ -447,12 +454,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 "franco": "كيف فيني ساعدك اليوم؟"
             }
             override_reply = override_reply_messages.get(current_preferred_lang, override_reply_messages["ar"])
+            sent_reply = override_reply
             await send_message_func(user_id, override_reply)
             await save_conversation_message_to_firestore(user_id, "ai", override_reply, current_conversation_id, user_name, user_data.get('phone_number'))
         else:
             config.gender_attempts[user_id] += 1
             if config.gender_attempts[user_id] >= config.MAX_GENDER_ASK_ATTEMPTS:
                 fallback_reply = "عذراً، لم أتمكن من تحديد جنسك بشكل دقيق. لتقديم أفضل مساعدة، قد تحتاج للتواصل مع فريقنا مباشرة. أو يمكنك المحاولة مجدداً بعبارة واضحة كـ 'أنا شب' أو 'أنا صبية'."
+                sent_reply = fallback_reply
                 await send_message_func(user_id, fallback_reply)
                 await save_conversation_message_to_firestore(user_id, "ai", fallback_reply, current_conversation_id, user_name, user_data.get('phone_number'))
                 config.user_greeting_stage[user_id] = 2
@@ -501,6 +510,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             acknowledgement = acknowledgement_messages.get(current_preferred_lang, acknowledgement_messages["ar"])
             combined_response = acknowledgement + initial_query_answer
+            sent_reply = combined_response
 
             await send_message_func(user_id, combined_response)
             await save_conversation_message_to_firestore(user_id, "ai", combined_response, current_conversation_id, user_name, user_data.get('phone_number'))
@@ -517,6 +527,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             }
 
             name_question = name_question_messages.get(current_preferred_lang, name_question_messages["ar"])
+            sent_reply = name_question
             await send_message_func(user_id, name_question)
             await save_conversation_message_to_firestore(user_id, "ai", name_question, current_conversation_id, user_name, user_data.get('phone_number'))
 
@@ -572,9 +583,25 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         config.user_greeting_stage[user_id] = 2
 
     else:
-        await send_message_func(user_id, "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى.")
-        await save_conversation_message_to_firestore(user_id, "ai", "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى.", current_conversation_id, user_name, user_data.get('phone_number'))
+        sent_reply = "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
+        await send_message_func(user_id, sent_reply)
+        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'))
         print(f"[_process_and_respond] ERROR: User {user_id} received fallback reply due to unexpected action: {action}")
+
+    # Flow logging for dashboard transparency
+    response_time_ms = (time.time() - start_time) * 1000
+    flow_source = "rate_limit" if action == "rate_limit_exceeded" else "moderation" if action == "content_moderated" else "gpt"
+    log_interaction(
+        user_id,
+        user_input_to_process,
+        sent_reply or "",
+        flow_source,
+        ai_raw_response=flow_meta.get("ai_raw_response"),
+        model=flow_meta.get("model"),
+        tokens=flow_meta.get("tokens"),
+        response_time_ms=response_time_ms,
+        tool_calls=flow_meta.get("tool_calls"),
+    )
 
     # Token counting and cost calculation
     prompt_tokens = 0

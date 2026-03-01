@@ -37,6 +37,7 @@ import modules.settings_api
 import modules.media_api  # Audio proxy for voice message playback
 import modules.auth_api  # Dashboard user authentication
 import modules.content_files_api  # Content Files: Knowledge, Price, Style (CRUD + dynamic retrieval)
+import modules.flow_api  # Activity Flow: User ↔ Bot ↔ AI transparency
 
 # Serve dashboard SPA (index.html for / and all non-API routes) - must be after API routes
 if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):

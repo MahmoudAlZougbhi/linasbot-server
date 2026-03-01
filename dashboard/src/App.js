@@ -15,6 +15,7 @@ import Testing from './pages/Testing';
 import SimpleApiTest from './pages/SimpleApiTest';
 import Training from './pages/Training';
 import ContentManagers from './pages/ContentManagers';
+import ActivityFlow from './pages/ActivityFlow';
 import Analytics from './pages/Analytics';
 import LiveChat from './pages/LiveChat';
 import ChatHistory from './pages/ChatHistory';
@@ -126,6 +127,11 @@ function AppContent() {
                   <Route path="/content-managers" element={
                     <ProtectedRoute>
                       <ContentManagers />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/activity-flow" element={
+                    <ProtectedRoute>
+                      <ActivityFlow />
                     </ProtectedRoute>
                   } />
                   <Route path="/live-chat" element={

@@ -7,6 +7,7 @@ import {
   AcademicCapIcon,
   FolderIcon,
   ChatBubbleLeftRightIcon,
+  ArrowPathRoundedSquareIcon,
   ClockIcon,
   ChartBarIcon,
   BellIcon,
@@ -29,7 +30,7 @@ const navigationItems = [
     permissionKey: "testing",
   },
   {
-    name: "AI Training",
+    name: "Bot Training",
     href: "/training",
     icon: AcademicCapIcon,
     badge: "Active",
@@ -41,6 +42,13 @@ const navigationItems = [
     icon: FolderIcon,
     badge: "New",
     permissionKey: "training",
+  },
+  {
+    name: "Activity Flow",
+    href: "/activity-flow",
+    icon: ArrowPathRoundedSquareIcon,
+    badge: "New",
+    permissionKey: "analytics",
   },
   {
     name: "Live Chat",

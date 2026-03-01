@@ -1179,6 +1179,20 @@ export const useApi = () => {
     }
   }, []);
 
+  // Activity Flow API (User ↔ Bot ↔ AI transparency)
+  const getFlowLogs = useCallback(async (limit = 50) => {
+    try {
+      const response = await api.get(`/api/flow/logs?limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error getting flow logs:", error);
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", data: [], count: 0 };
+      }
+      return { success: false, error: error.message, data: [], count: 0 };
+    }
+  }, []);
+
   // Content Files API (Knowledge, Price, Style managers - dynamic retrieval)
   const getContentFilesList = useCallback(async (section) => {
     try {
@@ -1303,6 +1317,8 @@ export const useApi = () => {
     getTrainingFileBackups,
     restoreTrainingFileBackup,
     getTrainingFileStats,
+    // Activity Flow (User ↔ Bot ↔ AI)
+    getFlowLogs,
     // Content Files (Knowledge, Price, Style managers)
     getContentFilesList,
     getContentFile,
