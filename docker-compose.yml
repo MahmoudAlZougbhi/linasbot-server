@@ -32,6 +32,7 @@ services:
       dockerfile: backend/Dockerfile
     container_name: linas_backend
     environment:
+      - LINASBOT_DATA_ROOT=/opt/linasbot_data
       - DATABASE_URL=postgresql://botuser:${DB_PASSWORD}@postgres:5432/linasbot
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -49,6 +50,7 @@ services:
     volumes:
       - ./:/app
       - ./data:/app/data
+      - linasbot_data:/opt/linasbot_data
     ports:
       - "8003:8003"
     depends_on:
@@ -77,6 +79,7 @@ services:
 
 volumes:
   postgres_data:
+  linasbot_data:
 
 networks:
   linas_network:

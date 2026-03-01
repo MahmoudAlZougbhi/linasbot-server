@@ -25,6 +25,7 @@ services:
       dockerfile: backend/Dockerfile.prod
     container_name: linas_backend_prod
     environment:
+      - LINASBOT_DATA_ROOT=/opt/linasbot_data
       - DATABASE_URL=postgresql://botuser:${DB_PASSWORD}@postgres:5432/linasbot
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -39,6 +40,8 @@ services:
       - WHATSAPP_WEBHOOK_VERIFY_TOKEN=${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
       - LINASLASER_API_BASE_URL=${LINASLASER_API_BASE_URL}
       - LINASLASER_API_TOKEN=${LINASLASER_API_TOKEN}
+    volumes:
+      - linasbot_data:/opt/linasbot_data
     depends_on:
       - postgres
       - redis
@@ -66,6 +69,7 @@ services:
 
 volumes:
   postgres_data:
+  linasbot_data:
 
 networks:
   linas_network:

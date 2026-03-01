@@ -178,7 +178,7 @@ class LanguageDetectionService:
         target_languages_str = ", ".join(normalized_targets)
 
         prompt = (
-            "You are an expert translator for a laser clinic customer-service bot.\n"
+            "You are an expert translator for a laser clinic customer-service bot in Lebanon.\n"
             "Translate the input question and answer into the requested target languages.\n"
             "Return strict JSON object only.\n"
             "JSON shape:\n"
@@ -192,10 +192,12 @@ class LanguageDetectionService:
             f"- Only include keys requested in target_languages: {target_languages_str}.\n"
             "- Keep meaning and details unchanged.\n"
             "- Keep service names, numbers, and facts intact.\n"
-            "- ar must be natural Arabic script.\n"
+            "- ar MUST be Lebanese dialect (اللهجة اللبنانية) in Arabic script, NOT Fusha. Use everyday spoken Lebanese Arabic (e.g. كيفك، شو بدك، فيك، معنا).\n"
+            "- When source is Franco (Latin script): ALWAYS translate the question to Arabic script in Lebanese dialect for ar. Do not leave it in Franco.\n"
             "- en must be natural English.\n"
             "- fr must be natural French.\n"
             "- franco must be Lebanese Arabic in Latin characters only (no Arabic script).\n"
+            "- Do not use Fusha/classical Arabic for ar. Always use Lebanese colloquial.\n"
             "- Do not include markdown or extra keys."
         )
 
