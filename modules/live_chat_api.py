@@ -51,6 +51,8 @@ async def broadcast_sse_event(event_type: str, data: dict):
     if client_count == 0:
         return
     _log_sse("broadcast", event_type=event_type, client_count=client_count, conv_id=data.get("conversation_id"))
+    if event_type == "new_message":
+        print(f"📡 [SSE] broadcast new_message conv_id={data.get('conversation_id')} user_id={data.get('user_id')}")
     await live_chat_sse_broadcaster.publish(event_type, data)
 
 @app.get("/api/live-chat/events")
@@ -67,6 +69,7 @@ async def live_chat_events(request: Request):
     - heartbeat: Keep-alive ping every 30s
     """
     _log_sse("client_connect")
+    print("📡 [SSE] client connected")
     return StreamingResponse(
         live_chat_sse_broadcaster.stream(request, initial_payload_loader=_load_initial_sse_payload),
         media_type="text/event-stream",
@@ -85,10 +88,12 @@ async def get_unified_chats(
     search: str = Query(default="", description="Search by name or phone"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=30, ge=1, le=100),
+    cursor: str = Query(default=None, description="Optional cursor for next page (same as page number)"),
 ):
     """WhatsApp-style: live chats at top, history below. Top 30 per page, Load More for more."""
     try:
-        result = await live_chat_service.get_unified_chats(search=search, page=page, page_size=page_size)
+        effective_page = int(cursor) if cursor else page
+        result = await live_chat_service.get_unified_chats(search=search, page=effective_page, page_size=page_size)
         return result
     except Exception as e:
         print(f"❌ Error in get_unified_chats: {e}")

@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
 
+const DEBOUNCE_REFRESH_MS = 3000; // Max 1 full refresh per 3s - avoids heavy /unified-chats on every message
+
 export const useLiveChatSSE = ({
   enabled,
   isMountedRef,
@@ -15,6 +17,7 @@ export const useLiveChatSSE = ({
   setLastRefreshTime,
   setIsRefreshing,
   setSelectedConversation,
+  updateChatListLocally,
 }) => {
   useEffect(() => {
     if (!enabled) {
@@ -27,6 +30,8 @@ export const useLiveChatSSE = ({
     let clearNewBadgeTimeout = null;
     let reconnectAttempt = 0;
     let handlingNewMessageEvent = false;
+    let lastRefreshAt = 0;
+    let debouncedRefreshScheduled = false;
 
     const clearNewBadgesSoon = () => {
       if (clearNewBadgeTimeout) {
@@ -150,9 +155,8 @@ export const useLiveChatSSE = ({
           const userId = data?.user_id;
           const message = data?.message;
 
-          // Dedupe and merge by message_id (never timestamp+content - unstable for rapid messages)
+          // 1) If message for open conversation: append immediately (no API call)
           const msgId = message?.message_id;
-
           const isMatch =
             selected &&
             ((convId && selected.conversation?.conversation_id === convId) ||
@@ -160,7 +164,6 @@ export const useLiveChatSSE = ({
           if (isMatch && message && typeof message === "object" && message.timestamp) {
             setSelectedConversation((prev) => {
               if (!prev || !prev.history) return prev;
-              // Dedupe by message_id; fallback to content+ts only when message_id absent (legacy)
               const exists = prev.history.some((m) => {
                 if (msgId && m.message_id) return m.message_id === msgId;
                 if (msgId && !m.message_id) return false;
@@ -173,17 +176,38 @@ export const useLiveChatSSE = ({
               return { ...prev, history: [...prev.history, message] };
             });
             if (process.env.NODE_ENV === "development") {
-              console.log("[SSE] new_message merged", { convId, msgId });
+              console.log("[SSE] new_message merged (instant append)", { convId, msgId });
             }
           }
 
-          setIsRefreshing(true);
-          refreshChats().finally(() => setIsRefreshing(false));
+          // 2) Update chat list locally: move to top, update last_message + last_activity (no /unified-chats call)
+          if (updateChatListLocally && message && (convId || userId)) {
+            updateChatListLocally(convId, userId, message);
+          }
 
+          // 3) Debounced full refresh (max once per 3s) - avoid heavy scan on every message
+          const now = Date.now();
+          if (now - lastRefreshAt >= DEBOUNCE_REFRESH_MS && !debouncedRefreshScheduled) {
+            debouncedRefreshScheduled = true;
+            setTimeout(async () => {
+              if (!isMountedRef.current) return;
+              debouncedRefreshScheduled = false;
+              lastRefreshAt = Date.now();
+              setIsRefreshing(true);
+              try {
+                await refreshChats();
+              } finally {
+                setIsRefreshing(false);
+              }
+            }, DEBOUNCE_REFRESH_MS);
+          }
+
+          // 4) If viewing a different conversation, fetch its messages (no full list refresh)
           if (!isMatch || !message) {
             await refreshSelectedConversationIfMatched(data);
           }
         } catch (error) {
+          debouncedRefreshScheduled = false;
           setIsRefreshing(false);
           console.error("SSE new_message handler error:", error);
         } finally {
@@ -223,13 +247,35 @@ export const useLiveChatSSE = ({
         }
       });
 
-      eventSource.addEventListener("new_conversation", async (event) => {
+      eventSource.addEventListener("new_conversation", (event) => {
         if (!isMountedRef.current) return;
         try {
           const data = JSON.parse(event.data || "{}");
-          const announcedId = data?.conversation_id;
-          const newIds = announcedId ? new Set([announcedId]) : new Set();
-          await refreshChats({ announceNewIds: newIds });
+          const convId = data?.conversation_id;
+          const userId = data?.user_id;
+          const phone = data?.phone || "";
+          const name = data?.name || "Unknown";
+          if (convId && userId) {
+            // Add new conversation locally (no /unified-chats call)
+            const now = new Date().toISOString();
+            setActiveConversations((prev) => {
+              const exists = prev.some((c) => c.conversation_id === convId || c.user_id === userId);
+              if (exists) return prev;
+              const newEntry = {
+                user_id: userId,
+                conversation_id: convId,
+                user_name: name,
+                user_phone: phone,
+                last_message: { content: "", is_user: true, timestamp: now },
+                last_activity: now,
+                status: "bot",
+                is_live: true,
+              };
+              return [newEntry, ...prev];
+            });
+            setNewConversationIds((prev) => new Set([...prev, convId]));
+            setLastRefreshTime(new Date());
+          }
         } catch (error) {
           console.error("SSE new_conversation handler error:", error);
         }
@@ -280,6 +326,7 @@ export const useLiveChatSSE = ({
     setLastRefreshTime,
     setNewConversationIds,
     setSelectedConversation,
+    updateChatListLocally,
     useMockDataRef,
   ]);
 };

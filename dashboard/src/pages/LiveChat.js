@@ -166,6 +166,31 @@ const LiveChat = () => {
     });
   };
 
+  // Update chat list locally (move to top + update last_message) without calling /unified-chats
+  const updateChatListLocally = (conversationId, userId, message) => {
+    setActiveConversations((prev) => {
+      const idx = prev.findIndex(
+        (c) =>
+          (conversationId && c.conversation_id === conversationId) ||
+          (userId && c.user_id === userId)
+      );
+      if (idx < 0) return prev;
+      const conv = prev[idx];
+      const ts = message?.timestamp || new Date().toISOString();
+      const updated = {
+        ...conv,
+        last_message: {
+          content: message?.content ?? message?.text ?? "",
+          is_user: message?.is_user ?? message?.role === "user",
+          timestamp: ts,
+        },
+        last_activity: ts,
+      };
+      const rest = prev.filter((_, i) => i !== idx);
+      return [updated, ...rest];
+    });
+  };
+
   const {
     isRecording,
     recordedAudio,
@@ -306,6 +331,7 @@ const LiveChat = () => {
     setLastRefreshTime,
     setIsRefreshing,
     setSelectedConversation,
+    updateChatListLocally,
   });
 
   const selectedConversationId = selectedConversation?.conversation?.conversation_id;
@@ -1563,26 +1589,15 @@ const LiveChat = () => {
                               {msg.handled_by === "bot" &&
                                 !isVoiceMessage &&
                                 !isImageMessage && (
-                                  <div className="flex items-center space-x-1 ml-2">
-                                    <button
-                                      onClick={() =>
-                                        handleFeedback(msg, "good")
-                                      }
-                                      className="text-xs hover:scale-125 transition-transform"
-                                      title="Good response"
-                                    >
-                                      ��
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleFeedback(msg, "wrong")
-                                      }
-                                      className="text-xs hover:scale-125 transition-transform"
-                                      title="Wrong answer - train bot"
-                                    >
-                                      👎
-                                    </button>
-                                  </div>
+                                  <button
+                                    onClick={() =>
+                                      handleFeedback(msg, "wrong")
+                                    }
+                                    className="text-xs hover:scale-125 transition-transform ml-2"
+                                    title="Dislike - تصحيح الرد أو تعديله"
+                                  >
+                                    👎
+                                  </button>
                                 )}
                             </>
                           )}
@@ -1969,17 +1984,20 @@ const LiveChat = () => {
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto"
           >
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+            <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
               <span className="text-xl mr-2">📚</span>
               تصحيح الرد من الـ FAQ
             </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              عرض السؤال الأصلي اللي انطبق مع رسالة المستخدم، نسبة التطابق، وتعديل الإجابة. Save Change = تحديث نفس السؤال بكل اللغات. Save New = حفظ سؤال المستخدم مع الإجابة كسؤال جديد بكل اللغات من دون تغيير القديم.
+            </p>
             {faqContextLoading ? (
               <p className="text-slate-500 text-sm">جاري تحميل سياق التطابق...</p>
             ) : faqContext?.faq_match ? (
               <>
                 <div className="space-y-3 mb-4 text-sm">
                   <div>
-                    <span className="font-medium text-slate-600">سؤال الـ FAQ المخزّن:</span>
+                    <span className="font-medium text-slate-600">السؤال الأصلي اللي انطبق مع رسالة المستخدم (مخزّن بالـ FAQ):</span>
                     <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
                       {faqContext.faq_match.stored_question || "—"}
                     </p>
@@ -1991,7 +2009,7 @@ const LiveChat = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-600">التطابق:</span>
+                    <span className="font-medium text-slate-600">نسبة التطابق:</span>
                     <span className="text-primary-600 font-medium">
                       {faqContext.faq_match.similarity != null
                         ? `${Math.round(Number(faqContext.faq_match.similarity) * 100)}%`
@@ -2027,7 +2045,7 @@ const LiveChat = () => {
                     className="btn-primary disabled:opacity-50"
                     disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
                   >
-                    {faqSubmitting ? "..." : "حفظ التعديل (تحديث نفس الـ FAQ)"}
+                    {faqSubmitting ? "..." : "Save Change — تحديث جواب السؤال الأصلي بكل اللغات"}
                   </button>
                   <button
                     type="button"
@@ -2035,7 +2053,7 @@ const LiveChat = () => {
                     className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
                     disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
                   >
-                    {faqSubmitting ? "..." : "حفظ كسؤال جديد"}
+                    {faqSubmitting ? "..." : "Save New — حفظ سؤال المستخدم + الإجابة كسؤال جديد بكل اللغات (القديم يبقى)"}
                   </button>
                 </div>
               </>

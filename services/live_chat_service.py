@@ -35,8 +35,8 @@ class LiveChatService:
     # Time window for active conversations (2 hours - "live" = currently with AI)
     ACTIVE_TIME_WINDOW = 2 * 60 * 60  # 2 hours
 
-    # Cache configuration (short TTL for real-time feel; invalidated on every message save)
-    CACHE_TTL = 15  # seconds - reuse across initial load + SSE so open feels fast
+    # Cache configuration: higher TTL, invalidate only on new_message/new_conversation
+    CACHE_TTL = 60  # seconds - avoid heavy Firestore scan on every refresh
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
     FIRESTORE_FETCH_PARALLELISM = 24
 
@@ -350,6 +350,7 @@ class LiveChatService:
         """
         search_val = (search or "").strip().lower()
         current_time = utc_now()
+        _start = __import__("time").time()
 
         if not search_val and page == 1 and self._unified_chats_cache and self._is_cache_fresh(self._unified_chats_cache_time):
                 all_chats = self._unified_chats_cache
@@ -357,6 +358,8 @@ class LiveChatService:
                 start = 0
                 end = min(page_size, total)
                 paged = all_chats[start:end]
+                elapsed = (__import__("time").time() - _start) * 1000
+                print(f"📊 [unified-chats] cache hit | {len(paged)} chats | {elapsed:.0f}ms")
                 return {
                     "success": True,
                     "chats": paged,
@@ -364,6 +367,7 @@ class LiveChatService:
                     "page": 1,
                     "page_size": page_size,
                     "has_more": end < total,
+                    "next_cursor": str(2) if end < total else None,
                 }
 
         try:
@@ -375,8 +379,7 @@ class LiveChatService:
 
             users_docs = await self._stream_user_docs(users_collection)
             user_ids = [doc.id for doc in users_docs]
-            if len(user_ids) > 200:
-                user_ids = user_ids[:200]
+            # Removed 200 cap - allows Load More to work correctly for large user bases
             results = await self._stream_conversations_for_users(users_collection, user_ids)
 
             all_chats: List[Dict[str, Any]] = []
@@ -482,6 +485,9 @@ class LiveChatService:
                 self._unified_chats_cache = all_chats
                 self._unified_chats_cache_time = current_time
 
+            elapsed_ms = (__import__("time").time() - _start) * 1000
+            print(f"📊 [unified-chats] Firestore scan | users={len(user_ids)} | chats={total} | page={safe_page} | {elapsed_ms:.0f}ms")
+
             return {
                 "success": True,
                 "chats": paged,
@@ -489,6 +495,7 @@ class LiveChatService:
                 "page": safe_page,
                 "page_size": safe_size,
                 "has_more": has_more,
+                "next_cursor": str(safe_page + 1) if has_more else None,
             }
         except Exception as e:
             print(f"❌ Error in get_unified_chats: {e}")
