@@ -30,6 +30,21 @@ FIRESTORE_METRICS_COLLECTION = "dashboardMetrics"   # Collection for dashboard s
 # Testing Mode Flag (NEW)
 TESTING_MODE = False  # When True, Firebase saving is disabled for testing
 
+# --- Local / development environment (same APIs as prod, safe messaging) ---
+# Set APP_MODE=local or ENV=development to run locally with real APIs but controlled sending.
+APP_MODE = os.getenv("APP_MODE", "").strip().lower()  # "local" = local env
+ENV = os.getenv("ENV", "").strip().lower()            # "development" = local env
+# When False: all outbound WhatsApp is dry-run (log + "would send", no real send).
+ENABLE_SENDING = os.getenv("ENABLE_SENDING", "true").strip().lower() == "true"
+# Comma-separated list of phone numbers allowed to receive real messages in local mode (sandbox/test).
+# Only used when APP_MODE=local or ENV=development and ENABLE_SENDING=true.
+_LOCAL_ALLOWED_RAW = os.getenv("LOCAL_ALLOWED_WHATSAPP_NUMBERS", "").strip()
+LOCAL_ALLOWED_WHATSAPP_NUMBERS = {n.strip() for n in _LOCAL_ALLOWED_RAW.split(",") if n.strip()}
+
+def is_local_env():
+    """True when running in local/development mode (same external APIs, safe messaging)."""
+    return APP_MODE == "local" or ENV == "development"
+
 # --- Bot Operational Settings ---
 # WhatsApp Number for Human Notifications (e.g., your admin/staff number)
 WHATSAPP_TO = os.getenv("WHATSAPP_TO")

@@ -71,4 +71,7 @@ if __name__ == "__main__":
         raise
 
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    use_reload = getattr(config, "is_local_env", lambda: False)()
+    if use_reload:
+        print("🔄 Local mode: auto-reload enabled")
+    uvicorn.run(app, host="0.0.0.0", port=8003, reload=use_reload)

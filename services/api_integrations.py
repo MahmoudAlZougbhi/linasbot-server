@@ -286,10 +286,15 @@ async def get_paused_appointments_between_dates(start_date: str, end_date: str, 
     return response
 
 async def get_customer_by_phone(phone: str):
-    """Retrieves customer details by phone number."""
-    phone_clean = str(phone).replace("+", "").replace(" ", "")
-    if phone_clean.startswith("961"):
-        phone_clean = phone_clean[3:]
+    """Retrieves customer details by phone number. Accepts any format; normalizes to E.164 then API local format."""
+    from utils.phone_utils import normalize_phone
+    normalized = normalize_phone(phone)
+    if normalized and normalized.startswith("+961"):
+        phone_clean = normalized[4:]  # strip "+961"
+    else:
+        phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
+        if phone_clean.startswith("961"):
+            phone_clean = phone_clean[3:]
     print(f"API Call: get_customer_by_phone for phone={phone_clean}")
     params = {"phone": phone_clean}
     response = await _make_api_request("GET", "customers/by-phone", params=params) # Assuming this endpoint exists

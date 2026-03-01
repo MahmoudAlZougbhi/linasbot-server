@@ -295,7 +295,11 @@ async def startup_event():
                         # Actually send the message
                         result = await adapter.send_text_message(phone, content)
 
-                        if result.get('success'):
+                        if result.get('dry_run'):
+                            sent_count += 1
+                            smart_messaging.mark_message_dry_run(message_id)
+                            print(f"   📋 Dry-run (would send)")
+                        elif result.get('success'):
                             sent_count += 1
                             smart_messaging.mark_message_sent(message_id)
                             print(f"   ✅ Sent successfully")
@@ -413,33 +417,36 @@ async def startup_event():
 
                             if message_content:
                                 adapter = WhatsAppFactory.get_adapter()
-                                await adapter.send_text_message(customer_phone, message_content)
-                                print(f"✅ Sent missed yesterday message to {customer_phone}")
+                                result = await adapter.send_text_message(customer_phone, message_content)
+                                if result.get('dry_run'):
+                                    print(f"📋 [DRY-RUN] Would send missed yesterday to {customer_phone}")
+                                else:
+                                    print(f"✅ Sent missed yesterday message to {customer_phone}")
 
-                                # Sync in-memory scheduled_messages dict
-                                smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_yesterday")
+                                    # Sync in-memory scheduled_messages dict
+                                    smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_yesterday")
 
-                                # Save to conversation history for continuous context
-                                await save_conversation_message_to_firestore(
-                                    user_id=customer_phone,
-                                    role="ai",
-                                    text=message_content,
-                                    conversation_id=None,
-                                    user_name=customer_name,
-                                    phone_number=customer_phone,
-                                    metadata={
-                                        "source": "smart_message",
-                                        "type": "missed_yesterday"
-                                    }
-                                )
-                                print(f"💾 Saved missed yesterday message to conversation history")
+                                    # Save to conversation history for continuous context
+                                    await save_conversation_message_to_firestore(
+                                        user_id=customer_phone,
+                                        role="ai",
+                                        text=message_content,
+                                        conversation_id=None,
+                                        user_name=customer_name,
+                                        phone_number=customer_phone,
+                                        metadata={
+                                            "source": "smart_message",
+                                            "type": "missed_yesterday"
+                                        }
+                                    )
+                                    print(f"💾 Saved missed yesterday message to conversation history")
 
-                                log_report_event(
-                                    "scheduled_message_sent",
-                                    customer_phone,
-                                    "N/A",
-                                    {"type": "missed_yesterday", "customer_name": customer_name}
-                                )
+                                    log_report_event(
+                                        "scheduled_message_sent",
+                                        customer_phone,
+                                        "N/A",
+                                        {"type": "missed_yesterday", "customer_name": customer_name}
+                                    )
                         except Exception as e:
                             print(f"❌ Error sending missed yesterday message: {e}")
                 else:
@@ -502,170 +509,42 @@ async def startup_event():
                             
                             if message_content:
                                 adapter = WhatsAppFactory.get_adapter()
-                                await adapter.send_text_message(customer_phone, message_content)
-                                print(f"✅ Sent missed this month message to {customer_phone}")
+                                result = await adapter.send_text_message(customer_phone, message_content)
+                                if result.get('dry_run'):
+                                    print(f"📋 [DRY-RUN] Would send missed this month to {customer_phone}")
+                                else:
+                                    print(f"✅ Sent missed this month message to {customer_phone}")
 
-                                # Sync in-memory scheduled_messages dict
-                                smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_this_month")
+                                    # Sync in-memory scheduled_messages dict
+                                    smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_this_month")
 
-                                # Save to conversation history for continuous context
-                                await save_conversation_message_to_firestore(
-                                    user_id=customer_phone,
-                                    role="ai",
-                                    text=message_content,
-                                    conversation_id=None,
-                                    user_name=customer_name,
-                                    phone_number=customer_phone,
-                                    metadata={
-                                        "source": "smart_message",
-                                        "type": "missed_this_month"
-                                    }
-                                )
-                                print(f"💾 Saved missed this month message to conversation history")
+                                    # Save to conversation history for continuous context
+                                    await save_conversation_message_to_firestore(
+                                        user_id=customer_phone,
+                                        role="ai",
+                                        text=message_content,
+                                        conversation_id=None,
+                                        user_name=customer_name,
+                                        phone_number=customer_phone,
+                                        metadata={
+                                            "source": "smart_message",
+                                            "type": "missed_this_month"
+                                        }
+                                    )
+                                    print(f"💾 Saved missed this month message to conversation history")
 
-                                log_report_event(
-                                    "scheduled_message_sent",
-                                    customer_phone,
-                                    "N/A",
-                                    {"type": "missed_this_month", "customer_name": customer_name}
-                                )
+                                    log_report_event(
+                                        "scheduled_message_sent",
+                                        customer_phone,
+                                        "N/A",
+                                        {"type": "missed_this_month", "customer_name": customer_name}
+                                    )
                         except Exception as e:
                             print(f"❌ Error sending missed this month message: {e}")
                 else:
                     print(f"ℹ️ No missed appointments this month")
             except Exception as e:
                 print(f"❌ Error in missed this month follow-ups job: {e}")
-        
-        # Job 4: Send "attended yesterday" thank you messages daily at 9 PM
-        async def send_attended_yesterday_messages():
-            try:
-                print("📨 Running attended yesterday thank you messages job...")
-
-                # Check if smart messaging is globally enabled
-                settings_file = 'data/app_settings.json'
-                smart_messaging_enabled = True
-
-                if os.path.exists(settings_file):
-                    try:
-                        with open(settings_file, 'r', encoding='utf-8') as f:
-                            settings = json.load(f)
-                        smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
-                    except Exception as e:
-                        print(f"Error reading settings: {e}")
-
-                if not smart_messaging_enabled:
-                    print("⏸️ Smart Messaging is DISABLED. Skipping attended yesterday messages.")
-                    return
-
-                yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%d/%m/%Y')
-                
-                db = get_firestore_db()
-                if not db:
-                    print("⚠️ Firebase not initialized, skipping attended yesterday messages")
-                    return
-                
-                app_id_for_firestore = "linas-ai-bot-backend"
-                users_collection = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-                
-                users_docs = list(users_collection.stream())
-                print(f"📋 Checking {len(users_docs)} users for attended appointments yesterday")
-                
-                customers_contacted = set()
-                
-                for user_doc in users_docs:
-                    try:
-                        user_id = user_doc.id
-                        
-                        if user_id in customers_contacted:
-                            continue
-                        
-                        user_data = user_doc.to_dict()
-                        phone_number = user_data.get('phone_number') or config.user_data_whatsapp.get(user_id, {}).get('phone_number')
-                        
-                        if not phone_number:
-                            print(f"⚠️ No phone number found for user {user_id}, skipping")
-                            continue
-                        
-                        phone_clean = str(phone_number).replace("+", "").replace(" ", "").replace("-", "")
-                        if phone_clean.startswith("961"):
-                            phone_clean = phone_clean[3:]
-                        
-                        from services.api_integrations import get_customer_appointments
-                        appointments_result = await get_customer_appointments(phone_clean)
-                        
-                        if not appointments_result.get('success') or not appointments_result.get('data'):
-                            continue
-                        
-                        appointments = appointments_result['data']
-                        
-                        attended_yesterday = False
-                        next_appointment_date = None
-                        
-                        for appointment in appointments:
-                            if appointment.get('date') == yesterday and appointment.get('status') == 'Done':
-                                attended_yesterday = True
-                                for next_apt in appointments:
-                                    if next_apt.get('status') == 'Available':
-                                        next_appointment_date = next_apt.get('date')
-                                        break
-                                break
-                        
-                        if attended_yesterday:
-                            customers_contacted.add(user_id)
-                            
-                            customer_name = config.user_names.get(user_id, "عميلنا العزيز")
-                            language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
-                            
-                            placeholders = {
-                                'customer_name': customer_name,
-                                'phone_number': config.TRAINER_WHATSAPP_NUMBER or '+961 XX XXXXXX',
-                                'next_appointment_date': next_appointment_date or 'سيتم تحديده قريباً'
-                            }
-                            
-                            message_content = smart_messaging.get_message_content(
-                                'attended_yesterday',
-                                language,
-                                placeholders
-                            )
-                            
-                            if message_content:
-                                adapter = WhatsAppFactory.get_adapter()
-                                await adapter.send_text_message(user_id, message_content)
-                                print(f"✅ Sent attended yesterday message to {user_id}")
-
-                                # Sync in-memory scheduled_messages dict
-                                smart_messaging.mark_messages_sent_by_phone(user_id, "attended_yesterday")
-
-                                # Save to conversation history for continuous context
-                                await save_conversation_message_to_firestore(
-                                    user_id=user_id,
-                                    role="ai",
-                                    text=message_content,
-                                    conversation_id=None,
-                                    user_name=customer_name,
-                                    phone_number=phone_number,
-                                    metadata={
-                                        "source": "smart_message",
-                                        "type": "attended_yesterday"
-                                    }
-                                )
-                                print(f"💾 Saved attended yesterday message to conversation history")
-
-                                log_report_event(
-                                    "scheduled_message_sent",
-                                    user_id,
-                                    "N/A",
-                                    {"type": "attended_yesterday", "customer_name": customer_name}
-                                )
-                    except Exception as e:
-                        print(f"❌ Error processing user {user_doc.id}: {e}")
-                
-                print(f"✅ Sent attended yesterday messages to {len(customers_contacted)} customers")
-                
-            except Exception as e:
-                print(f"❌ Error in attended yesterday messages job: {e}")
-                import traceback
-                traceback.print_exc()
         
         # Job 5: Daily refresh - clear stale messages and re-populate fresh ones
         async def daily_refresh_messages_job():

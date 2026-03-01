@@ -66,7 +66,7 @@ class SmartMessagingService:
         try:
             entries = {}
             for message_id, msg in self.scheduled_messages.items():
-                if msg.get("status") != "sent":
+                if msg.get("status") not in ("sent", "would_send"):
                     continue
                 # Shallow copy and serialise datetimes
                 entry = dict(msg)
@@ -676,6 +676,28 @@ Des questions? Nous sommes là! 💬
 
         return messages_to_send
 
+    def mark_message_dry_run(self, message_id: str):
+        """Mark message as dry-run (would send) – used when ENABLE_SENDING=false or local sandbox."""
+        if message_id in self.scheduled_messages:
+            self.scheduled_messages[message_id]["status"] = "would_send"
+            self.scheduled_messages[message_id]["sent_at"] = datetime.now()
+            msg_data = self.scheduled_messages[message_id]
+            canonical_type = normalize_template_id(msg_data.get("message_type", ""))
+            content_preview = self.get_message_content(
+                canonical_type,
+                msg_data.get("language", "ar"),
+                msg_data.get("placeholders") or {}
+            ) or ""
+            self.sent_messages_log.append({
+                "message_id": message_id,
+                "phone": msg_data.get("customer_phone", ""),
+                "type": canonical_type,
+                "sent_at": datetime.now(),
+                "content": "(dry-run) " + (content_preview[:80] + "..." if len(content_preview) > 80 else content_preview)
+            })
+            self._persist_sent_messages()
+            print(f"   📋 Marked {message_id} as would_send (dry-run)")
+
     def mark_message_sent(self, message_id: str):
         """Mark a single message as successfully sent (called after WhatsApp confirms)."""
         if message_id in self.scheduled_messages:
@@ -851,6 +873,7 @@ Des questions? Nous sommes là! 💬
             "total": len(self.scheduled_messages),
             "scheduled": 0,
             "sent": 0,
+            "would_send": 0,
             "by_type": {},
             "next_message": None
         }
@@ -869,6 +892,8 @@ Des questions? Nous sommes là! 💬
                         "send_at": message_data["send_at"].isoformat(),
                         "phone": message_data["customer_phone"]
                     }
+            elif message_data["status"] == "would_send":
+                summary["would_send"] += 1
             else:
                 summary["sent"] += 1
             
@@ -979,10 +1004,10 @@ Des questions? Nous sommes là! 💬
                 kept += 1
                 continue
 
-            # Keep messages that were sent today (so user can see today's sent messages)
+            # Keep messages that were sent or dry-run today (so user can see today's activity)
             status = msg_data.get("status", "")
             sent_at = msg_data.get("sent_at")
-            if status == "sent" and sent_at:
+            if status in ("sent", "would_send") and sent_at:
                 sent_date = sent_at.date() if isinstance(sent_at, datetime) else None
                 if sent_date and sent_date >= today:
                     new_scheduled[message_id] = msg_data

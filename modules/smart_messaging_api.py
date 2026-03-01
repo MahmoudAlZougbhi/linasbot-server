@@ -519,6 +519,15 @@ async def send_test_message(request_data: Dict[str, Any]):
                 message=message
             )
 
+            if result.get("dry_run"):
+                print(f"📋 [DRY-RUN] Test message would be sent to {phone_number} (room {room_id})")
+                return {
+                    "success": True,
+                    "message": f"Dry-run: message not sent (local/sandbox mode). Would send to {phone_number}.",
+                    "phone_number": phone_number,
+                    "room_id": room_id,
+                    "dry_run": True
+                }
             if result.get("success"):
                 print(f"✅ Test message sent successfully to {phone_number} (room {room_id})")
 
@@ -613,7 +622,7 @@ async def get_scheduler_status():
             
             if msg_data.get("status") in ["scheduled", "pending_approval", "sending"]:
                 statistics["by_type"][msg_type]["scheduled"] += 1
-            elif msg_data.get("status") == "sent":
+            elif msg_data.get("status") in ("sent", "would_send"):
                 statistics["by_type"][msg_type]["sent"] += 1
         
         # Add sent messages statistics
@@ -659,8 +668,6 @@ def _apply_count_date_filter(msg_type: str, send_date_str, apt_date, send_at, no
         if send_date_str:
             return start_of_month_str <= send_date_str < start_of_next_month_str
         return False
-    if msg_type == "attended_yesterday":
-        return (send_date_str or "") == today_str or not send_date_str
     if msg_type == "missed_paused_appointment":
         return True
     return True
@@ -669,110 +676,81 @@ def _apply_count_date_filter(msg_type: str, send_date_str, apt_date, send_at, no
 @app.get("/api/smart-messaging/counts")
 async def get_message_counts():
     """
-    Get counts for each message type (FAST endpoint for lazy loading).
-    Counts from: (1) in-memory scheduled_messages, (2) collector log (scheduled_messages_to_be_sent.json).
-    Merges both sources so counts reflect messages that will be sent (e.g. tomorrow's reminders).
+    Get counts for each message type. Source of truth: API-only (smart_messaging_customers_service).
+    Counts = number of customers in each category; never negative. If API fails, fallback to 0.
     """
     try:
-        from services.smart_messaging import smart_messaging
-        from services.scheduled_messages_collector import scheduled_messages_collector
-        from datetime import datetime as dt, timedelta
+        from services.smart_messaging_customers_service import get_all_counts_and_customers
 
-        # Initialize counts
-        counts = {
-            "reminder_24h": 0,
-            "post_session_feedback": 0,
-            "twenty_day_followup": 0,
-            "missed_yesterday": 0,
-            "attended_yesterday": 0,
-            "missed_paused_appointment": 0,
-        }
-
-        # Date calculations for filtering (same as frontend)
-        now = dt.now()
-        today_str = now.strftime('%Y-%m-%d')
-        yesterday = now - timedelta(days=1)
-        yesterday_str = yesterday.strftime('%Y-%m-%d')
-        start_of_month_str = now.replace(day=1).strftime('%Y-%m-%d')
-        if now.month == 12:
-            next_month_start = dt(now.year + 1, 1, 1)
-        else:
-            next_month_start = dt(now.year, now.month + 1, 1)
-        start_of_next_month_str = next_month_start.strftime('%Y-%m-%d')
-        past_24h = now - timedelta(hours=24)
-        next_24h = now + timedelta(hours=24)
-
-        # Source 1: in-memory scheduled_messages
-        for msg_id, msg_data in smart_messaging.scheduled_messages.items():
-            if msg_data.get("status") not in ["scheduled", "pending_approval", "sent", "sending"]:
-                continue
-            msg_type = normalize_template_id(msg_data.get("message_type", "unknown"))
-            if msg_type in DEPRECATED_TEMPLATE_IDS or msg_type not in counts:
-                continue
-            send_at = msg_data.get("send_at")
-            send_date_str = send_at.strftime('%Y-%m-%d') if send_at else None
-            apt_date = msg_data.get("placeholders", {}).get("appointment_date")
-            if _apply_count_date_filter(msg_type, send_date_str, apt_date, send_at, now, today_str,
-                                        yesterday_str, start_of_month_str, start_of_next_month_str,
-                                        past_24h, next_24h):
-                counts[msg_type] += 1
-
-        # Source 2: collector log (scheduled_messages_to_be_sent.json) - messages to be sent
-        try:
-            collector_log = scheduled_messages_collector.load_or_create_log()
-            collector_counts = {k: 0 for k in counts}
-            for msg in collector_log:
-                if msg.get("status") != "pending":
-                    continue
-                msg_type = normalize_template_id(msg.get("message_type", "unknown"))
-                if msg_type in DEPRECATED_TEMPLATE_IDS or msg_type not in collector_counts:
-                    continue
-                send_datetime_str = msg.get("send_datetime")
-                send_at = None
-                send_date_str = None
-                if send_datetime_str:
-                    try:
-                        send_at = dt.fromisoformat(send_datetime_str.replace("Z", "+00:00"))
-                        if send_at.tzinfo:
-                            send_at = send_at.replace(tzinfo=None)
-                        send_date_str = send_at.strftime('%Y-%m-%d')
-                    except (ValueError, TypeError):
-                        pass
-                apt_datetime = msg.get("appointment_datetime")
-                apt_date = None
-                if apt_datetime:
-                    try:
-                        s = str(apt_datetime).replace("Z", "+00:00")
-                        apt_dt = dt.fromisoformat(s)
-                        if apt_dt.tzinfo:
-                            apt_dt = apt_dt.replace(tzinfo=None)
-                        apt_date = apt_dt.strftime('%Y-%m-%d')
-                    except (ValueError, TypeError):
-                        pass
-                if _apply_count_date_filter(msg_type, send_date_str, apt_date, send_at, now, today_str,
-                                            yesterday_str, start_of_month_str, start_of_next_month_str,
-                                            past_24h, next_24h):
-                    collector_counts[msg_type] += 1
-            # Merge: take max per type to avoid double-counting (same msg may be in both)
-            for k in counts:
-                counts[k] = max(counts[k], collector_counts[k])
-        except Exception as coll_e:
-            print(f"⚠️ Could not merge collector log into counts: {coll_e}")
-
-        total = sum(counts.values())
+        data = await get_all_counts_and_customers()
+        counts = data.get("counts", {})
+        # Ensure no negative and all keys present
+        for key in ("reminder_24h", "post_session_feedback", "twenty_day_followup",
+                    "missed_yesterday", "missed_paused_appointment"):
+            if key not in counts:
+                counts[key] = 0
+            counts[key] = max(0, int(counts[key]))
+        total = max(0, sum(counts.values()))
         return {
             "success": True,
             "counts": counts,
             "total": total
         }
-
     except Exception as e:
         print(f"Error getting message counts: {e}")
         import traceback
         traceback.print_exc()
+        counts = {
+            "reminder_24h": 0,
+            "post_session_feedback": 0,
+            "twenty_day_followup": 0,
+            "missed_yesterday": 0,
+            "missed_paused_appointment": 0,
+        }
+        return {
+            "success": True,
+            "counts": counts,
+            "total": 0
+        }
+
+
+@app.get("/api/smart-messaging/customers-by-category")
+async def get_customers_by_category(category: str):
+    """
+    Get the list of customers for a given category (source of truth from APIs).
+    Returns: { success, category, count, customers: [ { customer_name, phone, appointment_id, status, type, reason, date, time, details, action_state } ] }
+    If count > 0 the list will not be empty; if list is empty count is 0.
+    """
+    try:
+        from services.smart_messaging_customers_service import get_customers_by_category as fetch_customers
+
+        canonical = normalize_template_id(category) if category else ""
+        if not canonical or canonical == "missed_paused_appointment":
+            return {
+                "success": True,
+                "category": canonical or category,
+                "count": 0,
+                "customers": []
+            }
+        customers = await fetch_customers(canonical)
+        customers = list(customers) if customers else []
+        count = max(0, len(customers))
+        return {
+            "success": True,
+            "category": canonical,
+            "count": count,
+            "customers": customers
+        }
+    except Exception as e:
+        print(f"Error getting customers by category: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "category": category or "",
+            "count": 0,
+            "customers": []
         }
 
 
@@ -801,7 +779,6 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
             "post_session_feedback": "Post-Session Feedback",
             "twenty_day_followup": "20-Day Follow-up",
             "missed_yesterday": "Missed Yesterday Follow-up",
-            "attended_yesterday": "Thank You - Attended Yesterday",
             "missed_paused_appointment": "Missed Paused Appointment Campaign",
         }
 
@@ -813,7 +790,7 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
             # Filter by status parameter
             if status == "scheduled" and msg_status not in ["scheduled", "pending_approval", "sending"]:
                 continue
-            if status == "sent" and msg_status != "sent":
+            if status == "sent" and msg_status not in ("sent", "would_send"):
                 continue
             # status == "all" shows everything
 

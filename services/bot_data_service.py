@@ -11,6 +11,7 @@ import json
 import time
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
+import api_config
 
 # Load environment variables
 load_dotenv()
@@ -22,8 +23,8 @@ class BotDataService:
     """
     
     def __init__(self):
-        self.base_url = os.getenv("LINASLASER_API_BASE_URL")
-        self.token = os.getenv("LINASLASER_API_TOKEN")
+        self.base_url = api_config.LINASLASER_API_BASE_URL
+        self.token = api_config.LINASLASER_API_TOKEN
         self.cache = {}
         self.cache_timestamps = {}
         self.cache_ttl = 3600  # 1 hour cache

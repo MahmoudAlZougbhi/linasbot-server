@@ -23,6 +23,7 @@ from services.live_chat_contracts import (
     utc_now,
 )
 from utils.utils import get_firestore_db, set_human_takeover_status
+from utils.phone_utils import normalize_phone
 from services.media_service import build_whatsapp_audio_delivery_url
 
 
@@ -274,10 +275,14 @@ class LiveChatService:
                     # Get latest conversation
                     latest_conv = client_convs[0]
                     
-                    # Get user info from latest conversation snapshot.
+                    # Get user info from latest conversation snapshot. When no name (not in CRM), show phone only.
                     customer_info = latest_conv.get("customer_info", {}) or {}
-                    user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
+                    user_name = customer_info.get("name") or config.user_names.get(user_id) or ""
                     phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+                    if not user_name and phone_full and phone_full != "Unknown":
+                        user_name = phone_full
+                    if not user_name:
+                        user_name = "Unknown Customer"
 
                     language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
 
@@ -415,8 +420,12 @@ class LiveChatService:
                     continue  # waiting_human - skip from main list
 
                 cust = best_conv.get("customer_info", {}) or {}
-                user_name = cust.get("name") or config.user_names.get(user_id, "Unknown")
+                user_name = cust.get("name") or config.user_names.get(user_id) or ""
                 phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=cust)
+                if not user_name and phone_full and phone_full != "Unknown":
+                    user_name = phone_full
+                if not user_name:
+                    user_name = "Unknown"
 
                 preview = best_messages[-1] if best_messages else {}
 
@@ -544,9 +553,13 @@ class LiveChatService:
                 user_name = (
                     latest_customer_info.get("name")
                     or config.user_names.get(user_id)
-                    or "Unknown Customer"
+                    or ""
                 )
                 phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=latest_customer_info)
+                if not user_name and phone_full and phone_full != "Unknown":
+                    user_name = phone_full
+                if not user_name:
+                    user_name = "Unknown Customer"
                 gender = latest_customer_info.get("gender") or config.user_gender.get(user_id, "unknown")
 
                 customers.append({
@@ -882,11 +895,14 @@ class LiveChatService:
                     else:
                         wait_time_seconds = int((current_time - last_message_time).total_seconds())
                     
-                    # Get user info from Firebase customer_info first, fallback to config
+                    # Get user info from Firebase customer_info first, fallback to config. When no name, show phone only.
                     customer_info = conv_data.get("customer_info", {})
-                    user_name = customer_info.get("name") or config.user_names.get(user_id, "Unknown Customer")
+                    user_name = customer_info.get("name") or config.user_names.get(user_id) or ""
                     phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
-                    
+                    if not user_name and phone_full and phone_full != "Unknown":
+                        user_name = phone_full
+                    if not user_name:
+                        user_name = "Unknown Customer"
                     language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
                     sentiment = conv_data.get("sentiment", "neutral")
                     
@@ -1716,6 +1732,15 @@ class LiveChatService:
         if not clean_digits:
             clean_digits = phone_full_digits
 
+        # Prefer E.164 for display (single canonical format everywhere)
+        if phone_full:
+            e164 = normalize_phone(phone_full)
+            if e164:
+                phone_full = e164
+        elif clean_digits and len(clean_digits) >= 10:
+            e164 = normalize_phone("+" + clean_digits if clean_digits.startswith("961") else "961" + clean_digits)
+            if e164:
+                phone_full = e164
         # Backward-compatible "clean" format used elsewhere in the app.
         if clean_digits.startswith("961") and len(clean_digits) > 8:
             phone_clean = clean_digits[3:]

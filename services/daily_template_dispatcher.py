@@ -407,33 +407,27 @@ class DailyTemplateDispatcher:
             return await self._schedule_from_reminders(
                 template_id=template_id,
                 reminders_date=target_day,
-                status=None,
+                status="Available",
                 reference_date=target_day.strftime("%Y-%m-%d"),
             )
 
         if template_id == "post_session_feedback":
+            # Feedback for appointments that happened YESTERDAY (status DONE), sent at end-of-day today
+            target_day = run_day - timedelta(days=1)
             return await self._schedule_from_reminders(
                 template_id=template_id,
-                reminders_date=run_day,
+                reminders_date=target_day,
                 status="Done",
-                reference_date=run_day.strftime("%Y-%m-%d"),
+                reference_date=target_day.strftime("%Y-%m-%d"),
             )
 
         if template_id == "missed_yesterday":
+            # Yesterday, status = Available (not Done) = had appointment but not completed
             target_day = run_day - timedelta(days=1)
             return await self._schedule_from_reminders(
                 template_id=template_id,
                 reminders_date=target_day,
                 status="Available",
-                reference_date=target_day.strftime("%Y-%m-%d"),
-            )
-
-        if template_id == "attended_yesterday":
-            target_day = run_day - timedelta(days=1)
-            return await self._schedule_from_reminders(
-                template_id=template_id,
-                reminders_date=target_day,
-                status="Done",
                 reference_date=target_day.strftime("%Y-%m-%d"),
             )
 

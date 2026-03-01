@@ -1,6 +1,8 @@
 """
 WhatsApp Adapter Factory
 Creates and manages WhatsApp adapters (Meta, 360Dialog, ThirdProvider, etc.)
+In local/development mode or when ENABLE_SENDING=false, wraps the real adapter
+with SafeSendAdapter so outbound messaging is dry-run or sandbox-only.
 """
 import os
 from typing import Optional
@@ -9,6 +11,23 @@ from .meta_adapter import MetaAdapter
 from .dialog360_adapter import Dialog360Adapter
 from .qiscus_adapter import QiscusAdapter
 from .montymobile_adapter import MontyMobileAdapter
+from .safe_send_adapter import SafeSendAdapter
+
+try:
+    import config
+except ImportError:
+    config = None
+
+
+def _wrap_if_safe_send(adapter: WhatsAppAdapter) -> WhatsAppAdapter:
+    """Wrap adapter with SafeSendAdapter when local env or sending disabled."""
+    if config is None:
+        return adapter
+    if getattr(config, "is_local_env", lambda: False)() or not getattr(config, "ENABLE_SENDING", True):
+        print("📋 Outbound WhatsApp: dry-run or sandbox-only (APP_MODE=local / ENABLE_SENDING=false)")
+        return SafeSendAdapter(adapter)
+    return adapter
+
 
 class WhatsAppFactory:
     """Factory for creating WhatsApp adapters"""
@@ -41,6 +60,7 @@ class WhatsAppFactory:
         
         # Add provider name for tracking
         cls._current_adapter.provider_name = cls._current_provider
+        cls._current_adapter = _wrap_if_safe_send(cls._current_adapter)
         return cls._current_adapter
     
     @classmethod

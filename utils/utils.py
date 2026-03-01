@@ -3,9 +3,11 @@ import re
 import json
 import os
 import datetime
+import logging
 from difflib import SequenceMatcher
 
 import config
+from utils.phone_utils import normalize_phone, is_phone_like_user_id
 from openai import AsyncOpenAI
 from services.live_chat_contracts import (
     extract_source_message_id as contract_extract_source_message_id,
@@ -84,6 +86,22 @@ def get_firestore_db():
 
 _PHONE_ROOM_MAPPING_CACHE = {"mtime": None, "room_to_phone": {}}
 MESSAGE_DEDUPE_WINDOW_SECONDS = 20
+_log = logging.getLogger(__name__)
+
+
+def get_canonical_user_id_and_phone(user_id: str, phone_number: str = None) -> tuple:
+    """
+    Return (canonical_user_id, normalized_phone) for Firestore and identity.
+    - If we have a real phone (from phone_number or user_id when phone-like), canonical_user_id = normalized_phone (E.164).
+    - Otherwise canonical_user_id = user_id (e.g. room_id). normalized_phone may be "".
+    """
+    raw_phone = phone_number or (user_id if is_phone_like_user_id(user_id) else None)
+    if not raw_phone or str(raw_phone).strip().startswith("room:"):
+        mapped = _resolve_phone_from_room_mapping(user_id)
+        raw_phone = mapped or None
+    normalized = normalize_phone(raw_phone) if raw_phone else ""
+    canonical = normalized if normalized else user_id
+    return canonical, normalized
 
 
 def _normalize_phone_digits(value: str) -> str:
@@ -218,11 +236,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     # Use a fixed string for the backend's app ID in Firestore path for consistency.
     app_id_for_firestore = "linas-ai-bot-backend"
 
-    # Set up collection references early (needed for phone lookup from existing conversation)
-    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
-    conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-
-    # Resolve phone_number using fallback chain if not provided.
+    # Resolve phone_number using fallback chain if not provided (before canonical resolution).
     # Priority:
     # 1) provided phone_number
     # 2) existing conversation
@@ -277,24 +291,59 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 # user_id looks like a phone number (Meta/360Dialog)
                 phone_number = user_id
 
-    print(f"📱 Firebase save: user_id={user_id}, phone={phone_number}, role={role}")
+    # Unified identity: canonical user = normalized phone (E.164) so same number = same user/thread
+    canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id, phone_number)
+    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id)
+    conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
 
-    # Get customer info for this user_id
-    customer_name = user_name or config.user_names.get(user_id, "Unknown Customer")
+    _log.info(
+        "identity raw_phone=%s normalized_phone=%s canonical_user_id=%s user_id_arg=%s",
+        phone_number, normalized_phone, canonical_user_id, user_id,
+    )
 
-    clean_phone = _clean_phone_for_lookup(phone_number)
     placeholder_phone = _is_placeholder_phone(phone_number)
+    clean_phone = _clean_phone_for_lookup(phone_number)
+
+    # Mandatory external resolve before naming: do not set a name if not in CRM (show phone only)
+    customer_name = user_name or config.user_names.get(canonical_user_id) or config.user_names.get(user_id)
+    external_id = None
+    if normalized_phone:
+        try:
+            from services.customer_identity_service import resolve_customer_from_external
+            external = await resolve_customer_from_external(normalized_phone)
+            _log.info(
+                "external_lookup normalized_phone=%s exists=%s name=%s external_id=%s",
+                normalized_phone, external.get("exists"), external.get("name"), external.get("external_id"),
+            )
+            if external.get("exists") and external.get("name"):
+                customer_name = external["name"]
+                config.user_names[canonical_user_id] = customer_name
+            else:
+                customer_name = customer_name or ""
+            external_id = external.get("external_id")
+        except Exception as e:
+            _log.warning("External resolve failed for %s: %s; using unknown/phone only", normalized_phone, e)
+            customer_name = customer_name or ""
+    if customer_name is None:
+        customer_name = ""
+    # When not in external system: show phone only in Live Chat (no name)
+    if not customer_name and not normalized_phone:
+        customer_name = "Unknown Customer"
 
     # Ensure the user document exists (create if it doesn't)
-    # Get current gender and greeting stage for persistence
-    current_gender = config.user_gender.get(user_id, "")
-    current_greeting_stage = config.user_greeting_stage.get(user_id, 0)
+    # Get current gender and greeting stage for persistence (by canonical id)
+    current_gender = config.user_gender.get(canonical_user_id, "") or config.user_gender.get(user_id, "")
+    current_greeting_stage = config.user_greeting_stage.get(canonical_user_id, 0) or config.user_greeting_stage.get(user_id, 0)
+
+    # Store E.164 for consistency when we have it
+    effective_phone_full = normalized_phone if normalized_phone else phone_number
+    effective_phone_clean = _clean_phone_for_lookup(effective_phone_full) if not placeholder_phone else clean_phone
 
     # ✅ Use asyncio.to_thread to prevent blocking
     user_doc = await asyncio.to_thread(user_doc_ref.get)
     if not user_doc.exists:
         user_doc_payload = {
-            "user_id": user_id,
+            "user_id": canonical_user_id,
             "name": customer_name,
             "gender": current_gender,
             "greeting_stage": current_greeting_stage,
@@ -302,9 +351,14 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             "last_activity": utc_now()
         }
         if not placeholder_phone:
-            user_doc_payload["phone_full"] = phone_number
-            user_doc_payload["phone_clean"] = clean_phone
+            user_doc_payload["phone_full"] = effective_phone_full
+            user_doc_payload["phone_clean"] = effective_phone_clean
+        if normalized_phone:
+            user_doc_payload["normalized_phone"] = normalized_phone
+        if external_id:
+            user_doc_payload["external_id"] = external_id
         await asyncio.to_thread(user_doc_ref.set, user_doc_payload)
+        _log.info("identity created new user doc canonical_user_id=%s", canonical_user_id)
     else:
         # Update last activity and phone info
         update_data = {
@@ -312,36 +366,24 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             "name": customer_name
         }
         if not placeholder_phone:
-            update_data["phone_full"] = phone_number
-            update_data["phone_clean"] = clean_phone
+            update_data["phone_full"] = effective_phone_full
+            update_data["phone_clean"] = effective_phone_clean
+        if normalized_phone:
+            update_data["normalized_phone"] = normalized_phone
+        if external_id:
+            update_data["external_id"] = external_id
         if current_gender:
             update_data["gender"] = current_gender
         if current_greeting_stage > 0:
             update_data["greeting_stage"] = current_greeting_stage
         await asyncio.to_thread(user_doc_ref.update, update_data)
-    
-    # Try to get customer name from API if not provided
-    if customer_name == "Unknown Customer" and clean_phone.isdigit():
-        try:
-            from services.api_integrations import get_customer_by_phone
-            customer_response = await get_customer_by_phone(phone=clean_phone)
-            if customer_response and customer_response.get("success") and customer_response.get("data"):
-                customer_data = customer_response["data"]
-                if customer_data.get("name"):
-                    customer_name = customer_data["name"]
-                    # Update config cache
-                    config.user_names[user_id] = customer_name
-                    print(f"✅ Found customer name from API: {customer_name} for phone {clean_phone}")
-        except Exception as e:
-            print(f"⚠️ Could not fetch customer name from API for {clean_phone}: {e}")
+        _log.info("identity updated existing user doc canonical_user_id=%s", canonical_user_id)
     
     # Prepare customer info to save (including gender for persistence)
-    user_gender_value = config.user_gender.get(user_id, "")
-    user_greeting_stage_value = config.user_greeting_stage.get(user_id, 0)
+    user_gender_value = config.user_gender.get(canonical_user_id, "") or config.user_gender.get(user_id, "")
+    user_greeting_stage_value = config.user_greeting_stage.get(canonical_user_id, 0) or config.user_greeting_stage.get(user_id, 0)
 
     existing_user_data = user_doc.to_dict() if user_doc.exists else {}
-    effective_phone_full = phone_number
-    effective_phone_clean = clean_phone
     if placeholder_phone:
         existing_phone = existing_user_data.get("phone_full")
         if existing_phone and not _is_placeholder_phone(existing_phone):
@@ -351,6 +393,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     customer_info = {
         "phone_full": effective_phone_full,
         "phone_clean": effective_phone_clean,
+        "normalized_phone": normalized_phone or None,
         "name": customer_name,
         "gender": user_gender_value,
         "greeting_stage": user_greeting_stage_value,
@@ -412,7 +455,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     try:
                         from modules.live_chat_api import broadcast_sse_event
                         asyncio.create_task(broadcast_sse_event("new_message", {
-                            "user_id": user_id,
+                            "user_id": canonical_user_id,
                             "conversation_id": conversation_id,
                             "role": role,
                             "text": text[:100] + "..." if len(text) > 100 else text,
@@ -426,7 +469,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
 
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
-                    "user_id": user_id,
+                    "user_id": canonical_user_id,
                     "customer_info": customer_info,
                     "messages": [message_data],
                     "timestamp": utc_now(),
@@ -435,17 +478,17 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "human_takeover_active": False,
                     "last_updated": utc_now()
                 })
-                if user_id not in config.user_data_whatsapp:
-                    config.user_data_whatsapp[user_id] = {}
-                config.user_data_whatsapp[user_id]["current_conversation_id"] = new_doc_ref.id
+                if canonical_user_id not in config.user_data_whatsapp:
+                    config.user_data_whatsapp[canonical_user_id] = {}
+                config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
                 _invalidate_live_chat_cache()
-                print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
+                print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
         else:
             # No conversation_id — try to reuse latest conversation first.
             resolved_conversation_id = None
 
-            # 1) Check in-memory cache
-            cached_id = config.user_data_whatsapp.get(user_id, {}).get("current_conversation_id")
+            # 1) Check in-memory cache (by canonical id so same phone = same thread)
+            cached_id = config.user_data_whatsapp.get(canonical_user_id, {}).get("current_conversation_id")
             if cached_id:
                 try:
                     cached_ref = conversations_collection_for_user.document(cached_id)
@@ -503,18 +546,18 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         "operator_id": None
                     })
                 await asyncio.to_thread(doc_ref.update, update_payload)
-                if user_id not in config.user_data_whatsapp:
-                    config.user_data_whatsapp[user_id] = {}
-                config.user_data_whatsapp[user_id]["current_conversation_id"] = resolved_conversation_id
+                if canonical_user_id not in config.user_data_whatsapp:
+                    config.user_data_whatsapp[canonical_user_id] = {}
+                config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = resolved_conversation_id
                 _invalidate_live_chat_cache()
-                print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {user_id} (total: {len(current_messages)})")
+                print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {canonical_user_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event
                 if not is_smart_source:
                     try:
                         from modules.live_chat_api import broadcast_sse_event
                         asyncio.create_task(broadcast_sse_event("new_message", {
-                            "user_id": user_id,
+                            "user_id": canonical_user_id,
                             "conversation_id": resolved_conversation_id,
                             "role": role,
                             "text": text[:100] + "..." if len(text) > 100 else text,
@@ -525,7 +568,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             else:
                 # No existing conversation found — create a new one
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
-                    "user_id": user_id,
+                    "user_id": canonical_user_id,
                     "customer_info": customer_info,
                     "messages": [message_data],
                     "timestamp": utc_now(),
@@ -534,18 +577,18 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "human_takeover_active": False,
                     "last_updated": utc_now()
                 })
-                if user_id not in config.user_data_whatsapp:
-                    config.user_data_whatsapp[user_id] = {}
-                config.user_data_whatsapp[user_id]["current_conversation_id"] = new_doc_ref.id
+                if canonical_user_id not in config.user_data_whatsapp:
+                    config.user_data_whatsapp[canonical_user_id] = {}
+                config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
                 _invalidate_live_chat_cache()
-                print(f"✅ Created conversation {new_doc_ref.id} for user {user_id}")
+                print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
 
                 # 📡 Broadcast SSE event for new conversation
                 if not is_smart_source:
                     try:
                         from modules.live_chat_api import broadcast_sse_event
                         asyncio.create_task(broadcast_sse_event("new_conversation", {
-                            "user_id": user_id,
+                            "user_id": canonical_user_id,
                             "conversation_id": new_doc_ref.id,
                             "phone": customer_info.get("phone_full"),
                             "name": customer_name

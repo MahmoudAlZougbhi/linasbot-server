@@ -175,15 +175,60 @@ def extract_meta_message_content(message) -> Dict[str, Any]:
 
 
 async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
-    """Process a parsed message regardless of provider"""
-    user_id = parsed_message["user_id"]
+    """Process a parsed message regardless of provider. Uses normalized phone as canonical user_id to prevent duplicates."""
+    from utils.phone_utils import normalize_phone, is_phone_like_user_id
+    from utils.utils import get_canonical_user_id_and_phone
+    from services.customer_identity_service import resolve_customer_from_external
+
+    raw_user_id = parsed_message["user_id"]
     user_name = parsed_message["user_name"]
+    phone_number = parsed_message.get("phone_number")
+    # Resolve canonical user_id (E.164 normalized_phone) so same number = same user/thread
+    canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(raw_user_id, phone_number)
+    user_id = canonical_user_id
+    parsed_message["user_id"] = user_id
+    parsed_message["phone_number"] = normalized_phone or phone_number or ""
+
+    print(f"DEBUG: identity raw_user_id={raw_user_id} normalized_phone={normalized_phone} canonical_user_id={canonical_user_id}")
+
+    # Migrate in-memory state from raw to canonical so we don't lose conversation_id etc.
+    if raw_user_id != user_id and raw_user_id in config.user_data_whatsapp:
+        if user_id not in config.user_data_whatsapp:
+            config.user_data_whatsapp[user_id] = dict(config.user_data_whatsapp[raw_user_id])
+        else:
+            config.user_data_whatsapp[user_id].update(config.user_data_whatsapp[raw_user_id])
+        for key in ("user_names", "user_gender", "user_greeting_stage"):
+            d = getattr(config, key, None)
+            if d and raw_user_id in d and user_id not in d:
+                d[user_id] = d[raw_user_id]
+
+    # Mandatory external resolve before naming: set name only if customer exists in CRM
+    if normalized_phone:
+        try:
+            external = await resolve_customer_from_external(normalized_phone)
+            print(f"DEBUG: external_lookup normalized_phone={normalized_phone} exists={external.get('exists')} name={external.get('name')}")
+            if external.get("exists") and external.get("name"):
+                config.user_names[user_id] = external["name"]
+                user_name = external["name"]
+                parsed_message["user_name"] = user_name
+            else:
+                # Not in CRM: show phone only in Live Chat (no name)
+                config.user_names.pop(user_id, None)
+                user_name = ""
+                parsed_message["user_name"] = user_name
+            # Set gender from external when available
+            if external.get("gender") and external["gender"] in ("male", "female"):
+                config.user_gender[user_id] = external["gender"]
+                if config.user_greeting_stage.get(user_id, 0) <= 1:
+                    config.user_greeting_stage[user_id] = 2
+        except Exception as e:
+            print(f"WARNING: External resolve failed for {normalized_phone}: {e}; using phone only")
+            config.user_names.pop(user_id, None)
+            parsed_message["user_name"] = ""
+
     message_type = parsed_message["type"]
     content = parsed_message["content"]
-    phone_number = parsed_message.get("phone_number")
-    
-    print(f"DEBUG: Processing message - user_id: {user_id}, phone_number: {phone_number}")
-    
+
     # Initialize user_data_whatsapp if not exists
     if user_id not in config.user_data_whatsapp:
         config.user_data_whatsapp[user_id] = {
@@ -249,45 +294,7 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     # Debug: Log state after Firestore restoration attempt
     print(f"🔍 DEBUG: After Firestore restore - gender: '{config.user_gender.get(user_id)}', greeting_stage: {config.user_greeting_stage.get(user_id, 0)}")
 
-    # Fetch customer data from API ONLY if Firestore didn't have valid gender
-    current_gender_after_firestore = config.user_gender.get(user_id)
-    if current_gender_after_firestore not in ["male", "female"] and phone_number:
-        try:
-            from services.api_integrations import get_customer_by_phone
-            
-            phone_clean = str(phone_number).replace("+", "").replace(" ", "").replace("-", "")
-            if phone_clean.startswith("961"):
-                phone_clean = phone_clean[3:]
-            
-            print(f"🔍 Fetching customer data from API for phone: {phone_clean}")
-            
-            customer_response = await get_customer_by_phone(phone=phone_clean)
-            
-            if customer_response and customer_response.get("success") and customer_response.get("data"):
-                customer_data = customer_response["data"]
-                print(f"✅ Customer found in API: {customer_data}")
-                
-                if customer_data.get("name"):
-                    config.user_names[user_id] = customer_data["name"]
-                    user_name = customer_data["name"]
-                    print(f"✅ Updated user name from API: {user_name}")
-                
-                if customer_data.get("gender"):
-                    api_gender = customer_data["gender"].lower()
-                    if api_gender in ["male", "female"]:
-                        config.user_gender[user_id] = api_gender
-                        print(f"✅ Updated gender from API: {api_gender}")
-                        
-                        if config.user_greeting_stage.get(user_id, 0) <= 1:
-                            config.user_greeting_stage[user_id] = 2
-                            print(f"✅ Set greeting stage to 2 (skip gender question)")
-            else:
-                print(f"ℹ️ Customer not found in API for phone: {phone_clean}")
-                
-        except Exception as e:
-            print(f"❌ Error fetching customer from API: {e}")
-            import traceback
-            traceback.print_exc()
+    # (Name/gender from external CRM are already set above via resolve_customer_from_external)
 
     # Initialize user state ONLY for NEW users
     is_new_user = (

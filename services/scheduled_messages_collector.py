@@ -328,25 +328,9 @@ class ScheduledMessagesCollector:
                             "last_updated": current_time.isoformat()
                         })
         
-        # 6. Attended Yesterday / Thank You (24 hours after appointment)
-        # Collects: Appointments where send time (24h after) is in the future
-        # Send time: 24 hours after appointment
-        send_datetime = apt_datetime + timedelta(hours=24)
-        if send_datetime > current_time:  # Only if send time is in future
-            messages.append({
-                "appointment_id": apt_id,
-                "customer_name": customer_name,
-                "customer_phone": customer_phone,
-                "message_type": "attended_yesterday",
-                "reason": "Thank You / Post-Visit Follow-up",
-                "send_datetime": send_datetime.isoformat(),
-                "status": "pending",
-                "error": None,
-                "appointment_datetime": apt_datetime.isoformat(),
-                "appointment_status": apt_status,
-                "created_at": current_time.isoformat(),
-                "last_updated": current_time.isoformat()
-            })
+        # 6. Attended Yesterday / Thank You: REMOVED from collector.
+        # Thank-you is sent only by daily_template_dispatcher at configured time (rule-based:
+        # yesterday's DONE appointments). This prevents duplicate thank-you sends.
 
         return messages
     

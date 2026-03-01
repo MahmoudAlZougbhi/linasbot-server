@@ -10,9 +10,10 @@ from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from difflib import SequenceMatcher
 import re
+import api_config
 from services.language_detection_service import language_detection_service
 
-# Load environment variables
+# Load environment variables (.env then .env.local via core; load_dotenv for standalone scripts)
 load_dotenv()
 
 
@@ -23,8 +24,8 @@ class QADatabaseService:
     """
     
     def __init__(self):
-        self.base_url = os.getenv("LINASLASER_API_BASE_URL")
-        self.token = os.getenv("LINASLASER_API_TOKEN")
+        self.base_url = api_config.LINASLASER_API_BASE_URL
+        self.token = api_config.LINASLASER_API_TOKEN
         self.match_threshold = 0.7  # 70% similarity threshold
         
         if not self.base_url or not self.token:

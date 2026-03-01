@@ -22,8 +22,11 @@ except ImportError as e:
     PYDUB_AVAILABLE = False
     AudioSegment = None
 
-# Load environment variables from .env file
+# Load environment variables: .env first, then .env.local (local overrides)
 load_dotenv()
+_env_local = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env.local")
+if os.path.isfile(_env_local):
+    load_dotenv(_env_local)
 
 # Import configuration
 import config

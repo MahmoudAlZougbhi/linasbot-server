@@ -10,7 +10,6 @@ DAILY_TEMPLATE_IDS = (
     "reminder_24h",
     "post_session_feedback",
     "missed_yesterday",
-    "attended_yesterday",
     "twenty_day_followup",
 )
 
@@ -41,11 +40,7 @@ TEMPLATE_METADATA: Dict[str, Dict[str, str]] = {
     },
     "missed_yesterday": {
         "name": "Missed Yesterday",
-        "description": "Daily fixed-time follow-up for yesterday missed appointments.",
-    },
-    "attended_yesterday": {
-        "name": "Attended Yesterday",
-        "description": "Daily fixed-time thank-you/follow-up for yesterday attended appointments.",
+        "description": "Daily fixed-time follow-up for yesterday missed appointments (date=yesterday, status=Available).",
     },
     "twenty_day_followup": {
         "name": "20-Day Follow-up",
@@ -71,11 +66,6 @@ DEFAULT_TEMPLATE_SCHEDULES: Dict[str, Dict[str, object]] = {
     "missed_yesterday": {
         "enabled": True,
         "sendTime": "10:00",
-        "timezone": "Asia/Beirut",
-    },
-    "attended_yesterday": {
-        "enabled": True,
-        "sendTime": "21:00",
         "timezone": "Asia/Beirut",
     },
     "twenty_day_followup": {
