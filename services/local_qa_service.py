@@ -43,9 +43,8 @@ class LocalQAService:
                     if line.strip():
                         try:
                             qa_pair = json.loads(line)
-                            # Add ID if not present
-                            if 'id' not in qa_pair:
-                                qa_pair['id'] = f"{qa_pair.get('question', '')}_{qa_pair.get('language', 'ar')}_{line_num}"
+                            # Stable 1-based line number as faq_id (matches local_qa_api update/delete)
+                            qa_pair['id'] = line_num
                             qa_pairs.append(qa_pair)
                         except json.JSONDecodeError as e:
                             print(f"❌ Error parsing line {line_num}: {e}")

@@ -226,6 +226,11 @@ def _message_to_dashboard_format(msg: dict) -> dict:
         val = msg.get(key) or meta.get(key)
         if val:
             out[key] = val
+    if meta.get("reply_source"):
+        out["reply_source"] = meta["reply_source"]
+    if meta.get("faq_match"):
+        out["metadata"] = out.get("metadata") or {}
+        out["metadata"]["faq_match"] = meta["faq_match"]
     return out
 
 

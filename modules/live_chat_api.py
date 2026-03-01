@@ -26,7 +26,8 @@ from modules.models import (
     TakeoverRequest,
     ReleaseRequest,
     SendOperatorMessageRequest,
-    OperatorStatusRequest
+    OperatorStatusRequest,
+    EditMessageRequest,
 )
 from services.live_chat_service import live_chat_service
 from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
@@ -235,6 +236,27 @@ async def get_live_chat_metrics():
         }
 
 
+@app.get("/api/live-chat/faq-match-context")
+async def get_faq_match_context(
+    user_id: str = Query(..., description="User ID"),
+    conversation_id: str = Query(..., description="Conversation ID"),
+    message_id: str = Query(..., description="Message ID"),
+):
+    """Get FAQ match metadata and current FAQ entry for a message (for FAQ correction modal)."""
+    try:
+        result = await live_chat_service.get_faq_match_context(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+        )
+        return result
+    except Exception as e:
+        print(f"❌ Error in get_faq_match_context: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/live-chat/conversation/{user_id}/{conversation_id}")
 async def get_conversation_details(
     user_id: str,
@@ -281,6 +303,24 @@ async def get_client_all_conversations(user_id: str):
             "success": False,
             "error": str(e)
         }
+
+
+@app.post("/api/live-chat/edit-message")
+async def edit_message(request: EditMessageRequest):
+    """Edit a bot message's content (e.g. after operator dislike). Updates Firestore and broadcasts."""
+    try:
+        result = await live_chat_service.update_message_content(
+            user_id=request.user_id,
+            conversation_id=request.conversation_id,
+            message_id=request.message_id,
+            new_content=request.new_content,
+        )
+        return result
+    except Exception as e:
+        print(f"❌ Error in edit_message: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/live-chat/end-conversation")

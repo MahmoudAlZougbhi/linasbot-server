@@ -1486,6 +1486,12 @@ class LiveChatService:
                 if image_url:
                     msg_data["image_url"] = image_url
 
+                if meta.get("reply_source"):
+                    msg_data["reply_source"] = meta["reply_source"]
+                if meta.get("faq_match"):
+                    msg_data["metadata"] = msg_data.get("metadata") or {}
+                    msg_data["metadata"]["faq_match"] = meta["faq_match"]
+
                 formatted_messages.append(msg_data)
 
             # WhatsApp-style: has_more = more older messages available (for Load More)
@@ -1507,6 +1513,184 @@ class LiveChatService:
 
         except Exception as e:
             print(f"❌ Error getting conversation details: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    async def get_faq_match_context(
+        self, user_id: str, conversation_id: str, message_id: str
+    ) -> Dict[str, Any]:
+        """
+        Get faq_match metadata and current FAQ entry for a message (for FAQ correction modal).
+        Returns faq_match from message metadata and current_entry (question, answer) if faq_id exists.
+        """
+        try:
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "error": "Firestore not initialized"}
+
+            app_id = "linas-ai-bot-backend"
+            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
+                user_id
+            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+
+            conv_doc = await asyncio.to_thread(conv_ref.get)
+            if not conv_doc.exists:
+                return {"success": False, "error": "Conversation not found"}
+
+            doc_data = conv_doc.to_dict() or {}
+            messages = doc_data.get("messages", [])
+            message_id_str = str(message_id).strip()
+
+            def _msg_id(m: Dict[str, Any]) -> str:
+                mid = m.get("message_id")
+                if mid:
+                    return str(mid).strip()
+                meta = (m.get("metadata") or {})
+                for key in ("message_id", "source_message_id"):
+                    if meta.get(key):
+                        return str(meta[key]).strip()
+                return ""
+
+            faq_match = None
+            for msg in messages:
+                if _msg_id(msg) == message_id_str:
+                    meta = msg.get("metadata") or {}
+                    faq_match = meta.get("faq_match")
+                    break
+
+            if not faq_match:
+                return {
+                    "success": True,
+                    "faq_match": None,
+                    "current_entry": None,
+                    "message": "No FAQ match for this message",
+                }
+
+            faq_id = faq_match.get("faq_id")
+            current_entry = None
+            if faq_id is not None:
+                try:
+                    from modules.local_qa_api import read_qa_pairs
+                    qa_pairs = read_qa_pairs()
+                    idx = (int(faq_id) - 1) if isinstance(faq_id, int) else (int(faq_id) - 1 if isinstance(faq_id, str) and faq_id.isdigit() else -1)
+                    if 0 <= idx < len(qa_pairs):
+                        row = qa_pairs[idx]
+                        current_entry = {
+                            "question": row.get("question", ""),
+                            "answer": row.get("answer", ""),
+                            "language": row.get("language", "ar"),
+                            "qa_group_id": row.get("qa_group_id"),
+                        }
+                except Exception as e:
+                    print(f"⚠️ get_faq_match_context read_qa_pairs: {e}")
+
+            return {
+                "success": True,
+                "faq_match": faq_match,
+                "current_entry": current_entry,
+            }
+        except Exception as e:
+            print(f"❌ Error in get_faq_match_context: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    async def update_message_content(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message_id: str,
+        new_content: str,
+    ) -> Dict[str, Any]:
+        """
+        Update a single message's text in a conversation (e.g. operator edit after dislike).
+        Updates Firestore, invalidates cache, and broadcasts message_updated for real-time UI.
+        """
+        try:
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "error": "Firestore not initialized"}
+
+            app_id = "linas-ai-bot-backend"
+            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
+                user_id
+            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+
+            conv_doc = await asyncio.to_thread(conv_ref.get)
+            if not conv_doc.exists:
+                return {"success": False, "error": "Conversation not found"}
+
+            doc_data = conv_doc.to_dict() or {}
+            messages = list(doc_data.get("messages", []))
+            message_id_str = str(message_id).strip()
+            if not message_id_str:
+                return {"success": False, "error": "message_id is required"}
+
+            def _msg_id(m: Dict[str, Any]) -> str:
+                mid = m.get("message_id")
+                if mid:
+                    return str(mid).strip()
+                meta = (m.get("metadata") or {})
+                for key in ("message_id", "source_message_id"):
+                    if meta.get(key):
+                        return str(meta[key]).strip()
+                return ""
+
+            found_index = None
+            for i, msg in enumerate(messages):
+                if _msg_id(msg) == message_id_str:
+                    found_index = i
+                    break
+
+            if found_index is None:
+                return {"success": False, "error": "Message not found"}
+
+            new_text = (new_content or "").strip()
+            if not new_text:
+                return {"success": False, "error": "new_content cannot be empty"}
+
+            messages[found_index]["text"] = new_text
+            meta = messages[found_index].get("metadata") or {}
+            meta["edited_at"] = utc_now().isoformat()
+            messages[found_index]["metadata"] = meta
+
+            await asyncio.to_thread(conv_ref.update, {
+                "messages": messages,
+                "last_updated": utc_now(),
+            })
+            self.invalidate_cache()
+
+            updated_msg = messages[found_index]
+            dash_msg = {
+                "message_id": message_id_str,
+                "content": new_text,
+                "text": new_text,
+                "timestamp": updated_msg.get("timestamp"),
+                "is_user": updated_msg.get("role") == "user",
+                "handled_by": (updated_msg.get("metadata") or {}).get("handled_by") or updated_msg.get("handled_by") or "bot",
+                "role": updated_msg.get("role"),
+            }
+
+            try:
+                from modules.live_chat_api import broadcast_sse_event
+                asyncio.create_task(broadcast_sse_event("message_updated", {
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "message_id": message_id_str,
+                    "message": dash_msg,
+                }))
+            except Exception as sse_err:
+                print(f"⚠️ SSE broadcast after edit failed: {sse_err}")
+
+            return {
+                "success": True,
+                "conversation_id": conversation_id,
+                "message_id": message_id_str,
+                "message": dash_msg,
+            }
+        except Exception as e:
+            print(f"❌ Error updating message content: {e}")
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}

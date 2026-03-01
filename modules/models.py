@@ -189,3 +189,11 @@ class SendOperatorMessageRequest(BaseModel):
 class OperatorStatusRequest(BaseModel):
     operator_id: str
     status: str
+
+
+class EditMessageRequest(BaseModel):
+    """Request to edit a bot message content in live chat (e.g. after dislike)."""
+    user_id: str
+    conversation_id: str
+    message_id: str
+    new_content: str

@@ -304,6 +304,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] 🎯 Answer: {qa_response[:100]}...")
 
             await send_message_func(user_id, qa_response)
+            qa_pair = match_result.get("qa_pair", {})
+            stored_language = match_result.get("matched_language", qa_pair.get("language", "ar"))
+            faq_id = qa_pair.get("id")
+            if isinstance(faq_id, str) and faq_id.isdigit():
+                faq_id = int(faq_id)
             await save_conversation_message_to_firestore(
                 user_id, "ai", qa_response,
                 current_conversation_id, user_name,
@@ -313,7 +318,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "handled_by": "bot",
                     "match_score": match_score,
                     "ai_cost_saved": True,
-                    "response_type": "instant"
+                    "response_type": "instant",
+                    "reply_source": "managed_faq",
+                    "faq_match": {
+                        "faq_id": faq_id,
+                        "stored_question": qa_pair.get("question", ""),
+                        "stored_language": stored_language,
+                        "user_question": query_to_send_to_gpt,
+                        "user_language": current_preferred_lang,
+                        "similarity": match_score,
+                        "tier": match_result.get("tier", "direct"),
+                    },
                 }
             )
             await update_dashboard_metric_in_firestore(user_id, "qa_responses_used", 1)

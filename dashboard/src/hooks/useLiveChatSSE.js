@@ -191,6 +191,38 @@ export const useLiveChatSSE = ({
         }
       });
 
+      eventSource.addEventListener("message_updated", (event) => {
+        if (!isMountedRef.current) return;
+        try {
+          const data = JSON.parse(event.data || "{}");
+          const selected = selectedConversationRef.current;
+          const convId = data?.conversation_id;
+          const message = data?.message;
+          const msgId = message?.message_id;
+          const isMatch =
+            selected &&
+            convId &&
+            selected.conversation?.conversation_id === convId &&
+            message &&
+            msgId;
+          if (isMatch) {
+            setSelectedConversation((prev) => {
+              if (!prev || !prev.history) return prev;
+              return {
+                ...prev,
+                history: prev.history.map((m) =>
+                  (m.message_id || m.id) === msgId
+                    ? { ...m, content: message.content ?? message.text, text: message.text ?? message.content }
+                    : m
+                ),
+              };
+            });
+          }
+        } catch (error) {
+          console.error("SSE message_updated handler error:", error);
+        }
+      });
+
       eventSource.addEventListener("new_conversation", async (event) => {
         if (!isMountedRef.current) return;
         try {

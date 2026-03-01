@@ -62,3 +62,86 @@ export const endLiveChatConversation = async ({
 
   return response.json();
 };
+
+/**
+ * Edit a bot message's content in live chat (after dislike).
+ * Updates the message in Firestore and returns the updated message.
+ */
+export const editLiveChatMessage = async ({
+  userId,
+  conversationId,
+  messageId,
+  newContent,
+}) => {
+  const baseURL = getApiAbsoluteBaseUrl();
+  const response = await fetch(`${baseURL}/api/live-chat/edit-message`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      conversation_id: conversationId,
+      message_id: messageId,
+      new_content: newContent,
+    }),
+  });
+  return response.json();
+};
+
+/**
+ * Get FAQ match context for a message (for FAQ Correction modal).
+ */
+export const fetchFaqMatchContext = async ({ userId, conversationId, messageId }) => {
+  const baseURL = getApiAbsoluteBaseUrl();
+  const params = new URLSearchParams({ user_id: userId, conversation_id: conversationId, message_id: messageId });
+  const response = await fetch(`${baseURL}/api/live-chat/faq-match-context?${params}`);
+  return response.json();
+};
+
+/**
+ * Update existing FAQ entry's answer (Save Change in FAQ Correction).
+ */
+export const faqUpdateAnswer = async ({ faqId, newAnswerText, updatedBy = "operator", source = "live_chat_dislike" }) => {
+  const baseURL = getApiAbsoluteBaseUrl();
+  const response = await fetch(`${baseURL}/api/faq/update-answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      faq_id: faqId,
+      new_answer_text: newAnswerText,
+      updated_by: updatedBy,
+      source,
+    }),
+  });
+  return response.json();
+};
+
+/**
+ * Create new FAQ entry from Live Chat (Save New in FAQ Correction).
+ */
+export const faqCreateFromLivechat = async ({
+  questionText,
+  questionLanguage,
+  answerText,
+  createdBy = "operator",
+  source = "live_chat_dislike",
+  relatedFaqId,
+  matchSimilarity,
+}) => {
+  const baseURL = getApiAbsoluteBaseUrl();
+  const response = await fetch(`${baseURL}/api/faq/create-from-livechat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      question_text: questionText,
+      question_language: questionLanguage,
+      answer_text: answerText,
+      created_by: createdBy,
+      source,
+      related_faq_id: relatedFaqId ?? undefined,
+      match_similarity: matchSimilarity ?? undefined,
+    }),
+  });
+  return response.json();
+};

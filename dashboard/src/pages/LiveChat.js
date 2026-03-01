@@ -32,6 +32,10 @@ import { useLiveChatMediaComposer } from "../hooks/useLiveChatMediaComposer";
 import {
   endLiveChatConversation,
   fetchLiveChatConversationMessages,
+  editLiveChatMessage,
+  fetchFaqMatchContext,
+  faqUpdateAnswer,
+  faqCreateFromLivechat,
 } from "../utils/liveChatApi";
 
 const LiveChat = () => {
@@ -43,6 +47,8 @@ const LiveChat = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [useMockData, setUseMockData] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState(null);
+  const [editMessageModal, setEditMessageModal] = useState(null);
+  const [faqCorrectionModal, setFaqCorrectionModal] = useState(null);
 
   // ✅ Auto-refresh state (Solution 1 + 4: Smart refresh with badges)
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
@@ -627,7 +633,7 @@ const LiveChat = () => {
     }
   };
 
-  // Auto-scroll only on conversation switch or when user is near bottom.
+  // Auto-scroll: when chat opens go to last message (bottom); when near bottom and new messages, scroll.
   useEffect(() => {
     const conversationId = selectedConversation?.conversation?.conversation_id || null;
     const messageCount = selectedConversation?.history?.length || 0;
@@ -637,19 +643,31 @@ const LiveChat = () => {
     const hasConversationChanged =
       conversationId && conversationId !== previousConversationId;
     const hasNewMessages = messageCount > previousMessageCount;
+    const isFirstLoadForConversation = messageCount > 0 && previousMessageCount === 0;
 
     const container = messagesContainerRef.current;
     const nearBottom = container
       ? container.scrollHeight - container.scrollTop - container.clientHeight < 120
       : true;
 
-    if (hasConversationChanged || (hasNewMessages && nearBottom)) {
-      const behavior = hasConversationChanged ? "auto" : "smooth";
-      messagesEndRef.current?.scrollIntoView({ behavior });
-    }
+    const shouldScrollToBottomOnOpen =
+      hasConversationChanged || isFirstLoadForConversation;
+    const shouldScrollForNewMessages = hasNewMessages && nearBottom;
 
     previousConversationIdRef.current = conversationId;
     previousMessageCountRef.current = messageCount;
+
+    if (shouldScrollToBottomOnOpen || shouldScrollForNewMessages) {
+      const behavior = shouldScrollToBottomOnOpen ? "auto" : "smooth";
+      messagesEndRef.current?.scrollIntoView({ behavior });
+      // When opening a conversation, messages may render after this effect — scroll again after paint.
+      if (shouldScrollToBottomOnOpen) {
+        const rafId = requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+        });
+        return () => cancelAnimationFrame(rafId);
+      }
+    }
   }, [selectedConversation?.conversation?.conversation_id, selectedConversation?.history?.length]);
 
   const handleTakeOver = async (conversationId, userId) => {
@@ -815,7 +833,7 @@ const LiveChat = () => {
       // Submit positive feedback immediately
       submitFeedback({
         conversation_id: selectedConversation.conversation.conversation_id,
-        message_id: message.id || `msg_${Date.now()}`,
+        message_id: message.message_id || message.id || `msg_${Date.now()}`,
         user_question: getPreviousUserMessage(message),
         bot_response: message.content,
         feedback_type: "good",
@@ -823,11 +841,12 @@ const LiveChat = () => {
       });
       toast.success("👍 Thanks for your feedback!");
     } else if (feedbackType === "wrong") {
-      // Show modal to get correct answer
-      setFeedbackModal({
-        message,
-        feedbackType,
-      });
+      const hasFaqMatch = message.metadata?.faq_match || message.reply_source === "managed_faq";
+      if (hasFaqMatch) {
+        setFaqCorrectionModal({ message });
+      } else {
+        setEditMessageModal({ message });
+      }
     } else if (feedbackType === "like") {
       // Show modal to edit question + answer and save to FAQ (4 languages)
       setFeedbackModal({
@@ -882,6 +901,167 @@ const LiveChat = () => {
     if (result.success) {
       setFeedbackModal(null);
       toast.success("Saved to FAQ in 4 languages!");
+    }
+  };
+
+  const [editContent, setEditContent] = useState("");
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  useEffect(() => {
+    if (editMessageModal?.message) {
+      setEditContent(editMessageModal.message.content || "");
+    }
+  }, [editMessageModal]);
+
+  const [faqContext, setFaqContext] = useState(null);
+  const [faqEditAnswer, setFaqEditAnswer] = useState("");
+  const [faqContextLoading, setFaqContextLoading] = useState(false);
+  const [faqSubmitting, setFaqSubmitting] = useState(false);
+  useEffect(() => {
+    if (!faqCorrectionModal?.message || !selectedConversation) {
+      setFaqContext(null);
+      return;
+    }
+    const msg = faqCorrectionModal.message;
+    const faqMatch = msg.metadata?.faq_match || null;
+    if (faqMatch) {
+      setFaqContext({ faq_match: faqMatch, current_entry: msg.metadata?.current_entry ?? null });
+      setFaqEditAnswer(msg.content || "");
+      return;
+    }
+    setFaqContextLoading(true);
+    setFaqEditAnswer(msg.content || "");
+    const userId = selectedConversation.conversation.user_id;
+    const conversationId = selectedConversation.conversation.conversation_id;
+    const messageId = msg.message_id || msg.id;
+    fetchFaqMatchContext({ userId, conversationId, messageId })
+      .then((res) => {
+        if (res.success && res.faq_match) {
+          setFaqContext({ faq_match: res.faq_match, current_entry: res.current_entry ?? null });
+          if (res.current_entry?.answer) setFaqEditAnswer(res.current_entry.answer);
+          else setFaqEditAnswer(msg.content || "");
+        } else {
+          setFaqContext(null);
+        }
+      })
+      .catch(() => setFaqContext(null))
+      .finally(() => setFaqContextLoading(false));
+  }, [faqCorrectionModal, selectedConversation]);
+
+  const handleFaqSaveChange = async () => {
+    if (!faqCorrectionModal?.message || !selectedConversation || !faqContext?.faq_match) return;
+    const newAnswer = (faqEditAnswer || "").trim();
+    if (!newAnswer) {
+      toast.error("النص لا يمكن أن يكون فارغاً");
+      return;
+    }
+    setFaqSubmitting(true);
+    try {
+      const res = await faqUpdateAnswer({
+        faqId: faqContext.faq_match.faq_id,
+        newAnswerText: newAnswer,
+        updatedBy: "operator_001",
+        source: "live_chat_dislike",
+      });
+      if (res.success) {
+        const messageId = faqCorrectionModal.message.message_id || faqCorrectionModal.message.id;
+        await editLiveChatMessage({
+          userId: selectedConversation.conversation.user_id,
+          conversationId: selectedConversation.conversation.conversation_id,
+          messageId,
+          newContent: newAnswer,
+        });
+        setSelectedConversation((prev) => {
+          if (!prev?.history) return prev;
+          return {
+            ...prev,
+            history: prev.history.map((m) =>
+              (m.message_id || m.id) === messageId ? { ...m, content: newAnswer, text: newAnswer } : m
+            ),
+          };
+        });
+        setFaqCorrectionModal(null);
+        toast.success("تم تحديث الـ FAQ");
+      } else {
+        toast.error(res.error || "فشل التحديث");
+      }
+    } catch (e) {
+      toast.error("فشل التحديث");
+    } finally {
+      setFaqSubmitting(false);
+    }
+  };
+
+  const handleFaqSaveNew = async () => {
+    if (!faqCorrectionModal?.message || !selectedConversation) return;
+    const newAnswer = (faqEditAnswer || "").trim();
+    if (!newAnswer) {
+      toast.error("النص لا يمكن أن يكون فارغاً");
+      return;
+    }
+    const userQuestion = faqContext?.faq_match?.user_question ?? getPreviousUserMessage(faqCorrectionModal.message);
+    const questionLanguage = faqContext?.faq_match?.user_language ?? selectedConversation.conversation.language ?? "ar";
+    setFaqSubmitting(true);
+    try {
+      const res = await faqCreateFromLivechat({
+        questionText: userQuestion,
+        questionLanguage: questionLanguage === "franco" ? "franco" : questionLanguage,
+        answerText: newAnswer,
+        createdBy: "operator_001",
+        source: "live_chat_dislike",
+        relatedFaqId: faqContext?.faq_match?.faq_id,
+        matchSimilarity: faqContext?.faq_match?.similarity,
+      });
+      if (res.success) {
+        setFaqCorrectionModal(null);
+        toast.success("تمت إضافة سؤال جديد إلى الـ FAQ");
+      } else {
+        toast.error(res.error || "فشل الإضافة");
+      }
+    } catch (e) {
+      toast.error("فشل الإضافة");
+    } finally {
+      setFaqSubmitting(false);
+    }
+  };
+
+  const submitEditMessage = async () => {
+    if (!editMessageModal?.message || !selectedConversation) return;
+    const newContent = (editContent || "").trim();
+    if (!newContent) {
+      toast.error("النص لا يمكن أن يكون فارغاً");
+      return;
+    }
+    const msg = editMessageModal.message;
+    const messageId = msg.message_id || msg.id;
+    setIsSubmittingEdit(true);
+    try {
+      const result = await editLiveChatMessage({
+        userId: selectedConversation.conversation.user_id,
+        conversationId: selectedConversation.conversation.conversation_id,
+        messageId,
+        newContent,
+      });
+      if (result.success) {
+        setSelectedConversation((prev) => {
+          if (!prev || !prev.history) return prev;
+          return {
+            ...prev,
+            history: prev.history.map((m) =>
+              (m.message_id || m.id) === messageId
+                ? { ...m, content: newContent, text: newContent }
+                : m
+            ),
+          };
+        });
+        setEditMessageModal(null);
+        toast.success("تم تحديث الرد");
+      } else {
+        toast.error(result.error || "فشل التحديث");
+      }
+    } catch (err) {
+      toast.error("فشل التحديث");
+    } finally {
+      setIsSubmittingEdit(false);
     }
   };
 
@@ -1737,6 +1917,138 @@ const LiveChat = () => {
           onClose={() => setFeedbackModal(null)}
           onSubmit={submitCorrection}
         />
+      )}
+
+      {/* Edit bot message modal (dislike → edit reply, non-FAQ) */}
+      {editMessageModal?.message && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-xl"
+          >
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+              <span className="text-xl mr-2">✏️</span>
+              تعديل رد البوت
+            </h3>
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="عدّل نص الرد..."
+              className="input-field w-full min-h-[120px] resize-y mb-4"
+              disabled={isSubmittingEdit}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditMessageModal(null)}
+                className="btn-secondary"
+                disabled={isSubmittingEdit}
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={submitEditMessage}
+                className="btn-primary disabled:opacity-50"
+                disabled={isSubmittingEdit || !(editContent || "").trim()}
+              >
+                {isSubmittingEdit ? "جاري الحفظ..." : "حفظ التعديل"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* FAQ Correction modal (dislike on FAQ-sourced bot reply) */}
+      {faqCorrectionModal?.message && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto"
+          >
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+              <span className="text-xl mr-2">📚</span>
+              تصحيح الرد من الـ FAQ
+            </h3>
+            {faqContextLoading ? (
+              <p className="text-slate-500 text-sm">جاري تحميل سياق التطابق...</p>
+            ) : faqContext?.faq_match ? (
+              <>
+                <div className="space-y-3 mb-4 text-sm">
+                  <div>
+                    <span className="font-medium text-slate-600">سؤال الـ FAQ المخزّن:</span>
+                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
+                      {faqContext.faq_match.stored_question || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-600">سؤال المستخدم:</span>
+                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
+                      {faqContext.faq_match.user_question || "—"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-600">التطابق:</span>
+                    <span className="text-primary-600 font-medium">
+                      {faqContext.faq_match.similarity != null
+                        ? `${Math.round(Number(faqContext.faq_match.similarity) * 100)}%`
+                        : "—"}
+                    </span>
+                    {faqContext.faq_match.tier && (
+                      <span className="text-xs px-2 py-0.5 bg-slate-200 rounded">{faqContext.faq_match.tier}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">الإجابة (قابلة للتعديل):</label>
+                  <textarea
+                    value={faqEditAnswer}
+                    onChange={(e) => setFaqEditAnswer(e.target.value)}
+                    placeholder="عدّل الإجابة..."
+                    className="input-field w-full min-h-[100px] resize-y"
+                    disabled={faqSubmitting}
+                  />
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFaqCorrectionModal(null)}
+                    className="btn-secondary"
+                    disabled={faqSubmitting}
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFaqSaveChange}
+                    className="btn-primary disabled:opacity-50"
+                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
+                  >
+                    {faqSubmitting ? "..." : "حفظ التعديل (تحديث نفس الـ FAQ)"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFaqSaveNew}
+                    className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
+                  >
+                    {faqSubmitting ? "..." : "حفظ كسؤال جديد"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <p className="text-slate-500 text-sm">لا يوجد سياق FAQ لهذه الرسالة.</p>
+                <button type="button" onClick={() => setFaqCorrectionModal(null)} className="btn-secondary">
+                  إغلاق
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </div>
       )}
     </div>
   );
