@@ -159,11 +159,20 @@ async def create_local_qa_pair_internal(
     for lang in target_languages_all:
         translated = translations.get(lang, {})
         q_text = translated.get("question", "") or question
-        # Answer: always Arabic for ar and franco (Manage Data shows answer in Arabic)
+        # Answer: always Arabic for ar and franco (never store Franco in answer)
         if lang in ("ar", "franco"):
-            a_text = translations.get("ar", {}).get("answer", "") or answer_ar_canonical
+            a_text = answer_ar_canonical
         else:
             a_text = translated.get("answer", "") or answer_ar_canonical
+        # Arabic section question must be in Arabic script; if Franco, translate
+        if lang == "ar" and q_text and not _answer_in_arabic_script(q_text):
+            ar_q_result = await language_detection_service.translate_training_pair(
+                question=q_text, answer=answer_ar_canonical,
+                source_language=detected_language, target_languages=["ar"],
+            )
+            ar_q = ar_q_result.get("translations", {}).get("ar", {})
+            if ar_q.get("question"):
+                q_text = ar_q["question"]
         if not q_text or not a_text:
             continue
         created_entries.append(
