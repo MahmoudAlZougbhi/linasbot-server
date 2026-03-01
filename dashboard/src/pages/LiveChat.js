@@ -21,6 +21,7 @@ import toast from "react-hot-toast";
 import { useApi } from "../hooks/useApi";
 import { formatMessageTime } from "../utils/dateUtils";
 import FeedbackModal from "../components/FeedbackModal";
+import LikeFeedbackModal from "../components/LikeFeedbackModal";
 import ModernAudioPlayer from "../components/LiveChat/ModernAudioPlayer";
 import {
   SentimentIndicator,
@@ -809,6 +810,12 @@ const LiveChat = () => {
         message,
         feedbackType,
       });
+    } else if (feedbackType === "like") {
+      // Show modal to edit question + answer and save to FAQ (4 languages)
+      setFeedbackModal({
+        message,
+        feedbackType: "like",
+      });
     }
   };
 
@@ -840,6 +847,23 @@ const LiveChat = () => {
 
     if (result.success) {
       setFeedbackModal(null);
+    }
+  };
+
+  const submitLikeToFaq = async (editedQuestion, editedAnswer) => {
+    const result = await submitFeedback({
+      conversation_id: selectedConversation.conversation.conversation_id,
+      message_id: feedbackModal.message.id || `msg_${Date.now()}`,
+      user_question: editedQuestion,
+      bot_response: feedbackModal.message.content,
+      feedback_type: "save_to_faq",
+      correct_answer: editedAnswer,
+      language: selectedConversation.conversation.language,
+    });
+
+    if (result.success) {
+      setFeedbackModal(null);
+      toast.success("Saved to FAQ in 4 languages!");
     }
   };
 
@@ -1319,10 +1343,25 @@ const LiveChat = () => {
                             <>
                               <span className="text-xs text-slate-500">
                                 •{" "}
-                                {msg.handled_by === "bot"
+                                {msg.handled_by === "ai"
+                                  ? "✨ AI"
+                                  : msg.handled_by === "bot"
                                   ? "🤖 Bot"
                                   : "👤 Human"}
                               </span>
+                              {msg.handled_by === "ai" &&
+                                !isVoiceMessage &&
+                                !isImageMessage && (
+                                  <button
+                                    onClick={() =>
+                                      handleFeedback(msg, "like")
+                                    }
+                                    className="text-xs hover:scale-125 transition-transform ml-2"
+                                    title="Save to FAQ (edit & save in 4 languages)"
+                                  >
+                                    👍
+                                  </button>
+                                )}
                               {msg.handled_by === "bot" &&
                                 !isVoiceMessage &&
                                 !isImageMessage && (
@@ -1664,8 +1703,16 @@ const LiveChat = () => {
         </motion.div>
       </div>
 
-      {/* Feedback Modal */}
-      {feedbackModal && (
+      {/* Feedback Modals */}
+      {feedbackModal?.feedbackType === "like" && (
+        <LikeFeedbackModal
+          message={feedbackModal.message}
+          userQuestion={getPreviousUserMessage(feedbackModal.message)}
+          onClose={() => setFeedbackModal(null)}
+          onSubmit={submitLikeToFaq}
+        />
+      )}
+      {feedbackModal?.feedbackType === "wrong" && (
         <FeedbackModal
           message={feedbackModal.message}
           conversation={selectedConversation.conversation}

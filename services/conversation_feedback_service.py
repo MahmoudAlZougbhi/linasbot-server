@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from services.qa_database_service import qa_db_service
+from services.language_detection_service import language_detection_service
 
 load_dotenv()
 
@@ -71,7 +72,7 @@ class ConversationFeedbackService:
             print(f"   Question: {user_question}")
             print(f"   Bot Response: {bot_response}")
             
-            # If feedback is negative and correct answer provided, train the bot
+            # If feedback is negative and correct answer provided, train the bot (single language)
             if feedback_type == "wrong" and correct_answer:
                 print(f"🎓 Training bot with correct answer...")
                 training_result = await self.train_from_feedback(
@@ -84,6 +85,23 @@ class ConversationFeedbackService:
                 return {
                     "success": True,
                     "message": "Feedback submitted and bot trained successfully",
+                    "feedback_id": len(self.feedback_log) - 1,
+                    "training_result": training_result
+                }
+            
+            # If "save_to_faq" (Like on AI answer): save to FAQ in all 4 languages
+            if feedback_type == "save_to_faq" and correct_answer:
+                print(f"🎓 Saving to FAQ in 4 languages...")
+                training_result = await self.train_from_feedback_multilang(
+                    user_question=user_question,
+                    correct_answer=correct_answer,
+                    source_language=language,
+                    category="operator_trained"
+                )
+                
+                return {
+                    "success": True,
+                    "message": "Saved to FAQ in 4 languages",
                     "feedback_id": len(self.feedback_log) - 1,
                     "training_result": training_result
                 }
@@ -159,6 +177,63 @@ class ConversationFeedbackService:
                 "success": False,
                 "error": str(e)
             }
+    
+    async def train_from_feedback_multilang(
+        self,
+        user_question: str,
+        correct_answer: str,
+        source_language: str = "ar",
+        category: str = "operator_trained"
+    ) -> Dict:
+        """
+        Save Q&A to FAQ in all 4 languages (ar, en, fr, franco).
+        Uses translation service to produce all language variants.
+        """
+        try:
+            norm_source = language_detection_service.normalize_training_language(source_language, default="ar")
+            result = await language_detection_service.translate_training_pair(
+                question=user_question,
+                answer=correct_answer,
+                source_language=norm_source,
+                target_languages=["ar", "en", "fr", "franco"],
+            )
+            translations = result.get("translations", {})
+            
+            qa_data = {
+                "question_ar": translations.get("ar", {}).get("question", user_question if norm_source == "ar" else ""),
+                "answer_ar": translations.get("ar", {}).get("answer", correct_answer if norm_source == "ar" else ""),
+                "question_en": translations.get("en", {}).get("question", user_question if norm_source == "en" else ""),
+                "answer_en": translations.get("en", {}).get("answer", correct_answer if norm_source == "en" else ""),
+                "question_fr": translations.get("fr", {}).get("question", user_question if norm_source == "fr" else ""),
+                "answer_fr": translations.get("fr", {}).get("answer", correct_answer if norm_source == "fr" else ""),
+                "question_franco": translations.get("franco", {}).get("question", user_question if norm_source == "franco" else ""),
+                "answer_franco": translations.get("franco", {}).get("answer", correct_answer if norm_source == "franco" else ""),
+                "category": category,
+                "tags": ["operator_trained", "save_to_faq", "live_chat"]
+            }
+            
+            # Ensure we have at least Arabic or source language
+            if not qa_data["question_ar"] and not qa_data["question_en"]:
+                qa_data["question_ar"] = user_question
+                qa_data["answer_ar"] = correct_answer
+            
+            result = await qa_db_service.create_qa_pair(**qa_data)
+            
+            if result.get("success"):
+                qa_id = result.get("data", {}).get("qa_id")
+                print(f"✅ Saved to FAQ in 4 languages! Q&A ID: {qa_id}")
+                return {
+                    "success": True,
+                    "qa_id": qa_id,
+                    "message": "Saved to FAQ in 4 languages"
+                }
+            return {
+                "success": False,
+                "error": result.get("message", "Unknown error")
+            }
+        except Exception as e:
+            print(f"❌ Error saving to FAQ: {e}")
+            return {"success": False, "error": str(e)}
     
     def get_feedback_stats(self) -> Dict:
         """

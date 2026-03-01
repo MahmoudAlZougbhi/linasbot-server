@@ -183,7 +183,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             
             thanks_message = thanks_messages.get(current_preferred_lang, thanks_messages["ar"])
             await send_message_func(user_id, thanks_message)
-            await save_conversation_message_to_firestore(user_id, "ai", thanks_message, current_conversation_id, extracted_name, user_data.get('phone_number'))
+            await save_conversation_message_to_firestore(user_id, "ai", thanks_message, current_conversation_id, extracted_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
             
             # Log the event
             log_report_event("name_saved", extracted_name, current_gender, {"method": "Post-Gender Confirmation", "whatsapp_id": user_id})
@@ -202,7 +202,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             
             error_message = error_messages.get(current_preferred_lang, error_messages["ar"])
             await send_message_func(user_id, error_message)
-            await save_conversation_message_to_firestore(user_id, "ai", error_message, current_conversation_id, user_name, user_data.get('phone_number'))
+            await save_conversation_message_to_firestore(user_id, "ai", error_message, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
             
             return
 
@@ -271,7 +271,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             gender_acknowledgement = "أهلاً بك أستاذ " if current_gender == "male" else "أهلاً بكِ سيدتي "
             await send_message_func(user_id, f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.")
-            await save_conversation_message_to_firestore(user_id, "ai", f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.", current_conversation_id, user_name, user_data.get('phone_number'))
+            await save_conversation_message_to_firestore(user_id, "ai", f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.", current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
         # Check Q&A Database before calling GPT-4
         # Decision flow: 90%+ returns Q&A directly, <90% passes to GPT with top 3 relevant Q&A pairs
@@ -310,6 +310,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 user_data.get('phone_number'),
                 metadata={
                     "source": "qa_database",
+                    "handled_by": "bot",
                     "match_score": match_score,
                     "ai_cost_saved": True,
                     "response_type": "instant"
@@ -356,7 +357,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                             {"step": 4, "title": "Bot → User", "content": clarification},
                         ]
                         await send_message_func(user_id, clarification)
-                        await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"))
+                        await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"), metadata={"handled_by": "ai"})
                         save_for_training_conversation_log(query_to_send_to_gpt, clarification)
                         log_interaction(user_id, query_to_send_to_gpt, clarification, "dynamic_retrieval", user_name=user_name, user_phone=user_data.get("phone_number"), flow_steps=flow_steps)
                         return
@@ -475,18 +476,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             override_reply = override_reply_messages.get(current_preferred_lang, override_reply_messages["ar"])
             sent_reply = override_reply
             await send_message_func(user_id, override_reply)
-            await save_conversation_message_to_firestore(user_id, "ai", override_reply, current_conversation_id, user_name, user_data.get('phone_number'))
+            await save_conversation_message_to_firestore(user_id, "ai", override_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         else:
             config.gender_attempts[user_id] += 1
             if config.gender_attempts[user_id] >= config.MAX_GENDER_ASK_ATTEMPTS:
                 fallback_reply = "عذراً، لم أتمكن من تحديد جنسك بشكل دقيق. لتقديم أفضل مساعدة، قد تحتاج للتواصل مع فريقنا مباشرة. أو يمكنك المحاولة مجدداً بعبارة واضحة كـ 'أنا شب' أو 'أنا صبية'."
                 sent_reply = fallback_reply
                 await send_message_func(user_id, fallback_reply)
-                await save_conversation_message_to_firestore(user_id, "ai", fallback_reply, current_conversation_id, user_name, user_data.get('phone_number'))
+                await save_conversation_message_to_firestore(user_id, "ai", fallback_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
                 config.user_greeting_stage[user_id] = 2
             else:
                 await send_message_func(user_id, bot_reply_text)
-                await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
+                await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     elif action == "confirm_gender":
         # FIXED: Don't send GPT's reply to avoid double messages
@@ -532,7 +533,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             sent_reply = combined_response
 
             await send_message_func(user_id, combined_response)
-            await save_conversation_message_to_firestore(user_id, "ai", combined_response, current_conversation_id, user_name, user_data.get('phone_number'))
+            await save_conversation_message_to_firestore(user_id, "ai", combined_response, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
             print(f"✅ Answered initial query for user {user_id}")
         else:
             # No initial query stored, ask for name
@@ -548,7 +549,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             name_question = name_question_messages.get(current_preferred_lang, name_question_messages["ar"])
             sent_reply = name_question
             await send_message_func(user_id, name_question)
-            await save_conversation_message_to_firestore(user_id, "ai", name_question, current_conversation_id, user_name, user_data.get('phone_number'))
+            await save_conversation_message_to_firestore(user_id, "ai", name_question, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
             # Set flag to expect name in next message
             user_data['awaiting_name_input'] = True
@@ -556,17 +557,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     elif action == "confirm_booking_details":
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         config.user_greeting_stage[user_id] = 2
 
     elif action == "human_handover_initial_ask":
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         user_data['awaiting_human_handover_confirmation'] = True
 
     elif action == "human_handover_confirmed":
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "customer_requested_human",
             trigger_source="ai_handover_confirmed"
@@ -580,11 +581,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     elif action == "return_to_normal_chat":
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     elif action == "human_handover":
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
             trigger_source="ai_handover_direct"
@@ -598,13 +599,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     elif action in ["answer_question", "normal_chat", "unknown_query", "provide_info", "tool_call", "ask_for_details_for_booking", "ask_for_service_type", "ask_for_details", "ask_for_tattoo_photo", "check_customer_status", "confirm_appointment_reschedule"]:
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'))
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         config.user_greeting_stage[user_id] = 2
 
     else:
         sent_reply = "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
         await send_message_func(user_id, sent_reply)
-        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'))
+        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         print(f"[_process_and_respond] ERROR: User {user_id} received fallback reply due to unexpected action: {action}")
 
     # Flow logging for dashboard transparency

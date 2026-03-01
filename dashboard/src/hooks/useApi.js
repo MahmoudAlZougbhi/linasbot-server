@@ -939,7 +939,11 @@ export const useApi = () => {
       if (response.data.success) {
         toast.success("Feedback submitted successfully!");
         if (response.data.training_result?.success) {
-          toast.success("🎓 Bot trained with correct answer!");
+          if (feedbackData.feedback_type === "save_to_faq") {
+            toast.success("🎓 Saved to FAQ in 4 languages!");
+          } else {
+            toast.success("🎓 Bot trained with correct answer!");
+          }
         }
       }
 

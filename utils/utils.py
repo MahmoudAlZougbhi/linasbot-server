@@ -224,6 +224,39 @@ def _message_to_dashboard_format(msg: dict) -> dict:
     return out
 
 
+async def _update_customer_name_from_external_after_save(
+    canonical_user_id: str,
+    normalized_phone: str,
+    conversation_id: str,
+    conversations_collection_for_user,
+    user_doc_ref,
+):
+    """Update customer name from CRM in background so user message can save+broadcast first."""
+    try:
+        from services.customer_identity_service import resolve_customer_from_external
+        external = await resolve_customer_from_external(normalized_phone)
+        customer_name = (external.get("name") or "") if external.get("exists") else ""
+        external_id = external.get("external_id")
+        if customer_name:
+            config.user_names[canonical_user_id] = customer_name
+        doc_ref = conversations_collection_for_user.document(conversation_id)
+        doc_snap = await asyncio.to_thread(doc_ref.get)
+        if doc_snap.exists:
+            doc_data = doc_snap.to_dict() or {}
+            customer_info = dict(doc_data.get("customer_info") or {})
+            customer_info["name"] = customer_name
+            customer_info["last_updated"] = utc_now()
+            await asyncio.to_thread(doc_ref.update, {"customer_info": customer_info})
+        if customer_name or external_id is not None:
+            update_data = {"last_activity": utc_now(), "name": customer_name}
+            if external_id is not None:
+                update_data["external_id"] = external_id
+            await asyncio.to_thread(user_doc_ref.update, update_data)
+        _log.info("Background customer name updated for %s: name=%s", canonical_user_id, customer_name or "(phone only)")
+    except Exception as e:
+        _log.warning("Background customer name update failed: %s", e)
+
+
 def _invalidate_live_chat_cache():
     try:
         from services.live_chat_service import live_chat_service
@@ -329,10 +362,11 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     placeholder_phone = _is_placeholder_phone(phone_number)
     clean_phone = _clean_phone_for_lookup(phone_number)
 
-    # Mandatory external resolve before naming: do not set a name if not in CRM (show phone only)
+    # For "user" role: save + broadcast FIRST so message appears instantly in Live Chat; resolve CRM name in background.
     customer_name = user_name or config.user_names.get(canonical_user_id) or config.user_names.get(user_id)
     external_id = None
-    if normalized_phone:
+    defer_external_for_speed = role == "user" and normalized_phone
+    if normalized_phone and not defer_external_for_speed:
         try:
             from services.customer_identity_service import resolve_customer_from_external
             external = await resolve_customer_from_external(normalized_phone)
@@ -351,7 +385,6 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             customer_name = customer_name or ""
     if customer_name is None:
         customer_name = ""
-    # When not in external system: show phone only in Live Chat (no name)
     if not customer_name and not normalized_phone:
         customer_name = "Unknown Customer"
 
@@ -442,6 +475,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         })
         return payload
 
+    saved_conv_id = None  # for deferred external name update (user role)
     try:
         if conversation_id:
             # Update existing conversation document
@@ -449,6 +483,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             doc_snap = await asyncio.to_thread(doc_ref.get)
 
             if doc_snap.exists:
+                saved_conv_id = conversation_id
                 doc_data = doc_snap.to_dict() or {}
                 current_messages = doc_data.get("messages", [])
                 message_data = _build_message_data()
@@ -506,6 +541,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "human_takeover_active": False,
                     "last_updated": utc_now()
                 })
+                saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
@@ -542,6 +578,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
 
             if resolved_conversation_id:
+                saved_conv_id = resolved_conversation_id
                 # Append to existing conversation
                 doc_ref = conversations_collection_for_user.document(resolved_conversation_id)
                 doc_snap = await asyncio.to_thread(doc_ref.get)
@@ -607,6 +644,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "human_takeover_active": False,
                     "last_updated": utc_now()
                 })
+                saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
@@ -625,6 +663,13 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         }))
                     except Exception:
                         pass
+
+        # Deferred: update customer name from CRM in background so user message already appeared in Live Chat
+        if defer_external_for_speed and saved_conv_id and normalized_phone:
+            asyncio.create_task(_update_customer_name_from_external_after_save(
+                canonical_user_id, normalized_phone, saved_conv_id,
+                conversations_collection_for_user, user_doc_ref,
+            ))
 
     except Exception as e:
         print(f"❌ ERROR saving conversation message to Firestore for user {user_id}: {e}")
