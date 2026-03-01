@@ -97,6 +97,76 @@ def reload_local_qa_cache():
         print(f"⚠️ Failed to reload local_qa_service cache: {e}")
 
 
+async def create_local_qa_pair_internal(
+    question: str,
+    answer: str,
+    language: str = "ar",
+    category: str = "operator_trained",
+) -> dict:
+    """
+    Create Q&A pair in local JSON file (used by Save to FAQ from Live Chat).
+    Saves to Manage Data / Bot Training so it appears in the dashboard.
+    """
+    question = (question or "").strip()
+    answer = (answer or "").strip()
+    if not question or not answer:
+        return {"success": False, "error": "Question and answer are required"}
+
+    detected_language = language_detection_service.normalize_training_language(
+        language,
+        default=language_detection_service.detect_training_language(question),
+    )
+    qa_group_id = f"qa_{uuid.uuid4().hex[:10]}"
+    created_entries = []
+
+    target_languages_all = ["ar", "en", "fr", "franco"]
+    translation_result = await language_detection_service.translate_training_pair(
+        question=question,
+        answer=answer,
+        source_language=detected_language,
+        target_languages=target_languages_all,
+    )
+    if not translation_result.get("success"):
+        return {
+            "success": False,
+            "error": "Failed to auto-translate Q&A to all 4 languages",
+        }
+
+    translations = translation_result.get("translations", {})
+    for lang in target_languages_all:
+        translated = translations.get(lang, {})
+        q_text = translated.get("question", "") or question
+        a_text = translated.get("answer", "") or answer
+        if not q_text or not a_text:
+            continue
+        created_entries.append(
+            build_qa_entry(
+                question=q_text,
+                answer=a_text,
+                language=lang,
+                category=category,
+                qa_group_id=qa_group_id,
+                source_language=detected_language,
+                is_auto_translated=(lang != detected_language),
+            )
+        )
+
+    qa_pairs = read_qa_pairs()
+    qa_pairs.extend(created_entries)
+    if write_qa_pairs(qa_pairs):
+        reload_local_qa_cache()
+        return {
+            "success": True,
+            "message": "Q&A pair saved to Manage Data",
+            "data": created_entries[0],
+            "created_entries": created_entries,
+            "count_created": len(created_entries),
+            "detected_language": detected_language,
+            "qa_group_id": qa_group_id,
+        }
+    return {"success": False, "error": "Failed to write to file"}
+
+
 @app.get("/api/local-qa/list")
 async def list_local_qa_pairs(language: Optional[str] = None):
     """List all Q&A pairs from local JSON file"""
@@ -143,97 +213,16 @@ async def list_local_qa_pairs(language: Optional[str] = None):
 async def create_local_qa_pair(qa_data: dict):
     """Create a new Q&A pair in local JSON file"""
     try:
-        print("\n" + "="*80)
-        print("🆕 Creating new Q&A pair (LOCAL JSON)")
-        print("="*80)
-        print(f"📥 Received data: {qa_data}")
-        
         question = qa_data.get("question", "").strip()
         answer = qa_data.get("answer", "").strip()
         category = qa_data.get("category", "general")
         requested_language = qa_data.get("language")
-        
-        if not question or not answer:
-            return {
-                "success": False,
-                "error": "Question and answer are required"
-            }
-        
-        detected_language = language_detection_service.normalize_training_language(
-            requested_language,
-            default=language_detection_service.detect_training_language(question),
-        )
-        print(f"🔍 Training language: {detected_language}")
-
-        qa_group_id = qa_data.get("qa_group_id") or f"qa_{uuid.uuid4().hex[:10]}"
-        created_entries = []
-
-        # Auto-translate from ANY language to all 4 (ar, en, fr, franco)
-        target_languages_all = ["ar", "en", "fr", "franco"]
-        translation_result = await language_detection_service.translate_training_pair(
+        return await create_local_qa_pair_internal(
             question=question,
             answer=answer,
-            source_language=detected_language,
-            target_languages=target_languages_all,
+            language=requested_language or "ar",
+            category=category,
         )
-        if not translation_result.get("success"):
-            return {
-                "success": False,
-                "error": "Failed to auto-translate Q&A to all 4 languages",
-                "missing_languages": translation_result.get("missing_languages", []),
-            }
-
-        translations = translation_result.get("translations", {})
-        for lang in target_languages_all:
-            translated = translations.get(lang, {})
-            q_text = translated.get("question", "") or question
-            a_text = translated.get("answer", "") or answer
-            if not q_text or not a_text:
-                continue
-            created_entries.append(
-                build_qa_entry(
-                    question=q_text,
-                    answer=a_text,
-                    language=lang,
-                    category=category,
-                    qa_group_id=qa_group_id,
-                    source_language=detected_language,
-                    is_auto_translated=(lang != detected_language),
-                )
-            )
-        
-        # Read existing Q&A pairs
-        qa_pairs = read_qa_pairs()
-        
-        # Append new Q&A entries (single language or multilingual batch)
-        qa_pairs.extend(created_entries)
-        
-        # Write back to file
-        if write_qa_pairs(qa_pairs):
-            reload_local_qa_cache()
-            print(f"✅ Q&A pair saved successfully!")
-            print(f"   Question: {question}")
-            print(f"   Answer: {answer}")
-            print(f"   Language: {detected_language}")
-            print(f"   Category: {category}")
-            print(f"   Entries created: {len(created_entries)}")
-            print("="*80 + "\n")
-            
-            return {
-                "success": True,
-                "message": "Q&A pair created successfully",
-                "data": created_entries[0],
-                "created_entries": created_entries,
-                "count_created": len(created_entries),
-                "detected_language": detected_language,
-                "qa_group_id": qa_group_id,
-            }
-        else:
-            return {
-                "success": False,
-                "error": "Failed to write to file"
-            }
-            
     except Exception as e:
         print(f"❌ Error creating Q&A pair: {e}")
         import traceback

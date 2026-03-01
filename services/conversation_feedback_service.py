@@ -89,16 +89,36 @@ class ConversationFeedbackService:
                     "training_result": training_result
                 }
             
-            # If "save_to_faq" (Like on AI answer): save to FAQ in all 4 languages
+            # If "save_to_faq" (Like on AI answer): save to LOCAL QA so it appears in Manage Data
             if feedback_type == "save_to_faq" and correct_answer:
-                print(f"🎓 Saving to FAQ in 4 languages...")
+                print(f"🎓 Saving to FAQ (Manage Data) in 4 languages...")
+                try:
+                    from modules.local_qa_api import create_local_qa_pair_internal
+                    local_result = await create_local_qa_pair_internal(
+                        question=user_question,
+                        answer=correct_answer,
+                        language=language,
+                        category="operator_trained",
+                    )
+                    if local_result.get("success"):
+                        print(f"✅ Saved to Manage Data! Count: {local_result.get('count_created', 0)}")
+                        return {
+                            "success": True,
+                            "message": "Saved to FAQ in 4 languages",
+                            "feedback_id": len(self.feedback_log) - 1,
+                            "training_result": {"success": True, "qa_id": "local"}
+                        }
+                    # Fallback to external QA if local fails
+                    print(f"⚠️ Local save failed: {local_result.get('error')}, trying external QA...")
+                except Exception as e:
+                    print(f"⚠️ Local QA save error: {e}, trying external QA...")
+                # Fallback: also save to external QA database
                 training_result = await self.train_from_feedback_multilang(
                     user_question=user_question,
                     correct_answer=correct_answer,
                     source_language=language,
                     category="operator_trained"
                 )
-                
                 return {
                     "success": True,
                     "message": "Saved to FAQ in 4 languages",
