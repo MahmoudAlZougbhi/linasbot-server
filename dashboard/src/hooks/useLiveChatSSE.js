@@ -18,6 +18,9 @@ export const useLiveChatSSE = ({
   setIsRefreshing,
   setSelectedConversation,
   updateChatListLocally,
+  setIsLoading,
+  setHasMoreChats,
+  setChatPage,
 }) => {
   useEffect(() => {
     if (!enabled) {
@@ -40,19 +43,27 @@ export const useLiveChatSSE = ({
       clearNewBadgeTimeout = setTimeout(() => setNewConversationIds(new Set()), 10000);
     };
 
-    const refreshChats = async ({ preferredConversations = null, announceNewIds = null } = {}) => {
+    const refreshChats = async ({
+      preferredConversations = null,
+      announceNewIds = null,
+      total = null,
+      hasMore = null,
+    } = {}) => {
       if (!isMountedRef.current) return null;
       const searchTerm = debouncedSearchRef.current;
       let conversations = null;
-      // Use SSE payload when no search to avoid duplicate API call on initial connect (faster open)
+      let hasMoreValue = hasMore;
+      // Use SSE payload when no search - single Firestore scan on open (no duplicate API call)
       if (!searchTerm && preferredConversations != null && Array.isArray(preferredConversations)) {
         conversations = preferredConversations;
+        if (total != null) hasMoreValue = total > conversations.length;
       }
       if (conversations == null) {
         const chatsResponse = await getUnifiedChats(searchTerm, 1, 30);
         if (!isMountedRef.current) return null;
         conversations =
           chatsResponse?.success && chatsResponse?.chats ? chatsResponse.chats : preferredConversations;
+        if (chatsResponse?.success) hasMoreValue = chatsResponse.has_more ?? false;
       }
       if (!conversations) return null;
 
@@ -72,6 +83,10 @@ export const useLiveChatSSE = ({
       if (newIds.size > 0) {
         clearNewBadgesSoon();
       }
+
+      if (total != null && setIsLoading) setIsLoading(false);
+      if (hasMoreValue != null && setHasMoreChats) setHasMoreChats(hasMoreValue);
+      if (setChatPage) setChatPage(1);
 
       return conversations;
     };
@@ -138,9 +153,22 @@ export const useLiveChatSSE = ({
         try {
           const data = JSON.parse(event.data || "{}");
           const conversations = Array.isArray(data.conversations) ? data.conversations : null;
-          await refreshChats({ preferredConversations: conversations });
+          const total = typeof data.total === "number" ? data.total : (conversations?.length || 0);
+          await refreshChats({
+            preferredConversations: conversations,
+            total,
+          });
+          // Populate from SSE = single scan on open; stop loading + select first chat if none
+          if (setIsLoading) setIsLoading(false);
+          if (conversations?.length > 0 && selectedConversationRef.current == null) {
+            setSelectedConversation({
+              conversation: conversations[0],
+              history: [],
+            });
+          }
         } catch (error) {
           console.error("SSE conversations parse error:", error);
+          if (setIsLoading) setIsLoading(false);
         }
       });
 
@@ -322,6 +350,9 @@ export const useLiveChatSSE = ({
     isMountedRef,
     selectedConversationRef,
     setActiveConversations,
+    setChatPage,
+    setHasMoreChats,
+    setIsLoading,
     setIsRefreshing,
     setLastRefreshTime,
     setNewConversationIds,

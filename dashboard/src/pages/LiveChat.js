@@ -212,13 +212,25 @@ const LiveChat = () => {
     onAppendMessage: appendMessageToSelectedConversation,
   });
 
-  // Fetch real data from API
+  // Fetch real data: on initial load (no search) rely on SSE only - no duplicate /unified-chats call
   useEffect(() => {
     const fetchLiveData = async () => {
       if (!isMountedRef.current) return;
-      // Only show loading on initial load, not on refresh
       if (!activeConversations.length) {
         if (isMountedRef.current) setIsLoading(true);
+      }
+
+      // Initial load with no search: skip getUnifiedChats - SSE "conversations" will populate (1 scan instead of 2)
+      if (!debouncedSearch.trim()) {
+        getWaitingQueue()
+          .then((queueResponse) => {
+            if (!isMountedRef.current) return;
+            if (queueResponse?.success && queueResponse.queue) {
+              setWaitingQueue(queueResponse.queue);
+            }
+          })
+          .catch(() => {});
+        return; // SSE will populate + setIsLoading(false) via useLiveChatSSE
       }
 
       try {
@@ -239,9 +251,8 @@ const LiveChat = () => {
                 throw new Error("Fallback failed");
               }
             } catch (fallbackErr) {
-              // 504 / timeout: do NOT switch to mock data - keep existing conversations
               toast.error("Server is busy. Data will refresh when available.");
-              return; // Exit without changing conversations or loading mock
+              return;
             }
           } else {
             throw err;
@@ -255,40 +266,21 @@ const LiveChat = () => {
           setUseMockData(false);
 
           const currentSelection = selectedConversationRef.current;
-
-          if (
-            !currentSelection &&
-            chats.length > 0 &&
-            !activeConversations.length
-          ) {
-            const firstConv = chats[0];
-            // ✅ Set conversation immediately with empty history (show loading state)
-            setSelectedConversation({
-              conversation: firstConv,
-              history: [],
-            });
+          if (!currentSelection && chats.length > 0 && !activeConversations.length) {
+            setSelectedConversation({ conversation: chats[0], history: [] });
             setMessagesLoading(true);
           } else if (currentSelection) {
             const updatedConv = chats.find(
-              (c) =>
-                c.conversation_id ===
-                currentSelection.conversation.conversation_id
+              (c) => c.conversation_id === currentSelection.conversation.conversation_id
             );
             if (updatedConv && isMountedRef.current) {
-              setSelectedConversation((prev) => ({
-                ...prev,
-                conversation: updatedConv,
-              }));
+              setSelectedConversation((prev) => ({ ...prev, conversation: updatedConv }));
             }
           }
-        } else if (isMountedRef.current) {
-          // Backend returned failure - use mock only for true offline (ERR_NETWORK)
-          if (!activeConversations.length) {
-            loadMockData();
-          }
+        } else if (isMountedRef.current && !activeConversations.length) {
+          loadMockData();
         }
 
-        // Fetch waiting queue in background (do not block initial Live Chat render)
         getWaitingQueue()
           .then((queueResponse) => {
             if (!isMountedRef.current) return;
@@ -296,9 +288,7 @@ const LiveChat = () => {
               setWaitingQueue(queueResponse.queue);
             }
           })
-          .catch(() => {
-            // Silent fail - chats list already rendered
-          });
+          .catch(() => {});
       } catch (error) {
         if (!isMountedRef.current) return;
         console.error("Error fetching live chat data:", error);
@@ -315,7 +305,7 @@ const LiveChat = () => {
 
     fetchLiveData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]); // Re-fetch when search changes
+  }, [debouncedSearch]);
 
   useLiveChatSSE({
     enabled: !useMockData,
@@ -332,7 +322,37 @@ const LiveChat = () => {
     setIsRefreshing,
     setSelectedConversation,
     updateChatListLocally,
+    setIsLoading,
+    setHasMoreChats,
+    setChatPage,
   });
+
+  // Fallback: if SSE doesn't populate within 8s, fetch manually (SSE failed/slow)
+  useEffect(() => {
+    if (debouncedSearch.trim() || useMockData) return;
+    const t = setTimeout(async () => {
+      if (!isMountedRef.current) return;
+      if (activeConversationsRef.current?.length > 0) return;
+      setIsLoading(true);
+      try {
+        const r = await getUnifiedChats("", 1, 30);
+        if (!isMountedRef.current) return;
+        if (r?.success && r?.chats?.length > 0) {
+          setActiveConversations(r.chats);
+          setHasMoreChats(r.has_more ?? false);
+          setChatPage(1);
+          if (!selectedConversationRef.current) {
+            setSelectedConversation({ conversation: r.chats[0], history: [] });
+          }
+        }
+      } catch (e) {
+        console.warn("Live Chat fallback fetch failed:", e);
+      } finally {
+        if (isMountedRef.current) setIsLoading(false);
+      }
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [debouncedSearch, useMockData, getUnifiedChats, setIsLoading, setActiveConversations, setHasMoreChats, setChatPage, setSelectedConversation]);
 
   const selectedConversationId = selectedConversation?.conversation?.conversation_id;
   const selectedConversationUserId = selectedConversation?.conversation?.user_id;
@@ -867,12 +887,8 @@ const LiveChat = () => {
       });
       toast.success("👍 Thanks for your feedback!");
     } else if (feedbackType === "wrong") {
-      const hasFaqMatch = message.metadata?.faq_match || message.reply_source === "managed_faq";
-      if (hasFaqMatch) {
-        setFaqCorrectionModal({ message });
-      } else {
-        setEditMessageModal({ message });
-      }
+      // Always show FAQ correction pop-up for bot messages (with or without FAQ match)
+      setFaqCorrectionModal({ message });
     } else if (feedbackType === "like") {
       // Show modal to edit question + answer and save to FAQ (4 languages)
       setFeedbackModal({
@@ -2058,12 +2074,53 @@ const LiveChat = () => {
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-between">
-                <p className="text-slate-500 text-sm">لا يوجد سياق FAQ لهذه الرسالة.</p>
-                <button type="button" onClick={() => setFaqCorrectionModal(null)} className="btn-secondary">
-                  إغلاق
-                </button>
-              </div>
+              <>
+                {/* No FAQ match: show user question + editable answer + Save New only */}
+                <div className="space-y-3 mb-4 text-sm">
+                  <div>
+                    <span className="font-medium text-slate-600">السؤال الأصلي (مخزّن بالـ FAQ):</span>
+                    <p className="mt-1 p-2 bg-slate-100 rounded border border-slate-200 text-slate-500 italic">—</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-600">سؤال المستخدم:</span>
+                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
+                      {getPreviousUserMessage(faqCorrectionModal.message) || "—"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-600">نسبة التطابق:</span>
+                    <span className="text-slate-400">—</span>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">الإجابة (قابلة للتعديل):</label>
+                  <textarea
+                    value={faqEditAnswer}
+                    onChange={(e) => setFaqEditAnswer(e.target.value)}
+                    placeholder="عدّل الإجابة..."
+                    className="input-field w-full min-h-[100px] resize-y"
+                    disabled={faqSubmitting}
+                  />
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFaqCorrectionModal(null)}
+                    className="btn-secondary"
+                    disabled={faqSubmitting}
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFaqSaveNew}
+                    className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
+                  >
+                    {faqSubmitting ? "..." : "Save New — حفظ سؤال المستخدم + الإجابة كسؤال جديد بكل اللغات"}
+                  </button>
+                </div>
+              </>
             )}
           </motion.div>
         </div>
