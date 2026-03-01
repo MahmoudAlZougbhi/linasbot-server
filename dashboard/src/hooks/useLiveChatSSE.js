@@ -134,10 +134,37 @@ export const useLiveChatSSE = ({
         handlingNewMessageEvent = true;
         try {
           const data = JSON.parse(event.data || "{}");
+          const selected = selectedConversationRef.current;
+          const convId = data?.conversation_id;
+          const userId = data?.user_id;
+          const message = data?.message;
+
+          // INSTANT: If we have full message and it matches selected conversation, append directly (no API call)
+          const isMatch =
+            selected &&
+            ((convId && selected.conversation?.conversation_id === convId) ||
+              (userId && selected.conversation?.user_id === userId));
+          if (isMatch && message && typeof message === "object" && message.timestamp) {
+            setSelectedConversation((prev) => {
+              if (!prev || !prev.history) return prev;
+              const exists = prev.history.some(
+                (m) =>
+                  m.timestamp === message.timestamp &&
+                  String(m.content || m.text || "") === String(message.content || message.text || "")
+              );
+              if (exists) return prev;
+              return { ...prev, history: [...prev.history, message] };
+            });
+          }
+
+          // Refresh conversation list in background (for last_message, badge updates)
           setIsRefreshing(true);
-          await refreshChats();
-          setIsRefreshing(false);
-          await refreshSelectedConversationIfMatched(data);
+          refreshChats().finally(() => setIsRefreshing(false));
+
+          // If we didn't have message payload or didn't match, refetch messages
+          if (!isMatch || !message) {
+            await refreshSelectedConversationIfMatched(data);
+          }
         } catch (error) {
           setIsRefreshing(false);
           console.error("SSE new_message handler error:", error);

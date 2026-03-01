@@ -199,6 +199,31 @@ def _is_duplicate_message(existing_messages: list, new_message: dict) -> bool:
     )
 
 
+def _message_to_dashboard_format(msg: dict) -> dict:
+    """Convert internal message format to dashboard-compatible shape for instant SSE append."""
+    if not msg:
+        return {}
+    ts = msg.get("timestamp")
+    ts_str = ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else utc_now().isoformat())
+    role = str(msg.get("role", "")).strip().lower()
+    meta = msg.get("metadata") or {}
+    handled = meta.get("handled_by") or ("human" if role == "operator" else "bot")
+    out = {
+        "timestamp": ts_str,
+        "is_user": role == "user",
+        "content": msg.get("text", ""),
+        "text": msg.get("text", ""),
+        "type": msg.get("type") or meta.get("type") or "text",
+        "handled_by": handled,
+        "role": role,
+    }
+    for key in ("audio_url", "image_url"):
+        val = msg.get(key) or meta.get(key)
+        if val:
+            out[key] = val
+    return out
+
+
 def _invalidate_live_chat_cache():
     try:
         from services.live_chat_service import live_chat_service
@@ -450,16 +475,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 _invalidate_live_chat_cache()
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
-                # 📡 Broadcast SSE event for real-time dashboard updates
+                # 📡 Broadcast SSE event for real-time dashboard updates (instant WhatsApp-like)
                 if not is_smart_source:
                     try:
                         from modules.live_chat_api import broadcast_sse_event
+                        # Include full message for instant append (no API refetch)
+                        dash_msg = _message_to_dashboard_format(message_data)
                         asyncio.create_task(broadcast_sse_event("new_message", {
                             "user_id": canonical_user_id,
                             "conversation_id": conversation_id,
                             "role": role,
                             "text": text[:100] + "..." if len(text) > 100 else text,
-                            "phone": customer_info.get("phone_full")
+                            "phone": customer_info.get("phone_full"),
+                            "message": dash_msg,
                         }))
                     except Exception as sse_err:
                         print(f"❌ SSE Broadcast error: {sse_err}")
@@ -552,16 +580,18 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 _invalidate_live_chat_cache()
                 print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {canonical_user_id} (total: {len(current_messages)})")
 
-                # 📡 Broadcast SSE event
+                # 📡 Broadcast SSE event (instant WhatsApp-like)
                 if not is_smart_source:
                     try:
                         from modules.live_chat_api import broadcast_sse_event
+                        dash_msg = _message_to_dashboard_format(message_data)
                         asyncio.create_task(broadcast_sse_event("new_message", {
                             "user_id": canonical_user_id,
                             "conversation_id": resolved_conversation_id,
                             "role": role,
                             "text": text[:100] + "..." if len(text) > 100 else text,
-                            "phone": customer_info.get("phone_full")
+                            "phone": customer_info.get("phone_full"),
+                            "message": dash_msg,
                         }))
                     except Exception:
                         pass

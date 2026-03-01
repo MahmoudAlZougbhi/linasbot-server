@@ -35,8 +35,8 @@ class LiveChatService:
     # Time window for active conversations (2 hours - "live" = currently with AI)
     ACTIVE_TIME_WINDOW = 2 * 60 * 60  # 2 hours
 
-    # Cache configuration
-    CACHE_TTL = 20  # seconds - reduce expensive cold reads while keeping near real-time updates
+    # Cache configuration (short TTL for real-time feel; invalidated on every message save)
+    CACHE_TTL = 5  # seconds - near-instant updates when SSE broadcasts
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
     FIRESTORE_FETCH_PARALLELISM = 24
 

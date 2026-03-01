@@ -82,6 +82,18 @@ npm start
 
 ---
 
+## 7. Live Chat Real-Time (SSE)
+
+Live Chat uses Server-Sent Events for instant message delivery (no page refresh):
+
+- **SSE endpoint**: `GET /api/live-chat/events` (EventSource)
+- **New user messages** appear instantly in the dashboard when viewing that conversation.
+- **Admin messages** also push in real time to all connected clients.
+
+See `docs/LIVE_CHAT_REALTIME.md` for architecture and troubleshooting.
+
+---
+
 ## Quick reference
 
 | Task              | Command / location |

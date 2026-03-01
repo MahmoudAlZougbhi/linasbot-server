@@ -54,9 +54,10 @@ async def live_chat_events(request: Request):
         live_chat_sse_broadcaster.stream(request, initial_payload_loader=_load_initial_sse_payload),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
         }
     )
 
