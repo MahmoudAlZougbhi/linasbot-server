@@ -71,6 +71,17 @@ const LiveChat = () => {
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
 
+  // Split handover queue: AI-initiated vs User-requested
+  const userRequestedReasons = ["user_request", "customer_requested_human"];
+  const aiInitiatedHandover = React.useMemo(
+    () => waitingQueue.filter((item) => !userRequestedReasons.includes((item.reason || "").toLowerCase())),
+    [waitingQueue]
+  );
+  const userRequestedHandover = React.useMemo(
+    () => waitingQueue.filter((item) => userRequestedReasons.includes((item.reason || "").toLowerCase())),
+    [waitingQueue]
+  );
+
   const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
@@ -1179,15 +1190,85 @@ const LiveChat = () => {
           animate={{ opacity: 1, x: 0 }}
           className="col-span-3 space-y-4 h-full overflow-y-auto"
         >
-          {/* Waiting Queue */}
-          {waitingQueue.length > 0 && (
-            <div className="card p-4">
-              <h3 className="font-bold text-slate-800 mb-3 flex items-center">
-                <HandRaisedIcon className="w-5 h-5 mr-2 text-orange-500" />
-                Waiting Queue ({waitingQueue.length})
-              </h3>
-              <div className="space-y-2">
-                {waitingQueue.map((item) => (
+          {/* Handover: AI-Initiated */}
+          <div className="card p-4">
+            <h3 className="font-bold text-slate-800 mb-3 flex items-center">
+              <span className="text-lg mr-2">🤖</span>
+              AI-Initiated Handover ({aiInitiatedHandover.length})
+            </h3>
+            <p className="text-xs text-slate-500 mb-2">
+              Users the AI referred to human
+            </p>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {aiInitiatedHandover.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">None waiting</p>
+              ) : (
+                aiInitiatedHandover.map((item) => (
+                  <div
+                    key={item.conversation_id}
+                    className="p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors"
+                    onClick={() => {
+                      const conv = activeConversations.find(
+                        (c) =>
+                          c.conversation_id === item.conversation_id &&
+                          c.user_id === item.user_id
+                      ) || {
+                        conversation_id: item.conversation_id,
+                        user_id: item.user_id,
+                        user_name: item.user_name,
+                        user_phone: item.user_phone,
+                        status: "waiting_human",
+                        language: item.language || "ar",
+                        sentiment: item.sentiment,
+                        message_count: item.message_count || 0,
+                        last_message: item.last_message ? { content: item.last_message } : null,
+                      };
+                      setSelectedConversation({
+                        conversation: conv,
+                        history: [],
+                      });
+                    }}
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <span className="font-medium text-slate-800 text-sm">
+                        {item.user_name}
+                      </span>
+                      <SentimentIndicator sentiment={item.sentiment} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <span>
+                        {Math.floor(item.wait_time_seconds / 60)}m waiting
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTakeOver(item.conversation_id, item.user_id);
+                        }}
+                        className="text-amber-600 hover:text-amber-700 font-medium"
+                      >
+                        Take Over
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Handover: User-Requested */}
+          <div className="card p-4">
+            <h3 className="font-bold text-slate-800 mb-3 flex items-center">
+              <span className="text-lg mr-2">👤</span>
+              User-Requested Handover ({userRequestedHandover.length})
+            </h3>
+            <p className="text-xs text-slate-500 mb-2">
+              Users who asked for human
+            </p>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {userRequestedHandover.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">None waiting</p>
+              ) : (
+                userRequestedHandover.map((item) => (
                   <div
                     key={item.conversation_id}
                     className="p-3 bg-orange-50 border border-orange-200 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors"
@@ -1196,12 +1277,21 @@ const LiveChat = () => {
                         (c) =>
                           c.conversation_id === item.conversation_id &&
                           c.user_id === item.user_id
-                      );
-                      if (conv)
-                        setSelectedConversation({
-                          conversation: conv,
-                          history: [],
-                        });
+                      ) || {
+                        conversation_id: item.conversation_id,
+                        user_id: item.user_id,
+                        user_name: item.user_name,
+                        user_phone: item.user_phone,
+                        status: "waiting_human",
+                        language: item.language || "ar",
+                        sentiment: item.sentiment,
+                        message_count: item.message_count || 0,
+                        last_message: item.last_message ? { content: item.last_message } : null,
+                      };
+                      setSelectedConversation({
+                        conversation: conv,
+                        history: [],
+                      });
                     }}
                   >
                     <div className="flex items-start justify-between mb-1">
@@ -1225,10 +1315,10 @@ const LiveChat = () => {
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                ))
+              )}
             </div>
-          )}
+          </div>
 
           {/* Active Conversations */}
           <div className="card p-4 flex-1 overflow-y-auto">
