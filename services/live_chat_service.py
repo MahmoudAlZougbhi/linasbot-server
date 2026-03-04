@@ -92,15 +92,17 @@ class LiveChatService:
             return None
         return db.collection("artifacts").document(self.APP_ID).collection("users")
 
-    async def _stream_user_docs(self, users_collection):
+    # Limit users scanned when no search - speeds up first load (150 users ≈ top conversations)
+    USERS_STREAM_LIMIT = 150
+
+    async def _stream_user_docs(self, users_collection, limit: Optional[int] = None):
         if users_collection is None:
             return []
         try:
-            return await asyncio.to_thread(
-                lambda: list(
-                    users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).stream()
-                )
-            )
+            q = users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING)
+            if limit is not None:
+                q = q.limit(limit)
+            return await asyncio.to_thread(lambda: list(q.stream()))
         except Exception:
             return await asyncio.to_thread(lambda: list(users_collection.stream()))
 
@@ -377,7 +379,10 @@ class LiveChatService:
 
             current_time = utc_now()
 
-            users_docs = await self._stream_user_docs(users_collection)
+            users_docs = await self._stream_user_docs(
+                users_collection,
+                limit=self.USERS_STREAM_LIMIT if not search_val else None,
+            )
             user_ids = [doc.id for doc in users_docs]
             # Removed 200 cap - allows Load More to work correctly for large user bases
             results = await self._stream_conversations_for_users(users_collection, user_ids)

@@ -86,6 +86,11 @@ const LiveChat = () => {
     () => activeConversations.filter((c) => c.status === "human" && c.operator_id),
     [activeConversations]
   );
+  // Only bot conversations (exclude waiting_human + with operator) - shown below, release to bot moves here
+  const botConversations = React.useMemo(
+    () => activeConversations.filter((c) => c.status === "bot"),
+    [activeConversations]
+  );
 
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
   const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
@@ -265,17 +270,31 @@ const LiveChat = () => {
         if (isMountedRef.current) setIsLoading(true);
       }
 
-      // Initial load with no search: skip getUnifiedChats - SSE "conversations" will populate (1 scan instead of 2)
+      // Initial load with no search: fetch both in parallel for faster load (SSE no longer sends initial list)
       if (!debouncedSearch.trim()) {
-        getWaitingQueue()
-          .then((queueResponse) => {
+        Promise.all([
+          getUnifiedChats("", 1, 30),
+          getWaitingQueue(),
+        ])
+          .then(([chatsResponse, queueResponse]) => {
             if (!isMountedRef.current) return;
+            if (chatsResponse?.success && chatsResponse.chats) {
+              setActiveConversations(chatsResponse.chats);
+              setHasMoreChats(chatsResponse.has_more ?? false);
+              setChatPage(1);
+            }
             if (queueResponse?.success && queueResponse.queue) {
               setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
             }
           })
-          .catch(() => {});
-        return; // SSE will populate + setIsLoading(false) via useLiveChatSSE
+          .catch((err) => {
+            if (!isMountedRef.current) return;
+            console.warn("Live Chat initial fetch error:", err);
+          })
+          .finally(() => {
+            if (isMountedRef.current) setIsLoading(false);
+          });
+        return;
       }
 
       try {
@@ -1227,18 +1246,29 @@ const LiveChat = () => {
               <span className="text-lg mr-2">⏳</span>
               Waiting for human
             </h3>
-            <p className="text-2xl font-bold text-amber-600">
-              {waitingQueue.length}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              {waitingQueue.length === 0
-                ? "None waiting"
-                : `${userRequestedHandover.length} asked for human · ${aiInitiatedHandover.length} AI referred`}
-            </p>
-            <div className="space-y-2 max-h-48 overflow-y-auto mt-2">
-              {waitingQueue.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">None waiting</p>
-              ) : (
+            {isLoading ? (
+              <div className="animate-pulse space-y-2">
+                <div className="h-8 w-12 bg-slate-200 rounded" />
+                <div className="h-3 w-32 bg-slate-100 rounded" />
+                <div className="h-16 mt-2 space-y-2">
+                  <div className="h-10 bg-slate-100 rounded" />
+                  <div className="h-10 bg-slate-100 rounded" />
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-amber-600">
+                  {waitingQueue.length}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {waitingQueue.length === 0
+                    ? "None waiting"
+                    : `${userRequestedHandover.length} asked for human · ${aiInitiatedHandover.length} AI referred`}
+                </p>
+                <div className="space-y-2 max-h-48 overflow-y-auto mt-2">
+                  {waitingQueue.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">None waiting</p>
+                  ) : (
                 waitingQueue.map((item) => {
                   const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
                   const readKey = `${item.user_id}_${item.conversation_id}`;
@@ -1314,8 +1344,10 @@ const LiveChat = () => {
                     </div>
                   );
                 })
-              )}
-            </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* 2) With operator – yale ma3mol handover w 3am ne7ke ma3on */}
@@ -1324,14 +1356,22 @@ const LiveChat = () => {
               <span className="text-lg mr-2">💬</span>
               With operator
             </h3>
-            <p className="text-2xl font-bold text-green-600">
-              {withOperator.length}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Handover done, chatting with them
-            </p>
-            <div className="space-y-2 max-h-36 overflow-y-auto mt-2">
-              {withOperator.length === 0 ? (
+            {isLoading ? (
+              <div className="animate-pulse space-y-2">
+                <div className="h-8 w-12 bg-slate-200 rounded" />
+                <div className="h-3 w-24 bg-slate-100 rounded" />
+                <div className="h-12 mt-2 bg-slate-100 rounded" />
+              </div>
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-green-600">
+                  {withOperator.length}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Handover done, chatting with them
+                </p>
+                <div className="space-y-2 max-h-36 overflow-y-auto mt-2">
+                  {withOperator.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">None</p>
               ) : (
                 withOperator.map((conv) => (
@@ -1357,8 +1397,10 @@ const LiveChat = () => {
                     </div>
                   </div>
                 ))
-              )}
-            </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Active Conversations */}
@@ -1366,7 +1408,7 @@ const LiveChat = () => {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-slate-800 flex items-center">
                 <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                Active Conversations ({activeConversations.length})
+                With bot ({botConversations.length})
               </h3>
               {/* ✅ Auto-refresh indicator */}
               <span className="text-xs text-slate-500 flex items-center space-x-1">
@@ -1397,7 +1439,16 @@ const LiveChat = () => {
               )}
             </div>
             <div className="space-y-2">
-              {activeConversations.map((conv) => (
+              {isLoading && botConversations.length === 0 ? (
+                [...Array(5)].map((_, i) => (
+                  <div key={i} className="p-3 rounded-lg bg-slate-50 border border-slate-100 animate-pulse">
+                    <div className="h-4 w-3/4 bg-slate-200 rounded mb-2" />
+                    <div className="h-3 w-1/2 bg-slate-100 rounded mb-2" />
+                    <div className="h-3 w-full bg-slate-100 rounded" />
+                  </div>
+                ))
+              ) : (
+                botConversations.map((conv) => (
                 <div
                   key={conv.conversation_id}
                   className={`p-3 rounded-lg cursor-pointer transition-all ${
@@ -1453,7 +1504,8 @@ const LiveChat = () => {
                     <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
                   </div>
                 </div>
-              ))}
+              ))
+              )}
               {hasMoreChats && (
                 <button
                   onClick={loadMoreChats}
