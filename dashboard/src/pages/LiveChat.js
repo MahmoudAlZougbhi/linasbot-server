@@ -406,7 +406,7 @@ const LiveChat = () => {
         const { messages, hasMore } = await fetchConversationMessages(
           selectedConversationUserId,
           selectedConversationId,
-          1,
+          0,
           null,
           0,
           100
@@ -727,7 +727,7 @@ const LiveChat = () => {
       const { messages, hasMore } = await fetchConversationMessages(
         selectedConversation.conversation.user_id,
         selectedConversation.conversation.conversation_id,
-        1,
+        0,
         null,
         0,
         100
@@ -964,7 +964,7 @@ const LiveChat = () => {
   };
 
   const getPreviousUserMessage = (botMessage) => {
-    const messages = selectedConversation.history;
+    const messages = selectedConversation.history || [];
     const botIndex = messages.findIndex((m) => m === botMessage);
 
     // Find the previous user message
@@ -1626,7 +1626,7 @@ const LiveChat = () => {
                   </button>
                 )}
                 {/* ✅ Loading indicator for messages */}
-                {messagesLoading && selectedConversation.history.length === 0 && (
+                {messagesLoading && (selectedConversation.history || []).length === 0 && (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
                       <svg
@@ -1653,7 +1653,19 @@ const LiveChat = () => {
                     </div>
                   </div>
                 )}
-                {selectedConversation.history.map((msg, index) => {
+                {!messagesLoading && (selectedConversation.history || []).length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-slate-500">
+                    <p className="text-sm mb-3">No messages loaded</p>
+                    <button
+                      type="button"
+                      onClick={reloadSelectedConversationMessages}
+                      className="px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 rounded-lg border border-primary-200 hover:bg-primary-100"
+                    >
+                      Reload messages
+                    </button>
+                  </div>
+                )}
+                {(selectedConversation.history || []).map((msg, index) => {
                   // ✅ Check if this is a voice message - Updated to use new Firebase structure
                   // First check msg.type (preferred), fallback to old content-based detection
                   const isVoiceMessage =
