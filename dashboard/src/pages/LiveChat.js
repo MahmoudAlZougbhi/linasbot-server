@@ -71,7 +71,7 @@ const LiveChat = () => {
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
 
-  // Split handover queue: AI-initiated vs User-requested
+  // Split handover: 1) waiting (no operator yet) 2) with operator (handover done, chatting)
   const userRequestedReasons = ["user_request", "customer_requested_human"];
   const aiInitiatedHandover = React.useMemo(
     () => waitingQueue.filter((item) => !userRequestedReasons.includes((item.reason || "").toLowerCase())),
@@ -80,6 +80,11 @@ const LiveChat = () => {
   const userRequestedHandover = React.useMemo(
     () => waitingQueue.filter((item) => userRequestedReasons.includes((item.reason || "").toLowerCase())),
     [waitingQueue]
+  );
+  // Conversations where handover was done and we're talking with them (operator assigned)
+  const withOperator = React.useMemo(
+    () => activeConversations.filter((c) => c.status === "human" && c.operator_id),
+    [activeConversations]
   );
 
   const messagesContainerRef = useRef(null);
@@ -1190,129 +1195,117 @@ const LiveChat = () => {
           animate={{ opacity: 1, x: 0 }}
           className="col-span-3 space-y-4 h-full overflow-y-auto"
         >
-          {/* Handover: AI-Initiated */}
+          {/* 1) Waiting for human – yale tablin (no operator yet) */}
           <div className="card p-4">
-            <h3 className="font-bold text-slate-800 mb-3 flex items-center">
-              <span className="text-lg mr-2">🤖</span>
-              AI-Initiated Handover ({aiInitiatedHandover.length})
+            <h3 className="font-bold text-slate-800 mb-2 flex items-center">
+              <span className="text-lg mr-2">⏳</span>
+              Waiting for human
             </h3>
-            <p className="text-xs text-slate-500 mb-2">
-              Users the AI referred to human
+            <p className="text-2xl font-bold text-amber-600">
+              {waitingQueue.length}
             </p>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {aiInitiatedHandover.length === 0 ? (
+            <p className="text-xs text-slate-500 mt-1">
+              {waitingQueue.length === 0
+                ? "None waiting"
+                : `${userRequestedHandover.length} asked for human · ${aiInitiatedHandover.length} AI referred`}
+            </p>
+            <div className="space-y-2 max-h-36 overflow-y-auto mt-2">
+              {waitingQueue.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">None waiting</p>
               ) : (
-                aiInitiatedHandover.map((item) => (
-                  <div
-                    key={item.conversation_id}
-                    className="p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors"
-                    onClick={() => {
-                      const conv = activeConversations.find(
-                        (c) =>
-                          c.conversation_id === item.conversation_id &&
-                          c.user_id === item.user_id
-                      ) || {
-                        conversation_id: item.conversation_id,
-                        user_id: item.user_id,
-                        user_name: item.user_name,
-                        user_phone: item.user_phone,
-                        status: "waiting_human",
-                        language: item.language || "ar",
-                        sentiment: item.sentiment,
-                        message_count: item.message_count || 0,
-                        last_message: item.last_message ? { content: item.last_message } : null,
-                      };
-                      setSelectedConversation({
-                        conversation: conv,
-                        history: [],
-                      });
-                    }}
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <span className="font-medium text-slate-800 text-sm">
-                        {item.user_name}
-                      </span>
-                      <SentimentIndicator sentiment={item.sentiment} />
+                waitingQueue.map((item) => {
+                  const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
+                  return (
+                    <div
+                      key={item.conversation_id}
+                      className={`p-2.5 rounded-lg cursor-pointer transition-colors ${
+                        isUserRequested
+                          ? "bg-orange-50 border border-orange-200 hover:bg-orange-100"
+                          : "bg-amber-50 border border-amber-200 hover:bg-amber-100"
+                      }`}
+                      onClick={() => {
+                        const conv = activeConversations.find(
+                          (c) =>
+                            c.conversation_id === item.conversation_id &&
+                            c.user_id === item.user_id
+                        ) || {
+                          conversation_id: item.conversation_id,
+                          user_id: item.user_id,
+                          user_name: item.user_name,
+                          user_phone: item.user_phone,
+                          status: "waiting_human",
+                          language: item.language || "ar",
+                          sentiment: item.sentiment,
+                          message_count: item.message_count || 0,
+                          last_message: item.last_message ? { content: item.last_message } : null,
+                        };
+                        setSelectedConversation({
+                          conversation: conv,
+                          history: [],
+                        });
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-0.5">
+                        <span className="font-medium text-slate-800 text-sm">
+                          {item.user_name}
+                        </span>
+                        <SentimentIndicator sentiment={item.sentiment} />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-600">
+                        <span>{Math.floor(item.wait_time_seconds / 60)}m waiting</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTakeOver(item.conversation_id, item.user_id);
+                          }}
+                          className="text-amber-600 hover:text-amber-700 font-medium"
+                        >
+                          Take Over
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>
-                        {Math.floor(item.wait_time_seconds / 60)}m waiting
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTakeOver(item.conversation_id, item.user_id);
-                        }}
-                        className="text-amber-600 hover:text-amber-700 font-medium"
-                      >
-                        Take Over
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
 
-          {/* Handover: User-Requested */}
+          {/* 2) With operator – yale ma3mol handover w 3am ne7ke ma3on */}
           <div className="card p-4">
-            <h3 className="font-bold text-slate-800 mb-3 flex items-center">
-              <span className="text-lg mr-2">👤</span>
-              User-Requested Handover ({userRequestedHandover.length})
+            <h3 className="font-bold text-slate-800 mb-2 flex items-center">
+              <span className="text-lg mr-2">💬</span>
+              With operator
             </h3>
-            <p className="text-xs text-slate-500 mb-2">
-              Users who asked for human
+            <p className="text-2xl font-bold text-green-600">
+              {withOperator.length}
             </p>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {userRequestedHandover.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">None waiting</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Handover done, chatting with them
+            </p>
+            <div className="space-y-2 max-h-36 overflow-y-auto mt-2">
+              {withOperator.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">None</p>
               ) : (
-                userRequestedHandover.map((item) => (
+                withOperator.map((conv) => (
                   <div
-                    key={item.conversation_id}
-                    className="p-3 bg-orange-50 border border-orange-200 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors"
+                    key={conv.conversation_id}
+                    className="p-2.5 rounded-lg cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
                     onClick={() => {
-                      const conv = activeConversations.find(
-                        (c) =>
-                          c.conversation_id === item.conversation_id &&
-                          c.user_id === item.user_id
-                      ) || {
-                        conversation_id: item.conversation_id,
-                        user_id: item.user_id,
-                        user_name: item.user_name,
-                        user_phone: item.user_phone,
-                        status: "waiting_human",
-                        language: item.language || "ar",
-                        sentiment: item.sentiment,
-                        message_count: item.message_count || 0,
-                        last_message: item.last_message ? { content: item.last_message } : null,
-                      };
                       setSelectedConversation({
                         conversation: conv,
                         history: [],
                       });
+                      setMessagesLoading(true);
                     }}
                   >
-                    <div className="flex items-start justify-between mb-1">
+                    <div className="flex items-start justify-between mb-0.5">
                       <span className="font-medium text-slate-800 text-sm">
-                        {item.user_name}
+                        {conv.user_name}
                       </span>
-                      <SentimentIndicator sentiment={item.sentiment} />
+                      <SentimentIndicator sentiment={conv.sentiment} />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>
-                        {Math.floor(item.wait_time_seconds / 60)}m waiting
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTakeOver(item.conversation_id, item.user_id);
-                        }}
-                        className="text-orange-600 hover:text-orange-700 font-medium"
-                      >
-                        Take Over
-                      </button>
+                    <div className="text-xs text-slate-600">
+                      <span className="text-green-600">With {conv.operator_id || "operator"}</span>
                     </div>
                   </div>
                 ))
