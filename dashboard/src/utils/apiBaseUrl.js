@@ -3,5 +3,6 @@ const isLocalDevHost = () =>
 
 export const getApiBaseUrl = () => (isLocalDevHost() ? "http://localhost:8003" : "");
 
+// Use relative URL in dev so proxy forwards /api to backend; full origin in production
 export const getApiAbsoluteBaseUrl = () =>
-  isLocalDevHost() ? "http://localhost:8003" : window.location.origin;
+  isLocalDevHost() ? "" : window.location.origin;

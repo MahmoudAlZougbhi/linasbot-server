@@ -27,18 +27,27 @@ export const fetchLiveChatConversationMessages = async ({
     params.append("limit", String(Math.min(100, Math.max(1, limit))));
 
     const query = params.toString();
-    const baseURL = getApiAbsoluteBaseUrl();
-    const url = `${baseURL}/api/live-chat/conversation/${userId}/${conversationId}?${query}`;
+    const base = getApiAbsoluteBaseUrl();
+    const url = `${base}/api/live-chat/conversation/${userId}/${conversationId}?${query}`;
     const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`API ${response.status}: ${errText || response.statusText}`);
+    }
     const data = await response.json();
 
     return {
       ...data,
+      success: data?.success ?? false,
       messages: data?.success && Array.isArray(data.messages)
         ? normalizeConversationMessages(data.messages)
         : [],
       has_more: data?.has_more ?? false,
     };
+  } catch (err) {
+    if (err.name === "AbortError") throw err;
+    console.error("[liveChatApi] fetch messages error:", err);
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }

@@ -112,20 +112,24 @@ export const useLiveChatSSE = ({
         : selected.conversation.user_id === eventData.user_id;
       if (!isSameConversation) return;
 
-      const { messages } = await fetchConversationMessages(
-        selected.conversation.user_id,
-        selected.conversation.conversation_id,
-        1,
-        null,
-        0,
-        50
-      );
-      if (!isMountedRef.current || !messages?.length) return;
+      try {
+        const { messages } = await fetchConversationMessages(
+          selected.conversation.user_id,
+          selected.conversation.conversation_id,
+          1,
+          null,
+          0,
+          50
+        );
+        if (!isMountedRef.current || !messages?.length) return;
 
-      setSelectedConversation((previous) => {
-        if (!previous) return previous;
-        return { ...previous, history: messages };
-      });
+        setSelectedConversation((previous) => {
+          if (!previous) return previous;
+          return { ...previous, history: messages };
+        });
+      } catch {
+        // Silent fail for SSE refresh - user can manually reload
+      }
     };
 
     const startFallbackPolling = () => {

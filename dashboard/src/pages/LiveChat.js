@@ -180,30 +180,23 @@ const LiveChat = () => {
 
   // Fetch conversation messages: initial = last 1 day; Load More = 1 more day (before + day_window)
   const fetchConversationMessages = async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
-    try {
-      const data = await fetchLiveChatConversationMessages({
-        userId,
-        conversationId,
-        days,
-        before,
-        day_window,
-        limit,
-      });
+    const data = await fetchLiveChatConversationMessages({
+      userId,
+      conversationId,
+      days,
+      before,
+      day_window,
+      limit,
+      timeoutMs: 20000,
+    });
 
-      if (data.success && data.messages) {
-        return { messages: data.messages, hasMore: data.has_more ?? false };
-      }
-      console.warn("No messages found or API error:", data);
-      return { messages: [], hasMore: false };
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error("Message fetch timed out");
-        toast.error("Loading messages timed out - try again");
-      } else {
-        console.error("Error fetching conversation messages:", error);
-      }
-      return { messages: [], hasMore: false };
+    if (data.success && Array.isArray(data.messages)) {
+      return { messages: data.messages, hasMore: data.has_more ?? false };
     }
+    if (!data.success) {
+      throw new Error(data.error || "Failed to load messages");
+    }
+    return { messages: [], hasMore: false };
   };
 
   const appendMessageToSelectedConversation = (newMessage) => {
@@ -444,7 +437,15 @@ const LiveChat = () => {
         });
         setHasMoreMessages(hasMore);
       } catch (error) {
-        // Silent fail
+        if (isMountedRef.current && !cancelled) {
+          setSelectedConversation((prev) => {
+            if (!prev || prev.conversation?.conversation_id !== selectedConversationId) return prev;
+            return { ...prev, history: [] };
+          });
+          setHasMoreMessages(false);
+          const msg = error?.name === "AbortError" ? "Loading messages timed out - try again" : (error?.message || "Failed to load messages. Try again.");
+          toast.error(msg);
+        }
       } finally {
         if (isMountedRef.current && !cancelled) {
           setMessagesLoading(false);
