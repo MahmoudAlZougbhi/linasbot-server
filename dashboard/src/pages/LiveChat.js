@@ -65,7 +65,8 @@ const LiveChat = () => {
   // ✅ Search by name or phone (debounced for API calls)
   const [liveSearchQuery, setLiveSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  // ✅ WhatsApp-style: top 30, Load More
+  // ✅ With bot: 50 per page for faster list fill, Load More for rest
+  const CHAT_LIST_PAGE_SIZE = 50;
   const [chatPage, setChatPage] = useState(1);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
@@ -250,7 +251,7 @@ const LiveChat = () => {
       // Initial load with no search: fetch both in parallel for faster load (SSE no longer sends initial list)
       if (!debouncedSearch.trim()) {
         Promise.all([
-          getUnifiedChats("", 1, 30),
+          getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE),
           getWaitingQueue(),
         ])
           .then(([chatsResponse, queueResponse]) => {
@@ -277,7 +278,7 @@ const LiveChat = () => {
       try {
         let chatsResponse;
         try {
-          chatsResponse = await getUnifiedChats(debouncedSearch, 1, 30);
+          chatsResponse = await getUnifiedChats(debouncedSearch, 1, CHAT_LIST_PAGE_SIZE);
           if (!isMountedRef.current) return;
         } catch (err) {
           if (err?.response?.status === 504 || err?.code === "ECONNABORTED") {
@@ -353,6 +354,7 @@ const LiveChat = () => {
     selectedConversationRef,
     debouncedSearchRef,
     getUnifiedChats,
+    chatListPageSize: CHAT_LIST_PAGE_SIZE,
     fetchConversationMessages,
     setActiveConversations,
     setNewConversationIds,
@@ -373,7 +375,7 @@ const LiveChat = () => {
       if (activeConversationsRef.current?.length > 0) return;
       setIsLoading(true);
       try {
-        const r = await getUnifiedChats("", 1, 30);
+        const r = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
         if (!isMountedRef.current) return;
         if (r?.success && r?.chats?.length > 0) {
           setActiveConversations(r.chats);
@@ -611,7 +613,7 @@ const LiveChat = () => {
     setLoadingMoreChats(true);
     try {
       const nextPage = chatPage + 1;
-      const chatsResponse = await getUnifiedChats(debouncedSearch, nextPage, 30);
+      const chatsResponse = await getUnifiedChats(debouncedSearch, nextPage, CHAT_LIST_PAGE_SIZE);
       if (chatsResponse.success && chatsResponse.chats) {
         setActiveConversations((prev) => [...prev, ...chatsResponse.chats]);
         setChatPage(nextPage);
@@ -628,11 +630,25 @@ const LiveChat = () => {
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const chatsResponse = await getUnifiedChats(debouncedSearch, 1, 30);
-      if (chatsResponse.success && chatsResponse.chats) {
-        const chats = chatsResponse.chats;
+      const [chatsResponse, queueResponse] = await Promise.all([
+        getUnifiedChats(debouncedSearch, 1, CHAT_LIST_PAGE_SIZE),
+        getWaitingQueue(),
+      ]);
+
+      if (chatsResponse?.success && chatsResponse.chats) {
+        let chats = chatsResponse.chats;
+        const selected = selectedConversationRef.current?.conversation;
+        if (selected) {
+          const alreadyInList = chats.some(
+            (c) => c.conversation_id === selected.conversation_id && c.user_id === selected.user_id
+          );
+          if (!alreadyInList) {
+            chats = [selected, ...chats];
+          }
+        }
+
         const previousIds = new Set(
-          activeConversationsRef.current.map((c) => c.conversation_id)
+          (activeConversationsRef.current || []).map((c) => c.conversation_id)
         );
         const newIds = new Set(
           chats.filter((c) => !previousIds.has(c.conversation_id)).map((c) => c.conversation_id)
@@ -647,10 +663,12 @@ const LiveChat = () => {
 
         // Auto-clear "new" badge after 10 seconds
         if (newIds.size > 0) {
-          setTimeout(() => {
-            setNewConversationIds(new Set());
-          }, 10000);
+          setTimeout(() => setNewConversationIds(new Set()), 10000);
         }
+      }
+
+      if (queueResponse?.success && Array.isArray(queueResponse.queue)) {
+        setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
       }
     } catch (error) {
       console.error("Error refreshing conversations:", error);

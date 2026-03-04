@@ -11,6 +11,7 @@ export const useLiveChatSSE = ({
   selectedConversationRef,
   debouncedSearchRef,
   getUnifiedChats,
+  chatListPageSize = 50,
   fetchConversationMessages,
   setActiveConversations,
   setNewConversationIds,
@@ -59,7 +60,7 @@ export const useLiveChatSSE = ({
         if (total != null) hasMoreValue = total > conversations.length;
       }
       if (conversations == null) {
-        const chatsResponse = await getUnifiedChats(searchTerm, 1, 30);
+        const chatsResponse = await getUnifiedChats(searchTerm, 1, chatListPageSize);
         if (!isMountedRef.current) return null;
         conversations =
           chatsResponse?.success && chatsResponse?.chats ? chatsResponse.chats : preferredConversations;
@@ -353,6 +354,7 @@ export const useLiveChatSSE = ({
     };
   }, [
     activeConversationsRef,
+    chatListPageSize,
     debouncedSearchRef,
     enabled,
     fetchConversationMessages,
