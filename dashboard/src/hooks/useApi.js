@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
+import { normalizeConversationMessages } from "../utils/liveChatApi";
 
 // Create axios instance with default config
 const api = axios.create({
@@ -507,6 +508,40 @@ export const useApi = () => {
       throw error;
     }
   }, []);
+
+  /** Same axios as getUnifiedChats – use for loading conversation messages so request goes to same origin. */
+  const getConversationMessages = useCallback(
+    async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
+      try {
+        const params = new URLSearchParams();
+        if (days > 0) params.append("days", String(days));
+        if (before) params.append("before", before);
+        if (day_window > 0) params.append("day_window", String(day_window));
+        params.append("limit", String(Math.min(100, Math.max(1, limit))));
+        const response = await api.get(
+          `/api/live-chat/conversation/${encodeURIComponent(userId)}/${encodeURIComponent(conversationId)}?${params.toString()}`,
+          { timeout: 25000 }
+        );
+        const data = response.data;
+        if (!data.success) {
+          throw new Error(data.error || "Failed to load messages");
+        }
+        const messages = Array.isArray(data.messages)
+          ? normalizeConversationMessages(data.messages)
+          : [];
+        return { messages, hasMore: data.has_more ?? false };
+      } catch (error) {
+        if (error.code === "ERR_NETWORK") {
+          throw new Error("Backend offline – cannot load messages");
+        }
+        if (error.code === "ECONNABORTED") {
+          throw new Error("Loading messages timed out - try again");
+        }
+        throw error;
+      }
+    },
+    []
+  );
 
   const takeoverConversation = useCallback(
     async (conversationId, userId, operatorId) => {
@@ -1310,6 +1345,7 @@ export const useApi = () => {
     getUnifiedChats,
     getLiveConversations,
     getWaitingQueue,
+    getConversationMessages,
     takeoverConversation,
     releaseConversation,
     sendOperatorMessage,

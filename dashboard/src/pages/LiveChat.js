@@ -31,7 +31,6 @@ import { useLiveChatSSE } from "../hooks/useLiveChatSSE";
 import { useLiveChatMediaComposer } from "../hooks/useLiveChatMediaComposer";
 import {
   endLiveChatConversation,
-  fetchLiveChatConversationMessages,
   editLiveChatMessage,
   fetchFaqMatchContext,
   faqUpdateAnswer,
@@ -165,6 +164,7 @@ const LiveChat = () => {
     getUnifiedChats,
     getLiveConversations,
     getWaitingQueue,
+    getConversationMessages,
     takeoverConversation,
     releaseConversation,
     sendOperatorMessage,
@@ -178,25 +178,9 @@ const LiveChat = () => {
     });
   }, [operatorStatus, updateOperatorStatus]);
 
-  // Fetch conversation messages: initial = last 1 day; Load More = 1 more day (before + day_window)
+  // Fetch conversation messages: use same axios as list (getUnifiedChats) so request hits same origin
   const fetchConversationMessages = async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
-    const data = await fetchLiveChatConversationMessages({
-      userId,
-      conversationId,
-      days,
-      before,
-      day_window,
-      limit,
-      timeoutMs: 20000,
-    });
-
-    if (data.success && Array.isArray(data.messages)) {
-      return { messages: data.messages, hasMore: data.has_more ?? false };
-    }
-    if (!data.success) {
-      throw new Error(data.error || "Failed to load messages");
-    }
-    return { messages: [], hasMore: false };
+    return getConversationMessages(userId, conversationId, days, before, day_window, limit);
   };
 
   const appendMessageToSelectedConversation = (newMessage) => {
@@ -459,6 +443,25 @@ const LiveChat = () => {
       cancelled = true;
     };
   }, [selectedConversationId, selectedConversationUserId, useMockData]);
+
+  // Failsafe: if messages stay loading >26s (e.g. request hung), clear loading and notify
+  const messagesLoadingStartRef = useRef(null);
+  useEffect(() => {
+    if (!messagesLoading) {
+      messagesLoadingStartRef.current = null;
+      return;
+    }
+    if (!messagesLoadingStartRef.current) messagesLoadingStartRef.current = Date.now();
+    const t = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      const elapsed = messagesLoadingStartRef.current ? Date.now() - messagesLoadingStartRef.current : 0;
+      if (elapsed >= 26000) {
+        setMessagesLoading(false);
+        toast.error("Loading took too long. Try again or reload.");
+      }
+    }, 26000);
+    return () => clearTimeout(t);
+  }, [messagesLoading]);
 
   // Load mock data fallback
   const loadMockData = () => {
