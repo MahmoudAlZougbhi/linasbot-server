@@ -12,6 +12,7 @@ export const fetchLiveChatConversationMessages = async ({
   conversationId,
   days = 0,
   before = null,
+  day_window = 0,
   limit = 50,
   timeoutMs = 45000,
 }) => {
@@ -22,6 +23,7 @@ export const fetchLiveChatConversationMessages = async ({
     const params = new URLSearchParams();
     if (days > 0) params.append("days", String(days));
     if (before) params.append("before", before);
+    if (day_window > 0) params.append("day_window", String(day_window));
     params.append("limit", String(Math.min(100, Math.max(1, limit))));
 
     const query = params.toString();

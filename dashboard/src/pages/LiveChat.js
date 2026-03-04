@@ -87,6 +87,34 @@ const LiveChat = () => {
     [activeConversations]
   );
 
+  // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
+  const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
+  const markWaitingConversationRead = (userId, conversationId, messageCount) => {
+    const key = `${userId}_${conversationId}`;
+    setReadMessageCountByConv((prev) => ({ ...prev, [key]: messageCount }));
+  };
+
+  // Merge selected conversation into waiting queue when refetching so it doesn't disappear from the list
+  const mergeSelectedIntoWaitingQueue = (newQueue, selectedRef) => {
+    const selected = selectedRef?.current;
+    if (!selected?.conversation || selected.conversation.status !== "waiting_human") return newQueue ?? [];
+    const c = selected.conversation;
+    const inQueue = (newQueue ?? []).some((q) => q.conversation_id === c.conversation_id && q.user_id === c.user_id);
+    if (inQueue) return newQueue ?? [];
+    const synthetic = {
+      conversation_id: c.conversation_id,
+      user_id: c.user_id,
+      user_name: c.user_name,
+      user_phone: c.user_phone,
+      wait_time_seconds: 0,
+      message_count: c.message_count || 0,
+      last_message: c.last_message?.content ?? "",
+      reason: "user_request",
+      sentiment: c.sentiment || "neutral",
+    };
+    return [synthetic, ...(newQueue ?? [])];
+  };
+
   const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
@@ -145,14 +173,15 @@ const LiveChat = () => {
     });
   }, [operatorStatus, updateOperatorStatus]);
 
-  // Fetch conversation messages - WhatsApp-style: last 50 initially, Load More with before
-  const fetchConversationMessages = async (userId, conversationId, days = 0, before = null, limit = 50) => {
+  // Fetch conversation messages: initial = last 1 day; Load More = 1 more day (before + day_window)
+  const fetchConversationMessages = async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
     try {
       const data = await fetchLiveChatConversationMessages({
         userId,
         conversationId,
         days,
         before,
+        day_window,
         limit,
       });
 
@@ -242,7 +271,7 @@ const LiveChat = () => {
           .then((queueResponse) => {
             if (!isMountedRef.current) return;
             if (queueResponse?.success && queueResponse.queue) {
-              setWaitingQueue(queueResponse.queue);
+              setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
             }
           })
           .catch(() => {});
@@ -282,10 +311,7 @@ const LiveChat = () => {
           setUseMockData(false);
 
           const currentSelection = selectedConversationRef.current;
-          if (!currentSelection && chats.length > 0 && !activeConversations.length) {
-            setSelectedConversation({ conversation: chats[0], history: [] });
-            setMessagesLoading(true);
-          } else if (currentSelection) {
+          if (currentSelection) {
             const updatedConv = chats.find(
               (c) => c.conversation_id === currentSelection.conversation.conversation_id
             );
@@ -301,7 +327,7 @@ const LiveChat = () => {
           .then((queueResponse) => {
             if (!isMountedRef.current) return;
             if (queueResponse?.success && queueResponse.queue) {
-              setWaitingQueue(queueResponse.queue);
+              setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
             }
           })
           .catch(() => {});
@@ -357,9 +383,6 @@ const LiveChat = () => {
           setActiveConversations(r.chats);
           setHasMoreChats(r.has_more ?? false);
           setChatPage(1);
-          if (!selectedConversationRef.current) {
-            setSelectedConversation({ conversation: r.chats[0], history: [] });
-          }
         }
       } catch (e) {
         console.warn("Live Chat fallback fetch failed:", e);
@@ -387,9 +410,10 @@ const LiveChat = () => {
         const { messages, hasMore } = await fetchConversationMessages(
           selectedConversationUserId,
           selectedConversationId,
-          0,
+          1,
           null,
-          50
+          0,
+          100
         );
         if (!isMountedRef.current || cancelled) return;
 
@@ -627,7 +651,7 @@ const LiveChat = () => {
     return `${Math.floor(diff / 3600)}h ago`;
   };
 
-  // ✅ Load more (older) messages - cursor-based: before=oldest loaded timestamp
+  // ✅ Load more = 1 more day for this chat only (before=oldest, day_window=1)
   const loadMoreMessages = async () => {
     if (!selectedConversation || loadingMoreMessages || !hasMoreMessages) return;
     const history = selectedConversation.history || [];
@@ -644,7 +668,8 @@ const LiveChat = () => {
         selectedConversation.conversation.conversation_id,
         0,
         beforeTs,
-        50
+        1,
+        100
       );
       if (older && older.length > 0) {
         // Prepend older messages; dedupe by message_id
@@ -671,7 +696,7 @@ const LiveChat = () => {
     }
   };
 
-  // ✅ Reload messages for currently selected conversation (WhatsApp-style: last 50)
+  // ✅ Reload messages for currently selected conversation (last 1 day only)
   const reloadSelectedConversationMessages = async () => {
     if (!selectedConversation) return;
 
@@ -679,9 +704,10 @@ const LiveChat = () => {
       const { messages, hasMore } = await fetchConversationMessages(
         selectedConversation.conversation.user_id,
         selectedConversation.conversation.conversation_id,
-        0,
+        1,
         null,
-        50
+        0,
+        100
       );
       setSelectedConversation((prev) => ({
         ...prev,
@@ -1209,21 +1235,26 @@ const LiveChat = () => {
                 ? "None waiting"
                 : `${userRequestedHandover.length} asked for human · ${aiInitiatedHandover.length} AI referred`}
             </p>
-            <div className="space-y-2 max-h-36 overflow-y-auto mt-2">
+            <div className="space-y-2 max-h-48 overflow-y-auto mt-2">
               {waitingQueue.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">None waiting</p>
               ) : (
                 waitingQueue.map((item) => {
                   const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
+                  const readKey = `${item.user_id}_${item.conversation_id}`;
+                  const readCount = readMessageCountByConv[readKey] ?? 0;
+                  const unreadCount = Math.max(0, (item.message_count || 0) - readCount);
+                  const lastMsg = typeof item.last_message === "string" ? item.last_message : (item.last_message?.content ?? "");
                   return (
                     <div
                       key={item.conversation_id}
-                      className={`p-2.5 rounded-lg cursor-pointer transition-colors ${
+                      className={`p-3 rounded-lg cursor-pointer transition-colors ${
                         isUserRequested
                           ? "bg-orange-50 border border-orange-200 hover:bg-orange-100"
                           : "bg-amber-50 border border-amber-200 hover:bg-amber-100"
                       }`}
                       onClick={() => {
+                        markWaitingConversationRead(item.user_id, item.conversation_id, item.message_count || 0);
                         const conv = activeConversations.find(
                           (c) =>
                             c.conversation_id === item.conversation_id &&
@@ -1245,12 +1276,29 @@ const LiveChat = () => {
                         });
                       }}
                     >
-                      <div className="flex items-start justify-between mb-0.5">
-                        <span className="font-medium text-slate-800 text-sm">
-                          {item.user_name}
-                        </span>
-                        <SentimentIndicator sentiment={item.sentiment} />
+                      <div className="flex items-start justify-between mb-1">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-800 text-sm truncate">
+                            {item.user_name}
+                          </p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {item.user_phone}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {unreadCount > 0 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">
+                              {unreadCount > 99 ? "99+" : unreadCount} unread
+                            </span>
+                          )}
+                          <SentimentIndicator sentiment={item.sentiment} />
+                        </div>
                       </div>
+                      {lastMsg && (
+                        <p className="text-xs text-slate-600 truncate mb-1.5" title={lastMsg}>
+                          {lastMsg}
+                        </p>
+                      )}
                       <div className="flex items-center justify-between text-xs text-slate-600">
                         <span>{Math.floor(item.wait_time_seconds / 60)}m waiting</span>
                         <button

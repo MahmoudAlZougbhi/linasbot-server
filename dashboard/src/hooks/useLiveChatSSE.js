@@ -67,6 +67,17 @@ export const useLiveChatSSE = ({
       }
       if (!conversations) return null;
 
+      // Keep selected conversation in the list so it doesn't disappear from "With operator" / Active when refetching
+      const selected = selectedConversationRef.current;
+      if (selected?.conversation) {
+        const alreadyInList = conversations.some(
+          (c) => c.conversation_id === selected.conversation.conversation_id && c.user_id === selected.conversation.user_id
+        );
+        if (!alreadyInList) {
+          conversations = [selected.conversation, ...conversations];
+        }
+      }
+
       const previousIds = new Set(
         (activeConversationsRef.current || []).map((conversation) => conversation.conversation_id)
       );
@@ -106,6 +117,7 @@ export const useLiveChatSSE = ({
         selected.conversation.conversation_id,
         1,
         null,
+        0,
         50
       );
       if (!isMountedRef.current || !messages?.length) return;
@@ -158,14 +170,8 @@ export const useLiveChatSSE = ({
             preferredConversations: conversations,
             total,
           });
-          // Populate from SSE = single scan on open; stop loading + select first chat if none
+          // List only: stop loading; do not auto-select so chat messages load only when user clicks
           if (setIsLoading) setIsLoading(false);
-          if (conversations?.length > 0 && selectedConversationRef.current == null) {
-            setSelectedConversation({
-              conversation: conversations[0],
-              history: [],
-            });
-          }
         } catch (error) {
           console.error("SSE conversations parse error:", error);
           if (setIsLoading) setIsLoading(false);

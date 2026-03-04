@@ -268,15 +268,17 @@ async def get_conversation_details(
     conversation_id: str,
     days: int = Query(default=0, description="Return only last N days (0=all)"),
     before: str = Query(default=None, description="Load messages older than this ISO timestamp (Load More)"),
+    day_window: int = Query(default=0, description="With before: return only messages from this many days back (1 = one more day)"),
     limit: int = Query(default=50, ge=1, le=100, description="Max messages per request (WhatsApp-style: 50)"),
 ):
-    """Get detailed conversation history. Initial: last 50. Load More: before=oldest_ts, limit=50."""
+    """Get detailed conversation history. Initial: last 1 day. Load More: before=oldest_ts, day_window=1 for one more day."""
     try:
         details = await live_chat_service.get_conversation_details(
             user_id=user_id,
             conversation_id=conversation_id,
             days=days,
             before=before,
+            day_window=day_window,
             max_messages=limit,
         )
         return details

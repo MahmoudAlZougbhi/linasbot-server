@@ -1400,6 +1400,7 @@ class LiveChatService:
         max_messages: int = 100,
         days: int = 0,
         before: Optional[str] = None,
+        day_window: int = 0,
     ) -> Dict[str, Any]:
         """Get detailed conversation history.
 
@@ -1409,6 +1410,7 @@ class LiveChatService:
             max_messages: Max messages to return (default 100)
             days: If > 0, return only messages from last N days (default 0 = no day limit)
             before: If provided (ISO timestamp), return only messages older than this (for Load More)
+            day_window: If before is set and > 0, return only messages in (before - day_window days, before]
         """
         try:
             db = get_firestore_db()
@@ -1440,6 +1442,8 @@ class LiveChatService:
                 now = utc_now()
                 cutoff = now - datetime.timedelta(days=days) if days > 0 else None
                 before_dt = self._parse_timestamp(before) if before else None
+                # When before + day_window: only messages in (before_dt - day_window days, before_dt]
+                after_dt = (before_dt - datetime.timedelta(days=day_window)) if (before_dt and day_window > 0) else None
 
                 filtered = []
                 for msg in messages:
@@ -1447,6 +1451,8 @@ class LiveChatService:
                     if days > 0 and ts < cutoff:
                         continue
                     if before_dt and ts >= before_dt:
+                        continue
+                    if after_dt is not None and ts <= after_dt:
                         continue
                     filtered.append(msg)
                 messages = filtered
