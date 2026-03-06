@@ -44,20 +44,27 @@ class SentimentEscalationService:
             "وديني على موظف", "حولني على موظف", "بدي مدير", "بدي مسؤول",
             "مش بدي بوت", "مش بدي روبوت", "بدي حدا بشري", "بدي حدا حقيقي",
             "ما بدي معك", "بدي غيرك", "بدي حدا تاني", "بدي حدا يساعدني",
-            "موظف خدمة عملاء", "خدمة العملاء", "بدي اشتكي", "بدي شكوى"
+            "موظف خدمة عملاء", "خدمة العملاء", "بدي اشتكي", "بدي شكوى",
+            "بدي احكي مع موظف", "بدي احكي مع انسان", "بدي احكي مع حدا بشري",
+            "عايز اكلم حد", "عايز اتكلم مع حد", "عايز موظف", "عايز انسان",
+            "اريد موظف", "اريد انسان", "اريد التحدث مع موظف", "اريد التحدث مع انسان",
+            "بدّي موظف", "بدّي إنسان", "بدّي احكي مع موظف", "بدّي احكي مع انسان",
+            "حابب احكي مع موظف", "نفسي احكي مع حدا", "لو سمحت بدي موظف",
+            "حولوني على موظف", "وصلوني لموظف", "في حدا يحكي معي"
         ],
         "en": [
             "speak to someone", "talk to someone", "human", "real person",
             "transfer me", "connect me", "operator", "agent", "representative",
             "customer service", "manager", "supervisor", "not a bot",
             "real human", "actual person", "someone else", "help me",
-            "complaint", "complain", "escalate"
+            "complaint", "complain", "escalate", "live agent", "human agent",
+            "speak to an agent", "talk to an agent", "connect me to an agent"
         ],
         "fr": [
             "parler à quelqu'un", "personne réelle", "humain", "opérateur",
             "agent", "représentant", "service client", "responsable",
             "pas un bot", "vraie personne", "quelqu'un d'autre",
-            "plainte", "se plaindre"
+            "plainte", "se plaindre", "agent humain", "parler à un agent"
         ]
     }
     

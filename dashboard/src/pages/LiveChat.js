@@ -954,13 +954,34 @@ const LiveChat = () => {
       if (result.success) {
         toast.success("Conversation taken over successfully");
         // Update conversation status locally
-        setActiveConversations((prev) =>
-          prev.map((conv) =>
+        setActiveConversations((prev) => {
+          const exists = prev.some((conv) => conv.conversation_id === conversationId && conv.user_id === userId);
+          const updated = prev.map((conv) =>
             conv.conversation_id === conversationId
               ? { ...conv, status: "human", operator_id: "operator_001" }
               : conv
-          )
-        );
+          );
+          if (exists) return updated;
+          const fallback = selectedConversation?.conversation &&
+            selectedConversation.conversation.conversation_id === conversationId
+            ? selectedConversation.conversation
+            : null;
+          const newEntry = {
+            ...(fallback || {
+              conversation_id: conversationId,
+              user_id: userId,
+              user_name: userId,
+              user_phone: "",
+              status: "human",
+              language: "ar",
+              sentiment: "neutral",
+              message_count: 0,
+            }),
+            status: "human",
+            operator_id: "operator_001",
+          };
+          return [newEntry, ...updated];
+        });
         // Update selected conversation if it's the one we took over
         if (
           selectedConversation?.conversation?.conversation_id === conversationId

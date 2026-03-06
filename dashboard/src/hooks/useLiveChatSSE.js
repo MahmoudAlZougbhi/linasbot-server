@@ -36,6 +36,9 @@ export const useLiveChatSSE = ({
     let handlingNewMessageEvent = false;
     let lastRefreshAt = 0;
     let debouncedRefreshScheduled = false;
+  let lastEventAt = Date.now();
+  let heartbeatWatchdog = null;
+  let refreshingFallback = false;
 
     const clearNewBadgesSoon = () => {
       if (clearNewBadgeTimeout) {
@@ -103,6 +106,29 @@ export const useLiveChatSSE = ({
       return conversations;
     };
 
+    const refreshSelectedConversation = async () => {
+      if (!isMountedRef.current) return;
+      const selected = selectedConversationRef.current;
+      if (!selected?.conversation) return;
+      try {
+        const { messages } = await fetchConversationMessages(
+          selected.conversation.user_id,
+          selected.conversation.conversation_id,
+          1,
+          null,
+          0,
+          50
+        );
+        if (!isMountedRef.current || !messages?.length) return;
+        setSelectedConversation((previous) => {
+          if (!previous) return previous;
+          return { ...previous, history: messages };
+        });
+      } catch {
+        // Silent fail: user can manually refresh
+      }
+    };
+
     const refreshSelectedConversationIfMatched = async (eventData) => {
       const selected = selectedConversationRef.current;
       if (!selected || !isMountedRef.current) return;
@@ -160,6 +186,7 @@ export const useLiveChatSSE = ({
       eventSource.onopen = () => {
         reconnectAttempt = 0;
         stopFallbackPolling();
+        lastEventAt = Date.now();
         if (process.env.NODE_ENV === "development") {
           console.log("[SSE] connected");
         }
@@ -169,6 +196,7 @@ export const useLiveChatSSE = ({
         if (!isMountedRef.current) return;
         try {
           const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
           const conversations = Array.isArray(data.conversations) ? data.conversations : null;
           const total = typeof data.total === "number" ? data.total : (conversations?.length || 0);
           await refreshChats({
@@ -189,6 +217,7 @@ export const useLiveChatSSE = ({
         handlingNewMessageEvent = true;
         try {
           const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
           const selected = selectedConversationRef.current;
           const convId = data?.conversation_id;
           const userId = data?.user_id;
@@ -258,6 +287,7 @@ export const useLiveChatSSE = ({
         if (!isMountedRef.current) return;
         try {
           const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
           const selected = selectedConversationRef.current;
           const convId = data?.conversation_id;
           const message = data?.message;
@@ -290,6 +320,7 @@ export const useLiveChatSSE = ({
         if (!isMountedRef.current) return;
         try {
           const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
           const convId = data?.conversation_id;
           const userId = data?.user_id;
           const phone = data?.phone || "";
@@ -322,7 +353,23 @@ export const useLiveChatSSE = ({
 
       eventSource.addEventListener("heartbeat", () => {
         // No-op, this event is only for keep-alive.
+        lastEventAt = Date.now();
       });
+
+      if (!heartbeatWatchdog) {
+        heartbeatWatchdog = setInterval(async () => {
+          if (!isMountedRef.current || useMockDataRef.current) return;
+          const elapsed = Date.now() - lastEventAt;
+          if (elapsed < 20000 || refreshingFallback) return;
+          refreshingFallback = true;
+          try {
+            await refreshChats();
+            await refreshSelectedConversation();
+          } finally {
+            refreshingFallback = false;
+          }
+        }, 15000);
+      }
 
       eventSource.onerror = () => {
         if (eventSource) {
@@ -346,6 +393,9 @@ export const useLiveChatSSE = ({
       }
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
+      }
+      if (heartbeatWatchdog) {
+        clearInterval(heartbeatWatchdog);
       }
       if (clearNewBadgeTimeout) {
         clearTimeout(clearNewBadgeTimeout);
