@@ -119,6 +119,10 @@ const LiveChat = () => {
   }, []);
 
   const applyServerConversations = React.useCallback((incoming) => {
+    if (!Array.isArray(incoming)) return;
+    if (incoming.length === 0 && activeConversationsRef.current?.length) {
+      return;
+    }
     const merged = mergeMissingActiveChats(incoming, activeConversationsRef.current);
     setActiveConversations(merged);
   }, [mergeMissingActiveChats]);
@@ -434,7 +438,7 @@ const LiveChat = () => {
               autoLoadedPagesRef.current = 1;
             }
             if (queueResponse?.success && queueResponse.queue) {
-              setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
+              applyWaitingQueue(queueResponse);
             }
           })
           .catch((err) => {
