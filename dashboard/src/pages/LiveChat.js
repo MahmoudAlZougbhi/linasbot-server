@@ -67,6 +67,7 @@ const LiveChat = () => {
   // ✅ Search by name or phone (debounced for API calls)
   const [liveSearchQuery, setLiveSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const waitingSearchTerm = debouncedSearch.trim().toLowerCase();
   // ✅ With bot: 50 per page for faster list fill, Load More for rest
   const CHAT_LIST_PAGE_SIZE = 50;
   const [chatPage, setChatPage] = useState(1);
@@ -132,19 +133,37 @@ const LiveChat = () => {
     [waitingQueue, activeConversations]
   );
 
+  const filteredWaitingQueue = React.useMemo(() => {
+    if (!waitingSearchTerm) return effectiveWaitingQueue;
+    return effectiveWaitingQueue.filter((item) => {
+      const name = (item.user_name || "").toLowerCase();
+      const phone = (item.user_phone || "").toLowerCase();
+      return name.includes(waitingSearchTerm) || phone.includes(waitingSearchTerm);
+    });
+  }, [effectiveWaitingQueue, waitingSearchTerm]);
+
   const aiInitiatedHandover = React.useMemo(
-    () => effectiveWaitingQueue.filter((item) => !userRequestedReasons.includes((item.reason || "").toLowerCase())),
-    [effectiveWaitingQueue, userRequestedReasons]
+    () => filteredWaitingQueue.filter((item) => !userRequestedReasons.includes((item.reason || "").toLowerCase())),
+    [filteredWaitingQueue, userRequestedReasons]
   );
   const userRequestedHandover = React.useMemo(
-    () => effectiveWaitingQueue.filter((item) => userRequestedReasons.includes((item.reason || "").toLowerCase())),
-    [effectiveWaitingQueue, userRequestedReasons]
+    () => filteredWaitingQueue.filter((item) => userRequestedReasons.includes((item.reason || "").toLowerCase())),
+    [filteredWaitingQueue, userRequestedReasons]
   );
   // Conversations where handover was done and we're talking with them (operator assigned)
   const withOperator = React.useMemo(
     () => activeConversations.filter((c) => c.status === "human" && c.operator_id),
     [activeConversations]
   );
+
+  const filteredWithOperator = React.useMemo(() => {
+    if (!waitingSearchTerm) return withOperator;
+    return withOperator.filter((conv) => {
+      const name = (conv.user_name || "").toLowerCase();
+      const phone = (conv.user_phone || "").toLowerCase();
+      return name.includes(waitingSearchTerm) || phone.includes(waitingSearchTerm);
+    });
+  }, [withOperator, waitingSearchTerm]);
   // Only bot conversations (exclude waiting_human + with operator) - shown below, release to bot moves here
   const botConversations = React.useMemo(
     () => activeConversations.filter((c) => c.status === "bot"),
@@ -232,6 +251,7 @@ const LiveChat = () => {
   const previousMessageCountRef = useRef(0);
   const messageCacheRef = useRef(new Map());
   const autoLoadedPagesRef = useRef(1);
+  const botListRef = useRef(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -830,7 +850,15 @@ const LiveChat = () => {
       const nextPage = chatPage + 1;
       const chatsResponse = await getUnifiedChats(debouncedSearch, nextPage, CHAT_LIST_PAGE_SIZE);
       if (chatsResponse.success && chatsResponse.chats) {
-        setActiveConversations((prev) => [...prev, ...chatsResponse.chats]);
+        setActiveConversations((prev) => {
+          const existingKeys = new Set(
+            prev.map((c) => `${c.user_id}_${c.conversation_id}`)
+          );
+          const deduped = chatsResponse.chats.filter(
+            (c) => !existingKeys.has(`${c.user_id}_${c.conversation_id}`)
+          );
+          return [...prev, ...deduped];
+        });
         setChatPage(nextPage);
         setHasMoreChats(chatsResponse.has_more || false);
       }
@@ -840,6 +868,19 @@ const LiveChat = () => {
       setLoadingMoreChats(false);
     }
   }, [loadingMoreChats, hasMoreChats, chatPage, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE]);
+
+  const handleBotListScroll = React.useCallback(
+    (event) => {
+      const el = event.currentTarget;
+      if (!el || loadingMoreChats || !hasMoreChats) return;
+      const threshold = 140;
+      const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceToBottom <= threshold) {
+        loadMoreChats();
+      }
+    },
+    [loadingMoreChats, hasMoreChats, loadMoreChats]
+  );
 
   // Auto-load extra pages to reduce missing conversations on first load
   useEffect(() => {
@@ -1546,18 +1587,18 @@ const LiveChat = () => {
             ) : (
               <>
                 <p className="text-2xl font-bold text-amber-600">
-                  {effectiveWaitingQueue.length}
+                  {filteredWaitingQueue.length}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  {effectiveWaitingQueue.length === 0
+                  {filteredWaitingQueue.length === 0
                     ? "None waiting"
                     : `${userRequestedHandover.length} asked for human · ${aiInitiatedHandover.length} AI referred`}
                 </p>
                 <div className="space-y-2 max-h-48 overflow-y-auto mt-2">
-                  {effectiveWaitingQueue.length === 0 ? (
+                  {filteredWaitingQueue.length === 0 ? (
                     <p className="text-xs text-slate-400 italic">None waiting</p>
                   ) : (
-                effectiveWaitingQueue.map((item) => {
+                filteredWaitingQueue.map((item) => {
                   const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
                   const readKey = `${item.user_id}_${item.conversation_id}`;
                   const readCount = readMessageCountByConv[readKey] ?? 0;
@@ -1653,16 +1694,16 @@ const LiveChat = () => {
             ) : (
               <>
                 <p className="text-2xl font-bold text-green-600">
-                  {withOperator.length}
+                  {filteredWithOperator.length}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   Handover done, chatting with them
                 </p>
                 <div className="space-y-2 max-h-36 overflow-y-auto mt-2">
-                  {withOperator.length === 0 ? (
+                  {filteredWithOperator.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">None</p>
               ) : (
-                withOperator.map((conv) => (
+                filteredWithOperator.map((conv) => (
                   <div
                     key={conv.conversation_id}
                     className="p-2.5 rounded-lg cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
@@ -1692,7 +1733,11 @@ const LiveChat = () => {
           </div>
 
           {/* Active Conversations */}
-          <div className="whatsapp-sidebar-section flex-1 overflow-y-auto">
+          <div
+            className="whatsapp-sidebar-section flex-1 overflow-y-auto"
+            ref={botListRef}
+            onScroll={handleBotListScroll}
+          >
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-slate-800 flex items-center">
                 <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
