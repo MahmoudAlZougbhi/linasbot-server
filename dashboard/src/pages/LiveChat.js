@@ -207,6 +207,15 @@ const LiveChat = () => {
     return [synthetic, ...(newQueue ?? [])];
   };
 
+  const applyWaitingQueue = (queueResponse) => {
+    const incoming = queueResponse?.queue;
+    if (!Array.isArray(incoming)) return;
+    if (incoming.length === 0 && waitingQueueRef.current?.length) {
+      return;
+    }
+    setWaitingQueue(mergeSelectedIntoWaitingQueue(incoming, selectedConversationRef));
+  };
+
   const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
@@ -465,8 +474,8 @@ const LiveChat = () => {
         getWaitingQueue()
           .then((queueResponse) => {
             if (!isMountedRef.current) return;
-            if (queueResponse?.success && queueResponse.queue) {
-              setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
+            if (queueResponse?.success) {
+              applyWaitingQueue(queueResponse);
             }
           })
           .catch(() => {});
@@ -545,6 +554,16 @@ const LiveChat = () => {
     }
 
     let cancelled = false;
+    const loadingFallbackTimer = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      if (cancelled) return;
+      if (
+        selectedConversationRef.current?.conversation?.conversation_id ===
+        selectedConversationId
+      ) {
+        setMessagesLoading(false);
+      }
+    }, 12000);
     const cacheKey = `${selectedConversationUserId}_${selectedConversationId}`;
     const cached = messageCacheRef.current.get(cacheKey);
     const cacheAge = cached ? Date.now() - cached.cachedAt : Infinity;
@@ -612,6 +631,7 @@ const LiveChat = () => {
 
     return () => {
       cancelled = true;
+      clearTimeout(loadingFallbackTimer);
     };
   }, [selectedConversationId, selectedConversationUserId, useMockData, fetchConversationMessages]);
 
@@ -850,8 +870,8 @@ const LiveChat = () => {
         }
       }
 
-      if (queueResponse?.success && Array.isArray(queueResponse.queue)) {
-        setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
+      if (queueResponse?.success) {
+        applyWaitingQueue(queueResponse);
       }
     } catch (error) {
       console.error("Error refreshing conversations:", error);
