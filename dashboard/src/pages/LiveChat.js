@@ -243,6 +243,28 @@ const LiveChat = () => {
   }, [waitingQueue]);
 
   useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        "liveChatActiveConversations",
+        JSON.stringify(activeConversations || [])
+      );
+    } catch (err) {
+      console.warn("LiveChat cache write error (active)", err);
+    }
+  }, [activeConversations]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        "liveChatWaitingQueue",
+        JSON.stringify(waitingQueue || [])
+      );
+    } catch (err) {
+      console.warn("LiveChat cache write error (waiting)", err);
+    }
+  }, [waitingQueue]);
+
+  useEffect(() => {
     useMockDataRef.current = useMockData;
   }, [useMockData]);
 
