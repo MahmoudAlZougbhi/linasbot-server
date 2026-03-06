@@ -88,6 +88,22 @@ class SentimentEscalationService:
             "ça n'a pas de sens", "perdu", "bloqué"
         ]
     }
+
+    CLARIFICATION_KEYWORDS = {
+        "ar": [
+            "وضحلي", "فسرلي", "شرحلي", "اشرح", "فسر", "وضح",
+            "شو قصدك", "شو يعني", "شو المقصود", "مش واضح",
+            "ما فهمت", "مش فاهم", "وضح سؤالك"
+        ],
+        "en": [
+            "explain", "clarify", "what do you mean", "not clear",
+            "i don't understand", "i dont understand", "can you explain"
+        ],
+        "fr": [
+            "explique", "clarifie", "je ne comprends pas", "pas clair",
+            "qu'est-ce que tu veux dire"
+        ]
+    }
     
     # Profanity/offensive language (mild detection)
     OFFENSIVE_KEYWORDS = {
@@ -159,8 +175,9 @@ class SentimentEscalationService:
             self.user_message_history[user_id] = self.user_message_history[user_id][-10:]
         
         # 1. Check for explicit human request (HIGH PRIORITY)
+        clarification_found = self._check_keywords(message_lower, self.CLARIFICATION_KEYWORDS, language)
         human_request_found = self._check_keywords(message_lower, self.HUMAN_REQUEST_KEYWORDS, language)
-        if human_request_found:
+        if human_request_found and not clarification_found:
             detected_issues.append("explicit_human_request")
             escalation_score += 100  # Immediate escalation
             print(f"🚨 ESCALATION: User {user_id} explicitly requested human operator")

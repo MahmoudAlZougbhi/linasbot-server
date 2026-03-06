@@ -147,6 +147,38 @@ const LiveChat = () => {
     [activeConversations]
   );
 
+  const liveBotConversations = React.useMemo(() => {
+    const now = Date.now();
+    const getLastTs = (conv) => {
+      const ts = conv.last_activity || conv.last_message?.timestamp;
+      return ts ? new Date(ts).getTime() : 0;
+    };
+    const enriched = botConversations.map((conv) => {
+      const lastTs = getLastTs(conv);
+      const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
+      return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
+    });
+    return enriched
+      .filter((conv) => conv._isLive)
+      .sort((a, b) => b._lastTs - a._lastTs);
+  }, [botConversations]);
+
+  const historyBotConversations = React.useMemo(() => {
+    const now = Date.now();
+    const getLastTs = (conv) => {
+      const ts = conv.last_activity || conv.last_message?.timestamp;
+      return ts ? new Date(ts).getTime() : 0;
+    };
+    return botConversations
+      .map((conv) => {
+        const lastTs = getLastTs(conv);
+        const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
+        return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
+      })
+      .filter((conv) => !conv._isLive)
+      .sort((a, b) => b._lastTs - a._lastTs);
+  }, [botConversations]);
+
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
   const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
   const markWaitingConversationRead = (userId, conversationId, messageCount) => {
@@ -179,6 +211,7 @@ const LiveChat = () => {
   const messagesEndRef = useRef(null);
   const selectedConversationRef = useRef(null);
   const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
+  const waitingQueueRef = useRef([]);
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
   const debouncedSearchRef = useRef("");
   const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
@@ -197,14 +230,46 @@ const LiveChat = () => {
   }, [activeConversations]);
 
   useEffect(() => {
+    waitingQueueRef.current = waitingQueue;
+  }, [waitingQueue]);
+
+  useEffect(() => {
     useMockDataRef.current = useMockData;
   }, [useMockData]);
 
   // Track mount state to avoid setState after unmount (fixes slowdown on repeated open/close)
   useEffect(() => {
     isMountedRef.current = true;
+    const cachedChats = sessionStorage.getItem("liveChatActiveConversations");
+    const cachedQueue = sessionStorage.getItem("liveChatWaitingQueue");
+    if (cachedChats) {
+      try {
+        const parsed = JSON.parse(cachedChats);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setActiveConversations(parsed);
+        }
+      } catch (err) {
+        console.warn("LiveChat cache parse error (active conversations)", err);
+      }
+    }
+    if (cachedQueue) {
+      try {
+        const parsed = JSON.parse(cachedQueue);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setWaitingQueue(parsed);
+        }
+      } catch (err) {
+        console.warn("LiveChat cache parse error (waiting queue)", err);
+      }
+    }
     return () => {
       isMountedRef.current = false;
+      try {
+        sessionStorage.setItem("liveChatActiveConversations", JSON.stringify(activeConversationsRef.current || []));
+        sessionStorage.setItem("liveChatWaitingQueue", JSON.stringify(waitingQueueRef.current || []));
+      } catch (err) {
+        console.warn("LiveChat cache write error", err);
+      }
     };
   }, []);
 
@@ -1625,63 +1690,126 @@ const LiveChat = () => {
                   </div>
                 ))
               ) : (
-                botConversations.map((conv) => (
-                <div
-                  key={conv.conversation_id}
-                  className={`p-3 rounded-lg cursor-pointer transition-all ${
-                    selectedConversation?.conversation?.conversation_id ===
-                    conv.conversation_id
-                      ? "bg-primary-50 border-2 border-primary-300"
-                      : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
-                  }`}
-                  onClick={() => {
-                    // ✅ PRIORITY: Show conversation immediately with loading state
-                    setSelectedConversation({
-                      conversation: conv,
-                      history: [],
-                    });
-                    setMessagesLoading(true);
-                  }}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <p className="font-medium text-slate-800 text-sm">
-                          {conv.user_name}
-                        </p>
-                        {/* ✅ "Live" Badge - currently chatting with AI */}
-                        {conv.is_live && (
-                          <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
-                            Live
-                          </span>
-                        )}
-                        {newConversationIds.has(conv.conversation_id) && (
-                          <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
-                            New
-                          </span>
-                        )}
+                <>
+                  {liveBotConversations.length > 0 && (
+                    <div className="pt-1">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Live now</p>
+                      <div className="space-y-2">
+                        {liveBotConversations.map((conv) => (
+                          <div
+                            key={conv.conversation_id}
+                            className={`p-3 rounded-lg cursor-pointer transition-all ${
+                              selectedConversation?.conversation?.conversation_id ===
+                              conv.conversation_id
+                                ? "bg-primary-50 border-2 border-primary-300"
+                                : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                            onClick={() => {
+                              setSelectedConversation({
+                                conversation: conv,
+                                history: [],
+                              });
+                              setMessagesLoading(true);
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-slate-800 text-sm">
+                                    {conv.user_name}
+                                  </p>
+                                  <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
+                                    Live
+                                  </span>
+                                  {newConversationIds.has(conv.conversation_id) && (
+                                    <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
+                                      New
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                  {conv.user_phone}
+                                </p>
+                              </div>
+                              <SentimentIndicator sentiment={conv.sentiment} />
+                            </div>
+
+                            <div className="mb-2"><StatusBadge status={conv.status} /></div>
+
+                            {conv.last_message && (
+                              <p className="text-xs text-slate-600 truncate mb-1">
+                                {conv.last_message.content}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between text-xs text-slate-500">
+                              <span>{conv.message_count} messages</span>
+                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-xs text-slate-500">
-                        {conv.user_phone}
-                      </p>
                     </div>
-                    <SentimentIndicator sentiment={conv.sentiment} />
-                  </div>
-
-                  <div className="mb-2"><StatusBadge status={conv.status} /></div>
-
-                  {conv.last_message && (
-                    <p className="text-xs text-slate-600 truncate mb-1">
-                      {conv.last_message.content}
-                    </p>
                   )}
 
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>{conv.message_count} messages</span>
-                    <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
-                  </div>
-                </div>
-              ))
+                  {historyBotConversations.length > 0 && (
+                    <div className="pt-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Earlier</p>
+                      <div className="space-y-2">
+                        {historyBotConversations.map((conv) => (
+                          <div
+                            key={conv.conversation_id}
+                            className={`p-3 rounded-lg cursor-pointer transition-all ${
+                              selectedConversation?.conversation?.conversation_id ===
+                              conv.conversation_id
+                                ? "bg-primary-50 border-2 border-primary-300"
+                                : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                            onClick={() => {
+                              setSelectedConversation({
+                                conversation: conv,
+                                history: [],
+                              });
+                              setMessagesLoading(true);
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-slate-800 text-sm">
+                                    {conv.user_name}
+                                  </p>
+                                  {newConversationIds.has(conv.conversation_id) && (
+                                    <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
+                                      New
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                  {conv.user_phone}
+                                </p>
+                              </div>
+                              <SentimentIndicator sentiment={conv.sentiment} />
+                            </div>
+
+                            <div className="mb-2"><StatusBadge status={conv.status} /></div>
+
+                            {conv.last_message && (
+                              <p className="text-xs text-slate-600 truncate mb-1">
+                                {conv.last_message.content}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between text-xs text-slate-500">
+                              <span>{conv.message_count} messages</span>
+                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               {hasMoreChats && (
                 <button

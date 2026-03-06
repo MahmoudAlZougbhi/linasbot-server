@@ -18,6 +18,13 @@ _EXPLICIT_HUMAN_HANDOFF_PATTERNS = [
     r"(مش\s*بدي\s*(?:بوت|روبوت)|بدي\s*حدا\s*بشري|بدي\s*حدا\s*حقيقي|مش\s*عايز\s*بوت|مش\s*حابب\s*بوت)"
 ]
 
+_CLARIFICATION_PATTERNS = [
+    r"(وضحلي|فسرلي|شرحلي|فسر|اشرح|وضح)\s*(?:سؤالك|السؤال|قصدك|شو\s*قصدك|شو\s*يعني)",
+    r"(شو\s*يعني|شو\s*قصدك|شو\s*المقصود|مش\s*فاهم|ما\s*فهمت|مش\s*واضح)",
+    r"(explain|clarify|what\s*do\s*you\s*mean|i\s*don'?t\s*understand|not\s*clear)",
+    r"(explique|clarifie|je\s*ne\s*comprends\s*pas|pas\s*clair|qu'?est-ce\s*que\s*tu\s*veux\s*dire)"
+]
+
 
 def _is_explicit_human_handoff_request(message: str) -> bool:
     """Detect direct customer request for human/call takeover."""
@@ -25,6 +32,14 @@ def _is_explicit_human_handoff_request(message: str) -> bool:
     if not message_text:
         return False
     return any(re.search(pattern, message_text, re.IGNORECASE | re.UNICODE) for pattern in _EXPLICIT_HUMAN_HANDOFF_PATTERNS)
+
+
+def _is_clarification_request(message: str) -> bool:
+    """Detect user asking for clarification/explanation (not a human handoff)."""
+    message_text = (message or "").strip().lower()
+    if not message_text:
+        return False
+    return any(re.search(pattern, message_text, re.IGNORECASE | re.UNICODE) for pattern in _CLARIFICATION_PATTERNS)
 
 
 async def handle_message(user_id: str, user_name: str, user_input_text: str, user_data: dict, send_message_func, send_action_func, skip_firestore_save: bool = False):
@@ -208,7 +223,11 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             traceback.print_exc()
 
     # Explicit user request for human/call gets immediate takeover
-    if _is_explicit_human_handoff_request(raw_msg) and not config.user_in_human_takeover_mode.get(user_id, False):
+    if (
+        _is_explicit_human_handoff_request(raw_msg)
+        and not _is_clarification_request(raw_msg)
+        and not config.user_in_human_takeover_mode.get(user_id, False)
+    ):
         print(f"📞 Explicit human/call handoff requested by user {user_id}")
         await _trigger_human_takeover(
             trigger_source="customer_explicit_request",
