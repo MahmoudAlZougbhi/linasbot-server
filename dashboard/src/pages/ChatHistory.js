@@ -12,6 +12,7 @@ import {
   ChatBubbleLeftIcon,
   ChatBubbleOvalLeftEllipsisIcon,
 } from "@heroicons/react/24/outline";
+import { useNavigate } from "react-router-dom";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 import {
@@ -191,6 +192,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
 
 const ChatHistory = () => {
   const { loading, submitFeedback } = useApi();
+  const navigate = useNavigate();
   const appTimezone = getTimezoneName();
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -261,6 +263,13 @@ const ChatHistory = () => {
     } finally {
       setIsLoadingCustomers(false);
     }
+  };
+
+  const openInLiveChat = (customer) => {
+    if (!customer) return;
+    const query = (customer.phone_full || customer.user_id || customer.user_name || "").trim();
+    if (!query) return;
+    navigate(`/live-chat?search=${encodeURIComponent(query)}`);
   };
 
   const loadMoreCustomers = async () => {
@@ -490,7 +499,7 @@ const ChatHistory = () => {
     // Find the previous user message
     for (let i = botIndex - 1; i >= 0; i--) {
       if (conversationMessages[i].role === "user") {
-        return conversationMessages[i].text;
+        return conversationMessages[i].text || conversationMessages[i].content || "";
       }
     }
 
@@ -566,7 +575,7 @@ const ChatHistory = () => {
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search customers..."
+                placeholder="Search by name or phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="input-field pl-10 w-full"
@@ -707,6 +716,19 @@ const ChatHistory = () => {
                         </>
                       )}
                     </div>
+                  </div>
+                  <div className="ml-auto flex flex-col items-end">
+                    <button
+                      type="button"
+                      onClick={() => openInLiveChat(selectedCustomer)}
+                      className="btn-primary text-sm"
+                    >
+                      <ChatBubbleLeftRightIcon className="w-4 h-4 mr-1" />
+                      Open in Live Chat
+                    </button>
+                    <span className="text-xs text-slate-400 mt-1">
+                      Reply with voice/image from Live Chat
+                    </span>
                   </div>
                 </div>
               </div>
@@ -880,7 +902,7 @@ const ChatHistory = () => {
                               ) : (
                                 /* Text Message Display */
                                 <p className="text-sm whitespace-pre-wrap">
-                                  {message.text}
+                                  {message.text || message.content || ""}
                                 </p>
                               )}
 

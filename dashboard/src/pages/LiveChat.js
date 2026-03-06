@@ -17,6 +17,7 @@ import {
   PhotoIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
+import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useApi } from "../hooks/useApi";
 import { formatMessageTime } from "../utils/dateUtils";
@@ -38,6 +39,7 @@ import {
 } from "../utils/liveChatApi";
 
 const LiveChat = () => {
+  const [searchParams] = useSearchParams();
   const [activeConversations, setActiveConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [waitingQueue, setWaitingQueue] = useState([]);
@@ -104,6 +106,22 @@ const LiveChat = () => {
     });
     return merged;
   };
+
+  const mergeMissingActiveChats = React.useCallback((incoming, existing) => {
+    if (!Array.isArray(incoming)) return incoming || [];
+    const existingList = existing || [];
+    const keep = existingList.filter((conv) => ["human", "waiting_human"].includes(conv.status));
+    if (!keep.length) return incoming;
+    const incomingKeys = new Set(incoming.map((conv) => `${conv.user_id}_${conv.conversation_id}`));
+    const missing = keep.filter((conv) => !incomingKeys.has(`${conv.user_id}_${conv.conversation_id}`));
+    if (!missing.length) return incoming;
+    return [...missing, ...incoming];
+  }, []);
+
+  const applyServerConversations = React.useCallback((incoming) => {
+    const merged = mergeMissingActiveChats(incoming, activeConversationsRef.current);
+    setActiveConversations(merged);
+  }, [mergeMissingActiveChats]);
 
   const effectiveWaitingQueue = React.useMemo(
     () => mergeActiveWaitingIntoQueue(waitingQueue, activeConversations),
@@ -199,6 +217,13 @@ const LiveChat = () => {
     }, 250);
     return () => clearTimeout(timer);
   }, [liveSearchQuery]);
+
+  useEffect(() => {
+    const query = (searchParams.get("search") || "").trim();
+    if (query && query !== liveSearchQuery) {
+      setLiveSearchQuery(query);
+    }
+  }, [searchParams, liveSearchQuery]);
 
   const {
     getUnifiedChats,
@@ -307,7 +332,7 @@ const LiveChat = () => {
           .then(([chatsResponse, queueResponse]) => {
             if (!isMountedRef.current) return;
             if (chatsResponse?.success && chatsResponse.chats) {
-              setActiveConversations(chatsResponse.chats);
+              applyServerConversations(chatsResponse.chats);
               setHasMoreChats(chatsResponse.has_more ?? false);
               setChatPage(1);
               autoLoadedPagesRef.current = 1;
@@ -353,7 +378,7 @@ const LiveChat = () => {
         }
         if (chatsResponse?.success && isMountedRef.current) {
           const chats = chatsResponse.chats || chatsResponse.conversations || [];
-          setActiveConversations(chats);
+          applyServerConversations(chats);
           setChatPage(1);
           setHasMoreChats(chatsResponse.has_more || false);
           setUseMockData(false);
@@ -396,7 +421,7 @@ const LiveChat = () => {
 
     fetchLiveData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
+  }, [debouncedSearch, applyServerConversations]);
 
   useLiveChatSSE({
     enabled: !useMockData,
@@ -408,7 +433,7 @@ const LiveChat = () => {
     getUnifiedChats,
     chatListPageSize: CHAT_LIST_PAGE_SIZE,
     fetchConversationMessages,
-    setActiveConversations,
+    setActiveConversations: applyServerConversations,
     setNewConversationIds,
     setLastRefreshTime,
     setIsRefreshing,
@@ -430,7 +455,7 @@ const LiveChat = () => {
         const r = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
         if (!isMountedRef.current) return;
         if (r?.success && r?.chats?.length > 0) {
-          setActiveConversations(r.chats);
+          applyServerConversations(r.chats);
           setHasMoreChats(r.has_more ?? false);
           setChatPage(1);
           autoLoadedPagesRef.current = 1;
@@ -442,7 +467,7 @@ const LiveChat = () => {
       }
     }, 8000);
     return () => clearTimeout(t);
-  }, [debouncedSearch, useMockData, getUnifiedChats, setIsLoading, setActiveConversations, setHasMoreChats, setChatPage, setSelectedConversation]);
+  }, [debouncedSearch, useMockData, getUnifiedChats, applyServerConversations, setIsLoading, setHasMoreChats, setChatPage]);
 
   const selectedConversationId = selectedConversation?.conversation?.conversation_id;
   const selectedConversationUserId = selectedConversation?.conversation?.user_id;
@@ -746,7 +771,7 @@ const LiveChat = () => {
           chats.filter((c) => !previousIds.has(c.conversation_id)).map((c) => c.conversation_id)
         );
 
-        setActiveConversations(chats);
+  applyServerConversations(chats);
         setChatPage(1);
         setHasMoreChats(chatsResponse.has_more || false);
         setNewConversationIds(newIds);
