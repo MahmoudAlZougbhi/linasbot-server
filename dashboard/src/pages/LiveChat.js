@@ -71,15 +71,52 @@ const LiveChat = () => {
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
 
+  const MESSAGE_CACHE_TTL_MS = 30000;
+
   // Split handover: 1) waiting (no operator yet) 2) with operator (handover done, chatting)
-  const userRequestedReasons = ["user_request", "customer_requested_human"];
+  const userRequestedReasons = React.useMemo(
+    () => ["user_request", "customer_requested_human"],
+    []
+  );
+
+  const mergeActiveWaitingIntoQueue = (queue, activeList) => {
+    const activeWaiting = (activeList || []).filter((conv) => conv.status === "waiting_human");
+    if (!activeWaiting.length) return queue ?? [];
+    const queueKeys = new Set(
+      (queue || []).map((item) => `${item.user_id}_${item.conversation_id}`)
+    );
+    const merged = [...(queue || [])];
+    activeWaiting.forEach((conv) => {
+      const key = `${conv.user_id}_${conv.conversation_id}`;
+      if (queueKeys.has(key)) return;
+      merged.push({
+        conversation_id: conv.conversation_id,
+        user_id: conv.user_id,
+        user_name: conv.user_name,
+        user_phone: conv.user_phone,
+        wait_time_seconds: 0,
+        message_count: conv.message_count || 0,
+        last_message: conv.last_message?.content ?? conv.last_message ?? "",
+        reason: "user_request",
+        sentiment: conv.sentiment || "neutral",
+        language: conv.language || "ar",
+      });
+    });
+    return merged;
+  };
+
+  const effectiveWaitingQueue = React.useMemo(
+    () => mergeActiveWaitingIntoQueue(waitingQueue, activeConversations),
+    [waitingQueue, activeConversations]
+  );
+
   const aiInitiatedHandover = React.useMemo(
-    () => waitingQueue.filter((item) => !userRequestedReasons.includes((item.reason || "").toLowerCase())),
-    [waitingQueue]
+    () => effectiveWaitingQueue.filter((item) => !userRequestedReasons.includes((item.reason || "").toLowerCase())),
+    [effectiveWaitingQueue, userRequestedReasons]
   );
   const userRequestedHandover = React.useMemo(
-    () => waitingQueue.filter((item) => userRequestedReasons.includes((item.reason || "").toLowerCase())),
-    [waitingQueue]
+    () => effectiveWaitingQueue.filter((item) => userRequestedReasons.includes((item.reason || "").toLowerCase())),
+    [effectiveWaitingQueue, userRequestedReasons]
   );
   // Conversations where handover was done and we're talking with them (operator assigned)
   const withOperator = React.useMemo(
@@ -129,6 +166,8 @@ const LiveChat = () => {
   const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
   const previousConversationIdRef = useRef(null);
   const previousMessageCountRef = useRef(0);
+  const messageCacheRef = useRef(new Map());
+  const autoLoadedPagesRef = useRef(1);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -180,17 +219,28 @@ const LiveChat = () => {
   }, [operatorStatus, updateOperatorStatus]);
 
   // Fetch conversation messages: use same axios as list (getUnifiedChats) so request hits same origin
-  const fetchConversationMessages = async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
-    return getConversationMessages(userId, conversationId, days, before, day_window, limit);
-  };
+  const fetchConversationMessages = React.useCallback(
+    (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) =>
+      getConversationMessages(userId, conversationId, days, before, day_window, limit),
+    [getConversationMessages]
+  );
 
   const appendMessageToSelectedConversation = (newMessage) => {
     setSelectedConversation((previous) => {
       if (!previous) return previous;
-      return {
+      const updated = {
         ...previous,
         history: [...(previous.history || []), newMessage],
       };
+      if (previous.conversation) {
+        const cacheKey = `${previous.conversation.user_id}_${previous.conversation.conversation_id}`;
+        messageCacheRef.current.set(cacheKey, {
+          messages: updated.history,
+          hasMore: hasMoreMessages,
+          cachedAt: Date.now(),
+        });
+      }
+      return updated;
     });
   };
 
@@ -260,6 +310,7 @@ const LiveChat = () => {
               setActiveConversations(chatsResponse.chats);
               setHasMoreChats(chatsResponse.has_more ?? false);
               setChatPage(1);
+              autoLoadedPagesRef.current = 1;
             }
             if (queueResponse?.success && queueResponse.queue) {
               setWaitingQueue(mergeSelectedIntoWaitingQueue(queueResponse.queue, selectedConversationRef));
@@ -306,6 +357,7 @@ const LiveChat = () => {
           setChatPage(1);
           setHasMoreChats(chatsResponse.has_more || false);
           setUseMockData(false);
+          autoLoadedPagesRef.current = 1;
 
           const currentSelection = selectedConversationRef.current;
           if (currentSelection) {
@@ -381,6 +433,7 @@ const LiveChat = () => {
           setActiveConversations(r.chats);
           setHasMoreChats(r.has_more ?? false);
           setChatPage(1);
+          autoLoadedPagesRef.current = 1;
         }
       } catch (e) {
         console.warn("Live Chat fallback fetch failed:", e);
@@ -402,8 +455,28 @@ const LiveChat = () => {
     }
 
     let cancelled = false;
+    const cacheKey = `${selectedConversationUserId}_${selectedConversationId}`;
+    const cached = messageCacheRef.current.get(cacheKey);
+    const cacheAge = cached ? Date.now() - cached.cachedAt : Infinity;
+    const cacheFresh = cached && cacheAge < MESSAGE_CACHE_TTL_MS;
+
+    if (cached?.messages?.length) {
+      setSelectedConversation((prev) => {
+        if (!prev || prev.conversation?.conversation_id !== selectedConversationId) return prev;
+        return { ...prev, history: cached.messages };
+      });
+      setHasMoreMessages(cached.hasMore);
+    }
+
+    if (cacheFresh) {
+      setMessagesLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const fetchMessages = async () => {
-      setMessagesLoading(true);
+      setMessagesLoading(!cached?.messages?.length);
       try {
         const { messages, hasMore } = await fetchConversationMessages(
           selectedConversationUserId,
@@ -414,6 +487,12 @@ const LiveChat = () => {
           100
         );
         if (!isMountedRef.current || cancelled) return;
+
+        messageCacheRef.current.set(cacheKey, {
+          messages: messages || [],
+          hasMore: hasMore || false,
+          cachedAt: Date.now(),
+        });
 
         setSelectedConversation((prev) => {
           if (!prev || prev.conversation?.conversation_id !== selectedConversationId) {
@@ -444,7 +523,7 @@ const LiveChat = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedConversationId, selectedConversationUserId, useMockData]);
+  }, [selectedConversationId, selectedConversationUserId, useMockData, fetchConversationMessages]);
 
   // Failsafe: if messages stay loading >26s (e.g. request hung), clear loading and notify
   const messagesLoadingStartRef = useRef(null);
@@ -608,7 +687,7 @@ const LiveChat = () => {
   };
 
   // ✅ Load more chats (WhatsApp-style pagination)
-  const loadMoreChats = async () => {
+  const loadMoreChats = React.useCallback(async () => {
     if (loadingMoreChats || !hasMoreChats) return;
     setLoadingMoreChats(true);
     try {
@@ -624,7 +703,20 @@ const LiveChat = () => {
     } finally {
       setLoadingMoreChats(false);
     }
-  };
+  }, [loadingMoreChats, hasMoreChats, chatPage, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE]);
+
+  // Auto-load extra pages to reduce missing conversations on first load
+  useEffect(() => {
+    if (debouncedSearch.trim()) {
+      autoLoadedPagesRef.current = 1;
+      return;
+    }
+    if (!hasMoreChats || loadingMoreChats) return;
+    if (activeConversations.length >= 100) return;
+    if (autoLoadedPagesRef.current >= 3) return;
+    autoLoadedPagesRef.current += 1;
+    loadMoreChats();
+  }, [debouncedSearch, hasMoreChats, loadingMoreChats, activeConversations.length, loadMoreChats]);
 
   // ✅ Manual refresh handler
   const handleManualRefresh = async () => {
@@ -659,6 +751,7 @@ const LiveChat = () => {
         setHasMoreChats(chatsResponse.has_more || false);
         setNewConversationIds(newIds);
         setLastRefreshTime(new Date());
+  autoLoadedPagesRef.current = 1;
         toast.success("Conversations refreshed");
 
         // Auto-clear "new" badge after 10 seconds
@@ -726,6 +819,14 @@ const LiveChat = () => {
               return arr.findIndex((x) => x.message_id === id) === i;
             })
             .sort((a, b) => new Date(a?.timestamp || 0).getTime() - new Date(b?.timestamp || 0).getTime());
+          if (selectedConversation?.conversation) {
+            const key = `${selectedConversation.conversation.user_id}_${selectedConversation.conversation.conversation_id}`;
+            messageCacheRef.current.set(key, {
+              messages: deduped,
+              hasMore,
+              cachedAt: Date.now(),
+            });
+          }
           return { ...prev, history: deduped };
         });
       }
@@ -755,6 +856,14 @@ const LiveChat = () => {
         history: messages || [],
       }));
       setHasMoreMessages(hasMore);
+      if (selectedConversation?.conversation) {
+        const key = `${selectedConversation.conversation.user_id}_${selectedConversation.conversation.conversation_id}`;
+        messageCacheRef.current.set(key, {
+          messages: messages || [],
+          hasMore: hasMore || false,
+          cachedAt: Date.now(),
+        });
+      }
       toast.success(`Loaded ${(messages || []).length} messages`);
     } catch (error) {
       console.error("Error reloading conversation messages:", error);
@@ -1211,7 +1320,7 @@ const LiveChat = () => {
             <select
               value={operatorStatus}
               onChange={(e) => setOperatorStatus(e.target.value)}
-              className="input-field"
+              className="whatsapp-input"
             >
               <option value="available">🟢 Available</option>
               <option value="busy">🟡 Busy</option>
@@ -1255,15 +1364,15 @@ const LiveChat = () => {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-12 gap-6 h-[calc(100%-8rem)]">
+      <div className="grid grid-cols-12 gap-0 h-[calc(100%-7.5rem)] whatsapp-shell">
         {/* Conversations List */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="col-span-3 space-y-4 h-full overflow-y-auto"
+          className="col-span-3 whatsapp-sidebar"
         >
           {/* 1) Waiting for human – yale tablin (no operator yet) */}
-          <div className="card p-4">
+          <div className="whatsapp-sidebar-section">
             <h3 className="font-bold text-slate-800 mb-2 flex items-center">
               <span className="text-lg mr-2">⏳</span>
               Waiting for human
@@ -1280,18 +1389,18 @@ const LiveChat = () => {
             ) : (
               <>
                 <p className="text-2xl font-bold text-amber-600">
-                  {waitingQueue.length}
+                  {effectiveWaitingQueue.length}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  {waitingQueue.length === 0
+                  {effectiveWaitingQueue.length === 0
                     ? "None waiting"
                     : `${userRequestedHandover.length} asked for human · ${aiInitiatedHandover.length} AI referred`}
                 </p>
                 <div className="space-y-2 max-h-48 overflow-y-auto mt-2">
-                  {waitingQueue.length === 0 ? (
+                  {effectiveWaitingQueue.length === 0 ? (
                     <p className="text-xs text-slate-400 italic">None waiting</p>
                   ) : (
-                waitingQueue.map((item) => {
+                effectiveWaitingQueue.map((item) => {
                   const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
                   const readKey = `${item.user_id}_${item.conversation_id}`;
                   const readCount = readMessageCountByConv[readKey] ?? 0;
@@ -1373,7 +1482,7 @@ const LiveChat = () => {
           </div>
 
           {/* 2) With operator – yale ma3mol handover w 3am ne7ke ma3on */}
-          <div className="card p-4">
+          <div className="whatsapp-sidebar-section">
             <h3 className="font-bold text-slate-800 mb-2 flex items-center">
               <span className="text-lg mr-2">💬</span>
               With operator
@@ -1426,7 +1535,7 @@ const LiveChat = () => {
           </div>
 
           {/* Active Conversations */}
-          <div className="card p-4 flex-1 overflow-y-auto">
+          <div className="whatsapp-sidebar-section flex-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-slate-800 flex items-center">
                 <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
@@ -1449,7 +1558,7 @@ const LiveChat = () => {
                 value={liveSearchQuery}
                 onChange={(e) => setLiveSearchQuery(e.target.value)}
                 placeholder="Search by name or phone..."
-                className="input-field w-full pl-9 pr-4 py-2 text-sm"
+                className="whatsapp-input w-full pl-9 pr-4"
               />
               {liveSearchQuery && (
                 <button
@@ -1545,12 +1654,12 @@ const LiveChat = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="col-span-6 card flex flex-col h-full overflow-hidden"
+          className="col-span-6 whatsapp-chat-panel"
         >
           {selectedConversation ? (
             <>
               {/* Chat Header - Fixed Height */}
-              <div className="p-4 border-b border-slate-200 flex-shrink-0">
+              <div className="whatsapp-chat-header">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gradient-to-r from-primary-400 to-secondary-400 rounded-full flex items-center justify-center text-white font-bold">
@@ -1582,7 +1691,7 @@ const LiveChat = () => {
                             selectedConversation.conversation.user_id
                           )
                         }
-                        className="btn-primary text-sm"
+                        className="whatsapp-pill"
                       >
                         <HandRaisedIcon className="w-4 h-4 mr-1" />
                         Take Over
@@ -1596,7 +1705,7 @@ const LiveChat = () => {
                               selectedConversation.conversation.user_id
                             )
                           }
-                          className="btn-secondary text-sm"
+                          className="whatsapp-pill-outline"
                         >
                           <ArrowRightIcon className="w-4 h-4 mr-1" />
                           Release to Bot
@@ -1632,7 +1741,7 @@ const LiveChat = () => {
               {/* Messages - Fixed Height with Internal Scroll */}
               <div
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 flex flex-col"
+                className="whatsapp-chat-bg flex-1 overflow-y-auto p-4 space-y-3 min-h-0 flex flex-col"
               >
                 {hasMoreMessages && (
                   <button
@@ -1717,10 +1826,10 @@ const LiveChat = () => {
                         }`}
                       >
                         <div
-                          className={`rounded-2xl px-4 py-2 ${
+                          className={`px-4 py-2 ${
                             msg.is_user
-                              ? "bg-slate-100 text-slate-800"
-                              : "bg-gradient-to-r from-primary-500 to-secondary-500 text-white"
+                              ? "whatsapp-message-in"
+                              : "whatsapp-message-out"
                           }`}
                         >
                           {isImageMessage ? (
@@ -1844,7 +1953,7 @@ const LiveChat = () => {
 
               {/* Message Input - Fixed Height - Text + Voice */}
               {selectedConversation.conversation.status === "human" && (
-                <div className="p-4 border-t border-slate-200 flex-shrink-0">
+                <div className="whatsapp-input-bar flex-shrink-0">
                   {selectedImage && (
                     <div className="mb-3 p-3 bg-slate-100 rounded-lg">
                       <div className="flex items-center justify-between gap-3">
@@ -1868,7 +1977,7 @@ const LiveChat = () => {
                           </button>
                           <button
                             onClick={sendImageMessage}
-                            className="btn-primary flex items-center space-x-1"
+                            className="whatsapp-pill flex items-center space-x-1"
                           >
                             <PaperAirplaneIcon className="w-4 h-4" />
                             <span>Send</span>
@@ -1901,7 +2010,7 @@ const LiveChat = () => {
                           <button
                             onClick={sendVoiceMessage}
                             disabled={isSendingVoice}
-                            className="btn-primary flex items-center space-x-1 disabled:opacity-50"
+                            className="whatsapp-pill flex items-center space-x-1 disabled:opacity-50"
                           >
                             <PaperAirplaneIcon className="w-4 h-4" />
                             <span>{isSendingVoice ? "Sending..." : "Send"}</span>
@@ -1952,20 +2061,20 @@ const LiveChat = () => {
                           e.key === "Enter" && !isSending && handleSendMessage()
                         }
                         placeholder="Type your message..."
-                        className="input-field flex-1"
+                        className="whatsapp-input flex-1"
                         disabled={isSending}
                       />
                       {/* Voice Recording Button */}
                       <button
                         onClick={startRecording}
-                        className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+                        className="whatsapp-action-btn"
                         title="Record voice message"
                       >
                         <MicrophoneIcon className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => imageInputRef.current?.click()}
-                        className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+                        className="whatsapp-action-btn"
                         title="Send image"
                       >
                         <PhotoIcon className="w-5 h-5" />
@@ -1974,9 +2083,7 @@ const LiveChat = () => {
                       <button
                         onClick={handleSendMessage}
                         disabled={isSending || !messageInput.trim()}
-                        className={`btn-primary disabled:opacity-50 ${
-                          isSending ? "cursor-not-allowed" : ""
-                        }`}
+                        className="whatsapp-send-btn"
                       >
                         {isSending ? (
                           <span className="flex items-center">
@@ -2027,12 +2134,12 @@ const LiveChat = () => {
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="col-span-3 space-y-4 h-full overflow-y-auto"
+          className="col-span-3 whatsapp-info-panel space-y-4 p-4"
         >
           {selectedConversation ? (
             <>
               {/* User Info */}
-              <div className="card p-4">
+              <div className="whatsapp-info-card">
                 <h3 className="font-bold text-slate-800 mb-3 flex items-center">
                   <UserIcon className="w-5 h-5 mr-2 text-primary-600" />
                   User Information
@@ -2075,7 +2182,7 @@ const LiveChat = () => {
               </div>
 
               {/* Conversation Stats */}
-              <div className="card p-4">
+              <div className="whatsapp-info-card">
                 <h3 className="font-bold text-slate-800 mb-3 flex items-center">
                   <ChartBarIcon className="w-5 h-5 mr-2 text-secondary-600" />
                   Conversation Stats
@@ -2113,7 +2220,7 @@ const LiveChat = () => {
               </div>
 
               {/* Quick Actions */}
-              <div className="card p-4">
+              <div className="whatsapp-info-card">
                 <h3 className="font-bold text-slate-800 mb-3">Quick Actions</h3>
                 <div className="space-y-2">
                   <button className="w-full btn-ghost text-left text-sm">

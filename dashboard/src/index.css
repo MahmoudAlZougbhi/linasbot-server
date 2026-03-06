@@ -67,6 +67,75 @@
   .input-field {
     @apply glass rounded-xl border-0 px-4 py-3 text-slate-700 placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:ring-opacity-50 transition-all duration-200;
   }
+
+  /* WhatsApp-like Live Chat styling */
+  .whatsapp-shell {
+    @apply bg-[#f0f2f5] rounded-2xl border border-slate-200 shadow-xl overflow-hidden;
+  }
+
+  .whatsapp-sidebar {
+    @apply bg-white border-r border-slate-200 h-full overflow-y-auto flex flex-col;
+  }
+
+  .whatsapp-sidebar-section {
+    @apply px-4 py-3 border-b border-slate-200;
+  }
+
+  .whatsapp-chat-panel {
+    @apply bg-[#efeae2] flex flex-col h-full overflow-hidden;
+  }
+
+  .whatsapp-chat-header {
+    @apply px-4 py-3 border-b border-slate-200 bg-[#f7f8fa] flex items-center justify-between;
+  }
+
+  .whatsapp-chat-bg {
+    background-color: #efeae2;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.45) 0%, transparent 45%),
+      radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.35) 0%, transparent 40%),
+      radial-gradient(circle at 0% 80%, rgba(255, 255, 255, 0.2) 0%, transparent 45%);
+  }
+
+  .whatsapp-info-panel {
+    @apply bg-white border-l border-slate-200 h-full overflow-y-auto;
+  }
+
+  .whatsapp-info-card {
+    @apply bg-white rounded-xl border border-slate-200 p-4 shadow-sm;
+  }
+
+  .whatsapp-message-in {
+    @apply bg-white text-slate-800 rounded-2xl rounded-tl-md shadow-sm;
+  }
+
+  .whatsapp-message-out {
+    @apply bg-[#d9fdd3] text-slate-800 rounded-2xl rounded-tr-md shadow-sm;
+  }
+
+  .whatsapp-input-bar {
+    @apply px-4 py-3 border-t border-slate-200 bg-[#f7f8fa];
+  }
+
+  .whatsapp-input {
+    @apply bg-white border border-slate-200 rounded-full px-4 py-2 text-sm text-slate-700 placeholder-slate-400 focus:ring-2 focus:ring-[#25d366]/30 focus:outline-none;
+  }
+
+  .whatsapp-action-btn {
+    @apply p-2 rounded-full hover:bg-slate-200 text-slate-600 transition-colors;
+  }
+
+  .whatsapp-pill {
+    @apply bg-[#25d366] text-white text-sm font-semibold px-4 py-2 rounded-full shadow-sm hover:bg-[#1ebe57] transition-colors;
+  }
+
+  .whatsapp-pill-outline {
+    @apply border border-[#25d366] text-[#128c7e] bg-white text-sm font-semibold px-4 py-2 rounded-full hover:bg-[#e9f7ef] transition-colors;
+  }
+
+  .whatsapp-send-btn {
+    @apply bg-[#25d366] text-white p-3 rounded-full shadow-sm hover:bg-[#1ebe57] transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
   
   .floating-element {
     @apply animate-bounce-gentle;
