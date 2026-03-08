@@ -520,7 +520,7 @@ export const useApi = () => {
         params.append("limit", String(Math.min(100, Math.max(1, limit))));
         const response = await api.get(
           `/api/live-chat/conversation/${encodeURIComponent(userId)}/${encodeURIComponent(conversationId)}?${params.toString()}`,
-          { timeout: 12000 }
+          { timeout: 8000 }
         );
         const data = response.data;
         if (!data.success) {

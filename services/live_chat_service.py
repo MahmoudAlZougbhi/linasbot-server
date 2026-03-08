@@ -39,7 +39,9 @@ class LiveChatService:
     CACHE_TTL = 30  # seconds
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
     FIRESTORE_FETCH_PARALLELISM = 24
-    FIRESTORE_DOC_TIMEOUT_SECONDS = 12
+    FIRESTORE_DOC_TIMEOUT_SECONDS = 5
+    RECENT_MESSAGES_IN_INDEX = 50
+    INDEX_READ_TIMEOUT_SECONDS = 3
 
     # Canonical conversation states
     STATE_BOT_ACTIVE = "bot_active"
@@ -161,6 +163,42 @@ class LiveChatService:
                 p.cancel()
             raise asyncio.TimeoutError()
         return task.result()
+
+    def _format_single_message(self, msg: Dict[str, Any]) -> Dict[str, Any]:
+        """Format one raw message to API response shape (for index cache and full doc path)."""
+        meta = msg.get("metadata") or {}
+        handled = meta.get("handled_by")
+        if not handled:
+            if meta.get("source") == "qa_database":
+                handled = "bot"
+            elif msg.get("role") == "operator":
+                handled = "human"
+            else:
+                handled = "ai"
+        ts_str = self._parse_timestamp(msg.get("timestamp")).isoformat()
+        message_id = msg.get("message_id") or meta.get("message_id") or meta.get("source_message_id") or f"ts_{ts_str}"
+        msg_data = {
+            "message_id": str(message_id),
+            "timestamp": ts_str,
+            "is_user": msg.get("role") == "user",
+            "content": msg.get("text", ""),
+            "text": msg.get("text", ""),
+            "type": msg.get("type", "text"),
+            "handled_by": handled,
+            "role": msg.get("role"),
+        }
+        audio_url = msg.get("audio_url") or meta.get("audio_url")
+        if audio_url:
+            msg_data["audio_url"] = audio_url
+        image_url = msg.get("image_url") or meta.get("image_url")
+        if image_url:
+            msg_data["image_url"] = image_url
+        if meta.get("reply_source"):
+            msg_data["reply_source"] = meta["reply_source"]
+        if meta.get("faq_match"):
+            msg_data["metadata"] = msg_data.get("metadata") or {}
+            msg_data["metadata"]["faq_match"] = meta["faq_match"]
+        return msg_data
 
     async def _sync_index_from_source(self, user_id: str, conversation_id: str, *, allow_state_backfill: bool = False) -> Dict[str, Any]:
         """Read canonical conversation from Firestore, normalize, and upsert index entry."""
@@ -321,7 +359,16 @@ class LiveChatService:
         message_count = conv_data.get("message_count", len(messages))
         is_live = state in {self.STATE_BOT_ACTIVE, self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED} and self._is_live_window(last_ts)
 
-        return {
+        recent_messages = []
+        if messages:
+            tail = messages[-self.RECENT_MESSAGES_IN_INDEX:] if len(messages) > self.RECENT_MESSAGES_IN_INDEX else messages
+            for m in tail:
+                try:
+                    recent_messages.append(self._format_single_message(m))
+                except Exception:
+                    pass
+
+        out = {
             "conversation_id": conv_data.get("conversation_id"),
             "user_id": user_id,
             "user_name": user_name,
@@ -338,6 +385,9 @@ class LiveChatService:
             "language": language,
             "customer_info": customer_info,
         }
+        if recent_messages:
+            out["recent_messages"] = recent_messages
+        return out
 
     async def _upsert_index_entry(self, entry: dict):
         try:
@@ -1851,6 +1901,33 @@ class LiveChatService:
                 return {"success": False, "error": "Firestore not initialized"}
 
             app_id = "linas-ai-bot-backend"
+            index_coll = self._index_collection(db)
+
+            # Fast path: initial open (no days/before filter) — serve from index in <3s so UI opens in <5s
+            if days <= 0 and not before:
+                try:
+                    index_ref = index_coll.document(conversation_id)
+                    index_doc = await self._get_doc_with_timeout(index_ref, timeout_seconds=self.INDEX_READ_TIMEOUT_SECONDS)
+                    if index_doc.exists:
+                        data = index_doc.to_dict() or {}
+                        recent = data.get("recent_messages")
+                        if isinstance(recent, list) and len(recent) > 0:
+                            msg_count = int(data.get("message_count") or 0)
+                            return {
+                                "success": True,
+                                "conversation_id": conversation_id,
+                                "messages": recent,
+                                "total_messages": msg_count,
+                                "returned_messages": len(recent),
+                                "has_more": msg_count > len(recent),
+                                "sentiment": str(data.get("sentiment") or "neutral"),
+                                "status": self._conversation_state_to_status(data.get("conversation_state")),
+                            }
+                except asyncio.TimeoutError:
+                    pass
+                except Exception:
+                    pass
+
             effective_user_id = user_id
             conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
                 effective_user_id
@@ -1921,48 +1998,7 @@ class LiveChatService:
                 if len(messages) > max_messages:
                     messages = messages[-max_messages:]
 
-            formatted_messages = []
-
-            for msg in messages:
-                meta = msg.get("metadata") or {}
-                handled = meta.get("handled_by")
-                if not handled:
-                    if meta.get("source") == "qa_database":
-                        handled = "bot"
-                    elif msg.get("role") == "operator":
-                        handled = "human"
-                    else:
-                        handled = "ai"
-                ts_str = self._parse_timestamp(msg.get("timestamp")).isoformat()
-                message_id = msg.get("message_id") or meta.get("message_id") or meta.get("source_message_id") or f"ts_{ts_str}"
-                msg_data = {
-                    "message_id": str(message_id),
-                    "timestamp": ts_str,
-                    "is_user": msg.get("role") == "user",
-                    "content": msg.get("text", ""),
-                    "text": msg.get("text", ""),
-                    "type": msg.get("type", "text"),
-                    "handled_by": handled,
-                    "role": msg.get("role")
-                }
-
-                # Add audio_url if it exists (for voice messages) - check both top level and metadata
-                audio_url = msg.get("audio_url") or msg.get("metadata", {}).get("audio_url")
-                if audio_url:
-                    msg_data["audio_url"] = audio_url
-
-                # Add image_url if it exists (for image messages) - check both top level and metadata
-                image_url = msg.get("image_url") or msg.get("metadata", {}).get("image_url")
-                if image_url:
-                    msg_data["image_url"] = image_url
-
-                if meta.get("reply_source"):
-                    msg_data["reply_source"] = meta["reply_source"]
-                if meta.get("faq_match"):
-                    msg_data["metadata"] = msg_data.get("metadata") or {}
-                    msg_data["metadata"]["faq_match"] = meta["faq_match"]
-
-                formatted_messages.append(msg_data)
+            formatted_messages = [self._format_single_message(msg) for msg in messages]
 
             # WhatsApp-style: has_more = more older messages available (for Load More)
             has_more = (
@@ -1980,6 +2016,9 @@ class LiveChatService:
                 "sentiment": sentiment,
                 "status": status
             }
+            # Backfill index with recent_messages so next open uses fast path
+            if days <= 0 and not before:
+                asyncio.create_task(self._refresh_index_for_conversation(effective_user_id, conversation_id))
             # #region agent log
             try:
                 import json
