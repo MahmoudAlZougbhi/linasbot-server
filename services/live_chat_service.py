@@ -375,6 +375,19 @@ class LiveChatService:
         try:
             users_collection = self._get_users_collection()
             if users_collection is None:
+                if self._unified_chats_cache:
+                    total_cached = len(self._unified_chats_cache)
+                    end_cached = min(page_size, total_cached)
+                    return {
+                        "success": True,
+                        "chats": self._unified_chats_cache[:end_cached],
+                        "total": total_cached,
+                        "page": 1,
+                        "page_size": page_size,
+                        "has_more": end_cached < total_cached,
+                        "next_cursor": str(2) if end_cached < total_cached else None,
+                        "fallback_cache": True,
+                    }
                 return {"success": False, "chats": [], "total": 0, "has_more": False}
 
             current_time = utc_now()
@@ -485,6 +498,23 @@ class LiveChatService:
             end = start + safe_size
             paged = all_chats[start:end]
             has_more = end < total
+
+            # If Firestore scan returned nothing on first page, fallback to cache
+            if not search_val and safe_page == 1 and total == 0 and self._unified_chats_cache:
+                fallback_total = len(self._unified_chats_cache)
+                fallback_end = min(safe_size, fallback_total)
+                elapsed_ms = (__import__("time").time() - _start) * 1000
+                print(f"📊 [unified-chats] empty scan -> cache fallback | {fallback_end}/{fallback_total} | {elapsed_ms:.0f}ms")
+                return {
+                    "success": True,
+                    "chats": self._unified_chats_cache[:fallback_end],
+                    "total": fallback_total,
+                    "page": 1,
+                    "page_size": safe_size,
+                    "has_more": fallback_end < fallback_total,
+                    "next_cursor": str(2) if fallback_end < fallback_total else None,
+                    "fallback_cache": True,
+                }
 
             if not search_val and safe_page == 1:
                 self._unified_chats_cache = all_chats
