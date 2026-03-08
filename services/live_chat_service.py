@@ -39,6 +39,7 @@ class LiveChatService:
     CACHE_TTL = 30  # seconds
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
     FIRESTORE_FETCH_PARALLELISM = 24
+    FIRESTORE_DOC_TIMEOUT_SECONDS = 12
 
     # Canonical conversation states
     STATE_BOT_ACTIVE = "bot_active"
@@ -149,6 +150,17 @@ class LiveChatService:
 
     def _index_collection(self, db):
         return db.collection("artifacts").document(self.APP_ID).collection(self.INDEX_COLLECTION)
+
+    async def _get_doc_with_timeout(self, doc_ref, timeout_seconds: Optional[float] = None):
+        """Guard Firestore doc reads so UI requests don't hang indefinitely."""
+        timeout = timeout_seconds or self.FIRESTORE_DOC_TIMEOUT_SECONDS
+        task = asyncio.create_task(asyncio.to_thread(doc_ref.get))
+        done, pending = await asyncio.wait({task}, timeout=timeout)
+        if not done:
+            for p in pending:
+                p.cancel()
+            raise asyncio.TimeoutError()
+        return task.result()
 
     async def _sync_index_from_source(self, user_id: str, conversation_id: str, *, allow_state_backfill: bool = False) -> Dict[str, Any]:
         """Read canonical conversation from Firestore, normalize, and upsert index entry."""
@@ -1844,31 +1856,49 @@ class LiveChatService:
                 effective_user_id
             ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
 
-            conv_doc = await asyncio.to_thread(conv_ref.get)
+            try:
+                conv_doc = await self._get_doc_with_timeout(conv_ref)
+            except asyncio.TimeoutError:
+                return {
+                    "success": False,
+                    "error": "Conversation loading timed out. Please retry.",
+                }
             if not conv_doc.exists:
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
                 if canonical_user_id != user_id:
                     conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
                         canonical_user_id
                     ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-                    conv_doc = await asyncio.to_thread(conv_ref.get)
+                    try:
+                        conv_doc = await self._get_doc_with_timeout(conv_ref)
+                    except asyncio.TimeoutError:
+                        return {
+                            "success": False,
+                            "error": "Conversation loading timed out. Please retry.",
+                        }
                     if conv_doc.exists:
                         effective_user_id = canonical_user_id
             if not conv_doc.exists:
                 return {"success": False, "error": "Conversation not found"}
 
-            conv_data = normalize_conversation_document(
-                conversation_id=conv_doc.id,
-                user_id=effective_user_id,
-                payload=conv_doc.to_dict() or {},
-            )
-            messages = conv_data.get("messages", [])
-            messages = self._visible_chat_messages(messages)
+            payload = conv_doc.to_dict() or {}
+            raw_messages = list(payload.get("messages") or [])
+            total_messages = len(raw_messages)
+            sentiment = str(payload.get("sentiment") or "neutral")
+            status = str(payload.get("status") or "active")
 
-            total_messages = len(messages)
-
-            # Filter by days or before (for Load More)
-            if days > 0 or before:
+            # Fast path for initial open (days=0, before not set):
+            # avoid scanning/normalizing the full conversation history on every open.
+            if days <= 0 and not before:
+                tail_window = max(max_messages * 4, 200)
+                candidate = raw_messages[-tail_window:] if len(raw_messages) > tail_window else raw_messages
+                messages = self._visible_chat_messages(candidate)
+                messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
+                messages_before_slice = len(messages)
+                if len(messages) > max_messages:
+                    messages = messages[-max_messages:]
+            else:
+                messages = self._visible_chat_messages(raw_messages)
                 now = utc_now()
                 cutoff = now - datetime.timedelta(days=days) if days > 0 else None
                 before_dt = self._parse_timestamp(before) if before else None
@@ -1886,13 +1916,10 @@ class LiveChatService:
                         continue
                     filtered.append(msg)
                 messages = filtered
-                # Sort by timestamp ascending (oldest first) for display
                 messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
-
-            # WhatsApp-style: cap at max_messages (default 50) for fast load
-            messages_before_slice = len(messages)
-            if len(messages) > max_messages:
-                messages = messages[-max_messages:]
+                messages_before_slice = len(messages)
+                if len(messages) > max_messages:
+                    messages = messages[-max_messages:]
 
             formatted_messages = []
 
@@ -1950,8 +1977,8 @@ class LiveChatService:
                 "total_messages": total_messages,
                 "returned_messages": len(formatted_messages),
                 "has_more": has_more,
-                "sentiment": conv_data.get("sentiment", "neutral"),
-                "status": conv_data.get("status", "active")
+                "sentiment": sentiment,
+                "status": status
             }
             # #region agent log
             try:
