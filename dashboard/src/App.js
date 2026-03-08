@@ -37,21 +37,14 @@ function AppContent() {
   const { botStatus, fetchBotStatus } = useApi();
 
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        await fetchBotStatus();
-        // Reduced loading time for faster response
-        setTimeout(() => setLoading(false), 300);
-      } catch (error) {
-        // Handle network and timeout errors gracefully (silent - no console logs)
-        // fetchBotStatus already handles these errors internally
-        // Still load the app even if backend is not available
-        setTimeout(() => setLoading(false), 300);
-      }
-    };
-
-    initializeApp();
-  }, [fetchBotStatus]);
+    // TEST: fetchBotStatus temporarily disabled to check if it causes login hang
+    // try {
+    //   await fetchBotStatus();
+    // } catch (error) {
+    //   // silent
+    // }
+    setTimeout(() => setLoading(false), 300);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return <LoadingScreen />;
@@ -99,61 +92,17 @@ function AppContent() {
                 className={sidebarCollapsed ? "max-w-full" : "max-w-7xl mx-auto"}
               >
                 <Routes>
-                  {/* Public Routes */}
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-
-                  {/* Protected Routes */}
-                  <Route path="/" element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/testing" element={
-                    <ProtectedRoute>
-                      <Testing />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/api-debug" element={
-                    <ProtectedRoute>
-                      <SimpleApiTest />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/training" element={
-                    <ProtectedRoute>
-                      <Training />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/content-managers" element={
-                    <ProtectedRoute>
-                      <ContentManagers />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/activity-flow" element={
-                    <ProtectedRoute>
-                      <ActivityFlow />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/live-chat" element={
-                    <ProtectedRoute>
-                      <LiveChat />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/analytics" element={
-                    <ProtectedRoute>
-                      <Analytics />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/smart-messaging" element={
-                    <ProtectedRoute>
-                      <SmartMessaging />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/settings" element={
-                    <ProtectedRoute>
-                      <Settings />
-                    </ProtectedRoute>
-                  } />
+                  {/* TEST: Inner ProtectedRoute removed - protection only at top level */}
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/testing" element={<Testing />} />
+                  <Route path="/api-debug" element={<SimpleApiTest />} />
+                  <Route path="/training" element={<Training />} />
+                  <Route path="/content-managers" element={<ContentManagers />} />
+                  <Route path="/activity-flow" element={<ActivityFlow />} />
+                  <Route path="/live-chat" element={<LiveChat />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/smart-messaging" element={<SmartMessaging />} />
+                  <Route path="/settings" element={<Settings />} />
 
                   {/* Catch all - redirect to dashboard */}
                   <Route path="*" element={<Navigate to="/" replace />} />
