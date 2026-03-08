@@ -1036,13 +1036,14 @@ class LiveChatService:
         - Can be reopened if customer messages again
         """
         try:
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
             db = get_firestore_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
             
             app_id = "linas-ai-bot-backend"
             conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                user_id
+                canonical_user_id
             ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
             
             # Update conversation status
@@ -1067,20 +1068,20 @@ class LiveChatService:
                 print(f"✅ Verified: status = {updated_data.get('status')}, resolved_by = {updated_data.get('resolved_by')}")
             
             # Update in-memory state
-            config.user_in_human_takeover_mode[user_id] = False
+            config.user_in_human_takeover_mode[canonical_user_id] = False
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
 
             # Clear current_conversation_id so next message creates a new conversation
-            if user_id in config.user_data_whatsapp:
-                config.user_data_whatsapp[user_id].pop('current_conversation_id', None)
-                print(f"🔄 Cleared current_conversation_id for {user_id} - next message will start new conversation")
+            if canonical_user_id in config.user_data_whatsapp:
+                config.user_data_whatsapp[canonical_user_id].pop('current_conversation_id', None)
+                print(f"🔄 Cleared current_conversation_id for {canonical_user_id} - next message will start new conversation")
 
             # Invalidate cache
             self.invalidate_cache()
 
             # Refresh index to reflect resolved state
-            await self._refresh_index_for_conversation(user_id, conversation_id)
+            await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
 
             # Send notification to customer
             if adapter:
@@ -1093,17 +1094,17 @@ class LiveChatService:
                     }
                     
                     # Get user's preferred language from config
-                    user_lang = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
+                    user_lang = config.user_data_whatsapp.get(canonical_user_id, {}).get('user_preferred_lang', 'ar')
                     notification_message = end_messages.get(user_lang, end_messages['ar'])
                     
                     # Send notification via WhatsApp
-                    await adapter.send_text_message(user_id, notification_message)
+                    await adapter.send_text_message(canonical_user_id, notification_message)
                     print(f"✅ Sent end conversation notification to customer {user_id}")
                     
                     # Save notification to Firebase
                     from utils.utils import save_conversation_message_to_firestore
                     await save_conversation_message_to_firestore(
-                        user_id=user_id,
+                        user_id=canonical_user_id,
                         role="ai",
                         text=notification_message,
                         conversation_id=conversation_id,
@@ -1208,21 +1209,22 @@ class LiveChatService:
     async def takeover_conversation(self, conversation_id: str, user_id: str, operator_id: str, operator_name: str = None) -> Dict[str, Any]:
         """Operator takes over a conversation"""
         try:
-            await set_human_takeover_status(user_id, conversation_id, True, operator_id, operator_name)
-            config.user_in_human_takeover_mode[user_id] = True
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+            await set_human_takeover_status(canonical_user_id, conversation_id, True, operator_id, operator_name)
+            config.user_in_human_takeover_mode[canonical_user_id] = True
             self.operator_sessions[conversation_id] = operator_id
 
             # Ensure canonical state is written
             db = get_firestore_db()
             if db:
-                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
                 await asyncio.to_thread(conv_ref.update, {
                     "conversation_state": self.STATE_ASSIGNED,
                     "last_updated": utc_now(),
                 })
 
             # Refresh index
-            await self._refresh_index_for_conversation(user_id, conversation_id)
+            await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
 
             # Invalidate cache
             self.invalidate_cache()
@@ -1243,15 +1245,16 @@ class LiveChatService:
     async def release_conversation(self, conversation_id: str, user_id: str) -> Dict[str, Any]:
         """Release conversation back to bot"""
         try:
-            await set_human_takeover_status(user_id, conversation_id, False)
-            config.user_in_human_takeover_mode[user_id] = False
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+            await set_human_takeover_status(canonical_user_id, conversation_id, False)
+            config.user_in_human_takeover_mode[canonical_user_id] = False
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
 
             # Ensure canonical state is written
             db = get_firestore_db()
             if db:
-                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
                 await asyncio.to_thread(conv_ref.update, {
                     "conversation_state": self.STATE_BOT_ACTIVE,
                     "last_updated": utc_now(),
@@ -1259,7 +1262,7 @@ class LiveChatService:
                 })
 
             # Refresh index
-            await self._refresh_index_for_conversation(user_id, conversation_id)
+            await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
 
             # Invalidate cache
             self.invalidate_cache()

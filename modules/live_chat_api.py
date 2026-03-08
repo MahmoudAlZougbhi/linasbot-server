@@ -397,6 +397,7 @@ async def debug_firestore():
                 conv_data = conv_doc.to_dict()
                 messages = conv_data.get("messages", [])
                 status = conv_data.get("status", "active")
+                conv_state = conv_data.get("conversation_state")
 
                 last_message_time = None
                 hours_ago = None
@@ -429,14 +430,30 @@ async def debug_firestore():
                     "id": conv_doc.id,
                     "message_count": len(messages),
                     "status": status,
+                    "conversation_state": conv_state,
                     "hours_ago": round(hours_ago, 1) if hours_ago else None,
-                    "human_takeover": conv_data.get("human_takeover_active", False)
+                    "human_takeover": conv_data.get("human_takeover_active", False),
+                })
+
+            # Lookup live_chat_index doc for this user_id for quick parity check
+            index_doc = db.collection("artifacts").document(app_id).collection("live_chat_index")
+            idx_docs = list(index_doc.where("user_id", "==", user_id).limit(5).stream())
+            index_entries = []
+            for idx in idx_docs:
+                data = idx.to_dict() or {}
+                index_entries.append({
+                    "conversation_id": idx.id,
+                    "state": data.get("conversation_state"),
+                    "last_message_at": str(data.get("last_message_at")),
+                    "last_message_text": data.get("last_message_text"),
+                    "unread_count": data.get("unread_count", 0),
                 })
 
             users_data.append({
                 "user_id": user_id,
                 "conversation_count": len(conversations_docs),
-                "conversations": conversations_info
+                "conversations": conversations_info,
+                "index_entries": index_entries,
             })
 
         return {
@@ -452,3 +469,20 @@ async def debug_firestore():
             "success": False,
             "error": str(e)
         }
+
+
+@app.post("/api/live-chat/rebuild-index")
+async def rebuild_live_chat_index(max_users: int = Query(default=None), max_conversations_per_user: int = Query(default=None)):
+    """Temporary debug endpoint to rebuild/backfill live_chat_index from Firestore conversations."""
+    try:
+        written = await live_chat_service.rebuild_index_from_firestore(
+            max_users=max_users,
+            max_conversations_per_user=max_conversations_per_user,
+            set_conversation_state=True,
+        )
+        return {"success": True, "written": written}
+    except Exception as e:
+        print(f"❌ Error rebuilding live_chat_index: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
