@@ -26,6 +26,7 @@ import Register from './pages/Register';
 // Contexts
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
+import { OperatorStatusProvider } from './contexts/OperatorStatusContext';
 
 // Hooks
 import { useApi } from './hooks/useApi';
@@ -57,6 +58,7 @@ function AppContent() {
   }
 
   return (
+      <OperatorStatusProvider>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         {/* Background Effects */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -189,6 +191,7 @@ function AppContent() {
           }}
         />
       </div>
+      </OperatorStatusProvider>
   );
 }
 

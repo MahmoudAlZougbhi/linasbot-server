@@ -515,6 +515,20 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             doc_ref = conversations_collection_for_user.document(conversation_id)
             doc_snap = await asyncio.to_thread(doc_ref.get)
 
+            # Fallback: try alternate user_id path (with/without +) for smart-notification users
+            if not doc_snap.exists and canonical_user_id and (
+                canonical_user_id.startswith("+") or (canonical_user_id.isdigit() and len(canonical_user_id) >= 10)
+            ):
+                alt_user_id = canonical_user_id[1:] if canonical_user_id.startswith("+") else f"+{canonical_user_id}"
+                alt_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(
+                    alt_user_id
+                ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                alt_ref = alt_coll.document(conversation_id)
+                alt_snap = await asyncio.to_thread(alt_ref.get)
+                if alt_snap.exists:
+                    doc_ref, doc_snap = alt_ref, alt_snap
+                    conversations_collection_for_user = alt_coll
+
             if doc_snap.exists:
                 saved_conv_id = conversation_id
                 doc_data = doc_snap.to_dict() or {}

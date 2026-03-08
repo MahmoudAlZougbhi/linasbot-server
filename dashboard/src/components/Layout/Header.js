@@ -5,18 +5,19 @@ import {
   Bars3Icon,
   BellIcon,
   UserCircleIcon,
-  GlobeAltIcon,
-  CpuChipIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   KeyIcon,
   ChevronDownIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOperatorStatus } from '../../contexts/OperatorStatusContext';
 import { buildDisplayLabel } from '../../utils/buildInfo';
 import { getTimezoneName } from '../../utils/dateUtils';
 
 const Header = ({ onMenuClick, botStatus }) => {
+  const { operatorStatus, setOperatorStatus } = useOperatorStatus();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef(null);
@@ -97,10 +98,7 @@ const Header = ({ onMenuClick, botStatus }) => {
             transition={{ duration: 0.5 }}
             className="hidden sm:block"
           >
-            <h2 className="text-2xl font-bold gradient-text font-display">
-              AI Control Center
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500">
               {currentDate} • {currentTime}
             </p>
             <p className="text-xs text-slate-400 mt-1">
@@ -109,39 +107,6 @@ const Header = ({ onMenuClick, botStatus }) => {
           </motion.div>
         </div>
 
-        {/* Center Section - Bot Status */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="hidden md:flex items-center space-x-6"
-        >
-          {/* Bot Status */}
-          <div className="flex items-center space-x-2 glass rounded-full px-4 py-2">
-            <div className="relative">
-              <CpuChipIcon className="w-5 h-5 text-primary-600" />
-              <div className={`absolute -top-1 -right-1 w-3 h-3 ${
-                botStatus?.status === 'online' ? 'bg-green-400' : 'bg-red-400'
-              } rounded-full border border-white animate-pulse`}></div>
-            </div>
-            <span className="text-sm font-medium text-slate-700">
-              Bot {botStatus?.status === 'online' ? 'Online' : 'Offline'}
-            </span>
-          </div>
-
-          {/* Language Status */}
-          <div className="flex items-center space-x-2 glass rounded-full px-4 py-2">
-            <GlobeAltIcon className="w-5 h-5 text-secondary-600" />
-            <span className="text-sm font-medium text-slate-700">Multi-Lang</span>
-          </div>
-
-          {/* Response Time */}
-          <div className="flex items-center space-x-2 glass rounded-full px-4 py-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="text-sm font-medium text-slate-700">~2.1s</span>
-          </div>
-        </motion.div>
-
         {/* Right Section */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
@@ -149,6 +114,20 @@ const Header = ({ onMenuClick, botStatus }) => {
           transition={{ duration: 0.5, delay: 0.4 }}
           className="flex items-center space-x-4"
         >
+          {/* Operator Status + Live - above notification icon */}
+          <select
+            value={operatorStatus}
+            onChange={(e) => setOperatorStatus(e.target.value)}
+            className="glass rounded-full px-4 py-2 text-sm font-medium text-slate-700 border-0"
+          >
+            <option value="available">🟢 Available</option>
+            <option value="busy">🟡 Busy</option>
+            <option value="away">🔴 Away</option>
+          </select>
+          <div className="flex items-center space-x-2 text-sm">
+            <SignalIcon className="w-4 h-4 text-green-500 animate-pulse" />
+            <span className="text-slate-600">Live</span>
+          </div>
           {/* Notifications */}
           <div className="relative" ref={notificationsRef}>
             <button
@@ -303,29 +282,6 @@ const Header = ({ onMenuClick, botStatus }) => {
         </motion.div>
       </div>
 
-      {/* Mobile Bot Status */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.6 }}
-        className="md:hidden mt-4 flex items-center justify-center space-x-4"
-      >
-        <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
-          <div className={`w-2 h-2 ${
-            botStatus?.status === 'online' ? 'bg-green-400' : 'bg-red-400'
-          } rounded-full animate-pulse`}></div>
-          <span className="text-xs font-medium text-slate-700">
-            Bot {botStatus?.status === 'online' ? 'Online' : 'Offline'}
-          </span>
-        </div>
-        <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
-          <GlobeAltIcon className="w-4 h-4 text-secondary-600" />
-          <span className="text-xs font-medium text-slate-700">Multi-Lang</span>
-        </div>
-        <div className="flex items-center space-x-2 glass rounded-full px-3 py-1">
-          <span className="text-xs font-medium text-slate-700">~2.1s</span>
-        </div>
-      </motion.div>
     </header>
   );
 };

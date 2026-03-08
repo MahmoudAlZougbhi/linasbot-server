@@ -24,6 +24,7 @@ export const useLiveChatSSE = ({
   setIsLoading,
   setHasMoreChats,
   setChatPage,
+  onOperatorMessageCached,
 }) => {
   useEffect(() => {
     if (!enabled) {
@@ -274,6 +275,9 @@ export const useLiveChatSSE = ({
                   hasMore: existing?.hasMore ?? (hasMoreMessagesRef?.current ?? false),
                   cachedAt: Date.now(),
                 });
+                if (onOperatorMessageCached && (message.role === "operator" || message.is_user === false)) {
+                  onOperatorMessageCached(prev.conversation.user_id, prev.conversation.conversation_id, message);
+                }
               }
               return { ...prev, history: updatedHistory };
             });
@@ -309,6 +313,9 @@ export const useLiveChatSSE = ({
                   hasMore: existing.hasMore,
                   cachedAt: Date.now(),
                 });
+                if (onOperatorMessageCached && (message.role === "operator" || message.is_user === false)) {
+                  onOperatorMessageCached(userId, convId, message);
+                }
               }
             }
           }

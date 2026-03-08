@@ -10,7 +10,6 @@ import {
   ArrowRightIcon,
   PaperAirplaneIcon,
   UserGroupIcon,
-  SignalIcon,
   XMarkIcon,
   ChartBarIcon,
   MicrophoneIcon,
@@ -22,6 +21,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useApi } from "../hooks/useApi";
+import { useOperatorStatus } from "../contexts/OperatorStatusContext";
 import { formatMessageTime } from "../utils/dateUtils";
 import FeedbackModal from "../components/FeedbackModal";
 import LikeFeedbackModal from "../components/LikeFeedbackModal";
@@ -46,7 +46,7 @@ const LiveChat = () => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [waitingQueue, setWaitingQueue] = useState([]);
   const [messageInput, setMessageInput] = useState("");
-  const [operatorStatus, setOperatorStatus] = useState("available");
+  const { operatorStatus } = useOperatorStatus();
   const [isLoading, setIsLoading] = useState(true);
   const [useMockData, setUseMockData] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState(null);
@@ -398,12 +398,70 @@ const LiveChat = () => {
     [getConversationMessages]
   );
 
-  // Merge API messages with recently sent operator messages from cache (prevents disappearing on refresh)
+  const SESSION_RECENT_OP_KEY = "live_chat_recent_op";
+  const RECENT_OP_TTL_MS = 120000;
+
+  const getRecentOpFromSession = React.useCallback((cacheKey) => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_RECENT_OP_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw) || [];
+      const now = Date.now();
+      const parts = (cacheKey || "").split("_");
+      const altKey = parts.length >= 2
+        ? `${parts[0].startsWith("+") ? parts[0].slice(1) : `+${parts[0]}`}_${parts.slice(1).join("_")}`
+        : "";
+      return arr.filter((e) => {
+        if (!e?.cacheKey || now - (e.ts || 0) > RECENT_OP_TTL_MS) return false;
+        return e.cacheKey === cacheKey || e.cacheKey === altKey || e.altKey === cacheKey;
+      }).flatMap((e) => e.messages || []);
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const saveOperatorMessageToSession = React.useCallback((userId, convId, message) => {
+    if (!userId || !convId || !message) return;
+    const isOp = message.role === "operator" || message.is_user === false;
+    if (!isOp) return;
+    try {
+      const cacheKey = `${userId}_${convId}`;
+      const raw = sessionStorage.getItem(SESSION_RECENT_OP_KEY);
+      const arr = (raw ? JSON.parse(raw) : []).filter((e) => e?.ts && Date.now() - e.ts < RECENT_OP_TTL_MS);
+      const entry = arr.find((e) => e.cacheKey === cacheKey);
+      const msg = { ...message, role: "operator", is_user: false };
+      if (entry) {
+        const exists = (entry.messages || []).some(
+          (m) => String(m.content || m.text || "").trim() === String(msg.content || msg.text || "").trim()
+        );
+        if (!exists) entry.messages = [...(entry.messages || []), msg];
+      } else {
+        arr.push({ cacheKey, ts: Date.now(), messages: [msg] });
+      }
+      sessionStorage.setItem(SESSION_RECENT_OP_KEY, JSON.stringify(arr.slice(-20)));
+    } catch {}
+  }, []);
+
+  // Merge API messages with recently sent operator messages from cache + sessionStorage (prevents disappearing on refresh)
   const mergeWithRecentOperatorMessages = React.useCallback((apiMessages, cacheKey) => {
-    const cached = messageCacheRef.current?.get(cacheKey)?.messages || [];
+    const cache = messageCacheRef.current;
+    let cached = cache?.get(cacheKey)?.messages || [];
+    if (!cached.length && cacheKey) {
+      const parts = cacheKey.split("_");
+      if (parts.length >= 2) {
+        const userId = parts[0];
+        const rest = parts.slice(1).join("_");
+        const altUserId = userId.startsWith("+") ? userId.slice(1) : `+${userId}`;
+        const altKey = `${altUserId}_${rest}`;
+        cached = cache?.get(altKey)?.messages || cached;
+      }
+    }
+    if (!cached.length && cacheKey) {
+      cached = getRecentOpFromSession(cacheKey);
+    }
     const api = apiMessages || [];
     const now = Date.now();
-    const RECENT_MS = 90000;
+    const RECENT_MS = 120000;
     const recentOperator = cached.filter((m) => {
       const isOp = m.is_user === false || m.role === "operator";
       const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
@@ -638,6 +696,7 @@ const LiveChat = () => {
     setIsLoading,
     setHasMoreChats,
     setChatPage,
+    onOperatorMessageCached: saveOperatorMessageToSession,
   });
 
   // Fallback: if SSE doesn't populate within 8s, fetch manually (SSE failed/slow)
@@ -1579,34 +1638,15 @@ const LiveChat = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)]">
-      {/* Header */}
+    <div className="h-[calc(100vh-5rem)] -m-6 p-4 flex flex-col min-h-0">
+      {/* Header - Operator Status + Refresh - compact */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
+        className="mb-2 flex items-center justify-end flex-shrink-0"
       >
-        <h1 className="text-4xl font-bold gradient-text font-display mb-2">
-          Live Chat Monitoring
-        </h1>
-        <div className="flex items-center justify-between">
-          <p className="text-xl text-slate-600">
-            Monitor and manage live conversations in real-time
-          </p>
-
-          {/* Operator Status + Refresh Button */}
+          {/* Manual Refresh Button */}
           <div className="flex items-center space-x-4">
-            <select
-              value={operatorStatus}
-              onChange={(e) => setOperatorStatus(e.target.value)}
-              className="whatsapp-input"
-            >
-              <option value="available">🟢 Available</option>
-              <option value="busy">🟡 Busy</option>
-              <option value="away">🔴 Away</option>
-            </select>
-
-            {/* ✅ Manual Refresh Button */}
             <button
               onClick={handleManualRefresh}
               disabled={isRefreshing}
@@ -1635,20 +1675,15 @@ const LiveChat = () => {
               </span>
             </button>
 
-            <div className="flex items-center space-x-2 text-sm">
-              <SignalIcon className="w-4 h-4 text-green-500 animate-pulse" />
-              <span className="text-slate-600">Live</span>
-            </div>
           </div>
-        </div>
       </motion.div>
 
-      <div className="grid grid-cols-12 gap-0 h-[calc(100%-7.5rem)] whatsapp-shell">
+      <div className="grid grid-cols-12 gap-0 flex-1 min-h-0 whatsapp-shell overflow-hidden">
         {/* Conversations List - collapsible */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className={`${sidebarCollapsed ? "col-span-1" : "col-span-3"} whatsapp-sidebar flex flex-col overflow-hidden transition-all`}
+          className={`${sidebarCollapsed ? "col-span-1" : "col-span-3"} whatsapp-sidebar flex flex-col overflow-hidden transition-all min-w-0`}
         >
           {sidebarCollapsed ? (
             <div className="flex flex-col items-center py-4 border-r border-slate-200">
@@ -1671,9 +1706,9 @@ const LiveChat = () => {
               <ChevronLeftIcon className="w-4 h-4" />
             </button>
           </div>
-          {/* 1) With bot – first section */}
+          {/* 1) With bot – first section - scroll contained, no overlap with chat */}
           <div
-            className="whatsapp-sidebar-section flex-1 overflow-y-auto max-h-[55vh] min-h-0"
+            className="whatsapp-sidebar-section flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-0 bg-white"
             ref={botListRef}
             onScroll={handleBotListScroll}
           >
@@ -2449,29 +2484,20 @@ const LiveChat = () => {
           animate={{ opacity: 1, x: 0 }}
           className={`${sidebarCollapsed ? "col-span-2" : "col-span-3"} whatsapp-info-panel flex flex-col overflow-y-auto p-4`}
         >
-          {/* Waiting for human + With operator - above user info */}
-          <div className="space-y-3 mb-4 flex-shrink-0">
-            <div className="whatsapp-info-card">
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center">
-                <span className="text-lg mr-2">⏳</span>
-                Waiting for human
+          {/* Waiting for human + With operator - compact above user info */}
+          <div className="space-y-2 mb-3 flex-shrink-0">
+            <div className="whatsapp-info-card p-3">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center">
+                <span className="mr-1.5">⏳</span>
+                Waiting ({filteredWaitingQueue.length})
               </h3>
               {isLoading ? (
-                <div className="animate-pulse space-y-2">
-                  <div className="h-6 w-16 bg-slate-200 rounded" />
-                  <div className="h-10 bg-slate-100 rounded" />
-                </div>
+                <div className="animate-pulse h-12 bg-slate-100 rounded" />
               ) : (
                 <>
-                  <p className="text-sm font-bold text-amber-600">{filteredWaitingQueue.length}</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {filteredWaitingQueue.length === 0
-                      ? "None waiting"
-                      : `${userRequestedHandover.length} asked · ${aiInitiatedHandover.length} AI referred`}
-                  </p>
-                  <div className="space-y-2 max-h-32 overflow-y-auto mt-2">
+                  <div className="space-y-1.5 max-h-20 overflow-y-auto">
                     {filteredWaitingQueue.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">None waiting</p>
+                      <p className="text-xs text-slate-400 italic py-1">None</p>
                     ) : (
                       filteredWaitingQueue.map((item) => {
                         const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
@@ -2481,7 +2507,7 @@ const LiveChat = () => {
                         return (
                           <div
                             key={item.conversation_id}
-                            className={`p-2 rounded-lg cursor-pointer transition-colors ${
+                            className={`px-2 py-1.5 rounded cursor-pointer transition-colors text-xs ${
                               isUserRequested
                                 ? "bg-orange-50 border border-orange-200 hover:bg-orange-100"
                                 : "bg-amber-50 border border-amber-200 hover:bg-amber-100"
@@ -2506,14 +2532,14 @@ const LiveChat = () => {
                               selectConversation(conv);
                             }}
                           >
-                            <div className="flex items-start justify-between mb-0.5">
-                              <p className="font-medium text-slate-800 text-xs truncate">{item.user_name}</p>
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="font-medium text-slate-800 truncate">{item.user_name}</p>
                               {unreadCount > 0 && (
                                 <span className="text-xs font-bold text-amber-600">{unreadCount}</span>
                               )}
                             </div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span>{Math.floor(item.wait_time_seconds / 60)}m</span>
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="text-slate-500">{Math.floor(item.wait_time_seconds / 60)}m</span>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -2532,35 +2558,27 @@ const LiveChat = () => {
                 </>
               )}
             </div>
-            <div className="whatsapp-info-card">
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center">
-                <span className="text-lg mr-2">💬</span>
-                With operator
+            <div className="whatsapp-info-card p-3">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center">
+                <span className="mr-1.5">💬</span>
+                With operator ({filteredWithOperator.length})
               </h3>
               {isLoading ? (
-                <div className="animate-pulse space-y-2">
-                  <div className="h-6 w-12 bg-slate-200 rounded" />
-                  <div className="h-10 bg-slate-100 rounded" />
-                </div>
+                <div className="animate-pulse h-10 bg-slate-100 rounded" />
               ) : (
                 <>
-                  <p className="text-sm font-bold text-green-600">{filteredWithOperator.length}</p>
-                  <p className="text-xs text-slate-500 mt-1">Handover done</p>
-                  <div className="space-y-2 max-h-24 overflow-y-auto mt-2">
+                  <div className="space-y-1.5 max-h-16 overflow-y-auto">
                     {filteredWithOperator.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">None</p>
+                      <p className="text-xs text-slate-400 italic py-1">None</p>
                     ) : (
                       filteredWithOperator.map((conv) => (
                         <div
                           key={conv.conversation_id}
-                          className="p-2 rounded-lg cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+                          className="px-2 py-1.5 rounded cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors text-xs flex items-center justify-between"
                           onClick={() => selectConversation(conv)}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-800 text-xs truncate">{conv.user_name}</span>
-                            <SentimentIndicator sentiment={conv.sentiment} />
-                          </div>
-                          <span className="text-xs text-green-600">With {conv.operator_id || "op"}</span>
+                          <span className="font-medium text-slate-800 truncate">{conv.user_name}</span>
+                          <SentimentIndicator sentiment={conv.sentiment} />
                         </div>
                       ))
                     )}

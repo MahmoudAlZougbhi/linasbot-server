@@ -74,7 +74,7 @@
   }
 
   .whatsapp-sidebar {
-    @apply bg-white border-r border-slate-200 h-full overflow-y-auto flex flex-col;
+    @apply bg-white border-r border-slate-200 h-full overflow-hidden flex flex-col;
   }
 
   .whatsapp-sidebar-section {
