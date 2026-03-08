@@ -69,11 +69,7 @@ export const useLiveChatSSE = ({
           chatsResponse?.success && chatsResponse?.chats ? chatsResponse.chats : preferredConversations;
         if (chatsResponse?.success) hasMoreValue = chatsResponse.has_more ?? false;
       }
-      if (!Array.isArray(conversations)) return null;
-
-      if (conversations.length === 0 && (activeConversationsRef.current || []).length > 0) {
-        return activeConversationsRef.current;
-      }
+      if (!conversations) return null;
 
       // Keep selected conversation in the list so it doesn't disappear from "With operator" / Active when refetching
       const selected = selectedConversationRef.current;
@@ -96,7 +92,7 @@ export const useLiveChatSSE = ({
       );
 
       const newIds = announceNewIds || calculatedNewIds;
-  setActiveConversations(conversations);
+      setActiveConversations(conversations);
       setLastRefreshTime(new Date());
       setNewConversationIds(newIds);
       if (newIds.size > 0) {
