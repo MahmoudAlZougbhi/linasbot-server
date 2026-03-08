@@ -3,6 +3,7 @@ User Service for Dashboard Authentication
 Handles Firestore operations for dashboard users with bcrypt password hashing
 """
 
+import os
 import time
 import uuid
 import bcrypt
@@ -266,16 +267,27 @@ class UserService:
         elapsed = time.monotonic() - t2
         print(f"[auth] _verify_password() took {elapsed:.2f}s", flush=True)
 
+        now = datetime.utcnow().isoformat()
+        user['lastLogin'] = now
+
+        # ISOLATION TEST: Skip Firestore lastLogin update when SKIP_LASTLOGIN_UPDATE=1
+        # If login works with this env set, the block is in the Firestore write.
+        skip_firestore = os.environ.get("SKIP_LASTLOGIN_UPDATE", "").strip() in ("1", "true", "yes")
+        if skip_firestore:
+            print(f"[auth] SKIP_LASTLOGIN_UPDATE=1: bypassing Firestore lastLogin write", flush=True)
+            result = self._sanitize_user(user)
+            total = time.monotonic() - t0
+            print(f"[auth] authenticate() completed (bypassed Firestore) for {email} in {total:.2f}s", flush=True)
+            return result
+
         # Step 3: Update lastLogin in Firestore
         print(f"[auth] step3: about to update lastLogin for user_id={user['id']}", flush=True)
         t3 = time.monotonic()
-        now = datetime.utcnow().isoformat()
         print(f"[auth] step3: calling Firestore document().update() now", flush=True)
         self.collection.document(user['id']).update({
             "lastLogin": now
         })
         print(f"[auth] step3: Firestore update() returned", flush=True)
-        user['lastLogin'] = now
         elapsed = time.monotonic() - t3
         print(f"[auth] Firestore update lastLogin took {elapsed:.2f}s", flush=True)
 
