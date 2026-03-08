@@ -1520,15 +1520,22 @@ class LiveChatService:
         """Release conversation back to bot"""
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+            db = get_firestore_db()
+            if db:
+                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                conv_snap = await asyncio.to_thread(conv_ref.get)
+                if not conv_snap.exists:
+                    return {
+                        "success": False,
+                        "error": f"Conversation not found. Check user_id and conversation_id.",
+                    }
             await set_human_takeover_status(canonical_user_id, conversation_id, False)
             config.user_in_human_takeover_mode[canonical_user_id] = False
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
 
             # Ensure canonical state is written
-            db = get_firestore_db()
             if db:
-                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
                 await asyncio.to_thread(conv_ref.update, {
                     "conversation_state": self.STATE_BOT_ACTIVE,
                     "last_updated": utc_now(),

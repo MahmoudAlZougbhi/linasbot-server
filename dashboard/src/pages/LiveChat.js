@@ -1213,7 +1213,8 @@ const LiveChat = () => {
           }));
         }
       } else {
-        toast.error("Failed to release conversation");
+        const errMsg = result?.error ? `Failed to release: ${result.error}` : "Failed to release conversation";
+        toast.error(errMsg);
       }
     } catch (error) {
       console.error("Error releasing conversation:", error);
