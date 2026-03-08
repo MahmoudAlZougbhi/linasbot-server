@@ -12,7 +12,7 @@ import asyncio
 import json
 import os
 import re
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any, Tuple, Union
 from collections import defaultdict
 from google.cloud import firestore
 import config
@@ -68,30 +68,137 @@ class LiveChatService:
 
     # ---------- State + index helpers ----------
     def _normalize_conversation_state(self, conv_data: dict) -> str:
-        state = (conv_data or {}).get("conversation_state")
-        # Canonical: only conversation_state is trusted; default to bot_active when missing
-        if state in {
+        """
+        Resolve a safe canonical conversation_state without downgrading valid states.
+        Priority:
+        1) Preserve existing valid conversation_state
+        2) Derive from lifecycle markers (archived/resolved/operator takeover)
+        3) Fallback to waiting/bot
+        """
+
+        data = conv_data or {}
+        state = data.get("conversation_state")
+        valid_states = {
             self.STATE_BOT_ACTIVE,
             self.STATE_WAITING_OPERATOR,
             self.STATE_ASSIGNED,
             self.STATE_RESOLVED,
             self.STATE_ARCHIVED,
-        }:
+        }
+
+        if state in valid_states:
             return state
+
+        status = str(data.get("status", "")).lower()
+        resolved_at = data.get("resolved_at")
+        archived_at = data.get("archived_at")
+        human_takeover = bool(data.get("human_takeover_active"))
+        operator_id = data.get("operator_id")
+
+        if archived_at or status == "archived":
+            return self.STATE_ARCHIVED
+        if resolved_at or status in {"resolved", "closed"}:
+            return self.STATE_RESOLVED
+        if human_takeover or operator_id:
+            return self.STATE_ASSIGNED
+        if status in {"waiting", "waiting_for_operator", "pending"}:
+            return self.STATE_WAITING_OPERATOR
+
         return self.STATE_BOT_ACTIVE
 
     def _is_live_window(self, ts: datetime.datetime) -> bool:
         return bool(ts) and (utc_now() - ts).total_seconds() <= self.ACTIVE_TIME_WINDOW
 
+    def _state_filter_values(self, filter_key: str):
+        key = (filter_key or "").lower()
+        if key in {"waiting", "waiting_for_operator"}:
+            return [self.STATE_WAITING_OPERATOR]
+        if key in {"with_operator", "assigned"}:
+            return [self.STATE_ASSIGNED]
+        if key in {"bot", "bot_active"}:
+            return [self.STATE_BOT_ACTIVE]
+        if key in {"closed", "resolved_or_archived"}:
+            return [self.STATE_RESOLVED, self.STATE_ARCHIVED]
+        return []
+
     def _index_collection(self, db):
         return db.collection("artifacts").document(self.APP_ID).collection(self.INDEX_COLLECTION)
+
+    async def _sync_index_from_source(self, user_id: str, conversation_id: str, *, allow_state_backfill: bool = False) -> Dict[str, Any]:
+        """Read canonical conversation from Firestore, normalize, and upsert index entry."""
+        db = get_firestore_db()
+        if not db:
+            return {"written": False, "reason": "firestore_missing"}
+
+        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+        conv_ref = (
+            db.collection("artifacts")
+            .document(self.APP_ID)
+            .collection("users")
+            .document(canonical_user_id)
+            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            .document(conversation_id)
+        )
+
+        conv_snap = await asyncio.to_thread(conv_ref.get)
+        if not conv_snap.exists:
+            return {"written": False, "reason": "missing"}
+
+        raw_payload = conv_snap.to_dict() or {}
+        conv_data = self._canonical_conversation(conversation_id, canonical_user_id, raw_payload)
+        entry = self._build_index_entry(canonical_user_id, conv_data, conv_data.get("visible_messages", []))
+
+        state_backfill = False
+        if allow_state_backfill and not raw_payload.get("conversation_state") and conv_data.get("conversation_state"):
+            try:
+                await asyncio.to_thread(conv_ref.update, {"conversation_state": conv_data["conversation_state"]})
+                state_backfill = True
+            except Exception as e:
+                print(f"⚠️ Failed to backfill conversation_state for {conversation_id}: {e}")
+
+        await self._upsert_index_entry(entry)
+
+        return {
+            "written": True,
+            "state_backfill": state_backfill,
+            "conversation_state": conv_data.get("conversation_state"),
+        }
+
+    def _canonical_conversation(self, conversation_id: str, user_id: str, payload: dict) -> dict:
+        """Normalize Firestore conversation payload and enrich with derived fields."""
+        conv_data = normalize_conversation_document(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            payload=payload or {},
+        )
+
+        state = self._normalize_conversation_state(conv_data)
+        conv_data["conversation_state"] = state
+        conv_data["raw_conversation_state"] = payload.get("conversation_state") if isinstance(payload, dict) else None
+
+        messages = conv_data.get("messages", []) or []
+        visible_messages = self._visible_chat_messages(messages)
+        last_message = visible_messages[-1] if visible_messages else (messages[-1] if messages else {})
+        last_ts = conv_data.get("last_message_at") or conv_data.get("last_updated") or conv_data.get("timestamp")
+        if not last_ts and last_message:
+            last_ts = self._parse_timestamp(last_message.get("timestamp"))
+        if not last_ts:
+            last_ts = utc_now()
+
+        conv_data["visible_messages"] = visible_messages
+        conv_data["last_message_at"] = last_ts
+        conv_data["last_message_text"] = last_message.get("text", "") if last_message else ""
+        conv_data["message_count"] = len(visible_messages)
+
+        return conv_data
 
     async def rebuild_index_from_firestore(
         self,
         max_users: Optional[int] = None,
         max_conversations_per_user: Optional[int] = None,
         set_conversation_state: bool = True,
-    ) -> int:
+        return_details: bool = False,
+    ) -> Union[int, Dict[str, int]]:
         """One-time (or manual) rebuild of live_chat_index from Firestore conversations.
 
         Returns number of index entries written.
@@ -129,35 +236,32 @@ class LiveChatService:
         conversation_results = await asyncio.gather(*[_bounded(uid) for uid in user_ids])
 
         total_written = 0
-        tasks = []
+        repaired_states = 0
+        skipped_missing = 0
 
         for user_id, conv_docs in conversation_results:
             for conv_doc in conv_docs:
-                conv_data = normalize_conversation_document(
-                    conversation_id=conv_doc.id,
-                    user_id=user_id,
-                    payload=conv_doc.to_dict() or {},
+                result = await self._sync_index_from_source(
+                    user_id,
+                    conv_doc.id,
+                    allow_state_backfill=set_conversation_state,
                 )
+                if result.get("written"):
+                    total_written += 1
+                    if result.get("state_backfill"):
+                        repaired_states += 1
+                else:
+                    skipped_missing += 1
 
-                messages = self._visible_chat_messages(conv_data.get("messages", []) or [])
-                entry = self._build_index_entry(user_id, conv_data, messages)
-
-                # If conversation_state missing in Firestore, optionally set it so future queries match
-                if set_conversation_state and not conv_data.get("conversation_state"):
-                    try:
-                        desired_state = entry.get("conversation_state", self.STATE_BOT_ACTIVE)
-                        conv_ref = users_collection.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conv_doc.id)
-                        await asyncio.to_thread(conv_ref.update, {"conversation_state": desired_state})
-                    except Exception as e:
-                        print(f"⚠️ Failed to set conversation_state for {conv_doc.id}: {e}")
-
-                tasks.append(self._upsert_index_entry(entry))
-                total_written += 1
-
-        if tasks:
-            await asyncio.gather(*tasks)
-
-        print(f"📦 Rebuilt live_chat_index entries: {total_written}")
+        print(
+            f"📦 Rebuilt live_chat_index entries: written={total_written} repaired_states={repaired_states} missing={skipped_missing}"
+        )
+        if return_details:
+            return {
+                "written": total_written,
+                "repaired_states": repaired_states,
+                "skipped_missing": skipped_missing,
+            }
         return total_written
 
     def _build_index_entry(self, user_id: str, conv_data: dict, messages: list) -> dict:
@@ -165,21 +269,29 @@ class LiveChatService:
         customer_info = conv_data.get("customer_info", {}) or {}
         user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
         phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
-        last_msg = messages[-1] if messages else {}
-        last_ts = self._parse_timestamp(last_msg.get("timestamp")) if last_msg else conv_data.get("last_updated") or utc_now()
-        is_live = state in {self.STATE_BOT_ACTIVE, self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED} and self._is_live_window(last_ts)
-        language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+        last_ts = conv_data.get("last_message_at") or conv_data.get("last_updated") or utc_now()
+        if isinstance(last_ts, str):
+            try:
+                last_ts = self._parse_timestamp(last_ts)
+            except Exception:
+                last_ts = utc_now()
+
+        last_message_text = conv_data.get("last_message_text", "")
         sentiment = conv_data.get("sentiment", "neutral")
         unread_count = conv_data.get("unread_count") or 0
+        language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+        message_count = conv_data.get("message_count", len(messages))
+        is_live = state in {self.STATE_BOT_ACTIVE, self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED} and self._is_live_window(last_ts)
+
         return {
             "conversation_id": conv_data.get("conversation_id"),
             "user_id": user_id,
             "user_name": user_name,
             "user_phone": phone_full,
             "phone_clean": phone_clean,
-            "last_message_text": last_msg.get("text", "") if last_msg else "",
+            "last_message_text": last_message_text,
             "last_message_at": last_ts,
-            "message_count": len(messages),
+            "message_count": message_count,
             "conversation_state": state,
             "operator_id": conv_data.get("operator_id"),
             "unread_count": unread_count,
@@ -208,23 +320,13 @@ class LiveChatService:
     async def _refresh_index_for_conversation(self, user_id: str, conv_id: str):
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-            db = get_firestore_db()
-            if not db:
+            result = await self._sync_index_from_source(canonical_user_id, conv_id, allow_state_backfill=False)
+            if not result.get("written"):
+                print(f"⚠️ [index-refresh] skipped user={canonical_user_id} conv={conv_id} reason={result.get('reason')}")
                 return
-            conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conv_id)
-            conv_snap = await asyncio.to_thread(conv_ref.get)
-            if not conv_snap.exists:
-                print(f"⚠️ [index-refresh] convo not found user={canonical_user_id} conv={conv_id}")
-                return
-            conv_data = normalize_conversation_document(
-                conversation_id=conv_id,
-                user_id=canonical_user_id,
-                payload=conv_snap.to_dict() or {},
+            print(
+                f"🔄 [index-refresh] rebuilt index user={canonical_user_id} conv={conv_id} state={result.get('conversation_state')}"
             )
-            messages = self._visible_chat_messages(conv_data.get("messages", []) or [])
-            entry = self._build_index_entry(canonical_user_id, conv_data, messages)
-            print(f"🔄 [index-refresh] rebuilding index user={canonical_user_id} conv={conv_id} state={entry.get('conversation_state')} last_at={entry.get('last_message_at')}")
-            await self._upsert_index_entry(entry)
         except Exception as e:
             print(f"⚠️ Failed to refresh index for {conv_id}: {e}")
 
@@ -402,6 +504,122 @@ class LiveChatService:
         except Exception as e:
             print(f"⚠️ Legacy active scan failed: {e}")
             return []
+
+    async def _fallback_unified_chats(
+        self,
+        search: str,
+        page: int,
+        page_size: int,
+        filter_state: str,
+    ) -> Dict[str, Any]:
+        """Resilient inbox loader that reads source conversations directly when index is empty/unavailable."""
+        users_collection = self._get_users_collection()
+        if users_collection is None:
+            return {"success": False, "chats": [], "total": 0, "has_more": False, "error": "firestore_missing"}
+
+        search_val = (search or "").strip().lower()
+        state_values = self._state_filter_values(filter_state)
+        safe_size = max(1, min(int(page_size), 100))
+
+        try:
+            users_docs = await self._stream_user_docs(users_collection, limit=self.USERS_STREAM_LIMIT)
+            user_ids = [doc.id for doc in users_docs]
+            conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
+
+            chats: List[Dict[str, Any]] = []
+            counters = {
+                "all": 0,
+                "waiting": 0,
+                "with_operator": 0,
+                "bot_active": 0,
+                "closed": 0,
+            }
+
+            for result in conversation_results:
+                if isinstance(result, Exception):
+                    continue
+                user_id, conv_docs = result
+                for conv_doc in conv_docs:
+                    payload = conv_doc.to_dict() or {}
+                    conv_data = self._canonical_conversation(conv_doc.id, user_id, payload)
+                    state = conv_data.get("conversation_state")
+                    if state_values and state not in state_values:
+                        continue
+
+                    customer_info = conv_data.get("customer_info") or {}
+                    user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+                    last_at = conv_data.get("last_message_at") or utc_now()
+                    if isinstance(last_at, str):
+                        try:
+                            last_at = self._parse_timestamp(last_at)
+                        except Exception:
+                            last_at = utc_now()
+
+                    chat_entry = {
+                        "conversation_id": conv_doc.id,
+                        "user_id": user_id,
+                        "user_name": user_name,
+                        "phone_number": phone_full,
+                        "phone_clean": phone_clean,
+                        "last_message_text": conv_data.get("last_message_text", ""),
+                        "last_message_at": last_at.isoformat(),
+                        "conversation_state": state,
+                        "operator_id": conv_data.get("operator_id"),
+                        "unread_count": conv_data.get("unread_count", 0),
+                    }
+
+                    if search_val:
+                        if not (
+                            search_val in str(chat_entry.get("user_name", "")).lower()
+                            or search_val in str(chat_entry.get("phone_number", "")).lower()
+                            or search_val in str(chat_entry.get("phone_clean", "")).lower()
+                        ):
+                            continue
+
+                    chats.append(chat_entry)
+
+                    entry = self._build_index_entry(user_id, conv_data, conv_data.get("visible_messages", []))
+                    asyncio.create_task(self._upsert_index_entry(entry))
+
+                    counters["all"] += 1
+                    if state == self.STATE_WAITING_OPERATOR:
+                        counters["waiting"] += 1
+                    if state == self.STATE_ASSIGNED:
+                        counters["with_operator"] += 1
+                    if state == self.STATE_BOT_ACTIVE:
+                        counters["bot_active"] += 1
+                    if state in {self.STATE_RESOLVED, self.STATE_ARCHIVED}:
+                        counters["closed"] += 1
+
+            chats.sort(key=lambda c: c.get("last_message_at", ""), reverse=True)
+
+            start = max(0, (max(1, int(page)) - 1) * safe_size)
+            paged = chats[start:start + safe_size]
+            has_more = len(chats) > start + safe_size
+            next_cursor = None
+            if has_more:
+                last = paged[-1]
+                next_cursor = f"{last['last_message_at']}|{last['conversation_id']}"
+
+            return {
+                "success": True,
+                "chats": paged,
+                "total": len(paged),
+                "page": page,
+                "page_size": safe_size,
+                "has_more": has_more,
+                "next_cursor": next_cursor,
+                "filter": filter_state,
+                "counters": counters,
+                "search": search,
+                "source": "firestore_fallback",
+            }
+        except Exception as e:
+            print(f"⚠️ fallback unified chats failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "chats": [], "total": 0, "has_more": False, "error": str(e)}
         
     async def get_active_conversations(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
         """Backward-compatible wrapper: return master inbox page 1 (no 6h filter)."""
@@ -446,29 +664,18 @@ class LiveChatService:
         """
         search_val = (search or "").strip().lower()
         safe_size = max(1, min(int(page_size), 100))
-
-        def _state_filter_values(filter_key: str):
-            if filter_key in {"waiting", "waiting_for_operator"}:
-                return [self.STATE_WAITING_OPERATOR]
-            if filter_key in {"with_operator", "assigned"}:
-                return [self.STATE_ASSIGNED]
-            if filter_key in {"bot", "bot_active"}:
-                return [self.STATE_BOT_ACTIVE]
-            if filter_key in {"closed", "resolved_or_archived"}:
-                return [self.STATE_RESOLVED, self.STATE_ARCHIVED]
-            return []
+        state_values = self._state_filter_values(filter_state)
 
         try:
             db = get_firestore_db()
             if not db:
-                return {"success": False, "chats": [], "total": 0, "has_more": False, "error": "firestore_missing"}
+                return await self._fallback_unified_chats(search, page, safe_size, filter_state)
 
             index_coll = self._index_collection(db)
 
             # Build base query (ordered for pagination)
             query = index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING).order_by("conversation_id")
 
-            state_values = _state_filter_values(filter_state.lower()) if filter_state else []
             if state_values:
                 if len(state_values) == 1:
                     query = query.where("conversation_state", "==", state_values[0])
@@ -503,6 +710,9 @@ class LiveChatService:
                         use_q = use_q
                     return list(use_q.limit(widen_limit).stream())
                 docs = await asyncio.to_thread(_stream_search, query)
+
+            if not docs:
+                return await self._fallback_unified_chats(search, page, safe_size, filter_state)
 
             chats: List[Dict[str, Any]] = []
             for doc in docs:
@@ -553,7 +763,7 @@ class LiveChatService:
                 next_cursor = f"{last['last_message_at']}|{last['conversation_id']}"
 
             total_returned = len(paged)
-            if not search_val and not cursor:
+            if not search_val and not cursor and not state_values:
                 self._unified_chats_cache = paged
                 self._unified_chats_cache_time = utc_now()
 
@@ -575,6 +785,9 @@ class LiveChatService:
             print(f"❌ Error in get_unified_chats: {e}")
             import traceback
             traceback.print_exc()
+            fallback = await self._fallback_unified_chats(search, page, safe_size, filter_state)
+            if fallback.get("success"):
+                return fallback
             return {"success": False, "chats": [], "total": 0, "has_more": False, "error": str(e)}
 
     async def _compute_index_counters(self) -> Dict[str, int]:
@@ -966,6 +1179,32 @@ class LiveChatService:
             )
             docs = await asyncio.to_thread(lambda: list(query.stream()))
 
+            if not docs:
+                fallback = await self._fallback_unified_chats("", page=1, page_size=300, filter_state="waiting")
+                if fallback.get("success") and fallback.get("chats"):
+                    queue = []
+                    current_time = utc_now()
+                    for chat in fallback.get("chats", []):
+                        last_at = self._parse_timestamp(chat.get("last_message_at")) if chat.get("last_message_at") else current_time
+                        wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
+                        queue.append({
+                            "conversation_id": chat.get("conversation_id"),
+                            "user_id": chat.get("user_id"),
+                            "user_name": chat.get("user_name"),
+                            "user_phone": chat.get("phone_number"),
+                            "phone_clean": chat.get("phone_clean"),
+                            "language": config.user_data_whatsapp.get(chat.get("user_id"), {}).get("user_preferred_lang", "ar"),
+                            "reason": "user_request",
+                            "wait_time_seconds": wait_time_seconds,
+                            "sentiment": "neutral",
+                            "message_count": 0,
+                            "priority": 2,
+                            "last_message": chat.get("last_message_text", ""),
+                        })
+                    self._queue_cache = queue
+                    self._queue_cache_time = current_time
+                    return queue
+
             waiting_queue = []
 
             for doc in docs:
@@ -1136,13 +1375,14 @@ class LiveChatService:
         Reopen a resolved conversation (auto-called when customer messages again)
         """
         try:
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
             db = get_firestore_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
             
             app_id = "linas-ai-bot-backend"
             conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                user_id
+                canonical_user_id
             ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
             
             # Reopen conversation - use asyncio.to_thread to prevent blocking
@@ -1159,7 +1399,7 @@ class LiveChatService:
             print(f"✅ Conversation {conversation_id} reopened (customer messaged again)")
 
             # Refresh index so UI picks up the reopened state
-            await self._refresh_index_for_conversation(user_id, conversation_id)
+            await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
             
             return {
                 "success": True,
