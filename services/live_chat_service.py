@@ -1294,14 +1294,16 @@ class LiveChatService:
         """
         try:
             from utils.utils import save_conversation_message_to_firestore, get_firestore_db
+            from utils.utils import get_canonical_user_id_and_phone
             
+            canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id)
             # For Qiscus, we need to fetch the phone_number from Firebase
             phone_number = None
             db = get_firestore_db()
             if db:
                 try:
                     app_id = "linas-ai-bot-backend"
-                    user_doc = db.collection("artifacts").document(app_id).collection("users").document(user_id).get()
+                    user_doc = db.collection("artifacts").document(app_id).collection("users").document(canonical_user_id).get()
                     if user_doc.exists:
                         user_data = user_doc.to_dict()
                         phone_number = user_data.get("phone_full")
@@ -1353,7 +1355,7 @@ class LiveChatService:
                 # Step 2: Save to Firebase Firestore
                 print(f"📝 Saving voice metadata to Firebase Firestore...")
                 await save_conversation_message_to_firestore(
-                    user_id=user_id,
+                    user_id=canonical_user_id,
                     role="operator",
                     text="[Voice Message from Operator]",
                     conversation_id=conversation_id,
@@ -1374,7 +1376,7 @@ class LiveChatService:
                     if storage_url:
                         whatsapp_audio_url = build_whatsapp_audio_delivery_url(storage_url)
                         print(f"📤 Proxy URL for WhatsApp: {whatsapp_audio_url}")
-                        send_result = await adapter.send_audio_message(user_id, whatsapp_audio_url)
+                        send_result = await adapter.send_audio_message(canonical_user_id, whatsapp_audio_url)
                         if send_result.get("success"):
                             print(f"✅ Sent voice message via WhatsApp")
                         else:
@@ -1390,7 +1392,7 @@ class LiveChatService:
                     else:
                         # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام رسالة صوتية من المشغل. يرجى فتح لوحة المعلومات لسماعها."
-                        await adapter.send_text_message(user_id, text_notification)
+                        await adapter.send_text_message(canonical_user_id, text_notification)
                         print(f"✅ Sent text notification (storage upload failed)")
                 except Exception as e:
                     print(f"⚠️ Failed to send via WhatsApp: {e}")
@@ -1429,7 +1431,7 @@ class LiveChatService:
                 # Step 2: Save to Firebase Firestore
                 print(f"📝 Saving image metadata to Firebase Firestore...")
                 await save_conversation_message_to_firestore(
-                    user_id=user_id,
+                    user_id=canonical_user_id,
                     role="operator",
                     text="[Image Message from Operator]",
                     conversation_id=conversation_id,
@@ -1449,12 +1451,12 @@ class LiveChatService:
                 try:
                     if storage_url:
                         # Send as native image message (displays in gallery on phone, not just a link)
-                        await adapter.send_image_message(user_id, storage_url, caption="صورة من المشغل")
+                        await adapter.send_image_message(canonical_user_id, storage_url, caption="صورة من المشغل")
                         print(f"✅ Sent image as native image message via Qiscus")
                     else:
                         # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام صورة من المشغل. يرجى فتح لوحة المعلومات لعرضها."
-                        await adapter.send_text_message(user_id, text_notification)
+                        await adapter.send_text_message(canonical_user_id, text_notification)
                         print(f"✅ Sent text notification (storage upload failed)")
                 except Exception as e:
                     print(f"⚠️ Failed to send via Qiscus: {e}")
@@ -1468,7 +1470,7 @@ class LiveChatService:
             else:  # Default to text
                 # Always save to Firestore first (for live chat history)
                 await save_conversation_message_to_firestore(
-                    user_id=user_id,
+                    user_id=canonical_user_id,
                     role="operator",
                     text=message,
                     conversation_id=conversation_id,
@@ -1479,7 +1481,7 @@ class LiveChatService:
 
                 # Try to send via WhatsApp adapter
                 try:
-                    result = await adapter.send_text_message(user_id, message)
+                    result = await adapter.send_text_message(canonical_user_id, message)
 
                     if result.get("success"):
                         print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
