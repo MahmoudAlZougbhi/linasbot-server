@@ -121,10 +121,15 @@ const LiveChat = () => {
 
   const applyServerConversations = React.useCallback((incoming) => {
     if (!Array.isArray(incoming)) return;
-    if (incoming.length === 0 && activeConversationsRef.current?.length) {
-      return;
+    if (incoming.length === 0) {
+      if (activeConversationsRef.current?.length || cachedActiveConversationsRef.current?.length) {
+        return;
+      }
     }
-    const merged = mergeMissingActiveChats(incoming, activeConversationsRef.current);
+    const baseline = activeConversationsRef.current?.length
+      ? activeConversationsRef.current
+      : cachedActiveConversationsRef.current;
+    const merged = mergeMissingActiveChats(incoming, baseline);
     setActiveConversations(merged);
   }, [mergeMissingActiveChats]);
 
@@ -233,8 +238,10 @@ const LiveChat = () => {
   const applyWaitingQueue = (queueResponse) => {
     const incoming = queueResponse?.queue;
     if (!Array.isArray(incoming)) return;
-    if (incoming.length === 0 && waitingQueueRef.current?.length) {
-      return;
+    if (incoming.length === 0) {
+      if (waitingQueueRef.current?.length || cachedWaitingQueueRef.current?.length) {
+        return;
+      }
     }
     setWaitingQueue(mergeSelectedIntoWaitingQueue(incoming, selectedConversationRef));
   };
@@ -244,6 +251,8 @@ const LiveChat = () => {
   const selectedConversationRef = useRef(null);
   const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
   const waitingQueueRef = useRef([]);
+  const cachedActiveConversationsRef = useRef([]);
+  const cachedWaitingQueueRef = useRef([]);
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
   const debouncedSearchRef = useRef("");
   const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
@@ -260,10 +269,16 @@ const LiveChat = () => {
 
   useEffect(() => {
     activeConversationsRef.current = activeConversations;
+    if (activeConversations?.length) {
+      cachedActiveConversationsRef.current = activeConversations;
+    }
   }, [activeConversations]);
 
   useEffect(() => {
     waitingQueueRef.current = waitingQueue;
+    if (waitingQueue?.length) {
+      cachedWaitingQueueRef.current = waitingQueue;
+    }
   }, [waitingQueue]);
 
   useEffect(() => {
@@ -302,6 +317,8 @@ const LiveChat = () => {
         const parsed = JSON.parse(cachedChats);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setActiveConversations(parsed);
+          activeConversationsRef.current = parsed;
+          cachedActiveConversationsRef.current = parsed;
         }
       } catch (err) {
         console.warn("LiveChat cache parse error (active conversations)", err);
@@ -312,6 +329,8 @@ const LiveChat = () => {
         const parsed = JSON.parse(cachedQueue);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setWaitingQueue(parsed);
+          waitingQueueRef.current = parsed;
+          cachedWaitingQueueRef.current = parsed;
         }
       } catch (err) {
         console.warn("LiveChat cache parse error (waiting queue)", err);
