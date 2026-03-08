@@ -231,7 +231,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/users?created_by=${user.id}`, {
+      const response = await fetch(`${getAuthBase()}/users?created_by=${user.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -270,7 +270,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/users/${userId}`, {
+      const response = await fetch(`${getAuthBase()}/users/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -319,7 +319,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/users/${userId}`, {
+      const response = await fetch(`${getAuthBase()}/users/${userId}`, {
         method: 'DELETE'
       });
 
