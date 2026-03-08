@@ -59,20 +59,32 @@ export const AuthProvider = ({ children }) => {
           clearTimeout(timeoutId);
           const data = await response.json();
 
-          if (data.success && data.user && data.user.status === 'active') {
-            const userData = buildUserData(data.user);
-            setUser(userData);
+          console.log('[AuthContext] checkSession response:', JSON.stringify({ success: data?.success, hasUser: !!data?.user, userStatus: data?.user?.status }));
 
-            // Update session with fresh data
-            const newSession = {
-              user: userData,
-              timestamp: new Date().toISOString()
-            };
-            localStorage.setItem('auth_session', JSON.stringify(newSession));
-          } else {
-            // Session invalid, clear it
+          if (!data.success || !data.user || typeof data.user !== 'object') {
+            console.warn('[AuthContext] checkSession: invalid or missing user data', data);
             localStorage.removeItem('auth_session');
+            return;
           }
+          if (data.user.status !== 'active') {
+            console.warn('[AuthContext] checkSession: user status not active', data.user.status);
+            localStorage.removeItem('auth_session');
+            return;
+          }
+
+          const userData = buildUserData(data.user);
+          if (!userData) {
+            console.warn('[AuthContext] checkSession: buildUserData returned null', data.user);
+            localStorage.removeItem('auth_session');
+            return;
+          }
+
+          setUser(userData);
+          const newSession = {
+            user: userData,
+            timestamp: new Date().toISOString()
+          };
+          localStorage.setItem('auth_session', JSON.stringify(newSession));
         } else {
           localStorage.removeItem('auth_session');
         }
@@ -84,11 +96,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   const buildUserData = (user) => {
+    if (!user || typeof user !== 'object') {
+      console.warn('[AuthContext] buildUserData called with invalid user:', user);
+      return null;
+    }
+    const email = user.email ?? '';
+    const name = user.name || (email ? email.split('@')[0] : 'user');
     const permissions = resolveUserPermissions(user);
     return {
       id: user.id,
-      email: user.email,
-      name: user.name || user.email.split('@')[0],
+      email,
+      name,
       role: user.role || 'admin',
       permissions: user.permissions,
       resolvedPermissions: permissions,
@@ -114,11 +132,23 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
+      // Debug: log exact auth response shape before processing
+      console.log('[AuthContext] login response:', JSON.stringify({ success: data?.success, hasUser: !!data?.user, userKeys: data?.user ? Object.keys(data.user) : [] }));
+
       if (!data.success) {
         throw new Error(data.error || 'Login failed');
       }
 
+      if (!data.user || typeof data.user !== 'object') {
+        console.error('[AuthContext] login failed: data.user missing or invalid', data);
+        throw new Error('Invalid login response: missing user data');
+      }
+
       const userData = buildUserData(data.user);
+      if (!userData) {
+        console.error('[AuthContext] login failed: buildUserData returned null', data.user);
+        throw new Error('Invalid login response: could not build user');
+      }
 
       // Create session
       const session = {
@@ -126,14 +156,16 @@ export const AuthProvider = ({ children }) => {
         timestamp: new Date().toISOString()
       };
 
+      console.log('[AuthContext] login: about to setUser + localStorage + navigate');
       localStorage.setItem('auth_session', JSON.stringify(session));
       setUser(userData);
-
       toast.success('Welcome back!');
       navigate('/');
+      console.log('[AuthContext] login: setUser + localStorage + navigate completed');
 
       return userData;
     } catch (error) {
+      console.error('[AuthContext] login failed:', error.message, error);
       const msg = error.name === 'AbortError'
         ? 'Connection timed out. Is the backend running on port 8003?'
         : (error.message || 'Login failed');
@@ -268,8 +300,9 @@ export const AuthProvider = ({ children }) => {
       }
 
       // If updating current user, refresh session
-      if (userId === user.id) {
+      if (userId === user.id && data.user) {
         const updatedUserData = buildUserData(data.user);
+        if (!updatedUserData) return data.user;
         setUser(updatedUserData);
 
         const session = {
@@ -328,15 +361,16 @@ export const AuthProvider = ({ children }) => {
       const response = await fetch(`${API_BASE}/session/${user.id}`);
       const data = await response.json();
 
-      if (data.success && data.user) {
+      if (data.success && data.user && typeof data.user === 'object') {
         const userData = buildUserData(data.user);
-        setUser(userData);
-
-        const session = {
-          user: userData,
-          timestamp: new Date().toISOString()
-        };
-        localStorage.setItem('auth_session', JSON.stringify(session));
+        if (userData) {
+          setUser(userData);
+          const session = {
+            user: userData,
+            timestamp: new Date().toISOString()
+          };
+          localStorage.setItem('auth_session', JSON.stringify(session));
+        }
       }
     } catch (error) {
       console.error('Failed to refresh user:', error);

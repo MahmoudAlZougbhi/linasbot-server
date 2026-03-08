@@ -80,7 +80,13 @@ async def login(request: LoginRequest):
     try:
         t0 = time.monotonic()
         print(f"[auth_api] login: REQUEST_RECEIVED for {request.email} t=0", flush=True)
-        print(f"[auth_api] login: calling asyncio.to_thread(authenticate)", flush=True)
+        # Check Firestore state (diagnostic - first access may trigger lazy init)
+        try:
+            import utils.utils as u
+            fs_ready = getattr(u, "_firestore_init_done", False)
+        except Exception:
+            fs_ready = False
+        print(f"[auth_api] login: Firestore init_done={fs_ready}, calling authenticate (watch backend stdout for [auth:...] logs)", flush=True)
         user = await asyncio.wait_for(
             asyncio.to_thread(user_service.authenticate, request.email, request.password),
             timeout=45.0
@@ -106,6 +112,7 @@ async def login(request: LoginRequest):
         }
     except asyncio.TimeoutError:
         print(f"[auth_api] login: TIMEOUT after 45s for {request.email}", flush=True)
+        print(f"[auth_api] login: DIAGNOSTIC - Check LAST [auth:...] log above to see where it hung: get_user_by_email query.stream() vs lastLogin update vs bcrypt", flush=True)
         return {
             "success": False,
             "error": "Authentication timeout (45s). تحقق من Firestore أو أعد تشغيل الـ backend."

@@ -24,7 +24,10 @@ class UserService:
     def db(self):
         """Lazy-load Firestore database connection"""
         if self._db is None:
+            t0 = time.monotonic()
+            print(f"[auth:user_service] db property: first access, calling get_firestore_db t=0.00s", flush=True)
             self._db = get_firestore_db()
+            print(f"[auth:user_service] db property: get_firestore_db returned in {time.monotonic() - t0:.3f}s (db is None: {self._db is None})", flush=True)
         return self._db
 
     @property
@@ -121,12 +124,12 @@ class UserService:
             email_lower = email.lower().strip()
             query = coll.where("email", "==", email_lower).limit(1)
 
-            # Firestore read
+            # Firestore read - THIS IS THE ACTUAL NETWORK CALL (may hang if Firestore unreachable)
             t2 = time.monotonic()
-            print(f"[auth:get_user_by_email] calling query.stream()", flush=True)
+            print(f"[auth:get_user_by_email] calling query.stream() - FIRST FIRESTORE NETWORK OP, may block here", flush=True)
             docs = list(query.stream())
             elapsed = time.monotonic() - t2
-            print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s", flush=True)
+            print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
 
             if docs:
                 result = docs[0].to_dict()
@@ -301,8 +304,8 @@ class UserService:
             print(f"[auth] 8. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
             return result
 
-        # Step 3: Update lastLogin in Firestore
-        print(f"[auth] 6. FIRESTORE_WRITE_START t={_elapsed():.3f}s", flush=True)
+        # Step 3: Update lastLogin in Firestore - SECOND NETWORK CALL (may hang)
+        print(f"[auth] 6. FIRESTORE_WRITE_START t={_elapsed():.3f}s - Firestore update, may block here", flush=True)
         self.collection.document(user['id']).update({"lastLogin": now})
         print(f"[auth] 7. FIRESTORE_WRITE_END t={_elapsed():.3f}s", flush=True)
 
