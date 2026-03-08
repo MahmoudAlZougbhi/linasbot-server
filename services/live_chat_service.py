@@ -1521,16 +1521,24 @@ class LiveChatService:
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
             db = get_firestore_db()
+            conv_ref = None
+            resolved_user_id = canonical_user_id
             if db:
-                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                users_coll = db.collection("artifacts").document(self.APP_ID).collection("users")
+                conv_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
                 conv_snap = await asyncio.to_thread(conv_ref.get)
+                if not conv_snap.exists and user_id != canonical_user_id:
+                    conv_ref = users_coll.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                    conv_snap = await asyncio.to_thread(conv_ref.get)
+                    if conv_snap.exists:
+                        resolved_user_id = user_id
                 if not conv_snap.exists:
                     return {
                         "success": False,
                         "error": f"Conversation not found. Check user_id and conversation_id.",
                     }
-            await set_human_takeover_status(canonical_user_id, conversation_id, False)
-            config.user_in_human_takeover_mode[canonical_user_id] = False
+            await set_human_takeover_status(resolved_user_id, conversation_id, False)
+            config.user_in_human_takeover_mode[resolved_user_id] = False
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
 
@@ -1543,7 +1551,7 @@ class LiveChatService:
                 })
 
             # Refresh index
-            await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
+            await self._refresh_index_for_conversation(resolved_user_id, conversation_id)
 
             # Invalidate cache
             self.invalidate_cache()
