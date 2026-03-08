@@ -76,6 +76,7 @@ const LiveChat = () => {
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [botPanelOpen, setBotPanelOpen] = useState(false); // With bot floating panel when sidebar collapsed
 
   const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min - avoid refetch when switching back to same conv
 
@@ -1630,7 +1631,169 @@ const LiveChat = () => {
               <ChevronLeftIcon className="w-4 h-4" />
             </button>
           </div>
-          {/* 1) Waiting for human – yale tablin (no operator yet) */}
+          {/* 1) With bot – first section */}
+          <div
+            className="whatsapp-sidebar-section flex-1 overflow-y-auto max-h-[55vh] min-h-0"
+            ref={botListRef}
+            onScroll={handleBotListScroll}
+          >
+            <div className="sticky top-0 z-10 bg-white pb-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-slate-800 flex items-center">
+                  <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
+                  With bot ({botConversations.length})
+                </h3>
+                <span className="text-xs text-slate-500 flex items-center space-x-1">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  <span>Auto-updating</span>
+                </span>
+                {isLoading && (
+                  <span className="text-xs text-slate-400">Loading...</span>
+                )}
+              </div>
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={liveSearchQuery}
+                  onChange={(e) => setLiveSearchQuery(e.target.value)}
+                  placeholder="Search by name or phone..."
+                  className="whatsapp-input w-full pl-9 pr-4"
+                />
+                {liveSearchQuery && (
+                  <button
+                    onClick={() => setLiveSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              {isLoading && botConversations.length === 0 ? (
+                [...Array(5)].map((_, i) => (
+                  <div key={i} className="p-3 rounded-lg bg-slate-50 border border-slate-100 animate-pulse">
+                    <div className="h-4 w-3/4 bg-slate-200 rounded mb-2" />
+                    <div className="h-3 w-1/2 bg-slate-100 rounded mb-2" />
+                    <div className="h-3 w-full bg-slate-100 rounded" />
+                  </div>
+                ))
+              ) : (
+                <>
+                  {liveBotConversations.length > 0 && (
+                    <div className="pt-1">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Live now</p>
+                      <div className="space-y-2">
+                        {liveBotConversations.map((conv) => (
+                          <div
+                            key={conv.conversation_id}
+                            className={`p-3 rounded-lg cursor-pointer transition-all ${
+                              selectedConversation?.conversation?.conversation_id ===
+                              conv.conversation_id
+                                ? "bg-primary-50 border-2 border-primary-300"
+                                : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                            onClick={() => selectConversation(conv)}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-slate-800 text-sm">
+                                    {conv.user_name}
+                                  </p>
+                                  <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
+                                    Live
+                                  </span>
+                                  {newConversationIds.has(conv.conversation_id) && (
+                                    <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
+                                      New
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                  {conv.user_phone || conv.phone_number || ""}
+                                </p>
+                              </div>
+                              <SentimentIndicator sentiment={conv.sentiment} />
+                            </div>
+                            <div className="mb-2"><StatusBadge status={conv.status} /></div>
+                            {(conv.last_message?.content ?? conv.last_message_text) && (
+                              <p className="text-xs text-slate-600 truncate mb-1">
+                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between text-xs text-slate-500">
+                              <span>{(conv.message_count ?? 0)} messages</span>
+                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {historyBotConversations.length > 0 && (
+                    <div className="pt-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Earlier</p>
+                      <div className="space-y-2">
+                        {historyBotConversations.map((conv) => (
+                          <div
+                            key={conv.conversation_id}
+                            className={`p-3 rounded-lg cursor-pointer transition-all ${
+                              selectedConversation?.conversation?.conversation_id ===
+                              conv.conversation_id
+                                ? "bg-primary-50 border-2 border-primary-300"
+                                : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                            onClick={() => selectConversation(conv)}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-slate-800 text-sm">
+                                    {conv.user_name}
+                                  </p>
+                                  {newConversationIds.has(conv.conversation_id) && (
+                                    <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
+                                      New
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                  {conv.user_phone || conv.phone_number || ""}
+                                </p>
+                              </div>
+                              <SentimentIndicator sentiment={conv.sentiment} />
+                            </div>
+                            <div className="mb-2"><StatusBadge status={conv.status} /></div>
+                            {(conv.last_message?.content ?? conv.last_message_text) && (
+                              <p className="text-xs text-slate-600 truncate mb-1">
+                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between text-xs text-slate-500">
+                              <span>{(conv.message_count ?? 0)} messages</span>
+                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {hasMoreChats && (
+                <button
+                  onClick={loadMoreChats}
+                  disabled={loadingMoreChats}
+                  className="w-full py-3 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 transition"
+                >
+                  {loadingMoreChats ? "Loading..." : "Load More"}
+                </button>
+              )}
+            </div>
+          </div>
+          {/* 2) Waiting for human – yale tablin (no operator yet) */}
           <div className="whatsapp-sidebar-section">
             <h3 className="font-bold text-slate-800 mb-2 flex items-center">
               <span className="text-lg mr-2">⏳</span>
@@ -1783,195 +1946,138 @@ const LiveChat = () => {
               </>
             )}
           </div>
-
-          {/* Active Conversations - limited height so chat stays visible */}
-          <div
-            className="whatsapp-sidebar-section flex-1 overflow-y-auto max-h-[55vh]"
-            ref={botListRef}
-            onScroll={handleBotListScroll}
-          >
-            {/* ✅ Sticky header + search - stays fixed when scrolling */}
-            <div className="sticky top-0 z-10 bg-white pb-3">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-slate-800 flex items-center">
-                  <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                  With bot ({botConversations.length})
-                </h3>
-                {/* ✅ Auto-refresh indicator */}
-                <span className="text-xs text-slate-500 flex items-center space-x-1">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  <span>Auto-updating</span>
-                </span>
-                {isLoading && (
-                  <span className="text-xs text-slate-400">Loading...</span>
-                )}
-              </div>
-              {/* ✅ Search by name or phone */}
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={liveSearchQuery}
-                  onChange={(e) => setLiveSearchQuery(e.target.value)}
-                  placeholder="Search by name or phone..."
-                  className="whatsapp-input w-full pl-9 pr-4"
-                />
-                {liveSearchQuery && (
-                  <button
-                    onClick={() => setLiveSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    <XMarkIcon className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="space-y-2">
-              {isLoading && botConversations.length === 0 ? (
-                [...Array(5)].map((_, i) => (
-                  <div key={i} className="p-3 rounded-lg bg-slate-50 border border-slate-100 animate-pulse">
-                    <div className="h-4 w-3/4 bg-slate-200 rounded mb-2" />
-                    <div className="h-3 w-1/2 bg-slate-100 rounded mb-2" />
-                    <div className="h-3 w-full bg-slate-100 rounded" />
-                  </div>
-                ))
-              ) : (
-                <>
-                  {liveBotConversations.length > 0 && (
-                    <div className="pt-1">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Live now</p>
-                      <div className="space-y-2">
-                        {liveBotConversations.map((conv) => (
-                          <div
-                            key={conv.conversation_id}
-                            className={`p-3 rounded-lg cursor-pointer transition-all ${
-                              selectedConversation?.conversation?.conversation_id ===
-                              conv.conversation_id
-                                ? "bg-primary-50 border-2 border-primary-300"
-                                : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
-                            }`}
-                            onClick={() => selectConversation(conv)}
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2">
-                                  <p className="font-medium text-slate-800 text-sm">
-                                    {conv.user_name}
-                                  </p>
-                                  <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
-                                    Live
-                                  </span>
-                                  {newConversationIds.has(conv.conversation_id) && (
-                                    <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
-                                      New
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-slate-500">
-                                  {conv.user_phone || conv.phone_number || ""}
-                                </p>
-                              </div>
-                              <SentimentIndicator sentiment={conv.sentiment} />
-                            </div>
-
-                            <div className="mb-2"><StatusBadge status={conv.status} /></div>
-
-                            {(conv.last_message?.content ?? conv.last_message_text) && (
-                              <p className="text-xs text-slate-600 truncate mb-1">
-                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
-                              </p>
-                            )}
-
-                            <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{(conv.message_count ?? 0)} messages</span>
-                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {historyBotConversations.length > 0 && (
-                    <div className="pt-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Earlier</p>
-                      <div className="space-y-2">
-                        {historyBotConversations.map((conv) => (
-                          <div
-                            key={conv.conversation_id}
-                            className={`p-3 rounded-lg cursor-pointer transition-all ${
-                              selectedConversation?.conversation?.conversation_id ===
-                              conv.conversation_id
-                                ? "bg-primary-50 border-2 border-primary-300"
-                                : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
-                            }`}
-                            onClick={() => selectConversation(conv)}
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2">
-                                  <p className="font-medium text-slate-800 text-sm">
-                                    {conv.user_name}
-                                  </p>
-                                  {newConversationIds.has(conv.conversation_id) && (
-                                    <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
-                                      New
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-slate-500">
-                                  {conv.user_phone || conv.phone_number || ""}
-                                </p>
-                              </div>
-                              <SentimentIndicator sentiment={conv.sentiment} />
-                            </div>
-
-                            <div className="mb-2"><StatusBadge status={conv.status} /></div>
-
-                            {(conv.last_message?.content ?? conv.last_message_text) && (
-                              <p className="text-xs text-slate-600 truncate mb-1">
-                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
-                              </p>
-                            )}
-
-                            <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{(conv.message_count ?? 0)} messages</span>
-                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-              {hasMoreChats && (
-                <button
-                  onClick={loadMoreChats}
-                  disabled={loadingMoreChats}
-                  className="w-full py-3 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 transition"
-                >
-                  {loadingMoreChats ? "Loading..." : "Load More"}
-                </button>
-              )}
-            </div>
-          </div>
             </>
           )}
         </motion.div>
 
-        {/* Chat Window - wider when sidebar collapsed */}
+        {/* Chat Window - much wider when sidebar collapsed */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`${sidebarCollapsed ? "col-span-8" : "col-span-6"} whatsapp-chat-panel`}
+          className={`relative ${sidebarCollapsed ? "col-span-9" : "col-span-6"} whatsapp-chat-panel`}
         >
+          {/* With bot floating panel - visible when sidebar collapsed (button in chat header) */}
+          {sidebarCollapsed && botPanelOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-30 bg-black/20"
+                    onClick={() => setBotPanelOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <motion.div
+                    initial={{ x: -320 }}
+                    animate={{ x: 0 }}
+                    exit={{ x: -320 }}
+                    className="fixed left-0 top-0 bottom-0 w-80 z-40 bg-white border-r border-slate-200 shadow-xl flex flex-col overflow-hidden"
+                  >
+                    <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+                      <h3 className="font-bold text-slate-800 flex items-center">
+                        <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
+                        With bot ({botConversations.length})
+                      </h3>
+                      <button
+                        onClick={() => setBotPanelOpen(false)}
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3">
+                      <div className="relative mb-3">
+                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="text"
+                          value={liveSearchQuery}
+                          onChange={(e) => setLiveSearchQuery(e.target.value)}
+                          placeholder="Search by name or phone..."
+                          className="whatsapp-input w-full pl-9 pr-4"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        {liveBotConversations.length > 0 && (
+                          <div className="pt-1">
+                            <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Live now</p>
+                            <div className="space-y-2">
+                              {liveBotConversations.map((conv) => (
+                                <div
+                                  key={conv.conversation_id}
+                                  className={`p-3 rounded-lg cursor-pointer transition-all ${
+                                    selectedConversation?.conversation?.conversation_id === conv.conversation_id
+                                      ? "bg-primary-50 border-2 border-primary-300"
+                                      : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                                  }`}
+                                  onClick={() => {
+                                    selectConversation(conv);
+                                    setBotPanelOpen(false);
+                                  }}
+                                >
+                                  <div className="flex items-start justify-between mb-1">
+                                    <p className="font-medium text-slate-800 text-sm truncate">{conv.user_name}</p>
+                                    <SentimentIndicator sentiment={conv.sentiment} />
+                                  </div>
+                                  <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {historyBotConversations.length > 0 && (
+                          <div className="pt-3">
+                            <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Earlier</p>
+                            <div className="space-y-2">
+                              {historyBotConversations.map((conv) => (
+                                <div
+                                  key={conv.conversation_id}
+                                  className={`p-3 rounded-lg cursor-pointer transition-all ${
+                                    selectedConversation?.conversation?.conversation_id === conv.conversation_id
+                                      ? "bg-primary-50 border-2 border-primary-300"
+                                      : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                                  }`}
+                                  onClick={() => {
+                                    selectConversation(conv);
+                                    setBotPanelOpen(false);
+                                  }}
+                                >
+                                  <div className="flex items-start justify-between mb-1">
+                                    <p className="font-medium text-slate-800 text-sm truncate">{conv.user_name}</p>
+                                    <SentimentIndicator sentiment={conv.sentiment} />
+                                  </div>
+                                  <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {hasMoreChats && (
+                          <button
+                            onClick={loadMoreChats}
+                            disabled={loadingMoreChats}
+                            className="w-full py-2 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200"
+                          >
+                            {loadingMoreChats ? "Loading..." : "Load More"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                </>
+          )}
           {selectedConversation ? (
             <>
               {/* Chat Header - Fixed Height */}
               <div className="whatsapp-chat-header">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
+                    {sidebarCollapsed && (
+                      <button
+                        onClick={() => setBotPanelOpen((o) => !o)}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm font-medium text-slate-700 mr-2"
+                        title="With bot conversations"
+                      >
+                        <ChatBubbleLeftRightIcon className="w-4 h-4 text-primary-600" />
+                        With bot ({botConversations.length})
+                      </button>
+                    )}
                     <div className="w-10 h-10 bg-gradient-to-r from-primary-400 to-secondary-400 rounded-full flex items-center justify-center text-white font-bold">
                       {selectedConversation.conversation.user_name.charAt(0)}
                     </div>
@@ -2433,9 +2539,18 @@ const LiveChat = () => {
             <div className="flex-1 flex items-center justify-center text-slate-400">
               <div className="text-center">
                 <ChatBubbleLeftRightIcon className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-                <p className="text-lg font-medium">
+                <p className="text-lg font-medium mb-4">
                   Select a conversation to view
                 </p>
+                {sidebarCollapsed && (
+                  <button
+                    onClick={() => setBotPanelOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium"
+                  >
+                    <ChatBubbleLeftRightIcon className="w-5 h-5" />
+                    With bot ({botConversations.length}) – Open list
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -2445,7 +2560,7 @@ const LiveChat = () => {
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="col-span-3 whatsapp-info-panel space-y-4 p-4"
+          className={`${sidebarCollapsed ? "col-span-2" : "col-span-3"} whatsapp-info-panel space-y-4 p-4`}
         >
           {selectedConversation ? (
             <>
