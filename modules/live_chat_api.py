@@ -85,12 +85,19 @@ async def get_unified_chats(
     search: str = Query(default="", description="Search by name or phone"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=30, ge=1, le=100),
-    cursor: str = Query(default=None, description="Optional cursor for next page (same as page number)"),
+    cursor: str = Query(default=None, description="Cursor string returned by previous page"),
+    filter: str = Query(default="all", description="Badge filter: all|waiting|with_operator|bot|closed"),
 ):
-    """WhatsApp-style: live chats at top, history below. Top 30 per page, Load More for more."""
+    """WhatsApp-style inbox (single master list) powered by live_chat_index."""
     try:
-        effective_page = int(cursor) if cursor else page
-        result = await live_chat_service.get_unified_chats(search=search, page=effective_page, page_size=page_size)
+        effective_page = int(cursor) if (cursor and cursor.isdigit()) else page
+        result = await live_chat_service.get_unified_chats(
+            search=search,
+            page=effective_page,
+            page_size=page_size,
+            filter_state=filter,
+            cursor=None if (cursor and cursor.isdigit()) else cursor,
+        )
         return result
     except Exception as e:
         print(f"❌ Error in get_unified_chats: {e}")

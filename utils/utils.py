@@ -280,10 +280,12 @@ def _invalidate_live_chat_cache():
 def _refresh_live_chat_index_async(user_id: str, conversation_id: str):
     """Fire-and-forget index refresh so new messages populate live_chat_index."""
     try:
+        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
         from services.live_chat_service import live_chat_service
-        asyncio.create_task(live_chat_service._refresh_index_for_conversation(user_id, conversation_id))
-    except Exception:
-        pass
+        print(f"🔄 [index-refresh] enqueue refresh user={canonical_user_id} conv={conversation_id}")
+        asyncio.create_task(live_chat_service._refresh_index_for_conversation(canonical_user_id, conversation_id))
+    except Exception as e:
+        print(f"⚠️ [index-refresh] enqueue failed for user={user_id} conv={conversation_id}: {e}")
 
 async def save_conversation_message_to_firestore(user_id: str, role: str, text: str, conversation_id: str = None, user_name: str = None, phone_number: str = None, metadata: dict = None):
     """
@@ -533,10 +535,21 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
 
                 current_messages.append(message_data)
+                previous_state = doc_data.get("conversation_state")
+                unread_before = int(doc_data.get("unread_count") or 0)
+                new_unread = unread_before
+                if role == "user":
+                    new_unread = unread_before + 1
+                elif role == "operator":
+                    new_unread = 0
+
                 update_payload = {
                     "messages": current_messages,
                     "customer_info": customer_info,
                     "last_updated": utc_now(),
+                    "last_message_text": message_data.get("text", ""),
+                    "last_message_at": message_data.get("timestamp") or utc_now(),
+                    "unread_count": new_unread,
                 }
                 if not is_smart_source:
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
@@ -559,6 +572,13 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     update_payload.get("operator_id"),
                     update_payload.get("status", "active"),
                 )
+                if role == "user" and previous_state in {"resolved", "archived"}:
+                    update_payload.update({
+                        "conversation_state": "bot_active",
+                        "status": "active",
+                        "human_takeover_active": False,
+                        "operator_id": None,
+                    })
                 await asyncio.to_thread(doc_ref.update, update_payload)
                 _invalidate_live_chat_cache()
                 _refresh_live_chat_index_async(canonical_user_id, conversation_id)
@@ -596,6 +616,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "human_takeover_active": False,
                     "last_updated": utc_now(),
                     "conversation_state": "archived" if is_smart_source else "bot_active",
+                    "last_message_text": message_data.get("text", ""),
+                    "last_message_at": message_data.get("timestamp") or utc_now(),
+                    "unread_count": 0 if role != "user" else 1,
                 })
                 saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
@@ -655,10 +678,21 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
 
                 current_messages.append(message_data)
+                prev_state = doc_data.get("conversation_state")
+                unread_before = int(doc_data.get("unread_count") or 0)
+                new_unread = unread_before
+                if role == "user":
+                    new_unread = unread_before + 1
+                elif role == "operator":
+                    new_unread = 0
+
                 update_payload = {
                     "messages": current_messages,
                     "customer_info": customer_info,
                     "last_updated": utc_now(),
+                    "last_message_text": message_data.get("text", ""),
+                    "last_message_at": message_data.get("timestamp") or utc_now(),
+                    "unread_count": new_unread,
                 }
                 # Smart campaign messages should not reopen/take over live conversations.
                 if not is_smart_source:
@@ -681,6 +715,13 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     update_payload.get("operator_id"),
                     update_payload.get("status", "active"),
                 )
+                if role == "user" and prev_state in {"resolved", "archived"}:
+                    update_payload.update({
+                        "conversation_state": "bot_active",
+                        "status": "active",
+                        "human_takeover_active": False,
+                        "operator_id": None,
+                    })
                 await asyncio.to_thread(doc_ref.update, update_payload)
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
@@ -718,6 +759,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "human_takeover_active": False,
                     "last_updated": utc_now(),
                     "conversation_state": "archived" if is_smart_source else "bot_active",
+                    "last_message_text": message_data.get("text", ""),
+                    "last_message_at": message_data.get("timestamp") or utc_now(),
+                    "unread_count": 0 if role != "user" else 1,
                 })
                 saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
@@ -1019,6 +1063,7 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
     """
     import asyncio
 
+    canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
     db = get_firestore_db()
     if not db:
         print("❌ Firestore not initialized. Cannot set human takeover status.")
@@ -1026,7 +1071,7 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
 
     # Correct path: artifacts (collection) -> {appId} (document) -> users (collection) -> {userId} (document) -> conversations (collection) -> {conversationId} (document)
     app_id_for_firestore = "linas-ai-bot-backend"
-    conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+    conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
 
     try:
         update_data = {
@@ -1054,10 +1099,10 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
 
         # ✅ Use asyncio.to_thread to prevent blocking the event loop
         await asyncio.to_thread(conv_doc_ref.update, update_data)
-        config.user_in_human_takeover_mode[user_id] = status # Update local config as well
+        config.user_in_human_takeover_mode[canonical_user_id] = status  # Update local config as well
 
         operator_info = f" by operator {operator_name or operator_id}" if operator_id else ""
-        print(f"✅ Set human takeover status for conversation {conversation_id} (user {user_id}) to {status}{operator_info}.")
+        print(f"✅ Set human takeover status for conversation {conversation_id} (user {canonical_user_id}) to {status}{operator_info}.")
     except Exception as e:
         print(f"❌ ERROR setting human takeover status for conversation {conversation_id} (user {user_id}): {e}")
         import traceback

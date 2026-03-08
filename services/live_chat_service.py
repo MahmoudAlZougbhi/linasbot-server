@@ -22,7 +22,7 @@ from services.live_chat_contracts import (
     parse_timestamp_utc,
     utc_now,
 )
-from utils.utils import get_firestore_db, set_human_takeover_status
+from utils.utils import get_firestore_db, set_human_takeover_status, get_canonical_user_id_and_phone
 from utils.phone_utils import normalize_phone
 from services.media_service import build_whatsapp_audio_delivery_url
 
@@ -170,6 +170,7 @@ class LiveChatService:
         is_live = state in {self.STATE_BOT_ACTIVE, self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED} and self._is_live_window(last_ts)
         language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
         sentiment = conv_data.get("sentiment", "neutral")
+        unread_count = conv_data.get("unread_count") or 0
         return {
             "conversation_id": conv_data.get("conversation_id"),
             "user_id": user_id,
@@ -181,6 +182,7 @@ class LiveChatService:
             "message_count": len(messages),
             "conversation_state": state,
             "operator_id": conv_data.get("operator_id"),
+            "unread_count": unread_count,
             "sentiment": sentiment,
             "is_live": is_live,
             "language": language,
@@ -205,20 +207,23 @@ class LiveChatService:
 
     async def _refresh_index_for_conversation(self, user_id: str, conv_id: str):
         try:
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
             db = get_firestore_db()
             if not db:
                 return
-            conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conv_id)
+            conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conv_id)
             conv_snap = await asyncio.to_thread(conv_ref.get)
             if not conv_snap.exists:
+                print(f"⚠️ [index-refresh] convo not found user={canonical_user_id} conv={conv_id}")
                 return
             conv_data = normalize_conversation_document(
                 conversation_id=conv_id,
-                user_id=user_id,
+                user_id=canonical_user_id,
                 payload=conv_snap.to_dict() or {},
             )
             messages = self._visible_chat_messages(conv_data.get("messages", []) or [])
-            entry = self._build_index_entry(user_id, conv_data, messages)
+            entry = self._build_index_entry(canonical_user_id, conv_data, messages)
+            print(f"🔄 [index-refresh] rebuilding index user={canonical_user_id} conv={conv_id} state={entry.get('conversation_state')} last_at={entry.get('last_message_at')}")
             await self._upsert_index_entry(entry)
         except Exception as e:
             print(f"⚠️ Failed to refresh index for {conv_id}: {e}")
@@ -399,116 +404,25 @@ class LiveChatService:
             return []
         
     async def get_active_conversations(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Active conversations (last 6h) from live_chat_index using canonical state."""
-        normalized_search = (search or "").strip()
-
-        current_time = utc_now()
-        if self._conversations_cache is not None and self._is_cache_fresh(self._conversations_cache_time):
-            cached = self._conversations_cache
-            if normalized_search:
-                filtered_cached = self._filter_conversations(cached, normalized_search)
-                print(f"🔎 Live chat search '{normalized_search}': {len(filtered_cached)} matches (cache)")
-                return filtered_cached
-            return cached
-
+        """Backward-compatible wrapper: return master inbox page 1 (no 6h filter)."""
         try:
-            db = get_firestore_db()
-            if not db:
-                return []
-
-            index_coll = self._index_collection(db)
-            active_states = [self.STATE_BOT_ACTIVE, self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED]
-            query = (
-                index_coll
-                .where("conversation_state", "in", active_states)
-                .order_by("last_message_at", direction=firestore.Query.DESCENDING)
-                .limit(500)
-            )
-            docs = await asyncio.to_thread(lambda: list(query.stream()))
-
-            print(f"📊 [live_chat_index] active query returned {len(docs)} docs")
-
-            # If index is empty, attempt an on-demand rebuild and retry once.
-            if not docs:
-                print("⚠️ live_chat_index empty for active query — rebuilding from Firestore conversations...")
-                await self.rebuild_index_from_firestore(max_users=self.USERS_STREAM_LIMIT, max_conversations_per_user=50, set_conversation_state=True)
-                docs = await asyncio.to_thread(lambda: list(query.stream()))
-                print(f"📊 [live_chat_index] post-rebuild query returned {len(docs)} docs")
-
-            # Still empty? fall back to legacy scan so UI isn't blank.
-            if not docs:
-                print("⚠️ live_chat_index still empty after rebuild; falling back to direct scan")
-                fallback = await self._legacy_active_scan_for_fallback(search=normalized_search, user_limit=self.USERS_STREAM_LIMIT)
-                self._conversations_cache = fallback
-                self._conversations_cache_time = current_time
-                return fallback
-
-            conversations: List[Dict[str, Any]] = []
-            for doc in docs:
-                data = doc.to_dict() or {}
-                data["conversation_id"] = doc.id
-                state = self._normalize_conversation_state(data)
-                last_at = data.get("last_message_at")
-                if isinstance(last_at, str):
-                    try:
-                        last_at = self._parse_timestamp(last_at)
-                    except Exception:
-                        last_at = current_time
-                in_window = bool(last_at) and self._is_live_window(last_at)
-                if not in_window:
-                    print(f"⏳ [live_chat_index] skipping {doc.id}: last_message_at outside 6h window ({last_at})")
-                if not last_at or not self._is_live_window(last_at):
-                    continue
-
-                customer_info = data.get("customer_info") or {}
-                user_id = data.get("user_id")
-                user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
-                phone_full = data.get("user_phone") or "Unknown"
-                phone_clean = data.get("phone_clean") or "Unknown"
-                language = data.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
-                sentiment = data.get("sentiment", "neutral")
-
-                if state == self.STATE_ASSIGNED:
-                    status = "human"
-                elif state == self.STATE_WAITING_OPERATOR:
-                    status = "waiting"
-                else:
-                    status = "bot"
-
-                conversations.append({
-                    "conversation_id": data.get("conversation_id"),
-                    "user_id": user_id,
-                    "user_name": user_name,
-                    "user_phone": phone_full,
-                    "phone_clean": phone_clean,
-                    "last_message": data.get("last_message_text", ""),
-                    "last_activity": last_at.isoformat(),
-                    "status": status,
-                    "conversation_state": state,
-                    "language": language,
-                    "operator_id": data.get("operator_id"),
-                    "sentiment": sentiment,
-                    "message_count": data.get("message_count", 0),
-                })
-
-            print(f"📊 [live_chat_index] usable conversations: {len(conversations)}")
-            state_counts = {}
-            for c in conversations:
-                st = c.get("conversation_state") or "unknown"
-                state_counts[st] = state_counts.get(st, 0) + 1
-            print(f"📊 [live_chat_index] state distribution: {state_counts}")
-
-            conversations.sort(key=lambda x: x["last_activity"], reverse=True)
-
-            self._conversations_cache = conversations
-            self._conversations_cache_time = current_time
-
-            if normalized_search:
-                filtered = self._filter_conversations(conversations, normalized_search)
-                print(f"🔎 Live chat search '{normalized_search}': {len(filtered)} matches")
-                return filtered
-
-            return conversations
+            unified = await self.get_unified_chats(search=search or "", page=1, page_size=200)
+            return [
+                {
+                    "conversation_id": c.get("conversation_id"),
+                    "user_id": c.get("user_id"),
+                    "user_name": c.get("user_name"),
+                    "user_phone": c.get("phone_number"),
+                    "phone_clean": c.get("phone_clean"),
+                    "last_message": c.get("last_message_text"),
+                    "last_activity": c.get("last_message_at"),
+                    "status": c.get("conversation_state"),
+                    "conversation_state": c.get("conversation_state"),
+                    "operator_id": c.get("operator_id"),
+                    "unread_count": c.get("unread_count", 0),
+                }
+                for c in unified.get("chats", [])
+            ]
         except Exception as e:
             print(f"❌ Error getting active conversations: {e}")
             import traceback
@@ -520,201 +434,181 @@ class LiveChatService:
         search: str = "",
         page: int = 1,
         page_size: int = 30,
+        filter_state: str = "all",
+        cursor: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        WhatsApp-style unified chat list: live at top, history below.
-        - Live = last 6h, not resolved/archived (chats currently with AI)
-        - History = older or resolved
-        - Returns top page_size (default 30) per page
-        - Search by name or phone
+        WhatsApp-style inbox driven ONLY by live_chat_index.
+        - Single master list ordered by last_message_at desc
+        - Optional filter by conversation_state badge
+        - Cursor-based pagination (last_message_at + conversation_id)
+        - Search by name / phone against index documents
         """
         search_val = (search or "").strip().lower()
-        current_time = utc_now()
-        _start = __import__("time").time()
+        safe_size = max(1, min(int(page_size), 100))
 
-        if not search_val and page == 1 and self._unified_chats_cache and self._is_cache_fresh(self._unified_chats_cache_time):
-                all_chats = self._unified_chats_cache
-                total = len(all_chats)
-                start = 0
-                end = min(page_size, total)
-                paged = all_chats[start:end]
-                elapsed = (__import__("time").time() - _start) * 1000
-                print(f"📊 [unified-chats] cache hit | {len(paged)} chats | {elapsed:.0f}ms")
-                return {
-                    "success": True,
-                    "chats": paged,
-                    "total": total,
-                    "page": 1,
-                    "page_size": page_size,
-                    "has_more": end < total,
-                    "next_cursor": str(2) if end < total else None,
-                }
+        def _state_filter_values(filter_key: str):
+            if filter_key in {"waiting", "waiting_for_operator"}:
+                return [self.STATE_WAITING_OPERATOR]
+            if filter_key in {"with_operator", "assigned"}:
+                return [self.STATE_ASSIGNED]
+            if filter_key in {"bot", "bot_active"}:
+                return [self.STATE_BOT_ACTIVE]
+            if filter_key in {"closed", "resolved_or_archived"}:
+                return [self.STATE_RESOLVED, self.STATE_ARCHIVED]
+            return []
 
         try:
-            users_collection = self._get_users_collection()
-            if users_collection is None:
-                if self._unified_chats_cache:
-                    total_cached = len(self._unified_chats_cache)
-                    end_cached = min(page_size, total_cached)
-                    return {
-                        "success": True,
-                        "chats": self._unified_chats_cache[:end_cached],
-                        "total": total_cached,
-                        "page": 1,
-                        "page_size": page_size,
-                        "has_more": end_cached < total_cached,
-                        "next_cursor": str(2) if end_cached < total_cached else None,
-                        "fallback_cache": True,
-                    }
-                return {"success": False, "chats": [], "total": 0, "has_more": False}
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "chats": [], "total": 0, "has_more": False, "error": "firestore_missing"}
 
-            current_time = utc_now()
+            index_coll = self._index_collection(db)
 
-            users_docs = await self._stream_user_docs(
-                users_collection,
-                limit=self.USERS_STREAM_LIMIT if not search_val else None,
-            )
-            user_ids = [doc.id for doc in users_docs]
-            # Removed 200 cap - allows Load More to work correctly for large user bases
-            results = await self._stream_conversations_for_users(users_collection, user_ids)
+            # Build base query (ordered for pagination)
+            query = index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING).order_by("conversation_id")
 
-            all_chats: List[Dict[str, Any]] = []
-            for r in results:
-                if isinstance(r, Exception):
-                    continue
-                user_id, conv_docs = r
-                best_conv = None
-                best_ts = None
-                best_messages = []
+            state_values = _state_filter_values(filter_state.lower()) if filter_state else []
+            if state_values:
+                if len(state_values) == 1:
+                    query = query.where("conversation_state", "==", state_values[0])
+                else:
+                    query = query.where("conversation_state", "in", state_values)
 
-                for conv_doc in conv_docs:
-                    conv_data = normalize_conversation_document(
-                        conversation_id=conv_doc.id,
-                        user_id=user_id,
-                        payload=conv_doc.to_dict() or {},
-                    )
-                    messages = conv_data.get("messages", []) or []
-                    visible_messages = self._visible_chat_messages(messages)
-                    if not visible_messages:
-                        continue
-                    last_msg = visible_messages[-1]
-                    ts = self._parse_timestamp(last_msg.get("timestamp"))
-                    if best_ts is None or ts > best_ts:
-                        best_ts = ts
-                        best_conv = conv_data
-                        best_conv["_id"] = conv_data.get("conversation_id", conv_doc.id)
-                        best_messages = visible_messages
+            start_after_values = None
+            if cursor:
+                try:
+                    ts_part, conv_part = cursor.split("|", 1)
+                    ts_val = self._parse_timestamp(ts_part)
+                    start_after_values = [ts_val, conv_part]
+                except Exception:
+                    start_after_values = None
 
-                if best_conv is None:
-                    continue
+            fetch_limit = safe_size + 1  # fetch one extra to know if there's more
 
-                conv_status = best_conv.get("status", "active")
-                time_diff = (current_time - best_ts).total_seconds()
-                is_live = (
-                    time_diff <= self.ACTIVE_TIME_WINDOW
-                    and conv_status not in ("resolved", "archived")
-                    and not best_conv.get("human_takeover_active", False)
-                )
-                if best_conv.get("human_takeover_active") and not best_conv.get("operator_id"):
-                    continue  # waiting_human - skip from main list
+            def _stream_page(q):
+                use_q = q
+                if start_after_values:
+                    use_q = use_q.start_after(*start_after_values)
+                return list(use_q.limit(fetch_limit).stream())
 
-                cust = best_conv.get("customer_info", {}) or {}
-                user_name = cust.get("name") or config.user_names.get(user_id) or ""
-                phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=cust)
-                if not user_name and phone_full and phone_full != "Unknown":
-                    user_name = phone_full
-                if not user_name:
-                    user_name = "Unknown"
+            docs = await asyncio.to_thread(_stream_page, query)
 
-                preview = best_messages[-1] if best_messages else {}
-
-                first_ts = self._parse_timestamp(best_messages[0].get("timestamp")) if best_messages else best_ts
-                duration_seconds = int((best_ts - first_ts).total_seconds()) if best_messages else 0
-                language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
-                entry = {
-                    "user_id": user_id,
-                    "conversation_id": best_conv["_id"],
-                    "user_name": user_name,
-                    "user_phone": phone_full,
-                    "language": language,
-                    "phone_clean": phone_clean,
-                    "last_message": {
-                        "content": str(preview.get("text", "")),
-                        "is_user": preview.get("role") == "user",
-                        "timestamp": best_ts.isoformat(),
-                    },
-                    "last_activity": best_ts.isoformat(),
-                    "status": "human" if best_conv.get("operator_id") else ("bot" if not best_conv.get("human_takeover_active") else "waiting_human"),
-                    "message_count": len(best_messages),
-                    "duration_seconds": duration_seconds,
-                    "is_live": is_live,
-                    "customer_info": cust,
-                }
-                all_chats.append(entry)
-
-            # Live at top, then by last_activity newest first
-            def _sort_key(c):
-                ts_str = c.get("last_activity", "") or ""
-                ts_val = self._parse_timestamp(ts_str).timestamp() if ts_str else 0
-                return (not c.get("is_live", False), -ts_val)
-            all_chats.sort(key=_sort_key)
-
-            search_val = (search or "").strip().lower()
+            # If search provided, widen fetch to improve matches (still index-only)
             if search_val:
-                all_chats = [
-                    c for c in all_chats
+                widen_limit = max(fetch_limit * 5, 200)
+                def _stream_search(q):
+                    use_q = q
+                    if state_values:
+                        use_q = use_q
+                    return list(use_q.limit(widen_limit).stream())
+                docs = await asyncio.to_thread(_stream_search, query)
+
+            chats: List[Dict[str, Any]] = []
+            for doc in docs:
+                data = doc.to_dict() or {}
+                state = self._normalize_conversation_state(data)
+                customer_info = data.get("customer_info") or {}
+                user_id = data.get("user_id")
+                user_name = data.get("user_name") or customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                phone_full = data.get("user_phone") or customer_info.get("phone_full") or ""
+                phone_clean = data.get("phone_clean") or customer_info.get("phone_clean") or ""
+                last_at = data.get("last_message_at") or data.get("last_updated")
+                if isinstance(last_at, str):
+                    try:
+                        last_at = self._parse_timestamp(last_at)
+                    except Exception:
+                        last_at = utc_now()
+
+                chat_entry = {
+                    "conversation_id": doc.id,
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "phone_number": phone_full,
+                    "phone_clean": phone_clean,
+                    "last_message_text": data.get("last_message_text", ""),
+                    "last_message_at": last_at.isoformat() if hasattr(last_at, "isoformat") else str(last_at),
+                    "conversation_state": state,
+                    "operator_id": data.get("operator_id"),
+                    "unread_count": data.get("unread_count", 0),
+                }
+                chats.append(chat_entry)
+
+            if search_val:
+                chats = [
+                    c for c in chats
                     if search_val in str(c.get("user_name", "")).lower()
-                    or search_val in str(c.get("user_id", "")).lower()
-                    or search_val in str(c.get("user_phone", "")).lower()
+                    or search_val in str(c.get("phone_number", "")).lower()
                     or search_val in str(c.get("phone_clean", "")).lower()
                 ]
 
-            total = len(all_chats)
-            safe_page = max(1, int(page))
-            safe_size = max(1, min(int(page_size), 100))
-            start = (safe_page - 1) * safe_size
-            end = start + safe_size
-            paged = all_chats[start:end]
-            has_more = end < total
+            # Always order by last_message_at desc (already sorted by query)
+            chats.sort(key=lambda c: c.get("last_message_at", ""), reverse=True)
 
-            # If Firestore scan returned nothing on first page, fallback to cache
-            if not search_val and safe_page == 1 and total == 0 and self._unified_chats_cache:
-                fallback_total = len(self._unified_chats_cache)
-                fallback_end = min(safe_size, fallback_total)
-                elapsed_ms = (__import__("time").time() - _start) * 1000
-                print(f"📊 [unified-chats] empty scan -> cache fallback | {fallback_end}/{fallback_total} | {elapsed_ms:.0f}ms")
-                return {
-                    "success": True,
-                    "chats": self._unified_chats_cache[:fallback_end],
-                    "total": fallback_total,
-                    "page": 1,
-                    "page_size": safe_size,
-                    "has_more": fallback_end < fallback_total,
-                    "next_cursor": str(2) if fallback_end < fallback_total else None,
-                    "fallback_cache": True,
-                }
+            has_more = len(chats) > safe_size
+            paged = chats[:safe_size]
+            next_cursor = None
+            if has_more:
+                last = paged[-1]
+                next_cursor = f"{last['last_message_at']}|{last['conversation_id']}"
 
-            if not search_val and safe_page == 1:
-                self._unified_chats_cache = all_chats
-                self._unified_chats_cache_time = current_time
+            total_returned = len(paged)
+            if not search_val and not cursor:
+                self._unified_chats_cache = paged
+                self._unified_chats_cache_time = utc_now()
 
-            elapsed_ms = (__import__("time").time() - _start) * 1000
-            print(f"📊 [unified-chats] Firestore scan | users={len(user_ids)} | chats={total} | page={safe_page} | {elapsed_ms:.0f}ms")
+            counters = await self._compute_index_counters()
 
             return {
                 "success": True,
                 "chats": paged,
-                "total": total,
-                "page": safe_page,
+                "total": total_returned,
+                "page": page,
                 "page_size": safe_size,
                 "has_more": has_more,
-                "next_cursor": str(safe_page + 1) if has_more else None,
+                "next_cursor": next_cursor,
+                "filter": filter_state,
+                "counters": counters,
+                "search": search,
             }
         except Exception as e:
             print(f"❌ Error in get_unified_chats: {e}")
             import traceback
             traceback.print_exc()
-            return {"success": False, "chats": [], "total": 0, "has_more": False}
+            return {"success": False, "chats": [], "total": 0, "has_more": False, "error": str(e)}
+
+    async def _compute_index_counters(self) -> Dict[str, int]:
+        """Compute dashboard counters directly from live_chat_index (best-effort, capped for performance)."""
+        counters = {
+            "all": 0,
+            "waiting": 0,
+            "with_operator": 0,
+            "bot_active": 0,
+            "closed": 0,
+        }
+        try:
+            db = get_firestore_db()
+            if not db:
+                return counters
+            index_coll = self._index_collection(db)
+            # Cap to avoid massive scans; newest 1000 usually enough for dashboard counters
+            docs = await asyncio.to_thread(lambda: list(index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING).limit(1000).stream()))
+            for doc in docs:
+                data = doc.to_dict() or {}
+                state = self._normalize_conversation_state(data)
+                counters["all"] += 1
+                if state == self.STATE_WAITING_OPERATOR:
+                    counters["waiting"] += 1
+                if state == self.STATE_ASSIGNED:
+                    counters["with_operator"] += 1
+                if state == self.STATE_BOT_ACTIVE:
+                    counters["bot_active"] += 1
+                if state in {self.STATE_RESOLVED, self.STATE_ARCHIVED}:
+                    counters["closed"] += 1
+            return counters
+        except Exception as e:
+            print(f"⚠️ counter computation failed: {e}")
+            return counters
 
     async def get_history_customers(
         self,
