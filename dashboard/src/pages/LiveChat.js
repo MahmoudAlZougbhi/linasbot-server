@@ -1838,7 +1838,7 @@ const LiveChat = () => {
                                   )}
                                 </div>
                                 <p className="text-xs text-slate-500">
-                                  {conv.user_phone}
+                                  {conv.user_phone || conv.phone_number || ""}
                                 </p>
                               </div>
                               <SentimentIndicator sentiment={conv.sentiment} />
@@ -1846,14 +1846,14 @@ const LiveChat = () => {
 
                             <div className="mb-2"><StatusBadge status={conv.status} /></div>
 
-                            {conv.last_message && (
+                            {(conv.last_message?.content ?? conv.last_message_text) && (
                               <p className="text-xs text-slate-600 truncate mb-1">
-                                {conv.last_message.content}
+                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
                               </p>
                             )}
 
                             <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{conv.message_count} messages</span>
+                              <span>{(conv.message_count ?? 0)} messages</span>
                               <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
                             </div>
                           </div>
@@ -1896,7 +1896,7 @@ const LiveChat = () => {
                                   )}
                                 </div>
                                 <p className="text-xs text-slate-500">
-                                  {conv.user_phone}
+                                  {conv.user_phone || conv.phone_number || ""}
                                 </p>
                               </div>
                               <SentimentIndicator sentiment={conv.sentiment} />
@@ -1904,14 +1904,14 @@ const LiveChat = () => {
 
                             <div className="mb-2"><StatusBadge status={conv.status} /></div>
 
-                            {conv.last_message && (
+                            {(conv.last_message?.content ?? conv.last_message_text) && (
                               <p className="text-xs text-slate-600 truncate mb-1">
-                                {conv.last_message.content}
+                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
                               </p>
                             )}
 
                             <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{conv.message_count} messages</span>
+                              <span>{(conv.message_count ?? 0)} messages</span>
                               <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
                             </div>
                           </div>
@@ -1956,11 +1956,11 @@ const LiveChat = () => {
                       <div className="flex items-center space-x-3 text-xs text-slate-500">
                         <span className="flex items-center">
                           <PhoneIcon className="w-3 h-3 mr-1" />
-                          {selectedConversation.conversation.user_phone}
+                          {selectedConversation.conversation.user_phone || selectedConversation.conversation.phone_number || ""}
                         </span>
                         <span className="flex items-center">
                           <GlobeAltIcon className="w-3 h-3 mr-1" />
-                          {selectedConversation.conversation.language.toUpperCase()}
+                          {(selectedConversation.conversation.language || "ar").toUpperCase()}
                         </span>
                       </div>
                     </div>

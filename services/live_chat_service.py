@@ -121,6 +121,32 @@ class LiveChatService:
             return [self.STATE_RESOLVED, self.STATE_ARCHIVED]
         return []
 
+    def _conversation_state_to_status(self, state: str) -> str:
+        """Map canonical conversation_state to frontend status (bot, waiting_human, human)."""
+        if state == self.STATE_ASSIGNED:
+            return "human"
+        if state == self.STATE_WAITING_OPERATOR:
+            return "waiting_human"
+        if state in {self.STATE_RESOLVED, self.STATE_ARCHIVED}:
+            return "closed"
+        return "bot"
+
+    def _to_frontend_chat_format(self, chat: Dict[str, Any]) -> Dict[str, Any]:
+        """Enrich chat entry with frontend-expected fields (status, last_message, user_phone, last_activity)."""
+        state = chat.get("conversation_state", self.STATE_BOT_ACTIVE)
+        last_text = chat.get("last_message_text", "")
+        last_at = chat.get("last_message_at", "")
+        out = dict(chat)
+        out["status"] = self._conversation_state_to_status(state)
+        out["user_phone"] = chat.get("user_phone") or chat.get("phone_number", "")
+        out["last_activity"] = last_at
+        out["last_message"] = (
+            {"content": last_text, "timestamp": last_at, "is_user": False}
+            if last_text or last_at
+            else None
+        )
+        return out
+
     def _index_collection(self, db):
         return db.collection("artifacts").document(self.APP_ID).collection(self.INDEX_COLLECTION)
 
@@ -567,6 +593,9 @@ class LiveChatService:
                         "conversation_state": state,
                         "operator_id": conv_data.get("operator_id"),
                         "unread_count": conv_data.get("unread_count", 0),
+                        "language": config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
+                        "sentiment": conv_data.get("sentiment", "neutral"),
+                        "message_count": conv_data.get("message_count", len(conv_data.get("visible_messages", []))),
                     }
 
                     if search_val:
@@ -596,10 +625,11 @@ class LiveChatService:
 
             start = max(0, (max(1, int(page)) - 1) * safe_size)
             paged = chats[start:start + safe_size]
+            paged = [self._to_frontend_chat_format(c) for c in paged]
             has_more = len(chats) > start + safe_size
             next_cursor = None
             if has_more:
-                last = paged[-1]
+                last = chats[start:start + safe_size][-1]
                 next_cursor = f"{last['last_message_at']}|{last['conversation_id']}"
 
             return {
@@ -741,6 +771,9 @@ class LiveChatService:
                     "conversation_state": state,
                     "operator_id": data.get("operator_id"),
                     "unread_count": data.get("unread_count", 0),
+                    "language": data.get("language") or customer_info.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
+                    "sentiment": data.get("sentiment", "neutral"),
+                    "message_count": data.get("message_count", 0),
                 }
                 chats.append(chat_entry)
 
@@ -757,9 +790,10 @@ class LiveChatService:
 
             has_more = len(chats) > safe_size
             paged = chats[:safe_size]
+            paged = [self._to_frontend_chat_format(c) for c in paged]
             next_cursor = None
             if has_more:
-                last = paged[-1]
+                last = chats[:safe_size][-1]
                 next_cursor = f"{last['last_message_at']}|{last['conversation_id']}"
 
             total_returned = len(paged)

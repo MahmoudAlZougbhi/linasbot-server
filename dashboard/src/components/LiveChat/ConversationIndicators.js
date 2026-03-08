@@ -17,6 +17,11 @@ const statusBadges = {
     icon: ClockIcon,
     text: "Waiting",
   },
+  closed: {
+    color: "bg-slate-100 text-slate-700",
+    icon: CheckCircleIcon,
+    text: "Closed",
+  },
   resolved: {
     color: "bg-slate-100 text-slate-700",
     icon: CheckCircleIcon,
