@@ -527,19 +527,47 @@ const LiveChat = () => {
     return combined;
   }, []);
 
+  const buildPreviewHistory = React.useCallback((conversation) => {
+    const preview = conversation?.last_message;
+    if (!preview || typeof preview !== "object") return [];
+    const text = String(preview.content ?? preview.text ?? "").trim();
+    if (!text) return [];
+    const timestamp =
+      preview.timestamp ||
+      conversation?.last_activity ||
+      conversation?.last_message_at ||
+      new Date().toISOString();
+    return [
+      {
+        message_id: `preview_${conversation?.conversation_id || "chat"}_${timestamp}`,
+        timestamp,
+        is_user: Boolean(preview.is_user),
+        content: text,
+        text,
+        type: "text",
+        role: preview.is_user ? "user" : "assistant",
+        handled_by: preview.is_user ? "human" : "ai",
+      },
+    ];
+  }, []);
+
   const selectConversation = React.useCallback((conv) => {
     const cacheKey = `${conv.user_id}_${conv.conversation_id}`;
     const cached = messageCacheRef.current.get(cacheKey);
     const hasCachedMessages = cached?.messages?.length > 0;
+    const previewHistory = hasCachedMessages ? [] : buildPreviewHistory(conv);
     setSelectedConversation({
       conversation: conv,
-      history: hasCachedMessages ? cached.messages : [],
+      history: hasCachedMessages ? cached.messages : previewHistory,
     });
     if (hasCachedMessages) {
       setHasMoreMessages(cached.hasMore ?? false);
       setMessagesLoading(false);
+    } else if (previewHistory.length > 0) {
+      setHasMoreMessages(false);
+      setMessagesLoading(false);
     }
-  }, []);
+  }, [buildPreviewHistory]);
 
   const appendMessageToSelectedConversation = (newMessage) => {
     setSelectedConversation((previous) => {
@@ -834,13 +862,18 @@ const LiveChat = () => {
         setHasMoreMessages(hasMore);
       } catch (error) {
         if (isMountedRef.current && !cancelled) {
+          const activeSelection = selectedConversationRef.current;
+          const fallbackPreview = buildPreviewHistory(activeSelection?.conversation);
+          const hasAnyFallback = (activeSelection?.history?.length || 0) > 0 || fallbackPreview.length > 0;
           setSelectedConversation((prev) => {
             if (!prev || prev.conversation?.conversation_id !== selectedConversationId) return prev;
-            return { ...prev, history: [] };
+            const existing = Array.isArray(prev.history) ? prev.history : [];
+            if (existing.length > 0) return prev;
+            return { ...prev, history: fallbackPreview };
           });
           setHasMoreMessages(false);
           const msg = error?.name === "AbortError" ? "Loading messages timed out - try again" : (error?.message || "Failed to load messages. Try again.");
-          toast.error(msg);
+          toast.error(hasAnyFallback ? `${msg} Showing latest available message.` : msg);
         }
       } finally {
         if (isMountedRef.current && !cancelled) {
@@ -855,7 +888,7 @@ const LiveChat = () => {
       cancelled = true;
       clearTimeout(loadingFallbackTimer);
     };
-  }, [selectedConversationId, selectedConversationUserId, useMockData, fetchConversationMessages, mergeWithRecentOperatorMessages]);
+  }, [selectedConversationId, selectedConversationUserId, useMockData, fetchConversationMessages, mergeWithRecentOperatorMessages, buildPreviewHistory]);
 
   // Failsafe: if messages stay loading >26s (e.g. request hung), clear loading and notify
   const messagesLoadingStartRef = useRef(null);

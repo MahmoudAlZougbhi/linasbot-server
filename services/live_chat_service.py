@@ -39,9 +39,16 @@ class LiveChatService:
     CACHE_TTL = 30  # seconds
     PHONE_MAPPING_CACHE_TTL = 60  # seconds
     FIRESTORE_FETCH_PARALLELISM = 24
-    FIRESTORE_DOC_TIMEOUT_SECONDS = 5
+    FIRESTORE_DOC_TIMEOUT_SECONDS = 4
+    FIRESTORE_QUERY_TIMEOUT_SECONDS = 4
     RECENT_MESSAGES_IN_INDEX = 50
     INDEX_READ_TIMEOUT_SECONDS = 3
+    INDEX_WRITE_TIMEOUT_SECONDS = 4
+    INDEX_REFRESH_TIMEOUT_SECONDS = 4
+    INDEX_WRITE_COOLDOWN_SECONDS = 180
+    INDEX_COUNTERS_CACHE_TTL = 20
+    FALLBACK_USERS_STREAM_LIMIT = 80
+    FALLBACK_UNIFIED_TIMEOUT_SECONDS = 8
 
     # Canonical conversation states
     STATE_BOT_ACTIVE = "bot_active"
@@ -68,6 +75,9 @@ class LiveChatService:
         # Cache for unified chats (WhatsApp-style list)
         self._unified_chats_cache = []
         self._unified_chats_cache_time = None
+        self._index_counters_cache = self._empty_counters()
+        self._index_counters_cache_time = None
+        self._index_write_paused_until = None
 
     # ---------- State + index helpers ----------
     def _normalize_conversation_state(self, conv_data: dict) -> str:
@@ -153,16 +163,87 @@ class LiveChatService:
     def _index_collection(self, db):
         return db.collection("artifacts").document(self.APP_ID).collection(self.INDEX_COLLECTION)
 
-    async def _get_doc_with_timeout(self, doc_ref, timeout_seconds: Optional[float] = None):
-        """Guard Firestore doc reads so UI requests don't hang indefinitely."""
-        timeout = timeout_seconds or self.FIRESTORE_DOC_TIMEOUT_SECONDS
-        task = asyncio.create_task(asyncio.to_thread(doc_ref.get))
+    def _empty_counters(self) -> Dict[str, int]:
+        return {
+            "all": 0,
+            "waiting": 0,
+            "with_operator": 0,
+            "bot_active": 0,
+            "closed": 0,
+        }
+
+    def _is_index_write_paused(self) -> bool:
+        if self._index_write_paused_until is None:
+            return False
+        return utc_now() < self._index_write_paused_until
+
+    def _pause_index_writes(self, reason: str):
+        self._index_write_paused_until = utc_now() + datetime.timedelta(
+            seconds=self.INDEX_WRITE_COOLDOWN_SECONDS
+        )
+        print(
+            f"⚠️ Pausing live_chat_index writes for {self.INDEX_WRITE_COOLDOWN_SECONDS}s: {reason}"
+        )
+
+    def _cached_unified_response(
+        self, page: int, page_size: int, filter_state: str, search: str
+    ) -> Dict[str, Any]:
+        chats = list(self._unified_chats_cache or [])
+        counters = dict(self._index_counters_cache or self._empty_counters())
+        return {
+            "success": True,
+            "chats": chats,
+            "total": len(chats),
+            "page": page,
+            "page_size": page_size,
+            "has_more": False,
+            "next_cursor": None,
+            "filter": filter_state,
+            "counters": counters,
+            "search": search,
+            "source": "cache_fallback",
+        }
+
+    def _empty_unified_response(
+        self, page: int, page_size: int, filter_state: str, search: str, source: str
+    ) -> Dict[str, Any]:
+        return {
+            "success": True,
+            "chats": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "has_more": False,
+            "next_cursor": None,
+            "filter": filter_state,
+            "counters": dict(self._index_counters_cache or self._empty_counters()),
+            "search": search,
+            "source": source,
+        }
+
+    async def _run_blocking_with_timeout(self, fn, timeout_seconds: float):
+        timeout = max(0.1, float(timeout_seconds or 0))
+        task = asyncio.create_task(asyncio.to_thread(fn))
         done, pending = await asyncio.wait({task}, timeout=timeout)
         if not done:
             for p in pending:
                 p.cancel()
             raise asyncio.TimeoutError()
         return task.result()
+
+    async def _get_doc_with_timeout(self, doc_ref, timeout_seconds: Optional[float] = None):
+        """Guard Firestore doc reads so UI requests don't hang indefinitely."""
+        timeout = timeout_seconds or self.FIRESTORE_DOC_TIMEOUT_SECONDS
+        try:
+            return await self._run_blocking_with_timeout(
+                lambda: doc_ref.get(timeout=timeout),
+                timeout,
+            )
+        except Exception as e:
+            lowered = str(e).lower()
+            if "timeout" in lowered or "timed out" in lowered or "deadline" in lowered:
+                raise asyncio.TimeoutError() from e
+            raise
 
     def _format_single_message(self, msg: Dict[str, Any]) -> Dict[str, Any]:
         """Format one raw message to API response shape (for index cache and full doc path)."""
@@ -216,7 +297,9 @@ class LiveChatService:
             .document(conversation_id)
         )
 
-        conv_snap = await asyncio.to_thread(conv_ref.get)
+        conv_snap = await self._get_doc_with_timeout(
+            conv_ref, timeout_seconds=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+        )
         if not conv_snap.exists:
             return {"written": False, "reason": "missing"}
 
@@ -394,6 +477,8 @@ class LiveChatService:
             db = get_firestore_db()
             if not db or not entry:
                 return
+            if self._is_index_write_paused():
+                return
             idx = self._index_collection(db).document(entry["conversation_id"])
             payload = dict(entry)
             if isinstance(payload.get("last_message_at"), str):
@@ -401,20 +486,36 @@ class LiveChatService:
                     payload["last_message_at"] = self._parse_timestamp(payload["last_message_at"])
                 except Exception:
                     payload["last_message_at"] = utc_now()
-            await asyncio.to_thread(idx.set, payload)
+            await asyncio.to_thread(
+                lambda: idx.set(payload, timeout=self.INDEX_WRITE_TIMEOUT_SECONDS)
+            )
         except Exception as e:
             print(f"⚠️ Failed upserting index entry for {entry.get('conversation_id')}: {e}")
+            lowered = str(e).lower()
+            if "timeout" in lowered or "timed out" in lowered or "deadline" in lowered:
+                self._pause_index_writes("index write timeout")
+            if "429" in lowered or "quota" in lowered or "resource exhausted" in lowered:
+                self._pause_index_writes(str(e))
 
     async def _refresh_index_for_conversation(self, user_id: str, conv_id: str):
         try:
+            if self._is_index_write_paused():
+                return
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-            result = await self._sync_index_from_source(canonical_user_id, conv_id, allow_state_backfill=False)
+            result = await asyncio.wait_for(
+                self._sync_index_from_source(
+                    canonical_user_id, conv_id, allow_state_backfill=False
+                ),
+                timeout=self.INDEX_REFRESH_TIMEOUT_SECONDS,
+            )
             if not result.get("written"):
                 print(f"⚠️ [index-refresh] skipped user={canonical_user_id} conv={conv_id} reason={result.get('reason')}")
                 return
             print(
                 f"🔄 [index-refresh] rebuilt index user={canonical_user_id} conv={conv_id} state={result.get('conversation_state')}"
             )
+        except asyncio.TimeoutError:
+            print(f"⚠️ [index-refresh] timeout user={user_id} conv={conv_id}")
         except Exception as e:
             print(f"⚠️ Failed to refresh index for {conv_id}: {e}")
 
@@ -426,6 +527,8 @@ class LiveChatService:
         self._queue_cache_time = None
         self._unified_chats_cache = []
         self._unified_chats_cache_time = None
+        self._index_counters_cache = self._empty_counters()
+        self._index_counters_cache_time = None
 
     def _dedupe_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return contract_dedupe_messages(messages)
@@ -463,16 +566,33 @@ class LiveChatService:
             q = users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING)
             if limit is not None:
                 q = q.limit(limit)
-            return await asyncio.to_thread(lambda: list(q.stream()))
+            return await asyncio.to_thread(
+                lambda: list(q.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
+            )
         except Exception:
-            return await asyncio.to_thread(lambda: list(users_collection.stream()))
+            try:
+                return await asyncio.to_thread(
+                    lambda: list(
+                        users_collection.stream(
+                            timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+                        )
+                    )
+                )
+            except Exception:
+                return []
 
     async def _stream_user_conversations(self, users_collection, user_id: str):
         try:
             conversations_collection = users_collection.document(user_id).collection(
                 config.FIRESTORE_CONVERSATIONS_COLLECTION
             )
-            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
+            conversations_docs = await asyncio.to_thread(
+                lambda: list(
+                    conversations_collection.stream(
+                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+                    )
+                )
+            )
             return user_id, conversations_docs
         except Exception as e:
             print(f"⚠️ Error fetching conversations for user {user_id}: {e}")
@@ -581,10 +701,6 @@ class LiveChatService:
                         "message_count": len(messages),
                     })
 
-                    # Opportunistically upsert index entry during fallback
-                    entry = self._build_index_entry(user_id, conv_data, messages)
-                    asyncio.create_task(self._upsert_index_entry(entry))
-
             conversations.sort(key=lambda x: x["last_activity"], reverse=True)
             if search:
                 conversations = self._filter_conversations(conversations, search)
@@ -610,7 +726,9 @@ class LiveChatService:
         safe_size = max(1, min(int(page_size), 100))
 
         try:
-            users_docs = await self._stream_user_docs(users_collection, limit=self.USERS_STREAM_LIMIT)
+            users_docs = await self._stream_user_docs(
+                users_collection, limit=self.FALLBACK_USERS_STREAM_LIMIT
+            )
             user_ids = [doc.id for doc in users_docs]
             conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
 
@@ -670,9 +788,6 @@ class LiveChatService:
 
                     chats.append(chat_entry)
 
-                    entry = self._build_index_entry(user_id, conv_data, conv_data.get("visible_messages", []))
-                    asyncio.create_task(self._upsert_index_entry(entry))
-
                     counters["all"] += 1
                     if state == self.STATE_WAITING_OPERATOR:
                         counters["waiting"] += 1
@@ -712,6 +827,27 @@ class LiveChatService:
             import traceback
             traceback.print_exc()
             return {"success": False, "chats": [], "total": 0, "has_more": False, "error": str(e)}
+
+    async def _fallback_unified_chats_with_timeout(
+        self,
+        search: str,
+        page: int,
+        page_size: int,
+        filter_state: str,
+    ) -> Dict[str, Any]:
+        try:
+            return await asyncio.wait_for(
+                self._fallback_unified_chats(search, page, page_size, filter_state),
+                timeout=self.FALLBACK_UNIFIED_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "chats": [],
+                "total": 0,
+                "has_more": False,
+                "error": "fallback_timeout",
+            }
         
     async def get_active_conversations(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
         """Backward-compatible wrapper: return master inbox page 1 (no 6h filter)."""
@@ -757,11 +893,29 @@ class LiveChatService:
         search_val = (search or "").strip().lower()
         safe_size = max(1, min(int(page_size), 100))
         state_values = self._state_filter_values(filter_state)
+        page_num = max(1, int(page))
+        use_cache_fallback = (
+            page_num == 1
+            and not search_val
+            and not cursor
+            and not state_values
+            and bool(self._unified_chats_cache)
+        )
 
         try:
             db = get_firestore_db()
             if not db:
-                return await self._fallback_unified_chats(search, page, safe_size, filter_state)
+                if use_cache_fallback:
+                    return self._cached_unified_response(
+                        page_num, safe_size, filter_state, search
+                    )
+                return self._empty_unified_response(
+                    page_num,
+                    safe_size,
+                    filter_state,
+                    search,
+                    source="firestore_missing",
+                )
 
             index_coll = self._index_collection(db)
 
@@ -789,9 +943,16 @@ class LiveChatService:
                 use_q = q
                 if start_after_values:
                     use_q = use_q.start_after(*start_after_values)
-                return list(use_q.limit(fetch_limit).stream())
+                return list(
+                    use_q.limit(fetch_limit).stream(
+                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+                    )
+                )
 
-            docs = await asyncio.to_thread(_stream_page, query)
+            docs = await self._run_blocking_with_timeout(
+                lambda: _stream_page(query),
+                self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+            )
 
             # If search provided, widen fetch to improve matches (still index-only)
             if search_val:
@@ -800,11 +961,28 @@ class LiveChatService:
                     use_q = q
                     if state_values:
                         use_q = use_q
-                    return list(use_q.limit(widen_limit).stream())
-                docs = await asyncio.to_thread(_stream_search, query)
+                    return list(
+                        use_q.limit(widen_limit).stream(
+                            timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+                        )
+                    )
+                docs = await self._run_blocking_with_timeout(
+                    lambda: _stream_search(query),
+                    self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                )
 
             if not docs:
-                return await self._fallback_unified_chats(search, page, safe_size, filter_state)
+                if use_cache_fallback:
+                    return self._cached_unified_response(
+                        page_num, safe_size, filter_state, search
+                    )
+                return self._empty_unified_response(
+                    page_num,
+                    safe_size,
+                    filter_state,
+                    search,
+                    source="index_empty",
+                )
 
             chats: List[Dict[str, Any]] = []
             for doc in docs:
@@ -881,27 +1059,42 @@ class LiveChatService:
             print(f"❌ Error in get_unified_chats: {e}")
             import traceback
             traceback.print_exc()
-            fallback = await self._fallback_unified_chats(search, page, safe_size, filter_state)
-            if fallback.get("success"):
-                return fallback
-            return {"success": False, "chats": [], "total": 0, "has_more": False, "error": str(e)}
+            if use_cache_fallback:
+                return self._cached_unified_response(
+                    page_num, safe_size, filter_state, search
+                )
+            return self._empty_unified_response(
+                page_num,
+                safe_size,
+                filter_state,
+                search,
+                source="index_error",
+            )
 
     async def _compute_index_counters(self) -> Dict[str, int]:
         """Compute dashboard counters directly from live_chat_index (best-effort, capped for performance)."""
-        counters = {
-            "all": 0,
-            "waiting": 0,
-            "with_operator": 0,
-            "bot_active": 0,
-            "closed": 0,
-        }
+        if self._is_cache_fresh(
+            self._index_counters_cache_time,
+            ttl_seconds=self.INDEX_COUNTERS_CACHE_TTL,
+        ):
+            return dict(self._index_counters_cache)
+
+        counters = self._empty_counters()
         try:
             db = get_firestore_db()
             if not db:
                 return counters
             index_coll = self._index_collection(db)
             # Cap to avoid massive scans; newest 1000 usually enough for dashboard counters
-            docs = await asyncio.to_thread(lambda: list(index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING).limit(1000).stream()))
+            docs = await asyncio.to_thread(
+                lambda: list(
+                    index_coll.order_by(
+                        "last_message_at", direction=firestore.Query.DESCENDING
+                    )
+                    .limit(1000)
+                    .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)
+                ),
+            )
             for doc in docs:
                 data = doc.to_dict() or {}
                 state = self._normalize_conversation_state(data)
@@ -914,9 +1107,13 @@ class LiveChatService:
                     counters["bot_active"] += 1
                 if state in {self.STATE_RESOLVED, self.STATE_ARCHIVED}:
                     counters["closed"] += 1
+            self._index_counters_cache = dict(counters)
+            self._index_counters_cache_time = utc_now()
             return counters
         except Exception as e:
             print(f"⚠️ counter computation failed: {e}")
+            if self._index_counters_cache:
+                return dict(self._index_counters_cache)
             return counters
 
     async def get_history_customers(
@@ -1928,34 +2125,40 @@ class LiveChatService:
                 except Exception:
                     pass
 
-            effective_user_id = user_id
-            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                effective_user_id
-            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+            candidate_user_ids = [canonical_user_id]
+            if user_id != canonical_user_id:
+                candidate_user_ids.append(user_id)
 
-            try:
-                conv_doc = await self._get_doc_with_timeout(conv_ref)
-            except asyncio.TimeoutError:
-                return {
-                    "success": False,
-                    "error": "Conversation loading timed out. Please retry.",
-                }
-            if not conv_doc.exists:
-                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-                if canonical_user_id != user_id:
-                    conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                        canonical_user_id
-                    ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-                    try:
-                        conv_doc = await self._get_doc_with_timeout(conv_ref)
-                    except asyncio.TimeoutError:
-                        return {
-                            "success": False,
-                            "error": "Conversation loading timed out. Please retry.",
-                        }
-                    if conv_doc.exists:
-                        effective_user_id = canonical_user_id
-            if not conv_doc.exists:
+            conv_doc = None
+            effective_user_id = canonical_user_id
+            had_timeout = False
+            for candidate_user_id in candidate_user_ids:
+                candidate_ref = (
+                    db.collection("artifacts")
+                    .document(app_id)
+                    .collection("users")
+                    .document(candidate_user_id)
+                    .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                    .document(conversation_id)
+                )
+                try:
+                    candidate_doc = await self._get_doc_with_timeout(candidate_ref)
+                except asyncio.TimeoutError:
+                    had_timeout = True
+                    continue
+                if candidate_doc.exists:
+                    conv_doc = candidate_doc
+                    effective_user_id = candidate_user_id
+                    break
+                conv_doc = candidate_doc
+
+            if not conv_doc or not conv_doc.exists:
+                if had_timeout:
+                    return {
+                        "success": False,
+                        "error": "Conversation loading timed out. Please retry.",
+                    }
                 return {"success": False, "error": "Conversation not found"}
 
             payload = conv_doc.to_dict() or {}
