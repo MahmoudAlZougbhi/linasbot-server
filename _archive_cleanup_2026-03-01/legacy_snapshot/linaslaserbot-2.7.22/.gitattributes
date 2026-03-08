@@ -1,2 +1,0 @@
-# Ensure shell scripts always use LF (fixes shebang on Linux servers)
-*.sh text eol=lf
