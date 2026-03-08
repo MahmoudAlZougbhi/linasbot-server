@@ -45,10 +45,14 @@ class UserService:
 
     def _verify_password(self, password: str, hashed: str) -> bool:
         """Verify a password against its bcrypt hash"""
+        t0 = time.monotonic()
+        print(f"[auth:_verify_password] entry", flush=True)
         try:
-            return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+            result = bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+            print(f"[auth:_verify_password] done in {time.monotonic() - t0:.3f}s", flush=True)
+            return result
         except Exception as e:
-            print(f"Password verification error: {e}")
+            print(f"[auth:_verify_password] ERROR after {time.monotonic() - t0:.3f}s: {e}", flush=True)
             return False
 
     # ==========================================
@@ -105,16 +109,33 @@ class UserService:
 
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get a user by email address (includes password for auth)"""
+        t_start = time.monotonic()
+        print(f"[auth:get_user_by_email] entry", flush=True)
         try:
+            # Access collection (lazy Firestore init)
+            t1 = time.monotonic()
+            print(f"[auth:get_user_by_email] accessing self.collection", flush=True)
+            coll = self.collection
+            print(f"[auth:get_user_by_email] collection accessed in {time.monotonic() - t1:.3f}s", flush=True)
+
             email_lower = email.lower().strip()
-            query = self.collection.where("email", "==", email_lower).limit(1)
+            query = coll.where("email", "==", email_lower).limit(1)
+
+            # Firestore read
+            t2 = time.monotonic()
+            print(f"[auth:get_user_by_email] calling query.stream()", flush=True)
             docs = list(query.stream())
+            elapsed = time.monotonic() - t2
+            print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s", flush=True)
 
             if docs:
-                return docs[0].to_dict()
+                result = docs[0].to_dict()
+                print(f"[auth:get_user_by_email] done in {time.monotonic() - t_start:.3f}s", flush=True)
+                return result
+            print(f"[auth:get_user_by_email] no docs, done in {time.monotonic() - t_start:.3f}s", flush=True)
             return None
         except Exception as e:
-            print(f"Error getting user by email: {e}")
+            print(f"[auth:get_user_by_email] ERROR after {time.monotonic() - t_start:.3f}s: {e}", flush=True)
             return None
 
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -243,61 +264,52 @@ class UserService:
             User data (without password) if authentication succeeds, None otherwise
         """
         t0 = time.monotonic()
-        print(f"[auth] authenticate() started for {email}", flush=True)
+
+        def _elapsed() -> float:
+            return time.monotonic() - t0
+
+        print(f"[auth] 1. ENTRY t=0.00s for {email}", flush=True)
 
         # Step 1: Firestore lookup by email
-        t1 = time.monotonic()
+        print(f"[auth] 2. USER_LOOKUP_START t={_elapsed():.3f}s", flush=True)
         user = self.get_user_by_email(email)
-        elapsed = time.monotonic() - t1
-        print(f"[auth] get_user_by_email() took {elapsed:.2f}s", flush=True)
+        print(f"[auth] 3. USER_LOOKUP_END t={_elapsed():.3f}s", flush=True)
 
         if not user:
-            print(f"[auth] User not found for {email}", flush=True)
+            print(f"[auth] 3b. USER_NOT_FOUND t={_elapsed():.3f}s", flush=True)
             return None
 
-        # Check if user is active
         if user.get('status') != 'active':
             raise ValueError(f"Account is {user.get('status', 'inactive')}")
 
         # Step 2: Password verification (bcrypt)
-        t2 = time.monotonic()
+        print(f"[auth] 4. PASSWORD_VERIFY_START t={_elapsed():.3f}s", flush=True)
         if not self._verify_password(password, user['password']):
-            print(f"[auth] Password verification failed for {email}", flush=True)
+            print(f"[auth] 4b. PASSWORD_FAIL t={_elapsed():.3f}s", flush=True)
             return None
-        elapsed = time.monotonic() - t2
-        print(f"[auth] _verify_password() took {elapsed:.2f}s", flush=True)
+        print(f"[auth] 5. PASSWORD_VERIFY_END t={_elapsed():.3f}s", flush=True)
 
         now = datetime.utcnow().isoformat()
         user['lastLogin'] = now
 
-        # ISOLATION TEST: Skip Firestore lastLogin update when SKIP_LASTLOGIN_UPDATE=1
-        # If login works with this env set, the block is in the Firestore write.
+        # ISOLATION TEST: Skip Firestore lastLogin update
         skip_firestore = os.environ.get("SKIP_LASTLOGIN_UPDATE", "").strip() in ("1", "true", "yes")
         if skip_firestore:
-            print(f"[auth] SKIP_LASTLOGIN_UPDATE=1: bypassing Firestore lastLogin write", flush=True)
+            print(f"[auth] 6. BYPASS_FIRESTORE_WRITE t={_elapsed():.3f}s (SKIP_LASTLOGIN_UPDATE=1)", flush=True)
             result = self._sanitize_user(user)
-            total = time.monotonic() - t0
-            print(f"[auth] authenticate() completed (bypassed Firestore) for {email} in {total:.2f}s", flush=True)
+            print(f"[auth] 7. SANITIZE_DONE t={_elapsed():.3f}s", flush=True)
+            print(f"[auth] 8. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
             return result
 
         # Step 3: Update lastLogin in Firestore
-        print(f"[auth] step3: about to update lastLogin for user_id={user['id']}", flush=True)
-        t3 = time.monotonic()
-        print(f"[auth] step3: calling Firestore document().update() now", flush=True)
-        self.collection.document(user['id']).update({
-            "lastLogin": now
-        })
-        print(f"[auth] step3: Firestore update() returned", flush=True)
-        elapsed = time.monotonic() - t3
-        print(f"[auth] Firestore update lastLogin took {elapsed:.2f}s", flush=True)
+        print(f"[auth] 6. FIRESTORE_WRITE_START t={_elapsed():.3f}s", flush=True)
+        self.collection.document(user['id']).update({"lastLogin": now})
+        print(f"[auth] 7. FIRESTORE_WRITE_END t={_elapsed():.3f}s", flush=True)
 
         # Step 4: Sanitize and return
-        print(f"[auth] step4: about to _sanitize_user()", flush=True)
+        print(f"[auth] 8. SANITIZE_START t={_elapsed():.3f}s", flush=True)
         result = self._sanitize_user(user)
-        print(f"[auth] step4: _sanitize_user() done", flush=True)
-
-        total = time.monotonic() - t0
-        print(f"[auth] authenticate() completed for {email} in {total:.2f}s", flush=True)
+        print(f"[auth] 9. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
         return result
 
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:

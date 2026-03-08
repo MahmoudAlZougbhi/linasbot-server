@@ -60,8 +60,10 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:8003",  # Backend (for dashboard serving)
         "http://127.0.0.1:8003",
-        "https://linasaibot.com",  # Production domain
+        "https://linasaibot.com",   # Production domain
         "http://linasaibot.com",
+        "https://www.linasaibot.com",
+        "http://www.linasaibot.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)

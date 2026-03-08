@@ -4,6 +4,7 @@ Handles authentication and user management endpoints for the dashboard
 """
 
 import asyncio
+import time
 
 from fastapi import HTTPException
 from pydantic import BaseModel, EmailStr
@@ -77,12 +78,15 @@ async def login(request: LoginRequest):
     Returns user data (without password) on success
     """
     try:
-        print(f"[auth_api] login: calling authenticate for {request.email}", flush=True)
+        t0 = time.monotonic()
+        print(f"[auth_api] login: REQUEST_RECEIVED for {request.email} t=0", flush=True)
+        print(f"[auth_api] login: calling asyncio.to_thread(authenticate)", flush=True)
         user = await asyncio.wait_for(
             asyncio.to_thread(user_service.authenticate, request.email, request.password),
             timeout=45.0
         )
-        print(f"[auth_api] login: authenticate returned, building response", flush=True)
+        elapsed = time.monotonic() - t0
+        print(f"[auth_api] login: authenticate RETURNED in {elapsed:.3f}s", flush=True)
 
         if not user:
             return {
