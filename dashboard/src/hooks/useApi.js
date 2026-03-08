@@ -78,7 +78,7 @@ export const useApi = () => {
       setLoading(true);
       // Use shorter timeout for initial status check
       const response = await api.get("/api/test", {
-        timeout: 10000, // 10 seconds - just for health check
+        timeout: 5000, // 5 seconds - don't block login/dashboard load
       });
       setBotStatus({
         status: "online",

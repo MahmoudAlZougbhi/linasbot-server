@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const response = await fetch(`${getAuthBase()}/login`, {
         method: 'POST',
         headers: {
@@ -114,6 +114,17 @@ export const AuthProvider = ({ children }) => {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          response.status === 404
+            ? 'صفحة تسجيل الدخول غير موجودة. تأكد أن nginx يوجّه /api إلى الـ backend (port 8003)'
+            : response.status >= 500
+            ? `خطأ في الخادم (${response.status}). راجع الـ logs`
+            : 'استجابة غير صحيحة من الخادم - ربما /api غير مُعدّ بشكل صحيح'
+        );
+      }
 
       let data;
       try {
@@ -150,9 +161,9 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       let msg = error.message || 'Login failed';
       if (error.name === 'AbortError') {
-        msg = 'Connection timed out. تأكد أن الـ backend شغال على port 8003';
+        msg = 'انتهت مهلة الاتصال. تأكد أن الـ backend شغال وأن nginx يوجّه /api إلى port 8003';
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        msg = 'لا يمكن الاتصال بالـ backend. شغّل السيرفر أولاً: python main.py';
+        msg = 'لا يمكن الاتصال بالـ backend. تأكد أن السيرفر يعمل وأن /api مُعدّ في nginx';
       }
       toast.error(msg);
       throw new Error(msg);

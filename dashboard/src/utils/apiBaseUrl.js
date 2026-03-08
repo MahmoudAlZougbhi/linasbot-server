@@ -6,6 +6,8 @@ export const getApiBaseUrl = () => {
   const envUrl = typeof process !== "undefined" && process.env?.REACT_APP_API_BASE_URL;
   if (envUrl && String(envUrl).trim()) return String(envUrl).trim().replace(/\/$/, "");
   if (isLocalDevHost()) return "http://localhost:8003";
+  // Production: use same origin so /api works when dashboard & backend served from same host
+  if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
   return "";
 };
 
