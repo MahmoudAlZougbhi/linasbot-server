@@ -426,11 +426,14 @@ class LiveChatService:
             )
             docs = await asyncio.to_thread(lambda: list(query.stream()))
 
+            print(f"📊 [live_chat_index] active query returned {len(docs)} docs")
+
             # If index is empty, attempt an on-demand rebuild and retry once.
             if not docs:
                 print("⚠️ live_chat_index empty for active query — rebuilding from Firestore conversations...")
                 await self.rebuild_index_from_firestore(max_users=self.USERS_STREAM_LIMIT, max_conversations_per_user=50, set_conversation_state=True)
                 docs = await asyncio.to_thread(lambda: list(query.stream()))
+                print(f"📊 [live_chat_index] post-rebuild query returned {len(docs)} docs")
 
             # Still empty? fall back to legacy scan so UI isn't blank.
             if not docs:
@@ -451,6 +454,9 @@ class LiveChatService:
                         last_at = self._parse_timestamp(last_at)
                     except Exception:
                         last_at = current_time
+                in_window = bool(last_at) and self._is_live_window(last_at)
+                if not in_window:
+                    print(f"⏳ [live_chat_index] skipping {doc.id}: last_message_at outside 6h window ({last_at})")
                 if not last_at or not self._is_live_window(last_at):
                     continue
 
@@ -484,6 +490,13 @@ class LiveChatService:
                     "sentiment": sentiment,
                     "message_count": data.get("message_count", 0),
                 })
+
+            print(f"📊 [live_chat_index] usable conversations: {len(conversations)}")
+            state_counts = {}
+            for c in conversations:
+                st = c.get("conversation_state") or "unknown"
+                state_counts[st] = state_counts.get(st, 0) + 1
+            print(f"📊 [live_chat_index] state distribution: {state_counts}")
 
             conversations.sort(key=lambda x: x["last_activity"], reverse=True)
 
