@@ -68,19 +68,15 @@ class LiveChatService:
     # ---------- State + index helpers ----------
     def _normalize_conversation_state(self, conv_data: dict) -> str:
         state = (conv_data or {}).get("conversation_state")
-        if state:
+        # Canonical: only conversation_state is trusted; default to bot_active when missing
+        if state in {
+            self.STATE_BOT_ACTIVE,
+            self.STATE_WAITING_OPERATOR,
+            self.STATE_ASSIGNED,
+            self.STATE_RESOLVED,
+            self.STATE_ARCHIVED,
+        }:
             return state
-        status = conv_data.get("status", "active")
-        human = bool(conv_data.get("human_takeover_active"))
-        operator_id = conv_data.get("operator_id")
-        if status == "archived":
-            return self.STATE_ARCHIVED
-        if status == "resolved":
-            return self.STATE_RESOLVED
-        if human and operator_id:
-            return self.STATE_ASSIGNED
-        if human and not operator_id:
-            return self.STATE_WAITING_OPERATOR
         return self.STATE_BOT_ACTIVE
 
     def _is_live_window(self, ts: datetime.datetime) -> bool:
@@ -874,7 +870,7 @@ class LiveChatService:
     async def get_waiting_queue(self) -> List[Dict[str, Any]]:
         """
         Get conversations waiting for human intervention
-        Queries Firebase directly for conversations with human_takeover_active=True and operator_id=None
+        Queries live_chat_index for conversations_state == waiting_for_operator
         """
         try:
             current_time = utc_now()
@@ -882,93 +878,61 @@ class LiveChatService:
             if self._queue_cache is not None and self._is_cache_fresh(self._queue_cache_time):
                 return self._queue_cache
 
-            users_collection = self._get_users_collection()
-            if users_collection is None:
+            db = get_firestore_db()
+            if not db:
                 return []
+
+            index_coll = self._index_collection(db)
+            query = (
+                index_coll
+                .where("conversation_state", "==", self.STATE_WAITING_OPERATOR)
+                .order_by("last_message_at", direction=firestore.Query.DESCENDING)
+                .limit(300)
+            )
+            docs = await asyncio.to_thread(lambda: list(query.stream()))
 
             waiting_queue = []
 
-            users_docs = await self._stream_user_docs(users_collection)
-            user_ids = [doc.id for doc in users_docs]
-            conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
-
-            for result in conversation_results:
-                if isinstance(result, Exception):
-                    print(f"⚠️ Error in waiting queue parallel fetch: {result}")
+            for doc in docs:
+                data = doc.to_dict() or {}
+                data["conversation_id"] = doc.id
+                state = self._normalize_conversation_state(data)
+                if state != self.STATE_WAITING_OPERATOR:
                     continue
 
-                user_id, conversations_docs = result
-                for conv_doc in conversations_docs:
-                    conv_data = normalize_conversation_document(
-                        conversation_id=conv_doc.id,
-                        user_id=user_id,
-                        payload=conv_doc.to_dict() or {},
-                    )
-                    messages = conv_data.get("messages", [])
-                    visible_messages = self._visible_chat_messages(messages)
-                    
-                    if not visible_messages:
-                        continue
-                    
-                    # Check if conversation is waiting for human
-                    human_takeover = conv_data.get("human_takeover_active", False)
-                    operator_id = conv_data.get("operator_id")
-                    conv_status = conv_data.get("status", "active")
-                    
-                    # Only include conversations waiting for human (takeover active but no operator assigned)
-                    if not (human_takeover and operator_id is None):
-                        continue
-                    
-                    # Skip resolved/archived
-                    if conv_status in ["resolved", "archived"]:
-                        continue
-                    
-                    # Get last message time (use actual last message for timing)
-                    last_message = visible_messages[-1]
-                    last_message_time = self._parse_timestamp(last_message.get("timestamp"))
+                last_at = data.get("last_message_at") or data.get("last_updated") or current_time
+                if isinstance(last_at, str):
+                    try:
+                        last_at = self._parse_timestamp(last_at)
+                    except Exception:
+                        last_at = current_time
 
-                    # Preview uses visible message set only.
-                    last_preview_message = visible_messages[-1]
+                wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
+                customer_info = data.get("customer_info") or {}
+                user_id = data.get("user_id")
+                user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                phone_full = data.get("user_phone") or "Unknown"
+                phone_clean = data.get("phone_clean") or "Unknown"
+                language = data.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+                sentiment = data.get("sentiment", "neutral")
+                priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
 
-                    # Calculate wait time
-                    escalation_time = conv_data.get("escalation_time")
-                    if escalation_time:
-                        escalation_dt = self._parse_timestamp(escalation_time)
-                        wait_time_seconds = int((current_time - escalation_dt).total_seconds())
-                    else:
-                        wait_time_seconds = int((current_time - last_message_time).total_seconds())
-                    
-                    # Get user info from Firebase customer_info first, fallback to config. When no name, show phone only.
-                    customer_info = conv_data.get("customer_info", {})
-                    user_name = customer_info.get("name") or config.user_names.get(user_id) or ""
-                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
-                    if not user_name and phone_full and phone_full != "Unknown":
-                        user_name = phone_full
-                    if not user_name:
-                        user_name = "Unknown Customer"
-                    language = config.user_data_whatsapp.get(user_id, {}).get('user_preferred_lang', 'ar')
-                    sentiment = conv_data.get("sentiment", "neutral")
-                    
-                    # Determine reason and priority
-                    escalation_reason = conv_data.get("escalation_reason", "user_request")
-                    priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
-                    
-                    queue_item = {
-                        "conversation_id": conv_data.get("conversation_id", conv_doc.id),
-                        "user_id": user_id,
-                        "user_name": user_name,
-                        "user_phone": phone_full,
-                        "phone_clean": phone_clean,
-                        "language": language,
-                        "reason": escalation_reason,
-                        "wait_time_seconds": wait_time_seconds,
-                        "sentiment": sentiment,
-                        "message_count": len(visible_messages),
-                        "priority": priority,
-                        "last_message": last_preview_message.get("text", "")
-                    }
+                queue_item = {
+                    "conversation_id": data.get("conversation_id"),
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "user_phone": phone_full,
+                    "phone_clean": phone_clean,
+                    "language": language,
+                    "reason": data.get("escalation_reason", "user_request"),
+                    "wait_time_seconds": wait_time_seconds,
+                    "sentiment": sentiment,
+                    "message_count": data.get("message_count", 0),
+                    "priority": priority,
+                    "last_message": data.get("last_message_text", ""),
+                }
 
-                    waiting_queue.append(queue_item)
+                waiting_queue.append(queue_item)
             
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
             waiting_queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
@@ -1012,7 +976,8 @@ class LiveChatService:
                 "resolved_at": utc_now(),
                 "resolved_by": operator_id,
                 "human_takeover_active": False,
-                "operator_id": None
+                "operator_id": None,
+                "conversation_state": self.STATE_RESOLVED,
             }
             
             print(f"🔄 Updating conversation {conversation_id} with data: {update_data}")
@@ -1038,6 +1003,9 @@ class LiveChatService:
 
             # Invalidate cache
             self.invalidate_cache()
+
+            # Refresh index to reflect resolved state
+            await self._refresh_index_for_conversation(user_id, conversation_id)
 
             # Send notification to customer
             if adapter:
@@ -1106,10 +1074,16 @@ class LiveChatService:
                 "status": "active",
                 "reopened_at": utc_now(),
                 "resolved_at": None,
-                "resolved_by": None
+                "resolved_by": None,
+                "conversation_state": self.STATE_BOT_ACTIVE,
+                "human_takeover_active": False,
+                "operator_id": None,
             })
             
             print(f"✅ Conversation {conversation_id} reopened (customer messaged again)")
+
+            # Refresh index so UI picks up the reopened state
+            await self._refresh_index_for_conversation(user_id, conversation_id)
             
             return {
                 "success": True,
@@ -1142,10 +1116,16 @@ class LiveChatService:
             await asyncio.to_thread(conv_ref.update, {
                 "status": "archived",
                 "archived_at": utc_now(),
-                "archived_reason": "auto_6h_timeout"
+                "archived_reason": "auto_6h_timeout",
+                "conversation_state": self.STATE_ARCHIVED,
+                "human_takeover_active": False,
+                "operator_id": None,
             })
 
             print(f"📦 Auto-archived conversation {conversation_id} (6-hour timeout)")
+
+            # Refresh index so the archive is reflected in lists
+            await self._refresh_index_for_conversation(user_id, conversation_id)
             
         except Exception as e:
             print(f"⚠️ Error auto-archiving conversation: {e}")
@@ -1156,6 +1136,18 @@ class LiveChatService:
             await set_human_takeover_status(user_id, conversation_id, True, operator_id, operator_name)
             config.user_in_human_takeover_mode[user_id] = True
             self.operator_sessions[conversation_id] = operator_id
+
+            # Ensure canonical state is written
+            db = get_firestore_db()
+            if db:
+                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                await asyncio.to_thread(conv_ref.update, {
+                    "conversation_state": self.STATE_ASSIGNED,
+                    "last_updated": utc_now(),
+                })
+
+            # Refresh index
+            await self._refresh_index_for_conversation(user_id, conversation_id)
 
             # Invalidate cache
             self.invalidate_cache()
@@ -1180,6 +1172,19 @@ class LiveChatService:
             config.user_in_human_takeover_mode[user_id] = False
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
+
+            # Ensure canonical state is written
+            db = get_firestore_db()
+            if db:
+                conv_ref = db.collection("artifacts").document(self.APP_ID).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                await asyncio.to_thread(conv_ref.update, {
+                    "conversation_state": self.STATE_BOT_ACTIVE,
+                    "last_updated": utc_now(),
+                    "operator_id": None,
+                })
+
+            # Refresh index
+            await self._refresh_index_for_conversation(user_id, conversation_id)
 
             # Invalidate cache
             self.invalidate_cache()
