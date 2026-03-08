@@ -6,6 +6,7 @@ import uuid
 import datetime
 import logging
 import asyncio
+from typing import Any
 from difflib import SequenceMatcher
 
 import config
@@ -275,6 +276,15 @@ def _invalidate_live_chat_cache():
     except Exception:
         pass
 
+
+def _refresh_live_chat_index_async(user_id: str, conversation_id: str):
+    """Fire-and-forget index refresh so new messages populate live_chat_index."""
+    try:
+        from services.live_chat_service import live_chat_service
+        asyncio.create_task(live_chat_service._refresh_index_for_conversation(user_id, conversation_id))
+    except Exception:
+        pass
+
 async def save_conversation_message_to_firestore(user_id: str, role: str, text: str, conversation_id: str = None, user_name: str = None, phone_number: str = None, metadata: dict = None):
     """
     Saves a message (user or bot) to Firestore.
@@ -291,6 +301,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         metadata: Optional metadata dict (e.g., operator_id, handled_by)
     """
     import asyncio
+
+    def _compute_conversation_state(human_takeover: bool, operator_id_val: Any, status_val: str) -> str:
+        if status_val == "archived":
+            return "archived"
+        if status_val == "resolved":
+            return "resolved"
+        if human_takeover:
+            return "assigned_to_operator" if operator_id_val else "waiting_for_operator"
+        return "bot_active"
 
     # Check if we're in testing mode - skip Firebase saving for tests
     if hasattr(config, 'TESTING_MODE') and config.TESTING_MODE:
@@ -534,8 +553,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "human_takeover_active": False,
                             "operator_id": None,
                         })
+                # Canonical conversation_state for index
+                update_payload["conversation_state"] = _compute_conversation_state(
+                    update_payload.get("human_takeover_active", False),
+                    update_payload.get("operator_id"),
+                    update_payload.get("status", "active"),
+                )
                 await asyncio.to_thread(doc_ref.update, update_payload)
                 _invalidate_live_chat_cache()
+                _refresh_live_chat_index_async(canonical_user_id, conversation_id)
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event for real-time dashboard updates (instant WhatsApp-like)
@@ -568,13 +594,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "status": "archived" if is_smart_source else "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
-                    "last_updated": utc_now()
+                    "last_updated": utc_now(),
+                    "conversation_state": "archived" if is_smart_source else "bot_active",
                 })
                 saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
                 _invalidate_live_chat_cache()
+                _refresh_live_chat_index_async(canonical_user_id, saved_conv_id)
                 print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
         else:
             # No conversation_id — try to reuse latest conversation first.
@@ -648,11 +676,17 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "human_takeover_active": False,
                             "operator_id": None,
                         })
+                update_payload["conversation_state"] = _compute_conversation_state(
+                    update_payload.get("human_takeover_active", False),
+                    update_payload.get("operator_id"),
+                    update_payload.get("status", "active"),
+                )
                 await asyncio.to_thread(doc_ref.update, update_payload)
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = resolved_conversation_id
                 _invalidate_live_chat_cache()
+                _refresh_live_chat_index_async(canonical_user_id, resolved_conversation_id)
                 print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {canonical_user_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event (instant WhatsApp-like)
@@ -682,13 +716,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "status": "archived" if is_smart_source else "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
-                    "last_updated": utc_now()
+                    "last_updated": utc_now(),
+                    "conversation_state": "archived" if is_smart_source else "bot_active",
                 })
                 saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
                 _invalidate_live_chat_cache()
+                _refresh_live_chat_index_async(canonical_user_id, saved_conv_id)
                 print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
 
                 # 📡 Broadcast SSE event for new conversation

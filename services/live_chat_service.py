@@ -86,6 +86,80 @@ class LiveChatService:
     def _index_collection(self, db):
         return db.collection("artifacts").document(self.APP_ID).collection(self.INDEX_COLLECTION)
 
+    async def rebuild_index_from_firestore(
+        self,
+        max_users: Optional[int] = None,
+        max_conversations_per_user: Optional[int] = None,
+        set_conversation_state: bool = True,
+    ) -> int:
+        """One-time (or manual) rebuild of live_chat_index from Firestore conversations.
+
+        Returns number of index entries written.
+        """
+        db = get_firestore_db()
+        if not db:
+            print("⚠️ Firestore not initialized; cannot rebuild index")
+            return 0
+
+        users_collection = self._get_users_collection()
+        if users_collection is None:
+            print("⚠️ Users collection missing; cannot rebuild index")
+            return 0
+
+        users_docs = await self._stream_user_docs(users_collection, limit=max_users)
+        user_ids = [doc.id for doc in users_docs]
+
+        # Stream conversations per user (optionally limited per user)
+        conversation_results = []
+        semaphore = asyncio.Semaphore(self.FIRESTORE_FETCH_PARALLELISM)
+
+        async def _bounded(user_id: str):
+            async with semaphore:
+                try:
+                    conversations_collection = users_collection.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                    q = conversations_collection.order_by("last_updated", direction=firestore.Query.DESCENDING)
+                    if max_conversations_per_user:
+                        q = q.limit(max_conversations_per_user)
+                    docs = await asyncio.to_thread(lambda: list(q.stream()))
+                    return user_id, docs
+                except Exception as e:
+                    print(f"⚠️ Error streaming conversations for {user_id}: {e}")
+                    return user_id, []
+
+        conversation_results = await asyncio.gather(*[_bounded(uid) for uid in user_ids])
+
+        total_written = 0
+        tasks = []
+
+        for user_id, conv_docs in conversation_results:
+            for conv_doc in conv_docs:
+                conv_data = normalize_conversation_document(
+                    conversation_id=conv_doc.id,
+                    user_id=user_id,
+                    payload=conv_doc.to_dict() or {},
+                )
+
+                messages = self._visible_chat_messages(conv_data.get("messages", []) or [])
+                entry = self._build_index_entry(user_id, conv_data, messages)
+
+                # If conversation_state missing in Firestore, optionally set it so future queries match
+                if set_conversation_state and not conv_data.get("conversation_state"):
+                    try:
+                        desired_state = entry.get("conversation_state", self.STATE_BOT_ACTIVE)
+                        conv_ref = users_collection.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conv_doc.id)
+                        await asyncio.to_thread(conv_ref.update, {"conversation_state": desired_state})
+                    except Exception as e:
+                        print(f"⚠️ Failed to set conversation_state for {conv_doc.id}: {e}")
+
+                tasks.append(self._upsert_index_entry(entry))
+                total_written += 1
+
+        if tasks:
+            await asyncio.gather(*tasks)
+
+        print(f"📦 Rebuilt live_chat_index entries: {total_written}")
+        return total_written
+
     def _build_index_entry(self, user_id: str, conv_data: dict, messages: list) -> dict:
         state = self._normalize_conversation_state(conv_data)
         customer_info = conv_data.get("customer_info", {}) or {}
@@ -244,6 +318,85 @@ class LiveChatService:
         start = (safe_page - 1) * safe_page_size
         end = start + safe_page_size
         return items[start:end], total_items, total_pages
+
+    async def _legacy_active_scan_for_fallback(self, search: Optional[str] = None, user_limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Lightweight scan of conversations (legacy path) used only as a safety fallback when index is empty."""
+        users_collection = self._get_users_collection()
+        if users_collection is None:
+            return []
+
+        try:
+            users_docs = await self._stream_user_docs(users_collection, limit=user_limit)
+            user_ids = [doc.id for doc in users_docs]
+            conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
+
+            conversations: List[Dict[str, Any]] = []
+            current_time = utc_now()
+            for result in conversation_results:
+                if isinstance(result, Exception):
+                    continue
+                user_id, conv_docs = result
+                for conv_doc in conv_docs:
+                    conv_data = normalize_conversation_document(
+                        conversation_id=conv_doc.id,
+                        user_id=user_id,
+                        payload=conv_doc.to_dict() or {},
+                    )
+                    state = self._normalize_conversation_state(conv_data)
+                    messages = self._visible_chat_messages(conv_data.get("messages", []) or [])
+                    last_msg = messages[-1] if messages else {}
+                    last_at = self._parse_timestamp(last_msg.get("timestamp")) if last_msg else conv_data.get("last_updated") or current_time
+                    if isinstance(last_at, str):
+                        try:
+                            last_at = self._parse_timestamp(last_at)
+                        except Exception:
+                            last_at = current_time
+
+                    if state not in {self.STATE_BOT_ACTIVE, self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED}:
+                        continue
+                    if not last_at or not self._is_live_window(last_at):
+                        continue
+
+                    customer_info = conv_data.get("customer_info") or {}
+                    user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+                    language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+                    sentiment = conv_data.get("sentiment", "neutral")
+
+                    if state == self.STATE_ASSIGNED:
+                        status = "human"
+                    elif state == self.STATE_WAITING_OPERATOR:
+                        status = "waiting"
+                    else:
+                        status = "bot"
+
+                    conversations.append({
+                        "conversation_id": conv_doc.id,
+                        "user_id": user_id,
+                        "user_name": user_name,
+                        "user_phone": phone_full,
+                        "phone_clean": phone_clean,
+                        "last_message": last_msg.get("text", "") if last_msg else "",
+                        "last_activity": last_at.isoformat(),
+                        "status": status,
+                        "conversation_state": state,
+                        "language": language,
+                        "operator_id": conv_data.get("operator_id"),
+                        "sentiment": sentiment,
+                        "message_count": len(messages),
+                    })
+
+                    # Opportunistically upsert index entry during fallback
+                    entry = self._build_index_entry(user_id, conv_data, messages)
+                    asyncio.create_task(self._upsert_index_entry(entry))
+
+            conversations.sort(key=lambda x: x["last_activity"], reverse=True)
+            if search:
+                conversations = self._filter_conversations(conversations, search)
+            return conversations
+        except Exception as e:
+            print(f"⚠️ Legacy active scan failed: {e}")
+            return []
         
     async def get_active_conversations(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
         """Active conversations (last 6h) from live_chat_index using canonical state."""
@@ -272,6 +425,20 @@ class LiveChatService:
                 .limit(500)
             )
             docs = await asyncio.to_thread(lambda: list(query.stream()))
+
+            # If index is empty, attempt an on-demand rebuild and retry once.
+            if not docs:
+                print("⚠️ live_chat_index empty for active query — rebuilding from Firestore conversations...")
+                await self.rebuild_index_from_firestore(max_users=self.USERS_STREAM_LIMIT, max_conversations_per_user=50, set_conversation_state=True)
+                docs = await asyncio.to_thread(lambda: list(query.stream()))
+
+            # Still empty? fall back to legacy scan so UI isn't blank.
+            if not docs:
+                print("⚠️ live_chat_index still empty after rebuild; falling back to direct scan")
+                fallback = await self._legacy_active_scan_for_fallback(search=normalized_search, user_limit=self.USERS_STREAM_LIMIT)
+                self._conversations_cache = fallback
+                self._conversations_cache_time = current_time
+                return fallback
 
             conversations: List[Dict[str, Any]] = []
             for doc in docs:
