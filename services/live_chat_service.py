@@ -1779,18 +1779,27 @@ class LiveChatService:
                 return {"success": False, "error": "Firestore not initialized"}
 
             app_id = "linas-ai-bot-backend"
+            effective_user_id = user_id
             conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                user_id
+                effective_user_id
             ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
 
-            # ✅ Use asyncio.to_thread to prevent blocking the event loop
             conv_doc = await asyncio.to_thread(conv_ref.get)
+            if not conv_doc.exists:
+                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+                if canonical_user_id != user_id:
+                    conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
+                        canonical_user_id
+                    ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                    conv_doc = await asyncio.to_thread(conv_ref.get)
+                    if conv_doc.exists:
+                        effective_user_id = canonical_user_id
             if not conv_doc.exists:
                 return {"success": False, "error": "Conversation not found"}
 
             conv_data = normalize_conversation_document(
                 conversation_id=conv_doc.id,
-                user_id=user_id,
+                user_id=effective_user_id,
                 payload=conv_doc.to_dict() or {},
             )
             messages = conv_data.get("messages", [])
@@ -1874,7 +1883,7 @@ class LiveChatService:
                 else total_messages > max_messages
             )
 
-            return {
+            out = {
                 "success": True,
                 "conversation_id": conversation_id,
                 "messages": formatted_messages,
@@ -1884,6 +1893,21 @@ class LiveChatService:
                 "sentiment": conv_data.get("sentiment", "neutral"),
                 "status": conv_data.get("status", "active")
             }
+            # #region agent log
+            try:
+                import json
+                import os
+                _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                _logpath = os.path.join(_root, ".cursor", "debug-420609.log")
+                os.makedirs(os.path.dirname(_logpath), exist_ok=True)
+                first_ts = formatted_messages[0]["timestamp"] if formatted_messages else None
+                last_ts = formatted_messages[-1]["timestamp"] if formatted_messages else None
+                with open(_logpath, "a") as f:
+                    f.write(json.dumps({"sessionId":"420609","location":"live_chat_service:get_conversation_details","message":"service return","data":{"msg_count":len(formatted_messages),"first_ts":first_ts,"last_ts":last_ts},"timestamp":int(__import__("time").time()*1000),"hypothesisId":"H1,H9"}) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            return out
 
         except Exception as e:
             print(f"❌ Error getting conversation details: {e}")

@@ -248,7 +248,20 @@ async def get_conversation_details(
             max_messages=limit,
         )
 
-    return await _run_endpoint(_handler)
+    result = await _run_endpoint(_handler)
+    # #region agent log
+    try:
+        import json
+        import os
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _logpath = os.path.join(_root, ".cursor", "debug-420609.log")
+        os.makedirs(os.path.dirname(_logpath), exist_ok=True)
+        with open(_logpath, "a") as f:
+            f.write(json.dumps({"sessionId":"420609","location":"live_chat_api:get_conversation_details","message":"API response","data":{"user_id":user_id,"conv_id":conversation_id,"success":result.get("success") if isinstance(result,dict) else False,"msg_count":len(result.get("messages",[])) if isinstance(result,dict) else 0,"error":result.get("error") if isinstance(result,dict) else None},"timestamp":int(__import__("time").time()*1000),"hypothesisId":"H1"}) + "\n")
+    except Exception as e:
+        print(f"[DEBUG] log write failed: {e}")
+    # #endregion
+    return result
 
 
 @app.get("/api/live-chat/client/{user_id}/conversations")
