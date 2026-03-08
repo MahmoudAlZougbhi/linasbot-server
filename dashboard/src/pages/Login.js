@@ -15,20 +15,24 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     
     if (!email || !password) {
+      setError('Please enter both email and password.');
       return;
     }
     
     setLoading(true);
     try {
       await login(email, password);
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (err) {
+      setError(err.message || 'Login failed. Please try again.');
+      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
@@ -73,6 +77,11 @@ const Login = () => {
           className="glass rounded-3xl shadow-2xl p-8"
         >
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm" role="alert">
+                {error}
+              </div>
+            )}
             {/* Email Field */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -85,7 +94,7 @@ const Login = () => {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
                   className="input-field pl-10 w-full"
                   placeholder="email@example.com"
                   required
@@ -105,7 +114,7 @@ const Login = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
                   className="input-field pl-10 pr-10 w-full"
                   placeholder="Enter your password"
                   required
