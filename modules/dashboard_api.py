@@ -89,6 +89,12 @@ async def root():
     return {"message": "Lina's Laser AI Bot is running!"}
 
 
+@app.get("/api/health")
+async def health():
+    """Lightweight health check - no Firestore, returns immediately."""
+    return {"ok": True}
+
+
 @app.get("/api/test")
 async def test_api():
     """Test endpoint for dashboard health check"""

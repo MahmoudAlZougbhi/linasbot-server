@@ -79,7 +79,7 @@ async def login(request: LoginRequest):
     try:
         user = await asyncio.wait_for(
             asyncio.to_thread(user_service.authenticate, request.email, request.password),
-            timeout=12.0
+            timeout=8.0
         )
 
         if not user:
@@ -100,7 +100,7 @@ async def login(request: LoginRequest):
     except asyncio.TimeoutError:
         return {
             "success": False,
-            "error": "Authentication service timeout. Please try again."
+            "error": "Authentication timeout (8s). تحقق من Firestore أو أعد تشغيل الـ backend."
         }
     except Exception as e:
         print(f"Login error: {e}")

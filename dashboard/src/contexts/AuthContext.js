@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const response = await fetch(`${getAuthBase()}/login`, {
         method: 'POST',
         headers: {
@@ -150,7 +150,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       let msg = error.message || 'Login failed';
       if (error.name === 'AbortError') {
-        msg = 'Connection timed out. تأكد أن الـ backend شغال على port 8003';
+        msg = 'انتهت المهلة (8 ثواني). تحقق من الـ backend أو Firestore وأعد التشغيل';
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
         msg = 'لا يمكن الاتصال بالـ backend. شغّل السيرفر أولاً: python main.py';
       }
