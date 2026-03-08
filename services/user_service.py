@@ -4,6 +4,7 @@ Handles Firestore operations for dashboard users with bcrypt password hashing
 """
 
 import os
+import threading
 import time
 import uuid
 import bcrypt
@@ -295,24 +296,21 @@ class UserService:
         now = datetime.utcnow().isoformat()
         user['lastLogin'] = now
 
-        # ISOLATION TEST: Skip Firestore lastLogin update
-        skip_firestore = os.environ.get("SKIP_LASTLOGIN_UPDATE", "").strip() in ("1", "true", "yes")
-        if skip_firestore:
-            print(f"[auth] 6. BYPASS_FIRESTORE_WRITE t={_elapsed():.3f}s (SKIP_LASTLOGIN_UPDATE=1)", flush=True)
-            result = self._sanitize_user(user)
-            print(f"[auth] 7. SANITIZE_DONE t={_elapsed():.3f}s", flush=True)
-            print(f"[auth] 8. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
-            return result
+        # Step 3: Fire-and-forget lastLogin update - MUST NOT block auth
+        # Credentials are verified; return success immediately. Update lastLogin
+        # in a daemon thread so Firestore write issues never block login.
+        def _update_lastlogin_background():
+            try:
+                self.collection.document(user['id']).update({"lastLogin": now})
+            except Exception as e:
+                print(f"[auth] lastLogin background update failed: {e}", flush=True)
 
-        # Step 3: Update lastLogin in Firestore - SECOND NETWORK CALL (may hang)
-        print(f"[auth] 6. FIRESTORE_WRITE_START t={_elapsed():.3f}s - Firestore update, may block here", flush=True)
-        self.collection.document(user['id']).update({"lastLogin": now})
-        print(f"[auth] 7. FIRESTORE_WRITE_END t={_elapsed():.3f}s", flush=True)
+        t = threading.Thread(target=_update_lastlogin_background, daemon=True)
+        t.start()
+        print(f"[auth] 6. lastLogin update dispatched (non-blocking) t={_elapsed():.3f}s", flush=True)
 
-        # Step 4: Sanitize and return
-        print(f"[auth] 8. SANITIZE_START t={_elapsed():.3f}s", flush=True)
         result = self._sanitize_user(user)
-        print(f"[auth] 9. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
+        print(f"[auth] 7. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
         return result
 
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
