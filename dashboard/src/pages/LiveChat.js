@@ -263,6 +263,7 @@ const LiveChat = () => {
   const previousConversationIdRef = useRef(null);
   const previousMessageCountRef = useRef(0);
   const messageCacheRef = useRef(new Map());
+  const hasMoreMessagesRef = useRef(true);
   const autoLoadedPagesRef = useRef(1);
   const botListRef = useRef(null);
 
@@ -270,6 +271,10 @@ const LiveChat = () => {
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
   }, [selectedConversation]);
+
+  useEffect(() => {
+    hasMoreMessagesRef.current = hasMoreMessages;
+  }, [hasMoreMessages]);
 
   useEffect(() => {
     activeConversationsRef.current = activeConversations;
@@ -596,6 +601,8 @@ const LiveChat = () => {
     setIsRefreshing,
     setSelectedConversation,
     updateChatListLocally,
+    messageCacheRef,
+    hasMoreMessagesRef,
     setIsLoading,
     setHasMoreChats,
     setChatPage,
@@ -1291,7 +1298,14 @@ const LiveChat = () => {
       );
 
       if (result.success) {
-        // Message will appear via SSE (no manual append to avoid duplicate)
+        // Optimistic append + cache update so message stays visible when switching back
+        const operatorMsg = {
+          content: messageToSend,
+          is_user: false,
+          timestamp: new Date().toISOString(),
+          role: "operator",
+        };
+        appendMessageToSelectedConversation(operatorMsg);
         toast.success("Message sent to customer");
       } else {
         toast.error("Failed to send message");

@@ -19,6 +19,8 @@ export const useLiveChatSSE = ({
   setIsRefreshing,
   setSelectedConversation,
   updateChatListLocally,
+  messageCacheRef,
+  hasMoreMessagesRef,
   setIsLoading,
   setHasMoreChats,
   setChatPage,
@@ -120,6 +122,14 @@ export const useLiveChatSSE = ({
           50
         );
         if (!isMountedRef.current || !messages?.length) return;
+        if (messageCacheRef?.current) {
+          const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
+          messageCacheRef.current.set(cacheKey, {
+            messages,
+            hasMore: false,
+            cachedAt: Date.now(),
+          });
+        }
         setSelectedConversation((previous) => {
           if (!previous) return previous;
           return { ...previous, history: messages };
@@ -149,7 +159,14 @@ export const useLiveChatSSE = ({
           50
         );
         if (!isMountedRef.current || !messages?.length) return;
-
+        if (messageCacheRef?.current) {
+          const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
+          messageCacheRef.current.set(cacheKey, {
+            messages,
+            hasMore: false,
+            cachedAt: Date.now(),
+          });
+        }
         setSelectedConversation((previous) => {
           if (!previous) return previous;
           return { ...previous, history: messages };
@@ -247,7 +264,18 @@ export const useLiveChatSSE = ({
                 );
               });
               if (exists) return prev;
-              return { ...prev, history: [...prev.history, message] };
+              const updatedHistory = [...prev.history, message];
+              // Update message cache so switching back shows the new message
+              if (messageCacheRef?.current && prev.conversation) {
+                const cacheKey = `${prev.conversation.user_id}_${prev.conversation.conversation_id}`;
+                const existing = messageCacheRef.current.get(cacheKey);
+                messageCacheRef.current.set(cacheKey, {
+                  messages: updatedHistory,
+                  hasMore: existing?.hasMore ?? (hasMoreMessagesRef?.current ?? false),
+                  cachedAt: Date.now(),
+                });
+              }
+              return { ...prev, history: updatedHistory };
             });
             if (process.env.NODE_ENV === "development") {
               console.log("[SSE] new_message merged (instant append)", { convId, msgId });
@@ -257,6 +285,32 @@ export const useLiveChatSSE = ({
           // 2) Update chat list locally: move to top, update last_message + last_activity (no /unified-chats call)
           if (updateChatListLocally && message && (convId || userId)) {
             updateChatListLocally(convId, userId, message);
+          }
+
+          // 2b) Update message cache for this conversation when not viewing it (so switch-back shows new message)
+          if (messageCacheRef?.current && message && convId && userId) {
+            const cacheKey = `${userId}_${convId}`;
+            const existing = messageCacheRef.current.get(cacheKey);
+            if (existing?.messages?.length) {
+              const content = String(message.content || message.text || "").trim();
+              const msgId = message?.message_id;
+              const exists = existing.messages.some((m) => {
+                if (msgId && m.message_id) return m.message_id === msgId;
+                if (content && String(m.content || m.text || "").trim() === content) {
+                  const mTs = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+                  const msgTs = message.timestamp ? new Date(message.timestamp).getTime() : 0;
+                  if (Math.abs(mTs - msgTs) < 15000) return true;
+                }
+                return false;
+              });
+              if (!exists) {
+                messageCacheRef.current.set(cacheKey, {
+                  messages: [...existing.messages, message],
+                  hasMore: existing.hasMore,
+                  cachedAt: Date.now(),
+                });
+              }
+            }
           }
 
           // 3) Debounced full refresh (max once per 3s) - avoid heavy scan on every message

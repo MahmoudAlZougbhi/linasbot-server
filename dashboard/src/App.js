@@ -32,7 +32,7 @@ import { useApi } from './hooks/useApi';
 
 function AppContent() {
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { botStatus, fetchBotStatus } = useApi();
 
   useEffect(() => {
@@ -66,36 +66,35 @@ function AppContent() {
         </div>
 
         <div className="relative flex h-screen overflow-hidden">
-          {/* Sidebar */}
-          <AnimatePresence>
-            {sidebarOpen && (
-              <motion.div
-                initial={{ x: -300, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: -300, opacity: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-                className="relative z-30"
-              >
-                <Sidebar onClose={() => setSidebarOpen(false)} />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Sidebar - collapsible */}
+          <motion.div
+            initial={false}
+            animate={{ width: sidebarCollapsed ? 80 : 320 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="relative z-30 flex-shrink-0 overflow-hidden"
+          >
+            <Sidebar
+              collapsed={sidebarCollapsed}
+              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+              onClose={() => setSidebarCollapsed(true)}
+            />
+          </motion.div>
 
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Header */}
             <Header
-              onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+              onMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               botStatus={botStatus}
             />
 
-            {/* Page Content */}
+            {/* Page Content - full width when sidebar collapsed */}
             <main className="flex-1 overflow-y-auto p-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.15 }}
-                className="max-w-7xl mx-auto"
+                className={sidebarCollapsed ? "max-w-full" : "max-w-7xl mx-auto"}
               >
                 <Routes>
                   {/* Public Routes */}
