@@ -16,6 +16,8 @@ import {
   MicrophoneIcon,
   PhotoIcon,
   MagnifyingGlassIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -73,8 +75,9 @@ const LiveChat = () => {
   const [chatPage, setChatPage] = useState(1);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const MESSAGE_CACHE_TTL_MS = 30000;
+  const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min - avoid refetch when switching back to same conv
 
   // Split handover: 1) waiting (no operator yet) 2) with operator (handover done, chatting)
   const userRequestedReasons = React.useMemo(
@@ -388,6 +391,20 @@ const LiveChat = () => {
       getConversationMessages(userId, conversationId, days, before, day_window, limit),
     [getConversationMessages]
   );
+
+  const selectConversation = React.useCallback((conv) => {
+    const cacheKey = `${conv.user_id}_${conv.conversation_id}`;
+    const cached = messageCacheRef.current.get(cacheKey);
+    const hasCachedMessages = cached?.messages?.length > 0;
+    setSelectedConversation({
+      conversation: conv,
+      history: hasCachedMessages ? cached.messages : [],
+    });
+    if (hasCachedMessages) {
+      setHasMoreMessages(cached.hasMore ?? false);
+      setMessagesLoading(false);
+    }
+  }, []);
 
   const appendMessageToSelectedConversation = (newMessage) => {
     setSelectedConversation((previous) => {
@@ -1586,12 +1603,33 @@ const LiveChat = () => {
       </motion.div>
 
       <div className="grid grid-cols-12 gap-0 h-[calc(100%-7.5rem)] whatsapp-shell">
-        {/* Conversations List */}
+        {/* Conversations List - collapsible */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="col-span-3 whatsapp-sidebar"
+          className={`${sidebarCollapsed ? "col-span-1" : "col-span-3"} whatsapp-sidebar flex flex-col overflow-hidden transition-all`}
         >
+          {sidebarCollapsed ? (
+            <div className="flex flex-col items-center py-4 border-r border-slate-200">
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
+                title="Expand conversations list"
+              >
+                <ChevronRightIcon className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <>
+          <div className="flex justify-end pr-2 pt-2">
+            <button
+              onClick={() => setSidebarCollapsed(true)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"
+              title="Collapse sidebar"
+            >
+              <ChevronLeftIcon className="w-4 h-4" />
+            </button>
+          </div>
           {/* 1) Waiting for human – yale tablin (no operator yet) */}
           <div className="whatsapp-sidebar-section">
             <h3 className="font-bold text-slate-800 mb-2 flex items-center">
@@ -1652,10 +1690,7 @@ const LiveChat = () => {
                           message_count: item.message_count || 0,
                           last_message: item.last_message ? { content: item.last_message } : null,
                         };
-                        setSelectedConversation({
-                          conversation: conv,
-                          history: [],
-                        });
+                        selectConversation(conv);
                       }}
                     >
                       <div className="flex items-start justify-between mb-1">
@@ -1730,13 +1765,7 @@ const LiveChat = () => {
                   <div
                     key={conv.conversation_id}
                     className="p-2.5 rounded-lg cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
-                    onClick={() => {
-                      setSelectedConversation({
-                        conversation: conv,
-                        history: [],
-                      });
-                      setMessagesLoading(true);
-                    }}
+                    onClick={() => selectConversation(conv)}
                   >
                     <div className="flex items-start justify-between mb-0.5">
                       <span className="font-medium text-slate-800 text-sm">
@@ -1755,44 +1784,47 @@ const LiveChat = () => {
             )}
           </div>
 
-          {/* Active Conversations */}
+          {/* Active Conversations - limited height so chat stays visible */}
           <div
-            className="whatsapp-sidebar-section flex-1 overflow-y-auto"
+            className="whatsapp-sidebar-section flex-1 overflow-y-auto max-h-[55vh]"
             ref={botListRef}
             onScroll={handleBotListScroll}
           >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-slate-800 flex items-center">
-                <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                With bot ({botConversations.length})
-              </h3>
-              {/* ✅ Auto-refresh indicator */}
-              <span className="text-xs text-slate-500 flex items-center space-x-1">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                <span>Auto-updating</span>
-              </span>
-              {isLoading && (
-                <span className="text-xs text-slate-400">Loading...</span>
-              )}
-            </div>
-            {/* ✅ Search by name or phone */}
-            <div className="relative mb-3">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={liveSearchQuery}
-                onChange={(e) => setLiveSearchQuery(e.target.value)}
-                placeholder="Search by name or phone..."
-                className="whatsapp-input w-full pl-9 pr-4"
-              />
-              {liveSearchQuery && (
-                <button
-                  onClick={() => setLiveSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <XMarkIcon className="w-4 h-4" />
-                </button>
-              )}
+            {/* ✅ Sticky header + search - stays fixed when scrolling */}
+            <div className="sticky top-0 z-10 bg-white pb-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-slate-800 flex items-center">
+                  <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
+                  With bot ({botConversations.length})
+                </h3>
+                {/* ✅ Auto-refresh indicator */}
+                <span className="text-xs text-slate-500 flex items-center space-x-1">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  <span>Auto-updating</span>
+                </span>
+                {isLoading && (
+                  <span className="text-xs text-slate-400">Loading...</span>
+                )}
+              </div>
+              {/* ✅ Search by name or phone */}
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={liveSearchQuery}
+                  onChange={(e) => setLiveSearchQuery(e.target.value)}
+                  placeholder="Search by name or phone..."
+                  className="whatsapp-input w-full pl-9 pr-4"
+                />
+                {liveSearchQuery && (
+                  <button
+                    onClick={() => setLiveSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               {isLoading && botConversations.length === 0 ? (
@@ -1818,13 +1850,7 @@ const LiveChat = () => {
                                 ? "bg-primary-50 border-2 border-primary-300"
                                 : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
                             }`}
-                            onClick={() => {
-                              setSelectedConversation({
-                                conversation: conv,
-                                history: [],
-                              });
-                              setMessagesLoading(true);
-                            }}
+                            onClick={() => selectConversation(conv)}
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
@@ -1879,13 +1905,7 @@ const LiveChat = () => {
                                 ? "bg-primary-50 border-2 border-primary-300"
                                 : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
                             }`}
-                            onClick={() => {
-                              setSelectedConversation({
-                                conversation: conv,
-                                history: [],
-                              });
-                              setMessagesLoading(true);
-                            }}
+                            onClick={() => selectConversation(conv)}
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
@@ -1936,13 +1956,15 @@ const LiveChat = () => {
               )}
             </div>
           </div>
+            </>
+          )}
         </motion.div>
 
-        {/* Chat Window */}
+        {/* Chat Window - wider when sidebar collapsed */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="col-span-6 whatsapp-chat-panel"
+          className={`${sidebarCollapsed ? "col-span-8" : "col-span-6"} whatsapp-chat-panel`}
         >
           {selectedConversation ? (
             <>

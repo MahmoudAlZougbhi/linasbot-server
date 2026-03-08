@@ -99,9 +99,9 @@ class LiveChatService:
             return self.STATE_ARCHIVED
         if resolved_at or status in {"resolved", "closed"}:
             return self.STATE_RESOLVED
-        if human_takeover or operator_id:
-            return self.STATE_ASSIGNED
-        if status in {"waiting", "waiting_for_operator", "pending"}:
+        if human_takeover:
+            return self.STATE_ASSIGNED if operator_id else self.STATE_WAITING_OPERATOR
+        if status in {"waiting", "waiting_for_operator", "pending", "waiting_human"}:
             return self.STATE_WAITING_OPERATOR
 
         return self.STATE_BOT_ACTIVE
@@ -374,10 +374,10 @@ class LiveChatService:
 
     def _visible_chat_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Live Chat UI should show only human/bot conversation content.
-        Automated smart messaging entries are excluded from operator views.
+        Live Chat UI shows all messages including smart messages (scheduled/sent from Smart Messaging).
+        Operators need to see the full conversation including automated messages.
         """
-        return [msg for msg in (messages or []) if not self._is_smart_message(msg)]
+        return list(messages or [])
 
     def _is_cache_fresh(self, cache_time: Optional[datetime.datetime], ttl_seconds: Optional[int] = None) -> bool:
         if cache_time is None:

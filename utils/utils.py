@@ -585,22 +585,22 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event for real-time dashboard updates (instant WhatsApp-like)
-                if not is_smart_source:
-                    try:
-                        from modules.live_chat_api import broadcast_sse_event
-                        dash_msg = _message_to_dashboard_format(message_data)
-                        _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
-                            conversation_id, role, dash_msg.get("message_id", ""))
-                        asyncio.create_task(broadcast_sse_event("new_message", {
-                            "user_id": canonical_user_id,
-                            "conversation_id": conversation_id,
-                            "role": role,
-                            "text": text[:100] + "..." if len(text) > 100 else text,
-                            "phone": customer_info.get("phone_full"),
-                            "message": dash_msg,
-                        }))
-                    except Exception as sse_err:
-                        _log.exception("SSE broadcast error after save: %s", sse_err)
+                # Include smart messages so they appear in Live Chat for operators
+                try:
+                    from modules.live_chat_api import broadcast_sse_event
+                    dash_msg = _message_to_dashboard_format(message_data)
+                    _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
+                        conversation_id, role, dash_msg.get("message_id", ""))
+                    asyncio.create_task(broadcast_sse_event("new_message", {
+                        "user_id": canonical_user_id,
+                        "conversation_id": conversation_id,
+                        "role": role,
+                        "text": text[:100] + "..." if len(text) > 100 else text,
+                        "phone": customer_info.get("phone_full"),
+                        "message": dash_msg,
+                    }))
+                except Exception as sse_err:
+                    _log.exception("SSE broadcast error after save: %s", sse_err)
             else:
                 # Conversation not found - create new one
                 message_data = _build_message_data()
@@ -730,23 +730,22 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 _refresh_live_chat_index_async(canonical_user_id, resolved_conversation_id)
                 print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {canonical_user_id} (total: {len(current_messages)})")
 
-                # 📡 Broadcast SSE event (instant WhatsApp-like)
-                if not is_smart_source:
-                    try:
-                        from modules.live_chat_api import broadcast_sse_event
-                        dash_msg = _message_to_dashboard_format(message_data)
-                        _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
-                            resolved_conversation_id, role, dash_msg.get("message_id", ""))
-                        asyncio.create_task(broadcast_sse_event("new_message", {
-                            "user_id": canonical_user_id,
-                            "conversation_id": resolved_conversation_id,
-                            "role": role,
-                            "text": text[:100] + "..." if len(text) > 100 else text,
-                            "phone": customer_info.get("phone_full"),
-                            "message": dash_msg,
-                        }))
-                    except Exception as sse_err:
-                        _log.exception("SSE broadcast error: %s", sse_err)
+                # 📡 Broadcast SSE event (instant WhatsApp-like) - include smart messages for Live Chat
+                try:
+                    from modules.live_chat_api import broadcast_sse_event
+                    dash_msg = _message_to_dashboard_format(message_data)
+                    _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
+                        resolved_conversation_id, role, dash_msg.get("message_id", ""))
+                    asyncio.create_task(broadcast_sse_event("new_message", {
+                        "user_id": canonical_user_id,
+                        "conversation_id": resolved_conversation_id,
+                        "role": role,
+                        "text": text[:100] + "..." if len(text) > 100 else text,
+                        "phone": customer_info.get("phone_full"),
+                        "message": dash_msg,
+                    }))
+                except Exception as sse_err:
+                    _log.exception("SSE broadcast error: %s", sse_err)
             else:
                 # No existing conversation found — create a new one
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
@@ -771,18 +770,17 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 _refresh_live_chat_index_async(canonical_user_id, saved_conv_id)
                 print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
 
-                # 📡 Broadcast SSE event for new conversation
-                if not is_smart_source:
-                    try:
-                        from modules.live_chat_api import broadcast_sse_event
-                        asyncio.create_task(broadcast_sse_event("new_conversation", {
-                            "user_id": canonical_user_id,
-                            "conversation_id": new_doc_ref.id,
-                            "phone": customer_info.get("phone_full"),
-                            "name": customer_name
-                        }))
-                    except Exception:
-                        pass
+                # 📡 Broadcast SSE event for new conversation - include smart messages for Live Chat
+                try:
+                    from modules.live_chat_api import broadcast_sse_event
+                    asyncio.create_task(broadcast_sse_event("new_conversation", {
+                        "user_id": canonical_user_id,
+                        "conversation_id": new_doc_ref.id,
+                        "phone": customer_info.get("phone_full"),
+                        "name": customer_name
+                    }))
+                except Exception:
+                    pass
 
         # Deferred: update customer name from CRM in background so user message already appeared in Live Chat
         if defer_external_for_speed and saved_conv_id and normalized_phone:

@@ -157,8 +157,10 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                     "human_takeover_active": True,
                     "human_takeover_requested": True,
                     "operator_id": None,
+                    "conversation_state": "waiting_for_operator",
                     "escalation_reason": escalation_reason,
-                    "escalation_time": datetime.datetime.now()
+                    "escalation_time": datetime.datetime.now(),
+                    "last_updated": datetime.datetime.now(),
                 }
                 if escalation_score is not None:
                     update_payload["escalation_score"] = escalation_score
@@ -167,6 +169,12 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
 
                 conv_doc_ref.update(update_payload)
                 print(f"✅ Conversation marked as waiting_human in Firebase")
+                try:
+                    from services.live_chat_service import live_chat_service
+                    live_chat_service.invalidate_cache()
+                    asyncio.create_task(live_chat_service._refresh_index_for_conversation(user_id, current_conversation_id))
+                except Exception as idx_err:
+                    print(f"⚠️ Index refresh after handover: {idx_err}")
             except Exception as e:
                 print(f"⚠️ Failed to mark conversation as waiting_human: {e}")
 

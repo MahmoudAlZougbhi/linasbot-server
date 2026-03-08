@@ -415,11 +415,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "human_takeover_active": True,
                     "human_takeover_requested": True,
                     "operator_id": None,
+                    "conversation_state": "waiting_for_operator",
                     "escalation_reason": escalation_reason,
                     "escalation_time": datetime.datetime.now(),
-                    "last_updated": datetime.datetime.now()
+                    "last_updated": datetime.datetime.now(),
                 })
                 print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision)")
+                try:
+                    from services.live_chat_service import live_chat_service
+                    live_chat_service.invalidate_cache()
+                    asyncio.create_task(live_chat_service._refresh_index_for_conversation(user_id, current_conversation_id))
+                except Exception as idx_err:
+                    print(f"⚠️ Index refresh after AI handover: {idx_err}")
             except Exception as e:
                 print(f"⚠️ Failed to update handover state in Firestore: {e}")
 
