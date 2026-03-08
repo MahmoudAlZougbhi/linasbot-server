@@ -177,7 +177,7 @@ class LiveChatService:
         try:
             users_collection = self._get_users_collection()
             if users_collection is None:
-                return []
+                return self._queue_cache or []
 
             # Dictionary to group conversations by client
             client_conversations = {}
@@ -375,6 +375,19 @@ class LiveChatService:
         try:
             users_collection = self._get_users_collection()
             if users_collection is None:
+                if not search_val and page == 1 and self._unified_chats_cache:
+                    total = len(self._unified_chats_cache)
+                    end = min(page_size, total)
+                    return {
+                        "success": True,
+                        "chats": self._unified_chats_cache[:end],
+                        "total": total,
+                        "page": 1,
+                        "page_size": page_size,
+                        "has_more": end < total,
+                        "next_cursor": str(2) if end < total else None,
+                        "fallback_cache": True,
+                    }
                 return {"success": False, "chats": [], "total": 0, "has_more": False}
 
             current_time = utc_now()
@@ -485,6 +498,22 @@ class LiveChatService:
             end = start + safe_size
             paged = all_chats[start:end]
             has_more = end < total
+
+            if not search_val and safe_page == 1 and total == 0 and self._unified_chats_cache:
+                fallback_total = len(self._unified_chats_cache)
+                fallback_end = min(safe_size, fallback_total)
+                elapsed_ms = (__import__("time").time() - _start) * 1000
+                print(f"📊 [unified-chats] empty scan -> cache fallback | {fallback_end}/{fallback_total} | {elapsed_ms:.0f}ms")
+                return {
+                    "success": True,
+                    "chats": self._unified_chats_cache[:fallback_end],
+                    "total": fallback_total,
+                    "page": 1,
+                    "page_size": safe_size,
+                    "has_more": fallback_end < fallback_total,
+                    "next_cursor": str(2) if fallback_end < fallback_total else None,
+                    "fallback_cache": True,
+                }
 
             if not search_val and safe_page == 1:
                 self._unified_chats_cache = all_chats
@@ -942,13 +971,16 @@ class LiveChatService:
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
             waiting_queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
             
-            # Update cache
-            self._queue_cache = waiting_queue
-            self._queue_cache_time = current_time
+            # Update cache (protect against empty scans)
+            if waiting_queue or not self._queue_cache:
+                self._queue_cache = waiting_queue
+                self._queue_cache_time = current_time
+            else:
+                print("📊 Waiting queue scan returned empty; keeping previous cache")
 
             print(f"📊 Waiting queue: {len(waiting_queue)} conversations")
             
-            return waiting_queue
+            return waiting_queue if waiting_queue else (self._queue_cache or [])
             
         except Exception as e:
             print(f"❌ Error getting waiting queue: {e}")

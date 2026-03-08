@@ -119,6 +119,15 @@ const LiveChat = () => {
     return [...missing, ...incoming];
   }, []);
 
+  const normalizeConversationStatus = React.useCallback((conv) => {
+    if (!conv) return conv;
+    const status = (conv.status || "").toLowerCase();
+    if (status === "human" || status === "waiting_human" || status === "bot") {
+      return conv;
+    }
+    return { ...conv, status: "bot" };
+  }, []);
+
   const applyServerConversations = React.useCallback((incoming) => {
     if (!Array.isArray(incoming)) return;
     if (incoming.length === 0) {
@@ -129,9 +138,9 @@ const LiveChat = () => {
     const baseline = activeConversationsRef.current?.length
       ? activeConversationsRef.current
       : cachedActiveConversationsRef.current;
-    const merged = mergeMissingActiveChats(incoming, baseline);
+    const merged = mergeMissingActiveChats(incoming, baseline).map(normalizeConversationStatus);
     setActiveConversations(merged);
-  }, [mergeMissingActiveChats]);
+  }, [mergeMissingActiveChats, normalizeConversationStatus]);
 
   const effectiveWaitingQueue = React.useMemo(
     () => mergeActiveWaitingIntoQueue(waitingQueue, activeConversations),
@@ -171,7 +180,7 @@ const LiveChat = () => {
   }, [withOperator, waitingSearchTerm]);
   // Only bot conversations (exclude waiting_human + with operator) - shown below, release to bot moves here
   const botConversations = React.useMemo(
-    () => activeConversations.filter((c) => c.status === "bot"),
+    () => activeConversations.filter((c) => !["human", "waiting_human"].includes(c.status)),
     [activeConversations]
   );
 
@@ -316,9 +325,10 @@ const LiveChat = () => {
       try {
         const parsed = JSON.parse(cachedChats);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setActiveConversations(parsed);
-          activeConversationsRef.current = parsed;
-          cachedActiveConversationsRef.current = parsed;
+          const normalized = parsed.map(normalizeConversationStatus);
+          setActiveConversations(normalized);
+          activeConversationsRef.current = normalized;
+          cachedActiveConversationsRef.current = normalized;
         }
       } catch (err) {
         console.warn("LiveChat cache parse error (active conversations)", err);
@@ -345,7 +355,7 @@ const LiveChat = () => {
         console.warn("LiveChat cache write error", err);
       }
     };
-  }, []);
+  }, [normalizeConversationStatus]);
 
   // Debounce search input (250ms) - WhatsApp-style snappy
   useEffect(() => {
@@ -873,7 +883,9 @@ const LiveChat = () => {
           const existingKeys = new Set(
             prev.map((c) => `${c.user_id}_${c.conversation_id}`)
           );
-          const deduped = chatsResponse.chats.filter(
+          const deduped = chatsResponse.chats
+            .map(normalizeConversationStatus)
+            .filter(
             (c) => !existingKeys.has(`${c.user_id}_${c.conversation_id}`)
           );
           return [...prev, ...deduped];
@@ -886,7 +898,7 @@ const LiveChat = () => {
     } finally {
       setLoadingMoreChats(false);
     }
-  }, [loadingMoreChats, hasMoreChats, chatPage, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE]);
+  }, [loadingMoreChats, hasMoreChats, chatPage, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE, normalizeConversationStatus]);
 
   const handleBotListScroll = React.useCallback(
     (event) => {
