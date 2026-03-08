@@ -125,19 +125,7 @@ export const useLiveChatMediaComposer = ({
         return;
       }
 
-      const persistedAudioUrl =
-        result.storage_url || result.whatsapp_audio_url || localRecordedAudio.url;
-
-      onAppendMessage({
-        timestamp: new Date().toISOString(),
-        is_user: false,
-        content: "[رسالة صوتية]",
-        text: "[رسالة صوتية]",
-        type: "voice",
-        audio_url: persistedAudioUrl,
-        handled_by: "human",
-      });
-
+      // Message will appear via SSE (no manual append to avoid duplicate)
       if (localRecordedAudio?.url?.startsWith("blob:")) {
         URL.revokeObjectURL(localRecordedAudio.url);
       }
@@ -195,14 +183,7 @@ export const useLiveChatMediaComposer = ({
         return;
       }
 
-      onAppendMessage({
-        timestamp: new Date().toISOString(),
-        is_user: false,
-        content: "[صورة]",
-        type: "image",
-        image_url: selectedImage.preview,
-        handled_by: "human",
-      });
+      // Message will appear via SSE (no manual append to avoid duplicate)
       discardImage();
       toast.success("Image sent to customer");
     } catch (error) {

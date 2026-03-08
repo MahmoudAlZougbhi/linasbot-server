@@ -1180,12 +1180,17 @@ const LiveChat = () => {
     }
   };
 
+  const [isReleasing, setIsReleasing] = useState(false);
+  const releasingRef = useRef(false);
   const handleReleaseToBot = async (conversationId, userId) => {
+    if (releasingRef.current || isReleasing) return;
+    releasingRef.current = true;
+    setIsReleasing(true);
     try {
       const result = await releaseConversation(conversationId, userId);
 
-      if (result.success) {
-        toast.success("Conversation released to bot");
+      if (result?.success) {
+        toast.success("Conversation released to bot!");
         // Update conversation status locally
         setActiveConversations((prev) =>
           prev.map((conv) =>
@@ -1213,6 +1218,9 @@ const LiveChat = () => {
     } catch (error) {
       console.error("Error releasing conversation:", error);
       toast.error("Error releasing conversation");
+    } finally {
+      releasingRef.current = false;
+      setIsReleasing(false);
     }
   };
 
@@ -1245,9 +1253,11 @@ const LiveChat = () => {
     }
   };
 
+  const sendingRef = React.useRef(false);
   const handleSendMessage = async () => {
-    if (!messageInput.trim() || !selectedConversation || isSending) return;
+    if (!messageInput.trim() || !selectedConversation || isSending || sendingRef.current) return;
 
+    sendingRef.current = true;
     setIsSending(true);
     const messageToSend = messageInput.trim();
     setMessageInput(""); // Clear immediately to prevent duplicate sends
@@ -1262,15 +1272,7 @@ const LiveChat = () => {
       );
 
       if (result.success) {
-        // Add message to UI
-        appendMessageToSelectedConversation({
-          timestamp: new Date().toISOString(),
-          is_user: false,
-          content: messageToSend,
-          type: "text",
-          handled_by: "human",
-        });
-
+        // Message will appear via SSE (no manual append to avoid duplicate)
         toast.success("Message sent to customer");
       } else {
         toast.error("Failed to send message");
@@ -1280,6 +1282,7 @@ const LiveChat = () => {
       toast.error("Error sending message");
     } finally {
       setIsSending(false);
+      sendingRef.current = false;
     }
   };
   // Feedback handlers
@@ -1989,10 +1992,11 @@ const LiveChat = () => {
                               selectedConversation.conversation.user_id
                             )
                           }
+                          disabled={isReleasing}
                           className="whatsapp-pill-outline"
                         >
                           <ArrowRightIcon className="w-4 h-4 mr-1" />
-                          Release to Bot
+                          {isReleasing ? "Releasing..." : "Release to Bot"}
                         </button>
                       )
                     )}

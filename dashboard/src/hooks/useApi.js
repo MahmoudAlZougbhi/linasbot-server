@@ -587,7 +587,7 @@ export const useApi = () => {
       }, {
         timeout: 60000, // 60 seconds - Firestore operations can be slow
       });
-      toast.success("Conversation released to bot!");
+      // Toast shown by caller (LiveChat) to avoid duplicates
       return response.data;
     } catch (error) {
       if (error.code === "ERR_NETWORK") {

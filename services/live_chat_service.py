@@ -1742,7 +1742,7 @@ class LiveChatService:
                 return {"success": True, "message": "Image message sent successfully", "storage_url": storage_url}
                     
             else:  # Default to text
-                # Always save to Firestore first (for live chat history)
+                # Save to Firestore first (SSE broadcasts immediately → message appears in UI fast)
                 await save_conversation_message_to_firestore(
                     user_id=canonical_user_id,
                     role="operator",
@@ -1753,19 +1753,19 @@ class LiveChatService:
                 )
                 print(f"✅ Saved operator message to Firestore")
 
-                # Try to send via WhatsApp adapter
-                try:
-                    result = await adapter.send_text_message(canonical_user_id, message)
+                # Send via WhatsApp in background - return immediately so UI feels fast
+                async def _send_whatsapp():
+                    try:
+                        result = await adapter.send_text_message(canonical_user_id, message)
+                        if result.get("success"):
+                            print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
+                        else:
+                            print(f"⚠️ WhatsApp send failed but message saved: {result.get('error')}")
+                    except Exception as send_error:
+                        print(f"⚠️ WhatsApp adapter error but message saved: {send_error}")
 
-                    if result.get("success"):
-                        print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
-                        return {"success": True, "message": "Message sent successfully"}
-                    else:
-                        print(f"⚠️ WhatsApp send failed but message saved: {result.get('error')}")
-                        return {"success": True, "message": "Message saved (WhatsApp send failed)", "warning": result.get('error')}
-                except Exception as send_error:
-                    print(f"⚠️ WhatsApp adapter error but message saved: {send_error}")
-                    return {"success": True, "message": "Message saved (WhatsApp unavailable)", "warning": str(send_error)}
+                asyncio.create_task(_send_whatsapp())
+                return {"success": True, "message": "Message sent successfully"}
             
         except Exception as e:
             print(f"❌ Error sending operator message: {e}")

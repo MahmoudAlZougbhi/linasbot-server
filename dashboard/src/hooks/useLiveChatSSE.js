@@ -232,9 +232,15 @@ export const useLiveChatSSE = ({
           if (isMatch && message && typeof message === "object" && message.timestamp) {
             setSelectedConversation((prev) => {
               if (!prev || !prev.history) return prev;
+              const content = String(message.content || message.text || "").trim();
               const exists = prev.history.some((m) => {
                 if (msgId && m.message_id) return m.message_id === msgId;
-                if (msgId && !m.message_id) return false;
+                // Dedupe operator messages: same content within 15s (handles race with manual append)
+                if (content && String(m.content || m.text || "").trim() === content) {
+                  const mTs = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+                  const msgTs = message.timestamp ? new Date(message.timestamp).getTime() : 0;
+                  if (Math.abs(mTs - msgTs) < 15000) return true;
+                }
                 return (
                   m.timestamp === message.timestamp &&
                   String(m.content || m.text || "") === String(message.content || message.text || "")
