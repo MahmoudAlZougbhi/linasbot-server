@@ -1071,7 +1071,17 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
 
     # Correct path: artifacts (collection) -> {appId} (document) -> users (collection) -> {userId} (document) -> conversations (collection) -> {conversationId} (document)
     app_id_for_firestore = "linas-ai-bot-backend"
-    conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+    users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+    conv_doc_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+    conv_snap = await asyncio.to_thread(conv_doc_ref.get)
+    resolved_user_id = canonical_user_id
+    if not conv_snap.exists and user_id != canonical_user_id:
+        conv_doc_ref = users_coll.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        conv_snap = await asyncio.to_thread(conv_doc_ref.get)
+        if conv_snap.exists:
+            resolved_user_id = user_id
+    if not conv_snap.exists:
+        raise ValueError(f"Conversation not found (user={canonical_user_id or user_id}, conv={conversation_id})")
 
     try:
         update_data = {
@@ -1099,10 +1109,10 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
 
         # ✅ Use asyncio.to_thread to prevent blocking the event loop
         await asyncio.to_thread(conv_doc_ref.update, update_data)
-        config.user_in_human_takeover_mode[canonical_user_id] = status  # Update local config as well
+        config.user_in_human_takeover_mode[resolved_user_id] = status  # Update local config as well
 
         operator_info = f" by operator {operator_name or operator_id}" if operator_id else ""
-        print(f"✅ Set human takeover status for conversation {conversation_id} (user {canonical_user_id}) to {status}{operator_info}.")
+        print(f"✅ Set human takeover status for conversation {conversation_id} (user {resolved_user_id}) to {status}{operator_info}.")
     except Exception as e:
         print(f"❌ ERROR setting human takeover status for conversation {conversation_id} (user {user_id}): {e}")
         import traceback
