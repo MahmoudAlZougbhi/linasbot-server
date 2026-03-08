@@ -184,23 +184,7 @@ const LiveChat = () => {
     [activeConversations]
   );
 
-  const liveBotConversations = React.useMemo(() => {
-    const now = Date.now();
-    const getLastTs = (conv) => {
-      const ts = conv.last_activity || conv.last_message?.timestamp;
-      return ts ? new Date(ts).getTime() : 0;
-    };
-    const enriched = botConversations.map((conv) => {
-      const lastTs = getLastTs(conv);
-      const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
-      return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
-    });
-    return enriched
-      .filter((conv) => conv._isLive)
-      .sort((a, b) => b._lastTs - a._lastTs);
-  }, [botConversations]);
-
-  const historyBotConversations = React.useMemo(() => {
+  const allBotConversations = React.useMemo(() => {
     const now = Date.now();
     const getLastTs = (conv) => {
       const ts = conv.last_activity || conv.last_message?.timestamp;
@@ -212,7 +196,6 @@ const LiveChat = () => {
         const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
         return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
       })
-      .filter((conv) => !conv._isLive)
       .sort((a, b) => b._lastTs - a._lastTs);
   }, [botConversations]);
 
@@ -1813,11 +1796,10 @@ const LiveChat = () => {
                 ))
               ) : (
                 <>
-                  {liveBotConversations.length > 0 && (
+                  {allBotConversations.length > 0 && (
                     <div className="pt-1">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Live now</p>
                       <div className="space-y-2">
-                        {liveBotConversations.map((conv) => (
+                        {allBotConversations.map((conv) => (
                           <div
                             key={conv.conversation_id}
                             className={`p-3 rounded-lg cursor-pointer transition-all ${
@@ -1840,67 +1822,11 @@ const LiveChat = () => {
                                   <p className="font-medium text-slate-800 text-sm">
                                     {conv.user_name}
                                   </p>
-                                  <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
-                                    Live
-                                  </span>
-                                  {newConversationIds.has(conv.conversation_id) && (
-                                    <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
-                                      New
+                                  {conv._isLive && (
+                                    <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
+                                      Live
                                     </span>
                                   )}
-                                </div>
-                                <p className="text-xs text-slate-500">
-                                  {conv.user_phone}
-                                </p>
-                              </div>
-                              <SentimentIndicator sentiment={conv.sentiment} />
-                            </div>
-
-                            <div className="mb-2"><StatusBadge status={conv.status} /></div>
-
-                            {conv.last_message && (
-                              <p className="text-xs text-slate-600 truncate mb-1">
-                                {conv.last_message.content}
-                              </p>
-                            )}
-
-                            <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{conv.message_count} messages</span>
-                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {historyBotConversations.length > 0 && (
-                    <div className="pt-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Earlier</p>
-                      <div className="space-y-2">
-                        {historyBotConversations.map((conv) => (
-                          <div
-                            key={conv.conversation_id}
-                            className={`p-3 rounded-lg cursor-pointer transition-all ${
-                              selectedConversation?.conversation?.conversation_id ===
-                              conv.conversation_id
-                                ? "bg-primary-50 border-2 border-primary-300"
-                                : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
-                            }`}
-                            onClick={() => {
-                              setSelectedConversation({
-                                conversation: conv,
-                                history: [],
-                              });
-                              setMessagesLoading(true);
-                            }}
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2">
-                                  <p className="font-medium text-slate-800 text-sm">
-                                    {conv.user_name}
-                                  </p>
                                   {newConversationIds.has(conv.conversation_id) && (
                                     <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
                                       New

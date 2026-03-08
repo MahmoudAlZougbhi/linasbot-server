@@ -1216,6 +1216,7 @@ class LiveChatService:
             # For Qiscus, we need to fetch the phone_number from Firebase
             phone_number = None
             db = get_firestore_db()
+            firestore_disabled = db is None
             if db:
                 try:
                     app_id = "linas-ai-bot-backend"
@@ -1295,6 +1296,17 @@ class LiveChatService:
                         send_result = await adapter.send_audio_message(user_id, whatsapp_audio_url)
                         if send_result.get("success"):
                             print(f"✅ Sent voice message via WhatsApp")
+                            if send_result.get("dry_run"):
+                                warnings = ["Outbound WhatsApp sending is disabled (dry-run)."]
+                                if firestore_disabled:
+                                    warnings.append("Firestore is disabled; message won't appear in Live Chat/Activity Flow.")
+                                return {
+                                    "success": True,
+                                    "message": "Voice message saved (sending disabled)",
+                                    "warning": " ".join(warnings),
+                                    "storage_url": storage_url,
+                                    "whatsapp_audio_url": whatsapp_audio_url,
+                                }
                         else:
                             error_msg = send_result.get("error", "Unknown error")
                             print(f"⚠️ WhatsApp audio send failed: {error_msg}")
@@ -1318,12 +1330,15 @@ class LiveChatService:
 
                 print(f"✅ Voice message processed and sent for {user_id}")
 
-                return {
+                response = {
                     "success": True,
                     "message": "Voice message sent successfully",
                     "storage_url": storage_url,
                     "whatsapp_audio_url": build_whatsapp_audio_delivery_url(storage_url) if storage_url else None
                 }
+                if firestore_disabled:
+                    response["warning"] = "Firestore is disabled; message won't appear in Live Chat/Activity Flow."
+                return response
                     
             elif message_type == "image":
                 # message contains base64 image data
@@ -1367,8 +1382,18 @@ class LiveChatService:
                 try:
                     if storage_url:
                         # Send as native image message (displays in gallery on phone, not just a link)
-                        await adapter.send_image_message(user_id, storage_url, caption="صورة من المشغل")
+                        send_result = await adapter.send_image_message(user_id, storage_url, caption="صورة من المشغل")
                         print(f"✅ Sent image as native image message via Qiscus")
+                        if isinstance(send_result, dict) and send_result.get("dry_run"):
+                            warnings = ["Outbound WhatsApp sending is disabled (dry-run)."]
+                            if firestore_disabled:
+                                warnings.append("Firestore is disabled; message won't appear in Live Chat/Activity Flow.")
+                            return {
+                                "success": True,
+                                "message": "Image message saved (sending disabled)",
+                                "warning": " ".join(warnings),
+                                "storage_url": storage_url,
+                            }
                     else:
                         # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام صورة من المشغل. يرجى فتح لوحة المعلومات لعرضها."
@@ -1381,7 +1406,10 @@ class LiveChatService:
                 
                 print(f"✅ Image message processed and sent for {user_id}")
                 
-                return {"success": True, "message": "Image message sent successfully", "storage_url": storage_url}
+                response = {"success": True, "message": "Image message sent successfully", "storage_url": storage_url}
+                if firestore_disabled:
+                    response["warning"] = "Firestore is disabled; message won't appear in Live Chat/Activity Flow."
+                return response
                     
             else:  # Default to text
                 # Always save to Firestore first (for live chat history)
@@ -1401,13 +1429,36 @@ class LiveChatService:
 
                     if result.get("success"):
                         print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
-                        return {"success": True, "message": "Message sent successfully"}
+                        response = {"success": True, "message": "Message sent successfully"}
+                        warnings = []
+                        if result.get("dry_run"):
+                            response["message"] = "Message saved (sending disabled)"
+                            warnings.append("Outbound WhatsApp sending is disabled (dry-run).")
+                        if firestore_disabled:
+                            warnings.append("Firestore is disabled; message won't appear in Live Chat/Activity Flow.")
+                        if warnings:
+                            response["warning"] = " ".join(warnings)
+                        return response
                     else:
                         print(f"⚠️ WhatsApp send failed but message saved: {result.get('error')}")
-                        return {"success": True, "message": "Message saved (WhatsApp send failed)", "warning": result.get('error')}
+                        warnings = [result.get("error")]
+                        if firestore_disabled:
+                            warnings.append("Firestore is disabled; message won't appear in Live Chat/Activity Flow.")
+                        return {
+                            "success": True,
+                            "message": "Message saved (WhatsApp send failed)",
+                            "warning": " ".join([w for w in warnings if w])
+                        }
                 except Exception as send_error:
                     print(f"⚠️ WhatsApp adapter error but message saved: {send_error}")
-                    return {"success": True, "message": "Message saved (WhatsApp unavailable)", "warning": str(send_error)}
+                    warnings = [str(send_error)]
+                    if firestore_disabled:
+                        warnings.append("Firestore is disabled; message won't appear in Live Chat/Activity Flow.")
+                    return {
+                        "success": True,
+                        "message": "Message saved (WhatsApp unavailable)",
+                        "warning": " ".join([w for w in warnings if w])
+                    }
             
         except Exception as e:
             print(f"❌ Error sending operator message: {e}")
