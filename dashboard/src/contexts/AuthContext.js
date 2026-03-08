@@ -2,13 +2,16 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { resolveUserPermissions } from '../utils/permissions';
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 
 const AuthContext = createContext({});
 
 export const useAuth = () => useContext(AuthContext);
 
-// API base URL - uses proxy in development
-const API_BASE = '/api/auth';
+const getAuthBase = () => {
+  const base = getApiBaseUrl();
+  return base ? `${base}/api/auth` : '/api/auth';
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -53,7 +56,7 @@ export const AuthProvider = ({ children }) => {
           // Validate session with backend and get fresh user data (5s timeout for local)
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(`${API_BASE}/session/${sessionData.user.id}`, {
+          const response = await fetch(`${getAuthBase()}/session/${sessionData.user.id}`, {
             signal: controller.signal
           });
           clearTimeout(timeoutId);
@@ -102,7 +105,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
-      const response = await fetch(`${API_BASE}/login`, {
+      const response = await fetch(`${getAuthBase()}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -112,10 +115,21 @@ export const AuthProvider = ({ children }) => {
       });
       clearTimeout(timeoutId);
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseErr) {
+        throw new Error(
+          response.status === 404
+            ? 'Backend not found. تأكد أن الـ backend شغال على port 8003'
+            : response.status >= 500
+            ? `Server error (${response.status}). راجع الـ logs`
+            : 'Invalid response from server'
+        );
+      }
 
       if (!data.success) {
-        throw new Error(data.error || 'Login failed');
+        throw new Error(data.error || 'Invalid email or password');
       }
 
       const userData = buildUserData(data.user);
@@ -134,9 +148,12 @@ export const AuthProvider = ({ children }) => {
 
       return userData;
     } catch (error) {
-      const msg = error.name === 'AbortError'
-        ? 'Connection timed out. Is the backend running on port 8003?'
-        : (error.message || 'Login failed');
+      let msg = error.message || 'Login failed';
+      if (error.name === 'AbortError') {
+        msg = 'Connection timed out. تأكد أن الـ backend شغال على port 8003';
+      } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        msg = 'لا يمكن الاتصال بالـ backend. شغّل السيرفر أولاً: python main.py';
+      }
       toast.error(msg);
       throw new Error(msg);
     }
@@ -153,7 +170,7 @@ export const AuthProvider = ({ children }) => {
     try {
       if (!user) throw new Error('Not authenticated');
 
-      const response = await fetch(`${API_BASE}/change-password`, {
+      const response = await fetch(`${getAuthBase()}/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -188,7 +205,7 @@ export const AuthProvider = ({ children }) => {
    */
   const getUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/users`);
+      const response = await fetch(`${getAuthBase()}/users`);
       const data = await response.json();
 
       if (!data.success) {
@@ -325,7 +342,7 @@ export const AuthProvider = ({ children }) => {
     if (!user) return;
 
     try {
-      const response = await fetch(`${API_BASE}/session/${user.id}`);
+      const response = await fetch(`${getAuthBase()}/session/${user.id}`);
       const data = await response.json();
 
       if (data.success && data.user) {

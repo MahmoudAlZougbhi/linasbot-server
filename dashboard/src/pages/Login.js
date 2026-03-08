@@ -183,17 +183,18 @@ const Login = () => {
             </p>
           </div>
 
-          {/* Demo Credentials
+          {/* Default credentials (created on first backend start) */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
             className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200"
           >
-            {/* <p className="text-xs text-blue-800 font-medium mb-1">Demo Credentials:</p>
+            <p className="text-xs text-blue-800 font-medium mb-1">Default credentials:</p>
             <p className="text-xs text-blue-700">Email: admin@lina.com</p>
-            <p className="text-xs text-blue-700">Password: admin123</p> */}
-          {/* </motion.div> */}
+            <p className="text-xs text-blue-700">Password: admin123</p>
+            <p className="text-xs text-blue-600 mt-1">(تتولد تلقائياً عند أول تشغيل للـ backend)</p>
+          </motion.div>
         </motion.div>
 
         {/* Footer */}
