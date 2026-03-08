@@ -182,7 +182,23 @@ echo ""
 # Step 8: Start the service
 echo -e "${YELLOW}[8/8] Starting the service...${NC}"
 systemctl enable ${SERVICE_NAME}
-systemctl restart ${SERVICE_NAME}
+# Stop first, wait for port 8003 to be released (avoid "address already in use" race)
+systemctl stop ${SERVICE_NAME} 2>/dev/null || true
+echo "Waiting for port 8003 to be released..."
+for i in $(seq 1 30); do
+  if ! ss -tlnp 2>/dev/null | grep -q ':8003 '; then
+    echo "Port 8003 is free."
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo -e "${YELLOW}Port 8003 still in use after 30s, forcing kill...${NC}"
+    fuser -k 8003/tcp 2>/dev/null || true
+    sleep 2
+  else
+    sleep 1
+  fi
+done
+systemctl start ${SERVICE_NAME}
 sleep 3
 
 if systemctl is-active --quiet ${SERVICE_NAME}; then
