@@ -51,6 +51,7 @@ class LiveChatService:
 
     def __init__(self):
         self.operator_status = defaultdict(lambda: "available")
+        self.operator_sessions = {}
         # Cache for active conversations
         self._conversations_cache = None
         self._conversations_cache_time = None
