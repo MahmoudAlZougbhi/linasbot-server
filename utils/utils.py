@@ -5,6 +5,7 @@ import os
 import uuid
 import datetime
 import logging
+import asyncio
 from difflib import SequenceMatcher
 
 import config
@@ -617,11 +618,20 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 }
                 # Smart campaign messages should not reopen/take over live conversations.
                 if not is_smart_source:
-                    update_payload.update({
-                        "status": "active",
-                        "human_takeover_active": False,
-                        "operator_id": None
-                    })
+                    existing_takeover = bool(doc_data.get("human_takeover_active", False))
+                    existing_operator = doc_data.get("operator_id")
+                    if existing_takeover:
+                        update_payload.update({
+                            "status": "human" if existing_operator else "waiting_human",
+                            "human_takeover_active": True,
+                            "operator_id": existing_operator,
+                        })
+                    else:
+                        update_payload.update({
+                            "status": "active",
+                            "human_takeover_active": False,
+                            "operator_id": None,
+                        })
                 await asyncio.to_thread(doc_ref.update, update_payload)
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
