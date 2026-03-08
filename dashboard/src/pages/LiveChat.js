@@ -398,6 +398,38 @@ const LiveChat = () => {
     [getConversationMessages]
   );
 
+  // Merge API messages with recently sent operator messages from cache (prevents disappearing on refresh)
+  const mergeWithRecentOperatorMessages = React.useCallback((apiMessages, cacheKey) => {
+    const cached = messageCacheRef.current?.get(cacheKey)?.messages || [];
+    const api = apiMessages || [];
+    const now = Date.now();
+    const RECENT_MS = 90000;
+    const recentOperator = cached.filter((m) => {
+      const isOp = m.is_user === false || m.role === "operator";
+      const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+      return isOp && now - ts < RECENT_MS;
+    });
+    const apiKeys = new Set(
+      api.map((m) => `${String(m.content || m.text || "").trim()}|${(m.timestamp || "").slice(0, 19)}`)
+    );
+    const toAdd = recentOperator.filter((m) => {
+      const key = `${String(m.content || m.text || "").trim()}|${(m.timestamp || "").slice(0, 19)}`;
+      if (apiKeys.has(key)) return false;
+      const mTs = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+      const inApi = api.some(
+        (a) =>
+          String(a.content || a.text || "").trim() === String(m.content || m.text || "").trim() &&
+          Math.abs((a.timestamp ? new Date(a.timestamp).getTime() : 0) - mTs) < 60000
+      );
+      return !inApi;
+    });
+    if (toAdd.length === 0) return api;
+    const combined = [...api, ...toAdd].sort(
+      (a, b) => new Date(a?.timestamp || 0).getTime() - new Date(b?.timestamp || 0).getTime()
+    );
+    return combined;
+  }, []);
+
   const selectConversation = React.useCallback((conv) => {
     const cacheKey = `${conv.user_id}_${conv.conversation_id}`;
     const cached = messageCacheRef.current.get(cacheKey);
@@ -687,8 +719,10 @@ const LiveChat = () => {
         );
         if (!isMountedRef.current || cancelled) return;
 
+        const merged = mergeWithRecentOperatorMessages(messages || [], cacheKey);
+
         messageCacheRef.current.set(cacheKey, {
-          messages: messages || [],
+          messages: merged,
           hasMore: hasMore || false,
           cachedAt: Date.now(),
         });
@@ -697,7 +731,7 @@ const LiveChat = () => {
           if (!prev || prev.conversation?.conversation_id !== selectedConversationId) {
             return prev;
           }
-          return { ...prev, history: messages || [] };
+          return { ...prev, history: merged };
         });
         setHasMoreMessages(hasMore);
       } catch (error) {
@@ -723,7 +757,7 @@ const LiveChat = () => {
       cancelled = true;
       clearTimeout(loadingFallbackTimer);
     };
-  }, [selectedConversationId, selectedConversationUserId, useMockData, fetchConversationMessages]);
+  }, [selectedConversationId, selectedConversationUserId, useMockData, fetchConversationMessages, mergeWithRecentOperatorMessages]);
 
   // Failsafe: if messages stay loading >26s (e.g. request hung), clear loading and notify
   const messagesLoadingStartRef = useRef(null);
@@ -1063,6 +1097,7 @@ const LiveChat = () => {
   const reloadSelectedConversationMessages = async () => {
     if (!selectedConversation) return;
 
+    const key = `${selectedConversation.conversation.user_id}_${selectedConversation.conversation.conversation_id}`;
     try {
       const { messages, hasMore } = await fetchConversationMessages(
         selectedConversation.conversation.user_id,
@@ -1072,20 +1107,18 @@ const LiveChat = () => {
         0,
         100
       );
+      const merged = mergeWithRecentOperatorMessages(messages || [], key);
       setSelectedConversation((prev) => ({
         ...prev,
-        history: messages || [],
+        history: merged,
       }));
       setHasMoreMessages(hasMore);
-      if (selectedConversation?.conversation) {
-        const key = `${selectedConversation.conversation.user_id}_${selectedConversation.conversation.conversation_id}`;
-        messageCacheRef.current.set(key, {
-          messages: messages || [],
-          hasMore: hasMore || false,
-          cachedAt: Date.now(),
-        });
-      }
-      toast.success(`Loaded ${(messages || []).length} messages`);
+      messageCacheRef.current.set(key, {
+        messages: merged,
+        hasMore: hasMore || false,
+        cachedAt: Date.now(),
+      });
+      toast.success(`Loaded ${merged.length} messages`);
     } catch (error) {
       console.error("Error reloading conversation messages:", error);
       toast.error("Failed to reload messages");
@@ -1298,14 +1331,7 @@ const LiveChat = () => {
       );
 
       if (result.success) {
-        // Optimistic append + cache update so message stays visible when switching back
-        const operatorMsg = {
-          content: messageToSend,
-          is_user: false,
-          timestamp: new Date().toISOString(),
-          role: "operator",
-        };
-        appendMessageToSelectedConversation(operatorMsg);
+        // Message will appear via SSE (no optimistic append to avoid duplicates)
         toast.success("Message sent to customer");
       } else {
         toast.error("Failed to send message");
@@ -1806,159 +1832,6 @@ const LiveChat = () => {
                 </button>
               )}
             </div>
-          </div>
-          {/* 2) Waiting for human – yale tablin (no operator yet) */}
-          <div className="whatsapp-sidebar-section">
-            <h3 className="font-bold text-slate-800 mb-2 flex items-center">
-              <span className="text-lg mr-2">⏳</span>
-              Waiting for human
-            </h3>
-            {isLoading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-8 w-12 bg-slate-200 rounded" />
-                <div className="h-3 w-32 bg-slate-100 rounded" />
-                <div className="h-16 mt-2 space-y-2">
-                  <div className="h-10 bg-slate-100 rounded" />
-                  <div className="h-10 bg-slate-100 rounded" />
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-amber-600">
-                  {filteredWaitingQueue.length}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {filteredWaitingQueue.length === 0
-                    ? "None waiting"
-                    : `${userRequestedHandover.length} asked for human · ${aiInitiatedHandover.length} AI referred`}
-                </p>
-                <div className="space-y-2 max-h-48 overflow-y-auto mt-2">
-                  {filteredWaitingQueue.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">None waiting</p>
-                  ) : (
-                filteredWaitingQueue.map((item) => {
-                  const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
-                  const readKey = `${item.user_id}_${item.conversation_id}`;
-                  const readCount = readMessageCountByConv[readKey] ?? 0;
-                  const unreadCount = Math.max(0, (item.message_count || 0) - readCount);
-                  const lastMsg = typeof item.last_message === "string" ? item.last_message : (item.last_message?.content ?? "");
-                  return (
-                    <div
-                      key={item.conversation_id}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                        isUserRequested
-                          ? "bg-orange-50 border border-orange-200 hover:bg-orange-100"
-                          : "bg-amber-50 border border-amber-200 hover:bg-amber-100"
-                      }`}
-                      onClick={() => {
-                        markWaitingConversationRead(item.user_id, item.conversation_id, item.message_count || 0);
-                        const conv = activeConversations.find(
-                          (c) =>
-                            c.conversation_id === item.conversation_id &&
-                            c.user_id === item.user_id
-                        ) || {
-                          conversation_id: item.conversation_id,
-                          user_id: item.user_id,
-                          user_name: item.user_name,
-                          user_phone: item.user_phone,
-                          status: "waiting_human",
-                          language: item.language || "ar",
-                          sentiment: item.sentiment,
-                          message_count: item.message_count || 0,
-                          last_message: item.last_message ? { content: item.last_message } : null,
-                        };
-                        selectConversation(conv);
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-1">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-800 text-sm truncate">
-                            {item.user_name}
-                          </p>
-                          <p className="text-xs text-slate-500 truncate">
-                            {item.user_phone}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {unreadCount > 0 && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">
-                              {unreadCount > 99 ? "99+" : unreadCount} unread
-                            </span>
-                          )}
-                          <SentimentIndicator sentiment={item.sentiment} />
-                        </div>
-                      </div>
-                      {lastMsg && (
-                        <p className="text-xs text-slate-600 truncate mb-1.5" title={lastMsg}>
-                          {lastMsg}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between text-xs text-slate-600">
-                        <span>{Math.floor(item.wait_time_seconds / 60)}m waiting</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTakeOver(item.conversation_id, item.user_id);
-                          }}
-                          className="text-amber-600 hover:text-amber-700 font-medium"
-                        >
-                          Take Over
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* 2) With operator – yale ma3mol handover w 3am ne7ke ma3on */}
-          <div className="whatsapp-sidebar-section">
-            <h3 className="font-bold text-slate-800 mb-2 flex items-center">
-              <span className="text-lg mr-2">💬</span>
-              With operator
-            </h3>
-            {isLoading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-8 w-12 bg-slate-200 rounded" />
-                <div className="h-3 w-24 bg-slate-100 rounded" />
-                <div className="h-12 mt-2 bg-slate-100 rounded" />
-              </div>
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-green-600">
-                  {filteredWithOperator.length}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Handover done, chatting with them
-                </p>
-                <div className="space-y-2 max-h-36 overflow-y-auto mt-2">
-                  {filteredWithOperator.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">None</p>
-              ) : (
-                filteredWithOperator.map((conv) => (
-                  <div
-                    key={conv.conversation_id}
-                    className="p-2.5 rounded-lg cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
-                    onClick={() => selectConversation(conv)}
-                  >
-                    <div className="flex items-start justify-between mb-0.5">
-                      <span className="font-medium text-slate-800 text-sm">
-                        {conv.user_name}
-                      </span>
-                      <SentimentIndicator sentiment={conv.sentiment} />
-                    </div>
-                    <div className="text-xs text-slate-600">
-                      <span className="text-green-600">With {conv.operator_id || "operator"}</span>
-                    </div>
-                  </div>
-                ))
-                  )}
-                </div>
-              </>
-            )}
           </div>
             </>
           )}
@@ -2570,14 +2443,134 @@ const LiveChat = () => {
           )}
         </motion.div>
 
-        {/* Conversation Details */}
+        {/* Conversation Details - Right panel: Waiting + With operator above, User info below */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className={`${sidebarCollapsed ? "col-span-2" : "col-span-3"} whatsapp-info-panel space-y-4 p-4`}
+          className={`${sidebarCollapsed ? "col-span-2" : "col-span-3"} whatsapp-info-panel flex flex-col overflow-y-auto p-4`}
         >
+          {/* Waiting for human + With operator - above user info */}
+          <div className="space-y-3 mb-4 flex-shrink-0">
+            <div className="whatsapp-info-card">
+              <h3 className="font-bold text-slate-800 mb-2 flex items-center">
+                <span className="text-lg mr-2">⏳</span>
+                Waiting for human
+              </h3>
+              {isLoading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-6 w-16 bg-slate-200 rounded" />
+                  <div className="h-10 bg-slate-100 rounded" />
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-amber-600">{filteredWaitingQueue.length}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {filteredWaitingQueue.length === 0
+                      ? "None waiting"
+                      : `${userRequestedHandover.length} asked · ${aiInitiatedHandover.length} AI referred`}
+                  </p>
+                  <div className="space-y-2 max-h-32 overflow-y-auto mt-2">
+                    {filteredWaitingQueue.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">None waiting</p>
+                    ) : (
+                      filteredWaitingQueue.map((item) => {
+                        const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
+                        const readKey = `${item.user_id}_${item.conversation_id}`;
+                        const readCount = readMessageCountByConv[readKey] ?? 0;
+                        const unreadCount = Math.max(0, (item.message_count || 0) - readCount);
+                        return (
+                          <div
+                            key={item.conversation_id}
+                            className={`p-2 rounded-lg cursor-pointer transition-colors ${
+                              isUserRequested
+                                ? "bg-orange-50 border border-orange-200 hover:bg-orange-100"
+                                : "bg-amber-50 border border-amber-200 hover:bg-amber-100"
+                            }`}
+                            onClick={() => {
+                              markWaitingConversationRead(item.user_id, item.conversation_id, item.message_count || 0);
+                              const conv = activeConversations.find(
+                                (c) =>
+                                  c.conversation_id === item.conversation_id &&
+                                  c.user_id === item.user_id
+                              ) || {
+                                conversation_id: item.conversation_id,
+                                user_id: item.user_id,
+                                user_name: item.user_name,
+                                user_phone: item.user_phone,
+                                status: "waiting_human",
+                                language: item.language || "ar",
+                                sentiment: item.sentiment,
+                                message_count: item.message_count || 0,
+                                last_message: item.last_message ? { content: item.last_message } : null,
+                              };
+                              selectConversation(conv);
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-0.5">
+                              <p className="font-medium text-slate-800 text-xs truncate">{item.user_name}</p>
+                              {unreadCount > 0 && (
+                                <span className="text-xs font-bold text-amber-600">{unreadCount}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span>{Math.floor(item.wait_time_seconds / 60)}m</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTakeOver(item.conversation_id, item.user_id);
+                                }}
+                                className="text-amber-600 hover:text-amber-700 font-medium"
+                              >
+                                Take Over
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="whatsapp-info-card">
+              <h3 className="font-bold text-slate-800 mb-2 flex items-center">
+                <span className="text-lg mr-2">💬</span>
+                With operator
+              </h3>
+              {isLoading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-6 w-12 bg-slate-200 rounded" />
+                  <div className="h-10 bg-slate-100 rounded" />
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-green-600">{filteredWithOperator.length}</p>
+                  <p className="text-xs text-slate-500 mt-1">Handover done</p>
+                  <div className="space-y-2 max-h-24 overflow-y-auto mt-2">
+                    {filteredWithOperator.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">None</p>
+                    ) : (
+                      filteredWithOperator.map((conv) => (
+                        <div
+                          key={conv.conversation_id}
+                          className="p-2 rounded-lg cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+                          onClick={() => selectConversation(conv)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-800 text-xs truncate">{conv.user_name}</span>
+                            <SentimentIndicator sentiment={conv.sentiment} />
+                          </div>
+                          <span className="text-xs text-green-600">With {conv.operator_id || "op"}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
           {selectedConversation ? (
-            <>
+            <div className="space-y-4 flex-1 min-h-0">
               {/* User Info */}
               <div className="whatsapp-info-card">
                 <h3 className="font-bold text-slate-800 mb-3 flex items-center">
@@ -2685,7 +2678,7 @@ const LiveChat = () => {
                   </button>
                 </div>
               </div>
-            </>
+            </div>
           ) : (
             <div className="card p-4">
               <p className="text-center text-slate-500">
