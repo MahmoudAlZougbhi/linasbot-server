@@ -6,6 +6,7 @@ Includes SSE (Server-Sent Events) for real-time dashboard updates.
 """
 
 import logging
+from typing import Any, Callable, Awaitable
 
 from fastapi import Request, Query
 from fastapi.responses import StreamingResponse
@@ -52,6 +53,20 @@ async def broadcast_sse_event(event_type: str, data: dict):
         print(f"📡 [SSE] broadcast new_message conv_id={data.get('conversation_id')} user_id={data.get('user_id')}")
     await live_chat_sse_broadcaster.publish(event_type, data)
 
+
+def _error_response(message: str):
+    return {"success": False, "error": str(message)}
+
+
+async def _run_endpoint(fn: Callable[[], Awaitable[Any]], fallback=None):
+    try:
+        return await fn()
+    except Exception as e:  # pragma: no cover - defensive catch-all for API stability
+        print(f"❌ Endpoint error: {e}")
+        import traceback
+        traceback.print_exc()
+        return fallback if fallback is not None else _error_response(str(e))
+
 @app.get("/api/live-chat/events")
 async def live_chat_events(request: Request):
     """
@@ -89,160 +104,111 @@ async def get_unified_chats(
     filter: str = Query(default="all", description="Badge filter: all|waiting|with_operator|bot|closed"),
 ):
     """WhatsApp-style inbox (single master list) powered by live_chat_index."""
-    try:
-        effective_page = int(cursor) if (cursor and cursor.isdigit()) else page
-        result = await live_chat_service.get_unified_chats(
+    effective_page = int(cursor) if (cursor and cursor.isdigit()) else page
+
+    async def _handler():
+        return await live_chat_service.get_unified_chats(
             search=search,
             page=effective_page,
             page_size=page_size,
             filter_state=filter,
             cursor=None if (cursor and cursor.isdigit()) else cursor,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in get_unified_chats: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "chats": [], "total": 0, "has_more": False}
+
+    fallback = {"success": False, "chats": [], "total": 0, "has_more": False}
+    return await _run_endpoint(_handler, fallback=fallback)
 
 
 @app.get("/api/live-chat/active-conversations")
 async def get_active_conversations(search: str = Query(default="", description="Search by client name or phone")):
     """Get active conversations with optional client search."""
-    try:
+    async def _handler():
         conversations = await live_chat_service.get_active_conversations(search=search)
         return {
             "success": True,
             "conversations": conversations,
             "total": len(conversations),
-            "search": search
+            "search": search,
         }
-    except Exception as e:
-        print(f"❌ Error in get_active_conversations: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.get("/api/live-chat/waiting-queue")
 async def get_waiting_queue():
     """Get conversations waiting for human intervention"""
-    try:
+    async def _handler():
         queue = await live_chat_service.get_waiting_queue()
         return {
             "success": True,
             "queue": queue,
-            "total": len(queue)
+            "total": len(queue),
         }
-    except Exception as e:
-        print(f"❌ Error in get_waiting_queue: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.post("/api/live-chat/takeover")
 async def takeover_conversation(request: TakeoverRequest):
     """Operator takes over a conversation"""
-    try:
-        result = await live_chat_service.takeover_conversation(
+    async def _handler():
+        return await live_chat_service.takeover_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
-            operator_id=request.operator_id
+            operator_id=request.operator_id,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in takeover_conversation: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.post("/api/live-chat/release")
 async def release_conversation(request: ReleaseRequest):
     """Release conversation back to bot"""
-    try:
-        result = await live_chat_service.release_conversation(
+    async def _handler():
+        return await live_chat_service.release_conversation(
             conversation_id=request.conversation_id,
-            user_id=request.user_id
+            user_id=request.user_id,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in release_conversation: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.post("/api/live-chat/send-message")
 async def send_operator_message(request: SendOperatorMessageRequest):
     """Send message from operator to customer"""
-    try:
+    async def _handler():
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
-        result = await live_chat_service.send_operator_message(
+        return await live_chat_service.send_operator_message(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
             message=request.message,
             operator_id=request.operator_id,
             message_type=request.message_type,
-            adapter=adapter
+            adapter=adapter,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in send_operator_message: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.post("/api/live-chat/operator-status")
 async def update_operator_status(request: OperatorStatusRequest):
     """Update operator availability status"""
-    try:
-        result = await live_chat_service.update_operator_status(
+    async def _handler():
+        return await live_chat_service.update_operator_status(
             operator_id=request.operator_id,
-            status=request.status
+            status=request.status,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in update_operator_status: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.get("/api/live-chat/metrics")
 async def get_live_chat_metrics():
     """Get real-time live chat metrics"""
-    try:
-        metrics = await live_chat_service.get_metrics()
-        return metrics
-    except Exception as e:
-        print(f"❌ Error in get_live_chat_metrics: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+    async def _handler():
+        return await live_chat_service.get_metrics()
+
+    return await _run_endpoint(_handler)
 
 
 @app.get("/api/live-chat/faq-match-context")
@@ -252,18 +218,14 @@ async def get_faq_match_context(
     message_id: str = Query(..., description="Message ID"),
 ):
     """Get FAQ match metadata and current FAQ entry for a message (for FAQ correction modal)."""
-    try:
-        result = await live_chat_service.get_faq_match_context(
+    async def _handler():
+        return await live_chat_service.get_faq_match_context(
             user_id=user_id,
             conversation_id=conversation_id,
             message_id=message_id,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in get_faq_match_context: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
+
+    return await _run_endpoint(_handler)
 
 
 @app.get("/api/live-chat/conversation/{user_id}/{conversation_id}")
@@ -276,8 +238,8 @@ async def get_conversation_details(
     limit: int = Query(default=50, ge=1, le=100, description="Max messages per request (WhatsApp-style: 50)"),
 ):
     """Get detailed conversation history. Initial: last 1 day. Load More: before=oldest_ts, day_window=1 for one more day."""
-    try:
-        details = await live_chat_service.get_conversation_details(
+    async def _handler():
+        return await live_chat_service.get_conversation_details(
             user_id=user_id,
             conversation_id=conversation_id,
             days=days,
@@ -285,86 +247,61 @@ async def get_conversation_details(
             day_window=day_window,
             max_messages=limit,
         )
-        return details
-    except Exception as e:
-        print(f"❌ Error in get_conversation_details: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.get("/api/live-chat/client/{user_id}/conversations")
 async def get_client_all_conversations(user_id: str):
     """Get all conversations for a specific client (for expanded view)"""
-    try:
+    async def _handler():
         conversations = await live_chat_service.get_client_conversations(user_id)
         return {
             "success": True,
             "conversations": conversations,
-            "total": len(conversations)
+            "total": len(conversations),
         }
-    except Exception as e:
-        print(f"❌ Error in get_client_all_conversations: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.post("/api/live-chat/edit-message")
 async def edit_message(request: EditMessageRequest):
     """Edit a bot message's content (e.g. after operator dislike). Updates Firestore and broadcasts."""
-    try:
-        result = await live_chat_service.update_message_content(
+    async def _handler():
+        return await live_chat_service.update_message_content(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
             message_id=request.message_id,
             new_content=request.new_content,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in edit_message: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
+
+    return await _run_endpoint(_handler)
 
 
 @app.post("/api/live-chat/end-conversation")
 async def end_conversation(request: dict):
     """Mark conversation as resolved/ended"""
-    try:
-        conversation_id = request.get("conversation_id")
-        user_id = request.get("user_id")
-        operator_id = request.get("operator_id")
+    conversation_id = request.get("conversation_id")
+    user_id = request.get("user_id")
+    operator_id = request.get("operator_id")
 
-        if not all([conversation_id, user_id, operator_id]):
-            return {
-                "success": False,
-                "error": "Missing required fields: conversation_id, user_id, operator_id"
-            }
+    if not all([conversation_id, user_id, operator_id]):
+        return {
+            "success": False,
+            "error": "Missing required fields: conversation_id, user_id, operator_id",
+        }
 
+    async def _handler():
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
-
-        result = await live_chat_service.end_conversation(
+        return await live_chat_service.end_conversation(
             conversation_id=conversation_id,
             user_id=user_id,
             operator_id=operator_id,
-            adapter=adapter
+            adapter=adapter,
         )
-        return result
-    except Exception as e:
-        print(f"❌ Error in end_conversation: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+
+    return await _run_endpoint(_handler)
 
 
 @app.get("/api/live-chat/debug-firestore")
@@ -474,15 +411,12 @@ async def debug_firestore():
 @app.post("/api/live-chat/rebuild-index")
 async def rebuild_live_chat_index(max_users: int = Query(default=None), max_conversations_per_user: int = Query(default=None)):
     """Temporary debug endpoint to rebuild/backfill live_chat_index from Firestore conversations."""
-    try:
+    async def _handler():
         written = await live_chat_service.rebuild_index_from_firestore(
             max_users=max_users,
             max_conversations_per_user=max_conversations_per_user,
             set_conversation_state=True,
         )
         return {"success": True, "written": written}
-    except Exception as e:
-        print(f"❌ Error rebuilding live_chat_index: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
+
+    return await _run_endpoint(_handler)

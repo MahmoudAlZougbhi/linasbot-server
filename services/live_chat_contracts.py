@@ -202,16 +202,32 @@ def normalize_conversation_document(
     """Normalize a raw conversation document while keeping contract fields."""
     data = dict(payload or {})
     normalized_messages = dedupe_messages(data.get("messages", []))
+    timestamp = parse_timestamp_utc(data.get("timestamp"))
+    last_updated = parse_timestamp_utc(data.get("last_updated"), fallback=timestamp)
+    last_message_at = parse_timestamp_utc(
+        data.get("last_message_at") or data.get("last_activity"),
+        fallback=last_updated,
+    )
+
+    resolved_raw = data.get("resolved_at")
+    archived_raw = data.get("archived_at")
+
     return {
         "conversation_id": conversation_id,
         "user_id": str(data.get("user_id") or user_id),
         "customer_info": dict(data.get("customer_info", {}) or {}),
         "messages": normalized_messages,
-        "timestamp": parse_timestamp_utc(data.get("timestamp")),
-        "last_updated": parse_timestamp_utc(data.get("last_updated")),
+        "timestamp": timestamp,
+        "last_updated": last_updated,
+        "last_message_at": last_message_at,
         "status": str(data.get("status") or "active"),
         "sentiment": str(data.get("sentiment") or "neutral"),
         "human_takeover_active": bool(data.get("human_takeover_active", False)),
         "operator_id": data.get("operator_id"),
         "operator_name": data.get("operator_name"),
+        "conversation_state": data.get("conversation_state"),
+        "unread_count": int(data.get("unread_count") or 0),
+        "resolved_at": parse_timestamp_utc(resolved_raw) if resolved_raw is not None else None,
+        "archived_at": parse_timestamp_utc(archived_raw) if archived_raw is not None else None,
+        "escalation_reason": data.get("escalation_reason"),
     }
