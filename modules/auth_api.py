@@ -77,10 +77,12 @@ async def login(request: LoginRequest):
     Returns user data (without password) on success
     """
     try:
+        print(f"[auth_api] login: calling authenticate for {request.email}", flush=True)
         user = await asyncio.wait_for(
             asyncio.to_thread(user_service.authenticate, request.email, request.password),
             timeout=45.0
         )
+        print(f"[auth_api] login: authenticate returned, building response", flush=True)
 
         if not user:
             return {
@@ -88,6 +90,7 @@ async def login(request: LoginRequest):
                 "error": "Invalid email or password"
             }
 
+        print(f"[auth_api] login: returning success", flush=True)
         return {
             "success": True,
             "user": user
@@ -98,6 +101,7 @@ async def login(request: LoginRequest):
             "error": str(e)
         }
     except asyncio.TimeoutError:
+        print(f"[auth_api] login: TIMEOUT after 45s for {request.email}", flush=True)
         return {
             "success": False,
             "error": "Authentication timeout (45s). تحقق من Firestore أو أعد تشغيل الـ backend."

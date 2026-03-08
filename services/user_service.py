@@ -242,16 +242,16 @@ class UserService:
             User data (without password) if authentication succeeds, None otherwise
         """
         t0 = time.monotonic()
-        print(f"[auth] authenticate() started for {email}")
+        print(f"[auth] authenticate() started for {email}", flush=True)
 
         # Step 1: Firestore lookup by email
         t1 = time.monotonic()
         user = self.get_user_by_email(email)
         elapsed = time.monotonic() - t1
-        print(f"[auth] get_user_by_email() took {elapsed:.2f}s")
+        print(f"[auth] get_user_by_email() took {elapsed:.2f}s", flush=True)
 
         if not user:
-            print(f"[auth] User not found for {email}")
+            print(f"[auth] User not found for {email}", flush=True)
             return None
 
         # Check if user is active
@@ -261,24 +261,32 @@ class UserService:
         # Step 2: Password verification (bcrypt)
         t2 = time.monotonic()
         if not self._verify_password(password, user['password']):
-            print(f"[auth] Password verification failed for {email}")
+            print(f"[auth] Password verification failed for {email}", flush=True)
             return None
         elapsed = time.monotonic() - t2
-        print(f"[auth] _verify_password() took {elapsed:.2f}s")
+        print(f"[auth] _verify_password() took {elapsed:.2f}s", flush=True)
 
         # Step 3: Update lastLogin in Firestore
+        print(f"[auth] step3: about to update lastLogin for user_id={user['id']}", flush=True)
         t3 = time.monotonic()
         now = datetime.utcnow().isoformat()
+        print(f"[auth] step3: calling Firestore document().update() now", flush=True)
         self.collection.document(user['id']).update({
             "lastLogin": now
         })
+        print(f"[auth] step3: Firestore update() returned", flush=True)
         user['lastLogin'] = now
         elapsed = time.monotonic() - t3
-        print(f"[auth] Firestore update lastLogin took {elapsed:.2f}s")
+        print(f"[auth] Firestore update lastLogin took {elapsed:.2f}s", flush=True)
+
+        # Step 4: Sanitize and return
+        print(f"[auth] step4: about to _sanitize_user()", flush=True)
+        result = self._sanitize_user(user)
+        print(f"[auth] step4: _sanitize_user() done", flush=True)
 
         total = time.monotonic() - t0
-        print(f"[auth] authenticate() completed for {email} in {total:.2f}s")
-        return self._sanitize_user(user)
+        print(f"[auth] authenticate() completed for {email} in {total:.2f}s", flush=True)
+        return result
 
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
         """
