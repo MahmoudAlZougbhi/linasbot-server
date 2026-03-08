@@ -514,11 +514,27 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         customer_info["phone_clean"] = _clean_phone_for_lookup(existing_phone)
 
                 current_messages.append(message_data)
-                await asyncio.to_thread(doc_ref.update, {
+                update_payload = {
                     "messages": current_messages,
                     "customer_info": customer_info,
-                    "last_updated": utc_now()
-                })
+                    "last_updated": utc_now(),
+                }
+                if not is_smart_source:
+                    existing_takeover = bool(doc_data.get("human_takeover_active", False))
+                    existing_operator = doc_data.get("operator_id")
+                    if existing_takeover:
+                        update_payload.update({
+                            "status": "human" if existing_operator else "waiting_human",
+                            "human_takeover_active": True,
+                            "operator_id": existing_operator,
+                        })
+                    else:
+                        update_payload.update({
+                            "status": "active",
+                            "human_takeover_active": False,
+                            "operator_id": None,
+                        })
+                await asyncio.to_thread(doc_ref.update, update_payload)
                 _invalidate_live_chat_cache()
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
