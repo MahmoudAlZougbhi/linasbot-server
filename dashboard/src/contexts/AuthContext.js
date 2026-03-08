@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 28000);
       const response = await fetch(`${getAuthBase()}/login`, {
         method: 'POST',
         headers: {

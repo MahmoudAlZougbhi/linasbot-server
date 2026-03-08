@@ -3,6 +3,7 @@ User Service for Dashboard Authentication
 Handles Firestore operations for dashboard users with bcrypt password hashing
 """
 
+import time
 import uuid
 import bcrypt
 from datetime import datetime
@@ -240,26 +241,43 @@ class UserService:
         Returns:
             User data (without password) if authentication succeeds, None otherwise
         """
+        t0 = time.monotonic()
+        print(f"[auth] authenticate() started for {email}")
+
+        # Step 1: Firestore lookup by email
+        t1 = time.monotonic()
         user = self.get_user_by_email(email)
+        elapsed = time.monotonic() - t1
+        print(f"[auth] get_user_by_email() took {elapsed:.2f}s")
 
         if not user:
+            print(f"[auth] User not found for {email}")
             return None
 
         # Check if user is active
         if user.get('status') != 'active':
             raise ValueError(f"Account is {user.get('status', 'inactive')}")
 
-        # Verify password
+        # Step 2: Password verification (bcrypt)
+        t2 = time.monotonic()
         if not self._verify_password(password, user['password']):
+            print(f"[auth] Password verification failed for {email}")
             return None
+        elapsed = time.monotonic() - t2
+        print(f"[auth] _verify_password() took {elapsed:.2f}s")
 
-        # Update last login
+        # Step 3: Update lastLogin in Firestore
+        t3 = time.monotonic()
         now = datetime.utcnow().isoformat()
         self.collection.document(user['id']).update({
             "lastLogin": now
         })
         user['lastLogin'] = now
+        elapsed = time.monotonic() - t3
+        print(f"[auth] Firestore update lastLogin took {elapsed:.2f}s")
 
+        total = time.monotonic() - t0
+        print(f"[auth] authenticate() completed for {email} in {total:.2f}s")
         return self._sanitize_user(user)
 
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
