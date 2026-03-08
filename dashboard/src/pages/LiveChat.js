@@ -86,6 +86,43 @@ const LiveChat = () => {
     []
   );
 
+  const normalizeConversationStatus = React.useCallback((status, conversationState) => {
+    const raw = String(status || conversationState || "").toLowerCase();
+    if (["human", "assigned_to_operator", "assigned"].includes(raw)) return "human";
+    if (["waiting_human", "waiting_for_operator", "waiting", "pending"].includes(raw)) {
+      return "waiting_human";
+    }
+    if (["closed", "resolved", "archived"].includes(raw)) return "closed";
+    return "bot";
+  }, []);
+
+  const normalizeIncomingConversation = React.useCallback((conv) => {
+    if (!conv || typeof conv !== "object") return conv;
+    const normalizedStatus = normalizeConversationStatus(
+      conv.status,
+      conv.conversation_state
+    );
+    const lastActivity = conv.last_activity || conv.last_message_at || null;
+    const hasLastMessageObject = conv.last_message && typeof conv.last_message === "object";
+    const normalizedLastMessage = hasLastMessageObject
+      ? conv.last_message
+      : (conv.last_message_text || conv.last_message)
+        ? {
+            content: conv.last_message_text ?? conv.last_message ?? "",
+            timestamp: lastActivity,
+            is_user: false,
+          }
+        : null;
+
+    return {
+      ...conv,
+      status: normalizedStatus,
+      user_phone: conv.user_phone || conv.phone_number || "",
+      last_activity: lastActivity,
+      last_message: normalizedLastMessage,
+    };
+  }, [normalizeConversationStatus]);
+
   const mergeActiveWaitingIntoQueue = (queue, activeList) => {
     const activeWaiting = (activeList || []).filter((conv) => conv.status === "waiting_human");
     if (!activeWaiting.length) return queue ?? [];
@@ -125,7 +162,8 @@ const LiveChat = () => {
 
   const applyServerConversations = React.useCallback((incoming) => {
     if (!Array.isArray(incoming)) return;
-    if (incoming.length === 0) {
+    const normalizedIncoming = incoming.map(normalizeIncomingConversation).filter(Boolean);
+    if (normalizedIncoming.length === 0) {
       if (activeConversationsRef.current?.length || cachedActiveConversationsRef.current?.length) {
         return;
       }
@@ -133,9 +171,9 @@ const LiveChat = () => {
     const baseline = activeConversationsRef.current?.length
       ? activeConversationsRef.current
       : cachedActiveConversationsRef.current;
-    const merged = mergeMissingActiveChats(incoming, baseline);
+    const merged = mergeMissingActiveChats(normalizedIncoming, baseline);
     setActiveConversations(merged);
-  }, [mergeMissingActiveChats]);
+  }, [mergeMissingActiveChats, normalizeIncomingConversation]);
 
   const effectiveWaitingQueue = React.useMemo(
     () => mergeActiveWaitingIntoQueue(waitingQueue, activeConversations),
@@ -325,9 +363,10 @@ const LiveChat = () => {
       try {
         const parsed = JSON.parse(cachedChats);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setActiveConversations(parsed);
-          activeConversationsRef.current = parsed;
-          cachedActiveConversationsRef.current = parsed;
+          const normalized = parsed.map(normalizeIncomingConversation).filter(Boolean);
+          setActiveConversations(normalized);
+          activeConversationsRef.current = normalized;
+          cachedActiveConversationsRef.current = normalized;
         }
       } catch (err) {
         console.warn("LiveChat cache parse error (active conversations)", err);
@@ -354,7 +393,7 @@ const LiveChat = () => {
         console.warn("LiveChat cache write error", err);
       }
     };
-  }, []);
+  }, [normalizeIncomingConversation]);
 
   // Debounce search input (250ms) - WhatsApp-style snappy
   useEffect(() => {
