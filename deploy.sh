@@ -102,6 +102,27 @@ else
 fi
 echo ""
 
+# Step 5b: Nginx config (proxy /api to backend for login, etc.)
+echo -e "${YELLOW}[5b/8] Nginx config for /api proxy...${NC}"
+if [ -f "$REPO_ROOT/deploy/nginx-linasaibot.conf" ]; then
+  apt install -y nginx 2>/dev/null || true
+  if command -v nginx >/dev/null 2>&1; then
+    cp "$REPO_ROOT/deploy/nginx-linasaibot.conf" /etc/nginx/sites-available/linasaibot
+    ln -sf /etc/nginx/sites-available/linasaibot /etc/nginx/sites-enabled/linasaibot 2>/dev/null || true
+    if nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || service nginx reload 2>/dev/null || true
+      echo -e "${GREEN}Nginx config installed. /api -> localhost:8003${NC}"
+    else
+      echo -e "${YELLOW}Nginx config copied. Run 'nginx -t' and fix any errors, then 'systemctl reload nginx'${NC}"
+    fi
+  else
+    echo -e "${YELLOW}Nginx not installed. Copy deploy/nginx-linasaibot.conf to /etc/nginx/sites-available/ and add /api proxy.${NC}"
+  fi
+else
+  echo -e "${YELLOW}deploy/nginx-linasaibot.conf not found, skipping.${NC}"
+fi
+echo ""
+
 # Step 6: Verify config and credentials
 echo -e "${YELLOW}[6/8] Checking configuration...${NC}"
 if [ ! -f "$APP_DIR/.env" ]; then
