@@ -4,8 +4,23 @@ Handles authentication and user management endpoints for the dashboard
 """
 
 import asyncio
+import json
+import time
 
 from fastapi import HTTPException
+
+# #region agent log
+_DEBUG_LOG = "/Users/mahmoudalzougbhi/linas ai bot/.cursor/debug-1bc2ee.log"
+def _dbg(m, d, h):
+    try:
+        import os
+        os.makedirs(os.path.dirname(_DEBUG_LOG), exist_ok=True)
+        with open(_DEBUG_LOG, "a") as f:
+            f.write(json.dumps({"sessionId":"1bc2ee","message":m,"data":d,"hypothesisId":h,"timestamp":int(time.time()*1000),"location":"auth_api.py"}) + "\n")
+        print(f"[DEBUG] {m} | {h} | {d}")
+    except Exception as e:
+        print(f"[DEBUG LOG FAIL] {e}")
+# #endregion
 from pydantic import BaseModel, EmailStr
 from typing import Dict, Any, Optional, List
 
@@ -76,11 +91,20 @@ async def login(request: LoginRequest):
 
     Returns user data (without password) on success
     """
+    # #region agent log
+    _dbg("login handler entered", {"email": request.email[:3] + "***"}, "H4")
+    # #endregion
     try:
+        # #region agent log
+        _dbg("before authenticate (Firestore)", {}, "H1")
+        # #endregion
         user = await asyncio.wait_for(
             asyncio.to_thread(user_service.authenticate, request.email, request.password),
             timeout=8.0
         )
+        # #region agent log
+        _dbg("authenticate returned", {"has_user": user is not None}, "H1")
+        # #endregion
 
         if not user:
             return {
@@ -98,11 +122,17 @@ async def login(request: LoginRequest):
             "error": str(e)
         }
     except asyncio.TimeoutError:
+        # #region agent log
+        _dbg("authenticate timeout (Firestore blocked)", {}, "H1")
+        # #endregion
         return {
             "success": False,
             "error": "Authentication timeout (8s). تحقق من Firestore أو أعد تشغيل الـ backend."
         }
     except Exception as e:
+        # #region agent log
+        _dbg("login exception", {"err": str(e)}, "H1")
+        # #endregion
         print(f"Login error: {e}")
         return {
             "success": False,

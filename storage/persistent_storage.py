@@ -10,7 +10,21 @@ import shutil
 from pathlib import Path
 
 # Root for persistent data. Override with LINASBOT_DATA_ROOT env var.
-_LINASBOT_DATA_ROOT = os.getenv("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
+# Dev fallback: if /opt/linasbot_data not writable, use project-local linasbot_data/
+def _resolve_data_root():
+    explicit = os.getenv("LINASBOT_DATA_ROOT")
+    if explicit:
+        return str(Path(explicit).expanduser().resolve())
+    default = "/opt/linasbot_data"
+    try:
+        Path(default).mkdir(parents=True, exist_ok=True)
+        return default
+    except (PermissionError, OSError):
+        proj = Path(__file__).resolve().parent.parent
+        fallback = str(proj / "linasbot_data")
+        return fallback
+
+_LINASBOT_DATA_ROOT = _resolve_data_root()
 _DATA_ROOT = Path(_LINASBOT_DATA_ROOT)
 
 # Legacy project data dir (relative to project root)

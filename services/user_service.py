@@ -3,8 +3,23 @@ User Service for Dashboard Authentication
 Handles Firestore operations for dashboard users with bcrypt password hashing
 """
 
+import json
+import time
 import uuid
 import bcrypt
+
+# #region agent log
+_DEBUG_LOG = "/Users/mahmoudalzougbhi/linas ai bot/.cursor/debug-1bc2ee.log"
+def _dbg(m, d, h):
+    try:
+        import os
+        os.makedirs(os.path.dirname(_DEBUG_LOG), exist_ok=True)
+        with open(_DEBUG_LOG, "a") as f:
+            f.write(json.dumps({"sessionId":"1bc2ee","message":m,"data":d,"hypothesisId":h,"timestamp":int(time.time()*1000),"location":"user_service.py"}) + "\n")
+        print(f"[DEBUG] {m} | {h} | {d}")
+    except Exception as e:
+        print(f"[DEBUG LOG FAIL] {e}")
+# #endregion
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from utils.utils import get_firestore_db
@@ -240,7 +255,13 @@ class UserService:
         Returns:
             User data (without password) if authentication succeeds, None otherwise
         """
+        # #region agent log
+        _dbg("authenticate: before get_user_by_email", {"email": email[:3] + "***"}, "H1")
+        # #endregion
         user = self.get_user_by_email(email)
+        # #region agent log
+        _dbg("authenticate: after get_user_by_email", {"found": user is not None}, "H1")
+        # #endregion
 
         if not user:
             return None
@@ -254,10 +275,16 @@ class UserService:
             return None
 
         # Update last login
+        # #region agent log
+        _dbg("authenticate: before Firestore update lastLogin", {}, "H1")
+        # #endregion
         now = datetime.utcnow().isoformat()
         self.collection.document(user['id']).update({
             "lastLogin": now
         })
+        # #region agent log
+        _dbg("authenticate: after Firestore update", {}, "H1")
+        # #endregion
         user['lastLogin'] = now
 
         return self._sanitize_user(user)

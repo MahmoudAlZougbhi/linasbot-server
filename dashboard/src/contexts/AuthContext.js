@@ -102,9 +102,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
+    // #region agent log
+    const _log = (m, d, h) => fetch('http://127.0.0.1:7613/ingest/3b1feaff-4c9a-4490-a8ad-995005809bfa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1bc2ee'},body:JSON.stringify({sessionId:'1bc2ee',location:'AuthContext.js',message:m,data:d,hypothesisId:h,timestamp:Date.now()})}).catch(()=>{});
+    _log('login called', {url: getAuthBase() + '/login'}, 'H2');
+    // #endregion
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
+      // #region agent log
+      _log('before fetch', {}, 'H2');
+      // #endregion
       const response = await fetch(`${getAuthBase()}/login`, {
         method: 'POST',
         headers: {
@@ -114,6 +121,9 @@ export const AuthProvider = ({ children }) => {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
+      // #region agent log
+      _log('fetch resolved', {status: response?.status}, 'H2');
+      // #endregion
 
       let data;
       try {
@@ -129,10 +139,16 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (!data.success) {
+        // #region agent log
+        _log('login failed (data.success=false)', {error: data?.error}, 'H3');
+        // #endregion
         throw new Error(data.error || 'Invalid email or password');
       }
 
       const userData = buildUserData(data.user);
+      // #region agent log
+      _log('login success, before setUser/navigate', {userId: userData?.id}, 'H3');
+      // #endregion
 
       // Create session
       const session = {
@@ -148,6 +164,9 @@ export const AuthProvider = ({ children }) => {
 
       return userData;
     } catch (error) {
+      // #region agent log
+      _log('login catch', {name: error?.name, msg: error?.message?.slice(0,80)}, 'H2');
+      // #endregion
       let msg = error.message || 'Login failed';
       if (error.name === 'AbortError') {
         msg = 'انتهت المهلة (8 ثواني). تحقق من الـ backend أو Firestore وأعد التشغيل';
