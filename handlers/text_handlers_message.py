@@ -1,45 +1,9 @@
 # handlers/text_handlers_message.py
 # Main message handler for WhatsApp text messages
+# Human handoff: AI detects intent (no keyword/regex - AI understands context)
 
 from handlers.text_handlers_firestore import *
 from handlers.text_handlers_delayed import _delayed_process_messages
-
-
-_EXPLICIT_HUMAN_HANDOFF_PATTERNS = [
-    r"\b(human|agent|representative|operator|customer\s*service|someone\s+real)\b",
-    r"\b(talk|speak|transfer|connect|escalate)\b.{0,20}\b(human|agent|representative|operator|someone)\b",
-    r"\b(call\s+(me|us|please|now|back)|phone\s+call|callback)\b",
-    r"(بدي|بدي احكي|حولني|وديني|خليني)\s*(?:احكي\s*)?(?:مع|على)\s*(?:موظف|شخص|انسان|مدير|مسؤول|خدمة العملاء)",
-    r"(بدي|بدّي|عايز|اريد|حابب|نفسي)\s*(?:احكي|اتكلم|أحكي|أتكلم|اتواصل|أحكي مع)\s*(?:مع|على)?\s*(?:حدا|حد|موظف|موظفة|انسان|بشري|مدير|مسؤول)",
-    r"(لو\s*سمحت|من\s*فضلك)?\s*(?:وصلني|وصلوني|حطوني|حوّلوني|حوّلني)\s*(?:على|مع)?\s*(?:موظف|موظفة|انسان|بشري|خدمة العملاء)",
-    r"(بدي|بدّي|عايز|اريد)\s*(?:احكي|اتكلم|أحكي|أتكلم)?\s*مع\s*خدمة\s*العملاء",
-    r"(في|فيك|فيكي)\s*حدا\s*(?:يساعدني|يفهمني|يحكي معي|يتواصل معي)\?",
-    r"(اتصلوا|اتصل|دقوا|تواصلوا)\s*(?:فيي|بي|معي|معنا)?",
-    r"(مش\s*بدي\s*(?:بوت|روبوت)|بدي\s*حدا\s*بشري|بدي\s*حدا\s*حقيقي|مش\s*عايز\s*بوت|مش\s*حابب\s*بوت)"
-]
-
-_CLARIFICATION_PATTERNS = [
-    r"(وضحلي|فسرلي|شرحلي|فسر|اشرح|وضح)\s*(?:سؤالك|السؤال|قصدك|شو\s*قصدك|شو\s*يعني)",
-    r"(شو\s*يعني|شو\s*قصدك|شو\s*المقصود|مش\s*فاهم|ما\s*فهمت|مش\s*واضح)",
-    r"(explain|clarify|what\s*do\s*you\s*mean|i\s*don'?t\s*understand|not\s*clear)",
-    r"(explique|clarifie|je\s*ne\s*comprends\s*pas|pas\s*clair|qu'?est-ce\s*que\s*tu\s*veux\s*dire)"
-]
-
-
-def _is_explicit_human_handoff_request(message: str) -> bool:
-    """Detect direct customer request for human/call takeover."""
-    message_text = (message or "").strip().lower()
-    if not message_text:
-        return False
-    return any(re.search(pattern, message_text, re.IGNORECASE | re.UNICODE) for pattern in _EXPLICIT_HUMAN_HANDOFF_PATTERNS)
-
-
-def _is_clarification_request(message: str) -> bool:
-    """Detect user asking for clarification/explanation (not a human handoff)."""
-    message_text = (message or "").strip().lower()
-    if not message_text:
-        return False
-    return any(re.search(pattern, message_text, re.IGNORECASE | re.UNICODE) for pattern in _CLARIFICATION_PATTERNS)
 
 
 async def handle_message(user_id: str, user_name: str, user_input_text: str, user_data: dict, send_message_func, send_action_func, skip_firestore_save: bool = False):
@@ -230,28 +194,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             import traceback
             traceback.print_exc()
 
-    # Explicit user request for human/call gets immediate takeover
-    if (
-        _is_explicit_human_handoff_request(raw_msg)
-        and not _is_clarification_request(raw_msg)
-        and not config.user_in_human_takeover_mode.get(user_id, False)
-    ):
-        print(f"📞 Explicit human/call handoff requested by user {user_id}")
-        await _trigger_human_takeover(
-            trigger_source="customer_explicit_request",
-            escalation_reason="customer_requested_human",
-            customer_message=raw_msg,
-            escalation_score=100,
-            detected_issues=["explicit_human_request_or_call"]
-        )
-        log_report_event("human_handover", user_id, config.user_gender.get(user_id, "unknown"), {
-            "message": raw_msg,
-            "status": "direct_keyword_trigger",
-            "reason": "customer_requested_human"
-        })
-        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
-        return
-    
+    # Human handoff: AI detects intent (no keyword/regex matching - AI understands context)
     # Analyze sentiment and check if auto-escalation is needed
     sentiment_analysis = sentiment_service.analyze_sentiment(
         user_id=user_id,

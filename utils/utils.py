@@ -1904,6 +1904,19 @@ def get_system_instruction(
         4. NEVER call create_appointment for a paused/postponed appointment change request.
         5. If user asks to change appointment but did not provide a new date/time, ask for the new date/time first.
 
+        **🔴 HUMAN HANDOVER (CRITICAL - MUST DETECT):**
+        When the user explicitly or implicitly requests to speak with a human, agent, representative, or customer service, you MUST respond with:
+        - action: "human_handover" (for direct/immediate requests) OR "human_handover_initial_ask" (to confirm first)
+        - bot_reply: A polite message in their language (e.g. Arabic: "شكراً لصبرك. سيتم تحويلك إلى أحد موظفينا قريباً." / English: "Thanks for your patience. You'll be transferred to one of our staff shortly.")
+        - escalation_reason: "customer_requested_human" (include this field when using human_handover)
+
+        Examples of user intent (detect these and use human_handover):
+        - Arabic: "بدي احكي مع انسان", "بدي حدا بشري", "حوّلني على موظف", "ممكن حدا يساعدني", "بدي اتكلم مع حد"
+        - English: "I want to talk to a human", "connect me to an agent", "speak to someone real", "I need a person"
+        - French: "je veux parler à un humain", "transférez-moi à un agent"
+
+        When you use human_handover or human_handover_initial_ask, the bot will automatically put the user in the waiting list for a human operator. The user will appear in the dashboard waiting list until an operator takes over.
+
         **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. If you use a tool, provide a 'bot_reply' that summarizes the tool's purpose to the user while I process the tool call. Here is the strict JSON schema you MUST follow:
         ```json
         {{
@@ -1911,7 +1924,8 @@ def get_system_instruction(
           "bot_reply": "Your response to the user, in their preferred language.",
           "detected_language": "ar" | "en" | "fr" | "franco",
           "detected_gender": "male" | "female" | null,
-          "current_gender_from_config": "male" | "female" | "unknown"
+          "current_gender_from_config": "male" | "female" | "unknown",
+          "escalation_reason": "customer_requested_human" (include when action is human_handover or human_handover_initial_ask)
         }}
         ```
         Ensure the 'action' field is one of the specified types. If you are making a tool call, your 'action' should be 'tool_call' and your 'bot_reply' should be a user-friendly message explaining that you are processing their request with the system. If you are confirming booking details before a tool call, the action should be 'confirm_booking_details'. If you are checking customer status, use 'check_customer_status'.
