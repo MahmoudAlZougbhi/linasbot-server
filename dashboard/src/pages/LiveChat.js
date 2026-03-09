@@ -105,7 +105,7 @@ const LiveChat = () => {
 
   const normalizeIncomingConversation = React.useCallback((conv) => {
     if (!conv || typeof conv !== "object") return conv;
-    const normalizedStatus = normalizeConversationStatus(
+    let normalizedStatus = normalizeConversationStatus(
       conv.status,
       conv.conversation_state
     );
@@ -120,6 +120,27 @@ const LiveChat = () => {
             is_user: false,
           }
         : null;
+
+    // Safety net: if backend status is temporarily stale but last bot message is a clear
+    // handover/waiting phrase and no operator is assigned yet, surface it as waiting_human.
+    if (normalizedStatus === "bot" && !conv.operator_id) {
+      const lastText = String(
+        (normalizedLastMessage && normalizedLastMessage.content) ||
+          conv.last_message_text ||
+          conv.last_message ||
+          ""
+      ).toLowerCase();
+      const waitingMarkers = [
+        "تم تحويلك",
+        "منكون معك",
+        "you'll be transferred",
+        "transferred to one of our staff",
+        "we'll be with you shortly",
+      ];
+      if (waitingMarkers.some((marker) => lastText.includes(marker.toLowerCase()))) {
+        normalizedStatus = "waiting_human";
+      }
+    }
 
     return {
       ...conv,
