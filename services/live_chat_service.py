@@ -75,6 +75,7 @@ class LiveChatService:
     FALLBACK_USERS_STREAM_LIMIT = 80
     FALLBACK_SEARCH_USERS_LIMIT = 150
     FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 20)
+    WAITING_SOURCE_USERS_LIMIT = _env_int("LIVECHAT_WAITING_SOURCE_USERS_LIMIT", 1200)
     PERSIST_UNIFIED_CACHE = _env_bool("LIVECHAT_PERSIST_UNIFIED_CACHE", True)
     UNIFIED_DISK_CACHE_MAX_AGE_SECONDS = _env_int("LIVECHAT_UNIFIED_DISK_CACHE_MAX_AGE_SECONDS", 86400)
     UNIFIED_CACHE_PATH = os.getenv("LIVECHAT_UNIFIED_CACHE_PATH", "data/live_chat_unified_cache.json")
@@ -1782,14 +1783,19 @@ class LiveChatService:
                 .order_by("last_message_at", direction=firestore.Query.DESCENDING)
                 .limit(300)
             )
-            docs = await asyncio.to_thread(
-                lambda: list(
-                    query.stream(
-                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
-                        retry=None,
+            try:
+                docs = await asyncio.to_thread(
+                    lambda: list(
+                        query.stream(
+                            timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                            retry=None,
+                        )
                     )
                 )
-            )
+            except Exception as idx_err:
+                # Missing index or transient Firestore issues should not zero-out Waiting UI.
+                print(f"⚠️ waiting_queue index query failed, switching to source fallback: {idx_err}")
+                docs = []
 
             if not docs:
                 fallback_queue = await self._fallback_waiting_queue_from_source()
@@ -1880,6 +1886,56 @@ class LiveChatService:
             return []
 
         current_time = utc_now()
+        def _build_queue_items_from_conversation_docs(conversation_docs) -> List[Dict[str, Any]]:
+            out: List[Dict[str, Any]] = []
+            for doc in conversation_docs:
+                payload = doc.to_dict() or {}
+                user_doc_ref = doc.reference.parent.parent if doc.reference.parent else None
+                user_id = user_doc_ref.id if user_doc_ref else payload.get("user_id")
+                if not user_id:
+                    continue
+
+                conv_data = normalize_conversation_document(
+                    conversation_id=doc.id,
+                    user_id=user_id,
+                    payload=payload,
+                )
+                state = self._normalize_conversation_state(conv_data)
+                if state != self.STATE_WAITING_OPERATOR:
+                    continue
+
+                last_at = conv_data.get("last_message_at") or conv_data.get("last_updated") or current_time
+                if isinstance(last_at, str):
+                    try:
+                        last_at = self._parse_timestamp(last_at)
+                    except Exception:
+                        last_at = current_time
+
+                wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
+                customer_info = conv_data.get("customer_info") or {}
+                user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+                language = conv_data.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+                sentiment = conv_data.get("sentiment", "neutral")
+                priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
+
+                out.append({
+                    "conversation_id": doc.id,
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "user_phone": phone_full,
+                    "phone_clean": phone_clean,
+                    "language": language,
+                    "reason": conv_data.get("escalation_reason", "user_request"),
+                    "wait_time_seconds": wait_time_seconds,
+                    "sentiment": sentiment,
+                    "message_count": conv_data.get("message_count", 0),
+                    "unread_count": conv_data.get("unread_count", 0),
+                    "priority": priority,
+                    "last_message": conv_data.get("last_message_text", ""),
+                })
+            return out
+
         try:
             query = (
                 db.collection_group(config.FIRESTORE_CONVERSATIONS_COLLECTION)
@@ -1894,57 +1950,26 @@ class LiveChatService:
                     )
                 )
             )
+            queue = _build_queue_items_from_conversation_docs(docs)
         except Exception as e:
-            print(f"⚠️ Waiting source fallback query failed: {e}")
-            return []
-
-        queue: List[Dict[str, Any]] = []
-        for doc in docs:
-            payload = doc.to_dict() or {}
-            user_doc_ref = doc.reference.parent.parent if doc.reference.parent else None
-            user_id = user_doc_ref.id if user_doc_ref else payload.get("user_id")
-            if not user_id:
-                continue
-
-            conv_data = normalize_conversation_document(
-                conversation_id=doc.id,
-                user_id=user_id,
-                payload=payload,
-            )
-            state = self._normalize_conversation_state(conv_data)
-            if state != self.STATE_WAITING_OPERATOR:
-                continue
-
-            last_at = conv_data.get("last_message_at") or conv_data.get("last_updated") or current_time
-            if isinstance(last_at, str):
-                try:
-                    last_at = self._parse_timestamp(last_at)
-                except Exception:
-                    last_at = current_time
-
-            wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
-            customer_info = conv_data.get("customer_info") or {}
-            user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
-            phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
-            language = conv_data.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
-            sentiment = conv_data.get("sentiment", "neutral")
-            priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
-
-            queue.append({
-                "conversation_id": doc.id,
-                "user_id": user_id,
-                "user_name": user_name,
-                "user_phone": phone_full,
-                "phone_clean": phone_clean,
-                "language": language,
-                "reason": conv_data.get("escalation_reason", "user_request"),
-                "wait_time_seconds": wait_time_seconds,
-                "sentiment": sentiment,
-                "message_count": conv_data.get("message_count", 0),
-                "unread_count": conv_data.get("unread_count", 0),
-                "priority": priority,
-                "last_message": conv_data.get("last_message_text", ""),
-            })
+            print(f"⚠️ Waiting source fallback query failed (collection_group): {e}")
+            queue = []
+            # Last-resort fallback that does not require collection_group indexes.
+            users_collection = self._get_users_collection()
+            if users_collection is not None:
+                users_docs = await self._stream_user_docs(
+                    users_collection,
+                    limit=self.WAITING_SOURCE_USERS_LIMIT,
+                )
+                user_ids = [doc.id for doc in users_docs]
+                conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
+                all_conv_docs = []
+                for result in conversation_results:
+                    if isinstance(result, Exception):
+                        continue
+                    _, conv_docs = result
+                    all_conv_docs.extend(conv_docs)
+                queue = _build_queue_items_from_conversation_docs(all_conv_docs)
 
         queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
         return queue
