@@ -74,7 +74,7 @@
   }
 
   .whatsapp-sidebar {
-    @apply relative z-30 bg-white border-r border-slate-200 h-full overflow-hidden flex flex-col;
+    @apply relative z-20 bg-white border-r border-slate-200 h-full overflow-hidden flex flex-col;
   }
 
   .whatsapp-sidebar-section {
@@ -82,7 +82,7 @@
   }
 
   .whatsapp-chat-panel {
-    @apply relative z-10 bg-[#efeae2] flex flex-col h-full overflow-hidden;
+    @apply relative z-30 bg-[#efeae2] flex flex-col h-full overflow-hidden;
   }
 
   .whatsapp-chat-header {
@@ -90,6 +90,9 @@
   }
 
   .whatsapp-chat-bg {
+    position: relative;
+    z-index: 1;
+    overflow-x: hidden;
     background-color: #efeae2;
     background-image:
       radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.45) 0%, transparent 45%),

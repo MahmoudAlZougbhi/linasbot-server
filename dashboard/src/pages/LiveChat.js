@@ -2779,7 +2779,7 @@ const LiveChat = () => {
                 <div className="animate-pulse h-12 bg-slate-100 rounded" />
               ) : (
                 <>
-                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                     {filteredWaitingQueue.length === 0 ? (
                       <p className="text-xs text-slate-400 italic py-1">None</p>
                     ) : (
@@ -2851,7 +2851,7 @@ const LiveChat = () => {
                 <div className="animate-pulse h-10 bg-slate-100 rounded" />
               ) : (
                 <>
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {filteredWithOperator.length === 0 ? (
                       <p className="text-xs text-slate-400 italic py-1">None</p>
                     ) : (
