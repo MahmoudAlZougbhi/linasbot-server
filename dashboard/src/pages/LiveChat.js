@@ -412,10 +412,8 @@ const LiveChat = () => {
 
   useEffect(() => {
     const query = (searchParams.get("search") || "").trim();
-    if (query !== liveSearchQuery) {
-      setLiveSearchQuery(query);
-    }
-  }, [searchParams, liveSearchQuery]);
+    setLiveSearchQuery((prev) => (prev === query ? prev : query));
+  }, [searchParams]);
 
   const {
     getUnifiedChats,

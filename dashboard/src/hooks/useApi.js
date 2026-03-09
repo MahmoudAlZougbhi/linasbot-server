@@ -464,7 +464,26 @@ export const useApi = () => {
       const response = await api.get(`/api/live-chat/unified-chats?${params.toString()}`, {
         timeout: 30000,
       });
-      return response.data;
+      const data = response?.data || {};
+      const chats = Array.isArray(data.chats)
+        ? data.chats
+        : Array.isArray(data.conversations)
+          ? data.conversations
+          : [];
+      const total = typeof data.total === "number" ? data.total : chats.length;
+      const hasMore = typeof data.has_more === "boolean"
+        ? data.has_more
+        : typeof data.hasMore === "boolean"
+          ? data.hasMore
+          : total > (page * pageSize);
+
+      return {
+        ...data,
+        success: data.success !== false,
+        chats,
+        total,
+        has_more: hasMore,
+      };
     } catch (error) {
       if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
         return { success: false, chats: [], total: 0, has_more: false, error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline" };
