@@ -114,8 +114,9 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         """Mark conversation as waiting_human, notify admins, and write audit event."""
         if db and current_conversation_id:
             try:
+                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 app_id_for_firestore = "linas-ai-bot-backend"
-                conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
                 update_payload = {
                     "status": "waiting_human",
                     "human_takeover_active": True,
@@ -136,7 +137,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                 try:
                     from services.live_chat_service import live_chat_service
                     live_chat_service.invalidate_cache()
-                    asyncio.create_task(live_chat_service._refresh_index_for_conversation(user_id, current_conversation_id))
+                    asyncio.create_task(live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id))
                 except Exception as idx_err:
                     print(f"⚠️ Index refresh after handover: {idx_err}")
             except Exception as e:
@@ -145,7 +146,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         config.user_in_human_takeover_mode[user_id] = True
 
         escalation_messages = {
-            "ar": "شكراً لصبرك. سيتم تحويلك إلى أحد موظفينا قريباً. 🙏",
+            "ar": "بدي يكون الآن تمام تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
             "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
             "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"
         }

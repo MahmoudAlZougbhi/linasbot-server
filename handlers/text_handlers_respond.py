@@ -408,8 +408,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         db = get_firestore_db()
         if db and current_conversation_id:
             try:
+                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 app_id_for_firestore = "linas-ai-bot-backend"
-                conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
                 conv_doc_ref.update({
                     "status": "waiting_human",
                     "human_takeover_active": True,
@@ -424,7 +425,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 try:
                     from services.live_chat_service import live_chat_service
                     live_chat_service.invalidate_cache()
-                    await live_chat_service._refresh_index_for_conversation(user_id, current_conversation_id)
+                    await live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id)
                 except Exception as idx_err:
                     print(f"⚠️ Index refresh after AI handover: {idx_err}")
             except Exception as e:
