@@ -10,6 +10,7 @@ import uuid
 import bcrypt
 from datetime import datetime
 from typing import Optional, Dict, List, Any
+from google.cloud.firestore_v1.base_query import FieldFilter
 from utils.utils import get_firestore_db
 
 
@@ -17,6 +18,8 @@ class UserService:
     """Service for managing dashboard users in Firestore"""
 
     COLLECTION = "artifacts/linas-ai-bot-backend/dashboard_users"
+    AUTH_QUERY_TIMEOUT_SECONDS = float(os.getenv("AUTH_QUERY_TIMEOUT_SECONDS", "8"))
+    AUTH_WRITE_TIMEOUT_SECONDS = float(os.getenv("AUTH_WRITE_TIMEOUT_SECONDS", "8"))
 
     def __init__(self):
         self._db = None
@@ -105,7 +108,10 @@ class UserService:
         }
 
         # Save to Firestore
-        self.collection.document(user_id).set(user_doc)
+        self.collection.document(user_id).set(
+            user_doc,
+            timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+        )
         print(f"Created dashboard user: {user_doc['email']} (ID: {user_id})")
 
         # Return without password
@@ -123,12 +129,16 @@ class UserService:
             print(f"[auth:get_user_by_email] collection accessed in {time.monotonic() - t1:.3f}s", flush=True)
 
             email_lower = email.lower().strip()
-            query = coll.where("email", "==", email_lower).limit(1)
+            query = coll.where(
+                filter=FieldFilter("email", "==", email_lower)
+            ).limit(1)
 
             # Firestore read - THIS IS THE ACTUAL NETWORK CALL (may hang if Firestore unreachable)
             t2 = time.monotonic()
             print(f"[auth:get_user_by_email] calling query.stream() - FIRST FIRESTORE NETWORK OP, may block here", flush=True)
-            docs = list(query.stream())
+            docs = list(
+                query.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS)
+            )
             elapsed = time.monotonic() - t2
             print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
 
@@ -145,7 +155,9 @@ class UserService:
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a user by ID (includes password for internal use)"""
         try:
-            doc = self.collection.document(user_id).get()
+            doc = self.collection.document(user_id).get(
+                timeout=self.AUTH_QUERY_TIMEOUT_SECONDS
+            )
             if doc.exists:
                 return doc.to_dict()
             return None
@@ -156,7 +168,7 @@ class UserService:
     def get_all_users(self) -> List[Dict[str, Any]]:
         """Get all users (without passwords)"""
         try:
-            docs = self.collection.stream()
+            docs = self.collection.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS)
             users = []
             for doc in docs:
                 user_data = doc.to_dict()
@@ -209,7 +221,10 @@ class UserService:
                 if admin_count <= 1:
                     raise ValueError("Cannot deactivate the last admin")
 
-            self.collection.document(user_id).update(update_data)
+            self.collection.document(user_id).update(
+                update_data,
+                timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+            )
 
             # Get updated user
             updated_user = self.get_user_by_id(user_id)
@@ -242,7 +257,9 @@ class UserService:
                 if admin_count <= 1:
                     raise ValueError("Cannot delete the last admin")
 
-            self.collection.document(user_id).delete()
+            self.collection.document(user_id).delete(
+                timeout=self.AUTH_WRITE_TIMEOUT_SECONDS
+            )
             print(f"Deleted dashboard user: {user['email']} (ID: {user_id})")
             return True
 
@@ -301,7 +318,10 @@ class UserService:
         # in a daemon thread so Firestore write issues never block login.
         def _update_lastlogin_background():
             try:
-                self.collection.document(user['id']).update({"lastLogin": now})
+                self.collection.document(user['id']).update(
+                    {"lastLogin": now},
+                    timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+                )
             except Exception as e:
                 print(f"[auth] lastLogin background update failed: {e}", flush=True)
 
@@ -335,10 +355,13 @@ class UserService:
             raise ValueError("Current password is incorrect")
 
         # Update password
-        self.collection.document(user_id).update({
-            "password": self._hash_password(new_password),
-            "updatedAt": datetime.utcnow().isoformat()
-        })
+        self.collection.document(user_id).update(
+            {
+                "password": self._hash_password(new_password),
+                "updatedAt": datetime.utcnow().isoformat()
+            },
+            timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+        )
 
         print(f"Password changed for user: {user['email']}")
         return True
@@ -357,7 +380,11 @@ class UserService:
         """
         try:
             # Check if any users exist
-            docs = list(self.collection.limit(1).stream())
+            docs = list(
+                self.collection.limit(1).stream(
+                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS
+                )
+            )
 
             if len(docs) == 0:
                 print("No dashboard users found. Creating default admin...")
@@ -380,8 +407,12 @@ class UserService:
     def count_active_admins(self) -> int:
         """Count the number of active admin users"""
         try:
-            query = self.collection.where("role", "==", "admin").where("status", "==", "active")
-            docs = list(query.stream())
+            query = self.collection.where(
+                filter=FieldFilter("role", "==", "admin")
+            ).where(filter=FieldFilter("status", "==", "active"))
+            docs = list(
+                query.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS)
+            )
             return len(docs)
         except Exception as e:
             print(f"Error counting admins: {e}")
