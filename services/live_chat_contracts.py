@@ -90,7 +90,10 @@ def normalize_message(message: Dict[str, Any]) -> Dict[str, Any]:
     metadata = normalize_message_metadata(payload.get("metadata"))
 
     role = str(payload.get("role", "")).strip().lower() or "user"
-    text = payload.get("text", "")
+    # Backward compatibility: some older records store message body under "content".
+    text = payload.get("text")
+    if text is None or text == "":
+        text = payload.get("content", "")
     safe_text = text if isinstance(text, str) else str(text or "")
     timestamp = parse_timestamp_utc(payload.get("timestamp"))
 

@@ -248,6 +248,9 @@ class LiveChatService:
     def _format_single_message(self, msg: Dict[str, Any]) -> Dict[str, Any]:
         """Format one raw message to API response shape (for index cache and full doc path)."""
         meta = msg.get("metadata") or {}
+        text_value = msg.get("text")
+        if text_value is None or text_value == "":
+            text_value = msg.get("content", "")
         handled = meta.get("handled_by")
         if not handled:
             if meta.get("source") == "qa_database":
@@ -262,8 +265,8 @@ class LiveChatService:
             "message_id": str(message_id),
             "timestamp": ts_str,
             "is_user": msg.get("role") == "user",
-            "content": msg.get("text", ""),
-            "text": msg.get("text", ""),
+            "content": text_value,
+            "text": text_value,
             "type": msg.get("type", "text"),
             "handled_by": handled,
             "role": msg.get("role"),
@@ -346,7 +349,10 @@ class LiveChatService:
 
         conv_data["visible_messages"] = visible_messages
         conv_data["last_message_at"] = last_ts
-        conv_data["last_message_text"] = last_message.get("text", "") if last_message else ""
+        if last_message:
+            conv_data["last_message_text"] = last_message.get("text") or last_message.get("content", "")
+        else:
+            conv_data["last_message_text"] = ""
         conv_data["message_count"] = len(visible_messages)
 
         return conv_data

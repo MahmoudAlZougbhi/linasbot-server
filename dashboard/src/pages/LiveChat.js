@@ -2204,18 +2204,19 @@ const LiveChat = () => {
                   </div>
                 )}
                 {(selectedConversation.history || []).map((msg, index) => {
+                  const messageText = msg.content || msg.text || "";
                   // ✅ Check if this is a voice message - Updated to use new Firebase structure
                   // First check msg.type (preferred), fallback to old content-based detection
                   const isVoiceMessage =
                     msg.type === "voice" ||
-                    msg.content === "[رسالة صوتية]" ||
-                    msg.content === "رسالة صوتية" ||
+                    messageText === "[رسالة صوتية]" ||
+                    messageText === "رسالة صوتية" ||
                     msg.audio_url;
 
                   // ✅ Check if this is an image message - Use new Firebase structure
                   const isImageMessage =
                     msg.type === "image" ||
-                    msg.content === "[صورة]" ||
+                    messageText === "[صورة]" ||
                     msg.image_url;
 
                   return (
@@ -2309,7 +2310,7 @@ const LiveChat = () => {
                               </div>
                             </div>
                           ) : (
-                            <p className="text-sm">{msg.content}</p>
+                            <p className="text-sm">{messageText}</p>
                           )}
                         </div>
                         <div className="flex items-center space-x-2 mt-1 px-2">
