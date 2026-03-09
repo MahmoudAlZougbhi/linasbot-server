@@ -616,11 +616,13 @@ const LiveChat = () => {
   // Update chat list locally (move to top + update last_message) without calling /unified-chats
   const updateChatListLocally = (conversationId, userId, message) => {
     setActiveConversations((prev) => {
-      const idx = prev.findIndex(
-        (c) =>
-          (conversationId && c.conversation_id === conversationId) ||
-          (userId && c.user_id === userId)
-      );
+      let idx = -1;
+      if (conversationId) {
+        idx = prev.findIndex((c) => c.conversation_id === conversationId);
+      } else if (userId) {
+        // Fallback only when conversation ID is unavailable.
+        idx = prev.findIndex((c) => c.user_id === userId);
+      }
       if (idx < 0) return prev;
       const conv = prev[idx];
       const ts = message?.timestamp || new Date().toISOString();
@@ -1431,7 +1433,7 @@ const LiveChat = () => {
         setActiveConversations((prev) => {
           const exists = prev.some((conv) => conv.conversation_id === conversationId && conv.user_id === userId);
           const updated = prev.map((conv) =>
-            conv.conversation_id === conversationId
+            conv.conversation_id === conversationId && conv.user_id === userId
               ? { ...conv, status: "human", operator_id: "operator_001" }
               : conv
           );
@@ -1497,7 +1499,7 @@ const LiveChat = () => {
         // Update conversation status locally
         setActiveConversations((prev) =>
           prev.map((conv) =>
-            conv.conversation_id === conversationId
+            conv.conversation_id === conversationId && conv.user_id === userId
               ? { ...conv, status: "bot", operator_id: null }
               : conv
           )
@@ -1588,6 +1590,13 @@ const LiveChat = () => {
           text: messageToSend,
         };
         appendMessageToSelectedConversation(optimisticMessage);
+        // Persist immediately so message stays visible after page refresh/tab switch
+        // even if SSE delivery is delayed.
+        saveOperatorMessageToSession(
+          selectedConversation.conversation.user_id,
+          selectedConversation.conversation.conversation_id,
+          optimisticMessage
+        );
         updateChatListLocally(
           selectedConversation.conversation.conversation_id,
           selectedConversation.conversation.user_id,
@@ -2008,7 +2017,7 @@ const LiveChat = () => {
                       <div className="space-y-2">
                         {liveBotConversations.map((conv) => (
                           <div
-                            key={conv.conversation_id}
+                            key={`${conv.user_id}_${conv.conversation_id}`}
                             className={`p-3 rounded-lg cursor-pointer transition-all ${
                               selectedConversation?.conversation?.conversation_id ===
                               conv.conversation_id
@@ -2064,7 +2073,7 @@ const LiveChat = () => {
                       <div className="space-y-2">
                         {historyBotConversations.map((conv) => (
                           <div
-                            key={conv.conversation_id}
+                            key={`${conv.user_id}_${conv.conversation_id}`}
                             className={`p-3 rounded-lg cursor-pointer transition-all ${
                               selectedConversation?.conversation?.conversation_id ===
                               conv.conversation_id
@@ -2194,7 +2203,7 @@ const LiveChat = () => {
                             <div className="space-y-2">
                               {liveBotConversations.map((conv) => (
                                 <div
-                                  key={conv.conversation_id}
+                                  key={`${conv.user_id}_${conv.conversation_id}`}
                                   className={`p-3 rounded-lg cursor-pointer transition-all ${
                                     selectedConversation?.conversation?.conversation_id === conv.conversation_id
                                       ? "bg-primary-50 border-2 border-primary-300"
@@ -2222,7 +2231,7 @@ const LiveChat = () => {
                             <div className="space-y-2">
                               {historyBotConversations.map((conv) => (
                                 <div
-                                  key={conv.conversation_id}
+                                  key={`${conv.user_id}_${conv.conversation_id}`}
                                   className={`p-3 rounded-lg cursor-pointer transition-all ${
                                     selectedConversation?.conversation?.conversation_id === conv.conversation_id
                                       ? "bg-primary-50 border-2 border-primary-300"
@@ -2848,7 +2857,7 @@ const LiveChat = () => {
                     ) : (
                       filteredWithOperator.map((conv) => (
                         <div
-                          key={conv.conversation_id}
+                          key={`${conv.user_id}_${conv.conversation_id}`}
                           className="px-2 py-1.5 rounded cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors text-xs flex items-center justify-between"
                           onClick={() => selectConversation(conv)}
                         >
