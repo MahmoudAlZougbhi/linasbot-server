@@ -1792,33 +1792,13 @@ class LiveChatService:
             )
 
             if not docs:
-                fallback = await self._fallback_unified_chats("", page=1, page_size=300, filter_state="waiting")
-                if fallback.get("success") and fallback.get("chats"):
-                    queue = []
-                    current_time = utc_now()
-                    for chat in fallback.get("chats", []):
-                        last_at = self._parse_timestamp(chat.get("last_message_at")) if chat.get("last_message_at") else current_time
-                        wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
-                        queue.append({
-                            "conversation_id": chat.get("conversation_id"),
-                            "user_id": chat.get("user_id"),
-                            "user_name": chat.get("user_name"),
-                            "user_phone": chat.get("phone_number"),
-                            "phone_clean": chat.get("phone_clean"),
-                            "language": config.user_data_whatsapp.get(chat.get("user_id"), {}).get("user_preferred_lang", "ar"),
-                            "reason": "user_request",
-                            "wait_time_seconds": wait_time_seconds,
-                            "sentiment": "neutral",
-                            "message_count": chat.get("message_count", 0),
-                            "unread_count": chat.get("unread_count", 0),
-                            "priority": 2,
-                            "last_message": chat.get("last_message_text", ""),
-                        })
-                    self._queue_cache = queue
+                fallback_queue = await self._fallback_waiting_queue_from_source()
+                if fallback_queue:
+                    self._queue_cache = fallback_queue
                     self._queue_cache_time = current_time
-                    print(f"[live_chat:waiting_queue] source=fallback_unified count={len(queue)}")
-                    return queue
-                print("[live_chat:waiting_queue] index empty and fallback returned no waiting chats")
+                    print(f"[live_chat:waiting_queue] source=fallback_source count={len(fallback_queue)}")
+                    return fallback_queue
+                print("[live_chat:waiting_queue] index empty and source fallback returned no waiting chats")
 
             waiting_queue = []
 
@@ -1866,32 +1846,12 @@ class LiveChatService:
             
             # If index returned docs but none normalized to waiting, fall back to source scan.
             if not waiting_queue:
-                fallback = await self._fallback_unified_chats("", page=1, page_size=300, filter_state="waiting")
-                if fallback.get("success") and fallback.get("chats"):
-                    queue = []
-                    current_time = utc_now()
-                    for chat in fallback.get("chats", []):
-                        last_at = self._parse_timestamp(chat.get("last_message_at")) if chat.get("last_message_at") else current_time
-                        wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
-                        queue.append({
-                            "conversation_id": chat.get("conversation_id"),
-                            "user_id": chat.get("user_id"),
-                            "user_name": chat.get("user_name"),
-                            "user_phone": chat.get("phone_number"),
-                            "phone_clean": chat.get("phone_clean"),
-                            "language": config.user_data_whatsapp.get(chat.get("user_id"), {}).get("user_preferred_lang", "ar"),
-                            "reason": "user_request",
-                            "wait_time_seconds": wait_time_seconds,
-                            "sentiment": "neutral",
-                            "message_count": chat.get("message_count", 0),
-                            "unread_count": chat.get("unread_count", 0),
-                            "priority": 2,
-                            "last_message": chat.get("last_message_text", ""),
-                        })
-                    self._queue_cache = queue
+                fallback_queue = await self._fallback_waiting_queue_from_source()
+                if fallback_queue:
+                    self._queue_cache = fallback_queue
                     self._queue_cache_time = current_time
-                    print(f"[live_chat:waiting_queue] source=fallback_unified_after_index count={len(queue)}")
-                    return queue
+                    print(f"[live_chat:waiting_queue] source=fallback_source_after_index count={len(fallback_queue)}")
+                    return fallback_queue
 
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
             waiting_queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
@@ -1909,6 +1869,85 @@ class LiveChatService:
             import traceback
             traceback.print_exc()
             return []
+
+    async def _fallback_waiting_queue_from_source(self, limit: int = 500) -> List[Dict[str, Any]]:
+        """
+        Build waiting queue directly from source conversations (collection_group)
+        so waiting counters still work even when live_chat_index is stale.
+        """
+        db = get_firestore_db()
+        if not db:
+            return []
+
+        current_time = utc_now()
+        try:
+            query = (
+                db.collection_group(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .where("human_takeover_active", "==", True)
+                .limit(limit)
+            )
+            docs = await asyncio.to_thread(
+                lambda: list(
+                    query.stream(
+                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                        retry=None,
+                    )
+                )
+            )
+        except Exception as e:
+            print(f"⚠️ Waiting source fallback query failed: {e}")
+            return []
+
+        queue: List[Dict[str, Any]] = []
+        for doc in docs:
+            payload = doc.to_dict() or {}
+            user_doc_ref = doc.reference.parent.parent if doc.reference.parent else None
+            user_id = user_doc_ref.id if user_doc_ref else payload.get("user_id")
+            if not user_id:
+                continue
+
+            conv_data = normalize_conversation_document(
+                conversation_id=doc.id,
+                user_id=user_id,
+                payload=payload,
+            )
+            state = self._normalize_conversation_state(conv_data)
+            if state != self.STATE_WAITING_OPERATOR:
+                continue
+
+            last_at = conv_data.get("last_message_at") or conv_data.get("last_updated") or current_time
+            if isinstance(last_at, str):
+                try:
+                    last_at = self._parse_timestamp(last_at)
+                except Exception:
+                    last_at = current_time
+
+            wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
+            customer_info = conv_data.get("customer_info") or {}
+            user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+            phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
+            language = conv_data.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+            sentiment = conv_data.get("sentiment", "neutral")
+            priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
+
+            queue.append({
+                "conversation_id": doc.id,
+                "user_id": user_id,
+                "user_name": user_name,
+                "user_phone": phone_full,
+                "phone_clean": phone_clean,
+                "language": language,
+                "reason": conv_data.get("escalation_reason", "user_request"),
+                "wait_time_seconds": wait_time_seconds,
+                "sentiment": sentiment,
+                "message_count": conv_data.get("message_count", 0),
+                "unread_count": conv_data.get("unread_count", 0),
+                "priority": priority,
+                "last_message": conv_data.get("last_message_text", ""),
+            })
+
+        queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
+        return queue
     
     async def end_conversation(self, conversation_id: str, user_id: str, operator_id: str, adapter=None) -> Dict[str, Any]:
         """
