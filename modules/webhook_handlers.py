@@ -177,7 +177,7 @@ def extract_meta_message_content(message) -> Dict[str, Any]:
 async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     """Process a parsed message regardless of provider. Uses normalized phone as canonical user_id to prevent duplicates."""
     from utils.phone_utils import normalize_phone, is_phone_like_user_id
-    from utils.utils import get_canonical_user_id_and_phone
+    from utils.utils import get_canonical_user_id_and_phone, persist_room_to_phone_mapping
     from services.customer_identity_service import resolve_customer_from_external
 
     raw_user_id = parsed_message["user_id"]
@@ -188,6 +188,11 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     user_id = canonical_user_id
     parsed_message["user_id"] = user_id
     parsed_message["phone_number"] = normalized_phone or phone_number or ""
+
+    # Persist room_id -> phone when provider sends room_id but we extracted phone (e.g. Qiscus).
+    # Prevents duplicate conversations when same user sends via room_id in future messages.
+    if normalized_phone and not is_phone_like_user_id(raw_user_id):
+        persist_room_to_phone_mapping(raw_user_id, normalized_phone)
 
     print(f"DEBUG: identity raw_user_id={raw_user_id} normalized_phone={normalized_phone} canonical_user_id={canonical_user_id}")
 

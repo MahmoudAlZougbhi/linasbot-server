@@ -2031,13 +2031,10 @@ const LiveChat = () => {
               <ChevronLeftIcon className="w-4 h-4" />
             </button>
           </div>
-          {/* 1) With bot – first section - scroll contained, no overlap with chat */}
-          <div
-            className="whatsapp-sidebar-section flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-0 bg-white"
-            ref={botListRef}
-            onScroll={handleBotListScroll}
-          >
-            <div className="sticky top-0 z-20 bg-white pb-3 shadow-sm">
+          {/* 1) With bot – header fixed above, list scrolls below */}
+          <div className="whatsapp-sidebar-section flex-1 flex flex-col min-h-0 bg-white overflow-hidden">
+            {/* Header - fixed at top, never scrolls */}
+            <div className="flex-shrink-0 pt-2 pb-3 bg-white border-b border-slate-100">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-slate-800 flex items-center">
                   <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
@@ -2114,6 +2111,12 @@ const LiveChat = () => {
                 )}
               </div>
             </div>
+            {/* List - scrolls independently below header */}
+            <div
+              className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 py-3"
+              ref={botListRef}
+              onScroll={handleBotListScroll}
+            >
             <div className="space-y-2">
               {isLoading && botConversations.length === 0 ? (
                 [...Array(5)].map((_, i) => (
@@ -2255,6 +2258,7 @@ const LiveChat = () => {
                   </button>
                 </div>
               )}
+            </div>
             </div>
           </div>
             </>

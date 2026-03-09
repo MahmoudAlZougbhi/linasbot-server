@@ -204,6 +204,46 @@ def _resolve_phone_from_room_mapping(user_id: str) -> str:
     return room_to_phone.get(str(user_id).strip(), "")
 
 
+def persist_room_to_phone_mapping(room_id: str, phone: str) -> None:
+    """
+    Persist room_id -> phone to data/phone_to_room_mapping.json so future requests
+    with room_id (e.g. from Qiscus) resolve to the same canonical user. Prevents
+    duplicate conversations when provider sends room_id instead of phone.
+    """
+    if not room_id or not phone or str(phone).strip().startswith("room:"):
+        return
+    room_id = str(room_id).strip()
+    phone = str(phone).strip()
+    if not room_id or not phone:
+        return
+    mapping_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "data",
+        "phone_to_room_mapping.json",
+    )
+    try:
+        data = {}
+        if os.path.exists(mapping_path):
+            with open(mapping_path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+        phone_to_room = dict(data.get("phone_to_room_mapping") or {})
+        room_to_phone = dict(data.get("room_to_phone_mapping") or {})
+        if phone_to_room.get(phone) == room_id and room_to_phone.get(room_id) == phone:
+            return
+        phone_to_room[phone] = room_id
+        room_to_phone[room_id] = phone
+        data["phone_to_room_mapping"] = phone_to_room
+        data["room_to_phone_mapping"] = room_to_phone
+        data.setdefault("notes", "Auto-persisted room<->phone for identity deduplication")
+        os.makedirs(os.path.dirname(mapping_path), exist_ok=True)
+        with open(mapping_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        _PHONE_ROOM_MAPPING_CACHE["mtime"] = None
+        _log.info("Persisted room_to_phone room_id=%s phone=%s", room_id, phone)
+    except Exception as e:
+        _log.warning("Failed to persist room_to_phone mapping: %s", e)
+
+
 def _extract_source_message_id(metadata: dict) -> str:
     return contract_extract_source_message_id(metadata)
 
