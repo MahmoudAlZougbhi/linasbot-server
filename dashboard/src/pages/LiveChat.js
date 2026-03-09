@@ -77,7 +77,7 @@ const LiveChat = () => {
     []
   );
   // Keep list page moderate to reduce backend/index reads per refresh.
-  const CHAT_LIST_PAGE_SIZE = 30;
+  const CHAT_LIST_PAGE_SIZE = 45;
   const [chatPage, setChatPage] = useState(1);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
@@ -352,6 +352,9 @@ const LiveChat = () => {
   const hasMoreMessagesRef = useRef(true);
   const autoLoadedPagesRef = useRef(1);
   const botListRef = useRef(null);
+  const botLoadMoreSentinelRef = useRef(null);
+  const botListScrollThrottleRef = useRef(null);
+  const botFloatingScrollRef = useRef(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -1183,14 +1186,37 @@ const LiveChat = () => {
     (event) => {
       const el = event.currentTarget;
       if (!el || loadingMoreChats || !hasMoreChats) return;
-      const threshold = 140;
+      if (botListScrollThrottleRef.current) return;
+      const threshold = 280;
       const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       if (distanceToBottom <= threshold) {
+        botListScrollThrottleRef.current = true;
         loadMoreChats();
+        setTimeout(() => {
+          botListScrollThrottleRef.current = false;
+        }, 800);
       }
     },
     [loadingMoreChats, hasMoreChats, loadMoreChats]
   );
+
+  // Intersection Observer: load more when sentinel comes into view (more reliable than scroll)
+  useEffect(() => {
+    const sentinel = botLoadMoreSentinelRef.current;
+    const scrollRoot = botListRef.current;
+    if (!sentinel || !scrollRoot || !hasMoreChats || loadingMoreChats) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting && hasMoreChats && !loadingMoreChats) {
+          loadMoreChats();
+        }
+      },
+      { root: scrollRoot, rootMargin: "200px", threshold: 0.1 }
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [hasMoreChats, loadingMoreChats, loadMoreChats, filteredBotConversations.length]);
 
   // Auto-load extra pages to reduce missing conversations on first load
   useEffect(() => {
@@ -2158,13 +2184,23 @@ const LiveChat = () => {
                 </>
               )}
               {hasMoreChats && (
-                <button
-                  onClick={loadMoreChats}
-                  disabled={loadingMoreChats}
-                  className="w-full py-3 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 transition"
-                >
-                  {loadingMoreChats ? "Loading..." : "Load More"}
-                </button>
+                <div className="mt-2">
+                  <div ref={botLoadMoreSentinelRef} className="h-2 min-h-[8px]" aria-hidden="true" />
+                  <button
+                    onClick={loadMoreChats}
+                    disabled={loadingMoreChats}
+                    className="w-full py-3 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 transition disabled:opacity-60"
+                  >
+                    {loadingMoreChats ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="inline-block w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                        Loading...
+                      </span>
+                    ) : (
+                      "Load More"
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -2204,7 +2240,11 @@ const LiveChat = () => {
                         <XMarkIcon className="w-5 h-5" />
                       </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-3">
+                    <div
+                      ref={botFloatingScrollRef}
+                      className="flex-1 overflow-y-auto p-3"
+                      onScroll={handleBotListScroll}
+                    >
                       <div className="relative mb-3">
                         <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input
@@ -2292,9 +2332,16 @@ const LiveChat = () => {
                           <button
                             onClick={loadMoreChats}
                             disabled={loadingMoreChats}
-                            className="w-full py-2 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200"
+                            className="w-full py-2 mt-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg border border-primary-200 transition disabled:opacity-60"
                           >
-                            {loadingMoreChats ? "Loading..." : "Load More"}
+                            {loadingMoreChats ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className="inline-block w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                                Loading...
+                              </span>
+                            ) : (
+                              "Load More"
+                            )}
                           </button>
                         )}
                       </div>
