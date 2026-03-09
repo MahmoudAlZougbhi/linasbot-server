@@ -424,7 +424,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 try:
                     from services.live_chat_service import live_chat_service
                     live_chat_service.invalidate_cache()
-                    asyncio.create_task(live_chat_service._refresh_index_for_conversation(user_id, current_conversation_id))
+                    await live_chat_service._refresh_index_for_conversation(user_id, current_conversation_id)
                 except Exception as idx_err:
                     print(f"⚠️ Index refresh after AI handover: {idx_err}")
             except Exception as e:
@@ -588,12 +588,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         user_data['awaiting_human_handover_confirmation'] = True
 
     elif action == "human_handover_confirmed":
-        await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "customer_requested_human",
             trigger_source="ai_handover_confirmed"
         )
+        await send_message_func(user_id, bot_reply_text)
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         log_report_event("human_handover", user_id, current_gender, {
             "message": user_input_to_process,
             "status": "confirmed",
@@ -606,12 +606,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     elif action == "human_handover":
-        await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
             trigger_source="ai_handover_direct"
         )
+        await send_message_func(user_id, bot_reply_text)
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         log_report_event("human_handover", user_id, current_gender, {
             "message": user_input_to_process,
             "status": "direct",

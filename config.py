@@ -77,6 +77,9 @@ user_data_whatsapp = defaultdict(dict)
 
 # NEW: AI Takeover State for each user
 user_in_human_takeover_mode = defaultdict(bool) # Flag if a specific user's chat is taken over by human
+# Rate limit for "waiting" auto-reply when user keeps messaging while in waiting queue (seconds)
+user_last_waiting_reply_sent = defaultdict(lambda: datetime.datetime.min)
+WAITING_REPLY_COOLDOWN_SECONDS = 60
 
 # NEW: Booking State Tracking - persists booking progress across messages
 # Tracks: service, body_area, machine, branch, date, etc.
