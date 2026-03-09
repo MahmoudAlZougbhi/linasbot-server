@@ -645,31 +645,52 @@ const LiveChat = () => {
         if (isMountedRef.current) setIsLoading(true);
       }
 
-      // Initial load with no search: fetch both in parallel for faster load (SSE no longer sends initial list)
+      // Initial load with no search: keep chats visible even if one endpoint fails.
       if (!debouncedSearch.trim()) {
-        Promise.all([
-          getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE),
-          getWaitingQueue(),
-        ])
-          .then(([chatsResponse, queueResponse]) => {
-            if (!isMountedRef.current) return;
-            if (chatsResponse?.success && chatsResponse.chats) {
-              applyServerConversations(chatsResponse.chats);
-              setHasMoreChats(chatsResponse.has_more ?? false);
-              setChatPage(1);
-              autoLoadedPagesRef.current = 1;
+        try {
+          const [chatsResult, queueResult] = await Promise.allSettled([
+            getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE),
+            getWaitingQueue(),
+          ]);
+          if (!isMountedRef.current) return;
+
+          let chatsResponse =
+            chatsResult.status === "fulfilled" ? chatsResult.value : null;
+
+          if (!chatsResponse?.success) {
+            try {
+              const fallback = await getLiveConversations("");
+              if (fallback?.success && Array.isArray(fallback.conversations)) {
+                chatsResponse = {
+                  success: true,
+                  chats: fallback.conversations,
+                  has_more: false,
+                };
+              }
+            } catch (fallbackErr) {
+              console.warn("Live Chat initial fallback fetch error:", fallbackErr);
             }
-            if (queueResponse?.success && queueResponse.queue) {
-              applyWaitingQueue(queueResponse);
-            }
-          })
-          .catch((err) => {
-            if (!isMountedRef.current) return;
-            console.warn("Live Chat initial fetch error:", err);
-          })
-          .finally(() => {
-            if (isMountedRef.current) setIsLoading(false);
-          });
+          }
+
+          if (chatsResponse?.success && Array.isArray(chatsResponse.chats)) {
+            applyServerConversations(chatsResponse.chats);
+            setHasMoreChats(chatsResponse.has_more ?? false);
+            setChatPage(1);
+            setUseMockData(false);
+            autoLoadedPagesRef.current = 1;
+          } else if (!activeConversationsRef.current?.length) {
+            loadMockData();
+          }
+
+          if (queueResult.status === "fulfilled" && queueResult.value?.success && queueResult.value?.queue) {
+            applyWaitingQueue(queueResult.value);
+          }
+        } catch (err) {
+          if (!isMountedRef.current) return;
+          console.warn("Live Chat initial fetch error:", err);
+        } finally {
+          if (isMountedRef.current) setIsLoading(false);
+        }
         return;
       }
 
@@ -779,7 +800,13 @@ const LiveChat = () => {
       if (activeConversationsRef.current?.length > 0) return;
       setIsLoading(true);
       try {
-        const r = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
+        let r = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
+        if (!r?.success || !(r?.chats?.length > 0)) {
+          const fallback = await getLiveConversations("");
+          if (fallback?.success && Array.isArray(fallback.conversations) && fallback.conversations.length > 0) {
+            r = { success: true, chats: fallback.conversations, has_more: false };
+          }
+        }
         if (!isMountedRef.current) return;
         if (r?.success && r?.chats?.length > 0) {
           applyServerConversations(r.chats);
@@ -794,7 +821,7 @@ const LiveChat = () => {
       }
     }, 15000);
     return () => clearTimeout(t);
-  }, [debouncedSearch, useMockData, getUnifiedChats, applyServerConversations, setIsLoading, setHasMoreChats, setChatPage]);
+  }, [debouncedSearch, useMockData, getUnifiedChats, getLiveConversations, applyServerConversations, setIsLoading, setHasMoreChats, setChatPage]);
 
   const selectedConversationId = selectedConversation?.conversation?.conversation_id;
   const selectedConversationUserId = selectedConversation?.conversation?.user_id;
@@ -1113,10 +1140,28 @@ const LiveChat = () => {
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const [chatsResponse, queueResponse] = await Promise.all([
+      const [chatsResult, queueResult] = await Promise.allSettled([
         getUnifiedChats(debouncedSearch, 1, CHAT_LIST_PAGE_SIZE),
         getWaitingQueue(),
       ]);
+
+      let chatsResponse =
+        chatsResult.status === "fulfilled" ? chatsResult.value : null;
+
+      if (!chatsResponse?.success) {
+        try {
+          const fallback = await getLiveConversations(debouncedSearch);
+          if (fallback?.success && Array.isArray(fallback.conversations)) {
+            chatsResponse = {
+              success: true,
+              chats: fallback.conversations,
+              has_more: false,
+            };
+          }
+        } catch (fallbackErr) {
+          console.warn("Live Chat manual refresh fallback error:", fallbackErr);
+        }
+      }
 
       if (chatsResponse?.success && chatsResponse.chats) {
         let chats = chatsResponse.chats;
@@ -1137,12 +1182,12 @@ const LiveChat = () => {
           chats.filter((c) => !previousIds.has(c.conversation_id)).map((c) => c.conversation_id)
         );
 
-  applyServerConversations(chats);
+        applyServerConversations(chats);
         setChatPage(1);
         setHasMoreChats(chatsResponse.has_more || false);
         setNewConversationIds(newIds);
         setLastRefreshTime(new Date());
-  autoLoadedPagesRef.current = 1;
+        autoLoadedPagesRef.current = 1;
         toast.success("Conversations refreshed");
 
         // Auto-clear "new" badge after 10 seconds
@@ -1151,8 +1196,18 @@ const LiveChat = () => {
         }
       }
 
-      if (queueResponse?.success) {
-        applyWaitingQueue(queueResponse);
+      if (queueResult.status === "fulfilled" && queueResult.value?.success) {
+        applyWaitingQueue(queueResult.value);
+      }
+      if (!chatsResponse?.success) {
+        toast.error("Failed to refresh conversations");
+      }
+
+      if (chatsResult.status === "rejected") {
+        console.warn("Live Chat manual refresh error:", chatsResult.reason);
+      }
+      if (queueResult.status === "rejected") {
+        console.warn("Live Chat queue refresh error:", queueResult.reason);
       }
     } catch (error) {
       console.error("Error refreshing conversations:", error);
