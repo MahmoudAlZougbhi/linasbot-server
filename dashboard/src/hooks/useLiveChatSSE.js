@@ -404,7 +404,9 @@ export const useLiveChatSSE = ({
             // Add new conversation locally (no /unified-chats call)
             const now = new Date().toISOString();
             setActiveConversations((prev) => {
-              const exists = prev.some((c) => c.conversation_id === convId || c.user_id === userId);
+              const exists = prev.some(
+                (c) => c.conversation_id === convId && c.user_id === userId
+              );
               if (exists) return prev;
               const newEntry = {
                 user_id: userId,

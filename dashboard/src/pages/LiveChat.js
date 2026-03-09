@@ -199,7 +199,12 @@ const LiveChat = () => {
   );
   // Conversations where handover was done and we're talking with them (operator assigned)
   const withOperator = React.useMemo(
-    () => activeConversations.filter((c) => c.status === "human" && c.operator_id),
+    () =>
+      activeConversations.filter((c) => {
+        if (c.status !== "human") return false;
+        // Some records can temporarily miss operator_id while still being assigned to a human.
+        return true;
+      }),
     [activeConversations]
   );
 
@@ -407,7 +412,7 @@ const LiveChat = () => {
 
   useEffect(() => {
     const query = (searchParams.get("search") || "").trim();
-    if (query && query !== liveSearchQuery) {
+    if (query !== liveSearchQuery) {
       setLiveSearchQuery(query);
     }
   }, [searchParams, liveSearchQuery]);
