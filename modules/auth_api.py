@@ -4,6 +4,7 @@ Handles authentication and user management endpoints for the dashboard
 """
 
 import asyncio
+import os
 import time
 
 from fastapi import HTTPException
@@ -12,6 +13,32 @@ from typing import Dict, Any, Optional, List
 
 from modules.core import app
 from services.user_service import user_service, AuthBackendUnavailableError
+
+
+# Emergency local fallback (disabled by default).
+# Enable only when Firestore is quota-limited and operators must access dashboard.
+AUTH_FALLBACK_ENABLED = os.getenv(
+    "ENABLE_AUTH_FALLBACK_WHEN_FIRESTORE_DOWN", "false"
+).strip().lower() == "true"
+AUTH_FALLBACK_EMAIL = os.getenv("AUTH_FALLBACK_EMAIL", "admin@lina.com").strip().lower()
+AUTH_FALLBACK_PASSWORD = os.getenv("AUTH_FALLBACK_PASSWORD", "admin123")
+AUTH_FALLBACK_USER_ID = os.getenv("AUTH_FALLBACK_USER_ID", "local-admin-fallback")
+
+
+def _build_auth_fallback_user(email: str) -> Dict[str, Any]:
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    return {
+        "id": AUTH_FALLBACK_USER_ID,
+        "email": email,
+        "name": "Local Admin",
+        "role": "admin",
+        "permissions": None,
+        "status": "active",
+        "lastLogin": now,
+        "createdAt": now,
+        "createdBy": "system",
+        "updatedAt": now,
+    }
 
 
 # ==========================================
@@ -111,6 +138,23 @@ async def login(request: LoginRequest):
             "error": str(e)
         }
     except AuthBackendUnavailableError as e:
+        # Optional emergency path: allow dashboard login while Firestore is down.
+        # Must be explicitly enabled by env var.
+        email = (request.email or "").strip().lower()
+        if (
+            AUTH_FALLBACK_ENABLED
+            and email == AUTH_FALLBACK_EMAIL
+            and request.password == AUTH_FALLBACK_PASSWORD
+        ):
+            print(
+                f"[auth_api] login: FALLBACK_LOGIN_GRANTED for {request.email} "
+                "(Firestore unavailable)",
+                flush=True,
+            )
+            return {
+                "success": True,
+                "user": _build_auth_fallback_user(email),
+            }
         print(f"[auth_api] login: BACKEND_UNAVAILABLE for {request.email}: {e}", flush=True)
         return {
             "success": False,
@@ -142,6 +186,12 @@ async def validate_session(user_id: str):
     request their own user_id. Frontend currently sends only its own id from localStorage.
     """
     try:
+        if AUTH_FALLBACK_ENABLED and user_id == AUTH_FALLBACK_USER_ID:
+            return {
+                "success": True,
+                "user": _build_auth_fallback_user(AUTH_FALLBACK_EMAIL),
+            }
+
         user = user_service.get_user_by_id(user_id)
 
         if not user:
