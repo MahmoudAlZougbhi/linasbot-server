@@ -34,11 +34,31 @@ echo ""
 echo -e "Using app directory: ${YELLOW}$APP_DIR${NC}"
 echo ""
 
-# Step 1: System dependencies
+# Step 1: System dependencies (skip if already present – apt mirrors can be flaky)
 echo -e "${YELLOW}[1/8] Installing system dependencies...${NC}"
-apt update -qq
-apt install -y python3 python3-venv python3-pip ffmpeg curl nodejs npm
-echo -e "${GREEN}Done!${NC}"
+DEPS_NEEDED=()
+command -v python3 &>/dev/null || DEPS_NEEDED+=(python3)
+command -v ffmpeg &>/dev/null || DEPS_NEEDED+=(ffmpeg)
+command -v node &>/dev/null || command -v nodejs &>/dev/null || DEPS_NEEDED+=(nodejs)
+command -v npm &>/dev/null || DEPS_NEEDED+=(npm)
+command -v curl &>/dev/null || DEPS_NEEDED+=(curl)
+# Only check venv/pip if python3 exists
+if command -v python3 &>/dev/null; then
+  python3 -c "import venv" 2>/dev/null || DEPS_NEEDED+=(python3-venv)
+  python3 -c "import pip" 2>/dev/null || DEPS_NEEDED+=(python3-pip)
+fi
+
+if [ ${#DEPS_NEEDED[@]} -gt 0 ]; then
+  if apt update -qq 2>/dev/null && apt install -y "${DEPS_NEEDED[@]}" 2>/dev/null; then
+    echo -e "${GREEN}Installed: ${DEPS_NEEDED[*]}${NC}"
+  else
+    echo -e "${RED}apt failed (mirror/repo issues). Required: ${DEPS_NEEDED[*]}${NC}"
+    echo -e "${YELLOW}SSH to server, fix apt sources (switch to archive.ubuntu.com if mirrors.digitalocean.com fails), then re-run.${NC}"
+    exit 1
+  fi
+else
+  echo -e "${GREEN}All dependencies already installed.${NC}"
+fi
 echo ""
 
 # Step 2: Validate application directory
