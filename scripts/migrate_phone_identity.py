@@ -9,8 +9,9 @@ Run once after deploying phone normalization + unified identity.
 - Merges: copy conversations from duplicate users into canonical user; delete duplicate user docs.
 
 Usage:
-  python scripts/migrate_phone_identity.py --dry-run   # report only
-  python scripts/migrate_phone_identity.py             # run migration
+  python scripts/migrate_phone_identity.py --dry-run       # report only
+  python scripts/migrate_phone_identity.py                 # full migration
+  python scripts/migrate_phone_identity.py --skip-backfill # skip Step 1, merge only (faster)
 """
 import argparse
 import asyncio
@@ -47,7 +48,7 @@ def _normalized_from_user_doc(user_id: str, user_data: dict) -> str:
     return ""
 
 
-def run_migration(dry_run: bool):
+def run_migration(dry_run: bool, skip_backfill: bool = False):
     db = get_firestore_db()
     if not db:
         print("❌ Firestore not initialized. Ensure data/firebase_data.json exists.")
@@ -56,18 +57,21 @@ def run_migration(dry_run: bool):
     users_col = _get_users_collection(db)
     users_docs = list(users_col.stream())
 
-    # 1) Backfill normalized_phone
-    print("Step 1: Backfill normalized_phone on user docs")
-    for doc in users_docs:
-        user_id = doc.id
-        data = doc.to_dict() or {}
-        normalized = _normalized_from_user_doc(user_id, data)
-        if normalized and data.get("normalized_phone") != normalized:
-            if not dry_run:
-                doc.reference.update({"normalized_phone": normalized})
-            print(f"  Backfill {user_id} -> normalized_phone={normalized}")
-        elif normalized:
-            print(f"  Skip (already set) {user_id} -> {normalized}")
+    # 1) Backfill normalized_phone (skip if --skip-backfill)
+    if skip_backfill:
+        print("Step 1: Skipped (--skip-backfill)")
+    else:
+        print("Step 1: Backfill normalized_phone on user docs")
+        for doc in users_docs:
+            user_id = doc.id
+            data = doc.to_dict() or {}
+            normalized = _normalized_from_user_doc(user_id, data)
+            if normalized and data.get("normalized_phone") != normalized:
+                if not dry_run:
+                    doc.reference.update({"normalized_phone": normalized})
+                print(f"  Backfill {user_id} -> normalized_phone={normalized}")
+            elif normalized:
+                print(f"  Skip (already set) {user_id} -> {normalized}")
 
     # 2) Group by normalized_phone to find duplicates
     by_normalized = {}
@@ -93,14 +97,15 @@ def run_migration(dry_run: bool):
     # 3) For each group, pick canonical and merge
     print("\nStep 3: Merge duplicates into canonical user")
     for normalized_phone, group in duplicates.items():
-        # Prefer: has external_id, then most messages, then newest last_activity
+        # Prefer: E.164 format (e.g. +961...), then has external_id, then most messages, then newest
         def key(item):
             user_id, data, _ = item
             convs_ref = users_col.document(user_id).collection(CONVERSATIONS_COLLECTION)
             conv_count = len(list(convs_ref.stream()))
             has_ext = 1 if data.get("external_id") else 0
             last = (data.get("last_activity") or data.get("created_at") or "").__str__()
-            return (has_ext, conv_count, last)
+            is_e164 = 1 if (str(user_id).startswith("+") and user_id == normalized_phone) else 0
+            return (is_e164, has_ext, conv_count, last)
 
         ordered = sorted(group, key=key, reverse=True)
         canonical_user_id, canonical_data, canonical_ref = ordered[0]
@@ -108,6 +113,7 @@ def run_migration(dry_run: bool):
 
         print(f"  Canonical for {normalized_phone}: {canonical_user_id} (rest: {[u[0] for u in duplicates_to_merge]})")
 
+        index_coll = db.collection("artifacts").document(APP_ID).collection("live_chat_index")
         for dup_user_id, dup_data, dup_ref in duplicates_to_merge:
             dup_conv_col = dup_ref.collection(CONVERSATIONS_COLLECTION)
             conv_docs = list(dup_conv_col.stream())
@@ -117,12 +123,24 @@ def run_migration(dry_run: bool):
                 if dry_run:
                     print(f"    [DRY-RUN] Would move conversation {conv_doc.id} from {dup_user_id} to {canonical_user_id}")
                     continue
-                # Add to canonical user (Firestore .add() creates new ID; we keep data)
-                canonical_conv_col.add(conv_data)
+                # Move conversation preserving ID (so live_chat_index stays valid)
+                canonical_conv_col.document(conv_doc.id).set(conv_data)
                 conv_doc.reference.delete()
+                # Update live_chat_index user_id so UI shows one user
+                idx_ref = index_coll.document(conv_doc.id)
+                if idx_ref.get().exists:
+                    idx_ref.update({"user_id": canonical_user_id})
             if not dry_run:
                 dup_ref.delete()
                 print(f"    Merged and deleted user {dup_user_id}")
+
+    if not dry_run and duplicates:
+        try:
+            from services.live_chat_service import live_chat_service
+            live_chat_service.invalidate_cache()
+            print("\n  Cache invalidated - Live Chat will show merged data on next refresh.")
+        except Exception as e:
+            print(f"\n  ⚠️ Could not invalidate cache: {e}")
 
     print("\nDone.")
 
@@ -130,8 +148,9 @@ def run_migration(dry_run: bool):
 def main():
     parser = argparse.ArgumentParser(description="Backfill normalized_phone and merge duplicate users")
     parser.add_argument("--dry-run", action="store_true", help="Only report, do not write")
+    parser.add_argument("--skip-backfill", action="store_true", help="Skip Step 1, go straight to merge (faster)")
     args = parser.parse_args()
-    run_migration(dry_run=args.dry_run)
+    run_migration(dry_run=args.dry_run, skip_backfill=args.skip_backfill)
 
 
 if __name__ == "__main__":
