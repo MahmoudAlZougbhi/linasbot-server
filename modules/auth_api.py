@@ -104,40 +104,67 @@ async def login(request: LoginRequest):
 
     Returns user data (without password) on success
     """
-    try:
-        t0 = time.monotonic()
-        print(f"[auth_api] login: REQUEST_RECEIVED for {request.email} t=0", flush=True)
-        # Check Firestore state (diagnostic - first access may trigger lazy init)
-        try:
-            import utils.utils as u
-            fs_ready = getattr(u, "_firestore_init_done", False)
-        except Exception:
-            fs_ready = False
-        print(f"[auth_api] login: Firestore init_done={fs_ready}, calling authenticate (watch backend stdout for [auth:...] logs)", flush=True)
-        user = await asyncio.wait_for(
-            asyncio.to_thread(user_service.authenticate, request.email, request.password),
-            timeout=45.0
-        )
-        elapsed = time.monotonic() - t0
-        print(f"[auth_api] login: authenticate RETURNED in {elapsed:.3f}s", flush=True)
+    max_retries = 3
+    last_error = None
 
-        if not user:
+    for attempt in range(max_retries):
+        try:
+            t0 = time.monotonic()
+            print(f"[auth_api] login: REQUEST_RECEIVED for {request.email} attempt {attempt + 1}/{max_retries} t=0", flush=True)
+            # Check Firestore state (diagnostic - first access may trigger lazy init)
+            try:
+                import utils.utils as u
+                fs_ready = getattr(u, "_firestore_init_done", False)
+            except Exception:
+                fs_ready = False
+            print(f"[auth_api] login: Firestore init_done={fs_ready}, calling authenticate (watch backend stdout for [auth:...] logs)", flush=True)
+            user = await asyncio.wait_for(
+                asyncio.to_thread(user_service.authenticate, request.email, request.password),
+                timeout=45.0
+            )
+            elapsed = time.monotonic() - t0
+            print(f"[auth_api] login: authenticate RETURNED in {elapsed:.3f}s", flush=True)
+
+            if not user:
+                return {
+                    "success": False,
+                    "error": "Invalid email or password"
+                }
+
+            print(f"[auth_api] login: returning success", flush=True)
+            return {
+                "success": True,
+                "user": user
+            }
+        except ValueError as e:
             return {
                 "success": False,
-                "error": "Invalid email or password"
+                "error": str(e)
+            }
+        except AuthBackendUnavailableError as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                delay = (attempt + 1) * 2  # 2s, 4s
+                print(f"[auth_api] login: BACKEND_UNAVAILABLE, retrying in {delay}s...", flush=True)
+                await asyncio.sleep(delay)
+            else:
+                break
+        except asyncio.TimeoutError:
+            print(f"[auth_api] login: TIMEOUT after 45s for {request.email}", flush=True)
+            print(f"[auth_api] login: DIAGNOSTIC - Check LAST [auth:...] log above to see where it hung: get_user_by_email query.stream() vs lastLogin update vs bcrypt", flush=True)
+            return {
+                "success": False,
+                "error": "Authentication timeout (45s). تحقق من Firestore أو أعد تشغيل الـ backend."
+            }
+        except Exception as e:
+            print(f"Login error: {e}")
+            return {
+                "success": False,
+                "error": "Login failed"
             }
 
-        print(f"[auth_api] login: returning success", flush=True)
-        return {
-            "success": True,
-            "user": user
-        }
-    except ValueError as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-    except AuthBackendUnavailableError as e:
+    # Handle AuthBackendUnavailableError after all retries exhausted
+    if last_error is not None:
         # Optional emergency path: allow dashboard login while Firestore is down.
         # Must be explicitly enabled by env var.
         email = (request.email or "").strip().lower()
@@ -155,23 +182,10 @@ async def login(request: LoginRequest):
                 "success": True,
                 "user": _build_auth_fallback_user(email),
             }
-        print(f"[auth_api] login: BACKEND_UNAVAILABLE for {request.email}: {e}", flush=True)
+        print(f"[auth_api] login: BACKEND_UNAVAILABLE for {request.email}: {last_error}", flush=True)
         return {
             "success": False,
             "error": "Authentication service temporarily unavailable (Firestore quota/network). Please retry in a few minutes."
-        }
-    except asyncio.TimeoutError:
-        print(f"[auth_api] login: TIMEOUT after 45s for {request.email}", flush=True)
-        print(f"[auth_api] login: DIAGNOSTIC - Check LAST [auth:...] log above to see where it hung: get_user_by_email query.stream() vs lastLogin update vs bcrypt", flush=True)
-        return {
-            "success": False,
-            "error": "Authentication timeout (45s). تحقق من Firestore أو أعد تشغيل الـ backend."
-        }
-    except Exception as e:
-        print(f"Login error: {e}")
-        return {
-            "success": False,
-            "error": "Login failed"
         }
 
 

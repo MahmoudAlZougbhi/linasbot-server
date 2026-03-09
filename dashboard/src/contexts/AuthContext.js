@@ -116,7 +116,10 @@ export const AuthProvider = ({ children }) => {
     };
   };
 
-  const login = async (email, password) => {
+  const TRANSIENT_AUTH_ERROR = 'Authentication service temporarily unavailable';
+
+  const login = async (email, password, retryCount = 0) => {
+    const maxRetries = 2;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -136,7 +139,14 @@ export const AuthProvider = ({ children }) => {
       console.log('[AuthContext] login response:', JSON.stringify({ success: data?.success, hasUser: !!data?.user, userKeys: data?.user ? Object.keys(data.user) : [] }));
 
       if (!data.success) {
-        throw new Error(data.error || 'Login failed');
+        const errMsg = data.error || 'Login failed';
+        if (errMsg.includes(TRANSIENT_AUTH_ERROR) && retryCount < maxRetries) {
+          toast.loading(`Service temporarily unavailable. Retrying in 3s... (${retryCount + 1}/${maxRetries})`, { id: 'auth-retry' });
+          await new Promise((r) => setTimeout(r, 3000));
+          toast.dismiss('auth-retry');
+          return login(email, password, retryCount + 1);
+        }
+        throw new Error(errMsg);
       }
 
       if (!data.user || typeof data.user !== 'object') {

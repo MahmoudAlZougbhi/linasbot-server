@@ -122,64 +122,80 @@ class UserService:
         # Return without password
         return self._sanitize_user(user_doc)
 
+    def _is_transient_firestore_error(self, e: Exception) -> bool:
+        """Check if error is transient (quota, timeout, network) and worth retrying."""
+        lowered = str(e).lower()
+        return any(
+            marker in lowered
+            for marker in (
+                "429",
+                "quota",
+                "resource exhausted",
+                "deadline",
+                "timed out",
+                "timeout",
+                "unavailable",
+                "connection",
+            )
+        )
+
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get a user by email address (includes password for auth)"""
         t_start = time.monotonic()
         print(f"[auth:get_user_by_email] entry", flush=True)
-        try:
-            # Access collection (lazy Firestore init)
-            t1 = time.monotonic()
-            print(f"[auth:get_user_by_email] accessing self.collection", flush=True)
-            coll = self.collection
-            print(f"[auth:get_user_by_email] collection accessed in {time.monotonic() - t1:.3f}s", flush=True)
+        max_retries = 3
+        last_exception = None
 
-            email_lower = email.lower().strip()
-            query = coll.where(
-                filter=FieldFilter("email", "==", email_lower)
-            ).limit(1)
+        for attempt in range(max_retries):
+            try:
+                # Access collection (lazy Firestore init)
+                t1 = time.monotonic()
+                print(f"[auth:get_user_by_email] attempt {attempt + 1}/{max_retries}, accessing self.collection", flush=True)
+                coll = self.collection
+                print(f"[auth:get_user_by_email] collection accessed in {time.monotonic() - t1:.3f}s", flush=True)
 
-            # Firestore read - THIS IS THE ACTUAL NETWORK CALL (may hang if Firestore unreachable)
-            t2 = time.monotonic()
-            print(f"[auth:get_user_by_email] calling query.stream() - FIRST FIRESTORE NETWORK OP, may block here", flush=True)
-            docs = list(
-                query.stream(
-                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
-                    retry=None,
+                email_lower = email.lower().strip()
+                query = coll.where(
+                    filter=FieldFilter("email", "==", email_lower)
+                ).limit(1)
+
+                # Firestore read - THIS IS THE ACTUAL NETWORK CALL (may hang if Firestore unreachable)
+                t2 = time.monotonic()
+                print(f"[auth:get_user_by_email] calling query.stream() - FIRST FIRESTORE NETWORK OP, may block here", flush=True)
+                docs = list(
+                    query.stream(
+                        timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
+                        retry=None,
+                    )
                 )
-            )
-            elapsed = time.monotonic() - t2
-            print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
+                elapsed = time.monotonic() - t2
+                print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
 
-            if docs:
-                result = docs[0].to_dict()
-                print(f"[auth:get_user_by_email] done in {time.monotonic() - t_start:.3f}s", flush=True)
-                return result
-            print(f"[auth:get_user_by_email] no docs, done in {time.monotonic() - t_start:.3f}s", flush=True)
-            return None
-        except Exception as e:
-            elapsed = time.monotonic() - t_start
-            lowered = str(e).lower()
-            is_transient = any(
-                marker in lowered
-                for marker in (
-                    "429",
-                    "quota",
-                    "resource exhausted",
-                    "deadline",
-                    "timed out",
-                    "timeout",
-                    "unavailable",
-                    "connection",
+                if docs:
+                    result = docs[0].to_dict()
+                    print(f"[auth:get_user_by_email] done in {time.monotonic() - t_start:.3f}s", flush=True)
+                    return result
+                print(f"[auth:get_user_by_email] no docs, done in {time.monotonic() - t_start:.3f}s", flush=True)
+                return None
+            except Exception as e:
+                last_exception = e
+                elapsed = time.monotonic() - t_start
+                is_transient = self._is_transient_firestore_error(e)
+                print(
+                    f"[auth:get_user_by_email] ERROR after {elapsed:.3f}s (attempt {attempt + 1}/{max_retries}): {e} "
+                    f"(transient={is_transient})",
+                    flush=True,
                 )
-            )
-            print(
-                f"[auth:get_user_by_email] ERROR after {elapsed:.3f}s: {e} "
-                f"(transient={is_transient})",
-                flush=True,
-            )
-            # IMPORTANT: do not return None here; returning None is interpreted
-            # as invalid credentials. Bubble up backend outages explicitly.
-            raise AuthBackendUnavailableError(str(e)) from e
+                if is_transient and attempt < max_retries - 1:
+                    delay = (attempt + 1) * 2  # 2s, 4s
+                    print(f"[auth:get_user_by_email] retrying in {delay}s...", flush=True)
+                    time.sleep(delay)
+                else:
+                    # IMPORTANT: do not return None here; returning None is interpreted
+                    # as invalid credentials. Bubble up backend outages explicitly.
+                    raise AuthBackendUnavailableError(str(e)) from e
+
+        raise AuthBackendUnavailableError(str(last_exception)) from last_exception
 
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a user by ID (includes password for internal use)"""
