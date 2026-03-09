@@ -42,6 +42,26 @@ export const useLiveChatSSE = ({
   let lastEventAt = Date.now();
   let heartbeatWatchdog = null;
   let refreshingFallback = false;
+    const agentDebugLog = (hypothesisId, location, message, data = {}, runId = "pre-fix") => {
+      // #region agent log
+      fetch("http://127.0.0.1:7613/ingest/3b1feaff-4c9a-4490-a8ad-995005809bfa", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "d9e2d7",
+        },
+        body: JSON.stringify({
+          sessionId: "d9e2d7",
+          runId,
+          hypothesisId,
+          location,
+          message,
+          data,
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    };
 
     const clearNewBadgesSoon = () => {
       if (clearNewBadgeTimeout) {
@@ -205,6 +225,9 @@ export const useLiveChatSSE = ({
         reconnectAttempt = 0;
         stopFallbackPolling();
         lastEventAt = Date.now();
+        agentDebugLog("H4", "useLiveChatSSE.js:onopen", "SSE connected", {
+          hasSearch: Boolean(debouncedSearchRef.current),
+        });
         if (process.env.NODE_ENV === "development") {
           console.log("[SSE] connected");
         }
@@ -217,6 +240,11 @@ export const useLiveChatSSE = ({
           lastEventAt = Date.now();
           const conversations = Array.isArray(data.conversations) ? data.conversations : null;
           const total = typeof data.total === "number" ? data.total : (conversations?.length || 0);
+          agentDebugLog("H4", "useLiveChatSSE.js:conversations-event", "Received SSE conversations event", {
+            total,
+            hasConversationsArray: Array.isArray(conversations),
+            conversationsCount: Array.isArray(conversations) ? conversations.length : -1,
+          });
           await refreshChats({
             preferredConversations: conversations,
             total,
@@ -240,6 +268,12 @@ export const useLiveChatSSE = ({
           const convId = data?.conversation_id;
           const userId = data?.user_id;
           const message = data?.message;
+          agentDebugLog("H4", "useLiveChatSSE.js:new-message-event", "Received SSE new_message event", {
+            hasConversationId: Boolean(convId),
+            hasUserId: Boolean(userId),
+            hasMessage: Boolean(message),
+            selectedConversationExists: Boolean(selected?.conversation),
+          });
 
           // 1) If message for open conversation: append immediately (no API call)
           const msgId = message?.message_id;
@@ -439,6 +473,10 @@ export const useLiveChatSSE = ({
       }
 
       eventSource.onerror = () => {
+        agentDebugLog("H4", "useLiveChatSSE.js:onerror", "SSE error/reconnect", {
+          readyState: eventSource?.readyState ?? null,
+          reconnectAttemptNext: reconnectAttempt + 1,
+        });
         if (eventSource) {
           eventSource.close();
         }

@@ -79,6 +79,29 @@ const LiveChat = () => {
   const [botPanelOpen, setBotPanelOpen] = useState(false); // With bot floating panel when sidebar collapsed
 
   const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min - avoid refetch when switching back to same conv
+  const agentDebugLog = React.useCallback(
+    (hypothesisId, location, message, data = {}, runId = "pre-fix") => {
+      // #region agent log
+      fetch("http://127.0.0.1:7613/ingest/3b1feaff-4c9a-4490-a8ad-995005809bfa", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "d9e2d7",
+        },
+        body: JSON.stringify({
+          sessionId: "d9e2d7",
+          runId,
+          hypothesisId,
+          location,
+          message,
+          data,
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    },
+    []
+  );
 
   // Split handover: 1) waiting (no operator yet) 2) with operator (handover done, chatting)
   const userRequestedReasons = React.useMemo(
@@ -248,6 +271,34 @@ const LiveChat = () => {
       .filter((conv) => !conv._isLive)
       .sort((a, b) => b._lastTs - a._lastTs);
   }, [botConversations]);
+
+  useEffect(() => {
+    const statusCounts = activeConversations.reduce(
+      (acc, conv) => {
+        const key = String(conv?.status || "unknown");
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      },
+      {}
+    );
+    agentDebugLog("H3", "LiveChat.js:bucket-summary", "Conversation bucket summary", {
+      activeCount: activeConversations.length,
+      waitingCount: filteredWaitingQueue.length,
+      withOperatorCount: filteredWithOperator.length,
+      liveBotCount: liveBotConversations.length,
+      historyBotCount: historyBotConversations.length,
+      waitingSearchTermLen: waitingSearchTerm.length,
+      statusCounts,
+    });
+  }, [
+    activeConversations,
+    filteredWaitingQueue.length,
+    filteredWithOperator.length,
+    liveBotConversations.length,
+    historyBotConversations.length,
+    waitingSearchTerm.length,
+    agentDebugLog,
+  ]);
 
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
   const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
@@ -638,6 +689,11 @@ const LiveChat = () => {
   useEffect(() => {
     const fetchLiveData = async () => {
       if (!isMountedRef.current) return;
+      agentDebugLog("H1", "LiveChat.js:fetchLiveData:start", "Starting live chat fetch", {
+        hasSearch: Boolean(debouncedSearch.trim()),
+        activeConversationsCount: activeConversationsRef.current?.length || 0,
+        chatPageSize: CHAT_LIST_PAGE_SIZE,
+      });
       if (!activeConversations.length) {
         if (isMountedRef.current) setIsLoading(true);
       }
@@ -650,6 +706,13 @@ const LiveChat = () => {
         ])
           .then(([chatsResponse, queueResponse]) => {
             if (!isMountedRef.current) return;
+            agentDebugLog("H1", "LiveChat.js:fetchLiveData:initial-response", "Initial live chat API responses", {
+              chatsSuccess: Boolean(chatsResponse?.success),
+              chatsCount: Array.isArray(chatsResponse?.chats) ? chatsResponse.chats.length : -1,
+              queueSuccess: Boolean(queueResponse?.success),
+              queueCount: Array.isArray(queueResponse?.queue) ? queueResponse.queue.length : -1,
+              source: chatsResponse?.source || null,
+            });
             if (chatsResponse?.success && chatsResponse.chats) {
               applyServerConversations(chatsResponse.chats);
               setHasMoreChats(chatsResponse.has_more ?? false);
@@ -697,6 +760,17 @@ const LiveChat = () => {
         }
         if (chatsResponse?.success && isMountedRef.current) {
           const chats = chatsResponse.chats || chatsResponse.conversations || [];
+          const statusCounts = chats.reduce((acc, c) => {
+            const key = String(c?.status || c?.conversation_state || "unknown");
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {});
+          agentDebugLog("H2", "LiveChat.js:fetchLiveData:search-response", "Search/live response before apply", {
+            chatsCount: chats.length,
+            hasMore: Boolean(chatsResponse.has_more),
+            source: chatsResponse?.source || null,
+            statusCounts,
+          });
           applyServerConversations(chats);
           setChatPage(1);
           setHasMoreChats(chatsResponse.has_more || false);
@@ -726,6 +800,11 @@ const LiveChat = () => {
           .catch(() => {});
       } catch (error) {
         if (!isMountedRef.current) return;
+        agentDebugLog("H5", "LiveChat.js:fetchLiveData:error", "Live chat fetch failed", {
+          code: error?.code || null,
+          status: error?.response?.status || null,
+          message: error?.message || null,
+        });
         console.error("Error fetching live chat data:", error);
         const is504OrTimeout = error?.response?.status === 504 || error?.code === "ECONNABORTED";
         if (is504OrTimeout) {
@@ -740,7 +819,7 @@ const LiveChat = () => {
 
     fetchLiveData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, applyServerConversations]);
+  }, [debouncedSearch, applyServerConversations, agentDebugLog]);
 
   useLiveChatSSE({
     enabled: !useMockData,
