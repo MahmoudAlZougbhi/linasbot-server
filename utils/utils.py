@@ -1160,21 +1160,33 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
         }
 
         if status and operator_id:
-            # Taking over - set operator_id, operator_name, and change status to "human"
+            # Taking over by an assigned operator.
             update_data["operator_id"] = operator_id
             update_data["takeover_time"] = utc_now()
-            update_data["status"] = "human"  # ✅ CRITICAL: Set status to "human" so it appears in active conversations
+            update_data["status"] = "human"
+            update_data["conversation_state"] = "assigned_to_operator"
             if operator_name:
                 update_data["operator_name"] = operator_name
                 print(f"🔄 Setting conversation status to 'human' for operator takeover by {operator_name}")
             else:
                 print(f"🔄 Setting conversation status to 'human' for operator takeover")
+        elif status:
+            # Human takeover requested but not assigned yet (waiting queue state).
+            update_data["operator_id"] = None
+            update_data["operator_name"] = None
+            update_data["status"] = "waiting_human"
+            update_data["conversation_state"] = "waiting_for_operator"
+            update_data["human_takeover_requested"] = True
+            update_data["escalation_time"] = utc_now()
+            print("🔄 Setting conversation status to 'waiting_human' (awaiting operator assignment)")
         elif not status:
             # Releasing - remove operator_id, operator_name and change status back to "active"
             update_data["operator_id"] = None
             update_data["operator_name"] = None
             update_data["release_time"] = utc_now()
-            update_data["status"] = "active"  # ✅ Set status back to "active" when released
+            update_data["status"] = "active"
+            update_data["conversation_state"] = "bot_active"
+            update_data["human_takeover_requested"] = False
             print(f"🔄 Setting conversation status to 'active' for bot release")
 
         # ✅ Use asyncio.to_thread to prevent blocking the event loop

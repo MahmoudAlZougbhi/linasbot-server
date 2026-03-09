@@ -104,6 +104,41 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
     # Get Firestore DB instance for sentiment and takeover checks
     db = get_firestore_db()
 
+    def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
+        """Build candidate Firestore user IDs to handle legacy/raw identity paths."""
+        candidates = []
+        for candidate in [canonical_user_id, raw_user_id]:
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+            if candidate and (
+                candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)
+            ):
+                alt_candidate = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
+                if alt_candidate not in candidates:
+                    candidates.append(alt_candidate)
+        return candidates
+
+    async def _resolve_conversation_doc_ref(users_coll, conversation_id: str, canonical_user_id: str):
+        """
+        Resolve conversation doc across canonical/raw/alt user paths.
+        Returns (doc_ref, doc_snap, resolved_user_id).
+        """
+        candidate_user_ids = _build_firestore_user_candidates(canonical_user_id, user_id)
+        last_ref = None
+        last_snap = None
+
+        for candidate_user_id in candidate_user_ids:
+            candidate_ref = users_coll.document(candidate_user_id).collection(
+                config.FIRESTORE_CONVERSATIONS_COLLECTION
+            ).document(conversation_id)
+            candidate_snap = await asyncio.to_thread(candidate_ref.get)
+            last_ref = candidate_ref
+            last_snap = candidate_snap
+            if candidate_snap.exists:
+                return candidate_ref, candidate_snap, candidate_user_id
+
+        return last_ref, last_snap, canonical_user_id
+
     async def _trigger_human_takeover(
         trigger_source: str,
         escalation_reason: str,
@@ -133,15 +168,11 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                 if detected_issues:
                     update_payload["detected_issues"] = detected_issues
 
-                doc_snap = await asyncio.to_thread(conv_doc_ref.get)
-                if not doc_snap.exists and canonical_user_id and (
-                    canonical_user_id.startswith("+") or (canonical_user_id.isdigit() and len(canonical_user_id) >= 10)
-                ):
-                    alt_user_id = canonical_user_id[1:] if canonical_user_id.startswith("+") else f"+{canonical_user_id}"
-                    alt_ref = users_coll.document(alt_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
-                    alt_snap = await asyncio.to_thread(alt_ref.get)
-                    if alt_snap.exists:
-                        conv_doc_ref, canonical_user_id, doc_snap = alt_ref, alt_user_id, alt_snap
+                conv_doc_ref, doc_snap, canonical_user_id = await _resolve_conversation_doc_ref(
+                    users_coll,
+                    current_conversation_id,
+                    canonical_user_id,
+                )
                 if doc_snap.exists:
                     await asyncio.to_thread(conv_doc_ref.update, update_payload)
                     print(f"✅ Conversation marked as waiting_human in Firebase")
@@ -220,8 +251,16 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
     if db and user_data.get('current_conversation_id'):
         try:
             app_id_for_firestore = "linas-ai-bot-backend"
-            conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(user_data['current_conversation_id'])
-            conv_doc_ref.update({
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+            users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+            conv_doc_ref, doc_snap, _ = await _resolve_conversation_doc_ref(
+                users_coll,
+                user_data['current_conversation_id'],
+                canonical_user_id,
+            )
+            if not doc_snap or not doc_snap.exists:
+                raise ValueError("Conversation not found for sentiment update")
+            await asyncio.to_thread(conv_doc_ref.update, {
                 "sentiment": sentiment_analysis["sentiment"],
                 "last_updated": datetime.datetime.now()
             })
@@ -255,12 +294,17 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         await update_dashboard_metric_in_firestore(user_id, "auto_escalations", 1)
         return
 
-    # Check Firestore for human takeover status
+    # Check Firestore for human takeover status (use canonical path + alternate fallback)
     if db and user_data.get('current_conversation_id'):
         try:
             app_id_for_firestore = "linas-ai-bot-backend"
-            conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(user_data['current_conversation_id'])
-            doc_snap = conv_doc_ref.get()
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+            users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+            conv_doc_ref, doc_snap, _ = await _resolve_conversation_doc_ref(
+                users_coll,
+                user_data['current_conversation_id'],
+                canonical_user_id,
+            )
             if doc_snap.exists:
                 conv_data = doc_snap.to_dict()
                 config.user_in_human_takeover_mode[user_id] = conv_data.get('human_takeover_active', False)
@@ -291,27 +335,19 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                             )
                             user_data['notified_human_takeover'] = True
                     else:
-                        # User is in waiting queue (no operator yet) — send "please wait" auto-reply with rate limiting
-                        print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply if cooldown passed.")
-                        now = datetime.datetime.now()
-                        last_sent = config.user_last_waiting_reply_sent.get(user_id, datetime.datetime.min)
-                        try:
-                            elapsed = (now - last_sent).total_seconds()
-                        except (TypeError, ValueError):
-                            elapsed = config.WAITING_REPLY_COOLDOWN_SECONDS + 1
-                        if elapsed >= config.WAITING_REPLY_COOLDOWN_SECONDS:
-                            waiting_messages = {
-                                "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي دقة 🙏",
-                                "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
-                                "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏"
-                            }
-                            waiting_msg = waiting_messages.get(user_lang, waiting_messages['ar'])
-                            await send_message_func(user_id, waiting_msg)
-                            await save_conversation_message_to_firestore(
-                                user_id, "ai", waiting_msg, current_conversation_id,
-                                user_name, user_data.get('phone_number')
-                            )
-                            config.user_last_waiting_reply_sent[user_id] = now
+                        # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
+                        print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply.")
+                        waiting_messages = {
+                            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي دقة 🙏",
+                            "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
+                            "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏"
+                        }
+                        waiting_msg = waiting_messages.get(user_lang, waiting_messages['ar'])
+                        await send_message_func(user_id, waiting_msg)
+                        await save_conversation_message_to_firestore(
+                            user_id, "ai", waiting_msg, current_conversation_id,
+                            user_name, user_data.get('phone_number')
+                        )
                     return
             else:
                 print(f"WARNING: Conversation {user_data['current_conversation_id']} not found in Firestore during takeover check.")

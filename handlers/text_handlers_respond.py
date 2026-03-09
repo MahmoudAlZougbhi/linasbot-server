@@ -403,6 +403,34 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
     flow_meta = gpt_response_data.get("_flow_meta") or {}
 
+    def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
+        candidates = []
+        for candidate in [canonical_user_id, raw_user_id]:
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+            if candidate and (
+                candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)
+            ):
+                alt_candidate = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
+                if alt_candidate not in candidates:
+                    candidates.append(alt_candidate)
+        return candidates
+
+    async def _resolve_conversation_doc_ref(users_coll, conversation_id: str, canonical_user_id: str):
+        candidate_user_ids = _build_firestore_user_candidates(canonical_user_id, user_id)
+        last_ref = None
+        last_snap = None
+        for candidate_user_id in candidate_user_ids:
+            candidate_ref = users_coll.document(candidate_user_id).collection(
+                config.FIRESTORE_CONVERSATIONS_COLLECTION
+            ).document(conversation_id)
+            candidate_snap = await asyncio.to_thread(candidate_ref.get)
+            last_ref = candidate_ref
+            last_snap = candidate_snap
+            if candidate_snap.exists:
+                return candidate_ref, candidate_snap, candidate_user_id
+        return last_ref, last_snap, canonical_user_id
+
     async def _activate_ai_handover(escalation_reason: str, trigger_source: str):
         """Switch conversation to waiting_human, notify admins from settings, and write audit."""
         db = get_firestore_db()
@@ -411,7 +439,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 app_id_for_firestore = "linas-ai-bot-backend"
                 users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-                conv_doc_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                conv_doc_ref, doc_snap, canonical_user_id = await _resolve_conversation_doc_ref(
+                    users_coll,
+                    current_conversation_id,
+                    canonical_user_id,
+                )
                 update_payload = {
                     "status": "waiting_human",
                     "human_takeover_active": True,
@@ -422,15 +454,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "escalation_time": datetime.datetime.now(),
                     "last_updated": datetime.datetime.now(),
                 }
-                doc_snap = await asyncio.to_thread(conv_doc_ref.get)
-                if not doc_snap.exists and canonical_user_id and (
-                    canonical_user_id.startswith("+") or (canonical_user_id.isdigit() and len(canonical_user_id) >= 10)
-                ):
-                    alt_user_id = canonical_user_id[1:] if canonical_user_id.startswith("+") else f"+{canonical_user_id}"
-                    alt_ref = users_coll.document(alt_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
-                    alt_snap = await asyncio.to_thread(alt_ref.get)
-                    if alt_snap.exists:
-                        conv_doc_ref, canonical_user_id, doc_snap = alt_ref, alt_user_id, alt_snap
                 if doc_snap.exists:
                     await asyncio.to_thread(conv_doc_ref.update, update_payload)
                     print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision)")
