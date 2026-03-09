@@ -67,22 +67,6 @@ async def _run_endpoint(fn: Callable[[], Awaitable[Any]], fallback=None):
         traceback.print_exc()
         return fallback if fallback is not None else _error_response(str(e))
 
-async def _sse_initial_conversations_loader():
-    """Load initial conversations for SSE connect - so chats appear immediately."""
-    try:
-        result = await live_chat_service.get_unified_chats(
-            search="", page=1, page_size=50, filter_state="all"
-        )
-        if result.get("success") and result.get("chats"):
-            return {
-                "conversations": result["chats"],
-                "total": result.get("total", len(result["chats"])),
-            }
-    except Exception as e:
-        _log.info(f"SSE initial payload skip: {e}")
-    return None
-
-
 @app.get("/api/live-chat/events")
 async def live_chat_events(request: Request):
     """
@@ -91,7 +75,7 @@ async def live_chat_events(request: Request):
 
     Events:
     - connected: Initial connection established
-    - conversations: Full conversation list update (sent on connect + on new_message)
+    - conversations: Full conversation list update
     - new_message: New message in a conversation
     - new_conversation: New conversation created
     - heartbeat: Keep-alive ping every 30s
@@ -99,7 +83,7 @@ async def live_chat_events(request: Request):
     _log_sse("client_connect")
     print("📡 [SSE] client connected")
     return StreamingResponse(
-        live_chat_sse_broadcaster.stream(request, initial_payload_loader=_sse_initial_conversations_loader),
+        live_chat_sse_broadcaster.stream(request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",

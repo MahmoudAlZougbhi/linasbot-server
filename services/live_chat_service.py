@@ -982,15 +982,6 @@ class LiveChatService:
                     return self._cached_unified_response(
                         page_num, safe_size, filter_state, search
                     )
-                # Index empty: fallback to Firestore source so chats still appear
-                try:
-                    fallback_result = await self._fallback_unified_chats_with_timeout(
-                        search, page_num, safe_size, filter_state
-                    )
-                    if fallback_result.get("success") and fallback_result.get("chats"):
-                        return fallback_result
-                except Exception as fb_err:
-                    print(f"⚠️ Fallback unified chats failed: {fb_err}")
                 return self._empty_unified_response(
                     page_num,
                     safe_size,
@@ -1078,15 +1069,6 @@ class LiveChatService:
                 return self._cached_unified_response(
                     page_num, safe_size, filter_state, search
                 )
-            # Index error: try fallback so chats still appear
-            try:
-                fallback_result = await self._fallback_unified_chats_with_timeout(
-                    search, page_num, safe_size, filter_state
-                )
-                if fallback_result.get("success") and fallback_result.get("chats"):
-                    return fallback_result
-            except Exception as fb_err:
-                print(f"⚠️ Fallback unified chats failed: {fb_err}")
             return self._empty_unified_response(
                 page_num,
                 safe_size,
