@@ -607,8 +607,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             escalation_reason=escalation_reason_from_gpt or "customer_requested_human",
             trigger_source="ai_handover_confirmed"
         )
-        await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        # Use standardized handoff message (same as sentiment escalation) - triggers human request
+        handoff_messages = {
+            "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
+            "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
+            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
+        }
+        handoff_msg = handoff_messages.get(current_preferred_lang, handoff_messages["ar"])
+        sent_reply = handoff_msg
+        await send_message_func(user_id, handoff_msg)
+        await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         log_report_event("human_handover", user_id, current_gender, {
             "message": user_input_to_process,
             "status": "confirmed",
@@ -625,8 +633,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
             trigger_source="ai_handover_direct"
         )
-        await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        # Use standardized handoff message (same as sentiment escalation) - triggers human request
+        handoff_messages = {
+            "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
+            "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
+            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
+        }
+        handoff_msg = handoff_messages.get(current_preferred_lang, handoff_messages["ar"])
+        sent_reply = handoff_msg
+        await send_message_func(user_id, handoff_msg)
+        await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         log_report_event("human_handover", user_id, current_gender, {
             "message": user_input_to_process,
             "status": "direct",

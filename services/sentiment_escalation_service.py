@@ -13,14 +13,18 @@ import datetime
 class SentimentEscalationService:
     """Service for detecting sentiment and auto-escalating to human operators"""
     
-    # Anger indicators in multiple languages
+    # Anger/frustration indicators in multiple languages
     ANGER_KEYWORDS = {
         "ar": [
             "غاضب", "زعلان", "مستاء", "منزعج", "متضايق", "مش راضي",
             "مش مبسوط", "مش عاجبني", "مش قابل", "مش معقول",
             "يا حرام", "يا خسارة", "فاشل", "سيء", "وحش", "مش كويس",
             "مش منيح", "بدي شكي", "بدي اشتكي", "شكوى", "مشكلة كبيرة",
-            "ما بينفع", "مش نافع"  # Removed: "تعبان", "زهقان", "ملل" (too ambiguous)
+            "ما بينفع", "مش نافع", "عصبي", "زعلان", "زعلانة",
+            # Franco-Arabic frustration
+            "ze3len", "ze3lane", "3asab", "3asabe", "balash", "blaash",
+            "sho bek", "shu bek", "sho elak", "ma fehem", "ma fhem",
+            "ta3ebetni", "ta3ebtni", "ze3letni", "3asabni"
         ],
         "en": [
             "angry", "mad", "furious", "upset", "frustrated", "annoyed",
@@ -37,7 +41,7 @@ class SentimentEscalationService:
         ]
     }
     
-    # Demanding human operator keywords
+    # Demanding human operator keywords (Arabic + Franco-Arabic / Lebanese)
     HUMAN_REQUEST_KEYWORDS = {
         "ar": [
             "بدي احكي مع حدا", "بدي موظف", "بدي شخص", "بدي انسان",
@@ -50,7 +54,13 @@ class SentimentEscalationService:
             "اريد موظف", "اريد انسان", "اريد التحدث مع موظف", "اريد التحدث مع انسان",
             "بدّي موظف", "بدّي إنسان", "بدّي احكي مع موظف", "بدّي احكي مع انسان",
             "حابب احكي مع موظف", "نفسي احكي مع حدا", "لو سمحت بدي موظف",
-            "حولوني على موظف", "وصلوني لموظف", "في حدا يحكي معي"
+            "حولوني على موظف", "وصلوني لموظف", "في حدا يحكي معي",
+            # Franco-Arabic / Lebanese colloquial
+            "bede mwzaf", "bede mwazzaf", "bede hada ye7kine", "bede hada ye7ke",
+            "hada ye7ke ma3e", "hada ye7kine", "bede hada ye7ke ma3e",
+            "ye7ke ma3e", "hada ye7ke ma3i", "bede hada ehke ma3o",
+            "bede hada y7kine", "hada y7ke ma3e", "bede hada y7ke ma3e",
+            "i need human", "need human", "want human", "bede human"
         ],
         "en": [
             "speak to someone", "talk to someone", "human", "real person",
@@ -58,7 +68,15 @@ class SentimentEscalationService:
             "customer service", "manager", "supervisor", "not a bot",
             "real human", "actual person", "someone else", "help me",
             "complaint", "complain", "escalate", "live agent", "human agent",
-            "speak to an agent", "talk to an agent", "connect me to an agent"
+            "speak to an agent", "talk to an agent", "connect me to an agent",
+            "i need human", "need human", "want human"
+        ],
+        "franco": [
+            "bede mwzaf", "bede mwazzaf", "bede hada ye7kine", "bede hada ye7ke",
+            "hada ye7ke ma3e", "hada ye7kine", "bede hada ye7ke ma3e",
+            "ye7ke ma3e", "hada ye7ke ma3i", "bede hada ehke ma3o",
+            "bede hada y7kine", "hada y7ke ma3e", "bede hada y7ke ma3e",
+            "i need human", "need human", "want human", "bede human"
         ],
         "fr": [
             "parler à quelqu'un", "personne réelle", "humain", "opérateur",
@@ -68,13 +86,16 @@ class SentimentEscalationService:
         ]
     }
     
-    # Confusion/frustration indicators
+    # Confusion/frustration indicators (triggers escalation when combined)
     CONFUSION_KEYWORDS = {
         "ar": [
             "مش فاهم", "ما فهمت", "مش واضح", "مش مفهوم", "معقد",
             "صعب", "مش عارف", "ما بعرف", "مش قادر", "تعبتني",
             "كتير معقد", "مش بسيط", "مش سهل", "محتار", "ضايع",
-            "مش عم بفهم", "ما عم بفهم", "شو يعني", "كيف يعني"
+            "مش عم بفهم", "ما عم بفهم", "شو يعني", "كيف يعني",
+            # Franco-Arabic
+            "ma fehem", "ma fhem", "mish fahm", "shu 3am te2oul",
+            "mish wade7"
         ],
         "en": [
             "don't understand", "not clear", "confusing", "confused",
@@ -174,13 +195,7 @@ class SentimentEscalationService:
         if len(self.user_message_history[user_id]) > 10:
             self.user_message_history[user_id] = self.user_message_history[user_id][-10:]
         
-        # 1. Check for explicit human request (HIGH PRIORITY)
-        clarification_found = self._check_keywords(message_lower, self.CLARIFICATION_KEYWORDS, language)
-        human_request_found = self._check_keywords(message_lower, self.HUMAN_REQUEST_KEYWORDS, language)
-        if human_request_found and not clarification_found:
-            detected_issues.append("explicit_human_request")
-            escalation_score += 100  # Immediate escalation
-            print(f"🚨 ESCALATION: User {user_id} explicitly requested human operator")
+        # 1. Human request: AI (GPT) detects from CONTEXT - no keyword matching here.
         
         # 2. Check for anger/offensive language
         anger_found = self._check_keywords(message_lower, self.ANGER_KEYWORDS, language)
@@ -238,8 +253,8 @@ class SentimentEscalationService:
         else:
             sentiment = "positive"
         
-        # Determine if escalation is needed
-        should_escalate = escalation_score >= 60
+        # Determine if escalation is needed (anger/frustration/confusion → transfer)
+        should_escalate = escalation_score >= 50
         
         # Determine escalation reason
         escalation_reason = self._get_escalation_reason(detected_issues)
@@ -270,10 +285,13 @@ class SentimentEscalationService:
     
     def _check_keywords(self, message: str, keyword_dict: Dict, language: str) -> bool:
         """Check if message contains any keywords from the dictionary"""
-        keywords = keyword_dict.get(language, [])
+        keywords = list(keyword_dict.get(language, []))
         # Also check English keywords as fallback
         if language != "en":
             keywords.extend(keyword_dict.get("en", []))
+        # For Arabic, also check Franco-Arabic (Lebanese often mix)
+        if language == "ar":
+            keywords.extend(keyword_dict.get("franco", []))
 
         for keyword in keywords:
             # Use word boundaries to avoid substring matches (e.g., "bad" in "bade")

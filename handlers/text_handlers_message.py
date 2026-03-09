@@ -159,7 +159,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         config.user_in_human_takeover_mode[user_id] = True
 
         escalation_messages = {
-            "ar": "بدي يكون الآن تمام تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
+            "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
             "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
             "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"
         }
@@ -208,8 +208,8 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             import traceback
             traceback.print_exc()
 
-    # Human handoff: AI detects intent (no keyword/regex matching - AI understands context)
-    # Analyze sentiment and check if auto-escalation is needed
+    # Human handoff: AI (GPT) detects intent from CONTEXT - no keyword matching for human requests
+    # Sentiment only escalates on anger/offensive/repetition - human request is understood by AI from context
     sentiment_analysis = sentiment_service.analyze_sentiment(
         user_id=user_id,
         message=raw_msg,
