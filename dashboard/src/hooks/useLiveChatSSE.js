@@ -403,11 +403,13 @@ export const useLiveChatSSE = ({
           if (convId && userId) {
             // Add new conversation locally (no /unified-chats call)
             const now = new Date().toISOString();
-            setActiveConversations((prev) => {
-              const exists = prev.some(
-                (c) => c.conversation_id === convId && c.user_id === userId
-              );
-              if (exists) return prev;
+            const previous = Array.isArray(activeConversationsRef.current)
+              ? activeConversationsRef.current
+              : [];
+            const exists = previous.some(
+              (c) => c.conversation_id === convId && c.user_id === userId
+            );
+            if (!exists) {
               const newEntry = {
                 user_id: userId,
                 conversation_id: convId,
@@ -418,8 +420,11 @@ export const useLiveChatSSE = ({
                 status: "bot",
                 is_live: true,
               };
-              return [newEntry, ...prev];
-            });
+              const nextConversations = [newEntry, ...previous];
+              // setActiveConversations may be either a React state setter or a custom array applier.
+              setActiveConversations(nextConversations);
+              activeConversationsRef.current = nextConversations;
+            }
             setNewConversationIds((prev) => new Set([...prev, convId]));
             setLastRefreshTime(new Date());
           }

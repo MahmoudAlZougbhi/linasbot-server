@@ -966,6 +966,13 @@ class LiveChatService:
         safe_size = max(1, min(int(page_size), 100))
         state_values = self._state_filter_values(filter_state)
         page_num = max(1, int(page))
+        can_use_stale_cache = (
+            page_num == 1
+            and not search_val
+            and not cursor
+            and not state_values
+            and bool(self._unified_chats_cache)
+        )
         use_cache_fallback = (
             page_num == 1
             and not search_val
@@ -992,7 +999,7 @@ class LiveChatService:
             request_started = utc_now()
             db = get_firestore_db()
             if not db:
-                if use_cache_fallback:
+                if can_use_stale_cache:
                     return self._cached_unified_response(
                         page_num, safe_size, filter_state, search
                     )
@@ -1032,7 +1039,8 @@ class LiveChatService:
                     use_q = use_q.start_after(*start_after_values)
                 return list(
                     use_q.limit(fetch_limit).stream(
-                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                        retry=None,
                     )
                 )
 
@@ -1056,7 +1064,8 @@ class LiveChatService:
                         use_q = use_q
                     return list(
                         use_q.limit(widen_limit).stream(
-                            timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+                            timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                            retry=None,
                         )
                     )
                 docs = await self._run_blocking_with_timeout(
@@ -1068,7 +1077,7 @@ class LiveChatService:
                 )
 
             if not docs:
-                if use_cache_fallback:
+                if can_use_stale_cache:
                     return self._cached_unified_response(
                         page_num, safe_size, filter_state, search
                     )
@@ -1167,7 +1176,7 @@ class LiveChatService:
             print(f"❌ Error in get_unified_chats: {e}")
             import traceback
             traceback.print_exc()
-            if use_cache_fallback:
+            if can_use_stale_cache:
                 return self._cached_unified_response(
                     page_num, safe_size, filter_state, search
                 )
@@ -1582,7 +1591,14 @@ class LiveChatService:
                 .order_by("last_message_at", direction=firestore.Query.DESCENDING)
                 .limit(300)
             )
-            docs = await asyncio.to_thread(lambda: list(query.stream()))
+            docs = await asyncio.to_thread(
+                lambda: list(
+                    query.stream(
+                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                        retry=None,
+                    )
+                )
+            )
 
             if not docs and self.ENABLE_WAITING_QUEUE_FALLBACK_SCAN:
                 fallback = await self._fallback_unified_chats("", page=1, page_size=300, filter_state="waiting")
