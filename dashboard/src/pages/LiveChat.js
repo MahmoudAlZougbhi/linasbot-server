@@ -2037,7 +2037,7 @@ const LiveChat = () => {
             ref={botListRef}
             onScroll={handleBotListScroll}
           >
-            <div className="sticky top-0 z-10 bg-white pb-3">
+            <div className="sticky top-0 z-20 bg-white pb-3 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-slate-800 flex items-center">
                   <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
