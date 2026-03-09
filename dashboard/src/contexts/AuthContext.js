@@ -9,6 +9,7 @@ export const useAuth = () => useContext(AuthContext);
 
 // API base - fixed relative path (same as last working commit d9a0000)
 const API_BASE = '/api/auth';
+const SESSION_VALIDATE_MIN_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -47,9 +48,22 @@ export const AuthProvider = ({ children }) => {
         const sessionTime = new Date(sessionData.timestamp);
         const now = new Date();
         const hoursDiff = (now - sessionTime) / (1000 * 60 * 60);
+        const lastValidatedAt = sessionData.lastValidatedAt
+          ? new Date(sessionData.lastValidatedAt)
+          : null;
+        const validatedRecently = lastValidatedAt
+          ? (now - lastValidatedAt) < SESSION_VALIDATE_MIN_INTERVAL_MS
+          : false;
 
         // Check if session is less than 24 hours old
         if (hoursDiff < 24 && sessionData.user?.id) {
+          if (validatedRecently) {
+            const cachedUser = buildUserData(sessionData.user);
+            if (cachedUser) {
+              setUser(cachedUser);
+              return;
+            }
+          }
           // Validate session with backend and get fresh user data (5s timeout for local)
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -58,10 +72,26 @@ export const AuthProvider = ({ children }) => {
           });
           clearTimeout(timeoutId);
           const data = await response.json();
+          const authErrorText = String(data?.error || '').toLowerCase();
+          const transientSessionError = (
+            authErrorText.includes('quota')
+            || authErrorText.includes('429')
+            || authErrorText.includes('resource exhausted')
+            || authErrorText.includes('timeout')
+            || authErrorText.includes('unavailable')
+          );
 
           console.log('[AuthContext] checkSession response:', JSON.stringify({ success: data?.success, hasUser: !!data?.user, userStatus: data?.user?.status }));
 
           if (!data.success || !data.user || typeof data.user !== 'object') {
+            if (transientSessionError && sessionData.user) {
+              const cachedUser = buildUserData(sessionData.user);
+              if (cachedUser) {
+                console.warn('[AuthContext] checkSession transient error, using cached session user');
+                setUser(cachedUser);
+                return;
+              }
+            }
             console.warn('[AuthContext] checkSession: invalid or missing user data', data);
             localStorage.removeItem('auth_session');
             return;
@@ -82,7 +112,8 @@ export const AuthProvider = ({ children }) => {
           setUser(userData);
           const newSession = {
             user: userData,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            lastValidatedAt: new Date().toISOString()
           };
           localStorage.setItem('auth_session', JSON.stringify(newSession));
         } else {
@@ -91,6 +122,26 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Session check failed:', error);
+      // Fail-open on transient backend issues: keep cached session if valid.
+      try {
+        const session = localStorage.getItem('auth_session');
+        if (session) {
+          const sessionData = JSON.parse(session);
+          const sessionTime = new Date(sessionData.timestamp);
+          const now = new Date();
+          const hoursDiff = (now - sessionTime) / (1000 * 60 * 60);
+          if (hoursDiff < 24 && sessionData.user?.id) {
+            const cachedUser = buildUserData(sessionData.user);
+            if (cachedUser) {
+              console.warn('[AuthContext] using cached session after checkSession failure');
+              setUser(cachedUser);
+              return;
+            }
+          }
+        }
+      } catch (cacheErr) {
+        // Ignore fallback parse errors and clear invalid session below.
+      }
       localStorage.removeItem('auth_session');
     }
   };
@@ -163,7 +214,8 @@ export const AuthProvider = ({ children }) => {
       // Create session
       const session = {
         user: userData,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        lastValidatedAt: new Date().toISOString()
       };
 
       console.log('[AuthContext] login: about to setUser + localStorage + navigate');
@@ -317,7 +369,8 @@ export const AuthProvider = ({ children }) => {
 
         const session = {
           user: updatedUserData,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          lastValidatedAt: new Date().toISOString()
         };
         localStorage.setItem('auth_session', JSON.stringify(session));
       }
@@ -377,7 +430,8 @@ export const AuthProvider = ({ children }) => {
           setUser(userData);
           const session = {
             user: userData,
-            timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          lastValidatedAt: new Date().toISOString()
           };
           localStorage.setItem('auth_session', JSON.stringify(session));
         }

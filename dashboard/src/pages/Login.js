@@ -18,15 +18,18 @@ const Login = () => {
   const [error, setError] = useState('');
   const { login } = useAuth();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    
-    if (!email || !password) {
-      setError('Please enter both email and password.');
-      return;
-    }
-    
+  const isConnectionError = (message) => {
+    const value = (message || '').toLowerCase();
+    return (
+      value.includes('connection timed out') ||
+      value.includes('backend running on port 8003') ||
+      value.includes('temporarily unavailable') ||
+      value.includes('firestore quota') ||
+      value.includes('failed to fetch')
+    );
+  };
+
+  const tryLogin = async () => {
     setLoading(true);
     try {
       await login(email, password);
@@ -36,6 +39,30 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+    
+    await tryLogin();
+  };
+
+  const handleRetryLogin = async () => {
+    if (loading) return;
+    setError('');
+
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
+    await tryLogin();
   };
 
   return (
@@ -79,7 +106,46 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm" role="alert">
-                {error}
+                <p>{error}</p>
+
+                {isConnectionError(error) && (
+                  <div className="mt-3 space-y-3 text-xs text-red-700">
+                    <p className="font-semibold">Quick checks:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Start backend and dashboard in separate terminals.</li>
+                      <li>Use <strong>http://localhost:3000</strong> for dev mode.</li>
+                      <li>If backend only, use <strong>http://localhost:8003</strong>.</li>
+                    </ul>
+
+                    <div className="rounded-lg border border-red-200 bg-white/80 p-2 text-[11px] leading-relaxed">
+                      <p className="font-semibold">Terminal 1 - backend</p>
+                      <code className="block">cd "/Users/mahmoudalzougbhi/linas ai bot"</code>
+                      <code className="block">.venv/bin/python main.py</code>
+                      <p className="mt-2 font-semibold">Terminal 2 - dashboard (dev)</p>
+                      <code className="block">cd "/Users/mahmoudalzougbhi/linas ai bot/dashboard"</code>
+                      <code className="block">npm start</code>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRetryLogin}
+                        disabled={loading}
+                        className="px-3 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        Retry Sign In
+                      </button>
+                      <a
+                        href="http://localhost:8003"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-md border border-red-300 hover:bg-red-100"
+                      >
+                        Open Backend
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {/* Email Field */}
@@ -147,9 +213,13 @@ const Login = () => {
                 </label>
               </div>
               <div className="text-sm">
-                <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
+                <button
+                  type="button"
+                  onClick={() => setError('Please contact an admin to reset your password.')}
+                  className="font-medium text-primary-600 hover:text-primary-500"
+                >
                   Forgot password?
-                </a>
+                </button>
               </div>
             </div>
 

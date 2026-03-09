@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
 
-const DEBOUNCE_REFRESH_MS = 3000; // Max 1 full refresh per 3s - avoids heavy /unified-chats on every message
+const FULL_REFRESH_COOLDOWN_MS = 45000; // At most one full refresh every 45s
+const FULL_REFRESH_DELAY_MS = 1500;
+const FALLBACK_POLL_INTERVAL_MS = 30000;
+const SSE_STALE_THRESHOLD_MS = 90000;
+const HEARTBEAT_WATCHDOG_INTERVAL_MS = 30000;
 
 export const useLiveChatSSE = ({
   enabled,
@@ -39,9 +43,9 @@ export const useLiveChatSSE = ({
     let handlingNewMessageEvent = false;
     let lastRefreshAt = 0;
     let debouncedRefreshScheduled = false;
-  let lastEventAt = Date.now();
-  let heartbeatWatchdog = null;
-  let refreshingFallback = false;
+    let lastEventAt = Date.now();
+    let heartbeatWatchdog = null;
+    let refreshingFallback = false;
 
     const clearNewBadgesSoon = () => {
       if (clearNewBadgeTimeout) {
@@ -186,7 +190,7 @@ export const useLiveChatSSE = ({
         } catch (error) {
           // Keep fallback silent to avoid noisy toasts during transient outages.
         }
-      }, 10000);
+      }, FALLBACK_POLL_INTERVAL_MS);
     };
 
     const stopFallbackPolling = () => {
@@ -320,9 +324,13 @@ export const useLiveChatSSE = ({
             }
           }
 
-          // 3) Debounced full refresh (max once per 3s) - avoid heavy scan on every message
+          // 3) Very low-frequency full refresh (safety net only; local merge is primary path)
           const now = Date.now();
-          if (now - lastRefreshAt >= DEBOUNCE_REFRESH_MS && !debouncedRefreshScheduled) {
+          if (
+            !debouncedSearchRef.current &&
+            now - lastRefreshAt >= FULL_REFRESH_COOLDOWN_MS &&
+            !debouncedRefreshScheduled
+          ) {
             debouncedRefreshScheduled = true;
             setTimeout(async () => {
               if (!isMountedRef.current) return;
@@ -334,7 +342,7 @@ export const useLiveChatSSE = ({
               } finally {
                 setIsRefreshing(false);
               }
-            }, DEBOUNCE_REFRESH_MS);
+            }, FULL_REFRESH_DELAY_MS);
           }
 
           // 4) If viewing a different conversation, fetch its messages (no full list refresh)
@@ -427,15 +435,19 @@ export const useLiveChatSSE = ({
         heartbeatWatchdog = setInterval(async () => {
           if (!isMountedRef.current || useMockDataRef.current) return;
           const elapsed = Date.now() - lastEventAt;
-          if (elapsed < 20000 || refreshingFallback) return;
+          if (elapsed < SSE_STALE_THRESHOLD_MS || refreshingFallback) return;
           refreshingFallback = true;
           try {
+            // SSE is stale; do a conservative reconciliation fetch.
             await refreshChats();
-            await refreshSelectedConversation();
+            const selected = selectedConversationRef.current;
+            if (selected && !selected.history?.length) {
+              await refreshSelectedConversation();
+            }
           } finally {
             refreshingFallback = false;
           }
-        }, 15000);
+        }, HEARTBEAT_WATCHDOG_INTERVAL_MS);
       }
 
       eventSource.onerror = () => {

@@ -60,6 +60,14 @@ async def startup_event():
         )
         
         scheduler = AsyncIOScheduler()
+        dispatcher_interval_minutes = max(
+            1,
+            int(os.getenv("SMART_DISPATCHER_INTERVAL_MINUTES", "5")),
+        )
+        monitor_interval_minutes = max(
+            1,
+            int(os.getenv("SMART_MONITOR_INTERVAL_MINUTES", "5")),
+        )
         
         # Job 0A: Populate scheduled messages from REAL appointments (via send_appointment_reminders endpoint)
         async def populate_messages_job():
@@ -193,6 +201,10 @@ async def startup_event():
                 if not smart_messaging_enabled:
                     print("Smart Messaging is DISABLED globally. Skipping message processing.")
                     return
+
+                print(
+                    f"[smart_scheduler] queue_monitor tick scheduled_pool={len(smart_messaging.scheduled_messages)}"
+                )
 
                 # If preview mode is enabled, messages need manual approval
                 if preview_mode_enabled:
@@ -605,21 +617,21 @@ async def startup_event():
             replace_existing=True
         )
 
-        # Template dispatcher checks configured HH:MM every minute
+        # Template dispatcher cadence (default 5m). Dispatcher itself handles due windows safely.
         scheduler.add_job(
             run_daily_template_dispatcher_job,
             'interval',
-            minutes=1,
+            minutes=dispatcher_interval_minutes,
             id='daily_template_dispatcher',
             name='Daily Template Dispatcher (Config-Driven)',
             replace_existing=True
         )
 
-        # Monitor queue and send due messages every minute
+        # Monitor queue and send due messages (default every 5m)
         scheduler.add_job(
             monitor_smart_messages_job,
             'interval',
-            minutes=1,
+            minutes=monitor_interval_minutes,
             id='monitor_smart_messages',
             name='Monitor Smart Messaging Scheduled Messages',
             replace_existing=True
@@ -634,8 +646,8 @@ async def startup_event():
         print("✅ Smart Messaging Scheduler started successfully")
         print("📅 Scheduled jobs:")
         print("   - Daily refresh: Daily at 00:01")
-        print("   - Template dispatcher: Every 1 minute (HH:MM per template from dashboard)")
-        print("   - Queue monitor/sender: Every 1 minute")
+        print(f"   - Template dispatcher: Every {dispatcher_interval_minutes} minute(s)")
+        print(f"   - Queue monitor/sender: Every {monitor_interval_minutes} minute(s)")
         print("=" * 60)
         
         app.state.scheduler = scheduler

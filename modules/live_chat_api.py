@@ -104,6 +104,14 @@ async def get_unified_chats(
     filter: str = Query(default="all", description="Badge filter: all|waiting|with_operator|bot|closed"),
 ):
     """WhatsApp-style inbox (single master list) powered by live_chat_index."""
+    _log.info(
+        "live_chat_api.get_unified_chats search=%s page=%s page_size=%s filter=%s cursor=%s",
+        bool(search and search.strip()),
+        page,
+        page_size,
+        filter,
+        bool(cursor),
+    )
     effective_page = int(cursor) if (cursor and cursor.isdigit()) else page
 
     async def _handler():
@@ -137,6 +145,7 @@ async def get_active_conversations(search: str = Query(default="", description="
 @app.get("/api/live-chat/waiting-queue")
 async def get_waiting_queue():
     """Get conversations waiting for human intervention"""
+    _log.info("live_chat_api.get_waiting_queue")
     async def _handler():
         queue = await live_chat_service.get_waiting_queue()
         return {
@@ -238,6 +247,15 @@ async def get_conversation_details(
     limit: int = Query(default=50, ge=1, le=100, description="Max messages per request (WhatsApp-style: 50)"),
 ):
     """Get detailed conversation history. Initial: last 1 day. Load More: before=oldest_ts, day_window=1 for one more day."""
+    _log.info(
+        "live_chat_api.get_conversation_details user_id=%s conversation_id=%s days=%s before=%s day_window=%s limit=%s",
+        user_id,
+        conversation_id,
+        days,
+        bool(before),
+        day_window,
+        limit,
+    )
     async def _handler():
         return await live_chat_service.get_conversation_details(
             user_id=user_id,

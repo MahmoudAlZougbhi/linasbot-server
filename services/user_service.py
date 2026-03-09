@@ -22,11 +22,15 @@ class UserService:
     """Service for managing dashboard users in Firestore"""
 
     COLLECTION = "artifacts/linas-ai-bot-backend/dashboard_users"
-    AUTH_QUERY_TIMEOUT_SECONDS = float(os.getenv("AUTH_QUERY_TIMEOUT_SECONDS", "8"))
-    AUTH_WRITE_TIMEOUT_SECONDS = float(os.getenv("AUTH_WRITE_TIMEOUT_SECONDS", "8"))
+    AUTH_QUERY_TIMEOUT_SECONDS = float(os.getenv("AUTH_QUERY_TIMEOUT_SECONDS", "6"))
+    AUTH_WRITE_TIMEOUT_SECONDS = float(os.getenv("AUTH_WRITE_TIMEOUT_SECONDS", "5"))
+    AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS = int(
+        os.getenv("AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS", "21600")
+    )
 
     def __init__(self):
         self._db = None
+        self._last_lastlogin_write_at: Dict[str, float] = {}
 
     @property
     def db(self):
@@ -35,15 +39,21 @@ class UserService:
             t0 = time.monotonic()
             print(f"[auth:user_service] db property: first access, calling get_firestore_db t=0.00s", flush=True)
             self._db = get_firestore_db()
-            print(f"[auth:user_service] db property: get_firestore_db returned in {time.monotonic() - t0:.3f}s (db is None: {self._db is None})", flush=True)
+            elapsed = time.monotonic() - t0
+            print(f"[auth:user_service] db property: get_firestore_db returned in {elapsed:.3f}s (db is None: {self._db is None})", flush=True)
         return self._db
 
     @property
     def collection(self):
         """Get the dashboard_users collection reference"""
+        t0 = time.monotonic()
         if not self.db:
             raise Exception("Firestore not initialized")
-        return self.db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
+        coll = self.db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
+        elapsed = time.monotonic() - t0
+        if elapsed > 0.1:
+            print(f"[auth:user_service] collection property: accessed in {elapsed:.3f}s", flush=True)
+        return coll
 
     # ==========================================
     # Password Methods
@@ -57,13 +67,15 @@ class UserService:
     def _verify_password(self, password: str, hashed: str) -> bool:
         """Verify a password against its bcrypt hash"""
         t0 = time.monotonic()
-        print(f"[auth:_verify_password] entry", flush=True)
+        print(f"[auth:_verify_password] entry t=0.00s", flush=True)
         try:
             result = bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-            print(f"[auth:_verify_password] done in {time.monotonic() - t0:.3f}s", flush=True)
+            elapsed = time.monotonic() - t0
+            print(f"[auth:_verify_password] done in {elapsed:.3f}s", flush=True)
             return result
         except Exception as e:
-            print(f"[auth:_verify_password] ERROR after {time.monotonic() - t0:.3f}s: {e}", flush=True)
+            elapsed = time.monotonic() - t0
+            print(f"[auth:_verify_password] ERROR after {elapsed:.3f}s: {e}", flush=True)
             return False
 
     # ==========================================
@@ -103,7 +115,7 @@ class UserService:
             "password": self._hash_password(user_data['password']),
             "name": user_data.get('name') or (user_data.get('email') or 'user@unknown').split('@')[0],
             "role": user_data.get('role', 'viewer'),
-            "permissions": user_data.get('permissions'),  # Custom permission overrides
+            "permissions": user_data.get('permissions'),
             "status": user_data.get('status', 'active'),
             "lastLogin": None,
             "createdAt": now,
@@ -142,26 +154,26 @@ class UserService:
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get a user by email address (includes password for auth)"""
         t_start = time.monotonic()
-        print(f"[auth:get_user_by_email] entry", flush=True)
+        email_lower = (email or "").lower().strip()
+        print(f"[auth:get_user_by_email] ENTRY for {email_lower} t=0.00s", flush=True)
         max_retries = 3
         last_exception = None
 
         for attempt in range(max_retries):
             try:
-                # Access collection (lazy Firestore init)
+                # Access collection (lazy Firestore init - may block on first access)
                 t1 = time.monotonic()
-                print(f"[auth:get_user_by_email] attempt {attempt + 1}/{max_retries}, accessing self.collection", flush=True)
+                print(f"[auth:get_user_by_email] attempt {attempt + 1}/{max_retries}, accessing self.collection t={t1 - t_start:.3f}s", flush=True)
                 coll = self.collection
                 print(f"[auth:get_user_by_email] collection accessed in {time.monotonic() - t1:.3f}s", flush=True)
 
-                email_lower = email.lower().strip()
+                # Firestore query - direct email lookup
                 query = coll.where(
                     filter=FieldFilter("email", "==", email_lower)
                 ).limit(1)
 
-                # Firestore read - THIS IS THE ACTUAL NETWORK CALL (may hang if Firestore unreachable)
                 t2 = time.monotonic()
-                print(f"[auth:get_user_by_email] calling query.stream() - FIRST FIRESTORE NETWORK OP, may block here", flush=True)
+                print(f"[auth:get_user_by_email] query.stream() START t={t2 - t_start:.3f}s (FIRESTORE NETWORK OP - may block)", flush=True)
                 docs = list(
                     query.stream(
                         timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
@@ -169,21 +181,20 @@ class UserService:
                     )
                 )
                 elapsed = time.monotonic() - t2
-                print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
+                print(f"[auth:get_user_by_email] query.stream() RETURNED in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
 
                 if docs:
                     result = docs[0].to_dict()
-                    print(f"[auth:get_user_by_email] done in {time.monotonic() - t_start:.3f}s", flush=True)
+                    print(f"[auth:get_user_by_email] USER_FOUND in {time.monotonic() - t_start:.3f}s", flush=True)
                     return result
-                print(f"[auth:get_user_by_email] no docs, done in {time.monotonic() - t_start:.3f}s", flush=True)
+                print(f"[auth:get_user_by_email] USER_NOT_FOUND in {time.monotonic() - t_start:.3f}s", flush=True)
                 return None
             except Exception as e:
                 last_exception = e
                 elapsed = time.monotonic() - t_start
                 is_transient = self._is_transient_firestore_error(e)
                 print(
-                    f"[auth:get_user_by_email] ERROR after {elapsed:.3f}s (attempt {attempt + 1}/{max_retries}): {e} "
-                    f"(transient={is_transient})",
+                    f"[auth:get_user_by_email] ERROR after {elapsed:.3f}s (attempt {attempt + 1}/{max_retries}): {e} (transient={is_transient})",
                     flush=True,
                 )
                 if is_transient and attempt < max_retries - 1:
@@ -191,8 +202,6 @@ class UserService:
                     print(f"[auth:get_user_by_email] retrying in {delay}s...", flush=True)
                     time.sleep(delay)
                 else:
-                    # IMPORTANT: do not return None here; returning None is interpreted
-                    # as invalid credentials. Bubble up backend outages explicitly.
                     raise AuthBackendUnavailableError(str(e)) from e
 
         raise AuthBackendUnavailableError(str(last_exception)) from last_exception
@@ -208,7 +217,7 @@ class UserService:
                 return doc.to_dict()
             return None
         except Exception as e:
-            print(f"Error getting user by ID: {e}")
+            print(f"[auth:get_user_by_id] Error: {e}", flush=True)
             return None
 
     def get_all_users(self) -> List[Dict[str, Any]]:
@@ -326,11 +335,10 @@ class UserService:
 
     def authenticate(self, email: str, password: str) -> Optional[Dict[str, Any]]:
         """
-        Authenticate a user with email and password
+        Authenticate a user with email and password.
 
-        Args:
-            email: User's email
-            password: Plain text password
+        CRITICAL: Successful login must NOT depend on lastLogin update.
+        lastLogin is best-effort only; Firestore write failures must not block auth.
 
         Returns:
             User data (without password) if authentication succeeds, None otherwise
@@ -340,54 +348,80 @@ class UserService:
         def _elapsed() -> float:
             return time.monotonic() - t0
 
-        print(f"[auth] 1. ENTRY t=0.00s for {email}", flush=True)
+        email_norm = (email or "").strip().lower()
+        print(f"[auth:authenticate] 1. ENTRY t=0.00s for {email_norm}", flush=True)
 
-        # Step 1: Firestore lookup by email
-        print(f"[auth] 2. USER_LOOKUP_START t={_elapsed():.3f}s", flush=True)
-        user = self.get_user_by_email(email)
-        print(f"[auth] 3. USER_LOOKUP_END t={_elapsed():.3f}s", flush=True)
+        # Step 1: Firestore user lookup (may trigger lazy db init)
+        print(f"[auth:authenticate] 2. USER_LOOKUP_START t={_elapsed():.3f}s", flush=True)
+        user = self.get_user_by_email(email_norm)
+        print(f"[auth:authenticate] 3. USER_LOOKUP_END t={_elapsed():.3f}s", flush=True)
 
         if not user:
-            print(f"[auth] 3b. USER_NOT_FOUND t={_elapsed():.3f}s", flush=True)
+            print(f"[auth:authenticate] 3b. USER_NOT_FOUND t={_elapsed():.3f}s", flush=True)
             return None
 
         if user.get('status') != 'active':
             raise ValueError(f"Account is {user.get('status', 'inactive')}")
 
-        # Step 2: Password verification (bcrypt)
-        print(f"[auth] 4. PASSWORD_VERIFY_START t={_elapsed():.3f}s", flush=True)
-        if not self._verify_password(password, user['password']):
-            print(f"[auth] 4b. PASSWORD_FAIL t={_elapsed():.3f}s", flush=True)
+        # Step 2: Password verification (bcrypt - CPU-bound, can be slow)
+        print(f"[auth:authenticate] 4. BCRYPT_VERIFY_START t={_elapsed():.3f}s", flush=True)
+        if not self._verify_password(password, user.get('password') or ''):
+            print(f"[auth:authenticate] 4b. PASSWORD_FAIL t={_elapsed():.3f}s", flush=True)
             return None
-        print(f"[auth] 5. PASSWORD_VERIFY_END t={_elapsed():.3f}s", flush=True)
+        print(f"[auth:authenticate] 5. BCRYPT_VERIFY_END t={_elapsed():.3f}s", flush=True)
 
+        # Auth succeeded. Set lastLogin in memory for response; Firestore update is best-effort.
         now = datetime.utcnow().isoformat()
         user['lastLogin'] = now
 
-        # Step 3: Fire-and-forget lastLogin update - MUST NOT block auth
-        # Credentials are verified; return success immediately. Update lastLogin
-        # in a daemon thread so Firestore write issues never block login.
-        def _update_lastlogin_background():
-            try:
-                self.collection.document(user['id']).update(
-                    {"lastLogin": now},
-                    timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
-                    retry=None,
-                )
-            except Exception as e:
-                print(f"[auth] lastLogin background update failed: {e}", flush=True)
+        # Step 3: lastLogin Firestore update - BEST-EFFORT ONLY, must NOT block auth.
+        # Throttle writes per user to reduce quota usage during repeated logins.
+        disable_lastlogin_update = str(
+            os.getenv("AUTH_DISABLE_LASTLOGIN_UPDATE", "false")
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        now_epoch = time.time()
+        last_write_at = self._last_lastlogin_write_at.get(user["id"], 0.0)
+        min_interval = max(0, self.AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS)
+        should_write_lastlogin = (
+            not disable_lastlogin_update
+            and (min_interval == 0 or (now_epoch - last_write_at) >= min_interval)
+        )
 
-        t = threading.Thread(target=_update_lastlogin_background, daemon=True)
-        t.start()
-        print(f"[auth] 6. lastLogin update dispatched (non-blocking) t={_elapsed():.3f}s", flush=True)
+        if should_write_lastlogin:
+            self._last_lastlogin_write_at[user["id"]] = now_epoch
 
+            def _update_lastlogin_background():
+                try:
+                    t_start = time.monotonic()
+                    self.collection.document(user['id']).update(
+                        {"lastLogin": now},
+                        timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+                        retry=None,
+                    )
+                    elapsed = time.monotonic() - t_start
+                    if elapsed > 1.0:
+                        print(f"[auth:authenticate] lastLogin update completed in {elapsed:.3f}s (background)", flush=True)
+                except Exception as e:
+                    print(f"[auth:authenticate] lastLogin background update FAILED (auth still succeeds): {e}", flush=True)
+
+            t = threading.Thread(target=_update_lastlogin_background, daemon=True)
+            t.start()
+            print(f"[auth:authenticate] 6. lastLogin DISPATCHED (non-blocking, best-effort) t={_elapsed():.3f}s", flush=True)
+        else:
+            print(
+                f"[auth:authenticate] 6. lastLogin SKIPPED (disabled/throttled) t={_elapsed():.3f}s",
+                flush=True,
+            )
+
+        # Step 4: Sanitize and return - no Firestore, fast
+        print(f"[auth:authenticate] 7. SANITIZE_START t={_elapsed():.3f}s", flush=True)
         result = self._sanitize_user(user)
-        print(f"[auth] 7. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
+        print(f"[auth:authenticate] 8. RETURN_SUCCESS t={_elapsed():.3f}s", flush=True)
         return result
 
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
         """
-        Change a user's password
+        Change user's password
 
         Args:
             user_id: User ID
@@ -476,7 +510,7 @@ class UserService:
             return 0
 
     def _sanitize_user(self, user: Dict[str, Any]) -> Dict[str, Any]:
-        """Remove sensitive fields (password) from user data"""
+        """Remove sensitive fields (password) from user data. Fast, in-memory only."""
         if not user:
             return None
 

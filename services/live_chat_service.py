@@ -27,6 +27,25 @@ from utils.phone_utils import normalize_phone
 from services.media_service import build_whatsapp_audio_delivery_url
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except Exception:
+        return int(default)
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except Exception:
+        return float(default)
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name, "true" if default else "false")
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
 class LiveChatService:
     """Service for managing live chat operations with canonical state"""
 
@@ -35,20 +54,26 @@ class LiveChatService:
     # Time window for active conversations (6 hours - "live" = currently with AI)
     ACTIVE_TIME_WINDOW = 6 * 60 * 60  # 6 hours
 
-    # Cache configuration: short TTL; invalidate on events
-    CACHE_TTL = 30  # seconds
-    PHONE_MAPPING_CACHE_TTL = 60  # seconds
+    # Cache configuration (tuned for quota safety)
+    CACHE_TTL = _env_int("LIVECHAT_CACHE_TTL_SECONDS", 45)
+    PHONE_MAPPING_CACHE_TTL = _env_int("LIVECHAT_PHONE_MAPPING_CACHE_TTL_SECONDS", 120)
+    UNIFIED_CACHE_TTL = _env_int("LIVECHAT_UNIFIED_CACHE_TTL_SECONDS", 12)
     FIRESTORE_FETCH_PARALLELISM = 24
-    FIRESTORE_DOC_TIMEOUT_SECONDS = 4
-    FIRESTORE_QUERY_TIMEOUT_SECONDS = 4
+    FIRESTORE_DOC_TIMEOUT_SECONDS = _env_float("LIVECHAT_DOC_TIMEOUT_SECONDS", 4)
+    FIRESTORE_QUERY_TIMEOUT_SECONDS = _env_float("LIVECHAT_QUERY_TIMEOUT_SECONDS", 4)
     RECENT_MESSAGES_IN_INDEX = 50
-    INDEX_READ_TIMEOUT_SECONDS = 3
-    INDEX_WRITE_TIMEOUT_SECONDS = 4
-    INDEX_REFRESH_TIMEOUT_SECONDS = 4
-    INDEX_WRITE_COOLDOWN_SECONDS = 180
-    INDEX_COUNTERS_CACHE_TTL = 20
+    INDEX_READ_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_READ_TIMEOUT_SECONDS", 3)
+    INDEX_WRITE_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_WRITE_TIMEOUT_SECONDS", 4)
+    INDEX_REFRESH_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_REFRESH_TIMEOUT_SECONDS", 4)
+    INDEX_WRITE_COOLDOWN_SECONDS = _env_int("LIVECHAT_INDEX_WRITE_COOLDOWN_SECONDS", 180)
+    INDEX_COUNTERS_CACHE_TTL = _env_int("LIVECHAT_INDEX_COUNTERS_CACHE_TTL_SECONDS", 180)
+    INDEX_COUNTER_SCAN_LIMIT = _env_int("LIVECHAT_INDEX_COUNTER_SCAN_LIMIT", 250)
+    INDEX_REFRESH_MIN_INTERVAL_SECONDS = _env_int("LIVECHAT_INDEX_REFRESH_MIN_INTERVAL_SECONDS", 120)
+    SEARCH_WIDEN_MAX_DOCS = _env_int("LIVECHAT_SEARCH_WIDEN_MAX_DOCS", 300)
+    ENABLE_INDEX_BACKFILL_ON_READ = _env_bool("LIVECHAT_ENABLE_INDEX_BACKFILL_ON_READ", False)
+    ENABLE_WAITING_QUEUE_FALLBACK_SCAN = _env_bool("LIVECHAT_ENABLE_WAITING_QUEUE_FALLBACK_SCAN", False)
     FALLBACK_USERS_STREAM_LIMIT = 80
-    FALLBACK_UNIFIED_TIMEOUT_SECONDS = 8
+    FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 8)
 
     # Canonical conversation states
     STATE_BOT_ACTIVE = "bot_active"
@@ -75,9 +100,17 @@ class LiveChatService:
         # Cache for unified chats (WhatsApp-style list)
         self._unified_chats_cache = []
         self._unified_chats_cache_time = None
+        self._unified_chats_cache_has_more = False
+        self._unified_chats_cache_total = 0
+        self._unified_chats_cache_next_cursor = None
+        self._unified_chats_cache_page_size = None
         self._index_counters_cache = self._empty_counters()
         self._index_counters_cache_time = None
         self._index_write_paused_until = None
+        # Prevent duplicate index writes for identical payloads.
+        self._index_signature_cache = {}
+        # Throttle read-path index refreshes for the same conversation.
+        self._read_path_refresh_tracker = {}
 
     # ---------- State + index helpers ----------
     def _normalize_conversation_state(self, conv_data: dict) -> str:
@@ -185,23 +218,34 @@ class LiveChatService:
             f"⚠️ Pausing live_chat_index writes for {self.INDEX_WRITE_COOLDOWN_SECONDS}s: {reason}"
         )
 
+    def _should_schedule_read_path_refresh(self, conversation_id: str) -> bool:
+        now = utc_now()
+        last = self._read_path_refresh_tracker.get(conversation_id)
+        if last:
+            elapsed = (now - last).total_seconds()
+            if elapsed < self.INDEX_REFRESH_MIN_INTERVAL_SECONDS:
+                return False
+        self._read_path_refresh_tracker[conversation_id] = now
+        return True
+
     def _cached_unified_response(
         self, page: int, page_size: int, filter_state: str, search: str
     ) -> Dict[str, Any]:
         chats = list(self._unified_chats_cache or [])
         counters = dict(self._index_counters_cache or self._empty_counters())
+        total = int(self._unified_chats_cache_total or len(chats))
         return {
             "success": True,
             "chats": chats,
-            "total": len(chats),
+            "total": total,
             "page": page,
             "page_size": page_size,
-            "has_more": False,
-            "next_cursor": None,
+            "has_more": bool(self._unified_chats_cache_has_more),
+            "next_cursor": self._unified_chats_cache_next_cursor,
             "filter": filter_state,
             "counters": counters,
             "search": search,
-            "source": "cache_fallback",
+            "source": "cache",
         }
 
     def _empty_unified_response(
@@ -485,16 +529,34 @@ class LiveChatService:
                 return
             if self._is_index_write_paused():
                 return
-            idx = self._index_collection(db).document(entry["conversation_id"])
+            conv_id = entry.get("conversation_id")
+            if not conv_id:
+                return
+
             payload = dict(entry)
             if isinstance(payload.get("last_message_at"), str):
                 try:
                     payload["last_message_at"] = self._parse_timestamp(payload["last_message_at"])
                 except Exception:
                     payload["last_message_at"] = utc_now()
+
+            signature = (
+                str(payload.get("last_message_at")),
+                str(payload.get("last_message_text", "")),
+                int(payload.get("message_count") or 0),
+                str(payload.get("conversation_state") or ""),
+                str(payload.get("operator_id") or ""),
+                int(payload.get("unread_count") or 0),
+            )
+            if self._index_signature_cache.get(conv_id) == signature:
+                print(f"[live_chat:index] skip unchanged write conv={conv_id}")
+                return
+
+            idx = self._index_collection(db).document(conv_id)
             await asyncio.to_thread(
                 lambda: idx.set(payload, timeout=self.INDEX_WRITE_TIMEOUT_SECONDS)
             )
+            self._index_signature_cache[conv_id] = signature
         except Exception as e:
             print(f"⚠️ Failed upserting index entry for {entry.get('conversation_id')}: {e}")
             lowered = str(e).lower()
@@ -533,6 +595,10 @@ class LiveChatService:
         self._queue_cache_time = None
         self._unified_chats_cache = []
         self._unified_chats_cache_time = None
+        self._unified_chats_cache_has_more = False
+        self._unified_chats_cache_total = 0
+        self._unified_chats_cache_next_cursor = None
+        self._unified_chats_cache_page_size = None
         self._index_counters_cache = self._empty_counters()
         self._index_counters_cache_time = None
 
@@ -906,9 +972,24 @@ class LiveChatService:
             and not cursor
             and not state_values
             and bool(self._unified_chats_cache)
+            and (
+                self._unified_chats_cache_page_size is None
+                or self._unified_chats_cache_page_size == safe_size
+            )
         )
+        if use_cache_fallback and self._is_cache_fresh(
+            self._unified_chats_cache_time,
+            ttl_seconds=self.UNIFIED_CACHE_TTL,
+        ):
+            print(
+                f"[live_chat:unified] source=memory_cache page={page_num} size={safe_size} search={bool(search_val)}"
+            )
+            return self._cached_unified_response(
+                page_num, safe_size, filter_state, search
+            )
 
         try:
+            request_started = utc_now()
             db = get_firestore_db()
             if not db:
                 if use_cache_fallback:
@@ -959,10 +1040,16 @@ class LiveChatService:
                 lambda: _stream_page(query),
                 self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
             )
+            print(
+                f"[live_chat:unified] source=index_page docs={len(docs)} page={page_num} size={safe_size} search={bool(search_val)} filter={filter_state}"
+            )
 
             # If search provided, widen fetch to improve matches (still index-only)
             if search_val:
-                widen_limit = max(fetch_limit * 5, 200)
+                widen_limit = min(
+                    self.SEARCH_WIDEN_MAX_DOCS,
+                    max(fetch_limit * 3, 120),
+                )
                 def _stream_search(q):
                     use_q = q
                     if state_values:
@@ -975,6 +1062,9 @@ class LiveChatService:
                 docs = await self._run_blocking_with_timeout(
                     lambda: _stream_search(query),
                     self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                )
+                print(
+                    f"[live_chat:unified] source=index_search docs={len(docs)} widen_limit={widen_limit} search={search_val}"
                 )
 
             if not docs:
@@ -1046,8 +1136,20 @@ class LiveChatService:
             if not search_val and not cursor and not state_values:
                 self._unified_chats_cache = paged
                 self._unified_chats_cache_time = utc_now()
+                self._unified_chats_cache_has_more = has_more
+                self._unified_chats_cache_total = total_returned
+                self._unified_chats_cache_next_cursor = next_cursor
+                self._unified_chats_cache_page_size = safe_size
 
-            counters = await self._compute_index_counters()
+            if page_num == 1 and not cursor:
+                counters = await self._compute_index_counters()
+            else:
+                counters = dict(self._index_counters_cache or self._empty_counters())
+
+            elapsed_ms = int((utc_now() - request_started).total_seconds() * 1000)
+            print(
+                f"[live_chat:unified] return chats={len(paged)} has_more={has_more} elapsed_ms={elapsed_ms}"
+            )
 
             return {
                 "success": True,
@@ -1083,6 +1185,7 @@ class LiveChatService:
             self._index_counters_cache_time,
             ttl_seconds=self.INDEX_COUNTERS_CACHE_TTL,
         ):
+            print("[live_chat:counters] source=cache")
             return dict(self._index_counters_cache)
 
         counters = self._empty_counters()
@@ -1091,15 +1194,18 @@ class LiveChatService:
             if not db:
                 return counters
             index_coll = self._index_collection(db)
-            # Cap to avoid massive scans; newest 1000 usually enough for dashboard counters
+            # Cap to avoid massive scans on every dashboard refresh.
             docs = await asyncio.to_thread(
                 lambda: list(
                     index_coll.order_by(
                         "last_message_at", direction=firestore.Query.DESCENDING
                     )
-                    .limit(1000)
+                    .limit(self.INDEX_COUNTER_SCAN_LIMIT)
                     .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)
                 ),
+            )
+            print(
+                f"[live_chat:counters] source=index docs_scanned={len(docs)} limit={self.INDEX_COUNTER_SCAN_LIMIT}"
             )
             for doc in docs:
                 data = doc.to_dict() or {}
@@ -1478,7 +1584,7 @@ class LiveChatService:
             )
             docs = await asyncio.to_thread(lambda: list(query.stream()))
 
-            if not docs:
+            if not docs and self.ENABLE_WAITING_QUEUE_FALLBACK_SCAN:
                 fallback = await self._fallback_unified_chats("", page=1, page_size=300, filter_state="waiting")
                 if fallback.get("success") and fallback.get("chats"):
                     queue = []
@@ -1503,6 +1609,8 @@ class LiveChatService:
                     self._queue_cache = queue
                     self._queue_cache_time = current_time
                     return queue
+            elif not docs:
+                print("[live_chat:waiting_queue] index empty; fallback scan disabled")
 
             waiting_queue = []
 
@@ -2116,6 +2224,9 @@ class LiveChatService:
                         recent = data.get("recent_messages")
                         if isinstance(recent, list) and len(recent) > 0:
                             msg_count = int(data.get("message_count") or 0)
+                            print(
+                                f"[live_chat:conversation] source=index_recent conv={conversation_id} returned={len(recent)} total={msg_count}"
+                            )
                             return {
                                 "success": True,
                                 "conversation_id": conversation_id,
@@ -2225,9 +2336,21 @@ class LiveChatService:
                 "sentiment": sentiment,
                 "status": status
             }
-            # Backfill index with recent_messages so next open uses fast path
-            if days <= 0 and not before:
-                asyncio.create_task(self._refresh_index_for_conversation(effective_user_id, conversation_id))
+            print(
+                f"[live_chat:conversation] source=full_document conv={conversation_id} total_raw={total_messages} returned={len(formatted_messages)}"
+            )
+            # Optional read-path backfill (disabled by default to avoid write amplification)
+            if (
+                days <= 0
+                and not before
+                and self.ENABLE_INDEX_BACKFILL_ON_READ
+                and self._should_schedule_read_path_refresh(conversation_id)
+            ):
+                asyncio.create_task(
+                    self._refresh_index_for_conversation(
+                        effective_user_id, conversation_id
+                    )
+                )
             # #region agent log
             try:
                 import json

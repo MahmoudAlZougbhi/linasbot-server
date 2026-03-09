@@ -450,7 +450,8 @@ class DailyTemplateDispatcher:
 
     async def tick(self) -> Dict[str, Any]:
         """
-        Called frequently (e.g., every minute). Runs templates whose local HH:MM matches now.
+        Called on scheduler cadence (default 5 minutes).
+        Runs templates whose configured HH:MM falls inside the current cadence window.
         """
         if not self._is_smart_messaging_enabled():
             return {
@@ -461,10 +462,13 @@ class DailyTemplateDispatcher:
             }
 
         schedules = template_schedule_service.get_all_schedules()
+        cadence_minutes = max(1, int(os.getenv("SMART_DISPATCHER_INTERVAL_MINUTES", "5")))
         jobs_run = []
         due_jobs: List[Dict[str, Any]] = []
+        templates_checked = 0
         with self._lock:
             for template_id in DAILY_TEMPLATE_IDS:
+                templates_checked += 1
                 schedule = schedules.get(template_id, {})
                 if not schedule.get("enabled", True):
                     continue
@@ -472,7 +476,19 @@ class DailyTemplateDispatcher:
                 send_time = str(schedule.get("sendTime", ""))
                 timezone = str(schedule.get("timezone", "Asia/Beirut"))
                 local_now = self._now_in_timezone(timezone)
-                if local_now.strftime("%H:%M") != send_time:
+                try:
+                    send_hour, send_minute = [int(p) for p in send_time.split(":", 1)]
+                    send_dt = local_now.replace(
+                        hour=send_hour,
+                        minute=send_minute,
+                        second=0,
+                        microsecond=0,
+                    )
+                except Exception:
+                    continue
+
+                window_start = local_now - timedelta(minutes=cadence_minutes)
+                if send_dt > local_now or send_dt < window_start:
                     continue
 
                 day_key = local_now.date().isoformat()
@@ -502,6 +518,10 @@ class DailyTemplateDispatcher:
                 for job in jobs_run:
                     self.last_runs[job["template_id"]] = job["run_date"]
                 self._save_state()
+
+        print(
+            f"[daily_template_dispatcher] tick cadence={cadence_minutes}m checked={templates_checked} due={len(due_jobs)} ran={len(jobs_run)}"
+        )
 
         return {
             "success": True,

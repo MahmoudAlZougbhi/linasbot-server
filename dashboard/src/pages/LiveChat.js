@@ -70,8 +70,8 @@ const LiveChat = () => {
   const [liveSearchQuery, setLiveSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const waitingSearchTerm = debouncedSearch.trim().toLowerCase();
-  // ✅ With bot: 50 per page for faster list fill, Load More for rest
-  const CHAT_LIST_PAGE_SIZE = 50;
+  // Keep list page moderate to reduce backend/index reads per refresh.
+  const CHAT_LIST_PAGE_SIZE = 30;
   const [chatPage, setChatPage] = useState(1);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
@@ -716,14 +716,16 @@ const LiveChat = () => {
           loadMockData();
         }
 
-        getWaitingQueue()
-          .then((queueResponse) => {
-            if (!isMountedRef.current) return;
-            if (queueResponse?.success) {
-              applyWaitingQueue(queueResponse);
-            }
-          })
-          .catch(() => {});
+        if (!debouncedSearch.trim()) {
+          getWaitingQueue()
+            .then((queueResponse) => {
+              if (!isMountedRef.current) return;
+              if (queueResponse?.success) {
+                applyWaitingQueue(queueResponse);
+              }
+            })
+            .catch(() => {});
+        }
       } catch (error) {
         if (!isMountedRef.current) return;
         console.error("Error fetching live chat data:", error);
@@ -766,7 +768,7 @@ const LiveChat = () => {
     onOperatorMessageCached: saveOperatorMessageToSession,
   });
 
-  // Fallback: if SSE doesn't populate within 8s, fetch manually (SSE failed/slow)
+  // Fallback: if SSE doesn't populate, fetch once manually (single safety net)
   useEffect(() => {
     if (debouncedSearch.trim() || useMockData) return;
     const t = setTimeout(async () => {
@@ -787,7 +789,7 @@ const LiveChat = () => {
       } finally {
         if (isMountedRef.current) setIsLoading(false);
       }
-    }, 8000);
+    }, 15000);
     return () => clearTimeout(t);
   }, [debouncedSearch, useMockData, getUnifiedChats, applyServerConversations, setIsLoading, setHasMoreChats, setChatPage]);
 
@@ -1098,8 +1100,8 @@ const LiveChat = () => {
       return;
     }
     if (!hasMoreChats || loadingMoreChats) return;
-    if (activeConversations.length >= 100) return;
-    if (autoLoadedPagesRef.current >= 3) return;
+    if (activeConversations.length >= 60) return;
+    if (autoLoadedPagesRef.current >= 2) return;
     autoLoadedPagesRef.current += 1;
     loadMoreChats();
   }, [debouncedSearch, hasMoreChats, loadingMoreChats, activeConversations.length, loadMoreChats]);
