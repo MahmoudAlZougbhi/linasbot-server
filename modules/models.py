@@ -178,6 +178,11 @@ class ReleaseRequest(BaseModel):
     user_id: str
 
 
+class MarkConversationReadRequest(BaseModel):
+    conversation_id: str
+    user_id: str
+
+
 class SendOperatorMessageRequest(BaseModel):
     conversation_id: str
     user_id: str

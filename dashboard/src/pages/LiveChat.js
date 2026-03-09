@@ -38,6 +38,7 @@ import {
   fetchFaqMatchContext,
   faqUpdateAnswer,
   faqCreateFromLivechat,
+  markConversationRead as markConversationReadApi,
 } from "../utils/liveChatApi";
 
 const LiveChat = () => {
@@ -297,10 +298,15 @@ const LiveChat = () => {
   }, [filteredBotConversations, getConversationLastTs]);
 
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
+  // Local state for optimistic UI; API unread_count is source of truth (persists across refresh)
   const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
   const markConversationRead = React.useCallback((userId, conversationId, messageCount) => {
     const key = `${userId}_${conversationId}`;
     setReadMessageCountByConv((prev) => ({ ...prev, [key]: messageCount }));
+    // Persist to backend so unread stays 0 after refresh/update
+    markConversationReadApi({ userId, conversationId }).catch((err) =>
+      console.warn("[LiveChat] mark-read API failed:", err)
+    );
   }, []);
   const markWaitingConversationRead = markConversationRead;
 
@@ -318,6 +324,7 @@ const LiveChat = () => {
       user_phone: c.user_phone,
       wait_time_seconds: 0,
       message_count: c.message_count || 0,
+      unread_count: c.unread_count,
       last_message: c.last_message?.content ?? "",
       reason: "user_request",
       sentiment: c.sentiment || "neutral",
@@ -2894,7 +2901,14 @@ const LiveChat = () => {
                         const isUserRequested = userRequestedReasons.includes((item.reason || "").toLowerCase());
                         const readKey = `${item.user_id}_${item.conversation_id}`;
                         const readCount = readMessageCountByConv[readKey] ?? 0;
-                        const unreadCount = Math.max(0, (item.message_count || 0) - readCount);
+                        const msgCount = item.message_count || 0;
+                        // If locally marked read this session, show 0. Else use API unread_count (user msgs only)
+                        const unreadCount =
+                          readCount > 0 && readCount >= msgCount
+                            ? 0
+                            : typeof item.unread_count === "number"
+                              ? item.unread_count
+                              : Math.max(0, msgCount - readCount);
                         return (
                           <div
                             key={item.conversation_id}
@@ -2965,7 +2979,14 @@ const LiveChat = () => {
                       filteredWithOperator.map((conv) => {
                         const readKey = `${conv.user_id}_${conv.conversation_id}`;
                         const readCount = readMessageCountByConv[readKey] ?? 0;
-                        const unreadCount = Math.max(0, (conv.message_count || 0) - readCount);
+                        const msgCount = conv.message_count || 0;
+                        // If locally marked read this session, show 0. Else use API unread_count (user msgs only)
+                        const unreadCount =
+                          readCount > 0 && readCount >= msgCount
+                            ? 0
+                            : typeof conv.unread_count === "number"
+                              ? conv.unread_count
+                              : Math.max(0, msgCount - readCount);
                         return (
                           <div
                             key={`${conv.user_id}_${conv.conversation_id}`}

@@ -60,7 +60,7 @@ class LiveChatService:
     UNIFIED_CACHE_TTL = _env_int("LIVECHAT_UNIFIED_CACHE_TTL_SECONDS", 12)
     FIRESTORE_FETCH_PARALLELISM = 24
     FIRESTORE_DOC_TIMEOUT_SECONDS = _env_float("LIVECHAT_DOC_TIMEOUT_SECONDS", 4)
-    FIRESTORE_QUERY_TIMEOUT_SECONDS = _env_float("LIVECHAT_QUERY_TIMEOUT_SECONDS", 4)
+    FIRESTORE_QUERY_TIMEOUT_SECONDS = _env_float("LIVECHAT_QUERY_TIMEOUT_SECONDS", 12)
     RECENT_MESSAGES_IN_INDEX = 50
     INDEX_READ_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_READ_TIMEOUT_SECONDS", 3)
     INDEX_WRITE_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_WRITE_TIMEOUT_SECONDS", 4)
@@ -73,7 +73,7 @@ class LiveChatService:
     ENABLE_INDEX_BACKFILL_ON_READ = _env_bool("LIVECHAT_ENABLE_INDEX_BACKFILL_ON_READ", False)
     ENABLE_WAITING_QUEUE_FALLBACK_SCAN = _env_bool("LIVECHAT_ENABLE_WAITING_QUEUE_FALLBACK_SCAN", False)
     FALLBACK_USERS_STREAM_LIMIT = 80
-    FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 8)
+    FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 20)
     PERSIST_UNIFIED_CACHE = _env_bool("LIVECHAT_PERSIST_UNIFIED_CACHE", True)
     UNIFIED_DISK_CACHE_MAX_AGE_SECONDS = _env_int("LIVECHAT_UNIFIED_DISK_CACHE_MAX_AGE_SECONDS", 86400)
     UNIFIED_CACHE_PATH = os.getenv("LIVECHAT_UNIFIED_CACHE_PATH", "data/live_chat_unified_cache.json")
@@ -1750,7 +1750,8 @@ class LiveChatService:
                             "reason": "user_request",
                             "wait_time_seconds": wait_time_seconds,
                             "sentiment": "neutral",
-                            "message_count": 0,
+                            "message_count": chat.get("message_count", 0),
+                            "unread_count": chat.get("unread_count", 0),
                             "priority": 2,
                             "last_message": chat.get("last_message_text", ""),
                         })
@@ -1797,6 +1798,7 @@ class LiveChatService:
                     "wait_time_seconds": wait_time_seconds,
                     "sentiment": sentiment,
                     "message_count": data.get("message_count", 0),
+                    "unread_count": data.get("unread_count", 0),
                     "priority": priority,
                     "last_message": data.get("last_message_text", ""),
                 }
@@ -2099,7 +2101,42 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error releasing conversation: {e}")
             return {"success": False, "error": str(e)}
-    
+
+    async def mark_conversation_read(self, user_id: str, conversation_id: str) -> Dict[str, Any]:
+        """
+        Mark a conversation as read (operator opened it).
+        Sets unread_count=0 in Firestore so it persists across refresh/update.
+        """
+        try:
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+            db = get_firestore_db()
+            if not db:
+                return {"success": False, "error": "Firestore not initialized"}
+
+            conv_ref = (
+                db.collection("artifacts")
+                .document(self.APP_ID)
+                .collection("users")
+                .document(canonical_user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
+            conv_snap = await self._get_doc_with_timeout(conv_ref)
+            if not conv_snap.exists:
+                return {"success": False, "error": "Conversation not found"}
+
+            current = conv_snap.to_dict() or {}
+            if int(current.get("unread_count") or 0) == 0:
+                return {"success": True, "message": "Already read"}
+
+            await asyncio.to_thread(conv_ref.update, {"unread_count": 0})
+            await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
+            self.invalidate_cache()
+            return {"success": True, "message": "Marked as read"}
+        except Exception as e:
+            print(f"❌ Error marking conversation read: {e}")
+            return {"success": False, "error": str(e)}
+
     async def send_operator_message(
         self, conversation_id: str, user_id: str, message: str, operator_id: str, adapter, message_type: str = "text"
     ) -> Dict[str, Any]:

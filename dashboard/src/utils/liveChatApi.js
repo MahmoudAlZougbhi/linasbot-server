@@ -75,6 +75,22 @@ export const endLiveChatConversation = async ({
 };
 
 /**
+ * Mark conversation as read when operator opens it. Persists unread_count=0 in Firestore.
+ */
+export const markConversationRead = async ({ userId, conversationId }) => {
+  const baseURL = getApiAbsoluteBaseUrl();
+  const response = await fetch(`${baseURL}/api/live-chat/mark-read`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      conversation_id: conversationId,
+    }),
+  });
+  return response.json();
+};
+
+/**
  * Edit a bot message's content in live chat (after dislike).
  * Updates the message in Firestore and returns the updated message.
  */

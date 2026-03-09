@@ -26,6 +26,7 @@ def _log_sse(action: str, **kwargs):
 from modules.models import (
     TakeoverRequest,
     ReleaseRequest,
+    MarkConversationReadRequest,
     SendOperatorMessageRequest,
     OperatorStatusRequest,
     EditMessageRequest,
@@ -212,6 +213,18 @@ async def release_conversation(request: ReleaseRequest):
         return await live_chat_service.release_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
+        )
+
+    return await _run_endpoint(_handler)
+
+
+@app.post("/api/live-chat/mark-read")
+async def mark_conversation_read(request: MarkConversationReadRequest):
+    """Mark conversation as read when operator opens it. Persists unread_count=0 in Firestore."""
+    async def _handler():
+        return await live_chat_service.mark_conversation_read(
+            user_id=request.user_id,
+            conversation_id=request.conversation_id,
         )
 
     return await _run_endpoint(_handler)
