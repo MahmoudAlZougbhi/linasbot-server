@@ -1176,32 +1176,53 @@ const LiveChat = () => {
     loadMoreInProgressRef.current = true;
     setLoadingMoreChats(true);
     try {
-      const chatsResponse = await getUnifiedChats(
-        debouncedSearch,
-        1,
-        CHAT_LIST_PAGE_SIZE,
-        nextCursor
+      let cursor = nextCursor;
+      let hasMore = hasMoreChats;
+      let pagesFetched = 0;
+      let totalAdded = 0;
+      const seenKeys = new Set(
+        (activeConversationsRef.current || []).map(
+          (c) => `${c.user_id}_${c.conversation_id}`
+        )
       );
-      if (chatsResponse.success && chatsResponse.chats) {
+
+      // Fetch up to 3 pages in one go to skip duplicate-only pages.
+      while (cursor && hasMore && pagesFetched < 3) {
+        const chatsResponse = await getUnifiedChats(
+          debouncedSearch,
+          1,
+          CHAT_LIST_PAGE_SIZE,
+          cursor
+        );
+        pagesFetched += 1;
+        if (!chatsResponse?.success) break;
+
         const normalized = (chatsResponse.chats || [])
           .map(normalizeIncomingConversation)
           .filter(Boolean);
-        setActiveConversations((prev) => {
-          const existingKeys = new Set(
-            prev.map((c) => `${c.user_id}_${c.conversation_id}`)
-          );
-          const deduped = normalized.filter(
-            (c) => !existingKeys.has(`${c.user_id}_${c.conversation_id}`)
-          );
-          return [...prev, ...deduped];
+        const deduped = normalized.filter((c) => {
+          const key = `${c.user_id}_${c.conversation_id}`;
+          if (seenKeys.has(key)) return false;
+          seenKeys.add(key);
+          return true;
         });
-        setNextCursor(chatsResponse.next_cursor || null);
-        setChatPage((p) => p + 1);
-        const hasMore = chatsResponse.has_more || false;
-        // Keep pagination alive even if this page was all duplicates (can happen with local/SSE overlap).
-        setHasMoreChats(Boolean(hasMore && chatsResponse.next_cursor));
-        loadMoreCooldownUntilRef.current = Date.now() + 1500; // Cooldown 1.5s
+
+        if (deduped.length > 0) {
+          totalAdded += deduped.length;
+          setActiveConversations((prev) => [...prev, ...deduped]);
+        }
+
+        cursor = chatsResponse.next_cursor || null;
+        hasMore = Boolean(chatsResponse.has_more && cursor);
+
+        // If we got new chats, stop here and let next user scroll load more.
+        if (totalAdded > 0) break;
       }
+
+      setNextCursor(cursor || null);
+      setChatPage((p) => p + pagesFetched);
+      setHasMoreChats(Boolean(hasMore));
+      loadMoreCooldownUntilRef.current = Date.now() + 1500; // Cooldown 1.5s
     } catch (error) {
       console.error("Error loading more chats:", error);
       loadMoreCooldownUntilRef.current = Date.now() + 2000; // Cooldown on error too
