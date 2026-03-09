@@ -849,6 +849,8 @@ const LiveChat = () => {
     selectedConversationRef,
     debouncedSearchRef,
     getUnifiedChats,
+    getWaitingQueue,
+    applyWaitingQueue,
     chatListPageSize: CHAT_LIST_PAGE_SIZE,
     fetchConversationMessages,
     setActiveConversations: applyServerConversations,

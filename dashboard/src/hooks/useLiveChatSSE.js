@@ -15,6 +15,8 @@ export const useLiveChatSSE = ({
   selectedConversationRef,
   debouncedSearchRef,
   getUnifiedChats,
+  getWaitingQueue,
+  applyWaitingQueue,
   chatListPageSize = 50,
   fetchConversationMessages,
   setActiveConversations,
@@ -137,6 +139,16 @@ export const useLiveChatSSE = ({
 
       if (total != null && setIsLoading) setIsLoading(false);
       if (hasMoreValue != null && setHasMoreChats) setHasMoreChats(hasMoreValue);
+      if (getWaitingQueue && applyWaitingQueue) {
+        getWaitingQueue()
+          .then((queueResponse) => {
+            if (!isMountedRef.current) return;
+            if (queueResponse?.success && queueResponse?.queue) {
+              applyWaitingQueue(queueResponse);
+            }
+          })
+          .catch(() => {});
+      }
       return conversations;
     };
 

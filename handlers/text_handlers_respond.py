@@ -410,8 +410,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             try:
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 app_id_for_firestore = "linas-ai-bot-backend"
-                conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
-                conv_doc_ref.update({
+                users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+                conv_doc_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                update_payload = {
                     "status": "waiting_human",
                     "human_takeover_active": True,
                     "human_takeover_requested": True,
@@ -420,14 +421,27 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "escalation_reason": escalation_reason,
                     "escalation_time": datetime.datetime.now(),
                     "last_updated": datetime.datetime.now(),
-                })
-                print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision)")
-                try:
-                    from services.live_chat_service import live_chat_service
-                    live_chat_service.invalidate_cache()
-                    await live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id)
-                except Exception as idx_err:
-                    print(f"⚠️ Index refresh after AI handover: {idx_err}")
+                }
+                doc_snap = await asyncio.to_thread(conv_doc_ref.get)
+                if not doc_snap.exists and canonical_user_id and (
+                    canonical_user_id.startswith("+") or (canonical_user_id.isdigit() and len(canonical_user_id) >= 10)
+                ):
+                    alt_user_id = canonical_user_id[1:] if canonical_user_id.startswith("+") else f"+{canonical_user_id}"
+                    alt_ref = users_coll.document(alt_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                    alt_snap = await asyncio.to_thread(alt_ref.get)
+                    if alt_snap.exists:
+                        conv_doc_ref, canonical_user_id, doc_snap = alt_ref, alt_user_id, alt_snap
+                if doc_snap.exists:
+                    await asyncio.to_thread(conv_doc_ref.update, update_payload)
+                    print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision)")
+                    try:
+                        from services.live_chat_service import live_chat_service
+                        live_chat_service.invalidate_cache()
+                        await live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id)
+                    except Exception as idx_err:
+                        print(f"⚠️ Index refresh after AI handover: {idx_err}")
+                else:
+                    print(f"⚠️ Conversation {current_conversation_id} not found in Firestore (tried canonical + alternate path)")
             except Exception as e:
                 print(f"⚠️ Failed to update handover state in Firestore: {e}")
 
