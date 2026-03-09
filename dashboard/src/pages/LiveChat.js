@@ -357,6 +357,7 @@ const LiveChat = () => {
   const botListScrollThrottleRef = useRef(null);
   const botFloatingScrollRef = useRef(null);
   const loadMoreInProgressRef = useRef(false);
+  const loadMoreCooldownUntilRef = useRef(0);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -1163,6 +1164,7 @@ const LiveChat = () => {
   // ✅ Load more chats (cursor-based pagination – backend uses cursor, not page offset)
   const loadMoreChats = React.useCallback(async () => {
     if (loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
+    if (Date.now() < loadMoreCooldownUntilRef.current) return;
     if (!nextCursor) return; // Backend uses cursor-based pagination; need cursor for next page
     loadMoreInProgressRef.current = true;
     setLoadingMoreChats(true);
@@ -1177,6 +1179,7 @@ const LiveChat = () => {
         const normalized = (chatsResponse.chats || [])
           .map(normalizeIncomingConversation)
           .filter(Boolean);
+        let addedCount = 0;
         setActiveConversations((prev) => {
           const existingKeys = new Set(
             prev.map((c) => `${c.user_id}_${c.conversation_id}`)
@@ -1184,14 +1187,18 @@ const LiveChat = () => {
           const deduped = normalized.filter(
             (c) => !existingKeys.has(`${c.user_id}_${c.conversation_id}`)
           );
+          addedCount = deduped.length;
           return [...prev, ...deduped];
         });
         setNextCursor(chatsResponse.next_cursor || null);
         setChatPage((p) => p + 1);
-        setHasMoreChats(chatsResponse.has_more || false);
+        const hasMore = chatsResponse.has_more || false;
+        setHasMoreChats(addedCount > 0 ? hasMore : false); // Prevent loop if 0 new chats
+        loadMoreCooldownUntilRef.current = Date.now() + 1500; // Cooldown 1.5s
       }
     } catch (error) {
       console.error("Error loading more chats:", error);
+      loadMoreCooldownUntilRef.current = Date.now() + 2000; // Cooldown on error too
     } finally {
       loadMoreInProgressRef.current = false;
       setLoadingMoreChats(false);
@@ -1202,7 +1209,8 @@ const LiveChat = () => {
     (event) => {
       const el = event.currentTarget;
       if (!el || loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
-      if (botListScrollThrottleRef.current) return;
+      if (botListScrollThrottleRef.current || Date.now() < loadMoreCooldownUntilRef.current) return;
+      if (!nextCursor) return;
       const threshold = 280;
       const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       if (distanceToBottom <= threshold) {
@@ -1213,10 +1221,10 @@ const LiveChat = () => {
         }, 800);
       }
     },
-    [loadingMoreChats, hasMoreChats, loadMoreChats]
+    [loadingMoreChats, hasMoreChats, nextCursor, loadMoreChats]
   );
 
-  // Intersection Observer: load more when sentinel comes into view (more reliable than scroll)
+  // Intersection Observer: load more when sentinel comes into view (avoid filteredBotConversations.length in deps to prevent loop)
   useEffect(() => {
     const sentinel = botLoadMoreSentinelRef.current;
     const scrollRoot = botListRef.current;
@@ -1224,15 +1232,15 @@ const LiveChat = () => {
     const obs = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
-        if (entry?.isIntersecting && !loadMoreInProgressRef.current) {
-          loadMoreChats();
-        }
+        if (!entry?.isIntersecting || loadMoreInProgressRef.current) return;
+        if (Date.now() < loadMoreCooldownUntilRef.current) return;
+        loadMoreChats();
       },
       { root: scrollRoot, rootMargin: "200px", threshold: 0.1 }
     );
     obs.observe(sentinel);
     return () => obs.disconnect();
-  }, [hasMoreChats, loadingMoreChats, loadMoreChats, filteredBotConversations.length]);
+  }, [hasMoreChats, loadingMoreChats, loadMoreChats]);
 
   // Auto-load extra pages to reduce missing conversations on first load
   useEffect(() => {
@@ -1240,12 +1248,13 @@ const LiveChat = () => {
       autoLoadedPagesRef.current = 1;
       return;
     }
-    if (!hasMoreChats || loadingMoreChats) return;
+    if (!hasMoreChats || loadingMoreChats || !nextCursor) return;
     if (activeConversations.length >= 60) return;
     if (autoLoadedPagesRef.current >= 2) return;
+    if (Date.now() < loadMoreCooldownUntilRef.current) return;
     autoLoadedPagesRef.current += 1;
     loadMoreChats();
-  }, [debouncedSearch, hasMoreChats, loadingMoreChats, activeConversations.length, loadMoreChats]);
+  }, [debouncedSearch, hasMoreChats, loadingMoreChats, nextCursor, activeConversations.length, loadMoreChats]);
 
   // ✅ Manual refresh handler
   const handleManualRefresh = async () => {
