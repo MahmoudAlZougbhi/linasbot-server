@@ -74,6 +74,9 @@ class LiveChatService:
     ENABLE_WAITING_QUEUE_FALLBACK_SCAN = _env_bool("LIVECHAT_ENABLE_WAITING_QUEUE_FALLBACK_SCAN", False)
     FALLBACK_USERS_STREAM_LIMIT = 80
     FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 8)
+    PERSIST_UNIFIED_CACHE = _env_bool("LIVECHAT_PERSIST_UNIFIED_CACHE", True)
+    UNIFIED_DISK_CACHE_MAX_AGE_SECONDS = _env_int("LIVECHAT_UNIFIED_DISK_CACHE_MAX_AGE_SECONDS", 86400)
+    UNIFIED_CACHE_PATH = os.getenv("LIVECHAT_UNIFIED_CACHE_PATH", "data/live_chat_unified_cache.json")
 
     # Canonical conversation states
     STATE_BOT_ACTIVE = "bot_active"
@@ -111,6 +114,7 @@ class LiveChatService:
         self._index_signature_cache = {}
         # Throttle read-path index refreshes for the same conversation.
         self._read_path_refresh_tracker = {}
+        self._load_unified_cache_from_disk()
 
     # ---------- State + index helpers ----------
     def _normalize_conversation_state(self, conv_data: dict) -> str:
@@ -248,11 +252,82 @@ class LiveChatService:
             "source": "cache",
         }
 
+    def _unified_cache_file(self) -> str:
+        path = str(self.UNIFIED_CACHE_PATH or "").strip()
+        if not path:
+            return ""
+        return path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
+
+    def _persist_unified_cache_to_disk(self):
+        if not self.PERSIST_UNIFIED_CACHE:
+            return
+        cache_file = self._unified_cache_file()
+        if not cache_file:
+            return
+        try:
+            cache_dir = os.path.dirname(cache_file)
+            if cache_dir:
+                os.makedirs(cache_dir, exist_ok=True)
+            payload = {
+                "updated_at": utc_now().isoformat(),
+                "chats": list(self._unified_chats_cache or []),
+                "has_more": bool(self._unified_chats_cache_has_more),
+                "total": int(self._unified_chats_cache_total or len(self._unified_chats_cache or [])),
+                "next_cursor": self._unified_chats_cache_next_cursor,
+                "page_size": self._unified_chats_cache_page_size,
+                "counters": dict(self._index_counters_cache or self._empty_counters()),
+            }
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ Could not persist unified cache to disk: {e}")
+
+    def _load_unified_cache_from_disk(self):
+        if not self.PERSIST_UNIFIED_CACHE:
+            return
+        cache_file = self._unified_cache_file()
+        if not cache_file or not os.path.exists(cache_file):
+            return
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                payload = json.load(f) or {}
+            chats = payload.get("chats")
+            if not isinstance(chats, list) or not chats:
+                return
+
+            updated_at_raw = payload.get("updated_at")
+            if updated_at_raw:
+                try:
+                    updated_at = self._parse_timestamp(updated_at_raw)
+                    age = (utc_now() - updated_at).total_seconds()
+                    if age > max(60, int(self.UNIFIED_DISK_CACHE_MAX_AGE_SECONDS)):
+                        return
+                except Exception:
+                    pass
+
+            self._unified_chats_cache = chats
+            self._unified_chats_cache_has_more = bool(payload.get("has_more"))
+            self._unified_chats_cache_total = int(payload.get("total") or len(chats))
+            self._unified_chats_cache_next_cursor = payload.get("next_cursor")
+            self._unified_chats_cache_page_size = payload.get("page_size")
+            counters = payload.get("counters")
+            if isinstance(counters, dict):
+                merged = self._empty_counters()
+                merged.update({k: int(v) for k, v in counters.items() if k in merged})
+                self._index_counters_cache = merged
+            self._unified_chats_cache_time = utc_now()
+            print(
+                f"[live_chat:unified] loaded disk cache chats={len(chats)} file={cache_file}"
+            )
+        except Exception as e:
+            print(f"⚠️ Could not load unified cache from disk: {e}")
+
     def _empty_unified_response(
         self, page: int, page_size: int, filter_state: str, search: str, source: str
     ) -> Dict[str, Any]:
+        is_legitimate_empty = source in {"index_empty"}
         return {
-            "success": True,
+            "success": is_legitimate_empty,
             "chats": [],
             "total": 0,
             "page": page,
@@ -1149,6 +1224,7 @@ class LiveChatService:
                 self._unified_chats_cache_total = total_returned
                 self._unified_chats_cache_next_cursor = next_cursor
                 self._unified_chats_cache_page_size = safe_size
+                self._persist_unified_cache_to_disk()
 
             if page_num == 1 and not cursor:
                 counters = await self._compute_index_counters()
