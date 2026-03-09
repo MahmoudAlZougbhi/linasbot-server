@@ -338,7 +338,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                         # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
                         print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply.")
                         waiting_messages = {
-                            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي دقة 🙏",
+                                "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
                             "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
                             "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏"
                         }

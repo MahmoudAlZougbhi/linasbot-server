@@ -60,7 +60,7 @@ async def _delayed_process_messages(user_id: str, user_data: dict, send_message_
                     if human_takeover_active and not operator_id:
                         user_lang = user_data.get('user_preferred_lang', 'ar')
                         waiting_messages = {
-                            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي دقة 🙏",
+                            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
                             "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
                             "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏"
                         }

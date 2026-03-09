@@ -211,7 +211,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         print(f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI will not respond.")
         # Fallback: never leave dashboard test with "No response captured" while user is waiting for a human.
         waiting_messages = {
-            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي دقة 🙏",
+            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
             "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
             "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
         }
