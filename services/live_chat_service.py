@@ -61,7 +61,7 @@ class LiveChatService:
     FIRESTORE_FETCH_PARALLELISM = 24
     FIRESTORE_DOC_TIMEOUT_SECONDS = _env_float("LIVECHAT_DOC_TIMEOUT_SECONDS", 4)
     FIRESTORE_QUERY_TIMEOUT_SECONDS = _env_float("LIVECHAT_QUERY_TIMEOUT_SECONDS", 12)
-    RECENT_MESSAGES_IN_INDEX = 100
+    RECENT_MESSAGES_IN_INDEX = 30
     INDEX_READ_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_READ_TIMEOUT_SECONDS", 3)
     INDEX_WRITE_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_WRITE_TIMEOUT_SECONDS", 4)
     INDEX_REFRESH_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_REFRESH_TIMEOUT_SECONDS", 4)
@@ -69,11 +69,11 @@ class LiveChatService:
     INDEX_COUNTERS_CACHE_TTL = _env_int("LIVECHAT_INDEX_COUNTERS_CACHE_TTL_SECONDS", 180)
     INDEX_COUNTER_SCAN_LIMIT = _env_int("LIVECHAT_INDEX_COUNTER_SCAN_LIMIT", 250)
     INDEX_REFRESH_MIN_INTERVAL_SECONDS = _env_int("LIVECHAT_INDEX_REFRESH_MIN_INTERVAL_SECONDS", 120)
-    SEARCH_WIDEN_MAX_DOCS = _env_int("LIVECHAT_SEARCH_WIDEN_MAX_DOCS", 5000)
+    SEARCH_WIDEN_MAX_DOCS = _env_int("LIVECHAT_SEARCH_WIDEN_MAX_DOCS", 1000)
     ENABLE_INDEX_BACKFILL_ON_READ = _env_bool("LIVECHAT_ENABLE_INDEX_BACKFILL_ON_READ", False)
     ENABLE_WAITING_QUEUE_FALLBACK_SCAN = _env_bool("LIVECHAT_ENABLE_WAITING_QUEUE_FALLBACK_SCAN", False)
     FALLBACK_USERS_STREAM_LIMIT = 80
-    FALLBACK_SEARCH_USERS_LIMIT = 500
+    FALLBACK_SEARCH_USERS_LIMIT = 150
     FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 20)
     PERSIST_UNIFIED_CACHE = _env_bool("LIVECHAT_PERSIST_UNIFIED_CACHE", True)
     UNIFIED_DISK_CACHE_MAX_AGE_SECONDS = _env_int("LIVECHAT_UNIFIED_DISK_CACHE_MAX_AGE_SECONDS", 86400)
@@ -2488,7 +2488,7 @@ class LiveChatService:
             # Fast path for initial open (days=0, before not set):
             # avoid scanning/normalizing the full conversation history on every open.
             if days <= 0 and not before:
-                tail_window = max(max_messages * 4, 500)
+                tail_window = max(max_messages * 4, 100)
                 candidate = raw_messages[-tail_window:] if len(raw_messages) > tail_window else raw_messages
                 messages = self._visible_chat_messages(candidate)
                 messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
