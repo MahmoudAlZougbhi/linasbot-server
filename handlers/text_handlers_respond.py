@@ -209,6 +209,23 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # Check if human takeover is active
     if config.user_in_human_takeover_mode.get(user_id, False):
         print(f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI will not respond.")
+        # Fallback: never leave dashboard test with "No response captured" while user is waiting for a human.
+        waiting_messages = {
+            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي دقة 🙏",
+            "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
+            "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
+        }
+        waiting_msg = waiting_messages.get(current_preferred_lang, waiting_messages["ar"])
+        await send_message_func(user_id, waiting_msg)
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            waiting_msg,
+            current_conversation_id,
+            user_name,
+            user_data.get('phone_number'),
+            metadata={"handled_by": "ai", "source": "waiting_queue_fallback"},
+        )
         return
 
     is_initial_message_for_gpt = (config.user_greeting_stage[user_id] == 1) and (current_gender == "unknown")
