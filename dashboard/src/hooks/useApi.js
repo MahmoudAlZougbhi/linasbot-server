@@ -455,12 +455,14 @@ export const useApi = () => {
   );
 
   // Live Chat API functions - WhatsApp-style: unified chats (live + history)
-  const getUnifiedChats = useCallback(async (search = "", page = 1, pageSize = 30) => {
+  // cursor: use for Load More (backend uses cursor-based pagination, not page offset)
+  const getUnifiedChats = useCallback(async (search = "", page = 1, pageSize = 30, cursor = null) => {
     try {
       const params = new URLSearchParams();
       if (search && search.trim()) params.append("search", search.trim());
       params.append("page", String(page));
       params.append("page_size", String(pageSize));
+      if (cursor && typeof cursor === "string") params.append("cursor", cursor);
       const response = await api.get(`/api/live-chat/unified-chats?${params.toString()}`, {
         timeout: 30000,
       });
@@ -483,6 +485,7 @@ export const useApi = () => {
         chats,
         total,
         has_more: hasMore,
+        next_cursor: data.next_cursor || null,
       };
     } catch (error) {
       if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {

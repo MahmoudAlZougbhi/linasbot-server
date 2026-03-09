@@ -79,6 +79,7 @@ const LiveChat = () => {
   // Keep list page moderate to reduce backend/index reads per refresh.
   const CHAT_LIST_PAGE_SIZE = 45;
   const [chatPage, setChatPage] = useState(1);
+  const [nextCursor, setNextCursor] = useState(null);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -738,6 +739,7 @@ const LiveChat = () => {
           if (chatsResponse?.success && Array.isArray(chatsResponse.chats)) {
             applyServerConversations(chatsResponse.chats);
             setHasMoreChats(chatsResponse.has_more ?? false);
+            setNextCursor(chatsResponse.next_cursor ?? null);
             setChatPage(1);
             setUseMockData(false);
             autoLoadedPagesRef.current = 1;
@@ -786,6 +788,7 @@ const LiveChat = () => {
           const chats = chatsResponse.chats || chatsResponse.conversations || [];
           applyServerConversations(chats);
           setChatPage(1);
+          setNextCursor(chatsResponse.next_cursor ?? null);
           setHasMoreChats(chatsResponse.has_more || false);
           setUseMockData(false);
           autoLoadedPagesRef.current = 1;
@@ -873,6 +876,7 @@ const LiveChat = () => {
         if (!isMountedRef.current) return;
         if (r?.success && r?.chats?.length > 0) {
           applyServerConversations(r.chats);
+          setNextCursor(r.next_cursor ?? null);
           setHasMoreChats(r.has_more ?? false);
           setChatPage(1);
           autoLoadedPagesRef.current = 1;
@@ -1156,25 +1160,34 @@ const LiveChat = () => {
     }
   };
 
-  // ✅ Load more chats (WhatsApp-style pagination)
+  // ✅ Load more chats (cursor-based pagination – backend uses cursor, not page offset)
   const loadMoreChats = React.useCallback(async () => {
     if (loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
+    if (!nextCursor) return; // Backend uses cursor-based pagination; need cursor for next page
     loadMoreInProgressRef.current = true;
     setLoadingMoreChats(true);
     try {
-      const nextPage = chatPage + 1;
-      const chatsResponse = await getUnifiedChats(debouncedSearch, nextPage, CHAT_LIST_PAGE_SIZE);
+      const chatsResponse = await getUnifiedChats(
+        debouncedSearch,
+        1,
+        CHAT_LIST_PAGE_SIZE,
+        nextCursor
+      );
       if (chatsResponse.success && chatsResponse.chats) {
+        const normalized = (chatsResponse.chats || [])
+          .map(normalizeIncomingConversation)
+          .filter(Boolean);
         setActiveConversations((prev) => {
           const existingKeys = new Set(
             prev.map((c) => `${c.user_id}_${c.conversation_id}`)
           );
-          const deduped = chatsResponse.chats.filter(
+          const deduped = normalized.filter(
             (c) => !existingKeys.has(`${c.user_id}_${c.conversation_id}`)
           );
           return [...prev, ...deduped];
         });
-        setChatPage(nextPage);
+        setNextCursor(chatsResponse.next_cursor || null);
+        setChatPage((p) => p + 1);
         setHasMoreChats(chatsResponse.has_more || false);
       }
     } catch (error) {
@@ -1183,7 +1196,7 @@ const LiveChat = () => {
       loadMoreInProgressRef.current = false;
       setLoadingMoreChats(false);
     }
-  }, [loadingMoreChats, hasMoreChats, chatPage, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE]);
+  }, [loadingMoreChats, hasMoreChats, nextCursor, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE, normalizeIncomingConversation]);
 
   const handleBotListScroll = React.useCallback(
     (event) => {
@@ -1282,6 +1295,7 @@ const LiveChat = () => {
 
         applyServerConversations(chats);
         setChatPage(1);
+        setNextCursor(chatsResponse.next_cursor ?? null);
         setHasMoreChats(chatsResponse.has_more || false);
         setNewConversationIds(newIds);
         setLastRefreshTime(new Date());
