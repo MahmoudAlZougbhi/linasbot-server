@@ -14,6 +14,10 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from utils.utils import get_firestore_db
 
 
+class AuthBackendUnavailableError(RuntimeError):
+    """Raised when auth storage (Firestore) is temporarily unavailable."""
+
+
 class UserService:
     """Service for managing dashboard users in Firestore"""
 
@@ -153,8 +157,29 @@ class UserService:
             print(f"[auth:get_user_by_email] no docs, done in {time.monotonic() - t_start:.3f}s", flush=True)
             return None
         except Exception as e:
-            print(f"[auth:get_user_by_email] ERROR after {time.monotonic() - t_start:.3f}s: {e}", flush=True)
-            return None
+            elapsed = time.monotonic() - t_start
+            lowered = str(e).lower()
+            is_transient = any(
+                marker in lowered
+                for marker in (
+                    "429",
+                    "quota",
+                    "resource exhausted",
+                    "deadline",
+                    "timed out",
+                    "timeout",
+                    "unavailable",
+                    "connection",
+                )
+            )
+            print(
+                f"[auth:get_user_by_email] ERROR after {elapsed:.3f}s: {e} "
+                f"(transient={is_transient})",
+                flush=True,
+            )
+            # IMPORTANT: do not return None here; returning None is interpreted
+            # as invalid credentials. Bubble up backend outages explicitly.
+            raise AuthBackendUnavailableError(str(e)) from e
 
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a user by ID (includes password for internal use)"""

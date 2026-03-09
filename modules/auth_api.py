@@ -11,7 +11,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Dict, Any, Optional, List
 
 from modules.core import app
-from services.user_service import user_service
+from services.user_service import user_service, AuthBackendUnavailableError
 
 
 # ==========================================
@@ -109,6 +109,12 @@ async def login(request: LoginRequest):
         return {
             "success": False,
             "error": str(e)
+        }
+    except AuthBackendUnavailableError as e:
+        print(f"[auth_api] login: BACKEND_UNAVAILABLE for {request.email}: {e}", flush=True)
+        return {
+            "success": False,
+            "error": "Authentication service temporarily unavailable (Firestore quota/network). Please retry in a few minutes."
         }
     except asyncio.TimeoutError:
         print(f"[auth_api] login: TIMEOUT after 45s for {request.email}", flush=True)
