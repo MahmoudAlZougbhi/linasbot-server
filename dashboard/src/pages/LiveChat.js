@@ -564,7 +564,7 @@ const LiveChat = () => {
       history: hasCachedMessages ? cached.messages : previewHistory,
     });
     if (hasCachedMessages) {
-      setHasMoreMessages(cached.hasMore ?? false);
+      setHasMoreMessages(cached.hasMore ?? !cached?.isPartial);
       setMessagesLoading(false);
     } else if (previewHistory.length > 0) {
       setHasMoreMessages(false);
@@ -585,6 +585,7 @@ const LiveChat = () => {
           messages: updated.history,
           hasMore: hasMoreMessages,
           cachedAt: Date.now(),
+          isPartial: false,
         });
       }
       return updated;
@@ -847,7 +848,7 @@ const LiveChat = () => {
     const cacheKey = `${selectedConversationUserId}_${selectedConversationId}`;
     const cached = messageCacheRef.current.get(cacheKey);
     const cacheAge = cached ? Date.now() - cached.cachedAt : Infinity;
-    const cacheFresh = cached && cacheAge < MESSAGE_CACHE_TTL_MS;
+    const cacheFresh = cached && !cached.isPartial && cacheAge < MESSAGE_CACHE_TTL_MS;
 
     if (cached?.messages?.length) {
       setSelectedConversation((prev) => {
@@ -883,6 +884,7 @@ const LiveChat = () => {
           messages: merged,
           hasMore: hasMore || false,
           cachedAt: Date.now(),
+          isPartial: false,
         });
 
         setSelectedConversation((prev) => {
@@ -1271,6 +1273,7 @@ const LiveChat = () => {
               messages: deduped,
               hasMore,
               cachedAt: Date.now(),
+              isPartial: false,
             });
           }
           return { ...prev, history: deduped };
@@ -1308,6 +1311,7 @@ const LiveChat = () => {
         messages: merged,
         hasMore: hasMore || false,
         cachedAt: Date.now(),
+        isPartial: false,
       });
       toast.success(`Loaded ${merged.length} messages`);
     } catch (error) {

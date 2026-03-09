@@ -129,10 +129,12 @@ export const useLiveChatSSE = ({
         if (!isMountedRef.current || !messages?.length) return;
         if (messageCacheRef?.current) {
           const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
+          const existing = messageCacheRef.current.get(cacheKey);
           messageCacheRef.current.set(cacheKey, {
             messages,
-            hasMore: false,
+            hasMore: existing?.hasMore ?? true,
             cachedAt: Date.now(),
+            isPartial: true,
           });
         }
         setSelectedConversation((previous) => {
@@ -166,10 +168,12 @@ export const useLiveChatSSE = ({
         if (!isMountedRef.current || !messages?.length) return;
         if (messageCacheRef?.current) {
           const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
+          const existing = messageCacheRef.current.get(cacheKey);
           messageCacheRef.current.set(cacheKey, {
             messages,
-            hasMore: false,
+            hasMore: existing?.hasMore ?? true,
             cachedAt: Date.now(),
+            isPartial: true,
           });
         }
         setSelectedConversation((previous) => {
@@ -278,6 +282,7 @@ export const useLiveChatSSE = ({
                   messages: updatedHistory,
                   hasMore: existing?.hasMore ?? (hasMoreMessagesRef?.current ?? false),
                   cachedAt: Date.now(),
+                  isPartial: existing?.isPartial ?? false,
                 });
                 if (onOperatorMessageCached && (message.role === "operator" || message.is_user === false)) {
                   onOperatorMessageCached(prev.conversation.user_id, prev.conversation.conversation_id, message);
@@ -316,6 +321,7 @@ export const useLiveChatSSE = ({
                   messages: [...existing.messages, message],
                   hasMore: existing.hasMore,
                   cachedAt: Date.now(),
+                  isPartial: existing.isPartial ?? false,
                 });
                 if (onOperatorMessageCached && (message.role === "operator" || message.is_user === false)) {
                   onOperatorMessageCached(userId, convId, message);
