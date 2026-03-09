@@ -607,6 +607,12 @@ const LiveChat = () => {
     const cached = messageCacheRef.current.get(cacheKey);
     const hasCachedMessages = cached?.messages?.length > 0;
     const previewHistory = hasCachedMessages ? [] : buildPreviewHistory(conv);
+    agentDebugLog("H9", "LiveChat.js:selectConversation", "Conversation selected", {
+      hasCachedMessages,
+      cachedCount: hasCachedMessages ? cached.messages.length : 0,
+      previewCount: previewHistory.length,
+      hasLastMessagePreview: Boolean(conv?.last_message),
+    });
     setSelectedConversation({
       conversation: conv,
       history: hasCachedMessages ? cached.messages : previewHistory,
@@ -618,7 +624,7 @@ const LiveChat = () => {
       setHasMoreMessages(false);
       setMessagesLoading(false);
     }
-  }, [buildPreviewHistory]);
+  }, [buildPreviewHistory, agentDebugLog]);
 
   const appendMessageToSelectedConversation = (newMessage) => {
     setSelectedConversation((previous) => {
@@ -925,6 +931,13 @@ const LiveChat = () => {
         if (!isMountedRef.current || cancelled) return;
 
         const merged = mergeWithRecentOperatorMessages(messages || [], cacheKey);
+        agentDebugLog("H10", "LiveChat.js:fetchMessages:success", "Conversation messages fetched", {
+          fetchedCount: Array.isArray(messages) ? messages.length : -1,
+          mergedCount: Array.isArray(merged) ? merged.length : -1,
+          hasMore: Boolean(hasMore),
+          cacheWasFresh: Boolean(cacheFresh),
+          hadPreviewOnlyBeforeFetch: Boolean(!cached?.messages?.length && buildPreviewHistory(selectedConversationRef.current?.conversation).length > 0),
+        });
 
         messageCacheRef.current.set(cacheKey, {
           messages: merged,
@@ -944,6 +957,13 @@ const LiveChat = () => {
           const activeSelection = selectedConversationRef.current;
           const fallbackPreview = buildPreviewHistory(activeSelection?.conversation);
           const hasAnyFallback = (activeSelection?.history?.length || 0) > 0 || fallbackPreview.length > 0;
+          agentDebugLog("H11", "LiveChat.js:fetchMessages:error", "Conversation messages fetch failed; fallback used", {
+            code: error?.code || null,
+            name: error?.name || null,
+            message: error?.message || null,
+            fallbackPreviewCount: fallbackPreview.length,
+            hadAnyFallback: hasAnyFallback,
+          });
           setSelectedConversation((prev) => {
             if (!prev || prev.conversation?.conversation_id !== selectedConversationId) return prev;
             const existing = Array.isArray(prev.history) ? prev.history : [];

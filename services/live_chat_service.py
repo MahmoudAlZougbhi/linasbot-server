@@ -79,6 +79,25 @@ class LiveChatService:
         self._index_counters_cache_time = None
         self._index_write_paused_until = None
 
+    def _debug_log(self, hypothesis_id: str, location: str, message: str, data: Optional[Dict[str, Any]] = None, run_id: str = "pre-fix"):
+        # #region agent log
+        try:
+            import time
+            payload = {
+                "sessionId": "d9e2d7",
+                "runId": run_id,
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data or {},
+                "timestamp": int(time.time() * 1000),
+            }
+            with open("/Users/mahmoudalzougbhi/linas ai bot/.cursor/debug-d9e2d7.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
+
     # ---------- State + index helpers ----------
     def _normalize_conversation_state(self, conv_data: dict) -> str:
         """
@@ -309,6 +328,16 @@ class LiveChatService:
         raw_payload = conv_snap.to_dict() or {}
         conv_data = self._canonical_conversation(conversation_id, canonical_user_id, raw_payload)
         entry = self._build_index_entry(canonical_user_id, conv_data, conv_data.get("visible_messages", []))
+        self._debug_log(
+            "H7",
+            "live_chat_service.py:_sync_index_from_source",
+            "Index refresh built entry",
+            {
+                "visible_messages_count": len(conv_data.get("visible_messages", []) or []),
+                "recent_messages_count": len(entry.get("recent_messages", []) or []),
+                "message_count_field": int(entry.get("message_count") or 0),
+            },
+        )
 
         state_backfill = False
         if allow_state_backfill and not raw_payload.get("conversation_state") and conv_data.get("conversation_state"):
@@ -2134,6 +2163,16 @@ class LiveChatService:
                         recent = data.get("recent_messages")
                         if isinstance(recent, list) and len(recent) > 0:
                             msg_count = int(data.get("message_count") or 0)
+                            self._debug_log(
+                                "H6",
+                                "live_chat_service.py:get_conversation_details:fast-path",
+                                "Returning conversation from index recent_messages",
+                                {
+                                    "recent_count": len(recent),
+                                    "message_count_field": msg_count,
+                                    "has_more": msg_count > len(recent),
+                                },
+                            )
                             return {
                                 "success": True,
                                 "conversation_id": conversation_id,
@@ -2243,6 +2282,20 @@ class LiveChatService:
                 "sentiment": sentiment,
                 "status": status
             }
+            self._debug_log(
+                "H8",
+                "live_chat_service.py:get_conversation_details:source-path",
+                "Returning conversation from source document",
+                {
+                    "total_messages_raw": total_messages,
+                    "messages_before_slice": messages_before_slice,
+                    "returned_messages": len(formatted_messages),
+                    "has_more": has_more,
+                    "is_before_mode": bool(before),
+                    "days": int(days or 0),
+                    "day_window": int(day_window or 0),
+                },
+            )
             # Backfill index with recent_messages so next open uses fast path
             if days <= 0 and not before:
                 asyncio.create_task(self._refresh_index_for_conversation(effective_user_id, conversation_id))
