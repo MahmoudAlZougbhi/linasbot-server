@@ -305,6 +305,7 @@ const LiveChat = () => {
   const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
   const previousConversationIdRef = useRef(null);
   const previousMessageCountRef = useRef(0);
+  const forceBottomOnOpenRef = useRef(null);
   const messageCacheRef = useRef(new Map());
   const hasMoreMessagesRef = useRef(true);
   const autoLoadedPagesRef = useRef(1);
@@ -558,19 +559,19 @@ const LiveChat = () => {
     const cacheKey = `${conv.user_id}_${conv.conversation_id}`;
     const cached = messageCacheRef.current.get(cacheKey);
     const hasCachedMessages = cached?.messages?.length > 0;
-    const previewHistory = hasCachedMessages ? [] : buildPreviewHistory(conv);
     setSelectedConversation({
       conversation: conv,
-      history: hasCachedMessages ? cached.messages : previewHistory,
+      history: hasCachedMessages ? cached.messages : [],
     });
     if (hasCachedMessages) {
       setHasMoreMessages(cached.hasMore ?? !cached?.isPartial);
       setMessagesLoading(false);
-    } else if (previewHistory.length > 0) {
+    } else {
+      // No cached history: show loader, then render full fetched history in one pass.
       setHasMoreMessages(false);
-      setMessagesLoading(false);
+      setMessagesLoading(true);
     }
-  }, [buildPreviewHistory]);
+  }, []);
 
   const appendMessageToSelectedConversation = (newMessage) => {
     setSelectedConversation((previous) => {
@@ -826,6 +827,15 @@ const LiveChat = () => {
 
   const selectedConversationId = selectedConversation?.conversation?.conversation_id;
   const selectedConversationUserId = selectedConversation?.conversation?.user_id;
+
+  useEffect(() => {
+    if (selectedConversationId) {
+      // Force initial open at bottom even if messages hydrate in multiple steps.
+      forceBottomOnOpenRef.current = selectedConversationId;
+    } else {
+      forceBottomOnOpenRef.current = null;
+    }
+  }, [selectedConversationId]);
 
   // ✅ Fetch messages when selected conversation changes (not polling)
   useEffect(() => {
@@ -1333,26 +1343,46 @@ const LiveChat = () => {
     const isFirstLoadForConversation = messageCount > 0 && previousMessageCount === 0;
 
     const container = messagesContainerRef.current;
+    const shouldForceBottom =
+      conversationId && forceBottomOnOpenRef.current === conversationId;
     const nearBottom = container
       ? container.scrollHeight - container.scrollTop - container.clientHeight < 120
       : true;
 
     const shouldScrollToBottomOnOpen =
-      hasConversationChanged || isFirstLoadForConversation;
-    const shouldScrollForNewMessages = hasNewMessages && nearBottom;
+      hasConversationChanged || isFirstLoadForConversation || shouldForceBottom;
+    const shouldScrollForNewMessages =
+      hasNewMessages && (nearBottom || shouldForceBottom);
 
     previousConversationIdRef.current = conversationId;
     previousMessageCountRef.current = messageCount;
 
     if (shouldScrollToBottomOnOpen || shouldScrollForNewMessages) {
       const behavior = shouldScrollToBottomOnOpen ? "auto" : "smooth";
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
       messagesEndRef.current?.scrollIntoView({ behavior });
       // When opening a conversation, messages may render after this effect — scroll again after paint.
-      if (shouldScrollToBottomOnOpen) {
+      if (shouldScrollToBottomOnOpen || shouldForceBottom) {
         const rafId = requestAnimationFrame(() => {
+          if (container) {
+            container.scrollTop = container.scrollHeight;
+          }
           messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
         });
-        return () => cancelAnimationFrame(rafId);
+        const settleId = setTimeout(() => {
+          if (
+            forceBottomOnOpenRef.current === conversationId &&
+            messageCount > 0
+          ) {
+            forceBottomOnOpenRef.current = null;
+          }
+        }, 400);
+        return () => {
+          cancelAnimationFrame(rafId);
+          clearTimeout(settleId);
+        };
       }
     }
   }, [selectedConversation?.conversation?.conversation_id, selectedConversation?.history?.length]);
@@ -1526,7 +1556,23 @@ const LiveChat = () => {
       );
 
       if (result.success) {
-        // Message will appear via SSE (no optimistic append to avoid duplicates)
+        // Optimistic append so operator sees the message immediately even if SSE is delayed.
+        const optimisticMessage = {
+          message_id: `local_op_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          is_user: false,
+          role: "operator",
+          handled_by: "human",
+          type: "text",
+          content: messageToSend,
+          text: messageToSend,
+        };
+        appendMessageToSelectedConversation(optimisticMessage);
+        updateChatListLocally(
+          selectedConversation.conversation.conversation_id,
+          selectedConversation.conversation.user_id,
+          optimisticMessage
+        );
         toast.success("Message sent to customer");
       } else {
         toast.error("Failed to send message");
