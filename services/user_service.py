@@ -111,6 +111,7 @@ class UserService:
         self.collection.document(user_id).set(
             user_doc,
             timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+            retry=None,
         )
         print(f"Created dashboard user: {user_doc['email']} (ID: {user_id})")
 
@@ -137,7 +138,10 @@ class UserService:
             t2 = time.monotonic()
             print(f"[auth:get_user_by_email] calling query.stream() - FIRST FIRESTORE NETWORK OP, may block here", flush=True)
             docs = list(
-                query.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS)
+                query.stream(
+                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
+                    retry=None,
+                )
             )
             elapsed = time.monotonic() - t2
             print(f"[auth:get_user_by_email] query.stream() returned in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
@@ -156,7 +160,8 @@ class UserService:
         """Get a user by ID (includes password for internal use)"""
         try:
             doc = self.collection.document(user_id).get(
-                timeout=self.AUTH_QUERY_TIMEOUT_SECONDS
+                timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
+                retry=None,
             )
             if doc.exists:
                 return doc.to_dict()
@@ -168,7 +173,10 @@ class UserService:
     def get_all_users(self) -> List[Dict[str, Any]]:
         """Get all users (without passwords)"""
         try:
-            docs = self.collection.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS)
+            docs = self.collection.stream(
+                timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
+                retry=None,
+            )
             users = []
             for doc in docs:
                 user_data = doc.to_dict()
@@ -224,6 +232,7 @@ class UserService:
             self.collection.document(user_id).update(
                 update_data,
                 timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+                retry=None,
             )
 
             # Get updated user
@@ -258,7 +267,8 @@ class UserService:
                     raise ValueError("Cannot delete the last admin")
 
             self.collection.document(user_id).delete(
-                timeout=self.AUTH_WRITE_TIMEOUT_SECONDS
+                timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+                retry=None,
             )
             print(f"Deleted dashboard user: {user['email']} (ID: {user_id})")
             return True
@@ -321,6 +331,7 @@ class UserService:
                 self.collection.document(user['id']).update(
                     {"lastLogin": now},
                     timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+                    retry=None,
                 )
             except Exception as e:
                 print(f"[auth] lastLogin background update failed: {e}", flush=True)
@@ -361,6 +372,7 @@ class UserService:
                 "updatedAt": datetime.utcnow().isoformat()
             },
             timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+            retry=None,
         )
 
         print(f"Password changed for user: {user['email']}")
@@ -382,7 +394,8 @@ class UserService:
             # Check if any users exist
             docs = list(
                 self.collection.limit(1).stream(
-                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS
+                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
+                    retry=None,
                 )
             )
 
@@ -411,7 +424,10 @@ class UserService:
                 filter=FieldFilter("role", "==", "admin")
             ).where(filter=FieldFilter("status", "==", "active"))
             docs = list(
-                query.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS)
+                query.stream(
+                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
+                    retry=None,
+                )
             )
             return len(docs)
         except Exception as e:
