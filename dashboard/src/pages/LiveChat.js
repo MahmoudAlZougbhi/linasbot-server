@@ -355,6 +355,7 @@ const LiveChat = () => {
   const botLoadMoreSentinelRef = useRef(null);
   const botListScrollThrottleRef = useRef(null);
   const botFloatingScrollRef = useRef(null);
+  const loadMoreInProgressRef = useRef(false);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -1157,7 +1158,8 @@ const LiveChat = () => {
 
   // ✅ Load more chats (WhatsApp-style pagination)
   const loadMoreChats = React.useCallback(async () => {
-    if (loadingMoreChats || !hasMoreChats) return;
+    if (loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
+    loadMoreInProgressRef.current = true;
     setLoadingMoreChats(true);
     try {
       const nextPage = chatPage + 1;
@@ -1178,6 +1180,7 @@ const LiveChat = () => {
     } catch (error) {
       console.error("Error loading more chats:", error);
     } finally {
+      loadMoreInProgressRef.current = false;
       setLoadingMoreChats(false);
     }
   }, [loadingMoreChats, hasMoreChats, chatPage, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE]);
@@ -1185,7 +1188,7 @@ const LiveChat = () => {
   const handleBotListScroll = React.useCallback(
     (event) => {
       const el = event.currentTarget;
-      if (!el || loadingMoreChats || !hasMoreChats) return;
+      if (!el || loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
       if (botListScrollThrottleRef.current) return;
       const threshold = 280;
       const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -1208,7 +1211,7 @@ const LiveChat = () => {
     const obs = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
-        if (entry?.isIntersecting && hasMoreChats && !loadingMoreChats) {
+        if (entry?.isIntersecting && !loadMoreInProgressRef.current) {
           loadMoreChats();
         }
       },
