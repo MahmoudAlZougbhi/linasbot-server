@@ -201,6 +201,57 @@ class LiveChatService:
     def _index_collection(self, db):
         return db.collection("artifacts").document(self.APP_ID).collection(self.INDEX_COLLECTION)
 
+    def _build_firestore_user_candidates(self, user_id: str) -> List[str]:
+        """
+        Build ordered candidate user IDs for Firestore document lookup.
+        Handles canonical/raw IDs and +prefix variants.
+        """
+        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+        candidates: List[str] = []
+
+        def _add(candidate: str):
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        def _add_alt_phone_variant(candidate: str):
+            if not candidate:
+                return
+            if candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10):
+                alt = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
+                _add(alt)
+
+        _add(user_id)
+        _add(canonical_user_id)
+        _add_alt_phone_variant(user_id)
+        _add_alt_phone_variant(canonical_user_id)
+        return candidates
+
+    async def _resolve_conversation_doc_ref(self, db, user_id: str, conversation_id: str):
+        """
+        Resolve a conversation document by trying candidate Firestore user IDs.
+        Returns (conv_ref, conv_snap, resolved_user_id).
+        """
+        users_coll = db.collection("artifacts").document(self.APP_ID).collection("users")
+        last_ref = None
+        last_snap = None
+
+        for candidate_user_id in self._build_firestore_user_candidates(user_id):
+            candidate_ref = (
+                users_coll.document(candidate_user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
+            candidate_snap = await self._get_doc_with_timeout(
+                candidate_ref,
+                timeout_seconds=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+            )
+            last_ref = candidate_ref
+            last_snap = candidate_snap
+            if candidate_snap.exists:
+                return candidate_ref, candidate_snap, candidate_user_id
+
+        return last_ref, last_snap, user_id
+
     def _empty_counters(self) -> Dict[str, int]:
         return {
             "all": 0,
@@ -410,25 +461,17 @@ class LiveChatService:
         if not db:
             return {"written": False, "reason": "firestore_missing"}
 
-        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-        conv_ref = (
-            db.collection("artifacts")
-            .document(self.APP_ID)
-            .collection("users")
-            .document(canonical_user_id)
-            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-            .document(conversation_id)
-        )
-
-        conv_snap = await self._get_doc_with_timeout(
-            conv_ref, timeout_seconds=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+        conv_ref, conv_snap, resolved_user_id = await self._resolve_conversation_doc_ref(
+            db,
+            user_id,
+            conversation_id,
         )
         if not conv_snap.exists:
             return {"written": False, "reason": "missing"}
 
         raw_payload = conv_snap.to_dict() or {}
-        conv_data = self._canonical_conversation(conversation_id, canonical_user_id, raw_payload)
-        entry = self._build_index_entry(canonical_user_id, conv_data, conv_data.get("visible_messages", []))
+        conv_data = self._canonical_conversation(conversation_id, resolved_user_id, raw_payload)
+        entry = self._build_index_entry(resolved_user_id, conv_data, conv_data.get("visible_messages", []))
 
         state_backfill = False
         if allow_state_backfill and not raw_payload.get("conversation_state") and conv_data.get("conversation_state"):
@@ -444,6 +487,7 @@ class LiveChatService:
             "written": True,
             "state_backfill": state_backfill,
             "conversation_state": conv_data.get("conversation_state"),
+            "resolved_user_id": resolved_user_id,
         }
 
     def _canonical_conversation(self, conversation_id: str, user_id: str, payload: dict) -> dict:
@@ -645,18 +689,17 @@ class LiveChatService:
         try:
             if self._is_index_write_paused():
                 return
-            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
             result = await asyncio.wait_for(
                 self._sync_index_from_source(
-                    canonical_user_id, conv_id, allow_state_backfill=False
+                    user_id, conv_id, allow_state_backfill=False
                 ),
                 timeout=self.INDEX_REFRESH_TIMEOUT_SECONDS,
             )
             if not result.get("written"):
-                print(f"⚠️ [index-refresh] skipped user={canonical_user_id} conv={conv_id} reason={result.get('reason')}")
+                print(f"⚠️ [index-refresh] skipped user={user_id} conv={conv_id} reason={result.get('reason')}")
                 return
             print(
-                f"🔄 [index-refresh] rebuilt index user={canonical_user_id} conv={conv_id} state={result.get('conversation_state')}"
+                f"🔄 [index-refresh] rebuilt index user={result.get('resolved_user_id', user_id)} conv={conv_id} state={result.get('conversation_state')}"
             )
         except asyncio.TimeoutError:
             print(f"⚠️ [index-refresh] timeout user={user_id} conv={conv_id}")
