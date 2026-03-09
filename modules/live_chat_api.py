@@ -131,12 +131,47 @@ async def get_unified_chats(
 async def get_active_conversations(search: str = Query(default="", description="Search by client name or phone")):
     """Get active conversations with optional client search."""
     async def _handler():
-        conversations = await live_chat_service.get_active_conversations(search=search)
+        unified = await live_chat_service.get_unified_chats(
+            search=search or "",
+            page=1,
+            page_size=200,
+        )
+        if not unified.get("success"):
+            return {
+                "success": False,
+                "conversations": [],
+                "total": 0,
+                "search": search,
+                "source": unified.get("source"),
+                "error": unified.get("error") or "live_chat_unavailable",
+            }
+
+        conversations = [
+            {
+                "conversation_id": c.get("conversation_id"),
+                "user_id": c.get("user_id"),
+                "user_name": c.get("user_name"),
+                "user_phone": c.get("user_phone") or c.get("phone_number"),
+                "phone_clean": c.get("phone_clean"),
+                "last_message": c.get("last_message_text") or (
+                    (c.get("last_message") or {}).get("content")
+                    if isinstance(c.get("last_message"), dict)
+                    else ""
+                ),
+                "last_activity": c.get("last_activity") or c.get("last_message_at"),
+                "status": c.get("status") or "bot",
+                "conversation_state": c.get("conversation_state"),
+                "operator_id": c.get("operator_id"),
+                "unread_count": c.get("unread_count", 0),
+            }
+            for c in unified.get("chats", [])
+        ]
         return {
             "success": True,
             "conversations": conversations,
             "total": len(conversations),
             "search": search,
+            "source": unified.get("source"),
         }
 
     return await _run_endpoint(_handler)

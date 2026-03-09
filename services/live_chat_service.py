@@ -1156,6 +1156,34 @@ class LiveChatService:
                     return self._cached_unified_response(
                         page_num, safe_size, filter_state, search
                     )
+                fallback = await self._fallback_unified_chats_with_timeout(
+                    search=search,
+                    page=page_num,
+                    page_size=safe_size,
+                    filter_state=filter_state,
+                )
+                if fallback.get("success"):
+                    if (
+                        page_num == 1
+                        and not cursor
+                        and not search_val
+                        and not state_values
+                    ):
+                        self._unified_chats_cache = list(fallback.get("chats") or [])
+                        self._unified_chats_cache_time = utc_now()
+                        self._unified_chats_cache_has_more = bool(
+                            fallback.get("has_more")
+                        )
+                        self._unified_chats_cache_total = int(
+                            fallback.get("total")
+                            or len(fallback.get("chats") or [])
+                        )
+                        self._unified_chats_cache_next_cursor = fallback.get(
+                            "next_cursor"
+                        )
+                        self._unified_chats_cache_page_size = safe_size
+                        self._persist_unified_cache_to_disk()
+                    return fallback
                 return self._empty_unified_response(
                     page_num,
                     safe_size,
@@ -1252,6 +1280,34 @@ class LiveChatService:
             print(f"❌ Error in get_unified_chats: {e}")
             import traceback
             traceback.print_exc()
+            fallback = await self._fallback_unified_chats_with_timeout(
+                search=search,
+                page=page_num,
+                page_size=safe_size,
+                filter_state=filter_state,
+            )
+            if fallback.get("success"):
+                if (
+                    page_num == 1
+                    and not cursor
+                    and not search_val
+                    and not state_values
+                ):
+                    self._unified_chats_cache = list(fallback.get("chats") or [])
+                    self._unified_chats_cache_time = utc_now()
+                    self._unified_chats_cache_has_more = bool(
+                        fallback.get("has_more")
+                    )
+                    self._unified_chats_cache_total = int(
+                        fallback.get("total")
+                        or len(fallback.get("chats") or [])
+                    )
+                    self._unified_chats_cache_next_cursor = fallback.get(
+                        "next_cursor"
+                    )
+                    self._unified_chats_cache_page_size = safe_size
+                    self._persist_unified_cache_to_disk()
+                return fallback
             if can_use_stale_cache:
                 return self._cached_unified_response(
                     page_num, safe_size, filter_state, search
