@@ -54,6 +54,35 @@ export const useLiveChatSSE = ({
       clearNewBadgeTimeout = setTimeout(() => setNewConversationIds(new Set()), 10000);
     };
 
+    const mergeFetchedWithRecentLocal = (fetchedMessages = [], currentHistory = []) => {
+      const fetched = Array.isArray(fetchedMessages) ? fetchedMessages : [];
+      const current = Array.isArray(currentHistory) ? currentHistory : [];
+      if (!current.length) return fetched;
+
+      const now = Date.now();
+      const RECENT_LOCAL_MS = 5 * 60 * 1000;
+      const fetchedIds = new Set(fetched.map((m) => m?.message_id).filter(Boolean));
+      const fetchedKeys = new Set(
+        fetched.map((m) => `${String(m?.content || m?.text || "").trim()}|${String(m?.timestamp || "").slice(0, 19)}`)
+      );
+
+      const toKeep = current.filter((m) => {
+        const isOperator = m?.role === "operator" || m?.is_user === false;
+        if (!isOperator) return false;
+        const ts = m?.timestamp ? new Date(m.timestamp).getTime() : 0;
+        if (!ts || now - ts > RECENT_LOCAL_MS) return false;
+        if (m?.message_id && fetchedIds.has(m.message_id)) return false;
+        const key = `${String(m?.content || m?.text || "").trim()}|${String(m?.timestamp || "").slice(0, 19)}`;
+        if (fetchedKeys.has(key)) return false;
+        return true;
+      });
+
+      if (!toKeep.length) return fetched;
+      return [...fetched, ...toKeep].sort(
+        (a, b) => new Date(a?.timestamp || 0).getTime() - new Date(b?.timestamp || 0).getTime()
+      );
+    };
+
     const refreshChats = async ({
       preferredConversations = null,
       announceNewIds = null,
@@ -125,11 +154,15 @@ export const useLiveChatSSE = ({
           50
         );
         if (!isMountedRef.current || !messages?.length) return;
+        const mergedMessages = mergeFetchedWithRecentLocal(
+          messages,
+          selectedConversationRef.current?.history || []
+        );
         if (messageCacheRef?.current) {
           const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
           const existing = messageCacheRef.current.get(cacheKey);
           messageCacheRef.current.set(cacheKey, {
-            messages,
+            messages: mergedMessages,
             hasMore: existing?.hasMore ?? true,
             cachedAt: Date.now(),
             isPartial: true,
@@ -137,7 +170,7 @@ export const useLiveChatSSE = ({
         }
         setSelectedConversation((previous) => {
           if (!previous) return previous;
-          return { ...previous, history: messages };
+          return { ...previous, history: mergedMessages };
         });
       } catch {
         // Silent fail: user can manually refresh
@@ -164,11 +197,15 @@ export const useLiveChatSSE = ({
           50
         );
         if (!isMountedRef.current || !messages?.length) return;
+        const mergedMessages = mergeFetchedWithRecentLocal(
+          messages,
+          selectedConversationRef.current?.history || []
+        );
         if (messageCacheRef?.current) {
           const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
           const existing = messageCacheRef.current.get(cacheKey);
           messageCacheRef.current.set(cacheKey, {
-            messages,
+            messages: mergedMessages,
             hasMore: existing?.hasMore ?? true,
             cachedAt: Date.now(),
             isPartial: true,
@@ -176,7 +213,7 @@ export const useLiveChatSSE = ({
         }
         setSelectedConversation((previous) => {
           if (!previous) return previous;
-          return { ...previous, history: messages };
+          return { ...previous, history: mergedMessages };
         });
       } catch {
         // Silent fail for SSE refresh - user can manually reload

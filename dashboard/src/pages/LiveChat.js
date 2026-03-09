@@ -72,6 +72,10 @@ const LiveChat = () => {
   const [botDateFrom, setBotDateFrom] = useState("");
   const [botDateTo, setBotDateTo] = useState("");
   const waitingSearchTerm = debouncedSearch.trim().toLowerCase();
+  const normalizeUserIdentity = React.useCallback(
+    (value) => String(value || "").trim().replace(/^\+/, ""),
+    []
+  );
   // Keep list page moderate to reduce backend/index reads per refresh.
   const CHAT_LIST_PAGE_SIZE = 30;
   const [chatPage, setChatPage] = useState(1);
@@ -201,12 +205,19 @@ const LiveChat = () => {
   );
   // Conversations where handover was done and we're talking with them (operator assigned)
   const withOperator = React.useMemo(
-    () =>
-      activeConversations.filter((c) => {
-        if (c.status !== "human") return false;
-        // Some records can temporarily miss operator_id while still being assigned to a human.
-        return true;
-      }),
+    () => {
+      const getLastTs = (conv) => {
+        const ts = conv?.last_activity || conv?.last_message?.timestamp;
+        return ts ? new Date(ts).getTime() : 0;
+      };
+      return activeConversations
+        .filter((c) => {
+          if (c.status !== "human") return false;
+          // Some records can temporarily miss operator_id while still being assigned to a human.
+          return true;
+        })
+        .sort((a, b) => getLastTs(b) - getLastTs(a));
+    },
     [activeConversations]
   );
 
@@ -219,10 +230,20 @@ const LiveChat = () => {
     });
   }, [withOperator, waitingSearchTerm]);
   // Only bot conversations (exclude waiting_human + with operator) - shown below, release to bot moves here
-  const botConversations = React.useMemo(
-    () => activeConversations.filter((c) => c.status === "bot"),
-    [activeConversations]
-  );
+  const botConversations = React.useMemo(() => {
+    const usersWithHumanOrWaiting = new Set(
+      activeConversations
+        .filter((c) => c.status === "human" || c.status === "waiting_human")
+        .map((c) => normalizeUserIdentity(c.user_id))
+        .filter(Boolean)
+    );
+    return activeConversations.filter((c) => {
+      if (c.status !== "bot") return false;
+      const normalizedUserId = normalizeUserIdentity(c.user_id);
+      // Prevent "shadow" bot rows for users who already have an active human/waiting chat.
+      return !usersWithHumanOrWaiting.has(normalizedUserId);
+    });
+  }, [activeConversations, normalizeUserIdentity]);
 
   const getConversationLastTs = React.useCallback((conv) => {
     const ts = conv?.last_activity || conv?.last_message?.timestamp;
@@ -276,10 +297,11 @@ const LiveChat = () => {
 
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
   const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
-  const markWaitingConversationRead = (userId, conversationId, messageCount) => {
+  const markConversationRead = React.useCallback((userId, conversationId, messageCount) => {
     const key = `${userId}_${conversationId}`;
     setReadMessageCountByConv((prev) => ({ ...prev, [key]: messageCount }));
-  };
+  }, []);
+  const markWaitingConversationRead = markConversationRead;
 
   // Merge selected conversation into waiting queue when refetching so it doesn't disappear from the list
   const mergeSelectedIntoWaitingQueue = (newQueue, selectedRef) => {
@@ -579,6 +601,8 @@ const LiveChat = () => {
     const cacheKey = `${conv.user_id}_${conv.conversation_id}`;
     const cached = messageCacheRef.current.get(cacheKey);
     const hasCachedMessages = cached?.messages?.length > 0;
+    const knownCount = Math.max(conv?.message_count || 0, cached?.messages?.length || 0);
+    markConversationRead(conv.user_id, conv.conversation_id, knownCount);
     setSelectedConversation({
       conversation: conv,
       history: hasCachedMessages ? cached.messages : [],
@@ -591,7 +615,18 @@ const LiveChat = () => {
       setHasMoreMessages(false);
       setMessagesLoading(true);
     }
-  }, []);
+  }, [markConversationRead]);
+
+  useEffect(() => {
+    if (!selectedConversation?.conversation) return;
+    const c = selectedConversation.conversation;
+    const count = Math.max(c.message_count || 0, selectedConversation.history?.length || 0);
+    markConversationRead(c.user_id, c.conversation_id, count);
+  }, [
+    selectedConversation?.conversation?.conversation_id,
+    selectedConversation?.history?.length,
+    markConversationRead,
+  ]);
 
   const appendMessageToSelectedConversation = (newMessage) => {
     setSelectedConversation((previous) => {
@@ -2855,16 +2890,30 @@ const LiveChat = () => {
                     {filteredWithOperator.length === 0 ? (
                       <p className="text-xs text-slate-400 italic py-1">None</p>
                     ) : (
-                      filteredWithOperator.map((conv) => (
-                        <div
-                          key={`${conv.user_id}_${conv.conversation_id}`}
-                          className="px-2 py-1.5 rounded cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors text-xs flex items-center justify-between"
-                          onClick={() => selectConversation(conv)}
-                        >
-                          <span className="font-medium text-slate-800 truncate">{conv.user_name}</span>
-                          <SentimentIndicator sentiment={conv.sentiment} />
-                        </div>
-                      ))
+                      filteredWithOperator.map((conv) => {
+                        const readKey = `${conv.user_id}_${conv.conversation_id}`;
+                        const readCount = readMessageCountByConv[readKey] ?? 0;
+                        const unreadCount = Math.max(0, (conv.message_count || 0) - readCount);
+                        return (
+                          <div
+                            key={`${conv.user_id}_${conv.conversation_id}`}
+                            className="px-2 py-1.5 rounded cursor-pointer bg-green-50 border border-green-200 hover:bg-green-100 transition-colors text-xs flex items-center justify-between"
+                            onClick={() => selectConversation(conv)}
+                          >
+                            <div className="min-w-0 flex-1 pr-2">
+                              <span className="font-medium text-slate-800 truncate block">{conv.user_name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {unreadCount > 0 && (
+                                <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                                  {unreadCount}
+                                </span>
+                              )}
+                              <SentimentIndicator sentiment={conv.sentiment} />
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </>
