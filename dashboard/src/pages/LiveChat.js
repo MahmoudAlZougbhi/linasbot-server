@@ -1179,7 +1179,6 @@ const LiveChat = () => {
         const normalized = (chatsResponse.chats || [])
           .map(normalizeIncomingConversation)
           .filter(Boolean);
-        let addedCount = 0;
         setActiveConversations((prev) => {
           const existingKeys = new Set(
             prev.map((c) => `${c.user_id}_${c.conversation_id}`)
@@ -1187,13 +1186,13 @@ const LiveChat = () => {
           const deduped = normalized.filter(
             (c) => !existingKeys.has(`${c.user_id}_${c.conversation_id}`)
           );
-          addedCount = deduped.length;
           return [...prev, ...deduped];
         });
         setNextCursor(chatsResponse.next_cursor || null);
         setChatPage((p) => p + 1);
         const hasMore = chatsResponse.has_more || false;
-        setHasMoreChats(addedCount > 0 ? hasMore : false); // Prevent loop if 0 new chats
+        // Keep pagination alive even if this page was all duplicates (can happen with local/SSE overlap).
+        setHasMoreChats(Boolean(hasMore && chatsResponse.next_cursor));
         loadMoreCooldownUntilRef.current = Date.now() + 1500; // Cooldown 1.5s
       }
     } catch (error) {
