@@ -108,8 +108,6 @@ export const useLiveChatSSE = ({
 
       if (total != null && setIsLoading) setIsLoading(false);
       if (hasMoreValue != null && setHasMoreChats) setHasMoreChats(hasMoreValue);
-      if (setChatPage) setChatPage(1);
-
       return conversations;
     };
 
@@ -224,10 +222,17 @@ export const useLiveChatSSE = ({
           const data = JSON.parse(event.data || "{}");
           lastEventAt = Date.now();
           const conversations = Array.isArray(data.conversations) ? data.conversations : null;
-          const total = typeof data.total === "number" ? data.total : (conversations?.length || 0);
+          const total = typeof data.total === "number" ? data.total : null;
+          const hasMore =
+            typeof data.has_more === "boolean"
+              ? data.has_more
+              : typeof data.hasMore === "boolean"
+                ? data.hasMore
+                : null;
           await refreshChats({
             preferredConversations: conversations,
             total,
+            hasMore,
           });
           // List only: stop loading; do not auto-select so chat messages load only when user clicks
           if (setIsLoading) setIsLoading(false);

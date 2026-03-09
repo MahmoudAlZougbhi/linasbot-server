@@ -70,11 +70,11 @@
 
   /* WhatsApp-like Live Chat styling */
   .whatsapp-shell {
-    @apply bg-[#f0f2f5] rounded-2xl border border-slate-200 shadow-xl overflow-hidden;
+    @apply relative isolate bg-[#f0f2f5] rounded-2xl border border-slate-200 shadow-xl overflow-hidden;
   }
 
   .whatsapp-sidebar {
-    @apply bg-white border-r border-slate-200 h-full overflow-hidden flex flex-col;
+    @apply relative z-30 bg-white border-r border-slate-200 h-full overflow-hidden flex flex-col;
   }
 
   .whatsapp-sidebar-section {
@@ -82,7 +82,7 @@
   }
 
   .whatsapp-chat-panel {
-    @apply bg-[#efeae2] flex flex-col h-full overflow-hidden;
+    @apply relative z-10 bg-[#efeae2] flex flex-col h-full overflow-hidden;
   }
 
   .whatsapp-chat-header {
@@ -98,7 +98,7 @@
   }
 
   .whatsapp-info-panel {
-    @apply bg-white border-l border-slate-200 h-full overflow-y-auto;
+    @apply relative z-20 bg-white border-l border-slate-200 h-full overflow-y-auto;
   }
 
   .whatsapp-info-card {

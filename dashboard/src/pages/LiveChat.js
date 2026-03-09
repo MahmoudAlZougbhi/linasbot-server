@@ -69,6 +69,8 @@ const LiveChat = () => {
   // ✅ Search by name or phone (debounced for API calls)
   const [liveSearchQuery, setLiveSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [botDateFrom, setBotDateFrom] = useState("");
+  const [botDateTo, setBotDateTo] = useState("");
   const waitingSearchTerm = debouncedSearch.trim().toLowerCase();
   // Keep list page moderate to reduce backend/index reads per refresh.
   const CHAT_LIST_PAGE_SIZE = 30;
@@ -222,37 +224,55 @@ const LiveChat = () => {
     [activeConversations]
   );
 
+  const getConversationLastTs = React.useCallback((conv) => {
+    const ts = conv?.last_activity || conv?.last_message?.timestamp;
+    return ts ? new Date(ts).getTime() : 0;
+  }, []);
+
+  const isBotDateFilterActive = Boolean(botDateFrom || botDateTo);
+
+  const filteredBotConversations = React.useMemo(() => {
+    if (!isBotDateFilterActive) return botConversations;
+    const start = botDateFrom ? new Date(`${botDateFrom}T00:00:00`) : null;
+    const end = botDateTo ? new Date(`${botDateTo}T23:59:59.999`) : null;
+    return botConversations.filter((conv) => {
+      const lastTs = getConversationLastTs(conv);
+      if (!lastTs) return false;
+      if (start && lastTs < start.getTime()) return false;
+      if (end && lastTs > end.getTime()) return false;
+      return true;
+    });
+  }, [botConversations, botDateFrom, botDateTo, isBotDateFilterActive, getConversationLastTs]);
+
+  const formatConversationListDate = React.useCallback((conv) => {
+    const lastTs = getConversationLastTs(conv);
+    if (!lastTs) return "No date";
+    return new Date(lastTs).toLocaleDateString();
+  }, [getConversationLastTs]);
+
   const liveBotConversations = React.useMemo(() => {
     const now = Date.now();
-    const getLastTs = (conv) => {
-      const ts = conv.last_activity || conv.last_message?.timestamp;
-      return ts ? new Date(ts).getTime() : 0;
-    };
-    const enriched = botConversations.map((conv) => {
-      const lastTs = getLastTs(conv);
+    const enriched = filteredBotConversations.map((conv) => {
+      const lastTs = getConversationLastTs(conv);
       const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
       return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
     });
     return enriched
       .filter((conv) => conv._isLive)
       .sort((a, b) => b._lastTs - a._lastTs);
-  }, [botConversations]);
+  }, [filteredBotConversations, getConversationLastTs]);
 
   const historyBotConversations = React.useMemo(() => {
     const now = Date.now();
-    const getLastTs = (conv) => {
-      const ts = conv.last_activity || conv.last_message?.timestamp;
-      return ts ? new Date(ts).getTime() : 0;
-    };
-    return botConversations
+    return filteredBotConversations
       .map((conv) => {
-        const lastTs = getLastTs(conv);
+        const lastTs = getConversationLastTs(conv);
         const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
         return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
       })
       .filter((conv) => !conv._isLive)
       .sort((a, b) => b._lastTs - a._lastTs);
-  }, [botConversations]);
+  }, [filteredBotConversations, getConversationLastTs]);
 
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
   const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
@@ -1898,7 +1918,7 @@ const LiveChat = () => {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-slate-800 flex items-center">
                   <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                  With bot ({botConversations.length})
+                  With bot ({filteredBotConversations.length})
                 </h3>
                 <span className="text-xs text-slate-500 flex items-center space-x-1">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
@@ -1924,6 +1944,50 @@ const LiveChat = () => {
                   >
                     <XMarkIcon className="w-4 h-4" />
                   </button>
+                )}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={botDateFrom}
+                  onChange={(e) => setBotDateFrom(e.target.value)}
+                  className="whatsapp-input w-full px-3 py-1.5 text-xs"
+                  title="From date"
+                />
+                <input
+                  type="date"
+                  value={botDateTo}
+                  onChange={(e) => setBotDateTo(e.target.value)}
+                  className="whatsapp-input w-full px-3 py-1.5 text-xs"
+                  title="To date"
+                />
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    setBotDateFrom(today);
+                    setBotDateTo(today);
+                  }}
+                  className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBotDateFrom("");
+                    setBotDateTo("");
+                  }}
+                  className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
+                >
+                  Clear
+                </button>
+                {isBotDateFilterActive && (
+                  <span className="text-[11px] text-slate-500">
+                    Showing selected range
+                  </span>
                 )}
               </div>
             </div>
@@ -1982,7 +2046,12 @@ const LiveChat = () => {
                             )}
                             <div className="flex items-center justify-between text-xs text-slate-500">
                               <span>{(conv.message_count ?? 0)} messages</span>
-                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
+                              <span>
+                                {(conv.duration_seconds || 0) > 0
+                                  ? `${Math.floor(conv.duration_seconds / 60)}m • `
+                                  : ""}
+                                {formatConversationListDate(conv)}
+                              </span>
                             </div>
                           </div>
                         ))}
@@ -2030,7 +2099,12 @@ const LiveChat = () => {
                             )}
                             <div className="flex items-center justify-between text-xs text-slate-500">
                               <span>{(conv.message_count ?? 0)} messages</span>
-                              <span>{(conv.duration_seconds || 0) > 0 ? `${Math.floor(conv.duration_seconds / 60)}m` : ""}</span>
+                              <span>
+                                {(conv.duration_seconds || 0) > 0
+                                  ? `${Math.floor(conv.duration_seconds / 60)}m • `
+                                  : ""}
+                                {formatConversationListDate(conv)}
+                              </span>
                             </div>
                           </div>
                         ))}
@@ -2077,7 +2151,7 @@ const LiveChat = () => {
                     <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                       <h3 className="font-bold text-slate-800 flex items-center">
                         <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                        With bot ({botConversations.length})
+                        With bot ({filteredBotConversations.length})
                       </h3>
                       <button
                         onClick={() => setBotPanelOpen(false)}
@@ -2095,6 +2169,22 @@ const LiveChat = () => {
                           onChange={(e) => setLiveSearchQuery(e.target.value)}
                           placeholder="Search by name or phone..."
                           className="whatsapp-input w-full pl-9 pr-4"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <input
+                          type="date"
+                          value={botDateFrom}
+                          onChange={(e) => setBotDateFrom(e.target.value)}
+                          className="whatsapp-input w-full px-3 py-1.5 text-xs"
+                          title="From date"
+                        />
+                        <input
+                          type="date"
+                          value={botDateTo}
+                          onChange={(e) => setBotDateTo(e.target.value)}
+                          className="whatsapp-input w-full px-3 py-1.5 text-xs"
+                          title="To date"
                         />
                       </div>
                       <div className="space-y-2">
@@ -2120,6 +2210,7 @@ const LiveChat = () => {
                                     <SentimentIndicator sentiment={conv.sentiment} />
                                   </div>
                                   <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
+                                  <p className="text-[11px] text-slate-400 mt-1">{formatConversationListDate(conv)}</p>
                                 </div>
                               ))}
                             </div>
@@ -2147,6 +2238,7 @@ const LiveChat = () => {
                                     <SentimentIndicator sentiment={conv.sentiment} />
                                   </div>
                                   <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
+                                  <p className="text-[11px] text-slate-400 mt-1">{formatConversationListDate(conv)}</p>
                                 </div>
                               ))}
                             </div>
@@ -2179,7 +2271,7 @@ const LiveChat = () => {
                         title="With bot conversations"
                       >
                         <ChatBubbleLeftRightIcon className="w-4 h-4 text-primary-600" />
-                        With bot ({botConversations.length})
+                        With bot ({filteredBotConversations.length})
                       </button>
                     )}
                     <div className="w-10 h-10 bg-gradient-to-r from-primary-400 to-secondary-400 rounded-full flex items-center justify-center text-white font-bold">
@@ -2653,7 +2745,7 @@ const LiveChat = () => {
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium"
                   >
                     <ChatBubbleLeftRightIcon className="w-5 h-5" />
-                    With bot ({botConversations.length}) – Open list
+                    With bot ({filteredBotConversations.length}) – Open list
                   </button>
                 )}
               </div>
@@ -2667,9 +2759,9 @@ const LiveChat = () => {
           animate={{ opacity: 1, x: 0 }}
           className={`${sidebarCollapsed ? "col-span-2" : "col-span-3"} whatsapp-info-panel flex flex-col overflow-y-auto p-4`}
         >
-          {/* Waiting for human + With operator - compact above user info */}
-          <div className="space-y-2 mb-3 flex-shrink-0">
-            <div className="whatsapp-info-card p-3">
+          {/* Waiting for human + With operator - taller blocks above user info */}
+          <div className="space-y-3 mb-4 flex-shrink-0">
+            <div className="whatsapp-info-card p-4">
               <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center">
                 <span className="mr-1.5">⏳</span>
                 Waiting ({filteredWaitingQueue.length})
@@ -2678,7 +2770,7 @@ const LiveChat = () => {
                 <div className="animate-pulse h-12 bg-slate-100 rounded" />
               ) : (
                 <>
-                  <div className="space-y-1.5 max-h-20 overflow-y-auto">
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
                     {filteredWaitingQueue.length === 0 ? (
                       <p className="text-xs text-slate-400 italic py-1">None</p>
                     ) : (
@@ -2741,7 +2833,7 @@ const LiveChat = () => {
                 </>
               )}
             </div>
-            <div className="whatsapp-info-card p-3">
+            <div className="whatsapp-info-card p-4">
               <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center">
                 <span className="mr-1.5">💬</span>
                 With operator ({filteredWithOperator.length})
@@ -2750,7 +2842,7 @@ const LiveChat = () => {
                 <div className="animate-pulse h-10 bg-slate-100 rounded" />
               ) : (
                 <>
-                  <div className="space-y-1.5 max-h-16 overflow-y-auto">
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                     {filteredWithOperator.length === 0 ? (
                       <p className="text-xs text-slate-400 italic py-1">None</p>
                     ) : (
