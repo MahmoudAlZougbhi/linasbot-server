@@ -77,8 +77,8 @@ const LiveChat = () => {
     (value) => String(value || "").trim().replace(/^\+/, ""),
     []
   );
-  // Keep list page moderate to reduce backend/index reads per refresh.
-  const CHAT_LIST_PAGE_SIZE = 45;
+  // Larger page size so Load More fetches more conversations (was 45, now 80)
+  const CHAT_LIST_PAGE_SIZE = 80;
   const [chatPage, setChatPage] = useState(1);
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMoreChats, setHasMoreChats] = useState(false);
@@ -1276,8 +1276,8 @@ const LiveChat = () => {
       return;
     }
     if (!hasMoreChats || loadingMoreChats || !nextCursor) return;
-    if (activeConversations.length >= 60) return;
-    if (autoLoadedPagesRef.current >= 2) return;
+    if (activeConversations.length >= 160) return;
+    if (autoLoadedPagesRef.current >= 3) return;
     if (Date.now() < loadMoreCooldownUntilRef.current) return;
     autoLoadedPagesRef.current += 1;
     loadMoreChats();
@@ -1379,7 +1379,7 @@ const LiveChat = () => {
     return `${Math.floor(diff / 3600)}h ago`;
   };
 
-  // ✅ Load more = 1 more day for this chat only (before=oldest, day_window=1)
+  // ✅ Load more = next 150 messages (day_window=0 = no day limit, load by count like WhatsApp)
   const loadMoreMessages = async () => {
     if (!selectedConversation || loadingMoreMessages || !hasMoreMessages) return;
     const history = selectedConversation.history || [];
@@ -1396,8 +1396,8 @@ const LiveChat = () => {
         selectedConversation.conversation.conversation_id,
         0,
         beforeTs,
-        1,
-        100
+        0,
+        150
       );
       if (older && older.length > 0) {
         // Prepend older messages; dedupe by message_id
@@ -1433,7 +1433,7 @@ const LiveChat = () => {
     }
   };
 
-  // ✅ Reload messages for currently selected conversation (last 1 day only)
+  // ✅ Reload messages for currently selected conversation (all history, no day limit)
   const reloadSelectedConversationMessages = async () => {
     if (!selectedConversation) return;
 
@@ -1445,7 +1445,7 @@ const LiveChat = () => {
         0,
         null,
         0,
-        100
+        150
       );
       const merged = mergeWithRecentOperatorMessages(messages || [], key);
       setSelectedConversation((prev) => ({

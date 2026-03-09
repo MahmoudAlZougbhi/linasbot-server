@@ -61,7 +61,7 @@ class LiveChatService:
     FIRESTORE_FETCH_PARALLELISM = 24
     FIRESTORE_DOC_TIMEOUT_SECONDS = _env_float("LIVECHAT_DOC_TIMEOUT_SECONDS", 4)
     FIRESTORE_QUERY_TIMEOUT_SECONDS = _env_float("LIVECHAT_QUERY_TIMEOUT_SECONDS", 12)
-    RECENT_MESSAGES_IN_INDEX = 50
+    RECENT_MESSAGES_IN_INDEX = 100
     INDEX_READ_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_READ_TIMEOUT_SECONDS", 3)
     INDEX_WRITE_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_WRITE_TIMEOUT_SECONDS", 4)
     INDEX_REFRESH_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_REFRESH_TIMEOUT_SECONDS", 4)
@@ -69,10 +69,11 @@ class LiveChatService:
     INDEX_COUNTERS_CACHE_TTL = _env_int("LIVECHAT_INDEX_COUNTERS_CACHE_TTL_SECONDS", 180)
     INDEX_COUNTER_SCAN_LIMIT = _env_int("LIVECHAT_INDEX_COUNTER_SCAN_LIMIT", 250)
     INDEX_REFRESH_MIN_INTERVAL_SECONDS = _env_int("LIVECHAT_INDEX_REFRESH_MIN_INTERVAL_SECONDS", 120)
-    SEARCH_WIDEN_MAX_DOCS = _env_int("LIVECHAT_SEARCH_WIDEN_MAX_DOCS", 300)
+    SEARCH_WIDEN_MAX_DOCS = _env_int("LIVECHAT_SEARCH_WIDEN_MAX_DOCS", 5000)
     ENABLE_INDEX_BACKFILL_ON_READ = _env_bool("LIVECHAT_ENABLE_INDEX_BACKFILL_ON_READ", False)
     ENABLE_WAITING_QUEUE_FALLBACK_SCAN = _env_bool("LIVECHAT_ENABLE_WAITING_QUEUE_FALLBACK_SCAN", False)
     FALLBACK_USERS_STREAM_LIMIT = 80
+    FALLBACK_SEARCH_USERS_LIMIT = 500
     FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 20)
     PERSIST_UNIFIED_CACHE = _env_bool("LIVECHAT_PERSIST_UNIFIED_CACHE", True)
     UNIFIED_DISK_CACHE_MAX_AGE_SECONDS = _env_int("LIVECHAT_UNIFIED_DISK_CACHE_MAX_AGE_SECONDS", 86400)
@@ -871,10 +872,11 @@ class LiveChatService:
         search_val = (search or "").strip().lower()
         state_values = self._state_filter_values(filter_state)
         safe_size = max(1, min(int(page_size), 100))
+        user_limit = self.FALLBACK_SEARCH_USERS_LIMIT if search_val else self.FALLBACK_USERS_STREAM_LIMIT
 
         try:
             users_docs = await self._stream_user_docs(
-                users_collection, limit=self.FALLBACK_USERS_STREAM_LIMIT
+                users_collection, limit=user_limit
             )
             user_ids = [doc.id for doc in users_docs]
             conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
@@ -1127,12 +1129,9 @@ class LiveChatService:
                 f"[live_chat:unified] source=index_page docs={len(docs)} page={page_num} size={safe_size} search={bool(search_val)} filter={filter_state}"
             )
 
-            # If search provided, widen fetch to improve matches (still index-only)
+            # If search provided, widen fetch so we find users by phone/name even if inactive for years
             if search_val:
-                widen_limit = min(
-                    self.SEARCH_WIDEN_MAX_DOCS,
-                    max(fetch_limit * 3, 120),
-                )
+                widen_limit = self.SEARCH_WIDEN_MAX_DOCS
                 def _stream_search(q):
                     use_q = q
                     if state_values:
@@ -1234,15 +1233,32 @@ class LiveChatService:
                 ]
 
             # Always order by last_message_at desc (already sorted by query)
-            chats.sort(key=lambda c: c.get("last_message_at", ""), reverse=True)
+            chats.sort(key=lambda c: (c.get("last_message_at", ""), c.get("conversation_id", "")), reverse=True)
 
-            has_more = len(chats) > safe_size
-            paged = chats[:safe_size]
+            # Cursor-based pagination: when cursor provided, find start position for Load More
+            start_idx = 0
+            if cursor:
+                try:
+                    ts_part, conv_part = cursor.split("|", 1)
+                    ts_str = ts_part.strip()
+                    for i, c in enumerate(chats):
+                        c_ts = str(c.get("last_message_at", ""))
+                        c_conv = str(c.get("conversation_id", ""))
+                        if (c_ts, c_conv) < (ts_str, conv_part):
+                            start_idx = i
+                            break
+                    else:
+                        start_idx = len(chats)
+                except Exception:
+                    start_idx = 0
+
+            has_more = len(chats) > start_idx + safe_size
+            paged = chats[start_idx : start_idx + safe_size]
             paged = [self._to_frontend_chat_format(c) for c in paged]
             next_cursor = None
-            if has_more:
-                last = chats[:safe_size][-1]
-                next_cursor = f"{last['last_message_at']}|{last['conversation_id']}"
+            if has_more and paged:
+                last = paged[-1]
+                next_cursor = f"{last.get('last_message_at', '')}|{last.get('conversation_id', '')}"
 
             total_returned = len(paged)
             if not search_val and not cursor and not state_values:
@@ -2472,7 +2488,7 @@ class LiveChatService:
             # Fast path for initial open (days=0, before not set):
             # avoid scanning/normalizing the full conversation history on every open.
             if days <= 0 and not before:
-                tail_window = max(max_messages * 4, 200)
+                tail_window = max(max_messages * 4, 500)
                 candidate = raw_messages[-tail_window:] if len(raw_messages) > tail_window else raw_messages
                 messages = self._visible_chat_messages(candidate)
                 messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
