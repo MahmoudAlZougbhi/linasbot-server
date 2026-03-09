@@ -71,7 +71,7 @@ class LiveChatService:
     INDEX_REFRESH_MIN_INTERVAL_SECONDS = _env_int("LIVECHAT_INDEX_REFRESH_MIN_INTERVAL_SECONDS", 120)
     SEARCH_WIDEN_MAX_DOCS = _env_int("LIVECHAT_SEARCH_WIDEN_MAX_DOCS", 1000)
     ENABLE_INDEX_BACKFILL_ON_READ = _env_bool("LIVECHAT_ENABLE_INDEX_BACKFILL_ON_READ", False)
-    ENABLE_WAITING_QUEUE_FALLBACK_SCAN = _env_bool("LIVECHAT_ENABLE_WAITING_QUEUE_FALLBACK_SCAN", False)
+    ENABLE_WAITING_QUEUE_FALLBACK_SCAN = _env_bool("LIVECHAT_ENABLE_WAITING_QUEUE_FALLBACK_SCAN", True)
     FALLBACK_USERS_STREAM_LIMIT = 80
     FALLBACK_SEARCH_USERS_LIMIT = 150
     FALLBACK_UNIFIED_TIMEOUT_SECONDS = _env_int("LIVECHAT_FALLBACK_UNIFIED_TIMEOUT_SECONDS", 20)
@@ -1791,7 +1791,7 @@ class LiveChatService:
                 )
             )
 
-            if not docs and self.ENABLE_WAITING_QUEUE_FALLBACK_SCAN:
+            if not docs:
                 fallback = await self._fallback_unified_chats("", page=1, page_size=300, filter_state="waiting")
                 if fallback.get("success") and fallback.get("chats"):
                     queue = []
@@ -1816,9 +1816,9 @@ class LiveChatService:
                         })
                     self._queue_cache = queue
                     self._queue_cache_time = current_time
+                    print(f"[live_chat:waiting_queue] source=fallback_unified count={len(queue)}")
                     return queue
-            elif not docs:
-                print("[live_chat:waiting_queue] index empty; fallback scan disabled")
+                print("[live_chat:waiting_queue] index empty and fallback returned no waiting chats")
 
             waiting_queue = []
 
@@ -1864,6 +1864,35 @@ class LiveChatService:
 
                 waiting_queue.append(queue_item)
             
+            # If index returned docs but none normalized to waiting, fall back to source scan.
+            if not waiting_queue:
+                fallback = await self._fallback_unified_chats("", page=1, page_size=300, filter_state="waiting")
+                if fallback.get("success") and fallback.get("chats"):
+                    queue = []
+                    current_time = utc_now()
+                    for chat in fallback.get("chats", []):
+                        last_at = self._parse_timestamp(chat.get("last_message_at")) if chat.get("last_message_at") else current_time
+                        wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
+                        queue.append({
+                            "conversation_id": chat.get("conversation_id"),
+                            "user_id": chat.get("user_id"),
+                            "user_name": chat.get("user_name"),
+                            "user_phone": chat.get("phone_number"),
+                            "phone_clean": chat.get("phone_clean"),
+                            "language": config.user_data_whatsapp.get(chat.get("user_id"), {}).get("user_preferred_lang", "ar"),
+                            "reason": "user_request",
+                            "wait_time_seconds": wait_time_seconds,
+                            "sentiment": "neutral",
+                            "message_count": chat.get("message_count", 0),
+                            "unread_count": chat.get("unread_count", 0),
+                            "priority": 2,
+                            "last_message": chat.get("last_message_text", ""),
+                        })
+                    self._queue_cache = queue
+                    self._queue_cache_time = current_time
+                    print(f"[live_chat:waiting_queue] source=fallback_unified_after_index count={len(queue)}")
+                    return queue
+
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
             waiting_queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
             
