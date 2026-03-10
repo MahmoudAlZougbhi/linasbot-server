@@ -13,7 +13,7 @@ const SECTIONS = [
   { id: "knowledge", name: "Knowledge", icon: BookOpenIcon },
   { id: "price", name: "Prices", icon: CurrencyDollarIcon },
   { id: "style", name: "Style", icon: SparklesIcon },
-  { id: "system_prompt", name: "System Prompt", icon: DocumentTextIcon },
+  { id: "system_prompt", name: "System Prompt (KB + Style)", icon: DocumentTextIcon },
 ];
 
 const ContentManagers = () => {

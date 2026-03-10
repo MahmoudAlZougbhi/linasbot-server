@@ -1346,19 +1346,6 @@ export const useApi = () => {
     }
   }, []);
 
-  const getSystemPromptKnowledgeStyle = useCallback(async () => {
-    try {
-      const response = await api.get("/api/content-files/system-prompt-knowledge-style");
-      return response.data;
-    } catch (error) {
-      console.error("Error getting system prompt knowledge/style:", error);
-      if (error.code === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline", data: null };
-      }
-      return { success: false, error: error.response?.data?.detail || error.message, data: null };
-    }
-  }, []);
-
   return {
     loading,
     currentProvider,
@@ -1427,6 +1414,5 @@ export const useApi = () => {
     createContentFile,
     updateContentFile,
     deleteContentFile,
-    getSystemPromptKnowledgeStyle,
   };
 };
