@@ -40,6 +40,16 @@ async def get_titles_only(section: str):
         return {"success": False, "error": str(e), "data": []}
 
 
+@app.get("/api/content-files/system-prompt-knowledge-style")
+async def get_system_prompt_knowledge_style():
+    """Get read-only merged text for System Prompt (Knowledge + Style)."""
+    try:
+        data = cfs.build_system_prompt_knowledge_style_preview()
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/content-files/{section}/{file_id}")
 async def get_content_file(section: str, file_id: str):
     """Get full file content by ID."""

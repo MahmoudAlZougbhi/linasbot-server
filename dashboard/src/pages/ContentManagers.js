@@ -4,13 +4,16 @@ import {
   BookOpenIcon,
   CurrencyDollarIcon,
   SparklesIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import ContentFilesPanel from "../components/ContentFilesPanel";
+import SystemPromptKnowledgeStylePanel from "../components/SystemPromptKnowledgeStylePanel";
 
 const SECTIONS = [
   { id: "knowledge", name: "Knowledge", icon: BookOpenIcon },
   { id: "price", name: "Prices", icon: CurrencyDollarIcon },
   { id: "style", name: "Style", icon: SparklesIcon },
+  { id: "system_prompt", name: "System Prompt", icon: DocumentTextIcon },
 ];
 
 const ContentManagers = () => {
@@ -52,11 +55,15 @@ const ContentManagers = () => {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2 }}
         >
-          <ContentFilesPanel
-            section={section.id}
-            sectionName={section.name}
-            icon={section.icon}
-          />
+          {section.id === "system_prompt" ? (
+            <SystemPromptKnowledgeStylePanel />
+          ) : (
+            <ContentFilesPanel
+              section={section.id}
+              sectionName={section.name}
+              icon={section.icon}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
     </div>

@@ -252,6 +252,53 @@ def load_file_contents(section: str, file_ids: List[str]) -> str:
     return "\n\n".join(parts)
 
 
+def build_system_prompt_knowledge_style_preview() -> Dict:
+    """
+    Build a read-only preview text for "System Prompt (Knowledge + Style)".
+    This is an admin transparency helper for dashboard view only.
+    """
+    style_files = list_files("style")
+    knowledge_files = list_files("knowledge")
+
+    style_parts: List[str] = []
+    for item in style_files:
+        file_id = item.get("id")
+        data = get_file("style", file_id) if file_id else None
+        if data and data.get("content"):
+            title = data.get("title", "Untitled")
+            style_parts.append(f"--- Style: {title} ---\n{data['content']}")
+
+    knowledge_parts: List[str] = []
+    for item in knowledge_files:
+        file_id = item.get("id")
+        data = get_file("knowledge", file_id) if file_id else None
+        if data and data.get("content"):
+            title = data.get("title", "Untitled")
+            knowledge_parts.append(f"--- Knowledge: {title} ---\n{data['content']}")
+
+    merged_parts: List[str] = []
+    if style_parts:
+        merged_parts.append(
+            "## STYLE GUIDE (from Content Managers)\n\n" + "\n\n".join(style_parts)
+        )
+    if knowledge_parts:
+        merged_parts.append(
+            "## KNOWLEDGE BASE (from Content Managers)\n\n" + "\n\n".join(knowledge_parts)
+        )
+
+    if not merged_parts:
+        merged_text = "No style or knowledge files found."
+    else:
+        merged_text = "\n\n".join(merged_parts)
+
+    return {
+        "system_prompt_knowledge_style": merged_text,
+        "style_files_count": len(style_parts),
+        "knowledge_files_count": len(knowledge_parts),
+        "total_chars": len(merged_text),
+    }
+
+
 def migrate_from_legacy(section: str, legacy_path: str) -> Optional[str]:
     """
     Migrate from legacy single .txt file to new file system.
