@@ -208,24 +208,62 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # Check if human takeover is active
     if config.user_in_human_takeover_mode.get(user_id, False):
-        print(f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI will not respond.")
-        # Fallback: never leave dashboard test with "No response captured" while user is waiting for a human.
-        waiting_messages = {
-            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
-            "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
-            "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
-        }
-        waiting_msg = waiting_messages.get(current_preferred_lang, waiting_messages["ar"])
-        await send_message_func(user_id, waiting_msg)
-        await save_conversation_message_to_firestore(
-            user_id,
-            "ai",
-            waiting_msg,
-            current_conversation_id,
-            user_name,
-            user_data.get('phone_number'),
-            metadata={"handled_by": "ai", "source": "waiting_queue_fallback"},
-        )
+        print(f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI fallback guard active.")
+        # IMPORTANT: During assigned operator takeover, AI must stay silent.
+        # We only send waiting auto-reply when takeover is active AND no operator is assigned yet.
+        should_send_waiting = False
+        try:
+            db = get_firestore_db()
+            if db and current_conversation_id:
+                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+                users_coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("users")
+                candidate_user_ids = []
+                for candidate in [canonical_user_id, user_id]:
+                    if candidate and candidate not in candidate_user_ids:
+                        candidate_user_ids.append(candidate)
+                    if candidate and (
+                        candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)
+                    ):
+                        alt_candidate = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
+                        if alt_candidate not in candidate_user_ids:
+                            candidate_user_ids.append(alt_candidate)
+
+                conv_data = None
+                for candidate_user_id in candidate_user_ids:
+                    candidate_ref = users_coll.document(candidate_user_id).collection(
+                        config.FIRESTORE_CONVERSATIONS_COLLECTION
+                    ).document(current_conversation_id)
+                    candidate_snap = await asyncio.to_thread(candidate_ref.get)
+                    if candidate_snap.exists:
+                        conv_data = candidate_snap.to_dict() or {}
+                        break
+
+                if conv_data and conv_data.get("human_takeover_active", False):
+                    operator_assigned = bool(conv_data.get("operator_id"))
+                    if operator_assigned:
+                        print(f"[_process_and_respond] INFO: Operator assigned for {user_id}; AI remains silent.")
+                        return
+                    should_send_waiting = True
+        except Exception as takeover_check_error:
+            print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
+
+        if should_send_waiting:
+            waiting_messages = {
+                "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
+                "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
+                "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
+            }
+            waiting_msg = waiting_messages.get(current_preferred_lang, waiting_messages["ar"])
+            await send_message_func(user_id, waiting_msg)
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                waiting_msg,
+                current_conversation_id,
+                user_name,
+                user_data.get('phone_number'),
+                metadata={"handled_by": "ai", "source": "waiting_queue_fallback"},
+            )
         return
 
     is_initial_message_for_gpt = (config.user_greeting_stage[user_id] == 1) and (current_gender == "unknown")
