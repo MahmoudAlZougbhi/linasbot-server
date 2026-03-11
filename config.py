@@ -36,6 +36,11 @@ FIRESTORE_METRICS_COLLECTION = "dashboardMetrics"   # Collection for dashboard s
 # Testing Mode Flag (NEW)
 TESTING_MODE = False  # When True, Firebase saving is disabled for testing
 
+# AI-primary orchestration mode:
+# - True: AI decides conversation action/routing; backend executes.
+# - False: Use code-first router short-circuit logic.
+AI_PRIMARY_ORCHESTRATION = os.getenv("AI_PRIMARY_ORCHESTRATION", "true").strip().lower() == "true"
+
 # --- Local / development environment (same APIs as prod, safe messaging) ---
 # Set APP_MODE=local or ENV=development to run locally with real APIs but controlled sending.
 APP_MODE = os.getenv("APP_MODE", "").strip().lower()  # "local" = local env

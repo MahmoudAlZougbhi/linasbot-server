@@ -430,31 +430,36 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         except Exception as e:
             print(f"❌ ERROR checking human takeover status from Firestore for user {user_id}: {e}")
 
-    # Greeting policy:
-    # - New conversation => send greeting first
-    # - Existing conversation but user inactive >= 1 hour => send greeting first
-    greeting_sent_for_conv = user_data.get("greeting_sent_for_conversation_id")
-    should_greet_now = False
-    if current_conversation_id and greeting_sent_for_conv != current_conversation_id:
-        if was_new_conversation:
-            should_greet_now = True
-        elif inactivity_seconds is not None and inactivity_seconds >= GREETING_INACTIVITY_SECONDS:
-            should_greet_now = True
+    ai_primary_mode = bool(getattr(config, "AI_PRIMARY_ORCHESTRATION", True))
 
-    if should_greet_now:
-        user_lang = user_data.get('user_preferred_lang', 'ar')
-        greeting_msg = _get_session_greeting_message(user_lang)
-        await send_message_func(user_id, greeting_msg)
-        await save_conversation_message_to_firestore(
-            user_id,
-            "ai",
-            greeting_msg,
-            current_conversation_id,
-            user_name,
-            user_data.get('phone_number'),
-            metadata={"handled_by": "ai", "source": "session_greeting"},
-        )
-        user_data["greeting_sent_for_conversation_id"] = current_conversation_id
+    # Greeting policy (code-driven) runs only in non AI-primary mode.
+    # In AI-primary mode, greeting timing/wording decisions are delegated to AI.
+    if not ai_primary_mode:
+        # Greeting policy:
+        # - New conversation => send greeting first
+        # - Existing conversation but user inactive >= threshold => send greeting first
+        greeting_sent_for_conv = user_data.get("greeting_sent_for_conversation_id")
+        should_greet_now = False
+        if current_conversation_id and greeting_sent_for_conv != current_conversation_id:
+            if was_new_conversation:
+                should_greet_now = True
+            elif inactivity_seconds is not None and inactivity_seconds >= GREETING_INACTIVITY_SECONDS:
+                should_greet_now = True
+
+        if should_greet_now:
+            user_lang = user_data.get('user_preferred_lang', 'ar')
+            greeting_msg = _get_session_greeting_message(user_lang)
+            await send_message_func(user_id, greeting_msg)
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                greeting_msg,
+                current_conversation_id,
+                user_name,
+                user_data.get('phone_number'),
+                metadata={"handled_by": "ai", "source": "session_greeting"},
+            )
+            user_data["greeting_sent_for_conversation_id"] = current_conversation_id
 
     # Check if it's the very first message after start
     if config.user_greeting_stage[user_id] == 1 and not config.user_gender.get(user_id):
