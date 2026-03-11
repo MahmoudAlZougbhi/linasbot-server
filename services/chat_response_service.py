@@ -653,6 +653,28 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             except (json.JSONDecodeError, TypeError):
                 pass
 
+        # CRITICAL: When gender is unknown and GPT returns tool_calls for booking, BLOCK tool execution.
+        # GPT often returns empty content when using tools - so the guard above misses it. We must ask gender first.
+        BOOKING_TOOL_NAMES = {"create_appointment", "create_customer", "get_branches", "get_pricing_details"}
+        if tool_calls and current_gender == "unknown":
+            tool_names = {tc.function.name for tc in tool_calls if getattr(tc, "function", None)}
+            if tool_names & BOOKING_TOOL_NAMES:
+                gender_ask_reply = {
+                    "ar": "قبل ما نكمل، ممكن تحدد جنسك لو سمحت؟ ذكر أو أنثى",
+                    "en": "Before we continue, could you please specify your gender? Male or female",
+                    "fr": "Avant de continuer, pourriez-vous préciser votre genre ? Homme ou femme",
+                    "franco": "abel ma nkammel, mumkin t7addel jinsak law sama7t? zakar aw ontha",
+                }
+                reply = gender_ask_reply.get(current_preferred_lang, gender_ask_reply["ar"])
+                print(f"PRIORITY: Gender unknown + booking tools ({tool_names}). Blocking tools, asking for gender first.")
+                return {
+                    "action": "ask_gender",
+                    "bot_reply": reply,
+                    "detected_language": current_preferred_lang,
+                    "detected_gender": None,
+                    "current_gender_from_config": current_gender,
+                }
+
         if tool_calls:
             messages.append(first_response_message)
             tool_round_trips = []  # For Activity Flow: AI request → Bot response
