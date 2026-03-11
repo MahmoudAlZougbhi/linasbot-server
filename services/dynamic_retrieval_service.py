@@ -153,23 +153,58 @@ async def select_files_llm(user_message: str) -> Dict:
     return {"files": [], "action": "fallback_to_general", "raw_response": None}
 
 
+def _normalize_for_match(s: str) -> str:
+    """Normalize string for title/id matching (lowercase, collapse spaces/underscores)."""
+    if not s:
+        return ""
+    return re.sub(r"[\s_\-]+", " ", str(s).lower().strip())
+
+
+def _build_title_to_id_map() -> dict:
+    """Build map: normalized_title -> (section, file_id) for fallback lookup when selector returns titles."""
+    result = {}
+    for section in ("knowledge", "price", "style"):
+        for t in cfs.get_titles_only(section):
+            fid = t.get("id", "")
+            title = t.get("title", "")
+            if fid and title:
+                key = _normalize_for_match(title)
+                if key and key not in result:
+                    result[key] = (section, fid)
+                # Also match id if it looks like a title (e.g. Laser_Hair_Removal_Men)
+                key_id = _normalize_for_match(fid)
+                if key_id and key_id not in result:
+                    result[key_id] = (section, fid)
+    return result
+
+
 def _load_content_by_ids(files: List[str]) -> Tuple[str, bool]:
     """Load and merge content from selected file IDs across sections.
+    Selector may return titles instead of IDs - we resolve via title-to-id map.
     Returns (merged_content, has_style)."""
     if not files:
         return "", False
 
+    title_to_id = _build_title_to_id_map()
     parts = []
     has_style = False
     for fid in files:
+        data, loaded_section = None, None
         for section in ("knowledge", "price", "style"):
             data = cfs.get_file(section, fid)
             if data and data.get("content"):
-                title = data.get("title", "Untitled")
-                parts.append(f"--- {title} ---\n{data['content']}")
-                if section == "style":
-                    has_style = True
+                loaded_section = section
                 break
+        if not data and fid:
+            key = _normalize_for_match(fid)
+            if key in title_to_id:
+                loaded_section, resolved_id = title_to_id[key]
+                data = cfs.get_file(loaded_section, resolved_id)
+        if data and data.get("content"):
+            title = data.get("title", "Untitled")
+            parts.append(f"--- {title} ---\n{data['content']}")
+            if loaded_section == "style":
+                has_style = True
     return "\n\n".join(parts), has_style
 
 
@@ -248,7 +283,13 @@ async def retrieve_and_merge(
 
     # action == normal: load selected files
     merged, has_style = _load_content_by_ids(files)
-    merged = _ensure_style_included(merged, has_style)
+    if not merged:
+        # Selector returned files but none could be loaded (wrong IDs/titles) - fall back to default
+        print(f"⚠️ Dynamic retrieval: selected files {files} could not be loaded. Using default general + style.")
+        merged = _get_default_general_and_style()
+        has_style = bool(config.BOT_STYLE_GUIDE)
+    else:
+        merged = _ensure_style_included(merged, has_style)
 
     if include_price_hint and config.PRICE_LIST and "price" not in merged.lower()[:200]:
         merged += "\n\n--- Price List ---\n" + config.PRICE_LIST
