@@ -398,6 +398,66 @@ class LocalQAService:
         print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, threshold: {self.match_threshold:.2%})")
         return None
 
+    async def find_exact_match(self, question: str, language: str = "ar") -> Optional[dict]:
+        """
+        Find an exact normalized question match.
+        Tries requested language first, then falls back to other languages.
+        """
+        requested_language = self._normalize_language(language)
+        normalized_question = self.normalize_text(question or "")
+
+        if not normalized_question:
+            return None
+
+        if not self.qa_pairs:
+            print("❌ DEBUG: NO Q&A PAIRS LOADED for exact matching!")
+            return None
+
+        same_language_match = None
+        cross_language_match = None
+
+        for qa in self.qa_pairs:
+            stored_question = qa.get("question", "")
+            if not stored_question:
+                continue
+
+            if self.normalize_text(stored_question) != normalized_question:
+                continue
+
+            matched_language = self._normalize_language(
+                qa.get("language"),
+                default=requested_language,
+            )
+            candidate = {
+                "qa_pair": qa,
+                "match_score": 1.0,
+                "tier": "exact",
+                "matched_language": matched_language,
+            }
+
+            if matched_language == requested_language:
+                same_language_match = candidate
+                break
+
+            if cross_language_match is None:
+                cross_language_match = candidate
+
+        if same_language_match:
+            print(
+                "✅ Exact Q&A match found in requested language "
+                f"({requested_language})."
+            )
+            return same_language_match
+
+        if cross_language_match:
+            print(
+                "✅ Exact Q&A match found via cross-language fallback "
+                f"(requested={requested_language}, matched={cross_language_match.get('matched_language')})."
+            )
+            return cross_language_match
+
+        return None
+
     async def get_relevant_qa_pairs(self, question: str, language: str = None, limit: int = 3) -> List[Dict]:
         """
         Get most relevant Q&A pairs for GPT context injection.
@@ -453,35 +513,69 @@ class LocalQAService:
         Returns:
             Dict with qa_pair, match_score, and tier, or None if below 90%
         """
-        best_match = None
-        best_score = 0
         requested_language = self._normalize_language(language)
 
         if not self.qa_pairs:
             print(f"❌ DEBUG: NO Q&A PAIRS LOADED!")
             return None
 
+        # Exact normalized match first (requested language first, then cross-language fallback).
+        exact_match = await self.find_exact_match(question, requested_language)
+        if exact_match:
+            return exact_match
+
+        best_same_language_match = None
+        best_same_language_score = 0
+        best_cross_language_match = None
+        best_cross_language_score = 0
+
         for qa in self.qa_pairs:
             qa_language = self._normalize_language(qa.get("language"))
-            if qa_language != requested_language:
+            qa_question = qa.get("question", "")
+            if not qa_question:
                 continue
 
-            similarity = self.calculate_similarity(question, qa.get("question", ""))
+            similarity = self.calculate_similarity(question, qa_question)
 
-            if similarity > best_score:
-                best_score = similarity
-                best_match = qa
+            if qa_language == requested_language:
+                if similarity > best_same_language_score:
+                    best_same_language_score = similarity
+                    best_same_language_match = qa
+            else:
+                if similarity > best_cross_language_score:
+                    best_cross_language_score = similarity
+                    best_cross_language_match = qa
 
-        # 90%+ threshold for direct Q&A response
-        if best_score >= 0.90:
-            print(f"✅ Q&A Match Found! Score: {best_score:.2%}, Tier: direct")
+        if best_same_language_score >= 0.90:
+            print(
+                "✅ Q&A Match Found! "
+                f"Score: {best_same_language_score:.2%}, Tier: direct, Language: {requested_language}"
+            )
             return {
-                "qa_pair": best_match,
-                "match_score": best_score,
+                "qa_pair": best_same_language_match,
+                "match_score": best_same_language_score,
                 "tier": "direct",
-                "matched_language": self._normalize_language(best_match.get("language"), default=requested_language)
+                "matched_language": requested_language,
             }
 
+        if best_cross_language_score >= 0.90:
+            matched_language = self._normalize_language(
+                best_cross_language_match.get("language"),
+                default=requested_language,
+            )
+            print(
+                "✅ Q&A Match Found via cross-language fallback! "
+                f"Score: {best_cross_language_score:.2%}, Tier: direct, "
+                f"Requested: {requested_language}, Matched: {matched_language}"
+            )
+            return {
+                "qa_pair": best_cross_language_match,
+                "match_score": best_cross_language_score,
+                "tier": "direct",
+                "matched_language": matched_language,
+            }
+
+        best_score = max(best_same_language_score, best_cross_language_score)
         print(f"ℹ️ No Q&A match found (best score: {best_score:.2%}, needs ≥90%)")
         return None
 

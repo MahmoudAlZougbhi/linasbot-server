@@ -532,33 +532,28 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             await save_conversation_message_to_firestore(user_id, "ai", f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.", current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
         # Check Q&A Database before calling GPT-4
-        # Decision flow: 90%+ returns Q&A directly, <90% passes to GPT with top 3 relevant Q&A pairs
+        # Required flow: ALWAYS try FAQ first. If match >=90% return direct answer, else continue normal flow.
         print(f"[_process_and_respond] 🔍 Checking Q&A DATABASE for: '{query_to_send_to_gpt}'")
 
         is_reschedule_intent = detect_reschedule_intent(query_to_send_to_gpt)
         is_price_intent = _is_price_intent(query_to_send_to_gpt)
-        if ai_primary_mode:
-            print(f"[_process_and_respond] 🧠 AI-primary mode ON. Skipping direct Q&A shortcut so AI remains decision owner.")
-            match_result = None
-        elif is_reschedule_intent:
-            # Routing safeguard: postpone/reschedule requests should never be short-circuited to Q&A.
-            print(f"[_process_and_respond] 🔁 Reschedule intent detected. Skipping direct Q&A routing.")
-            match_result = None
-        elif is_price_intent:
-            # Pricing must come from system/API sync path, never from static Q&A text.
-            print(f"[_process_and_respond] 💰 Price intent detected. Skipping direct Q&A routing for exact system pricing.")
-            match_result = None
-        else:
-            match_result = await local_qa_service.find_match_with_tier(query_to_send_to_gpt, current_preferred_lang)
+        match_result = await local_qa_service.find_match_with_tier(
+            query_to_send_to_gpt,
+            current_preferred_lang,
+        )
 
         if match_result:
             # 90%+ match: Return Q&A directly
             match_score = match_result.get("match_score", 0)
+            match_tier = match_result.get("tier", "direct")
             qa_pair = match_result.get("qa_pair", {})
             qa_response = qa_pair.get("answer", "")
 
             print(f"[_process_and_respond] ✅ Q&A MATCH FOUND!")
-            print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥90% threshold)")
+            if match_tier == "exact":
+                print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (exact match)")
+            else:
+                print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥90% threshold)")
             print(f"[_process_and_respond] 🎯 Returning Q&A directly")
             print(f"[_process_and_respond] 💰 AI CREDITS SAVED: $0.02-0.05 (NO GPT-4 CALL)")
             print(f"[_process_and_respond] ⚡ Response Time: ~100-200ms (vs 2-5s with GPT-4)")
@@ -595,9 +590,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             await update_dashboard_metric_in_firestore(user_id, "qa_responses_used", 1)
             config.user_greeting_stage[user_id] = 2
             save_for_training_conversation_log(query_to_send_to_gpt, qa_response)
+            flow_match_title = "Q&A Match (Exact)" if match_tier == "exact" else "Q&A Match (≥90%)"
             flow_steps = [
                 {"step": 1, "title": "User → Bot", "content": query_to_send_to_gpt},
-                {"step": 2, "title": "Q&A Match (≥90%)", "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
+                {"step": 2, "title": flow_match_title, "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
                 {"step": 3, "title": "Bot → User", "content": qa_response},
             ]
             log_interaction(
@@ -615,6 +611,21 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             )
             return
         else:
+            if ai_primary_mode:
+                print(
+                    "[_process_and_respond] 🧠 AI-primary mode ON. "
+                    "No FAQ match >=90%, continuing AI-normal flow."
+                )
+            if is_reschedule_intent:
+                print(
+                    "[_process_and_respond] 🔁 Reschedule intent detected. "
+                    "No FAQ match >=90%, continuing booking flow."
+                )
+            if is_price_intent:
+                print(
+                    "[_process_and_respond] 💰 Price intent detected. "
+                    "No FAQ match >=90%, continuing exact pricing flow."
+                )
             # <90% match: GPT + knowledge + style + top 3 relevant Q&A pairs
             print(f"[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
             print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
