@@ -15,6 +15,7 @@ from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     STYLE_GUIDE_FILE,
     PRICE_LIST_FILE,
+    SYSTEM_PROMPT_TEMPLATE_FILE,
     CONTENT_DIR,
     ensure_dirs,
 )
@@ -37,6 +38,12 @@ TRAINING_FILES = {
         "name": "Price List",
         "description": "Service pricing information",
         "config_attr": "PRICE_LIST",
+    },
+    "system_prompt_template": {
+        "path": str(SYSTEM_PROMPT_TEMPLATE_FILE),
+        "name": "System Prompt Template",
+        "description": "Core system prompt rules and guardrails (supports placeholders)",
+        "config_attr": "SYSTEM_PROMPT_TEMPLATE",
     },
 }
 

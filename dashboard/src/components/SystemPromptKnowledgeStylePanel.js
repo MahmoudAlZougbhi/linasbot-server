@@ -8,16 +8,19 @@ const SystemPromptKnowledgeStylePanel = () => {
 
   const [knowledgeContent, setKnowledgeContent] = useState("");
   const [styleContent, setStyleContent] = useState("");
+  const [templateContent, setTemplateContent] = useState("");
   const [originalKnowledge, setOriginalKnowledge] = useState("");
   const [originalStyle, setOriginalStyle] = useState("");
+  const [originalTemplate, setOriginalTemplate] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
   const loadFiles = useCallback(async () => {
     try {
       setRefreshing(true);
-      const [knowledgeRes, styleRes] = await Promise.all([
+      const [knowledgeRes, styleRes, templateRes] = await Promise.all([
         getTrainingFile("knowledge_base"),
         getTrainingFile("style_guide"),
+        getTrainingFile("system_prompt_template"),
       ]);
 
       if (knowledgeRes?.success) {
@@ -34,6 +37,14 @@ const SystemPromptKnowledgeStylePanel = () => {
         setOriginalStyle(text);
       } else {
         toast.error(styleRes?.error || "Failed to load style guide");
+      }
+
+      if (templateRes?.success) {
+        const text = templateRes.content || "";
+        setTemplateContent(text);
+        setOriginalTemplate(text);
+      } else {
+        toast.error(templateRes?.error || "Failed to load system prompt template");
       }
     } catch (error) {
       toast.error("Failed to load system prompt sources");
@@ -54,6 +65,10 @@ const SystemPromptKnowledgeStylePanel = () => {
     () => styleContent !== originalStyle,
     [styleContent, originalStyle]
   );
+  const hasTemplateChanges = useMemo(
+    () => templateContent !== originalTemplate,
+    [templateContent, originalTemplate]
+  );
 
   const handleSaveKnowledge = async () => {
     const res = await updateTrainingFile("knowledge_base", knowledgeContent);
@@ -69,6 +84,13 @@ const SystemPromptKnowledgeStylePanel = () => {
     }
   };
 
+  const handleSaveTemplate = async () => {
+    const res = await updateTrainingFile("system_prompt_template", templateContent);
+    if (res?.success) {
+      setOriginalTemplate(templateContent);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="card">
@@ -79,7 +101,7 @@ const SystemPromptKnowledgeStylePanel = () => {
             </h3>
             <p className="text-sm text-slate-600 mt-1">
               Edit the exact files used in system prompt composition:{" "}
-              <code>knowledge_base.txt</code> and <code>style_guide.txt</code>.
+              <code>system_prompt_template.txt</code>, <code>knowledge_base.txt</code>, and <code>style_guide.txt</code>.
             </p>
           </div>
           <button
@@ -130,6 +152,26 @@ const SystemPromptKnowledgeStylePanel = () => {
           onChange={(e) => setStyleContent(e.target.value)}
           className="w-full h-80 p-4 border border-slate-200 rounded-lg font-mono text-sm resize-none"
           placeholder="style_guide.txt content..."
+        />
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-slate-800">System Prompt Template (system prompt)</h4>
+          <button
+            onClick={handleSaveTemplate}
+            disabled={loading || !hasTemplateChanges}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            <CheckCircleIcon className="w-4 h-4" />
+            Save Template
+          </button>
+        </div>
+        <textarea
+          value={templateContent}
+          onChange={(e) => setTemplateContent(e.target.value)}
+          className="w-full h-80 p-4 border border-slate-200 rounded-lg font-mono text-sm resize-none"
+          placeholder="system_prompt_template.txt content..."
         />
       </div>
     </div>
