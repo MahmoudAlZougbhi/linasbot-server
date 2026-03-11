@@ -250,13 +250,14 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     message_type = parsed_message["type"]
     content = parsed_message["content"]
 
-    # Initialize user_data_whatsapp if not exists
+    # Initialize user_data_whatsapp if not exists (AI Smart Employee state schema)
     if user_id not in config.user_data_whatsapp:
         config.user_data_whatsapp[user_id] = {
-            'user_preferred_lang': 'ar', 
-            'initial_user_query_to_process': None, 
-            'awaiting_human_handover_confirmation': False, 
-            'current_conversation_id': None
+            'user_preferred_lang': 'ar',
+            'initial_user_query_to_process': None,
+            'awaiting_human_handover_confirmation': False,
+            'current_conversation_id': None,
+            **config.DEFAULT_CONVERSATION_STATE,
         }
         print(f"✅ Initialized user_data_whatsapp for user {user_id}")
     

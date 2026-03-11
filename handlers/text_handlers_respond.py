@@ -1,10 +1,19 @@
 # handlers/text_handlers_respond.py
 # Core logic for processing user input and generating bot responses
+# AI Smart Employee Architecture: router + state + operational context
 
 from handlers.text_handlers_firestore import *
 from services.analytics_events import analytics
 from services.language_detection_service import language_detection_service
 from services.interaction_flow_logger import log_interaction
+from services.conversation_router import (
+    route as router_route,
+    is_gender_answer,
+    get_gender_from_message,
+    GREETING_TEMPLATES,
+    FALLBACK_TEMPLATES,
+    ASK_CLARIFICATION_TEMPLATES,
+)
 from utils.datetime_utils import detect_reschedule_intent
 import time
 
@@ -266,6 +275,144 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             )
         return
 
+    # ===== AI SMART EMPLOYEE: ROUTER (Phase 2, 10) =====
+    config.ensure_conversation_state(user_data)
+    conv_state = config.get_conversation_state(user_id, user_data)
+    router_action = router_route(user_id, user_input_to_process, conv_state)
+
+    # Phase 12: Debugging/logging (Plan §18)
+    print(f"[_process_and_respond] 📋 ORCHESTRATION LOG:")
+    print(f"   - normalized_input: '{user_input_to_process.strip()[:100]}'")
+    print(f"   - state_before: gender={conv_state.get('gender')}, awaiting_gender={conv_state.get('awaiting_gender')}, awaiting_clarification={conv_state.get('awaiting_clarification')}, original_question={bool(conv_state.get('original_question'))}")
+    print(f"   - detected_action: {router_action}")
+
+    # 1. Human handover (top priority) - transfer immediately
+    if router_action == "human_handover":
+        async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str):
+            db = get_firestore_db()
+            if db and current_conversation_id:
+                try:
+                    canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+                    users_coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("users")
+                    candidate_user_ids = []
+                    for c in [canonical_user_id, user_id]:
+                        if c and c not in candidate_user_ids:
+                            candidate_user_ids.append(c)
+                        if c and (c.startswith("+") or (c.isdigit() and len(c) >= 10)):
+                            alt = c[1:] if c.startswith("+") else f"+{c}"
+                            if alt not in candidate_user_ids:
+                                candidate_user_ids.append(alt)
+                    for cid in candidate_user_ids:
+                        ref = users_coll.document(cid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                        snap = await asyncio.to_thread(ref.get)
+                        if snap.exists:
+                            await asyncio.to_thread(ref.update, {
+                                "status": "waiting_human", "human_takeover_active": True,
+                                "human_takeover_requested": True, "operator_id": None,
+                                "conversation_state": "waiting_for_operator",
+                                "escalation_reason": escalation_reason,
+                                "escalation_time": datetime.datetime.now(),
+                                "last_updated": datetime.datetime.now(),
+                            })
+                            break
+                except Exception as e:
+                    print(f"⚠️ Failed to update handover state: {e}")
+            config.user_in_human_takeover_mode[user_id] = True
+            notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification=f"AI handover - {escalation_reason}")
+            try:
+                from services.human_takeover_notification_service import human_takeover_notification_service
+                await human_takeover_notification_service.notify_and_audit_handoff(
+                    user_id=user_id, user_gender=current_gender, customer_name=user_name,
+                    customer_phone=user_data.get('phone_number', 'Unknown'),
+                    escalation_reason=escalation_reason, last_message=user_input_to_process,
+                    trigger_source=trigger_source, conversation_id=current_conversation_id,
+                    extra_details={"action": "router_human_handover"}
+                )
+            except Exception as notify_error:
+                print(f"⚠️ Failed to send handoff: {notify_error}")
+
+        await _activate_ai_handover_router("customer_requested_human", "router_human_handover")
+        handoff_msg = {"ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏", "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏", "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"}
+        sent_reply = handoff_msg.get(current_preferred_lang, handoff_msg["ar"])
+        await send_message_func(user_id, sent_reply)
+        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        log_report_event("human_handover", user_id, current_gender, {"message": user_input_to_process, "status": "router_direct", "source": "router"})
+        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        return
+
+    # 2. Greeting only (Phase 7)
+    if router_action == "greeting":
+        greeting_msg = GREETING_TEMPLATES.get(current_preferred_lang, GREETING_TEMPLATES["ar"])
+        await send_message_func(user_id, greeting_msg)
+        await save_conversation_message_to_firestore(user_id, "ai", greeting_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_greeting"})
+        log_interaction(user_id, user_input_to_process, greeting_msg, "router_greeting", user_name=user_name, user_phone=user_data.get("phone_number"))
+        return
+
+    # 3. Fallback (Phase 11)
+    if router_action == "fallback":
+        fallback_msg = FALLBACK_TEMPLATES.get(current_preferred_lang, FALLBACK_TEMPLATES["ar"])
+        await send_message_func(user_id, fallback_msg)
+        await save_conversation_message_to_firestore(user_id, "ai", fallback_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_fallback"})
+        log_interaction(user_id, user_input_to_process, fallback_msg, "router_fallback", user_name=user_name, user_phone=user_data.get("phone_number"))
+        return
+
+    # 4. Ask gender (Phase 8)
+    if router_action == "ask_gender":
+        user_data['original_question'] = user_input_to_process
+        user_data['awaiting_gender'] = True
+        user_data['last_bot_question_type'] = 'gender'
+        user_data['initial_user_query_to_process'] = user_input_to_process  # backward compat
+        gender_questions = config.GENDER_QUESTIONS.get(current_preferred_lang, config.GENDER_QUESTIONS["ar"])
+        import random
+        gender_msg = random.choice(gender_questions)
+        await send_message_func(user_id, gender_msg)
+        await save_conversation_message_to_firestore(user_id, "ai", gender_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_ask_gender"})
+        log_interaction(user_id, user_input_to_process, gender_msg, "router_ask_gender", user_name=user_name, user_phone=user_data.get("phone_number"))
+        return
+
+    # 5. Ask clarification (Phase 9) - use localized template
+    if router_action == "ask_clarification":
+        user_data['original_question'] = user_input_to_process
+        user_data['awaiting_clarification'] = True
+        user_data['last_bot_question_type'] = 'clarification'
+        user_data['pending_clarification_query'] = user_input_to_process  # backward compat
+        clarification_msg = ASK_CLARIFICATION_TEMPLATES.get(current_preferred_lang, ASK_CLARIFICATION_TEMPLATES["ar"])
+        await send_message_func(user_id, clarification_msg)
+        await save_conversation_message_to_firestore(user_id, "ai", clarification_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_ask_clarification"})
+        log_interaction(user_id, user_input_to_process, clarification_msg, "router_ask_clarification", user_name=user_name, user_phone=user_data.get("phone_number"))
+        return
+
+    # 6. answer_question (resume_original_question or answer_new_question)
+    # When router returns this from awaiting_gender/awaiting_clarification, we MUST use original_question
+    _resume_original_question = False
+    resume_original = conv_state.get('awaiting_gender') or conv_state.get('awaiting_clarification')
+    if resume_original:
+        orig = conv_state.get('original_question') or user_data.get('original_question') or user_data.get('pending_clarification_query') or user_data.get('initial_user_query_to_process')
+        if orig:
+            user_data['awaiting_gender'] = False
+            user_data['awaiting_clarification'] = False
+            user_data['pending_clarification_query'] = None
+            user_data['initial_user_query_to_process'] = None
+            if conv_state.get('awaiting_gender'):
+                detected_g = get_gender_from_message(user_input_to_process)
+                if detected_g in ('male', 'female'):
+                    config.user_gender[user_id] = detected_g
+                    config.user_greeting_stage[user_id] = 2
+                    config.gender_attempts[user_id] = 0
+                    await user_persistence.save_user_gender(user_id, detected_g, phone=user_data.get('phone_number', user_id), name=user_name)
+            user_data['selected_service'] = user_input_to_process  # user's answer often is the service
+            # Phase 4: For selector, pass combined context so retrieval fetches right knowledge
+            query_to_send_to_gpt = f"Original user question: {orig}\nUser follow-up answer: {user_input_to_process}"
+            _resume_original_question = True
+            print(f"[_process_and_respond] 📋 state_after (resume): awaiting_gender=False, awaiting_clarification=False, selected_service={user_input_to_process[:50]}")
+        else:
+            query_to_send_to_gpt = user_input_to_process
+            _resume_original_question = False
+    else:
+        # answer_question but not from awaiting_gender/clarification (answer_new_question)
+        query_to_send_to_gpt = user_input_to_process
+        _resume_original_question = False
+
     is_initial_message_for_gpt = (config.user_greeting_stage[user_id] == 1) and (current_gender == "unknown")
     initial_user_query_to_process_original = user_data.get('initial_user_query_to_process')
 
@@ -309,13 +456,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             )
 
     else:
-        query_to_send_to_gpt = user_input_to_process
+        # Only use raw input when not resuming from router (router already set query_to_send_to_gpt for resume)
+        if not _resume_original_question:
+            query_to_send_to_gpt = user_input_to_process
 
-        # Restore and combine original question when user replies to clarification
+        # Restore and combine original question when user replies to clarification (legacy path)
         pending_clarification = user_data.get('pending_clarification_query')
         if pending_clarification:
             query_to_send_to_gpt = f"{pending_clarification}\n[User clarified: {user_input_to_process}]"
             user_data['pending_clarification_query'] = None
+            user_data['awaiting_clarification'] = False
             print(f"[_process_and_respond] ✅ Restored original query + clarification: '{query_to_send_to_gpt[:80]}...'")
 
         # DEBUG: Gender confirmation and original query retrieval
@@ -422,6 +572,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     )
                     if action == "ask_clarification" and clarification:
                         user_data['pending_clarification_query'] = query_to_send_to_gpt
+                        user_data['original_question'] = query_to_send_to_gpt
+                        user_data['awaiting_clarification'] = True
+                        user_data['last_bot_question_type'] = 'clarification'
                         bot_sent = dr_flow_meta.get("bot_sent_to_selector", "")
                         ai_returned = dr_flow_meta.get("selector_ai_raw_response", '{"action": "ask_clarification"}')
                         sel_titles = dr_flow_meta.get("selected_titles") or []
@@ -447,6 +600,23 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             conversation_history = await get_conversation_history_from_firestore(user_id, current_conversation_id, max_messages=10)
 
+            # Phase 3: Build operational context when resuming (Plan §10)
+            operational_context = None
+            if _resume_original_question:
+                orig_q = user_data.get('original_question') or conv_state.get('original_question')
+                operational_context = (
+                    f"Conversation State:\n"
+                    f"- gender: {current_gender}\n"
+                    f"- awaiting_gender: false\n"
+                    f"- awaiting_clarification: false\n"
+                    f"- original_question: \"{orig_q or ''}\"\n"
+                    f"- selected_service: \"{user_data.get('selected_service', '')}\"\n"
+                    f"- last_bot_question_type: \"{conv_state.get('last_bot_question_type', '')}\"\n\n"
+                    f"Current User Message: \"{user_input_to_process}\"\n\n"
+                    f"Task: The user previously asked a question. The bot asked for clarification or gender. "
+                    f"The user has now answered. Answer the ORIGINAL question. Do not ask for clarification again."
+                )
+
             gpt_response_data = await get_bot_chat_response(
                 user_id=user_id,
                 user_input=query_to_send_to_gpt,
@@ -457,6 +627,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 is_initial_message_after_start=is_initial_message_for_gpt,
                 initial_user_query_to_process=None,
                 custom_knowledge_context=custom_context,
+                operational_context=operational_context,
             )
 
     action = gpt_response_data.get("action")

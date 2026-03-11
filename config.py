@@ -75,6 +75,48 @@ user_pending_messages = defaultdict(deque) # Queue for combining rapid messages 
 # This will hold things like 'user_preferred_lang', 'initial_user_query_to_process', etc.
 user_data_whatsapp = defaultdict(dict)
 
+# --- Conversation State Schema (AI Smart Employee Architecture) ---
+# Canonical fields for user_conversation_state (stored in user_data_whatsapp):
+# - gender, awaiting_gender, awaiting_clarification, awaiting_name
+# - original_question, clarification_target, selected_service, last_bot_question_type
+# - human_handover_active (synced from config.user_in_human_takeover_mode)
+DEFAULT_CONVERSATION_STATE = {
+    "awaiting_gender": False,
+    "awaiting_clarification": False,
+    "awaiting_name": False,  # alias: awaiting_name_input
+    "original_question": None,
+    "clarification_target": None,
+    "selected_service": None,
+    "last_bot_question_type": None,
+}
+
+
+def ensure_conversation_state(user_data: dict) -> dict:
+    """Ensure all conversation state fields exist in user_data. Returns user_data (mutated)."""
+    for key, default in DEFAULT_CONVERSATION_STATE.items():
+        if key not in user_data:
+            user_data[key] = default
+    # Sync awaiting_name from legacy awaiting_name_input
+    if "awaiting_name_input" in user_data:
+        user_data["awaiting_name"] = user_data.get("awaiting_name_input", False)
+    return user_data
+
+
+def get_conversation_state(user_id: str, user_data: dict) -> dict:
+    """Build full conversation state for router (gender from config, rest from user_data)."""
+    ensure_conversation_state(user_data)
+    return {
+        "gender": user_gender.get(user_id, "unknown"),
+        "awaiting_gender": user_data.get("awaiting_gender", False),
+        "awaiting_clarification": user_data.get("awaiting_clarification", False) or bool(user_data.get("pending_clarification_query")),
+        "awaiting_name": user_data.get("awaiting_name", False) or user_data.get("awaiting_name_input", False),
+        "original_question": user_data.get("original_question") or user_data.get("pending_clarification_query") or user_data.get("initial_user_query_to_process"),
+        "clarification_target": user_data.get("clarification_target"),
+        "selected_service": user_data.get("selected_service"),
+        "last_bot_question_type": user_data.get("last_bot_question_type"),
+        "human_handover_active": user_in_human_takeover_mode.get(user_id, False),
+    }
+
 # NEW: AI Takeover State for each user
 user_in_human_takeover_mode = defaultdict(bool) # Flag if a specific user's chat is taken over by human
 # Rate limit for "waiting" auto-reply when user keeps messaging while in waiting queue (seconds)
