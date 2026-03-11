@@ -15,6 +15,7 @@ from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     STYLE_GUIDE_FILE,
     PRICE_LIST_FILE,
+    TRAINED_QA_REFERENCE_FILE,
     CONTENT_DIR,
     ensure_dirs,
 )
@@ -37,6 +38,12 @@ TRAINING_FILES = {
         "name": "Price List",
         "description": "Service pricing information",
         "config_attr": "PRICE_LIST",
+    },
+    "trained_qa_reference": {
+        "path": str(TRAINED_QA_REFERENCE_FILE),
+        "name": "Trained Q&A Reference",
+        "description": "Static trained Q&A prompt block editable from Content Manager",
+        "config_attr": "PROMPT_TRAINED_QA_REFERENCE",
     },
 }
 

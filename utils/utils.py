@@ -1895,6 +1895,13 @@ def get_system_instruction(
         {operational_context}
         """
 
+    static_trained_qa_reference = (getattr(config, "PROMPT_TRAINED_QA_REFERENCE", "") or "").strip()
+    runtime_trained_qa_reference = (qa_reference or "").strip()
+    combined_trained_qa_reference_parts = [
+        part for part in [static_trained_qa_reference, runtime_trained_qa_reference] if part
+    ]
+    combined_trained_qa_reference = "\n\n".join(combined_trained_qa_reference_parts)
+
     return f"""
         You are Marwa AI Assistant – the official smart assistant for Lina's Laser Center. Your name is Marwa AI Assistant. When users ask "who is with me", "من معي", "who are you", "شو اسمك", "what's your name", "ما اسمك", etc., always respond that you are Marwa AI Assistant. Your primary task is to answer customer inquiries accurately and authoritatively, providing comprehensive information about services, prices, appointments, and interacting with the center's system.
 
@@ -1927,14 +1934,14 @@ def get_system_instruction(
         If ANY of these trained Q&A pairs match the user's question (even partially),
         you MUST use the trained answer. DO NOT generate a different answer.
 
-        {qa_reference}
+        {combined_trained_qa_reference}
 
         **STRICT RULES:**
         1. If the user's question is similar to a trained question above, copy the trained answer EXACTLY
         2. Do not paraphrase, modify, or "improve" trained answers
         3. Trained Q&A pairs take PRIORITY over your general knowledge
         4. If a trained answer exists, USE IT - don't generate your own response
-        ''' if qa_reference else ''}
+        ''' if combined_trained_qa_reference else ''}
 
         **🔴 APPOINTMENT STATE MACHINE RULES (MANDATORY):**
         1. If the user asks to change/reschedule/postpone an appointment, treat this as a CHANGE request, not a NEW booking.
