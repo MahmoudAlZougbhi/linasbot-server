@@ -637,6 +637,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         parsed_response = {}
         latest_pricing_payload = None
 
+        # When GPT asks for gender (unknown), send that reply and do NOT run tool calls.
+        # Otherwise a second response after tools can replace it with booking flow (date/time/branch).
+        if tool_calls and current_gender == "unknown" and gpt_raw_content:
+            try:
+                first_parsed = json.loads(gpt_raw_content)
+                first_action = (first_parsed.get("action") or "").strip().lower()
+                if first_action in ["ask_gender", "initial_greet_and_ask_gender"]:
+                    first_parsed.setdefault("detected_language", current_preferred_lang)
+                    first_parsed["current_gender_from_config"] = current_gender
+                    first_parsed.setdefault("detected_gender", None)
+                    print(f"PRIORITY: First response is ask_gender (gender unknown). Skipping tool calls and sending gender question.")
+                    return first_parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         if tool_calls:
             messages.append(first_response_message)
             tool_round_trips = []  # For Activity Flow: AI request → Bot response
