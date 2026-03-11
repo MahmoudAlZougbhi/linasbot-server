@@ -26,30 +26,52 @@ import config
 HUMAN_REQUEST_PATTERNS = [
     # Arabic
     r"بدي\s*(?:أحكي|أتكلم|أتكلم)\s*(?:مع|ل)",
+    r"بدي\s*(?:موظف|موظفة|حدا|حد)\s*(?:يحكي|يتواصل|يرد)\s*معي",
+    r"خليني\s*(?:احكي|اتواصل)\s*مع\s*(?:حد|موظف|موظفة)",
+    r"بدي\s*الدعم\s*البشري",
+    r"حوّلني\s*(?:لموظف|للموظف|لبشر|لإنسان)",
     r"حد\s*(?:يحكي|يتكلم)\s*معي",
     r"موظف",
     r"موظفة",
     r"إنسان",
     r"شخص\s*حقيقي",
     r"واحد\s*(?:منكم|منكن)",
-    r"بدي\s*إيا",
     r"بدي\s*حد",
     r"حابب\s*أحكي\s*مع",
+    r"بدي\s*خدمة\s*العملاء",
+    r"ما\s*بدي\s*بوت",
     r"ممكن\s*(?:حد|واحد)\s*(?:يحكي|يتكلم)",
     r"أريد\s*التحدث\s*مع",
     r"أريد\s*موظف",
-    r"أريد\s*إنسان",
+    r"أريد\s*(?:إنسان|موظفة)",
+    # Franco / Arabizi
+    r"bade\s*(?:ehke|a7ke)\s*ma[3a]?\s*(?:hada|7ada|human|agent)",
+    r"baddi\s*(?:hada|7ada)\s*(?:y7ke|ye7ke)\s*ma3e",
+    r"(?:7awelni|hawelni)\s*(?:la|lal)\s*(?:hada|7ada|human|agent|mowazaf)",
+    r"bade\s*(?:mowazaf|mwazzaf|employee|agent)",
+    r"ma\s*bade\s*bot",
+    r"bade\s*customer\s*service",
+    r"khallini\s*ehke\s*ma3\s*(?:hada|agent|employee)",
     # English
     r"speak\s*(?:to|with)\s*(?:a\s*)?(?:human|person|agent|representative|employee)",
+    r"i\s*want\s*to\s*speak\s*(?:to|with)\s*(?:someone|a\s*human|an?\s*agent)",
+    r"can\s*i\s*speak\s*(?:to|with)\s*(?:someone|an?\s*agent|a\s*human)",
+    r"i\s*need\s*(?:help\s*from\s*)?(?:a\s*)?(?:human|agent|representative|person)",
+    r"no\s*bot",
+    r"not\s*(?:a\s*)?bot",
+    r"live\s*agent",
     r"talk\s*(?:to|with)\s*(?:a\s*)?(?:human|person|agent|representative)",
-    r"want\s*(?:a\s*)?(?:human|person|agent|representative|employee)",
-    r"need\s*(?:a\s*)?(?:human|person|agent|representative)",
+    r"customer\s*service",
     r"connect\s*me\s*(?:to|with)",
     r"transfer\s*me\s*(?:to|with)",
     r"real\s*person",
     r"human\s*agent",
     # French
     r"parler\s*(?:à|avec)\s*(?:un\s*)?(?:humain|employé|agent|personne)",
+    r"je\s*veux\s*parler\s*(?:à|avec)\s*(?:un\s*)?(?:humain|agent|employé)",
+    r"pouvez[-\s]*vous\s*me\s*passer\s*(?:un\s*)?(?:agent|humain|employé)",
+    r"pas\s*de\s*bot",
+    r"service\s*client",
     r"vraie\s*personne",
     r"agent\s*humain",
 ]
@@ -58,17 +80,20 @@ HUMAN_REQUEST_RE = re.compile("|".join(f"({p})" for p in HUMAN_REQUEST_PATTERNS)
 # Simple keywords (fallback when regex misses)
 HUMAN_REQUEST_KEYWORDS = [
     "human", "موظف", "موظفة", "حد يحكي", "بدي حد", "واحد منكم", "شخص حقيقي",
-    "agent", "representative", "employee", "person", "parler à un", "vraie personne",
+    "agent", "representative", "employee", "person", "customer service", "service client",
+    "بدي حدا", "بدي انسان", "حوّلني", "حولني", "تحويل لموظف",
+    "bade hada", "baddi hada", "bade a7ke", "ehke ma3", "hawelni", "7awelni",
+    "ما بدي بوت", "live agent", "no bot", "not a bot", "pas de bot",
 ]
 
 # --- Gender answer patterns ---
 GENDER_MALE_PATTERNS = [
-    r"^(?:ذكر|male|homme|شب|شاب|رجل|رجال|أنا\s*شب|أنا\s*شاب|i'm\s*male|je\s*suis\s*homme)",
-    r"\b(?:ذكر|male|homme|شب|شاب)\b",
+    r"^(?:ذكر|male|homme|man|boy|شب|شاب|رجل|رجال|زلمة|أنا\s*شب|أنا\s*شاب|أنا\s*زلمة|انا\s*شب|انا\s*زلمة|ana\s*zalame|ana\s*zalameh|ana\s*shab|ana\s*rajol|i'm\s*male|i\s*am\s*male|je\s*suis\s*homme)",
+    r"\b(?:ذكر|male|homme|man|boy|m|شب|شاب|رجل|رجال|زلمة|zalame|zalameh|zalmeh|zalme|shab|rajol|zakar|manly)\b",
 ]
 GENDER_FEMALE_PATTERNS = [
-    r"^(?:أنثى|female|femme|صبية|بنت|امرأة|نساء|أنا\s*صبية|أنا\s*بنت|i'm\s*female|je\s*suis\s*femme)",
-    r"\b(?:أنثى|female|femme|صبية|بنت)\b",
+    r"^(?:أنثى|female|femme|woman|girl|صبية|بنت|امرأة|نساء|مرة|مرا|أنا\s*صبية|أنا\s*بنت|أنا\s*مرة|انا\s*بنت|انا\s*مرة|ana\s*bent|ana\s*mara|ana\s*sabeye|i'm\s*female|i\s*am\s*female|je\s*suis\s*femme)",
+    r"\b(?:أنثى|female|femme|woman|girl|f|صبية|بنت|مرة|مرا|mara|mra|bent|sabeye|sabya|onsa)\b",
 ]
 
 # --- Greeting-only patterns (no service/pricing/booking) ---
@@ -76,6 +101,9 @@ GREETING_ONLY_PATTERNS = [
     r"^(?:مرحبا|مرحبا|marhaba|هلا|أهلا|سلام|السلام\s*عليكم)",
     r"^(?:hello|hi|hey|good\s*morning|good\s*evening)",
     r"^(?:bonjour|salut|coucou)",
+    r"^(?:اهلين|أهلين|يا\s*هلا|هلا\s*فيك)",
+    r"^(?:bonsoir|bonne\s*soirée)",
+    r"^(?:mar7aba|ahla)",
 ]
 GREETING_RE = re.compile("|".join(f"({p})" for p in GREETING_ONLY_PATTERNS), re.IGNORECASE | re.UNICODE)
 
@@ -84,6 +112,11 @@ SERVICE_PRICING_BOOKING_KEYWORDS = [
     "سعر", "اسعار", "كم", "قديش", "أديش", "price", "cost", "pricing", "combien", "prix",
     "ليزر", "شعر", "وشم", "تاتو", "laser", "hair", "tattoo", "حجز", "booking", "reservation",
     "خدمة", "service", "علاج", "treatment", "جلسة", "session",
+    "موعد", "appointment", "book", "rdv", "rendez-vous",
+    "épilation", "epilation", "détatouage",
+    "whitening", "blanchiment", "co2", "dpl",
+    "sa3er", "as3ar", "2adde", "2adesh", "hajz", "7ajz",
+    "tatouage", "tarif",
 ]
 
 # --- Vague messages that need clarification ---
@@ -95,6 +128,23 @@ VAGUE_CLARIFICATION_PATTERNS = [
     r"^بدي\s*أحجز\s*[؟?]?$",
     r"^prices?\s*[?]?$",
     r"^how\s*much\s*[?]?$",
+    r"^بدي\s*معلومات\s*[؟?]?$",
+    r"^بدي\s*تفاصيل\s*[؟?]?$",
+    r"^حابب\s*استفسر\s*[؟?]?$",
+    r"^عندي\s*سؤال\s*[؟?]?$",
+    r"^ممكن\s*سؤال\s*[؟?]?$",
+    r"^info\s*[?]?$",
+    r"^information\s*[?]?$",
+    r"^i\s*have\s*a\s*question\s*[?]?$",
+    r"^book\s*[?]?$",
+    r"^booking\s*[?]?$",
+    r"^reservation\s*[?]?$",
+    r"^je\s*veux\s*des\s*infos\s*[?]?$",
+    r"^prix\s*[?]?$",
+    r"^tarif\s*[?]?$",
+    r"^rdv\s*[?]?$",
+    r"^bade\s*es2al\s*[?]?$",
+    r"^kam\s*el\s*sa3er\s*[?]?$",
 ]
 VAGUE_RE = re.compile("|".join(f"({p})" for p in VAGUE_CLARIFICATION_PATTERNS), re.IGNORECASE | re.UNICODE)
 
@@ -103,6 +153,19 @@ SERVICE_INTENT_KEYWORDS = [
     "ليزر", "شعر", "وشم", "تاتو", "laser", "hair", "tattoo", "جلسة", "session",
     "علاج", "treatment", "خدمة", "service", "سعر", "اسعار", "price", "pricing",
     "إزالة", "removal", "تبييض", "whitening", "حب شباب", "acne",
+    "موعد", "appointment", "حجز", "booking", "reservation", "book",
+    "co2", "dpl", "botox", "filler", "skin",
+    "tatouage", "épilation", "epilation", "blanchiment",
+    "sa3er", "as3ar", "hajz", "mou3ed", "3elaj",
+]
+
+TATTOO_KEYWORDS = ["وشم", "تاتو", "tattoo", "tatouage", "tatou"]
+BOOKING_OR_PRICE_KEYWORDS = [
+    "سعر", "اسعار", "price", "pricing", "cost", "prix",
+    "حجز", "booking", "book", "reservation",
+    "موعد", "ميعاد", "appointment", "date", "time", "session", "جلسة",
+    "as3ar", "sa3er", "2adde", "2adesh", "hajz",
+    "rdv", "rendez-vous", "tarif",
 ]
 
 
@@ -129,7 +192,7 @@ def is_gender_answer(message: str) -> bool:
 def get_gender_from_message(message: str) -> Optional[str]:
     """Extract gender from message. Returns 'male', 'female', or None."""
     t = _normalize(message)
-    if len(t) > 30:  # Too long to be just gender
+    if len(t) > 50:  # Too long to be just gender
         return None
     for p in GENDER_MALE_PATTERNS:
         if re.search(p, t, re.IGNORECASE | re.UNICODE):
@@ -138,9 +201,15 @@ def get_gender_from_message(message: str) -> Optional[str]:
         if re.search(p, t, re.IGNORECASE | re.UNICODE):
             return "female"
     short = t.lower().replace(" ", "")
-    if short in ("male", "ذكر", "شب", "شاب", "homme"):
+    if short in (
+        "male", "man", "boy", "m", "ذكر", "شب", "شاب", "homme", "زلمة",
+        "zalame", "zalameh", "zalmeh", "shab", "rajol", "zakar"
+    ):
         return "male"
-    if short in ("female", "أنثى", "صبية", "بنت", "femme"):
+    if short in (
+        "female", "woman", "girl", "f", "أنثى", "صبية", "بنت", "femme", "مرة", "مرا",
+        "mara", "mra", "bent", "sabeye", "sabya", "onsa"
+    ):
         return "female"
     return None
 
@@ -179,7 +248,16 @@ def is_greeting_only(message: str) -> bool:
 def needs_gender_for_service(message: str) -> bool:
     """Message is about service/pricing/treatment - gender may be needed."""
     t = _normalize(message).lower()
-    return any(kw in t for kw in SERVICE_INTENT_KEYWORDS)
+    if not any(kw in t for kw in SERVICE_INTENT_KEYWORDS):
+        return False
+
+    # Informational tattoo questions are usually gender-neutral; avoid blocking answer.
+    is_tattoo_only = any(kw in t for kw in TATTOO_KEYWORDS)
+    has_booking_or_price = any(kw in t for kw in BOOKING_OR_PRICE_KEYWORDS)
+    if is_tattoo_only and not has_booking_or_price:
+        return False
+
+    return True
 
 
 def needs_clarification(message: str) -> bool:

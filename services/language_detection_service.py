@@ -15,7 +15,24 @@ from services.llm_core_service import client as openai_client
 
 SUPPORTED_TRAINING_LANGUAGES = {"ar", "en", "fr", "franco"}
 TRAINING_LANGUAGE_ORDER = ["ar", "en", "fr", "franco"]
-FRENCH_MARKERS = ("bonjour", "merci", "salut", "s'il", "vous", "comment")
+FRENCH_MARKERS = (
+    "bonjour",
+    "bonsoir",
+    "merci",
+    "salut",
+    "s'il",
+    "vous",
+    "comment",
+    "prix",
+    "tarif",
+    "rendez-vous",
+    "rdv",
+    "épilation",
+    "epilation",
+    "tatouage",
+    "je veux",
+    "je suis",
+)
 FRANCO_MARKERS = (
     "kif",
     "kifak",
@@ -23,7 +40,20 @@ FRANCO_MARKERS = (
     "shou",
     "shu",
     "mish",
+    "mesh",
     "mafi",
+    "bade",
+    "baddi",
+    "ehke",
+    "a7ke",
+    "ma3",
+    "zalame",
+    "sabeye",
+    "hajz",
+    "7ajz",
+    "as3ar",
+    "mar7aba",
+    "ahla",
     "3",
     "7",
     "2",

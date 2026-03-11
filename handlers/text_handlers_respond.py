@@ -20,11 +20,14 @@ import time
 
 PRICE_INTENT_KEYWORDS = [
     "price",
+    "prices",
     "cost",
     "how much",
     "pricing",
+    "rate",
     "سعر",
     "اسعار",
+    "الاسعار",
     "كم",
     "قديش",
     "أديش",
@@ -39,6 +42,8 @@ PRICE_INTENT_KEYWORDS = [
     "2adesh",
     "kam",
     "sa3er",
+    "as3ar",
+    "price list",
 ]
 
 
@@ -73,6 +78,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # Update language variables
     current_preferred_lang = lang_result['detected_language']
     response_language = lang_result['response_language']
+    router_reply_lang = response_language if response_language in ("ar", "en", "fr") else current_preferred_lang
 
     print(f"[_process_and_respond] 🌐 Language detected: {current_preferred_lang} → respond in: {response_language}")
     # =====================================
@@ -338,7 +344,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 2. Greeting only (Phase 7)
     if router_action == "greeting":
-        greeting_msg = get_dynamic_message("router_greeting", current_preferred_lang) or GREETING_TEMPLATES.get(current_preferred_lang, GREETING_TEMPLATES["ar"])
+        greeting_msg = get_dynamic_message("router_greeting", router_reply_lang) or GREETING_TEMPLATES.get(router_reply_lang, GREETING_TEMPLATES["ar"])
         await send_message_func(user_id, greeting_msg)
         await save_conversation_message_to_firestore(user_id, "ai", greeting_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_greeting"})
         log_interaction(
@@ -356,7 +362,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 3. Fallback (Phase 11)
     if router_action == "fallback":
-        fallback_msg = get_dynamic_message("router_fallback", current_preferred_lang) or FALLBACK_TEMPLATES.get(current_preferred_lang, FALLBACK_TEMPLATES["ar"])
+        fallback_msg = get_dynamic_message("router_fallback", router_reply_lang) or FALLBACK_TEMPLATES.get(router_reply_lang, FALLBACK_TEMPLATES["ar"])
         await send_message_func(user_id, fallback_msg)
         await save_conversation_message_to_firestore(user_id, "ai", fallback_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_fallback"})
         log_interaction(
@@ -378,7 +384,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         user_data['awaiting_gender'] = True
         user_data['last_bot_question_type'] = 'gender'
         user_data['initial_user_query_to_process'] = user_input_to_process  # backward compat
-        gender_questions = config.GENDER_QUESTIONS.get(current_preferred_lang, config.GENDER_QUESTIONS["ar"])
+        gender_questions = config.GENDER_QUESTIONS.get(router_reply_lang, config.GENDER_QUESTIONS["ar"])
         import random
         gender_msg = random.choice(gender_questions)
         await send_message_func(user_id, gender_msg)
@@ -402,7 +408,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         user_data['awaiting_clarification'] = True
         user_data['last_bot_question_type'] = 'clarification'
         user_data['pending_clarification_query'] = user_input_to_process  # backward compat
-        clarification_msg = get_dynamic_message("router_ask_clarification", current_preferred_lang) or ASK_CLARIFICATION_TEMPLATES.get(current_preferred_lang, ASK_CLARIFICATION_TEMPLATES["ar"])
+        clarification_msg = get_dynamic_message("router_ask_clarification", router_reply_lang) or ASK_CLARIFICATION_TEMPLATES.get(router_reply_lang, ASK_CLARIFICATION_TEMPLATES["ar"])
         await send_message_func(user_id, clarification_msg)
         await save_conversation_message_to_firestore(user_id, "ai", clarification_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_ask_clarification"})
         log_interaction(
