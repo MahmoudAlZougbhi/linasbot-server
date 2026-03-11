@@ -17,7 +17,6 @@ from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     STYLE_GUIDE_FILE,
     PRICE_LIST_FILE,
-    SYSTEM_PROMPT_TEMPLATE_FILE,
     KNOWLEDGE_FILES_DIR,
     STYLE_FILES_DIR,
     PRICE_FILES_DIR,

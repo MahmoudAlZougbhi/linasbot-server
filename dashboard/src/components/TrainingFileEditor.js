@@ -21,7 +21,6 @@ const FILE_ICONS = {
   knowledge_base: BookOpenIcon,
   style_guide: SparklesIcon,
   price_list: CurrencyDollarIcon,
-  system_prompt_template: DocumentTextIcon,
 };
 
 // Color configuration for different file types
@@ -47,13 +46,6 @@ const FILE_COLORS = {
     helpBorder: "border-green-200",
     helpText: "text-green-800",
   },
-  system_prompt_template: {
-    icon: "text-amber-600",
-    bg: "bg-amber-100",
-    helpBg: "bg-amber-50",
-    helpBorder: "border-amber-200",
-    helpText: "text-amber-800",
-  },
 };
 
 // Description/help text for each file type
@@ -64,8 +56,6 @@ const FILE_HELP_TEXT = {
     "These instructions guide the AI's behavior in every customer conversation. The bot reads these guidelines before responding to ensure consistent, professional interactions.",
   price_list:
     "List your service prices here. The bot will reference this when customers ask about pricing. Format: one service per line with price.",
-  system_prompt_template:
-    "This is the core runtime system prompt template. Keep placeholders like {{KNOWLEDGE_SECTION}} and {{GENDER_INSTRUCTION}} unless you intentionally want to remove those dynamic blocks.",
 };
 
 const TrainingFileEditor = ({ fileId, title, description }) => {

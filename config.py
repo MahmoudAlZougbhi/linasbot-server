@@ -4,7 +4,6 @@ from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     PRICE_LIST_FILE,
     STYLE_GUIDE_FILE,
-    SYSTEM_PROMPT_TEMPLATE_FILE,
     ensure_dirs,
 )
 from collections import defaultdict, deque
@@ -214,13 +213,10 @@ SUMMARIZE_QA_KEYWORDS = [
     "kif fina n7afza", "how to save this", "comment sauvegarder ceci"
 ]
 
-# --- System Prompt Template (Editable from Content Manager) ---
-
 # --- Bot Knowledge Base (Loaded from files) ---
 PRICE_LIST = ""
 BOT_STYLE_GUIDE = ""
 CORE_KNOWLEDGE_BASE = ""
-SYSTEM_PROMPT_TEMPLATE = ""
 CUSTOM_TRAINING_DATA = [] # List of custom Q&A entries
 CUSTOM_TRAINING_DATA_MAP = {} # Map for quick lookup of custom Q&A by (question, language)
 
@@ -228,7 +224,7 @@ def load_bot_assets():
     """
     Loads static bot assets (price list, style guide, knowledge base) from persistent storage.
     """
-    global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE, SYSTEM_PROMPT_TEMPLATE
+    global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE
 
     ensure_dirs()
     try:
@@ -263,22 +259,6 @@ def load_bot_assets():
     except Exception as e:
         CORE_KNOWLEDGE_BASE = "خطأ في تحميل قاعدة المعرفة الأساسية."
         print(f"❌ خطأ في تحميل قاعدة المعرفة: {e}")
-
-    try:
-        with open(SYSTEM_PROMPT_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
-            SYSTEM_PROMPT_TEMPLATE = f.read()
-        print("✅ تم تحميل قالب الـ System Prompt من " + str(SYSTEM_PROMPT_TEMPLATE_FILE))
-    except FileNotFoundError:
-        SYSTEM_PROMPT_TEMPLATE = ""
-        try:
-            with open(SYSTEM_PROMPT_TEMPLATE_FILE, 'w', encoding='utf-8') as f:
-                f.write(SYSTEM_PROMPT_TEMPLATE)
-            print("✅ تم إنشاء ملف System Prompt Template فارغ في " + str(SYSTEM_PROMPT_TEMPLATE_FILE))
-        except Exception as write_error:
-            print(f"⚠️ تعذر إنشاء ملف قالب System Prompt: {write_error}")
-    except Exception as e:
-        SYSTEM_PROMPT_TEMPLATE = ""
-        print(f"❌ خطأ في تحميل قالب System Prompt: {e}")
 
 def load_training_data():
     """

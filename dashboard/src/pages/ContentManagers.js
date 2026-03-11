@@ -28,7 +28,7 @@ const ContentManagers = () => {
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Content Managers</h1>
         <p className="text-slate-600 mt-1">
-          Manage Knowledge, Prices, Style, and System Prompt files. The bot uses dynamic retrieval to load only relevant files.
+          Manage Knowledge, Prices, and Style files. The bot uses dynamic retrieval to load only relevant files.
         </p>
       </div>
 

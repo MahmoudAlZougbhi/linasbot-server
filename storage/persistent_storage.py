@@ -46,7 +46,6 @@ QA_DATABASE_FILE = QA_DIR / "qa_database.json"
 KNOWLEDGE_BASE_FILE = CONTENT_DIR / "knowledge_base.txt"
 STYLE_GUIDE_FILE = CONTENT_DIR / "style_guide.txt"
 PRICE_LIST_FILE = CONTENT_DIR / "price_list.txt"
-SYSTEM_PROMPT_TEMPLATE_FILE = CONTENT_DIR / "system_prompt_template.txt"
 KNOWLEDGE_FILES_DIR = CONTENT_DIR / "knowledge_files"
 STYLE_FILES_DIR = CONTENT_DIR / "style_files"
 PRICE_FILES_DIR = CONTENT_DIR / "price_files"
@@ -164,8 +163,6 @@ def migrate_from_legacy():
     if _safe_migrate_file(_LEGACY_DATA / "style_guide.txt", STYLE_GUIDE_FILE):
         migrated_any = True
     if _safe_migrate_file(_LEGACY_DATA / "price_list.txt", PRICE_LIST_FILE):
-        migrated_any = True
-    if _safe_migrate_file(_LEGACY_DATA / "system_prompt_template.txt", SYSTEM_PROMPT_TEMPLATE_FILE):
         migrated_any = True
 
     # Content - multi-file sections

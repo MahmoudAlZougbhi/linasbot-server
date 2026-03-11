@@ -531,17 +531,25 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             await send_message_func(user_id, f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.")
             await save_conversation_message_to_firestore(user_id, "ai", f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.", current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
-        # Check local training Q&A before calling GPT.
-        # Decision flow: 90%+ returns Q&A directly; otherwise continue with normal AI flow.
+        # Check Q&A Database before calling GPT-4
+        # Decision flow: 90%+ returns Q&A directly, <90% passes to GPT with top 3 relevant Q&A pairs
         print(f"[_process_and_respond] 🔍 Checking Q&A DATABASE for: '{query_to_send_to_gpt}'")
 
         is_reschedule_intent = detect_reschedule_intent(query_to_send_to_gpt)
         is_price_intent = _is_price_intent(query_to_send_to_gpt)
-        # Training-first policy: always try local trained Q&A match before AI flow.
-        match_result = await local_qa_service.find_match_with_tier(
-            query_to_send_to_gpt,
-            current_preferred_lang,
-        )
+        if ai_primary_mode:
+            print(f"[_process_and_respond] 🧠 AI-primary mode ON. Skipping direct Q&A shortcut so AI remains decision owner.")
+            match_result = None
+        elif is_reschedule_intent:
+            # Routing safeguard: postpone/reschedule requests should never be short-circuited to Q&A.
+            print(f"[_process_and_respond] 🔁 Reschedule intent detected. Skipping direct Q&A routing.")
+            match_result = None
+        elif is_price_intent:
+            # Pricing must come from system/API sync path, never from static Q&A text.
+            print(f"[_process_and_respond] 💰 Price intent detected. Skipping direct Q&A routing for exact system pricing.")
+            match_result = None
+        else:
+            match_result = await local_qa_service.find_match_with_tier(query_to_send_to_gpt, current_preferred_lang)
 
         if match_result:
             # 90%+ match: Return Q&A directly
