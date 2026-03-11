@@ -210,9 +210,11 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     # For text: defer external lookup so user message can save+broadcast first (instant in Live Chat)
     message_type = parsed_message.get("type", "")
     defer_external = message_type == "text" and bool(normalized_phone)
+    external_exists = None
     if normalized_phone and not defer_external:
         try:
             external = await resolve_customer_from_external(normalized_phone)
+            external_exists = bool(external.get("exists"))
             print(f"DEBUG: external_lookup normalized_phone={normalized_phone} exists={external.get('exists')} name={external.get('name')}")
             if external.get("exists") and external.get("name"):
                 config.user_names[user_id] = external["name"]
@@ -237,6 +239,10 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
         async def _set_name_from_external():
             try:
                 ext = await resolve_customer_from_external(normalized_phone)
+                user_state = config.user_data_whatsapp.get(user_id)
+                if user_state is not None:
+                    user_state["crm_customer_exists"] = bool(ext.get("exists"))
+                    user_state["customer_file_status"] = "existing_file" if ext.get("exists") else "new_customer"
                 if ext.get("exists") and ext.get("name"):
                     config.user_names[user_id] = ext["name"]
                 else:
@@ -257,6 +263,8 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
             'initial_user_query_to_process': None,
             'awaiting_human_handover_confirmation': False,
             'current_conversation_id': None,
+            'crm_customer_exists': None,
+            'customer_file_status': None,
             **config.DEFAULT_CONVERSATION_STATE,
         }
         print(f"✅ Initialized user_data_whatsapp for user {user_id}")
@@ -267,6 +275,10 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
         print(f"✅ CRITICAL: Stored phone_number {phone_number} for user {user_id} BEFORE any processing")
     else:
         print(f"⚠️ WARNING: No phone_number extracted for user {user_id}")
+
+    if external_exists is not None:
+        config.user_data_whatsapp[user_id]["crm_customer_exists"] = external_exists
+        config.user_data_whatsapp[user_id]["customer_file_status"] = "existing_file" if external_exists else "new_customer"
 
     # Persist source message id as one-shot metadata for Firestore dedupe.
     source_message_id = parsed_message.get("message_id")
@@ -318,18 +330,20 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
 
     # (Name/gender from external CRM are already set above via resolve_customer_from_external)
 
-    # Initialize user state ONLY for NEW users
+    # New-user inbound messages should not auto-trigger /start welcome.
+    # Session greeting is now handled in handle_message based on conversation/inactivity policy.
     is_new_user = (
         user_id not in config.user_names or
         user_id not in config.user_greeting_stage or
         config.user_greeting_stage.get(user_id, 0) == 0
     )
-    
     if is_new_user:
-        print(f"🆕 NEW USER detected: {user_id}, calling start_command_whatsapp...")
-        await start_command_whatsapp(user_id, user_name)
+        print(f"🆕 NEW USER detected: {user_id}, using session greeting flow (no auto /start).")
+        config.user_greeting_stage[user_id] = max(config.user_greeting_stage.get(user_id, 0), 1)
+        if config.user_gender.get(user_id) not in ["male", "female"]:
+            config.user_gender[user_id] = "unknown"
     else:
-        print(f"👤 EXISTING USER: {user_id}, skipping start_command_whatsapp")
+        print(f"👤 EXISTING USER: {user_id}, normal flow.")
 
     # Handle different message types
     if message_type == "text":

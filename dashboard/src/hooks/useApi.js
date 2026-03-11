@@ -1346,6 +1346,30 @@ export const useApi = () => {
     }
   }, []);
 
+  const getDynamicMessages = useCallback(async () => {
+    try {
+      const response = await api.get("/api/content-files/dynamic-messages");
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", data: {} };
+      }
+      return { success: false, error: error.response?.data?.detail || error.message, data: {} };
+    }
+  }, []);
+
+  const updateDynamicMessages = useCallback(async (data) => {
+    try {
+      const response = await api.put("/api/content-files/dynamic-messages", { data });
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: error.response?.data?.detail || error.message };
+    }
+  }, []);
+
   return {
     loading,
     currentProvider,
@@ -1414,5 +1438,7 @@ export const useApi = () => {
     createContentFile,
     updateContentFile,
     deleteContentFile,
+    getDynamicMessages,
+    updateDynamicMessages,
   };
 };

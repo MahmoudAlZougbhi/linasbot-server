@@ -96,7 +96,7 @@ async def handle_photo_message(user_id: str, user_name: str, image_url: str, use
         # 📊 ANALYTICS: Log image message from user
         response_time_ms = (time.time() - start_time) * 1000
         
-        # Estimate tokens and cost for GPT-4 Vision
+        # Estimate tokens and cost for image model
         # Vision API typically uses more tokens for image analysis
         estimated_tokens = analysis_data.get('tokens_used', 500)  # Default estimate
         vision_cost = (estimated_tokens / 1000) * 0.01  # GPT-4 Vision input pricing
@@ -109,7 +109,7 @@ async def handle_photo_message(user_id: str, user_name: str, image_url: str, use
             sentiment="neutral",
             tokens=estimated_tokens,
             cost_usd=vision_cost,
-            model="gpt-4-vision",
+            model="gpt-5.1",
             response_time_ms=response_time_ms,
             message_length=0  # Images don't have text length
         )
@@ -126,7 +126,7 @@ async def handle_photo_message(user_id: str, user_name: str, image_url: str, use
             sentiment="neutral",
             tokens=int(bot_tokens),
             cost_usd=bot_cost,
-            model="gpt-4-vision",
+            model="gpt-5.1",
             response_time_ms=response_time_ms,
             message_length=len(bot_reply)
         )

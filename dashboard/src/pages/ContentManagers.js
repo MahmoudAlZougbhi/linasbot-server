@@ -5,14 +5,17 @@ import {
   CurrencyDollarIcon,
   SparklesIcon,
   DocumentTextIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import ContentFilesPanel from "../components/ContentFilesPanel";
 import SystemPromptKnowledgeStylePanel from "../components/SystemPromptKnowledgeStylePanel";
+import DynamicMessagesPanel from "../components/DynamicMessagesPanel";
 
 const SECTIONS = [
   { id: "knowledge", name: "Knowledge", icon: BookOpenIcon },
   { id: "price", name: "Prices", icon: CurrencyDollarIcon },
   { id: "style", name: "Style", icon: SparklesIcon },
+  { id: "dynamic_messages", name: "Dynamic Messages", icon: ChatBubbleLeftRightIcon },
   { id: "system_prompt", name: "System Prompt (KB + Style)", icon: DocumentTextIcon },
 ];
 
@@ -57,6 +60,8 @@ const ContentManagers = () => {
         >
           {section.id === "system_prompt" ? (
             <SystemPromptKnowledgeStylePanel />
+          ) : section.id === "dynamic_messages" ? (
+            <DynamicMessagesPanel />
           ) : (
             <ContentFilesPanel
               section={section.id}

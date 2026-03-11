@@ -6,6 +6,7 @@ from handlers.text_handlers_firestore import *
 from services.analytics_events import analytics
 from services.language_detection_service import language_detection_service
 from services.interaction_flow_logger import log_interaction
+from services.dynamic_messages_service import get_dynamic_message
 from services.conversation_router import (
     route as router_route,
     is_gender_answer,
@@ -257,12 +258,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
 
         if should_send_waiting:
-            waiting_messages = {
-                "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
-                "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
-                "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
-            }
-            waiting_msg = waiting_messages.get(current_preferred_lang, waiting_messages["ar"])
+            waiting_msg = get_dynamic_message("waiting_queue_message", current_preferred_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
             await send_message_func(user_id, waiting_msg)
             await save_conversation_message_to_firestore(
                 user_id,
@@ -342,18 +338,38 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 2. Greeting only (Phase 7)
     if router_action == "greeting":
-        greeting_msg = GREETING_TEMPLATES.get(current_preferred_lang, GREETING_TEMPLATES["ar"])
+        greeting_msg = get_dynamic_message("router_greeting", current_preferred_lang) or GREETING_TEMPLATES.get(current_preferred_lang, GREETING_TEMPLATES["ar"])
         await send_message_func(user_id, greeting_msg)
         await save_conversation_message_to_firestore(user_id, "ai", greeting_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_greeting"})
-        log_interaction(user_id, user_input_to_process, greeting_msg, "router_greeting", user_name=user_name, user_phone=user_data.get("phone_number"))
+        log_interaction(
+            user_id,
+            user_input_to_process,
+            greeting_msg,
+            "router_greeting",
+            user_name=user_name,
+            user_phone=user_data.get("phone_number"),
+            user_gender=current_gender,
+            customer_exists=user_data.get("crm_customer_exists"),
+            customer_file_status=user_data.get("customer_file_status"),
+        )
         return
 
     # 3. Fallback (Phase 11)
     if router_action == "fallback":
-        fallback_msg = FALLBACK_TEMPLATES.get(current_preferred_lang, FALLBACK_TEMPLATES["ar"])
+        fallback_msg = get_dynamic_message("router_fallback", current_preferred_lang) or FALLBACK_TEMPLATES.get(current_preferred_lang, FALLBACK_TEMPLATES["ar"])
         await send_message_func(user_id, fallback_msg)
         await save_conversation_message_to_firestore(user_id, "ai", fallback_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_fallback"})
-        log_interaction(user_id, user_input_to_process, fallback_msg, "router_fallback", user_name=user_name, user_phone=user_data.get("phone_number"))
+        log_interaction(
+            user_id,
+            user_input_to_process,
+            fallback_msg,
+            "router_fallback",
+            user_name=user_name,
+            user_phone=user_data.get("phone_number"),
+            user_gender=current_gender,
+            customer_exists=user_data.get("crm_customer_exists"),
+            customer_file_status=user_data.get("customer_file_status"),
+        )
         return
 
     # 4. Ask gender (Phase 8)
@@ -367,7 +383,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         gender_msg = random.choice(gender_questions)
         await send_message_func(user_id, gender_msg)
         await save_conversation_message_to_firestore(user_id, "ai", gender_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_ask_gender"})
-        log_interaction(user_id, user_input_to_process, gender_msg, "router_ask_gender", user_name=user_name, user_phone=user_data.get("phone_number"))
+        log_interaction(
+            user_id,
+            user_input_to_process,
+            gender_msg,
+            "router_ask_gender",
+            user_name=user_name,
+            user_phone=user_data.get("phone_number"),
+            user_gender=current_gender,
+            customer_exists=user_data.get("crm_customer_exists"),
+            customer_file_status=user_data.get("customer_file_status"),
+        )
         return
 
     # 5. Ask clarification (Phase 9) - use localized template
@@ -376,10 +402,20 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         user_data['awaiting_clarification'] = True
         user_data['last_bot_question_type'] = 'clarification'
         user_data['pending_clarification_query'] = user_input_to_process  # backward compat
-        clarification_msg = ASK_CLARIFICATION_TEMPLATES.get(current_preferred_lang, ASK_CLARIFICATION_TEMPLATES["ar"])
+        clarification_msg = get_dynamic_message("router_ask_clarification", current_preferred_lang) or ASK_CLARIFICATION_TEMPLATES.get(current_preferred_lang, ASK_CLARIFICATION_TEMPLATES["ar"])
         await send_message_func(user_id, clarification_msg)
         await save_conversation_message_to_firestore(user_id, "ai", clarification_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_ask_clarification"})
-        log_interaction(user_id, user_input_to_process, clarification_msg, "router_ask_clarification", user_name=user_name, user_phone=user_data.get("phone_number"))
+        log_interaction(
+            user_id,
+            user_input_to_process,
+            clarification_msg,
+            "router_ask_clarification",
+            user_name=user_name,
+            user_phone=user_data.get("phone_number"),
+            user_gender=current_gender,
+            customer_exists=user_data.get("crm_customer_exists"),
+            customer_file_status=user_data.get("customer_file_status"),
+        )
         return
 
     # 6. answer_question (resume_original_question or answer_new_question)
@@ -551,7 +587,19 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 {"step": 2, "title": "Q&A Match (≥90%)", "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
                 {"step": 3, "title": "Bot → User", "content": qa_response},
             ]
-            log_interaction(user_id, query_to_send_to_gpt, qa_response, "qa_database", user_name=user_name, user_phone=user_data.get("phone_number"), qa_match_score=match_score, flow_steps=flow_steps)
+            log_interaction(
+                user_id,
+                query_to_send_to_gpt,
+                qa_response,
+                "qa_database",
+                user_name=user_name,
+                user_phone=user_data.get("phone_number"),
+                user_gender=current_gender,
+                customer_exists=user_data.get("crm_customer_exists"),
+                customer_file_status=user_data.get("customer_file_status"),
+                qa_match_score=match_score,
+                flow_steps=flow_steps,
+            )
             return
         else:
             # <90% match: GPT + knowledge + style + top 3 relevant Q&A pairs
@@ -591,7 +639,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         await send_message_func(user_id, clarification)
                         await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"), metadata={"handled_by": "ai"})
                         save_for_training_conversation_log(query_to_send_to_gpt, clarification)
-                        log_interaction(user_id, query_to_send_to_gpt, clarification, "dynamic_retrieval", user_name=user_name, user_phone=user_data.get("phone_number"), flow_steps=flow_steps)
+                        log_interaction(
+                            user_id,
+                            query_to_send_to_gpt,
+                            clarification,
+                            "dynamic_retrieval",
+                            user_name=user_name,
+                            user_phone=user_data.get("phone_number"),
+                            user_gender=current_gender,
+                            customer_exists=user_data.get("crm_customer_exists"),
+                            customer_file_status=user_data.get("customer_file_status"),
+                            flow_steps=flow_steps,
+                        )
                         return
                     custom_context = merged
                     _dynamic_retrieval_flow_meta = dr_flow_meta
@@ -844,12 +903,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             trigger_source="ai_handover_confirmed"
         )
         # Use standardized handoff message (same as sentiment escalation) - triggers human request
-        handoff_messages = {
-            "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
-            "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
-            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
-        }
-        handoff_msg = handoff_messages.get(current_preferred_lang, handoff_messages["ar"])
+        handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
         sent_reply = handoff_msg
         await send_message_func(user_id, handoff_msg)
         await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
@@ -870,12 +924,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             trigger_source="ai_handover_direct"
         )
         # Use standardized handoff message (same as sentiment escalation) - triggers human request
-        handoff_messages = {
-            "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
-            "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
-            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
-        }
-        handoff_msg = handoff_messages.get(current_preferred_lang, handoff_messages["ar"])
+        handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
         sent_reply = handoff_msg
         await send_message_func(user_id, handoff_msg)
         await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
@@ -974,6 +1023,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         flow_source,
         user_name=user_name,
         user_phone=user_data.get("phone_number"),
+        user_gender=current_gender,
+        customer_exists=user_data.get("crm_customer_exists"),
+        customer_file_status=user_data.get("customer_file_status"),
         ai_query_summary=flow_meta.get("ai_query_summary"),
         ai_raw_response=flow_meta.get("ai_raw_response"),
         model=flow_meta.get("model"),

@@ -4,6 +4,77 @@
 
 from handlers.text_handlers_firestore import *
 from handlers.text_handlers_delayed import _delayed_process_messages
+from services.dynamic_messages_service import get_dynamic_message
+
+GREETING_INACTIVITY_SECONDS = 43200  # 12 hours
+
+
+def _extract_greeting_from_style_content(style_content: str) -> str:
+    """Extract a user-facing greeting sentence from a style file content."""
+    if not style_content:
+        return ""
+    lines = [ln.strip() for ln in str(style_content).splitlines() if ln.strip()]
+    # Prefer explicit example bot lines first.
+    for ln in lines:
+        lower = ln.lower()
+        if lower.startswith("bot:") or lower.startswith("assistant:"):
+            candidate = ln.split(":", 1)[1].strip()
+            if candidate:
+                return candidate
+    # Fallback: first non-heading/non-rule line.
+    for ln in lines:
+        if ln.startswith("#") or ln.startswith("-") or ln.lower().startswith("rule"):
+            continue
+        if len(ln) >= 8:
+            return ln
+    return ""
+
+
+def _get_session_greeting_message(user_lang: str = "ar") -> str:
+    """
+    Load greeting from Content Manager style files (title contains 'greeting').
+    Falls back to router greeting templates when no suitable content is found.
+    """
+    try:
+        from services import content_files_service as cfs
+        titles = cfs.get_titles_only("style") or []
+        greeting_candidates = []
+        for t in titles:
+            title = str(t.get("title", ""))
+            if "greeting" in title.lower() or "ترحيب" in title.lower():
+                greeting_candidates.append(t)
+
+        # Prefer file language match first.
+        def _lang_score(t):
+            lang = (t.get("language") or "").lower()
+            if lang == user_lang:
+                return 2
+            if lang in ("", "ar", "general"):
+                return 1
+            return 0
+
+        greeting_candidates.sort(key=_lang_score, reverse=True)
+        for t in greeting_candidates:
+            data = cfs.get_file("style", t.get("id", ""))
+            if not data:
+                continue
+            extracted = _extract_greeting_from_style_content(data.get("content", ""))
+            if extracted:
+                return extracted
+    except Exception as e:
+        print(f"[handle_message] ⚠️ Failed loading greeting from content manager: {e}")
+
+    # Try dynamic messages catalog first
+    dyn = get_dynamic_message("session_greeting_after_inactivity", user_lang)
+    if dyn:
+        return dyn
+
+    # Final fallback
+    try:
+        from services.conversation_router import GREETING_TEMPLATES
+        return GREETING_TEMPLATES.get(user_lang, GREETING_TEMPLATES["ar"])
+    except Exception:
+        return "مرحباً! 😊 كيف فيني ساعدك اليوم؟"
 
 
 async def handle_message(user_id: str, user_name: str, user_input_text: str, user_data: dict, send_message_func, send_action_func, skip_firestore_save: bool = False):
@@ -57,11 +128,20 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         print(f"[handle_message] ERROR: No usable text in message for user {user_id}. raw_msg is empty. Exiting.")
         return
 
+    # Session timing for greeting policy (new conversation or inactivity >= 1h)
+    now_ts = datetime.datetime.now()
+    previous_user_msg_ts = user_data.get("last_user_message_at")
+    inactivity_seconds = None
+    if isinstance(previous_user_msg_ts, datetime.datetime):
+        inactivity_seconds = (now_ts - previous_user_msg_ts).total_seconds()
+    user_data["last_user_message_at"] = now_ts
+
     # ✅ FIXED: Only save to Firestore if not called from voice_handlers
     # Voice handler already saved the message with type="voice" and audio_url
     if not skip_firestore_save:
         # Save user's message to Firestore immediately
         current_conversation_id = user_data.get('current_conversation_id')
+        was_new_conversation = not current_conversation_id
         phone_for_save = user_data.get('phone_number')
 
         # DEBUG: Log critical info before saving user message
@@ -98,6 +178,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         # Just ensure current_conversation_id is up-to-date
         if 'current_conversation_id' not in user_data or not user_data['current_conversation_id']:
             user_data['current_conversation_id'] = config.user_data_whatsapp[user_id].get('current_conversation_id')
+        was_new_conversation = not user_data.get('current_conversation_id')
 
     current_conversation_id = user_data.get('current_conversation_id')
     
@@ -337,12 +418,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                     else:
                         # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
                         print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply.")
-                        waiting_messages = {
-                                "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
-                            "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
-                            "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏"
-                        }
-                        waiting_msg = waiting_messages.get(user_lang, waiting_messages['ar'])
+                        waiting_msg = get_dynamic_message("waiting_queue_message", user_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
                         await send_message_func(user_id, waiting_msg)
                         await save_conversation_message_to_firestore(
                             user_id, "ai", waiting_msg, current_conversation_id,
@@ -353,6 +429,32 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                 print(f"WARNING: Conversation {user_data['current_conversation_id']} not found in Firestore during takeover check.")
         except Exception as e:
             print(f"❌ ERROR checking human takeover status from Firestore for user {user_id}: {e}")
+
+    # Greeting policy:
+    # - New conversation => send greeting first
+    # - Existing conversation but user inactive >= 1 hour => send greeting first
+    greeting_sent_for_conv = user_data.get("greeting_sent_for_conversation_id")
+    should_greet_now = False
+    if current_conversation_id and greeting_sent_for_conv != current_conversation_id:
+        if was_new_conversation:
+            should_greet_now = True
+        elif inactivity_seconds is not None and inactivity_seconds >= GREETING_INACTIVITY_SECONDS:
+            should_greet_now = True
+
+    if should_greet_now:
+        user_lang = user_data.get('user_preferred_lang', 'ar')
+        greeting_msg = _get_session_greeting_message(user_lang)
+        await send_message_func(user_id, greeting_msg)
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            greeting_msg,
+            current_conversation_id,
+            user_name,
+            user_data.get('phone_number'),
+            metadata={"handled_by": "ai", "source": "session_greeting"},
+        )
+        user_data["greeting_sent_for_conversation_id"] = current_conversation_id
 
     # Check if it's the very first message after start
     if config.user_greeting_stage[user_id] == 1 and not config.user_gender.get(user_id):

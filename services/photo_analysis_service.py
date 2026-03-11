@@ -150,7 +150,7 @@ async def get_bot_photo_analysis_from_gpt(user_id: int, base64_image: str, is_tr
     ]
 
     response = await client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.1",
         messages=messages,
         temperature=0.4,
         max_tokens=1000

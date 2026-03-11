@@ -21,6 +21,18 @@ const SOURCE_LABELS = {
   moderation: { label: "Moderation", color: "bg-rose-100 text-rose-700", icon: "🛡" },
 };
 
+const GENDER_META = {
+  male: { label: "Male", color: "bg-sky-100 text-sky-700" },
+  female: { label: "Female", color: "bg-pink-100 text-pink-700" },
+  unknown: { label: "Gender: Unknown", color: "bg-slate-100 text-slate-600" },
+};
+
+const FILE_STATUS_META = {
+  existing_file: { label: "Has File", color: "bg-emerald-100 text-emerald-700" },
+  new_customer: { label: "New Customer", color: "bg-amber-100 text-amber-700" },
+  unknown: { label: "File Status: Unknown", color: "bg-slate-100 text-slate-600" },
+};
+
 /** Step block for the flow breakdown - supports long content with scroll */
 const FlowStep = ({ step, title, content }) => {
   const str = typeof content === "string" ? content : String(content ?? "");
@@ -50,6 +62,12 @@ const FlowStep = ({ step, title, content }) => {
 const FlowCard = ({ entry, isExpanded, onToggle }) => {
   const meta = SOURCE_LABELS[entry.source] || { label: entry.source, color: "bg-slate-100 text-slate-700", icon: "?" };
   const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  const genderKey = (entry.user_gender || "unknown").toLowerCase();
+  const genderMeta = GENDER_META[genderKey] || GENDER_META.unknown;
+  const fileStatusKey = (entry.customer_file_status || "unknown").toLowerCase();
+  const fileStatusMeta = FILE_STATUS_META[fileStatusKey] || FILE_STATUS_META.unknown;
+  const displayName = entry.user_name || "Unknown";
+  const displayPhone = entry.user_phone || entry.user_phone_masked || entry.user_id || entry.user_id_masked || "...";
 
   const isGptFlow = entry.source === "gpt";
   const hasAiDetails = isGptFlow && (entry.ai_query_summary || entry.ai_raw_response || entry.tool_calls?.length);
@@ -70,8 +88,10 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
             <div className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${meta.color}`}>
               {meta.icon} {meta.label}
             </div>
-            <span className="text-xs font-medium text-slate-700">{entry.user_name || "—"}</span>
-            <span className="text-xs text-slate-500">{entry.user_phone_masked ?? entry.user_id_masked ?? "..."}</span>
+            <span className="text-xs font-semibold text-slate-700">{displayName}</span>
+            <span className="text-xs text-slate-500">{displayPhone}</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${genderMeta.color}`}>{genderMeta.label}</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${fileStatusMeta.color}`}>{fileStatusMeta.label}</span>
             <span className="text-xs text-slate-400">{time}</span>
           </div>
           <div className="shrink-0 text-slate-400">
@@ -107,6 +127,19 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
           className="border-t border-slate-100 bg-slate-50/50"
         >
           <div className="p-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">User Info</p>
+                <p className="text-slate-700"><strong>Name:</strong> {displayName}</p>
+                <p className="text-slate-700"><strong>Phone:</strong> {displayPhone}</p>
+              </div>
+              <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Customer Status</p>
+                <p className="text-slate-700"><strong>Gender:</strong> {genderMeta.label.replace("Gender: ", "")}</p>
+                <p className="text-slate-700"><strong>File:</strong> {fileStatusMeta.label.replace("File Status: ", "")}</p>
+              </div>
+            </div>
+
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-2">
               <ListBulletIcon className="w-4 h-4" /> {entry.flow_steps?.length ? "Step-by-step flow" : "Detailed interaction flow (English)"}
             </p>

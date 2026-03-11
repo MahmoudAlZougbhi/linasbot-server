@@ -8,6 +8,10 @@ from fastapi import HTTPException, Body
 from modules.core import app
 from services import content_files_service as cfs
 from services.smart_retrieval_service import invalidate_titles_cache
+from services.dynamic_messages_service import (
+    get_dynamic_messages_catalog,
+    update_dynamic_messages_catalog,
+)
 
 
 VALID_SECTIONS = {"knowledge", "style", "price"}
@@ -132,3 +136,23 @@ async def migrate_legacy():
         except Exception as e:
             results[section] = {"migrated": False, "error": str(e)}
     return {"success": True, "results": results}
+
+
+@app.get("/api/content-files/dynamic-messages")
+async def get_dynamic_messages():
+    """Get editable dynamic bot messages and usage conditions."""
+    try:
+        data = get_dynamic_messages_catalog()
+        return {"success": True, "data": data}
+    except Exception as e:
+        return {"success": False, "error": str(e), "data": {}}
+
+
+@app.put("/api/content-files/dynamic-messages")
+async def put_dynamic_messages(request: dict = Body(default={})):
+    """Update dynamic bot messages catalog."""
+    try:
+        data = update_dynamic_messages_catalog(request.get("data", request))
+        return {"success": True, "message": "Dynamic messages updated", "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
