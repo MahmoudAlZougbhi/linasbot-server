@@ -1921,7 +1921,25 @@ def get_system_instruction(
         (QA_REFERENCE_BLOCK_TOKEN, qa_reference_block),
     )
 
+    # Robust behavior for custom templates:
+    # if a required token is missing from SYSTEM_PROMPT_TEMPLATE, append that section
+    # so dynamic selector content/guardrails are never silently dropped.
+    missing_tokens = []
+    missing_sections = []
     for token, value in token_values:
-        rendered_prompt = rendered_prompt.replace(token, value or "")
+        section_text = value or ""
+        if token in rendered_prompt:
+            rendered_prompt = rendered_prompt.replace(token, section_text)
+        elif section_text.strip():
+            missing_tokens.append(token)
+            missing_sections.append(section_text.strip())
+
+    if missing_sections:
+        print(
+            "⚠️ SYSTEM_PROMPT_TEMPLATE missing placeholders: "
+            + ", ".join(missing_tokens)
+            + ". Appending sections to preserve runtime context."
+        )
+        rendered_prompt = rendered_prompt.rstrip() + "\n\n" + "\n\n".join(missing_sections)
 
     return rendered_prompt
