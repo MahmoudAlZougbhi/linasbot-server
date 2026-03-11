@@ -4,7 +4,6 @@ from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     PRICE_LIST_FILE,
     STYLE_GUIDE_FILE,
-    TRAINED_QA_REFERENCE_FILE,
     ensure_dirs,
 )
 from collections import defaultdict, deque
@@ -218,7 +217,6 @@ SUMMARIZE_QA_KEYWORDS = [
 PRICE_LIST = ""
 BOT_STYLE_GUIDE = ""
 CORE_KNOWLEDGE_BASE = ""
-PROMPT_TRAINED_QA_REFERENCE = ""
 CUSTOM_TRAINING_DATA = [] # List of custom Q&A entries
 CUSTOM_TRAINING_DATA_MAP = {} # Map for quick lookup of custom Q&A by (question, language)
 
@@ -226,7 +224,7 @@ def load_bot_assets():
     """
     Loads static bot assets (price list, style guide, knowledge base) from persistent storage.
     """
-    global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE, PROMPT_TRAINED_QA_REFERENCE
+    global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE
 
     ensure_dirs()
     try:
@@ -261,17 +259,6 @@ def load_bot_assets():
     except Exception as e:
         CORE_KNOWLEDGE_BASE = "خطأ في تحميل قاعدة المعرفة الأساسية."
         print(f"❌ خطأ في تحميل قاعدة المعرفة: {e}")
-
-    try:
-        with open(TRAINED_QA_REFERENCE_FILE, 'r', encoding='utf-8') as f:
-            PROMPT_TRAINED_QA_REFERENCE = f.read().strip()
-        print("✅ تم تحميل ملف المرجع الثابت للأسئلة والأجوبة من " + str(TRAINED_QA_REFERENCE_FILE))
-    except FileNotFoundError:
-        PROMPT_TRAINED_QA_REFERENCE = ""
-        print("ℹ️ ملف trained_qa_reference غير موجود بعد (اختياري).")
-    except Exception as e:
-        PROMPT_TRAINED_QA_REFERENCE = ""
-        print(f"❌ خطأ في تحميل trained_qa_reference: {e}")
 
 def load_training_data():
     """

@@ -8,19 +8,16 @@ const SystemPromptKnowledgeStylePanel = () => {
 
   const [knowledgeContent, setKnowledgeContent] = useState("");
   const [styleContent, setStyleContent] = useState("");
-  const [trainedQaContent, setTrainedQaContent] = useState("");
   const [originalKnowledge, setOriginalKnowledge] = useState("");
   const [originalStyle, setOriginalStyle] = useState("");
-  const [originalTrainedQa, setOriginalTrainedQa] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
   const loadFiles = useCallback(async () => {
     try {
       setRefreshing(true);
-      const [knowledgeRes, styleRes, trainedQaRes] = await Promise.all([
+      const [knowledgeRes, styleRes] = await Promise.all([
         getTrainingFile("knowledge_base"),
         getTrainingFile("style_guide"),
-        getTrainingFile("trained_qa_reference"),
       ]);
 
       if (knowledgeRes?.success) {
@@ -37,14 +34,6 @@ const SystemPromptKnowledgeStylePanel = () => {
         setOriginalStyle(text);
       } else {
         toast.error(styleRes?.error || "Failed to load style guide");
-      }
-
-      if (trainedQaRes?.success) {
-        const text = trainedQaRes.content || "";
-        setTrainedQaContent(text);
-        setOriginalTrainedQa(text);
-      } else {
-        toast.error(trainedQaRes?.error || "Failed to load trained Q&A reference");
       }
     } catch (error) {
       toast.error("Failed to load system prompt sources");
@@ -65,10 +54,6 @@ const SystemPromptKnowledgeStylePanel = () => {
     () => styleContent !== originalStyle,
     [styleContent, originalStyle]
   );
-  const hasTrainedQaChanges = useMemo(
-    () => trainedQaContent !== originalTrainedQa,
-    [trainedQaContent, originalTrainedQa]
-  );
 
   const handleSaveKnowledge = async () => {
     const res = await updateTrainingFile("knowledge_base", knowledgeContent);
@@ -84,13 +69,6 @@ const SystemPromptKnowledgeStylePanel = () => {
     }
   };
 
-  const handleSaveTrainedQa = async () => {
-    const res = await updateTrainingFile("trained_qa_reference", trainedQaContent);
-    if (res?.success) {
-      setOriginalTrainedQa(trainedQaContent);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="card">
@@ -101,8 +79,7 @@ const SystemPromptKnowledgeStylePanel = () => {
             </h3>
             <p className="text-sm text-slate-600 mt-1">
               Edit the exact files used in system prompt composition:{" "}
-              <code>knowledge_base.txt</code>, <code>style_guide.txt</code>, and{" "}
-              <code>trained_qa_reference.txt</code>.
+              <code>knowledge_base.txt</code> and <code>style_guide.txt</code>.
             </p>
           </div>
           <button
@@ -153,26 +130,6 @@ const SystemPromptKnowledgeStylePanel = () => {
           onChange={(e) => setStyleContent(e.target.value)}
           className="w-full h-80 p-4 border border-slate-200 rounded-lg font-mono text-sm resize-none"
           placeholder="style_guide.txt content..."
-        />
-      </div>
-
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-slate-800">Trained Q&A Reference (system prompt)</h4>
-          <button
-            onClick={handleSaveTrainedQa}
-            disabled={loading || !hasTrainedQaChanges}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <CheckCircleIcon className="w-4 h-4" />
-            Save Trained Q&A
-          </button>
-        </div>
-        <textarea
-          value={trainedQaContent}
-          onChange={(e) => setTrainedQaContent(e.target.value)}
-          className="w-full h-80 p-4 border border-slate-200 rounded-lg font-mono text-sm resize-none"
-          placeholder="trained_qa_reference.txt content..."
         />
       </div>
     </div>
