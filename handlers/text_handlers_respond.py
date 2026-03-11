@@ -757,31 +757,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # Process the action requested by GPT
     if action in ["initial_greet_and_ask_gender", "ask_gender"]:
-        if current_gender in ["male", "female"]:
-            # FIX: Gender is already known, but GPT tried to ask for it
-            # Override the action and provide a helpful response instead
-            print(f"⚠️ OVERRIDE: GPT action was '{action}' but gender is already '{current_gender}'. Changing response.")
-            override_reply_messages = {
-                "ar": "كيف فيني ساعدك اليوم؟",
-                "en": "How can I help you today?",
-                "fr": "Comment puis-je vous aider aujourd'hui?",
-                "franco": "كيف فيني ساعدك اليوم؟"
-            }
-            override_reply = override_reply_messages.get(current_preferred_lang, override_reply_messages["ar"])
-            sent_reply = override_reply
-            await send_message_func(user_id, override_reply)
-            await save_conversation_message_to_firestore(user_id, "ai", override_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        else:
-            config.gender_attempts[user_id] += 1
-            if config.gender_attempts[user_id] >= config.MAX_GENDER_ASK_ATTEMPTS:
-                fallback_reply = "عذراً، لم أتمكن من تحديد جنسك بشكل دقيق. لتقديم أفضل مساعدة، قد تحتاج للتواصل مع فريقنا مباشرة. أو يمكنك المحاولة مجدداً بعبارة واضحة كـ 'أنا شب' أو 'أنا صبية'."
-                sent_reply = fallback_reply
-                await send_message_func(user_id, fallback_reply)
-                await save_conversation_message_to_firestore(user_id, "ai", fallback_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-                config.user_greeting_stage[user_id] = 2
-            else:
-                await send_message_func(user_id, bot_reply_text)
-                await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        # Respect AI decision exactly: send bot_reply as-is.
+        await send_message_func(user_id, bot_reply_text)
+        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     elif action == "confirm_gender":
         # FIXED: Don't send GPT's reply to avoid double messages
