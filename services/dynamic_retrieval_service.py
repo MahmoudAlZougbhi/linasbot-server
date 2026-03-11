@@ -33,6 +33,8 @@ When to use ask_clarification vs fallback_to_general:
 - Use "ask_clarification" ONLY when the message is TRULY vague (e.g. "I want laser", "prices?", "how many sessions?") – no service type at all.
 - Use "fallback_to_general" when the message is partially clear, likely inferable, or mentions any specific service (hair removal, tattoo, acne, whitening, skin tightening). Let GPT handle nuance.
 - Prefer "fallback_to_general" over "ask_clarification" when in doubt – only ask clarification when genuinely vague.
+- Greeting and social check-in messages are NOT clarification cases.
+- For greetings like "hi", "hello", "مرحبا", "kifak", "kifak taemam", "how are you", return "fallback_to_general" (not "ask_clarification").
 
 Output format:
 
@@ -231,6 +233,27 @@ def _ensure_style_included(merged: str, has_style: bool) -> str:
     return (merged + "\n\n--- Style ---\nBe professional, friendly, and helpful. Do not invent information.") if merged else "Be professional, friendly, and helpful. Do not invent information."
 
 
+_GREETING_ONLY_RE = re.compile(
+    r"^(?:\s*)(?:"
+    r"hi|hello|hey|hey there|"
+    r"how are you(?: doing)?|"
+    r"bonjour|salut|bonsoir|"
+    r"مرحبا|مرحب[اًا]|اهلا|أهلا|هلا|سلام|"
+    r"kifak|kifik|kifkon|kifak taemam|kifak tamam|taemam|tamam|marhaba|ahla"
+    r")(?:[!?.,\s]*)$",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def _is_greeting_only_message(user_message: str) -> bool:
+    """Heuristic guard: greetings/social check-ins should not trigger ask_clarification."""
+    text = (user_message or "").strip().lower()
+    if not text:
+        return False
+    # Keep this conservative: only pure greeting/check-in patterns.
+    return bool(_GREETING_ONLY_RE.match(text))
+
+
 async def retrieve_and_merge(
     user_message: str,
     include_price_hint: bool = False,
@@ -261,6 +284,23 @@ async def retrieve_and_merge(
     result = await select_files_llm(user_message)
     action = result.get("action", "normal")
     files = result.get("files", [])
+
+    # Guardrail: greeting-only messages must never map to ask_clarification.
+    if action == "ask_clarification" and _is_greeting_only_message(user_message):
+        print(
+            "ℹ️ Dynamic retrieval override: greeting-only message was misclassified as ask_clarification; forcing fallback_to_general."
+        )
+        action = "fallback_to_general"
+        # Keep Activity Flow aligned with the executed action.
+        result["raw_response"] = json.dumps(
+            {
+                "files": files,
+                "action": action,
+                "override_reason": "greeting_only_guard",
+            },
+            ensure_ascii=False,
+        )
+
     flow_meta["action"] = action
     flow_meta["selected_files"] = files
     flow_meta["selector_ai_raw_response"] = result.get("raw_response")
