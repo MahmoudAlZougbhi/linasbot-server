@@ -1829,18 +1829,16 @@ HARD_RULES_FOR_AI = """
 def get_system_instruction(
     user_id,
     response_lang,
-    qa_reference: str = "",
     include_price_list: bool = True,
     custom_knowledge_context: str = None,
     operational_context: str = None,
 ):
     """
-    Generate system instruction for GPT with optional Q&A reference injection.
+    Generate system instruction for GPT.
 
     Args:
         user_id: User identifier
         response_lang: Response language code (ar, en, fr, franco)
-        qa_reference: Optional formatted Q&A pairs to inject into system prompt
         include_price_list: Whether to include the price_list.txt content in prompt context
         custom_knowledge_context: When provided (dynamic retrieval), ADDITIVE to KB/Style - never replaces
         operational_context: Structured block with state, original_question, task (Plan §10)
@@ -1919,22 +1917,6 @@ def get_system_instruction(
         {operational_block}
 
         {gender_instruction}
-
-        {f'''
-        **🔴 TRAINED Q&A REFERENCE (CRITICAL - MUST FOLLOW) 🔴**
-
-        The following are TRAINED question-answer pairs from our database.
-        If ANY of these trained Q&A pairs match the user's question (even partially),
-        you MUST use the trained answer. DO NOT generate a different answer.
-
-        {qa_reference}
-
-        **STRICT RULES:**
-        1. If the user's question is similar to a trained question above, copy the trained answer EXACTLY
-        2. Do not paraphrase, modify, or "improve" trained answers
-        3. Trained Q&A pairs take PRIORITY over your general knowledge
-        4. If a trained answer exists, USE IT - don't generate your own response
-        ''' if qa_reference else ''}
 
         **🔴 APPOINTMENT STATE MACHINE RULES (MANDATORY):**
         1. If the user asks to change/reschedule/postpone an appointment, treat this as a CHANGE request, not a NEW booking.

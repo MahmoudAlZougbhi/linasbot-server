@@ -23,9 +23,6 @@ from utils.datetime_utils import (
     text_mentions_datetime,
 )
 
-# Import local Q&A service for context injection
-from services.local_qa_service import local_qa_service
-
 # Import dynamic model selector for cost optimization
 from services.dynamic_model_selector import select_optimal_model
 
@@ -58,32 +55,6 @@ PRICE_KEYWORDS = [
 ]
 
 DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS = {1, 12, 13}
-
-
-def format_qa_for_context(qa_pairs: list) -> str:
-    """
-    Format Q&A pairs for injection into GPT system prompt.
-
-    Args:
-        qa_pairs: List of dicts with question, answer, similarity
-
-    Returns:
-        Formatted string for system prompt
-    """
-    if not qa_pairs:
-        return ""
-
-    formatted_lines = []
-    for i, qa in enumerate(qa_pairs, 1):
-        similarity_pct = qa.get("similarity", 0) * 100
-        formatted_lines.append(
-            f"---\n"
-            f"**Trained Q{i}** (Match: {similarity_pct:.0f}%)\n"
-            f"Question: {qa.get('question', '')}\n"
-            f"Answer: {qa.get('answer', '')}\n"
-        )
-
-    return "\n".join(formatted_lines)
 
 def validate_language_match(user_language: str, bot_response: str, detected_response_lang: str) -> tuple:
     """
@@ -518,29 +489,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if is_reschedule_intent:
         print("🔁 Intent routing lock: reschedule/postpone intent detected.")
 
-    # NOTE: conversation_log.jsonl is NO LONGER USED
-    # Q&A matching is now handled by qa_database_service.py (API-based)
-    # This happens in text_handlers.py BEFORE calling this function
-    # If we reach here, it means no Q&A match was found, so proceed with GPT-4
-
-    # NEW: Get relevant Q&A pairs to inject into GPT context
-    # This ensures GPT knows about trained answers even for partial matches.
-    # For reschedule intents, skip Q&A injection to avoid drifting into unrelated informational replies.
-    relevant_qa = []
-    if not is_reschedule_intent:
-        relevant_qa = await local_qa_service.get_relevant_qa_pairs(
-            question=user_input,
-            language=current_preferred_lang,
-            limit=3
-        )
-    else:
-        print("🔁 Skipping Q&A context injection for reschedule/postpone intent.")
-    qa_reference_text = format_qa_for_context(relevant_qa)
-
-    if relevant_qa:
-        print(f"📚 Injecting {len(relevant_qa)} Q&A pairs into GPT context")
-        for qa in relevant_qa:
-            print(f"   - Q: '{qa['question'][:50]}...' (Match: {qa['similarity']:.0%})")
+    # NOTE: direct training Q&A matching is handled in text_handlers_respond.py
+    # before this function is called. If we reach here, no direct match was found,
+    # so GPT should continue using Content Manager context (KB/Style/Price + selector).
 
     # Detect if this is a price-related question and load sync rules.
     is_price_question = is_price_related_question(user_input)
@@ -551,7 +502,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     system_instruction_core = get_system_instruction(
         user_id,
         current_preferred_lang,
-        qa_reference_text,
         include_price_list=is_price_question,
         custom_knowledge_context=custom_knowledge_context,
         operational_context=operational_context,
