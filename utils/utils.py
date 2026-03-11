@@ -11,6 +11,7 @@ from difflib import SequenceMatcher
 
 import config
 from prompt_templates import (
+    DEFAULT_SYSTEM_PROMPT_TEMPLATE,
     GENDER_INSTRUCTION_TOKEN,
     KNOWLEDGE_SECTION_TOKEN,
     OPERATIONAL_BLOCK_TOKEN,
@@ -1906,6 +1907,11 @@ def get_system_instruction(
     prompt_template = getattr(config, "SYSTEM_PROMPT_TEMPLATE", "")
     if not isinstance(prompt_template, str):
         prompt_template = ""
+
+    # Safety fallback: avoid silently sending an empty system prompt when template file is blank/missing.
+    # This keeps knowledge/style/operational sections active and prevents fragile runtime behavior.
+    if not prompt_template.strip():
+        prompt_template = DEFAULT_SYSTEM_PROMPT_TEMPLATE
 
     rendered_prompt = prompt_template
     token_values = (

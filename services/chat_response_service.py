@@ -597,8 +597,23 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "- Use appointment flow only: `check_next_appointment` then `update_appointment_date` when date/time is provided.\n"
         )
 
+    # Enforce explicit json contract whenever response_format={"type":"json_object"} is used.
+    # Some OpenAI endpoints reject requests if the messages omit the word "json".
+    json_output_contract = (
+        "\n\nOUTPUT FORMAT (MANDATORY):\n"
+        "- Reply with a valid json object only.\n"
+        "- Include at least these keys: \"action\" and \"bot_reply\".\n"
+        "- Do not return markdown, code fences, or extra text outside json.\n"
+    )
+
     # Combine system instruction with dynamic context
-    system_instruction_final = system_instruction_core + "\n\n" + dynamic_customer_context + routing_guardrail
+    system_instruction_final = (
+        system_instruction_core
+        + "\n\n"
+        + dynamic_customer_context
+        + routing_guardrail
+        + json_output_contract
+    )
 
     messages = [{"role": "system", "content": system_instruction_final}]
     messages.extend(current_context_messages[-config.MAX_CONTEXT_MESSAGES:])
