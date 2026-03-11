@@ -569,6 +569,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     merged, clarification, action, dr_flow_meta = await retrieve_and_merge(
                         query_to_send_to_gpt,
                         include_price_hint=is_price_intent,
+                        response_lang=current_preferred_lang,
                     )
                     if action == "ask_clarification" and clarification:
                         user_data['pending_clarification_query'] = query_to_send_to_gpt

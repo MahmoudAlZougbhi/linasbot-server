@@ -134,7 +134,7 @@ async def select_files_llm(user_message: str) -> Dict:
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5.1",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )
@@ -234,6 +234,7 @@ def _ensure_style_included(merged: str, has_style: bool) -> str:
 async def retrieve_and_merge(
     user_message: str,
     include_price_hint: bool = False,
+    response_lang: str = "ar",
 ) -> Tuple[str, Optional[str], str, Dict]:
     """
     Main entry: Select files via LLM, load content, merge.
@@ -272,10 +273,13 @@ async def retrieve_and_merge(
     )
 
     if action == "ask_clarification":
-        clarification = (
-            "Could you provide more details so I can give you an accurate answer? "
-            "For example: which service are you asking about? (hair removal, tattoo removal, whitening, etc.)"
-        )
+        clarification_by_lang = {
+            "ar": "أكيد، ممكن توضّحلي أكتر شو الخدمة اللي بدك تستفسر عنها؟ مثلاً: ليزر شعر، إزالة وشم، تبييض، إلخ.",
+            "en": "Sure, could you share a bit more detail so I can give you an accurate answer? For example: which service are you asking about (hair removal, tattoo removal, whitening, etc.)?",
+            "fr": "Bien sûr, pourriez-vous préciser un peu plus pour que je vous réponde avec précision ? Par exemple : quel service vous intéresse (épilation, détatouage, blanchiment, etc.) ?",
+            "franco": "أكيد، ممكن توضحلي أكتر شو الخدمة اللي بدك تستفسر عنها؟ مثلاً: ليزر شعر، إزالة وشم، تبييض، إلخ.",
+        }
+        clarification = clarification_by_lang.get((response_lang or "ar").lower(), clarification_by_lang["ar"])
         return "", clarification, "ask_clarification", flow_meta
 
     if action == "fallback_to_general":

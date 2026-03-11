@@ -608,13 +608,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     
     gpt_raw_content = "" # Initialize gpt_raw_content here to make it accessible in except blocks
 
-    # Dynamic model selection based on question complexity
-    selected_model, model_metadata = select_optimal_model(
-        question=user_input,
-        context=current_context_messages,
-        user_tier="standard"
-    )
-    print(f"🤖 Model selected: {selected_model} | Complexity: {model_metadata['complexity']} | Reason: {model_metadata['reason']}")
+    # Main GPT model is fixed per latest routing policy.
+    selected_model = "gpt-5.1"
+    model_metadata = {
+        "complexity": "FIXED",
+        "reason": "Main flow forced to gpt-5.1",
+    }
+    print(f"🤖 Model selected: {selected_model} | Reason: {model_metadata['reason']}")
 
     try:
         response = await client.chat.completions.create(
