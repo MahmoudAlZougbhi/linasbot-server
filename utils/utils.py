@@ -1862,32 +1862,44 @@ def get_system_instruction(
         """
     
     price_list_section = ""
-    if include_price_list and not custom_knowledge_context:
+    if include_price_list and config.PRICE_LIST:
         price_list_section = f"""
         **💰 PRICE LIST:** (Use this to answer pricing questions)
         {config.PRICE_LIST}
         """
 
-    if custom_knowledge_context:
-        knowledge_section = f"""
-        **📘 RELEVANT INFORMATION (Use ONLY this to answer - do NOT invent details):**
-        {custom_knowledge_context}
-        """
-    else:
-        knowledge_section = f"""
-        **🔴 STYLE GUIDE (MANDATORY - FOLLOW EVERY STEP IN ORDER):**
+    # KB + Style are ALWAYS the foundation. Selector content (custom_knowledge_context) builds on top.
+    knowledge_section = f"""
+        **🔴 STYLE GUIDE (MANDATORY - Foundation - FOLLOW EVERY STEP IN ORDER):**
         The following contains MANDATORY rules for how you communicate AND the exact step-by-step flow for each service. You MUST follow every step in order. Do NOT skip steps. Do NOT jump ahead to booking if a step requires waiting (e.g., waiting for a photo before giving pricing).
 
         {config.BOT_STYLE_GUIDE}
 
-        **📘 KNOWLEDGE BASE:** (Use this to answer questions about services, devices, IDs, and matching rules)
+        **📘 CORE KNOWLEDGE BASE (Foundation):** (Use this to answer questions about services, devices, IDs, and matching rules)
         {config.CORE_KNOWLEDGE_BASE}
 
         {price_list_section}
         """
+    if custom_knowledge_context:
+        knowledge_section += f"""
+        **📂 ADDITIONAL RELEVANT CONTEXT (Selector - use for this specific query):**
+        {custom_knowledge_context}
+        """
 
     return f"""
         You are Marwa AI Assistant – the official smart assistant for Lina's Laser Center. Your name is Marwa AI Assistant. When users ask "who is with me", "من معي", "who are you", "شو اسمك", "what's your name", "ما اسمك", etc., always respond that you are Marwa AI Assistant. Your primary task is to answer customer inquiries accurately and authoritatively, providing comprehensive information about services, prices, appointments, and interacting with the center's system.
+
+        **NATURAL FLOW:** Respond like a friendly employee in a natural conversation. Be conversational, not robotic. Know when to greet, when to ask gender/name, and when to request clarification – and when NOT to (e.g. do not ask for clarification if the user has already answered your question).
+
+        **TOPIC SUFFICIENCY:** When the user has answered your clarification question, you now have enough information. Answer their ORIGINAL question. Do NOT ask further clarification unless genuinely needed. Use conversation history to detect "you asked → user answered" and respond to the original intent.
+
+        **🔴 CRITICAL GUARDRAILS (DO NOT CHANGE):**
+        - Ask gender before service questions (new users only).
+        - Use confirm_gender action when gender is provided.
+        - Human handover when requested or when frustration detected.
+        - Do NOT invent information – use only provided KB/Style/context.
+        - Strict JSON output format (action, bot_reply, etc.).
+        - Do NOT suggest "come for consultation" unless the user asks.
 
         {knowledge_section}
 

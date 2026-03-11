@@ -311,6 +311,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     else:
         query_to_send_to_gpt = user_input_to_process
 
+        # Restore and combine original question when user replies to clarification
+        pending_clarification = user_data.get('pending_clarification_query')
+        if pending_clarification:
+            query_to_send_to_gpt = f"{pending_clarification}\n[User clarified: {user_input_to_process}]"
+            user_data['pending_clarification_query'] = None
+            print(f"[_process_and_respond] ✅ Restored original query + clarification: '{query_to_send_to_gpt[:80]}...'")
+
         # DEBUG: Gender confirmation and original query retrieval
         print(f"[_process_and_respond] 🔍 Gender Check:")
         print(f"  - current_gender: {current_gender}")
@@ -414,6 +421,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         include_price_hint=is_price_intent,
                     )
                     if action == "ask_clarification" and clarification:
+                        user_data['pending_clarification_query'] = query_to_send_to_gpt
                         bot_sent = dr_flow_meta.get("bot_sent_to_selector", "")
                         ai_returned = dr_flow_meta.get("selector_ai_raw_response", '{"action": "ask_clarification"}')
                         sel_titles = dr_flow_meta.get("selected_titles") or []

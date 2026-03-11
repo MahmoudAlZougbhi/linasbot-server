@@ -27,9 +27,12 @@ Rules:
 - Include gender-specific files if user mentions men/women.
 - Always include one relevant style file.
 - Maximum 5 files total.
-- If unclear, request clarification.
-- If nothing matches, fallback to general file.
 - Return JSON only. No explanation.
+
+When to use ask_clarification vs fallback_to_general:
+- Use "ask_clarification" ONLY when the message is TRULY vague (e.g. "I want laser", "prices?", "how many sessions?") – no service type at all.
+- Use "fallback_to_general" when the message is partially clear, likely inferable, or mentions any specific service (hair removal, tattoo, acne, whitening, skin tightening). Let GPT handle nuance.
+- Prefer "fallback_to_general" over "ask_clarification" when in doubt – only ask clarification when genuinely vague.
 
 Output format:
 
@@ -80,12 +83,13 @@ USER MESSAGE:
 {{USER_MESSAGE}}
 
 RESPONSE RULES:
-- Natural and human tone
-- Follow provided style guidelines
-- Be clear if prices are included
-- Personalize if gender-specific
-- Keep concise but informative
-- Do not repeat unnecessary text"""
+- Respond like a friendly employee in a natural conversation – conversational, not robotic.
+- Follow provided style guidelines.
+- Be clear if prices are included.
+- Personalize if gender-specific.
+- Keep concise but informative.
+- Do not repeat unnecessary text.
+- When the user has answered your clarification question, you have enough info – answer their original question."""
 
 
 def _format_titles_for_prompt(titles: List[dict]) -> str:
