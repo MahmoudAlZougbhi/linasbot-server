@@ -605,6 +605,36 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     # Let GPT detect language naturally - no forced language reminder
     messages.append({"role": "user", "content": user_input})
+
+    # Prepare flow metadata context early so Activity Flow remains informative
+    # even when GPT fails before normal metadata assembly.
+    flow_context_count = len(current_context_messages) if current_context_messages else 0
+    flow_sys_len = len(system_instruction_final) if system_instruction_final else 0
+    flow_ai_query_summary = (
+        f"Bot sent to AI (GPT):\n"
+        f"- System prompt: {flow_sys_len} chars (knowledge + style + customer context)\n"
+        f"- Context messages: {flow_context_count}\n"
+        f"- User query: {user_input[:400]}{'...' if len(user_input) > 400 else ''}"
+    )
+    if custom_knowledge_context:
+        flow_ai_query_summary += (
+            f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, full content:\n"
+            f"{custom_knowledge_context}"
+        )
+    flow_context_dump = []
+    for msg in current_context_messages[-config.MAX_CONTEXT_MESSAGES:]:
+        role = msg.get("role", "unknown")
+        content = str(msg.get("content", ""))
+        flow_context_dump.append(f"[{role}] {content}")
+    flow_bot_sent_to_ai_full = (
+        "Bot sent to AI (GPT) - FULL INPUT\n\n"
+        "=== SYSTEM PROMPT ===\n"
+        f"{system_instruction_final}\n\n"
+        "=== CONTEXT MESSAGES ===\n"
+        + ("\n".join(flow_context_dump) if flow_context_dump else "(none)")
+        + "\n\n=== USER MESSAGE ===\n"
+        + str(user_input)
+    )
     
     gpt_raw_content = "" # Initialize gpt_raw_content here to make it accessible in except blocks
 
@@ -648,6 +678,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     first_parsed.setdefault("detected_language", current_preferred_lang)
                     first_parsed["current_gender_from_config"] = current_gender
                     first_parsed.setdefault("detected_gender", None)
+                    first_parsed["_flow_meta"] = {
+                        "model": selected_model,
+                        "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
+                        "ai_query_summary": flow_ai_query_summary,
+                        "bot_sent_to_ai": flow_bot_sent_to_ai_full,
+                    }
                     print(f"PRIORITY: First response is ask_gender (gender unknown). Skipping tool calls and sending gender question.")
                     return first_parsed
             except (json.JSONDecodeError, TypeError):
@@ -1553,39 +1589,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
         prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
         completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
-        context_count = len(current_context_messages) if current_context_messages else 0
-        sys_len = len(system_instruction_final) if system_instruction_final else 0
-        ai_query_summary = (
-            f"Bot sent to AI (GPT):\n"
-            f"- System prompt: {sys_len} chars (knowledge + style + customer context)\n"
-            f"- Context messages: {context_count}\n"
-            f"- User query: {user_input[:400]}{'...' if len(user_input) > 400 else ''}"
-        )
-        if custom_knowledge_context:
-            ai_query_summary += (
-                f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, full content:\n"
-                f"{custom_knowledge_context}"
-            )
-        context_dump = []
-        for msg in current_context_messages[-config.MAX_CONTEXT_MESSAGES:]:
-            role = msg.get("role", "unknown")
-            content = str(msg.get("content", ""))
-            context_dump.append(f"[{role}] {content}")
-        bot_sent_to_ai_full = (
-            "Bot sent to AI (GPT) - FULL INPUT\n\n"
-            "=== SYSTEM PROMPT ===\n"
-            f"{system_instruction_final}\n\n"
-            "=== CONTEXT MESSAGES ===\n"
-            + ("\n".join(context_dump) if context_dump else "(none)")
-            + "\n\n=== USER MESSAGE ===\n"
-            + str(user_input)
-        )
-
         flow_meta = {
             "model": selected_model,
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
-            "ai_query_summary": ai_query_summary,
-            "bot_sent_to_ai": bot_sent_to_ai_full,
+            "ai_query_summary": flow_ai_query_summary,
+            "bot_sent_to_ai": flow_bot_sent_to_ai_full,
             "tool_calls": tool_names if tool_names else None,
             "tokens": tokens_val,
             "prompt_tokens": prompt_tokens_val,
@@ -1698,12 +1706,29 @@ Rewrite your response in the correct language. Return ONLY a JSON object with "a
     except json.JSONDecodeError as e:
         print(f"â‌Œ JSON Decode Error from GPT chat response: {e}. Raw content: {gpt_raw_content}")
         # NEW: Try to parse a potential plain text reply if JSON fails
-        fallback_bot_reply = gpt_raw_content if gpt_raw_content else "Sorry, I encountered a technical issue understanding your request. Please try again or contact our staff directly. ًں™ڈ"
+        generic_error_by_lang = {
+            "ar": "عذراً، صار خطأ تقني وأنا عم عالج طلبك. جرّب مرة ثانية بعد شوي أو تواصل معنا مباشرة.",
+            "en": "Sorry, I encountered a technical issue while understanding your request. Please try again shortly or contact our staff directly.",
+            "fr": "Désolé, j'ai rencontré un problème technique en traitant votre demande. Veuillez réessayer dans un instant ou contacter notre équipe.",
+            "franco": "عذراً، صار خطأ تقني وأنا عم عالج طلبك. جرّب مرة ثانية بعد شوي أو تواصل معنا مباشرة.",
+        }
+        fallback_bot_reply = (
+            gpt_raw_content
+            if gpt_raw_content
+            else generic_error_by_lang.get(current_preferred_lang, generic_error_by_lang["en"])
+        )
         return {
             "action": "unknown_query", 
             "bot_reply": fallback_bot_reply, 
             "detected_language": current_preferred_lang,
-            "current_gender_from_config": current_gender # Pass the actual gender from config
+            "current_gender_from_config": current_gender, # Pass the actual gender from config
+            "_flow_meta": {
+                "model": selected_model,
+                "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
+                "ai_query_summary": flow_ai_query_summary,
+                "bot_sent_to_ai": flow_bot_sent_to_ai_full,
+                "error": f"json_decode_error: {e}",
+            },
         }
     except Exception as e:
         print(f"\n{'='*80}")
@@ -1713,9 +1738,22 @@ Rewrite your response in the correct language. Return ONLY a JSON object with "a
         print(f"   Full traceback:")
         traceback.print_exc()
         print(f"{'='*80}\n")
+        generic_error_by_lang = {
+            "ar": "عذراً، صار خطأ وأنا عم عالج طلبك حالياً. جرّب مرة ثانية أو تواصل معنا مباشرة.",
+            "en": "Sorry, I encountered an issue understanding your request at the moment. Please try again or contact our staff directly.",
+            "fr": "Désolé, j'ai rencontré un problème en traitant votre demande. Veuillez réessayer ou contacter notre équipe.",
+            "franco": "عذراً، صار خطأ وأنا عم عالج طلبك حالياً. جرّب مرة ثانية أو تواصل معنا مباشرة.",
+        }
         return {
             "action": "unknown_query",
-            "bot_reply": "Sorry, I encountered an issue understanding your request at the moment. Please try again or contact our staff directly. ًں™ڈ",
+            "bot_reply": generic_error_by_lang.get(current_preferred_lang, generic_error_by_lang["en"]),
             "detected_language": current_preferred_lang,
-            "current_gender_from_config": current_gender # Pass the actual gender from config
+            "current_gender_from_config": current_gender, # Pass the actual gender from config
+            "_flow_meta": {
+                "model": selected_model,
+                "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
+                "ai_query_summary": flow_ai_query_summary,
+                "bot_sent_to_ai": flow_bot_sent_to_ai_full,
+                "error": f"{type(e).__name__}: {e}",
+            },
         }

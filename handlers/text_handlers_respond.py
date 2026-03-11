@@ -944,6 +944,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         ai_selector_return = dr.get("selector_ai_raw_response", "")
         tool_round_trips = flow_meta.get("tool_round_trips") or []
         ai_first = flow_meta.get("ai_first_response")
+        ai_error = flow_meta.get("error")
+        ai_raw_or_error = flow_meta.get("ai_raw_response") or (f"AI error: {ai_error}" if ai_error else None)
         selected_titles = dr.get("selected_titles") or []
         loaded_content_full = dr.get("loaded_content_full") or ""
         loaded_content_block = (
@@ -977,16 +979,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 step_num += 1
                 steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", "")})
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": flow_meta.get("ai_raw_response") or "(no content)"})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)"})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": flow_meta.get("ai_raw_response") or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
             step_num += 1
         steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
         flow_steps = steps
     else:
         tool_round_trips = flow_meta.get("tool_round_trips") or []
         ai_first = flow_meta.get("ai_first_response")
+        ai_error = flow_meta.get("error")
+        ai_raw_or_error = flow_meta.get("ai_raw_response") or (f"AI error: {ai_error}" if ai_error else None)
         steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process},
             {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT."},
@@ -1008,10 +1012,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "content": tr.get("bot_returned", ""),
                 })
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": flow_meta.get("ai_raw_response") or "(no content)"})
+            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)"})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot", "content": flow_meta.get("ai_raw_response") or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
+            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
             step_num += 1
         steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
         flow_steps = steps
