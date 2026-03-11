@@ -721,6 +721,47 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
     flow_meta = gpt_response_data.get("_flow_meta") or {}
 
+    # Defensive normalization: GPT can occasionally return non-schema actions like "none".
+    # If we still have a usable bot reply, treat it as a normal answer instead of failing to fallback.
+    known_actions = {
+        "initial_greet_and_ask_gender",
+        "ask_gender",
+        "confirm_gender",
+        "confirm_booking_details",
+        "human_handover_initial_ask",
+        "human_handover_confirmed",
+        "return_to_normal_chat",
+        "human_handover",
+        "ask_for_details_for_booking",
+        "ask_for_service_type",
+        "ask_for_details",
+        "ask_for_tattoo_photo",
+        "ask_clarification",
+        "answer_question",
+        "normal_chat",
+        "unknown_query",
+        "provide_info",
+        "tool_call",
+        "check_customer_status",
+        "confirm_appointment_reschedule",
+        "rate_limit_exceeded",
+        "content_moderated",
+    }
+    action = str(action or "").strip().lower()
+    if action not in known_actions:
+        if bot_reply_text:
+            print(
+                f"[_process_and_respond] ⚠️ Unexpected GPT action '{action}'. "
+                "Using 'answer_question' since bot_reply is present."
+            )
+            action = "answer_question"
+        else:
+            action = "unknown_query"
+            bot_reply_text = (
+                get_dynamic_message("generic_error_message", current_preferred_lang)
+                or "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
+            )
+
     def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []
         for candidate in [canonical_user_id, raw_user_id]:
