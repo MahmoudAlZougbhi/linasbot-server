@@ -978,7 +978,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles."},
             {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned."},
             {"step": 4, "title": "Bot loaded content", "content": loaded_content_block},
-            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("ai_query_summary") or flow_meta.get("bot_sent_to_ai") or "Merged content + user query sent to GPT."},
+            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT."},
         ]
         step_num = 6
         if tool_round_trips:
@@ -1001,7 +1001,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         ai_first = flow_meta.get("ai_first_response")
         steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process},
-            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("ai_query_summary") or flow_meta.get("bot_sent_to_ai") or "Query + context sent to GPT."},
+            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT."},
         ]
         step_num = 3
         if tool_round_trips:
@@ -1038,6 +1038,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         customer_exists=user_data.get("crm_customer_exists"),
         customer_file_status=user_data.get("customer_file_status"),
         ai_query_summary=flow_meta.get("ai_query_summary"),
+        bot_sent_to_ai_full=flow_meta.get("bot_sent_to_ai"),
         ai_raw_response=flow_meta.get("ai_raw_response"),
         model=flow_meta.get("model"),
         tokens=flow_meta.get("tokens"),

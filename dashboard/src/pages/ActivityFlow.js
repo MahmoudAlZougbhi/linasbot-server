@@ -175,7 +175,11 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                   step={2}
                   title="Bot sent to AI"
                   content={
+                    entry.bot_sent_to_ai_full ||
                     entry.ai_query_summary ||
+                    (String(entry.source || "").startsWith("router_")
+                      ? `No AI call. Decision made by code-level router.\nSource: ${entry.source}`
+                      : null) ||
                     (entry.source === "qa_database"
                       ? "Bot matched from Q&A database (no AI call)."
                       : entry.source === "dynamic_retrieval"

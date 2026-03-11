@@ -1588,11 +1588,26 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, full content:\n"
                 f"{custom_knowledge_context}"
             )
+        context_dump = []
+        for msg in current_context_messages[-config.MAX_CONTEXT_MESSAGES:]:
+            role = msg.get("role", "unknown")
+            content = str(msg.get("content", ""))
+            context_dump.append(f"[{role}] {content}")
+        bot_sent_to_ai_full = (
+            "Bot sent to AI (GPT) - FULL INPUT\n\n"
+            "=== SYSTEM PROMPT ===\n"
+            f"{system_instruction_final}\n\n"
+            "=== CONTEXT MESSAGES ===\n"
+            + ("\n".join(context_dump) if context_dump else "(none)")
+            + "\n\n=== USER MESSAGE ===\n"
+            + str(user_input)
+        )
+
         flow_meta = {
             "model": selected_model,
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
             "ai_query_summary": ai_query_summary,
-            "bot_sent_to_ai": ai_query_summary,
+            "bot_sent_to_ai": bot_sent_to_ai_full,
             "tool_calls": tool_names if tool_names else None,
             "tokens": tokens_val,
             "prompt_tokens": prompt_tokens_val,
