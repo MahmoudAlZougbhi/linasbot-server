@@ -16,7 +16,7 @@ const SECTIONS = [
   { id: "price", name: "Prices", icon: CurrencyDollarIcon },
   { id: "style", name: "Style", icon: SparklesIcon },
   { id: "dynamic_messages", name: "Dynamic Messages", icon: ChatBubbleLeftRightIcon },
-  { id: "system_prompt", name: "System Prompt (KB + Style)", icon: DocumentTextIcon },
+  { id: "system_prompt", name: "System Prompt (Template + KB + Style)", icon: DocumentTextIcon },
 ];
 
 const ContentManagers = () => {

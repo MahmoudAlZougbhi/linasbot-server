@@ -15,6 +15,7 @@ from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     STYLE_GUIDE_FILE,
     PRICE_LIST_FILE,
+    SYSTEM_PROMPT_TEMPLATE_FILE,
     CONTENT_DIR,
     ensure_dirs,
 )
@@ -38,16 +39,27 @@ TRAINING_FILES = {
         "description": "Service pricing information",
         "config_attr": "PRICE_LIST",
     },
+    "system_prompt_template": {
+        "path": str(SYSTEM_PROMPT_TEMPLATE_FILE),
+        "name": "System Prompt Template",
+        "description": "Editable static system prompt scaffold with dynamic placeholders",
+        "config_attr": "SYSTEM_PROMPT_TEMPLATE",
+    },
 }
 
 
-def ensure_file_exists(file_path: str) -> None:
+def default_content_for_file(file_id: str) -> str:
+    """Default bootstrap content for new training files."""
+    return ""
+
+
+def ensure_file_exists(file_path: str, default_content: str = "") -> None:
     """Ensure the file exists, create it with empty content if it doesn't"""
     ensure_dirs()
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     if not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write("")
+            f.write(default_content or "")
         print(f"Created empty file: {file_path}")
 
 
@@ -56,7 +68,8 @@ def reload_config_value(file_id: str, content: str) -> None:
     try:
         file_config = TRAINING_FILES.get(file_id)
         if file_config and hasattr(config, file_config["config_attr"]):
-            setattr(config, file_config["config_attr"], content.strip())
+            value = content if file_id == "system_prompt_template" else content.strip()
+            setattr(config, file_config["config_attr"], value)
             print(f"Reloaded config.{file_config['config_attr']}")
     except Exception as e:
         print(f"Warning: Could not reload config for {file_id}: {e}")
@@ -69,7 +82,7 @@ async def list_training_files():
         files = []
         for file_id, file_config in TRAINING_FILES.items():
             file_path = file_config["path"]
-            ensure_file_exists(file_path)
+            ensure_file_exists(file_path, default_content_for_file(file_id))
 
             stat = os.stat(file_path)
             files.append({
@@ -107,7 +120,7 @@ async def get_training_file(file_id: str):
         file_path = file_config["path"]
 
         # Ensure file exists
-        ensure_file_exists(file_path)
+        ensure_file_exists(file_path, default_content_for_file(file_id))
 
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -315,7 +328,7 @@ async def get_training_file_stats(file_id: str):
         file_config = TRAINING_FILES[file_id]
         file_path = file_config["path"]
 
-        ensure_file_exists(file_path)
+        ensure_file_exists(file_path, default_content_for_file(file_id))
 
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()

@@ -3,6 +3,7 @@ import os
 from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     PRICE_LIST_FILE,
+    SYSTEM_PROMPT_TEMPLATE_FILE,
     STYLE_GUIDE_FILE,
     ensure_dirs,
 )
@@ -217,6 +218,7 @@ SUMMARIZE_QA_KEYWORDS = [
 PRICE_LIST = ""
 BOT_STYLE_GUIDE = ""
 CORE_KNOWLEDGE_BASE = ""
+SYSTEM_PROMPT_TEMPLATE = ""
 CUSTOM_TRAINING_DATA = [] # List of custom Q&A entries
 CUSTOM_TRAINING_DATA_MAP = {} # Map for quick lookup of custom Q&A by (question, language)
 
@@ -224,7 +226,7 @@ def load_bot_assets():
     """
     Loads static bot assets (price list, style guide, knowledge base) from persistent storage.
     """
-    global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE
+    global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE, SYSTEM_PROMPT_TEMPLATE
 
     ensure_dirs()
     try:
@@ -259,6 +261,20 @@ def load_bot_assets():
     except Exception as e:
         CORE_KNOWLEDGE_BASE = "خطأ في تحميل قاعدة المعرفة الأساسية."
         print(f"❌ خطأ في تحميل قاعدة المعرفة: {e}")
+
+    try:
+        with open(SYSTEM_PROMPT_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
+            SYSTEM_PROMPT_TEMPLATE = f.read()
+        if SYSTEM_PROMPT_TEMPLATE.strip():
+            print("✅ تم تحميل قالب system prompt من " + str(SYSTEM_PROMPT_TEMPLATE_FILE))
+        else:
+            print("ℹ️ ملف قالب system prompt فارغ. سيتم إرسال system prompt فارغ كما هو.")
+    except FileNotFoundError:
+        SYSTEM_PROMPT_TEMPLATE = ""
+        print("ℹ️ ملف قالب system prompt غير موجود. سيتم استخدام قيمة فارغة.")
+    except Exception as e:
+        SYSTEM_PROMPT_TEMPLATE = ""
+        print(f"❌ خطأ في تحميل قالب system prompt: {e}")
 
 def load_training_data():
     """
