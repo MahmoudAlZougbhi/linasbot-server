@@ -216,7 +216,9 @@ def _get_default_general_and_style() -> str:
     if config.BOT_STYLE_GUIDE:
         parts.append(f"--- Style Guide ---\n{config.BOT_STYLE_GUIDE}")
     if not parts:
-        return "No knowledge available. Ask user for clarification."
+        # Never send a "No knowledge available..." marker into GPT context.
+        # Keep fallback neutral and style-first.
+        return config.BOT_STYLE_GUIDE or "Be professional, friendly, and helpful. Do not invent information."
     return "\n\n".join(parts)
 
 
@@ -277,6 +279,15 @@ async def retrieve_and_merge(
         return "", clarification, "ask_clarification", flow_meta
 
     if action == "fallback_to_general":
+        # If selector returned files but chose fallback_to_general, prefer selected files.
+        # Some selector outputs are mixed (files + fallback action). Use files when available.
+        if files:
+            merged, has_style = _load_content_by_ids(files)
+            if merged:
+                merged = _ensure_style_included(merged, has_style)
+                if include_price_hint and config.PRICE_LIST and "price" not in merged.lower()[:200]:
+                    merged += "\n\n--- Price List ---\n" + config.PRICE_LIST
+                return merged, None, "normal", flow_meta
         merged = _get_default_general_and_style()
         merged = _ensure_style_included(merged, False)
         return merged, None, "fallback_to_general", flow_meta
