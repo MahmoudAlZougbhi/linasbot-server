@@ -288,11 +288,13 @@ async def retrieve_and_merge(
         if files:
             merged, has_style = _load_content_by_ids(files)
             if merged:
+                flow_meta["loaded_content_full"] = merged
                 merged = _ensure_style_included(merged, has_style)
                 if include_price_hint and config.PRICE_LIST and "price" not in merged.lower()[:200]:
                     merged += "\n\n--- Price List ---\n" + config.PRICE_LIST
                 return merged, None, "normal", flow_meta
         merged = _get_default_general_and_style()
+        flow_meta["loaded_content_full"] = merged
         merged = _ensure_style_included(merged, False)
         return merged, None, "fallback_to_general", flow_meta
 
@@ -305,6 +307,7 @@ async def retrieve_and_merge(
         has_style = bool(config.BOT_STYLE_GUIDE)
     else:
         merged = _ensure_style_included(merged, has_style)
+    flow_meta["loaded_content_full"] = merged
 
     if include_price_hint and config.PRICE_LIST and "price" not in merged.lower()[:200]:
         merged += "\n\n--- Price List ---\n" + config.PRICE_LIST

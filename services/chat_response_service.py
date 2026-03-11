@@ -1584,8 +1584,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             f"- User query: {user_input[:400]}{'...' if len(user_input) > 400 else ''}"
         )
         if custom_knowledge_context:
-            preview = (custom_knowledge_context[:300] + "...") if len(custom_knowledge_context) > 300 else custom_knowledge_context
-            ai_query_summary += f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, preview:\n{preview}"
+            ai_query_summary += (
+                f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, full content:\n"
+                f"{custom_knowledge_context}"
+            )
         flow_meta = {
             "model": selected_model,
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,

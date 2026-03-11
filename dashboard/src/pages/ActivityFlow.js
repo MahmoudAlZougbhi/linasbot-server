@@ -37,6 +37,8 @@ const FILE_STATUS_META = {
 const FlowStep = ({ step, title, content }) => {
   const str = typeof content === "string" ? content : String(content ?? "");
   const isJsonLike = str.trim().startsWith("{") || str.trim().startsWith("[");
+  const isLong = str.length > 800;
+  const [expanded, setExpanded] = useState(false);
   return (
     <div className="flex gap-3">
       <div className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-sm">
@@ -45,7 +47,9 @@ const FlowStep = ({ step, title, content }) => {
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{title}</p>
         <div
-          className="p-3 bg-white rounded-lg border border-slate-200 text-sm text-slate-700 max-h-48 overflow-y-auto overflow-x-auto"
+          className={`p-3 bg-white rounded-lg border border-slate-200 text-sm text-slate-700 overflow-y-auto overflow-x-auto ${
+            expanded || !isLong ? "max-h-[32rem]" : "max-h-48"
+          }`}
           dir="auto"
         >
           {isJsonLike ? (
@@ -54,6 +58,15 @@ const FlowStep = ({ step, title, content }) => {
             <pre className="text-sm whitespace-pre-wrap m-0 font-sans">{str}</pre>
           )}
         </div>
+        {isLong && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+          >
+            {expanded ? "Show less" : "Show full content"}
+          </button>
+        )}
       </div>
     </div>
   );

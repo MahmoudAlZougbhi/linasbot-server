@@ -957,6 +957,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         tool_round_trips = flow_meta.get("tool_round_trips") or []
         ai_first = flow_meta.get("ai_first_response")
         selected_titles = dr.get("selected_titles") or []
+        loaded_content_full = dr.get("loaded_content_full") or ""
+        loaded_content_block = (
+            "Bot loaded from knowledge/price/style:\n  • " + "\n  • ".join(selected_titles)
+            if selected_titles
+            else f"Bot used default/general content. Action: {dr.get('action', 'normal')}."
+        )
+        if loaded_content_full:
+            loaded_content_block += (
+                f"\n\nFull loaded content sent to AI ({len(loaded_content_full)} chars):\n"
+                f"{loaded_content_full}"
+            )
         ai_selected_str = f"AI selected from knowledge/price/style:\n  • " + "\n  • ".join(selected_titles) if selected_titles else ""
         if ai_selector_return:
             ai_selected_str += f"\n\nRaw AI response:\n{ai_selector_return}"
@@ -966,7 +977,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             {"step": 1, "title": "User → Bot", "content": user_input_to_process},
             {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles."},
             {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned."},
-            {"step": 4, "title": "Bot loaded content", "content": (f"Bot loaded from knowledge/price/style:\n  • " + "\n  • ".join(selected_titles)) if selected_titles else f"Bot used default/general content. Action: {dr.get('action', 'normal')}."},
+            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block},
             {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("ai_query_summary") or flow_meta.get("bot_sent_to_ai") or "Merged content + user query sent to GPT."},
         ]
         step_num = 6

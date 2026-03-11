@@ -138,7 +138,8 @@ def log_interaction(
         "user_message": (user_message or "")[:500],
         "bot_to_user": (bot_to_user or "")[:1000],
         "source": source,
-        "ai_query_summary": (ai_query_summary or "")[:1500] if ai_query_summary else None,
+        # Keep full AI query summary for transparency (includes full dynamic context)
+        "ai_query_summary": (ai_query_summary or "")[:120000] if ai_query_summary else None,
         "ai_raw_response": (ai_raw_response or "")[:2000] if ai_raw_response else None,
         "model": model,
         "tokens": tokens,
