@@ -18,6 +18,7 @@ from services.conversation_router import (
 from utils.datetime_utils import detect_reschedule_intent
 import time
 import re
+import json
 
 PRICE_INTENT_KEYWORDS = [
     "price",
@@ -410,8 +411,27 @@ def _build_out_of_scope_reply(lang: str) -> str:
     return messages.get((lang or "ar").lower(), messages["ar"])
 
 
+def _unwrap_embedded_json_reply(text: str) -> str:
+    """
+    Some model responses may accidentally place a full JSON object inside bot_reply.
+    Unwrap nested {"action": "...", "bot_reply": "..."} layers so users only see text.
+    """
+    value = str(text or "").strip()
+    for _ in range(3):
+        if not value.startswith("{"):
+            break
+        try:
+            parsed = json.loads(value)
+        except Exception:
+            break
+        if not isinstance(parsed, dict) or "bot_reply" not in parsed:
+            break
+        value = str(parsed.get("bot_reply") or "").strip()
+    return value
+
+
 def _clean_reply_text(text: str) -> str:
-    value = str(text or "")
+    value = _unwrap_embedded_json_reply(text)
     value = value.replace("\r\n", "\n").replace("\r", "\n")
     value = re.sub(r"\n{2,}", "\n", value)
     value = re.sub(r"[ \t]+", " ", value)
@@ -1034,6 +1054,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             match_tier = match_result.get("tier", "direct")
             qa_pair = match_result.get("qa_pair", {})
             qa_response = qa_pair.get("answer", "")
+            qa_response = _apply_turn_by_turn_policy(
+                "answer_question",
+                qa_response,
+                current_preferred_lang,
+            )
 
             print(f"[_process_and_respond] ✅ Q&A MATCH FOUND!")
             if match_tier == "exact":
