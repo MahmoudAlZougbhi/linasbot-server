@@ -631,7 +631,13 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "unread_count": new_unread,
                 }
                 if not is_smart_source:
+                    # Defensive: also treat as takeover if status/conversation_state indicate waiting
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
+                    if not existing_takeover and (
+                        doc_data.get("status") == "waiting_human"
+                        or doc_data.get("conversation_state") == "waiting_for_operator"
+                    ):
+                        existing_takeover = True
                     existing_operator = doc_data.get("operator_id")
                     if existing_takeover:
                         update_payload.update({
@@ -783,7 +789,13 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 }
                 # Smart campaign messages should not reopen/take over live conversations.
                 if not is_smart_source:
+                    # Defensive: also treat as takeover if status/conversation_state indicate waiting
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
+                    if not existing_takeover and (
+                        doc_data.get("status") == "waiting_human"
+                        or doc_data.get("conversation_state") == "waiting_for_operator"
+                    ):
+                        existing_takeover = True
                     existing_operator = doc_data.get("operator_id")
                     if existing_takeover:
                         update_payload.update({
