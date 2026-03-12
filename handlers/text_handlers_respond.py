@@ -1595,11 +1595,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
 
     elif action in ["ask_for_details_for_booking", "ask_for_service_type", "ask_for_details", "ask_for_tattoo_photo", "ask_clarification"]:
-        if not user_data.get('original_question'):
-            user_data['original_question'] = user_input_to_process
+        # Clarification anchor should point to the question being clarified now.
+        # If we're already awaiting clarification, keep the existing anchor.
+        clarification_anchor = user_data.get('pending_clarification_query') if user_data.get('awaiting_clarification') else None
+        if not clarification_anchor:
+            clarification_anchor = user_data.get('original_question') or user_input_to_process
+        user_data['original_question'] = clarification_anchor
         user_data['awaiting_clarification'] = True
         user_data['last_bot_question_type'] = 'clarification'
-        user_data['pending_clarification_query'] = user_data.get('original_question')
+        user_data['pending_clarification_query'] = clarification_anchor
         await send_message_func(user_id, bot_reply_text)
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         config.user_greeting_stage[user_id] = 2
@@ -1608,6 +1612,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         user_data['awaiting_gender'] = False
         user_data['awaiting_clarification'] = False
         user_data['pending_clarification_query'] = None
+        # Clear stale carry-over so the next user intent starts fresh.
+        user_data['original_question'] = None
+        user_data['initial_user_query_to_process'] = None
         user_data['last_bot_question_type'] = None
         await send_message_func(user_id, bot_reply_text)
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
