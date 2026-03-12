@@ -260,6 +260,64 @@ GREETING_OPENERS = (
     "bonsoir",
 )
 
+_GREETING_PREFIX_RE = re.compile(
+    r"^\s*(?:"
+    + "|".join(re.escape(opener) for opener in sorted(GREETING_OPENERS, key=len, reverse=True))
+    + r")\b[\s،,:;!.\-–—]*",
+    re.IGNORECASE,
+)
+
+_LEADING_ADDRESS_RE = re.compile(
+    r"^\s*(?:أستاذ|استاذ|عزيزتي|حضرتك)\s+[^\s،,:;!?-]+(?:\s+[^\s،,:;!?-]+){0,2}\s*[،,:;!\-–—]*"
+)
+
+BOOKING_OFFER_QUESTION_RE = re.compile(
+    r"(?:"
+    r"هل\s*(?:ترغب|تحب|بدك).*(?:حجز|نحجز).*(?:موعد)"
+    r"|(?:بدك|بتحب|تحب).*(?:نحجز|حجز).*(?:موعد)"
+    r"|would\s+you\s+like.*(?:book|schedule).*(?:appointment)"
+    r"|do\s+you\s+want.*(?:book|schedule).*(?:appointment)"
+    r"|souhaitez[-\s]*vous.*(?:prendre|r[ée]server).*(?:rendez[-\s]*vous)"
+    r"|voulez[-\s]*vous.*(?:prendre|r[ée]server).*(?:rendez[-\s]*vous)"
+    r"|(?:bade|baddi|baddak|bet7eb|te7eb).*(?:hajz|ehjez|ehjoz|maw3ad)"
+    r")",
+    re.IGNORECASE | re.UNICODE,
+)
+
+AFFIRMATIVE_CONFIRMATION_TOKENS = {
+    "اه", "اي", "ايه", "نعم", "تمام", "اكيد", "أكيد",
+    "yes", "yeah", "yep", "oui", "ok", "okay", "sure", "eh",
+}
+AFFIRMATIVE_CONFIRMATION_PHRASES = (
+    "يا ريت",
+    "أكيد بدي",
+    "اكيد بدي",
+    "yes please",
+    "sure please",
+)
+NEGATIVE_CONFIRMATION_TOKENS = {"لا", "no", "non", "nope", "nah"}
+NEGATIVE_CONFIRMATION_PHRASES = (
+    "ما بدي",
+    "مش ضروري",
+    "لا شكرا",
+    "لا شكرًا",
+    "خليني معك",
+    "no thanks",
+    "non merci",
+)
+BOOKING_INTENT_CONFIRMATION_KEYWORDS = (
+    "حجز",
+    "احجز",
+    "موعد",
+    "book",
+    "booking",
+    "appointment",
+    "rendez",
+    "rdv",
+    "hajz",
+    "maw3ad",
+)
+
 
 def _is_price_intent(text: str) -> bool:
     normalized = str(text or "").lower()
@@ -457,11 +515,79 @@ def _clean_reply_text(text: str) -> str:
     return value.strip()
 
 
+def _tokenize_intent_words(text: str) -> set:
+    normalized = _clean_reply_text(text).lower()
+    return set(re.findall(r"[a-zA-Z0-9\u0600-\u06FF]+", normalized, re.UNICODE))
+
+
+def _looks_like_booking_offer_confirmation_question(reply_text: str) -> bool:
+    cleaned = _clean_reply_text(reply_text)
+    if not cleaned or ("؟" not in cleaned and "?" not in cleaned):
+        return False
+    return bool(BOOKING_OFFER_QUESTION_RE.search(cleaned))
+
+
+def _classify_booking_offer_confirmation_reply(user_text: str) -> str:
+    normalized = _clean_reply_text(user_text).lower()
+    if not normalized:
+        return ""
+
+    tokens = _tokenize_intent_words(normalized)
+
+    if any(phrase in normalized for phrase in NEGATIVE_CONFIRMATION_PHRASES):
+        return "no"
+    if tokens.intersection(NEGATIVE_CONFIRMATION_TOKENS):
+        return "no"
+
+    if any(phrase in normalized for phrase in AFFIRMATIVE_CONFIRMATION_PHRASES):
+        return "yes"
+    if tokens.intersection(AFFIRMATIVE_CONFIRMATION_TOKENS):
+        return "yes"
+    if any(keyword in normalized for keyword in BOOKING_INTENT_CONFIRMATION_KEYWORDS):
+        return "yes"
+
+    return ""
+
+
+def _build_booking_followup_question(lang: str) -> str:
+    messages = {
+        "ar": "أكيد، خلّينا نحجز موعد جديد. لأي خدمة بتحب تحجز؟",
+        "franco": "أكيد، خلّينا نحجز موعد جديد. لأي خدمة بتحب تحجز؟",
+        "en": "Sure, let's book a new appointment. Which service would you like to book?",
+        "fr": "Bien sûr, prenons un nouveau rendez-vous. Pour quel service souhaitez-vous réserver ?",
+    }
+    return messages.get((lang or "ar").lower(), messages["ar"])
+
+
+def _build_booking_decline_reply(lang: str) -> str:
+    messages = {
+        "ar": "تمام، ولا يهمك. إذا حبيت تحجز لاحقاً خبرني وأنا بساعدك فوراً.",
+        "franco": "تمام، ولا يهمك. إذا حبيت تحجز لاحقاً خبرني وأنا بساعدك فوراً.",
+        "en": "No problem at all. If you'd like to book later, let me know and I'll help right away.",
+        "fr": "Pas de souci. Si vous souhaitez réserver plus tard, dites-le-moi et je vous aide tout de suite.",
+    }
+    return messages.get((lang or "ar").lower(), messages["ar"])
+
+
 def _looks_like_greeting_unit(unit: str) -> bool:
     probe = _clean_reply_text(unit).lower()
     if not probe:
         return False
     return probe.startswith(GREETING_OPENERS)
+
+
+def _strip_leading_greeting_phrase(text: str) -> str:
+    cleaned = _clean_reply_text(text)
+    if not cleaned:
+        return cleaned
+
+    without_greeting = _GREETING_PREFIX_RE.sub("", cleaned, count=1).strip()
+    if without_greeting == cleaned:
+        return cleaned
+
+    without_address = _LEADING_ADDRESS_RE.sub("", without_greeting, count=1).strip()
+    without_address = re.sub(r"^[،,:;!\-–—]+\s*", "", without_address).strip()
+    return without_address or cleaned
 
 
 def _strip_redundant_greeting_prefix(reply_text: str) -> str:
@@ -472,14 +598,22 @@ def _strip_redundant_greeting_prefix(reply_text: str) -> str:
     """
     cleaned = _clean_reply_text(reply_text)
     units = _split_reply_units(cleaned)
-    if len(units) < 2:
-        return cleaned
-    if not _looks_like_greeting_unit(units[0]):
-        return cleaned
-    remaining = " ".join(units[1:]).strip()
-    if len(remaining) < 20:
-        return cleaned
-    return remaining
+    if units and _looks_like_greeting_unit(units[0]):
+        first_unit_wo_greeting = _strip_leading_greeting_phrase(units[0])
+        if first_unit_wo_greeting and first_unit_wo_greeting != units[0]:
+            rebuilt = " ".join([first_unit_wo_greeting] + units[1:]).strip()
+            if len(rebuilt) >= 20:
+                return rebuilt
+
+        if len(units) >= 2:
+            remaining = " ".join(units[1:]).strip()
+            if len(remaining) >= 20:
+                return remaining
+
+    fallback = _strip_leading_greeting_phrase(cleaned)
+    if fallback != cleaned and len(fallback) >= 20:
+        return fallback
+    return cleaned
 
 
 def _split_reply_units(text: str) -> list:
@@ -1033,12 +1167,47 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     initial_user_query_to_process_original = user_data.get('initial_user_query_to_process')
 
     awaiting_confirmation = user_data.get('awaiting_human_handover_confirmation', False)
+    awaiting_booking_offer_confirmation = bool(user_data.get("awaiting_booking_offer_confirmation", False))
     confirmation_keywords_ar = ["اه", "نعم", "اي", "ايه", "يا ريت", "خلصني", "موافق", "yes", "oui", "ok", "تمام"]
     rejection_keywords_ar = ["لا", "ما بدي", "خليني معك", "مش ضروري", "no", "non"]
 
     gpt_response_data = {}
 
-    if awaiting_confirmation and not ai_primary_mode:
+    if awaiting_booking_offer_confirmation:
+        booking_confirmation = _classify_booking_offer_confirmation_reply(user_input_to_process)
+        if booking_confirmation == "yes":
+            booking_origin_query = (
+                user_data.get("booking_offer_origin_query")
+                or user_data.get("original_question")
+                or user_data.get("pending_clarification_query")
+                or "new_booking_request"
+            )
+            user_data["original_question"] = booking_origin_query
+            user_data["awaiting_booking_offer_confirmation"] = False
+            user_data["booking_offer_origin_query"] = None
+            gpt_response_data = {
+                "action": "ask_for_details_for_booking",
+                "bot_reply": _build_booking_followup_question(current_preferred_lang),
+                "detected_language": current_preferred_lang,
+                "detected_gender": current_gender if current_gender != "unknown" else None,
+                "current_gender_from_config": current_gender,
+            }
+        elif booking_confirmation == "no":
+            user_data["awaiting_booking_offer_confirmation"] = False
+            user_data["booking_offer_origin_query"] = None
+            gpt_response_data = {
+                "action": "answer_question",
+                "bot_reply": _build_booking_decline_reply(current_preferred_lang),
+                "detected_language": current_preferred_lang,
+                "detected_gender": current_gender if current_gender != "unknown" else None,
+                "current_gender_from_config": current_gender,
+            }
+        else:
+            # Treat unresolved short acknowledgments as stale and continue normal flow.
+            user_data["awaiting_booking_offer_confirmation"] = False
+            user_data["booking_offer_origin_query"] = None
+
+    if not gpt_response_data and awaiting_confirmation and not ai_primary_mode:
         user_input_lower = user_input_to_process.lower()
         if any(kw in user_input_lower for kw in confirmation_keywords_ar):
             gpt_response_data = {
@@ -1071,7 +1240,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 initial_user_query_to_process=initial_user_query_to_process_original
             )
 
-    else:
+    elif not gpt_response_data:
         # Only use raw input when not resuming from router (router already set query_to_send_to_gpt for resume)
         if not _resume_original_question:
             query_to_send_to_gpt = user_input_to_process
@@ -1340,6 +1509,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         "content_moderated",
     }
     action = str(action or "").strip().lower()
+    action_was_coerced = False
     if action not in known_actions:
         if bot_reply_text:
             print(
@@ -1347,6 +1517,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 "Using 'answer_question' since bot_reply is present."
             )
             action = "answer_question"
+            action_was_coerced = True
         else:
             action = "unknown_query"
             bot_reply_text = (
@@ -1394,11 +1565,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         action = "ask_clarification"
         bot_reply_text = _build_single_laser_area_question(current_gender, user_name)
 
-    bot_reply_text = _apply_turn_by_turn_policy(
-        action,
-        bot_reply_text,
-        current_preferred_lang,
-    )
+    # If we had to coerce an invalid action from GPT, keep the full AI wording
+    # instead of compressing it into the brief turn-by-turn format.
+    if action_was_coerced:
+        bot_reply_text = _clean_reply_text(bot_reply_text)
+    else:
+        bot_reply_text = _apply_turn_by_turn_policy(
+            action,
+            bot_reply_text,
+            current_preferred_lang,
+        )
 
     # Enforce greeting timing globally: greeting only for new session or >=12h inactivity.
     # If AI includes an opening greeting in regular turns, strip only the leading greeting line.
@@ -1625,6 +1801,24 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         await send_message_func(user_id, sent_reply)
         await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         print(f"[_process_and_respond] ERROR: User {user_id} received fallback reply due to unexpected action: {action}")
+
+    # Keep yes/no booking-follow-up state when we explicitly ask:
+    # "Would you like to book a new appointment?"
+    if _looks_like_booking_offer_confirmation_question(sent_reply):
+        booking_origin_query = (
+            user_data.get("original_question")
+            or user_data.get("pending_clarification_query")
+            or context_query
+            or user_input_to_process
+        )
+        user_data["awaiting_booking_offer_confirmation"] = True
+        user_data["booking_offer_origin_query"] = booking_origin_query
+        user_data["last_bot_question_type"] = "booking_offer_confirmation"
+    else:
+        user_data["awaiting_booking_offer_confirmation"] = False
+        user_data["booking_offer_origin_query"] = None
+        if user_data.get("last_bot_question_type") == "booking_offer_confirmation":
+            user_data["last_bot_question_type"] = None
 
     # Flow logging for dashboard transparency
     response_time_ms = (time.time() - start_time) * 1000
