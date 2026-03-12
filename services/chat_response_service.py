@@ -31,27 +31,93 @@ BOOKING_TZ = BOT_FIXED_TZ
 
 _custom_qa_cache = {}
 
-PRICE_KEYWORDS = [
+PRICE_STRONG_KEYWORDS = [
     "price",
     "cost",
     "how much",
     "pricing",
     "سعر",
     "اسعار",
-    "كم",
-    "قديش",
-    "أديش",
     "تكلفة",
     "prix",
     "coût",
     "combien",
     "tarif",
+    "sa3er",
+]
+
+# Weak "how much" words are ambiguous in Franco-Arabic (e.g., "kam dawle...")
+# so they should only count as price intent when clinic context is present.
+PRICE_WEAK_KEYWORDS = [
+    "كم",
+    "قديش",
+    "أديش",
     "adesh",
     "adde",
     "2adde",
     "2adesh",
     "kam",
-    "sa3er",
+]
+
+CLINIC_PRICE_CONTEXT_KEYWORDS = [
+    "laser",
+    "ليزر",
+    "جلسة",
+    "جلسات",
+    "service",
+    "services",
+    "خدمة",
+    "خدمات",
+    "appointment",
+    "appointments",
+    "موعد",
+    "مواعيد",
+    "booking",
+    "حجز",
+    "tattoo",
+    "تاتو",
+    "وشم",
+    "dpl",
+    "co2",
+    "scar",
+    "ندبة",
+    "stretch",
+    "hair",
+    "شعر",
+    "ليناز",
+    "linas",
+    "clinic",
+    "عيادة",
+]
+
+OFF_TOPIC_PRICE_FALSE_POSITIVE_HINTS = [
+    "president",
+    "prime minister",
+    "government",
+    "politics",
+    "country",
+    "countries",
+    "capital",
+    "news",
+    "weather",
+    "bitcoin",
+    "crypto",
+    "دولة",
+    "دول",
+    "عالم",
+    "رئيس",
+    "سياسة",
+    "طقس",
+    "dawle",
+    "dawlat",
+    "3alam",
+    "ra2is",
+    "siyase",
+    "siyaseh",
+    "wazir",
+    "ekhtara3",
+    "e5tr3",
+    "invented",
 ]
 
 DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS = {1, 12, 13}
@@ -124,9 +190,38 @@ def looks_like_working_hours_reply(text: str) -> bool:
     return any(re.search(pattern, normalized, re.IGNORECASE | re.UNICODE) for pattern in hours_patterns)
 
 
-def is_price_related_question(text: str) -> bool:
+def is_price_related_question(text: str, booking_state: Optional[Dict[str, Any]] = None) -> bool:
     normalized = str(text or "").lower()
-    return any(keyword in normalized for keyword in PRICE_KEYWORDS)
+    if not normalized.strip():
+        return False
+
+    has_strong_price_signal = any(keyword in normalized for keyword in PRICE_STRONG_KEYWORDS)
+    has_weak_price_signal = any(keyword in normalized for keyword in PRICE_WEAK_KEYWORDS)
+    if not has_strong_price_signal and not has_weak_price_signal:
+        return False
+
+    has_clinic_context = any(keyword in normalized for keyword in CLINIC_PRICE_CONTEXT_KEYWORDS)
+    state = booking_state or {}
+    has_booking_context = any(
+        [
+            state.get("service_id"),
+            state.get("machine_id"),
+            state.get("branch_id"),
+            state.get("body_part_ids"),
+            state.get("last_pricing_payload"),
+        ]
+    )
+    looks_off_topic = any(keyword in normalized for keyword in OFF_TOPIC_PRICE_FALSE_POSITIVE_HINTS)
+
+    # Prevent false positives like "kam dawle..." from triggering pricing sync.
+    if looks_off_topic and not has_clinic_context and not has_booking_context:
+        return False
+
+    if has_strong_price_signal:
+        return True
+
+    # Weak signals (kam/adde/قديش) need either clinic context or active booking context.
+    return has_clinic_context or has_booking_context
 
 
 def _safe_int(value: Any) -> Optional[int]:
@@ -515,7 +610,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     qa_reference_text = ""
 
     # Detect if this is a price-related question and load sync rules.
-    is_price_question = is_price_related_question(user_input)
+    # Use booking state too, so weak words like "kam" do not misfire out of context.
+    booking_state_snapshot = config.user_booking_state.get(user_id, {})
+    is_price_question = is_price_related_question(user_input, booking_state_snapshot)
     body_part_required_service_ids = _get_body_part_required_service_ids()
 
     # Get the core system instruction from utils.py, with conditional price list loading.

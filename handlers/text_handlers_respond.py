@@ -165,6 +165,17 @@ OFF_TOPIC_KEYWORDS = [
     "math",
     "physics",
     "chemistry",
+    # Franco-Arabic off-topic variants
+    "dawle",
+    "dawlat",
+    "3alam",
+    "ra2is",
+    "siyase",
+    "siyaseh",
+    "wazir",
+    "ekhtara3",
+    "e5tr3",
+    "invented",
 ]
 
 GENERAL_QUESTION_PREFIX_RE = re.compile(
