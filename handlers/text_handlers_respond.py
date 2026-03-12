@@ -898,8 +898,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     if config.user_in_human_takeover_mode.get(user_id, False):
         print(f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI fallback guard active.")
         # IMPORTANT: During assigned operator takeover, AI must stay silent.
-        # We only send waiting auto-reply when takeover is active AND no operator is assigned yet.
-        should_send_waiting = False
+        # We only stay silent when an operator is assigned.
+        # In all uncertain/error cases, prefer sending a waiting message instead of returning no response.
+        should_send_waiting = True
+        takeover_still_active = True
         try:
             db = get_firestore_db()
             if db and current_conversation_id:
@@ -932,10 +934,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         print(f"[_process_and_respond] INFO: Operator assigned for {user_id}; AI remains silent.")
                         return
                     should_send_waiting = True
+                elif conv_data and not conv_data.get("human_takeover_active", False):
+                    # Firestore says takeover ended; release stale local flag and continue normal AI flow.
+                    takeover_still_active = False
+                    should_send_waiting = False
+                    config.user_in_human_takeover_mode[user_id] = False
+                    print(f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; resuming normal bot flow.")
         except Exception as takeover_check_error:
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
 
-        if should_send_waiting:
+        if takeover_still_active and should_send_waiting:
             waiting_msg = get_dynamic_message("waiting_queue_message", current_preferred_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
             await send_message_func(user_id, waiting_msg)
             await save_conversation_message_to_firestore(
@@ -947,7 +955,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 user_data.get('phone_number'),
                 metadata={"handled_by": "ai", "source": "waiting_queue_fallback"},
             )
-        return
+            return
 
     # Hard guardrail: refuse clearly out-of-clinic questions before AI call.
     if _is_out_of_clinic_scope_query(user_input_to_process):
