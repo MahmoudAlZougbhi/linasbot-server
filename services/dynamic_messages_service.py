@@ -7,6 +7,7 @@ Used by Content Manager to let operators inspect/edit runtime wording.
 """
 
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Any
@@ -22,10 +23,10 @@ DEFAULT_DYNAMIC_MESSAGES: Dict[str, Dict[str, Any]] = {
         "label": "Router Greeting",
         "when_used": "Sent when user message is greeting-only and there is no pending state.",
         "messages": {
-            "ar": "مرحباً! 😊 أنا Marwa المساعدة الذكية من Lina's Laser Center 🌷 كيف فيني أساعدك اليوم؟",
+            "ar": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناس ليزر 🌷 كيف فيني أساعدك اليوم؟",
             "en": "Hello! 😊 I'm Marwa, the smart assistant from Lina's Laser Center 🌷 How can I help you today?",
             "fr": "Bonjour ! 😊 Je suis Marwa, l'assistante intelligente de Lina's Laser Center 🌷 Comment puis-je vous aider aujourd'hui ?",
-            "franco": "Marhaba! 😊 Ana Marwa el mosa3de el zekiyye men Lina's Laser Center 🌷 kif fini se3dik el yom?",
+            "franco": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناس ليزر 🌷 كيف فيني أساعدك اليوم؟",
         },
     },
     "router_fallback": {
@@ -150,8 +151,25 @@ def get_dynamic_message(key: str, lang: str = "ar") -> str:
     item = catalog.get(key) or {}
     msgs = item.get("messages") or {}
     lang_key = (lang or "ar").lower()
-    return (
+    message = (
         msgs.get(lang_key)
         or msgs.get("ar")
         or ""
     )
+    if lang_key in ("ar", "franco"):
+        # Keep Arabic-facing runtime messages in Arabic script for known assistant/brand names.
+        replacements = {
+            "Marwa AI Assistant": "مروى",
+            "Marwa": "مروى",
+            "Lina’s Laser Center": "مركز ليناس ليزر",
+            "Lina's Laser Center": "مركز ليناس ليزر",
+            "Lina’s Laser": "ليناس ليزر",
+            "Lina's Laser": "ليناس ليزر",
+        }
+        for latin_text, arabic_text in replacements.items():
+            message = message.replace(latin_text, arabic_text)
+
+        # Normalize accidental mixed-script leftovers around brand naming.
+        message = re.sub(r"\bLina(?:['’]s)?\b", "ليناس", message, flags=re.IGNORECASE)
+        message = re.sub(r"\bLaser\b", "ليزر", message, flags=re.IGNORECASE)
+    return message

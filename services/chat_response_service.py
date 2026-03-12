@@ -72,6 +72,18 @@ def validate_language_match(user_language: str, bot_response: str, detected_resp
     if user_language == 'franco':
         user_language = 'ar'
 
+    # For Arabic responses, enforce Arabic script only (names included).
+    # Allow URLs/emails to pass untouched when needed.
+    if user_language == "ar":
+        sanitized = re.sub(
+            r"https?://\S+|www\.\S+|\b\S+@\S+\b",
+            "",
+            bot_response or "",
+            flags=re.IGNORECASE,
+        )
+        if re.search(r"[A-Za-z]", sanitized):
+            return False, "Language mismatch: Arabic response contains Latin letters."
+
     if user_language not in patterns:
         return True, ""  # Skip validation for unknown languages
 
@@ -529,6 +541,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     current_time_str = current_local_time.strftime("%H:%M:%S")
     current_day_name = current_local_time.strftime("%A")
 
+    arabic_script_policy = ""
+    if response_language == "ar":
+        arabic_script_policy = (
+            "- **Arabic Script Only**: Your `bot_reply` MUST be in Arabic script only (no Latin letters at all). "
+            "This includes names, brands, and abbreviations; write them phonetically in Arabic letters.\n"
+        )
+
     # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
     dynamic_customer_context = (
         "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
@@ -537,7 +556,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"- **Gender**: '{current_gender}'"
         + (" - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n" if current_gender in ['male', 'female'] else " - UNKNOWN. Follow gender collection rules in Style Guide.\n")
         + f"- **Language**: Detected as '{current_preferred_lang}' - You MUST respond in: '{response_language}'\n"
-        f"- **current_gender_from_config**: '{current_gender}'\n"
+        + arabic_script_policy
+        + f"- **current_gender_from_config**: '{current_gender}'\n"
         f"- **detected_language**: '{current_preferred_lang}'\n"
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
     )
@@ -1647,16 +1667,25 @@ Your response was: "{final_bot_reply}"
 
 You MUST respond in **{response_language.upper()}** ONLY.
 - If response_language is "en": Write your ENTIRE response in English. NO Arabic characters.
-- If response_language is "ar": Write your ENTIRE response in Arabic script (العربية).
+- If response_language is "ar": Write your ENTIRE response in Arabic script (العربية) with ZERO Latin letters.
+- For Arabic: names/brands/codes must be written phonetically in Arabic letters (example: Marwa -> مروى, Test -> تيست).
 - If response_language is "fr": Write your ENTIRE response in French. NO Arabic characters.
 
 Rewrite your response in the correct language. Return ONLY a JSON object with "action" and "bot_reply"."""
 
             try:
+                correction_system_message = (
+                    f"You are a helpful assistant. Respond ONLY in {response_language}. "
+                    "Return JSON with 'action' and 'bot_reply' fields."
+                )
+                if response_language == "ar":
+                    correction_system_message += (
+                        " Arabic replies must contain Arabic script only with no Latin letters, including names."
+                    )
                 correction_response = await client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": f"You are a helpful assistant. Respond ONLY in {response_language}. Return JSON with 'action' and 'bot_reply' fields."},
+                        {"role": "system", "content": correction_system_message},
                         {"role": "user", "content": lang_correction_prompt}
                     ],
                     temperature=0,

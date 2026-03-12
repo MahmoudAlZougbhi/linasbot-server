@@ -191,10 +191,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             
             # Send acknowledgment with the name
             thanks_messages = {
-                "ar": f"شكراً {extracted_name}! 😊 كيف بقدر ساعدك اليوم؟",
+                # Keep Arabic replies fully in Arabic script; do not echo Latin names.
+                "ar": "شكراً! 😊 كيف بقدر ساعدك اليوم؟",
                 "en": f"Thanks, {extracted_name}! 😊 How can I help you today?",
                 "fr": f"Merci, {extracted_name}! 😊 Comment puis-je vous aider aujourd'hui?",
-                "franco": f"شكراً {extracted_name}! 😊 كيف فيني ساعدك اليوم؟"
+                "franco": "شكراً! 😊 كيف فيني ساعدك اليوم؟"
             }
             
             thanks_message = thanks_messages.get(current_preferred_lang, thanks_messages["ar"])
@@ -528,8 +529,22 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             is_initial_message_for_gpt = False
 
             gender_acknowledgement = "أهلاً بك أستاذ " if current_gender == "male" else "أهلاً بكِ سيدتي "
-            await send_message_func(user_id, f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.")
-            await save_conversation_message_to_firestore(user_id, "ai", f"{gender_acknowledgement}{user_name}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي.", current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            user_name_ar = str(user_name or "").strip()
+            include_name = bool(re.search(r"[\u0600-\u06FF]", user_name_ar))
+            name_segment = f"{user_name_ar}! " if include_name else ""
+            gender_ack_message = (
+                f"{gender_acknowledgement}{name_segment}شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي."
+            )
+            await send_message_func(user_id, gender_ack_message)
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                gender_ack_message,
+                current_conversation_id,
+                user_name,
+                user_data.get('phone_number'),
+                metadata={"handled_by": "ai"},
+            )
 
         # Check Q&A Database before calling GPT-4
         # Required flow: ALWAYS try FAQ first. If match >=90% return direct answer, else continue normal flow.

@@ -156,10 +156,10 @@ MESSAGE_COMBINING_DELAY = 3.0 # seconds
 
 # --- Bot Welcome Messages (Language-specific) ---
 WELCOME_MESSAGES = {
-    "ar": "مرحباً! 😊\nمعك Marwa – المساعد الذكي بالذكاء الاصطناعي من Lina’s Laser Center.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
+    "ar": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناس ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
     "en": "Hello! 😊\nThis is Marwa AI Assistant – your smart AI assistant from Lina's Laser Center.\nHow are you? How can I help you today? 🧠✨\n\nYou can talk to me in any way you prefer – even with your voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nBy the way, to help and serve you better, could you please tell us if you are male or female? 👦👧",
     "fr": "Bonjour ! 😊\nC'est Marwa AI Assistant – votre assistant intelligent de Lina's Laser Center.\nComment allez-vous ? Comment puis-je vous aider aujourd'hui ? 🧠✨\n\nYou can talk to me in any way you prefer – even by voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nAu fait, afin de mieux vous aider et de vous offrir le meilleur service, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
-    "franco": "Hello! 😊\nMa3ak Marwa – El mosa3ed el zaki bel zaka2 el istina3e mn Lina's Laser Center.\nKifak? Kif fini sa3edak el yom? 🧠✨\n\nFik t7kili bi ay tari2a bte7ebbaha – 7atta law bel sawt! 🎤\nAna hon mchan sa3edak bi ay chi baddak yeh, bi kel souhoule w ser3a.\nJahiz? Yalla ne7ki! 🤖💬\n\nW bel monasabe, kermel ne2dar nsa3edak w ne2addemlak afdal khedme, mumkin tkabbirna law sama7t iza inta chab aw inti sabieh? 👦👧"
+    "franco": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناس ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧"
 }
 
 # --- Gender Question Variations ---
