@@ -301,7 +301,21 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
             "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"
         }
+        calm_handover_messages = {
+            "ar": "روّق لو سمحت 🙏 أنا موجودة للمساعدة باحترام. رح حوّلك مباشرةً لأحد من موظفينا ليتواصل معك.",
+            "en": "Please stay calm 🙏 I'm here to help respectfully. I'll transfer you now to one of our staff members.",
+            "fr": "Merci de rester calme 🙏 Je suis là pour vous aider avec respect. Je vous transfère maintenant à l'un de nos employés.",
+        }
+        issues = set(detected_issues or [])
+        should_use_calm_handover = bool(
+            issues.intersection({"offensive_language", "anger_detected"})
+        )
         escalation_msg = escalation_messages.get(user_data.get('user_preferred_lang', 'ar'), escalation_messages['ar'])
+        if should_use_calm_handover:
+            escalation_msg = calm_handover_messages.get(
+                user_data.get('user_preferred_lang', 'ar'),
+                calm_handover_messages["ar"],
+            )
         await send_message_func(user_id, escalation_msg)
         await save_conversation_message_to_firestore(
             user_id,

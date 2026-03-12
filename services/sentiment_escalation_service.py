@@ -129,7 +129,8 @@ class SentimentEscalationService:
     # Profanity/offensive language (mild detection)
     OFFENSIVE_KEYWORDS = {
         "ar": [
-            "غبي", "احمق", "تافه", "سخيف", "وسخ", "قذر", "حقير"
+            "غبي", "احمق", "أحمق", "تافه", "سخيف", "وسخ", "قذر", "حقير",
+            "خرا", "خرة", "زبالة", "ابن الكلب", "يا كلب", "تفو", "يلعن", "لعنة"
         ],
         "en": [
             "stupid", "idiot", "dumb", "useless", "garbage", "trash",
@@ -137,7 +138,12 @@ class SentimentEscalationService:
         ],
         "fr": [
             "stupide", "idiot", "nul", "débile", "pourri"
-        ]
+        ],
+        "franco": [
+            "5ara", "khara", "kol hawa", "kell hawa", "koul hawa",
+            "zbele", "zbale", "ya kalb", "ibn kalb", "tfou", "yl3an",
+            "3alek", "3layk", "3alayk"
+        ],
     }
     
     # Urgency indicators
@@ -292,6 +298,9 @@ class SentimentEscalationService:
         # For Arabic, also check Franco-Arabic (Lebanese often mix)
         if language == "ar":
             keywords.extend(keyword_dict.get("franco", []))
+        # For Franco, also check Arabic-script keywords because users often mix both.
+        if language == "franco":
+            keywords.extend(keyword_dict.get("ar", []))
 
         for keyword in keywords:
             # Use word boundaries to avoid substring matches (e.g., "bad" in "bade")
