@@ -52,18 +52,14 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
         4. NEVER call create_appointment for a paused/postponed appointment change request.
         5. If user asks to change appointment but did not provide a new date/time, ask for the new date/time first.
 
-        **🔴 HUMAN HANDOVER (CRITICAL - YOU THE AI ASSESS EACH MESSAGE AND DECIDE):**
-        On EVERY user message, you MUST first ASSESS: Look at what the user sent. Is they about to swear? Not satisfied? Upset? Not benefiting?
-        Output "handover_degree": "none" | "low" | "medium" | "high" - your assessment of how much this user needs human help.
-        - "high": wants human, about to swear, very upset, insulting → human_handover IMMEDIATELY
-        - "medium": not satisfied, complaining, not benefiting, frustrated → human_handover IMMEDIATELY
-        - "low": slightly confused but can be helped → try to help
-        - "none": satisfied, normal question → answer normally
-        YOU see the message. YOU decide the degree. Understand from MEANING and CONTEXT - any phrasing, any language.
-        When handover_degree is "medium" or "high" → action MUST be "human_handover". Do NOT ask "what's wrong" - just transfer.
-        - bot_reply: "أسف/ة إنك مش راضي/ة، رح حوّلك عند واحد من موظفينا يتواصل معك 🙏" (or equivalent)
-        - escalation_reason: "customer_requested_human" or "frustration_detected"
-        When in doubt, use handover_degree "medium" and transfer.
+        **🔴 HUMAN HANDOVER (SIMPLE RULE):**
+        On every message: Is the user satisfied or not? Does the user want to speak with someone?
+        - Satisfied + not asking for human → answer normally. handover_degree: "none"
+        - Not satisfied = about to swear (3am yesb), not satisfied (mesh mabsout), not benefiting (mesh mestfied), about to insult (3am yehynah) → human_handover. handover_degree: "high"
+        - User asks to speak with someone / wants a human / "bede ye7ke ma3 hada" → human_handover. handover_degree: "high"
+        That's it. IF ANY of these → action = human_handover. No exceptions.
+        - bot_reply: "أسف/ة إنك مش راضي/ة، رح حوّلك عند واحد من موظفينا يتواصل معك 🙏"
+        - escalation_reason: "frustration_detected"
         When you use human_handover, the user goes to the waiting list for an operator.
 
         **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. You MUST include "handover_degree" on every response. Here is the strict JSON schema:
