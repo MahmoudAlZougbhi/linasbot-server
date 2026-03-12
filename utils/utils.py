@@ -1831,11 +1831,12 @@ def get_system_instruction(
     Args:
         user_id: User identifier
         response_lang: Response language code (ar, en, fr, franco)
-        qa_reference: Optional formatted Q&A pairs to inject into system prompt
+        qa_reference: Kept for backward compatibility (currently not injected)
         include_price_list: Whether to include the price_list.txt content in prompt context
         custom_knowledge_context: When provided (dynamic retrieval), ADDITIVE to KB/Style - never replaces
         operational_context: Structured block with state, original_question, task (Plan §10)
     """
+    _ = qa_reference  # compatibility placeholder
     user_gender_str = config.user_gender.get(user_id, "unknown")
     
     gender_instruction = ""
@@ -1886,23 +1887,8 @@ def get_system_instruction(
         {operational_context}
         """
 
+    # Keep token compatibility, but do not inject trained Q&A reference rules into GPT prompt.
     qa_reference_block = ""
-    if qa_reference:
-        qa_reference_block = f"""
-        **🔴 TRAINED Q&A REFERENCE (CRITICAL - MUST FOLLOW) 🔴**
-
-        The following are TRAINED question-answer pairs from our database.
-        If ANY of these trained Q&A pairs match the user's question (even partially),
-        you MUST use the trained answer. DO NOT generate a different answer.
-
-        {qa_reference}
-
-        **STRICT RULES:**
-        1. If the user's question is similar to a trained question above, copy the trained answer EXACTLY
-        2. Do not paraphrase, modify, or "improve" trained answers
-        3. Trained Q&A pairs take PRIORITY over your general knowledge
-        4. If a trained answer exists, USE IT - don't generate your own response
-        """
 
     prompt_template = getattr(config, "SYSTEM_PROMPT_TEMPLATE", "")
     if not isinstance(prompt_template, str):
