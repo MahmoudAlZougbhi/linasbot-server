@@ -302,9 +302,9 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"
         }
         calm_handover_messages = {
-            "ar": "تم تحويلك. رح يكون معك واحد من موظفينا شوي 🙏",
-            "en": "Transferred. One of our staff will be with you shortly 🙏",
-            "fr": "Transféré. Un de nos employés sera avec vous sous peu 🙏",
+            "ar": "أسف/ة إنك مش راضي/ة، رح حوّلك عند واحد من موظفينا يتواصل معك 🙏",
+            "en": "Sorry you're not satisfied. I'll transfer you to one of our staff to connect with you 🙏",
+            "fr": "Désolé que vous ne soyez pas satisfait. Je vous transfère à un de nos employés 🙏",
         }
         issues = set(detected_issues or [])
         should_use_calm_handover = bool(

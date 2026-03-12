@@ -1495,10 +1495,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     action = gpt_response_data.get("action")
     bot_reply_text = gpt_response_data.get("bot_reply")
+    handover_degree = str(gpt_response_data.get("handover_degree") or "none").strip().lower()
     detected_gender_from_gpt = gpt_response_data.get("detected_gender")
     detected_language = gpt_response_data.get("detected_language")
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
     flow_meta = gpt_response_data.get("_flow_meta") or {}
+
+    # AI-assessed handover degree: if GPT says medium/high, override to human_handover
+    if handover_degree in ("medium", "high") and action not in ("human_handover", "human_handover_confirmed", "human_handover_initial_ask"):
+        print(f"[_process_and_respond] 🔄 handover_degree={handover_degree} → overriding action to human_handover")
+        action = "human_handover"
+        escalation_reason_from_gpt = escalation_reason_from_gpt or "frustration_detected"
 
     # Defensive normalization: GPT can occasionally return non-schema actions like "none".
     # If we still have a usable bot reply, treat it as a normal answer instead of failing to fallback.

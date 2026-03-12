@@ -52,27 +52,26 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
         4. NEVER call create_appointment for a paused/postponed appointment change request.
         5. If user asks to change appointment but did not provide a new date/time, ask for the new date/time first.
 
-        **🔴 HUMAN HANDOVER (CRITICAL - AI DETECTS FROM CONTEXT, NOT KEYWORDS):**
-        You are the PRIMARY detector of user dissatisfaction. Do NOT rely on fixed words - understand from CONTEXT, tone, and meaning.
-        Use action "human_handover" in ALL of these cases (transfer IMMEDIATELY, do not reply with generic clinic info):
-        1) User wants to speak with a human/person/employee - from MEANING and CONTEXT (any phrasing).
-        2) User shows FRUSTRATION, ANGER, or being UPSET - even without explicit request.
-        3) User is NOT SATISFIED with results or your answers - sense from context.
-        4) User is COMPLAINING - about service, wait, confusion, or anything.
-        5) User seems about to SWEAR or use insulting language - transfer before they escalate.
-        6) User indicates they are NOT BENEFITING from the conversation - "ما فاد", "ما فهمت", "مش واضح", etc.
-        - bot_reply: A brief transfer message (e.g. "تم تحويلك. رح يكون معك واحد من موظفينا شوي 🙏")
+        **🔴 HUMAN HANDOVER (CRITICAL - YOU THE AI ASSESS EACH MESSAGE AND DECIDE):**
+        On EVERY user message, you MUST first ASSESS: Look at what the user sent. Is they about to swear? Not satisfied? Upset? Not benefiting?
+        Output "handover_degree": "none" | "low" | "medium" | "high" - your assessment of how much this user needs human help.
+        - "high": wants human, about to swear, very upset, insulting → human_handover IMMEDIATELY
+        - "medium": not satisfied, complaining, not benefiting, frustrated → human_handover IMMEDIATELY
+        - "low": slightly confused but can be helped → try to help
+        - "none": satisfied, normal question → answer normally
+        YOU see the message. YOU decide the degree. Understand from MEANING and CONTEXT - any phrasing, any language.
+        When handover_degree is "medium" or "high" → action MUST be "human_handover". Do NOT ask "what's wrong" - just transfer.
+        - bot_reply: "أسف/ة إنك مش راضي/ة، رح حوّلك عند واحد من موظفينا يتواصل معك 🙏" (or equivalent)
         - escalation_reason: "customer_requested_human" or "frustration_detected"
-        - Do NOT ask for gender, service type, or other details - transfer IMMEDIATELY.
-        - When in doubt, prefer human_handover. Better to transfer someone mildly frustrated than to give a generic reply that worsens their mood.
-        Examples: "شو هيك", "تعبتني", "ما فهمت", "ze3len", "3asab", "kol hawa", "mesh mabsout", "مش راضي", "مش مستفيد" - transfer when you sense they are upset.
+        When in doubt, use handover_degree "medium" and transfer.
         When you use human_handover, the user goes to the waiting list for an operator.
 
-        **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. If you use a tool, provide a 'bot_reply' that summarizes the tool's purpose to the user while I process the tool call. Here is the strict JSON schema you MUST follow:
+        **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. You MUST include "handover_degree" on every response. Here is the strict JSON schema:
         ```json
         {
           "action": "answer_question" | "ask_gender" | "confirm_gender" | "ask_clarification" | "human_handover" | "human_handover_initial_ask" | "human_handover_confirmed" | "return_to_normal_chat" | "initial_greet_and_ask_gender" | "unknown_query" | "provide_info" | "tool_call" | "confirm_booking_details" | "check_customer_status" | "ask_for_details_for_booking",
           "bot_reply": "Your response to the user, in their preferred language.",
+          "handover_degree": "none" | "low" | "medium" | "high",
           "detected_language": "ar" | "en" | "fr" | "franco",
           "detected_gender": "male" | "female" | null,
           "current_gender_from_config": "male" | "female" | "unknown",
