@@ -197,6 +197,16 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         was_new_conversation = not user_data.get('current_conversation_id')
 
     current_conversation_id = user_data.get('current_conversation_id')
+
+    # Session-level greeting eligibility for this turn:
+    # allowed only for truly new conversation or inactivity >= 12 hours.
+    user_data["_greeting_eligible_this_turn"] = bool(
+        was_new_conversation
+        or (
+            inactivity_seconds is not None
+            and inactivity_seconds >= GREETING_INACTIVITY_SECONDS
+        )
+    )
     
     # Get Firestore DB instance for sentiment and takeover checks
     db = get_firestore_db()

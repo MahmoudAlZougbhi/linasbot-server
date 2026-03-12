@@ -241,6 +241,25 @@ INTERROGATIVE_PREFIXES = (
     "how",
 )
 
+GREETING_OPENERS = (
+    "مرحبا",
+    "مرحباً",
+    "اهلا",
+    "أهلا",
+    "أهلاً",
+    "هلا",
+    "السلام عليكم",
+    "صباح الخير",
+    "مساء الخير",
+    "hello",
+    "hi",
+    "good morning",
+    "good evening",
+    "bonjour",
+    "salut",
+    "bonsoir",
+)
+
 
 def _is_price_intent(text: str) -> bool:
     normalized = str(text or "").lower()
@@ -438,6 +457,31 @@ def _clean_reply_text(text: str) -> str:
     return value.strip()
 
 
+def _looks_like_greeting_unit(unit: str) -> bool:
+    probe = _clean_reply_text(unit).lower()
+    if not probe:
+        return False
+    return probe.startswith(GREETING_OPENERS)
+
+
+def _strip_redundant_greeting_prefix(reply_text: str) -> str:
+    """
+    Remove a leading greeting sentence when the turn is not eligible for greeting.
+    Keeps original order and only strips the first greeting-like unit when there is
+    enough remaining content.
+    """
+    cleaned = _clean_reply_text(reply_text)
+    units = _split_reply_units(cleaned)
+    if len(units) < 2:
+        return cleaned
+    if not _looks_like_greeting_unit(units[0]):
+        return cleaned
+    remaining = " ".join(units[1:]).strip()
+    if len(remaining) < 20:
+        return cleaned
+    return remaining
+
+
 def _split_reply_units(text: str) -> list:
     cleaned = _clean_reply_text(text)
     if not cleaned:
@@ -500,14 +544,46 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
         if not looks_verbose:
             return cleaned
 
-        info_unit = next((u for u in units if not _looks_like_question(u)), units[0])
-        question_unit = next((u for u in units if _looks_like_question(u) and u != info_unit), "")
+        first_info_index = next(
+            (idx for idx, unit in enumerate(units) if not _looks_like_question(unit)),
+            None,
+        )
 
-        info_unit = _truncate_chars(info_unit, 180)
+        # If everything looks like a question, keep the first one only.
+        if first_info_index is None:
+            return _truncate_chars(units[0], 220)
+
+        info_unit = _truncate_chars(units[first_info_index], 180)
+
+        # Prefer a follow-up question that appears AFTER the selected info sentence
+        # so we preserve natural order and avoid reversed output.
+        question_unit = next(
+            (
+                unit
+                for idx, unit in enumerate(units)
+                if idx > first_info_index and _looks_like_question(unit)
+            ),
+            "",
+        )
+
         if question_unit:
             question_unit = _truncate_chars(question_unit, 140)
             combined = f"{info_unit} {question_unit}".strip()
             return _truncate_chars(combined, 320)
+
+        # If no trailing question exists, allow a short leading greeting question (same order).
+        leading_question = next(
+            (
+                unit
+                for idx, unit in enumerate(units[:first_info_index])
+                if _looks_like_question(unit)
+            ),
+            "",
+        )
+        if leading_question and first_info_index <= 1:
+            combined = f"{_truncate_chars(leading_question, 140)} {info_unit}".strip()
+            return _truncate_chars(combined, 320)
+
         return info_unit
 
     return cleaned
@@ -1323,6 +1399,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         bot_reply_text,
         current_preferred_lang,
     )
+
+    # Enforce greeting timing globally: greeting only for new session or >=12h inactivity.
+    # If AI includes an opening greeting in regular turns, strip only the leading greeting line.
+    greeting_eligible_this_turn = bool(user_data.get("_greeting_eligible_this_turn", False))
+    if not greeting_eligible_this_turn and action not in {"initial_greet_and_ask_gender", "ask_gender"}:
+        bot_reply_text = _strip_redundant_greeting_prefix(bot_reply_text)
 
     def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []
