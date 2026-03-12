@@ -130,19 +130,28 @@ class SentimentEscalationService:
     OFFENSIVE_KEYWORDS = {
         "ar": [
             "غبي", "احمق", "أحمق", "تافه", "سخيف", "وسخ", "قذر", "حقير",
-            "خرا", "خرة", "زبالة", "ابن الكلب", "يا كلب", "تفو", "يلعن", "لعنة"
+            "خرا", "خرة", "زبالة", "ابن الكلب", "يا كلب", "تفو", "يلعن", "لعنة",
+            "عير", "عيركم", "بهيم", "بهائم", "ما فهم", "مفهم"
         ],
         "en": [
             "stupid", "idiot", "dumb", "useless", "garbage", "trash",
-            "crap", "suck", "sucks"
+            "crap", "suck", "sucks", "moron", "fool", "asshole", "dick",
+            "shit", "bullshit", "damn you", "screw you", "fuck", "fucking",
+            "piece of shit", "motherfucker", "bastard", "sucker"
         ],
         "fr": [
-            "stupide", "idiot", "nul", "débile", "pourri"
+            "stupide", "idiot", "nul", "débile", "pourri", "con", "connard",
+            "merde", "putain", "enculé", "salope", "crétin", "imbécile",
+            "dégage", "va te faire", "ferme ta gueule", "ta gueule"
         ],
         "franco": [
             "5ara", "khara", "kol hawa", "kell hawa", "koul hawa",
             "zbele", "zbale", "ya kalb", "ibn kalb", "tfou", "yl3an",
-            "3alek", "3layk", "3alayk"
+            "3alek", "3layk", "3alayk",
+            "ahbal", "a7bal", "hmar", "7mar", "kalb", "zbaleh", "zbeleh",
+            "manyk", "emak", "e5tak", "e5t", "bhim", "bala fhem", "ma fhem",
+            "eyre", "eyreh", "eyre fikon", "eyreh fikon", "m2yra", "ma3e",
+            "kiss emak", "kiss e5tak", "bala fhem", "mafhem",
         ],
     }
     
