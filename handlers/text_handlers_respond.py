@@ -528,7 +528,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             config.user_greeting_stage[user_id] = 2
             is_initial_message_for_gpt = False
 
-            gender_acknowledgement = "أهلاً بك أستاذ " if current_gender == "male" else "أهلاً بكِ سيدتي "
+            gender_acknowledgement = "أهلاً بك أستاذ " if current_gender == "male" else "أهلاً بكِ عزيزتي "
             user_name_ar = str(user_name or "").strip()
             include_name = bool(re.search(r"[\u0600-\u06FF]", user_name_ar))
             name_segment = f"{user_name_ar}! " if include_name else ""

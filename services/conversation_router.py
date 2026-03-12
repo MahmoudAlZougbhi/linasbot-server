@@ -330,10 +330,10 @@ def route(user_id: str, message: str, state: dict) -> Optional[str]:
 
 # --- Greeting templates (Phase 7) ---
 GREETING_TEMPLATES = {
-    "ar": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناس ليزر 🌷 كيف فيني أساعدك اليوم؟",
+    "ar": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز لينا ليزر 🌷 كيف فيني أساعدك اليوم؟",
     "en": "Hello! 😊 I'm Marwa, the smart assistant from Lina's Laser Center 🌷 How can I help you today?",
     "fr": "Bonjour ! 😊 Je suis Marwa, l'assistante intelligente de Lina's Laser Center 🌷 Comment puis-je vous aider aujourd'hui ?",
-    "franco": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناس ليزر 🌷 كيف فيني أساعدك اليوم؟",
+    "franco": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز لينا ليزر 🌷 كيف فيني أساعدك اليوم؟",
 }
 
 # --- Fallback templates (Phase 11) ---

@@ -102,6 +102,10 @@ def validate_language_match(user_language: str, bot_response: str, detected_resp
     return True, ""
 
 
+def _contains_arabic_script(text: str) -> bool:
+    return bool(re.search(r"[\u0600-\u06FF]", str(text or "")))
+
+
 def looks_like_working_hours_reply(text: str) -> bool:
     """Heuristic: detect replies that are clearly about clinic hours/opening times."""
     normalized = str(text or "").strip().lower()
@@ -548,15 +552,47 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "This includes names, brands, and abbreviations; write them phonetically in Arabic letters.\n"
         )
 
+    customer_name_context = (
+        "NOT KNOWN - You MUST ask for their full name (see Name Capture Rules in Style Guide)"
+    )
+    if name_is_known:
+        customer_name_context = (
+            f"KNOWN - {user_name} (First name: {customer_first_name}). Do NOT ask for name again."
+        )
+
+    arabic_addressing_policy = ""
+    if response_language == "ar":
+        if current_gender == "male":
+            preferred_title = "أستاذ"
+        elif current_gender == "female":
+            preferred_title = "عزيزتي"
+        else:
+            preferred_title = "حضرتك"
+
+        if name_is_known and not _contains_arabic_script(user_name):
+            customer_name_context = (
+                f"KNOWN (non-Arabic script name). Do NOT transliterate/use this name in Arabic replies. "
+                f"Address the user as '{preferred_title}' and do NOT ask for the name again."
+            )
+
+        arabic_addressing_policy = (
+            "- **Arabic Addressing Rule**: Use respectful addressing in Arabic replies only:\n"
+            "  - male: أستاذ\n"
+            "  - female: عزيزتي\n"
+            "  - unknown gender: حضرتك\n"
+            "  Never use 'يا' followed by a transliterated name (example: يا تست).\n"
+        )
+
     # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
     dynamic_customer_context = (
         "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
-        f"- **Customer Name**: {'KNOWN - ' + user_name + ' (First name: ' + str(customer_first_name) + '). Do NOT ask for name again.' if name_is_known else 'NOT KNOWN - You MUST ask for their full name (see Name Capture Rules in Style Guide)'}\n"
+        f"- **Customer Name**: {customer_name_context}\n"
         f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, create_appointment, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{current_gender}'"
         + (" - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n" if current_gender in ['male', 'female'] else " - UNKNOWN. Follow gender collection rules in Style Guide.\n")
         + f"- **Language**: Detected as '{current_preferred_lang}' - You MUST respond in: '{response_language}'\n"
         + arabic_script_policy
+        + arabic_addressing_policy
         + f"- **current_gender_from_config**: '{current_gender}'\n"
         f"- **detected_language**: '{current_preferred_lang}'\n"
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
@@ -1669,6 +1705,7 @@ You MUST respond in **{response_language.upper()}** ONLY.
 - If response_language is "en": Write your ENTIRE response in English. NO Arabic characters.
 - If response_language is "ar": Write your ENTIRE response in Arabic script (العربية) with ZERO Latin letters.
 - For Arabic: names/brands/codes must be written phonetically in Arabic letters (example: Marwa -> مروى, Test -> تيست).
+- For Arabic addressing: use أستاذ (male), عزيزتي (female), حضرتك (unknown). Never use "يا" + transliterated names.
 - If response_language is "fr": Write your ENTIRE response in French. NO Arabic characters.
 
 Rewrite your response in the correct language. Return ONLY a JSON object with "action" and "bot_reply"."""
@@ -1681,6 +1718,8 @@ Rewrite your response in the correct language. Return ONLY a JSON object with "a
                 if response_language == "ar":
                     correction_system_message += (
                         " Arabic replies must contain Arabic script only with no Latin letters, including names."
+                        " Use respectful addressing: أستاذ (male), عزيزتي (female), حضرتك (unknown)."
+                        " Do not use 'يا' + transliterated names."
                     )
                 correction_response = await client.chat.completions.create(
                     model="gpt-4o-mini",
