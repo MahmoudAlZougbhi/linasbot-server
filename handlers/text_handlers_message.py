@@ -323,8 +323,16 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             escalation_msg,
             current_conversation_id,
             user_name,
-            user_data.get('phone_number')
+            user_data.get('phone_number'),
+            metadata={"handled_by": "ai", "source": "smart_message", "event": "auto_handover_escalation"},
         )
+        # Safety re-assertion: avoid any downstream save path from accidentally
+        # reverting the conversation back to bot_active.
+        try:
+            if current_conversation_id:
+                await set_human_takeover_status(user_id, current_conversation_id, True)
+        except Exception as takeover_fix_error:
+            print(f"⚠️ Failed to re-assert takeover status after escalation save: {takeover_fix_error}")
 
         notify_human_on_whatsapp(
             user_name,
@@ -452,7 +460,8 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                             await send_message_func(user_id, handover_msg)
                             await save_conversation_message_to_firestore(
                                 user_id, "ai", handover_msg, current_conversation_id,
-                                user_name, user_data.get('phone_number')
+                                user_name, user_data.get('phone_number'),
+                                metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_notice"},
                             )
                             user_data['notified_human_takeover'] = True
                     else:
@@ -462,7 +471,8 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                         await send_message_func(user_id, waiting_msg)
                         await save_conversation_message_to_firestore(
                             user_id, "ai", waiting_msg, current_conversation_id,
-                            user_name, user_data.get('phone_number')
+                            user_name, user_data.get('phone_number'),
+                            metadata={"handled_by": "ai", "source": "smart_message", "event": "waiting_queue_autoreply"},
                         )
                     return
             else:
