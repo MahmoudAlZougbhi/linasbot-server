@@ -321,6 +321,15 @@ class SentimentEscalationService:
             pattern = r'\b' + re.escape(keyword) + r'\b'
             if re.search(pattern, message, re.IGNORECASE):
                 return True
+        # For offensive: also match elongated variants (5arahhhh, kharaaa, etc.)
+        if keyword_dict is self.OFFENSIVE_KEYWORDS:
+            message_lower = message.lower()
+            for base in ("5ara", "khara", "kol hawa", "kol 5ara", "kol khara"):
+                if base in message_lower:
+                    # Match base + optional repeated chars (5arahhhh, etc.)
+                    flexible = r'\b' + re.escape(base) + r'[a-zA-Z0-9]*\b'
+                    if re.search(flexible, message, re.IGNORECASE):
+                        return True
         return False
     
     def _check_repetition(self, user_id: str, current_message: str) -> int:
