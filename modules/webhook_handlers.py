@@ -174,6 +174,63 @@ def extract_meta_message_content(message) -> Dict[str, Any]:
         return {"raw": message.model_dump()}
 
 
+def _extract_text_from_content(content: Any) -> str:
+    if isinstance(content, dict):
+        return str(content.get("text", "") or "")
+    return str(content or "")
+
+
+def _count_non_empty_lines(text: str) -> int:
+    normalized = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    return len([line for line in normalized.split("\n") if line.strip()])
+
+
+def _is_image_attachment(item: Any) -> bool:
+    if isinstance(item, str):
+        lower = item.lower()
+        return lower.startswith("data:image/") or any(
+            ext in lower for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif")
+        )
+
+    if isinstance(item, dict):
+        item_type = str(item.get("type") or item.get("mime_type") or "").lower()
+        if "image" in item_type:
+            return True
+        candidate = (
+            item.get("url")
+            or item.get("image_id")
+            or item.get("image_url")
+            or item.get("link")
+            or ""
+        )
+        return _is_image_attachment(candidate)
+
+    return False
+
+
+def _count_images_in_single_message(message_type: str, content: Any) -> int:
+    if isinstance(content, dict):
+        for key in ("images", "image_ids", "image_urls"):
+            values = content.get(key)
+            if isinstance(values, list):
+                return sum(1 for item in values if _is_image_attachment(item) or item)
+
+        attachments = content.get("attachments")
+        if isinstance(attachments, list):
+            return sum(1 for item in attachments if _is_image_attachment(item))
+
+        if content.get("image_id") or content.get("image_url"):
+            return 1
+
+    if isinstance(content, list):
+        return sum(1 for item in content if _is_image_attachment(item) or item)
+
+    if message_type == "image":
+        return 1
+
+    return 0
+
+
 async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
     """Process a parsed message regardless of provider. Uses normalized phone as canonical user_id to prevent duplicates."""
     from utils.phone_utils import normalize_phone, is_phone_like_user_id
@@ -207,8 +264,50 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
             if d and raw_user_id in d and user_id not in d:
                 d[user_id] = d[raw_user_id]
 
-    # For text: defer external lookup so user message can save+broadcast first (instant in Live Chat)
+    # Per-message guardrails (not conversation-wide): limit text lines and image count.
     message_type = parsed_message.get("type", "")
+    content = parsed_message.get("content", {})
+
+    if message_type == "text":
+        user_text = _extract_text_from_content(content)
+        line_count = _count_non_empty_lines(user_text)
+        if line_count > config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE:
+            await adapter.send_text_message(
+                user_id,
+                f"لطفاً خفّف طول الرسالة: الحد الأقصى للرسالة الواحدة هو {config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE} سطر. "
+                "قسّمها على أكثر من رسالة قصيرة."
+            )
+            log_report_event(
+                "single_message_text_line_limit_blocked",
+                user_name or user_id,
+                config.user_gender.get(user_id, "unspecified"),
+                {
+                    "line_count": line_count,
+                    "max_allowed_lines": config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE,
+                    "provider": WhatsAppFactory.get_current_provider(),
+                },
+            )
+            return
+
+    image_count = _count_images_in_single_message(message_type, content)
+    if image_count > config.MAX_IMAGES_PER_SINGLE_MESSAGE:
+        await adapter.send_text_message(
+            user_id,
+            f"لطفاً قلّل عدد الصور: الحد الأقصى للرسالة الواحدة هو {config.MAX_IMAGES_PER_SINGLE_MESSAGE} صور."
+        )
+        log_report_event(
+            "single_message_image_limit_blocked",
+            user_name or user_id,
+            config.user_gender.get(user_id, "unspecified"),
+            {
+                "image_count": image_count,
+                "max_allowed_images": config.MAX_IMAGES_PER_SINGLE_MESSAGE,
+                "provider": WhatsAppFactory.get_current_provider(),
+            },
+        )
+        return
+
+    # For text: defer external lookup so user message can save+broadcast first (instant in Live Chat)
     defer_external = message_type == "text" and bool(normalized_phone)
     external_exists = None
     if normalized_phone and not defer_external:

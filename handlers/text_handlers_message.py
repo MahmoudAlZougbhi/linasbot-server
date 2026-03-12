@@ -128,6 +128,22 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         print(f"[handle_message] ERROR: No usable text in message for user {user_id}. raw_msg is empty. Exiting.")
         return
 
+    # Per single-message guardrail: limit long pasted text to avoid excessive token usage.
+    non_empty_line_count = len(
+        [ln for ln in raw_msg.replace("\r\n", "\n").replace("\r", "\n").split("\n") if ln.strip()]
+    )
+    if non_empty_line_count > config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE:
+        await send_message_func(
+            user_id,
+            f"لطفاً خفّف طول الرسالة: الحد الأقصى للرسالة الواحدة هو {config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE} سطر. "
+            "قسّمها على أكثر من رسالة قصيرة."
+        )
+        print(
+            f"[handle_message] Blocked long single message for user {user_id}: "
+            f"{non_empty_line_count} lines (limit: {config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE})"
+        )
+        return
+
     # Session timing for greeting policy (new conversation or inactivity >= 1h)
     now_ts = datetime.datetime.now()
     previous_user_msg_ts = user_data.get("last_user_message_at")

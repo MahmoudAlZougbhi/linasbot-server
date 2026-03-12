@@ -17,6 +17,7 @@ from services.conversation_router import (
 )
 from utils.datetime_utils import detect_reschedule_intent
 import time
+import re
 
 PRICE_INTENT_KEYWORDS = [
     "price",
@@ -46,10 +47,439 @@ PRICE_INTENT_KEYWORDS = [
     "price list",
 ]
 
+LASER_HAIR_INTENT_KEYWORDS = [
+    "ليزر شعر",
+    "إزالة شعر",
+    "ازالة شعر",
+    "laser hair",
+    "hair laser",
+    "epilation",
+    "laser removal",
+    "ليزر",
+]
+
+BODY_AREA_HINT_KEYWORDS = [
+    "وجه",
+    "وش",
+    "خد",
+    "شنب",
+    "دقن",
+    "إبط",
+    "ابط",
+    "بيكيني",
+    "حساسة",
+    "يد",
+    "ايد",
+    "ذراع",
+    "رجل",
+    "فخذ",
+    "ظهر",
+    "صدر",
+    "بطن",
+    "رقبة",
+    "underarm",
+    "arm",
+    "arms",
+    "leg",
+    "legs",
+    "face",
+    "back",
+    "chest",
+    "bikini",
+    "body",
+]
+
+CLINIC_SCOPE_KEYWORDS = [
+    "ليزر",
+    "laser",
+    "epilation",
+    "dpl",
+    "co2",
+    "tattoo",
+    "تاتو",
+    "وشم",
+    "hair",
+    "شعر",
+    "جلسة",
+    "جلسات",
+    "session",
+    "sessions",
+    "سعر",
+    "اسعار",
+    "price",
+    "pricing",
+    "cost",
+    "موعد",
+    "مواعيد",
+    "appointment",
+    "appointments",
+    "حجز",
+    "book",
+    "booking",
+    "فرع",
+    "branch",
+    "branches",
+    "العيادة",
+    "المركز",
+    "clinic",
+    "center",
+    "ليناز",
+    "لينا",
+    "خدمة",
+    "خدمات",
+    "service",
+    "services",
+]
+
+OFF_TOPIC_KEYWORDS = [
+    "رئيس",
+    "رئاسة",
+    "سياسة",
+    "وزير",
+    "حكومة",
+    "برلمان",
+    "انتخابات",
+    "دولة",
+    "capital",
+    "president",
+    "prime minister",
+    "government",
+    "politics",
+    "election",
+    "weather",
+    "temperature",
+    "news",
+    "football",
+    "soccer",
+    "basketball",
+    "movie",
+    "series",
+    "song",
+    "bitcoin",
+    "crypto",
+    "stock",
+    "programming",
+    "python",
+    "java",
+    "javascript",
+    "math",
+    "physics",
+    "chemistry",
+]
+
+GENERAL_QUESTION_PREFIX_RE = re.compile(
+    r"^(?:مين|من\s+هو|من\s+هي|شو|ما\s+هو|ما\s+هي|what|who|where|when|why|how)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+
+ALLOWED_GENERAL_QUERIES = [
+    "شو اسمك",
+    "اسمك",
+    "من معي",
+    "مين معي",
+    "who are you",
+    "what is your name",
+    "what's your name",
+    "how are you",
+    "كيفك",
+    "مرحبا",
+    "اهلا",
+    "السلام عليكم",
+    "merci",
+    "thanks",
+    "thank you",
+]
+
+ASK_ONE_BY_ONE_ACTIONS = {
+    "initial_greet_and_ask_gender",
+    "ask_gender",
+    "ask_for_details_for_booking",
+    "ask_for_service_type",
+    "ask_for_details",
+    "ask_for_tattoo_photo",
+    "ask_clarification",
+}
+
+BRIEF_REPLY_ACTIONS = {
+    "answer_question",
+    "normal_chat",
+    "provide_info",
+    "unknown_query",
+    "tool_call",
+    "check_customer_status",
+}
+
+INTERROGATIVE_PREFIXES = (
+    "شو",
+    "شو ",
+    "أي",
+    "اي",
+    "هل",
+    "ممكن",
+    "فينا",
+    "قديش",
+    "كم",
+    "what",
+    "which",
+    "could",
+    "can",
+    "where",
+    "when",
+    "who",
+    "how",
+)
+
 
 def _is_price_intent(text: str) -> bool:
     normalized = str(text or "").lower()
     return any(keyword in normalized for keyword in PRICE_INTENT_KEYWORDS)
+
+
+def _is_laser_hair_intent(text: str) -> bool:
+    normalized = str(text or "").lower()
+    return any(keyword in normalized for keyword in LASER_HAIR_INTENT_KEYWORDS)
+
+
+def _has_body_area_hint(text: str) -> bool:
+    normalized = str(text or "").lower()
+    return any(keyword in normalized for keyword in BODY_AREA_HINT_KEYWORDS)
+
+
+def _contains_arabic_chars(value: str) -> bool:
+    return bool(re.search(r"[\u0600-\u06FF]", str(value or "")))
+
+
+def _latin_name_token_to_arabic(token: str) -> str:
+    token = (token or "").strip().lower()
+    if not token:
+        return ""
+
+    digraph_map = (
+        ("tch", "تش"),
+        ("sch", "ش"),
+        ("sh", "ش"),
+        ("kh", "خ"),
+        ("gh", "غ"),
+        ("th", "ث"),
+        ("dh", "ذ"),
+        ("ch", "تش"),
+        ("ph", "ف"),
+        ("qu", "كو"),
+        ("oo", "و"),
+        ("ou", "و"),
+        ("ee", "ي"),
+        ("ie", "ي"),
+        ("aa", "ا"),
+        ("ay", "اي"),
+        ("ai", "اي"),
+        ("ck", "ك"),
+    )
+    for latin_seq, arabic_seq in digraph_map:
+        token = token.replace(latin_seq, arabic_seq)
+
+    single_map = {
+        "a": "ا",
+        "b": "ب",
+        "c": "ك",
+        "d": "د",
+        "e": "ي",
+        "f": "ف",
+        "g": "ج",
+        "h": "ه",
+        "i": "ي",
+        "j": "ج",
+        "k": "ك",
+        "l": "ل",
+        "m": "م",
+        "n": "ن",
+        "o": "و",
+        "p": "ب",
+        "q": "ق",
+        "r": "ر",
+        "s": "س",
+        "t": "ت",
+        "u": "و",
+        "v": "ف",
+        "w": "و",
+        "x": "كس",
+        "y": "ي",
+        "z": "ز",
+    }
+
+    out = []
+    for ch in token:
+        if re.match(r"[\u0600-\u06FF]", ch):
+            out.append(ch)
+            continue
+        mapped = single_map.get(ch)
+        if mapped:
+            out.append(mapped)
+    return "".join(out).strip()
+
+
+def _transliterate_name_to_arabic(name: str) -> str:
+    raw_name = str(name or "").strip()
+    if not raw_name:
+        return ""
+    if _contains_arabic_chars(raw_name):
+        return raw_name
+
+    normalized = re.sub(r"[^A-Za-zÀ-ÿ\s\-']", " ", raw_name)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if not normalized:
+        return ""
+
+    arabic_tokens = []
+    for token in re.split(r"[\s\-]+", normalized):
+        latin_token = token.encode("ascii", "ignore").decode("ascii")
+        arabic_token = _latin_name_token_to_arabic(latin_token)
+        if arabic_token:
+            arabic_tokens.append(arabic_token)
+
+    return " ".join(arabic_tokens).strip()
+
+
+def _build_arabic_respectful_address(current_gender: str, user_name: str) -> str:
+    if current_gender == "male":
+        title = "أستاذ"
+    elif current_gender == "female":
+        title = "عزيزتي"
+    else:
+        title = "حضرتك"
+
+    normalized_name = str(user_name or "").strip()
+    if not normalized_name or normalized_name.lower() in {"client", "unknown customer"}:
+        return title
+
+    if _contains_arabic_chars(normalized_name):
+        return f"{title} {normalized_name}"
+
+    name_ar = _transliterate_name_to_arabic(normalized_name)
+    if name_ar:
+        return f"{title} {name_ar}"
+    return title
+
+
+def _build_single_laser_area_question(current_gender: str, user_name: str) -> str:
+    respectful_address = _build_arabic_respectful_address(current_gender, user_name)
+    verb = "تعملي" if current_gender == "female" else "تعمل"
+    return f"أكيد {respectful_address}، ممكن تخبرني شو المنطقة اللي بدك {verb} ليزر شعر عليها؟"
+
+
+def _is_out_of_clinic_scope_query(text: str) -> bool:
+    probe = str(text or "").strip()
+    if len(probe) < 3:
+        return False
+
+    lowered = probe.lower()
+
+    if any(phrase in lowered for phrase in ALLOWED_GENERAL_QUERIES):
+        return False
+
+    if any(keyword in lowered for keyword in CLINIC_SCOPE_KEYWORDS):
+        return False
+
+    if any(keyword in lowered for keyword in OFF_TOPIC_KEYWORDS):
+        return True
+
+    # Broad general-knowledge question with no clinic context.
+    if GENERAL_QUESTION_PREFIX_RE.search(lowered) and len(lowered.split()) >= 3:
+        return True
+
+    return False
+
+
+def _build_out_of_scope_reply(lang: str) -> str:
+    messages = {
+        "ar": "أنا مخصّصة فقط لخدمات عيادة ليناز ليزر. فيني ساعدك بأي سؤال عن خدمات الليزر، الأسعار، أو المواعيد.",
+        "franco": "أنا مخصّصة فقط لخدمات عيادة ليناز ليزر. فيني ساعدك بأي سؤال عن خدمات الليزر، الأسعار، أو المواعيد.",
+        "en": "I can only help with Linas Laser clinic services. I can assist with laser services, pricing, and appointments.",
+        "fr": "Je peux uniquement aider concernant les services de la clinique Linas Laser : services laser, prix et rendez-vous.",
+    }
+    return messages.get((lang or "ar").lower(), messages["ar"])
+
+
+def _clean_reply_text(text: str) -> str:
+    value = str(text or "")
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
+    value = re.sub(r"\n{2,}", "\n", value)
+    value = re.sub(r"[ \t]+", " ", value)
+    return value.strip()
+
+
+def _split_reply_units(text: str) -> list:
+    cleaned = _clean_reply_text(text)
+    if not cleaned:
+        return []
+    units = re.split(r"(?:\n+|(?<=[.!؟?])\s+)", cleaned)
+    out = []
+    for unit in units:
+        unit = re.sub(r"^\s*(?:\d+[.)]|[0-9]+️⃣|[-*•])\s*", "", unit.strip())
+        if unit:
+            out.append(unit)
+    return out
+
+
+def _looks_like_question(unit: str) -> bool:
+    probe = str(unit or "").strip()
+    if not probe:
+        return False
+    if "؟" in probe or "?" in probe:
+        return True
+    lowered = probe.lower()
+    return lowered.startswith(INTERROGATIVE_PREFIXES)
+
+
+def _truncate_chars(text: str, max_chars: int) -> str:
+    content = str(text or "").strip()
+    if len(content) <= max_chars:
+        return content
+    trimmed = content[: max_chars - 1].rstrip()
+    return f"{trimmed}…"
+
+
+def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
+    """
+    Enforce concise turn-by-turn messaging:
+    - Ask actions: one short question only
+    - Answer actions: concise answer (max one follow-up question)
+    """
+    cleaned = _clean_reply_text(bot_reply)
+    if not cleaned:
+        return cleaned
+
+    action = str(action or "").strip().lower()
+    units = _split_reply_units(cleaned)
+    if not units:
+        return cleaned
+
+    if action in ASK_ONE_BY_ONE_ACTIONS:
+        question_unit = next((u for u in units if _looks_like_question(u)), units[0])
+        question_unit = _truncate_chars(question_unit, 220)
+        if lang in ("ar", "franco") and ("؟" not in question_unit and "?" not in question_unit):
+            question_unit = f"{question_unit}؟"
+        return question_unit
+
+    if action in BRIEF_REPLY_ACTIONS:
+        looks_verbose = (
+            len(cleaned) > 320
+            or len(units) > 3
+            or bool(re.search(r"(?:^|\n)\s*(?:\d+[.)]|[0-9]+️⃣|[-*•])\s*", cleaned))
+        )
+        if not looks_verbose:
+            return cleaned
+
+        info_unit = next((u for u in units if not _looks_like_question(u)), units[0])
+        question_unit = next((u for u in units if _looks_like_question(u) and u != info_unit), "")
+
+        info_unit = _truncate_chars(info_unit, 180)
+        if question_unit:
+            question_unit = _truncate_chars(question_unit, 140)
+            combined = f"{info_unit} {question_unit}".strip()
+            return _truncate_chars(combined, 320)
+        return info_unit
+
+    return cleaned
 
 
 async def _process_and_respond(user_id: str, user_name: str, user_input_to_process: str, user_data: dict, send_message_func, send_action_func):
@@ -278,6 +708,32 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             )
         return
 
+    # Hard guardrail: refuse clearly out-of-clinic questions before AI call.
+    if _is_out_of_clinic_scope_query(user_input_to_process):
+        out_of_scope_reply = _build_out_of_scope_reply(current_preferred_lang)
+        await send_message_func(user_id, out_of_scope_reply)
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            out_of_scope_reply,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai", "source": "out_of_scope_guard"},
+        )
+        log_interaction(
+            user_id,
+            user_input_to_process,
+            out_of_scope_reply,
+            "out_of_scope_guard",
+            user_name=user_name,
+            user_phone=user_data.get("phone_number"),
+            user_gender=current_gender,
+            customer_exists=user_data.get("crm_customer_exists"),
+            customer_file_status=user_data.get("customer_file_status"),
+        )
+        return
+
     # ===== AI SMART EMPLOYEE: ROUTER (Phase 2, 10) =====
     config.ensure_conversation_state(user_data)
     conv_state = config.get_conversation_state(user_id, user_data)
@@ -349,7 +805,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 2. Greeting only (Phase 7)
     if (not ai_primary_mode) and router_action == "greeting":
-        greeting_msg = get_dynamic_message("router_greeting", router_reply_lang) or GREETING_TEMPLATES.get(router_reply_lang, GREETING_TEMPLATES["ar"])
+        if router_reply_lang in ("ar", "franco"):
+            respectful_address = _build_arabic_respectful_address(current_gender, user_name)
+            greeting_msg = (
+                f"مرحباً {respectful_address}، أنا مروى، المساعد الذكي في ليناز ليزر. كيف فيني ساعدك؟"
+            )
+        else:
+            greeting_msg = get_dynamic_message("router_greeting", router_reply_lang) or GREETING_TEMPLATES.get(router_reply_lang, GREETING_TEMPLATES["ar"])
         await send_message_func(user_id, greeting_msg)
         await save_conversation_message_to_firestore(user_id, "ai", greeting_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_greeting"})
         log_interaction(
@@ -528,12 +990,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             config.user_greeting_stage[user_id] = 2
             is_initial_message_for_gpt = False
 
-            gender_acknowledgement = "أهلاً بك أستاذ " if current_gender == "male" else "أهلاً بكِ عزيزتي "
-            user_name_ar = str(user_name or "").strip()
-            include_name = bool(re.search(r"[\u0600-\u06FF]", user_name_ar))
-            name_segment = f"{user_name_ar}! " if include_name else ""
+            respectful_address = _build_arabic_respectful_address(current_gender, user_name)
+            gender_acknowledgement = "أهلاً بكِ " if current_gender == "female" else "أهلاً بك "
             gender_ack_message = (
-                f"{gender_acknowledgement}{name_segment}شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي."
+                f"{gender_acknowledgement}{respectful_address}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي."
             )
             await send_message_func(user_id, gender_ack_message)
             await save_conversation_message_to_firestore(
@@ -659,6 +1119,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         response_lang=current_preferred_lang,
                     )
                     if action == "ask_clarification" and clarification:
+                        clarification = _apply_turn_by_turn_policy(
+                            "ask_clarification",
+                            clarification,
+                            current_preferred_lang,
+                        )
                         user_data['pending_clarification_query'] = query_to_send_to_gpt
                         user_data['original_question'] = query_to_send_to_gpt
                         user_data['awaiting_clarification'] = True
@@ -776,6 +1241,52 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 get_dynamic_message("generic_error_message", current_preferred_lang)
                 or "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
             )
+
+    # Concise guardrail for laser-hair discovery:
+    # if user asks generally for laser hair and AI returns a long structured block,
+    # force a single focused question about target area.
+    context_query = (
+        user_data.get("original_question")
+        or user_data.get("pending_clarification_query")
+        or user_input_to_process
+    )
+    looks_like_laser_hair_discovery = _is_laser_hair_intent(context_query) and not _has_body_area_hint(context_query)
+    looks_over_verbose = bool(
+        bot_reply_text
+        and (
+            len(str(bot_reply_text)) > 260
+            or "١️⃣" in str(bot_reply_text)
+            or "1️⃣" in str(bot_reply_text)
+            or "\n-" in str(bot_reply_text)
+        )
+    )
+    if (
+        current_preferred_lang in ("ar", "franco")
+        and looks_like_laser_hair_discovery
+        and (
+            action == "ask_gender"
+            or (
+                looks_over_verbose
+                and action in {
+                    "answer_question",
+                    "normal_chat",
+                    "provide_info",
+                    "unknown_query",
+                    "ask_for_details_for_booking",
+                    "ask_for_details",
+                    "ask_clarification",
+                }
+            )
+        )
+    ):
+        action = "ask_clarification"
+        bot_reply_text = _build_single_laser_area_question(current_gender, user_name)
+
+    bot_reply_text = _apply_turn_by_turn_policy(
+        action,
+        bot_reply_text,
+        current_preferred_lang,
+    )
 
     def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []

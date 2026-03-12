@@ -31,7 +31,10 @@ async def handle_photo_message(user_id: str, user_name: str, image_url: str, use
         )
         return
 
-    if config.user_photo_analysis_count[user_id] >= config.MAX_PHOTO_ANALYSIS_PER_USER:
+    if (
+        getattr(config, "ENFORCE_TOTAL_PHOTO_ANALYSIS_LIMIT", False)
+        and config.user_photo_analysis_count[user_id] >= config.MAX_PHOTO_ANALYSIS_PER_USER
+    ):
         await send_message_func(
             user_id,
             "عذراً، لقد وصلت إلى الحد الأقصى من تحليل الصور المسموح به في الوقت الحالي (10 صور). "

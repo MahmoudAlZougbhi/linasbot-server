@@ -571,8 +571,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         if name_is_known and not _contains_arabic_script(user_name):
             customer_name_context = (
-                f"KNOWN (non-Arabic script name). Do NOT transliterate/use this name in Arabic replies. "
-                f"Address the user as '{preferred_title}' and do NOT ask for the name again."
+                f"KNOWN (non-Arabic script name): {user_name}. "
+                "In Arabic replies, transliterate this name to Arabic letters and include it after the respectful title."
             )
 
         arabic_addressing_policy = (
@@ -580,8 +580,27 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "  - male: أستاذ\n"
             "  - female: عزيزتي\n"
             "  - unknown gender: حضرتك\n"
+            "  If customer name is known, include it after the respectful title in Arabic letters.\n"
             "  Never use 'يا' followed by a transliterated name (example: يا تست).\n"
         )
+
+    arabic_brand_policy = ""
+    if response_language == "ar":
+        arabic_brand_policy = (
+            "- **Arabic Clinic Naming Rule**: When mentioning the clinic in Arabic, write exactly: ليناز ليزر.\n"
+        )
+
+    concise_turn_policy = (
+        "- **Turn-by-Turn Policy**: Keep the reply concise and proportional to the user's question.\n"
+        "- Ask at most ONE question in this turn.\n"
+        "- Do NOT send long numbered checklists or many questions at once unless the user explicitly asks for a full detailed list.\n"
+    )
+
+    domain_scope_policy = (
+        "- **Domain Scope Policy**: You only support ليناز ليزر clinic topics (services, pricing, appointments, branches, preparation).\n"
+        "- If the user asks out-of-scope general knowledge/news/politics/etc., do NOT answer that question.\n"
+        "- Respond with a short polite redirection to clinic-related help.\n"
+    )
 
     # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
     dynamic_customer_context = (
@@ -593,6 +612,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         + f"- **Language**: Detected as '{current_preferred_lang}' - You MUST respond in: '{response_language}'\n"
         + arabic_script_policy
         + arabic_addressing_policy
+        + arabic_brand_policy
+        + concise_turn_policy
+        + domain_scope_policy
         + f"- **current_gender_from_config**: '{current_gender}'\n"
         f"- **detected_language**: '{current_preferred_lang}'\n"
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
@@ -1706,6 +1728,9 @@ You MUST respond in **{response_language.upper()}** ONLY.
 - If response_language is "ar": Write your ENTIRE response in Arabic script (العربية) with ZERO Latin letters.
 - For Arabic: names/brands/codes must be written phonetically in Arabic letters (example: Marwa -> مروى, Test -> تيست).
 - For Arabic addressing: use أستاذ (male), عزيزتي (female), حضرتك (unknown). Never use "يا" + transliterated names.
+- If Arabic and customer name is known, include it after the respectful title in Arabic letters.
+- In Arabic, write clinic name exactly as: ليناز ليزر.
+- Keep response concise and ask at most ONE question in this turn.
 - If response_language is "fr": Write your ENTIRE response in French. NO Arabic characters.
 
 Rewrite your response in the correct language. Return ONLY a JSON object with "action" and "bot_reply"."""
@@ -1719,6 +1744,9 @@ Rewrite your response in the correct language. Return ONLY a JSON object with "a
                     correction_system_message += (
                         " Arabic replies must contain Arabic script only with no Latin letters, including names."
                         " Use respectful addressing: أستاذ (male), عزيزتي (female), حضرتك (unknown)."
+                        " Include customer name after title when known."
+                        " Use clinic name exactly as ليناز ليزر in Arabic."
+                        " Keep it concise and ask at most one question."
                         " Do not use 'يا' + transliterated names."
                     )
                 correction_response = await client.chat.completions.create(

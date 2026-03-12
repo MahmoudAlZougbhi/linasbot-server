@@ -157,7 +157,10 @@ async def handle_training_input(user_id: str, user_name: str = "مدرب", user_
     elif image_url:
         await send_message_func(user_id, "تلقيت صورة للتدريب. جارٍ تحليلها بواسطة GPT... 📸")
         await send_action_func(user_id)
-        if config.user_photo_analysis_count[user_id] >= config.MAX_PHOTO_ANALYSIS_PER_USER:
+        if (
+            getattr(config, "ENFORCE_TOTAL_PHOTO_ANALYSIS_LIMIT", False)
+            and config.user_photo_analysis_count[user_id] >= config.MAX_PHOTO_ANALYSIS_PER_USER
+        ):
              await send_message_func(user_id, "وصلت لعدد الصور القصوى المسموحة في وضع التدريب أيضاً. يرجى الخروج من وضع التدريب أو التواصل مع المطور.")
              return
         try:

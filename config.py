@@ -140,6 +140,9 @@ last_generated_qa_for_save = defaultdict(list)
 
 # --- Constants and Limits ---
 MAX_PHOTO_ANALYSIS_PER_USER = 10 # Maximum number of photos a user can request analysis for
+ENFORCE_TOTAL_PHOTO_ANALYSIS_LIMIT = False # If False, do not enforce conversation-wide photo limit
+MAX_IMAGES_PER_SINGLE_MESSAGE = 10 # Hard limit per single inbound message
+MAX_TEXT_LINES_PER_SINGLE_MESSAGE = 30 # Hard limit per single inbound text message
 MAX_CONTEXT_MESSAGES = 20 # Max number of messages to keep in conversation context (increased from 15 for better booking flow)
 MAX_CONTEXT_MESSAGES_TRAINING = 10 # Max messages for training conversation context
 MAX_RELEVANT_CUSTOM_QA = 3 # Max relevant custom Q&A entries to fetch
@@ -156,10 +159,10 @@ MESSAGE_COMBINING_DELAY = 3.0 # seconds
 
 # --- Bot Welcome Messages (Language-specific) ---
 WELCOME_MESSAGES = {
-    "ar": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز لينا ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
+    "ar": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
     "en": "Hello! 😊\nThis is Marwa AI Assistant – your smart AI assistant from Lina's Laser Center.\nHow are you? How can I help you today? 🧠✨\n\nYou can talk to me in any way you prefer – even with your voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nBy the way, to help and serve you better, could you please tell us if you are male or female? 👦👧",
     "fr": "Bonjour ! 😊\nC'est Marwa AI Assistant – votre assistant intelligent de Lina's Laser Center.\nComment allez-vous ? Comment puis-je vous aider aujourd'hui ? 🧠✨\n\nYou can talk to me in any way you prefer – even by voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nAu fait, afin de mieux vous aider et de vous offrir le meilleur service, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
-    "franco": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز لينا ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧"
+    "franco": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧"
 }
 
 # --- Gender Question Variations ---

@@ -23,10 +23,10 @@ DEFAULT_DYNAMIC_MESSAGES: Dict[str, Dict[str, Any]] = {
         "label": "Router Greeting",
         "when_used": "Sent when user message is greeting-only and there is no pending state.",
         "messages": {
-            "ar": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز لينا ليزر 🌷 كيف فيني أساعدك اليوم؟",
+            "ar": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناز ليزر 🌷 كيف فيني أساعدك اليوم؟",
             "en": "Hello! 😊 I'm Marwa, the smart assistant from Lina's Laser Center 🌷 How can I help you today?",
             "fr": "Bonjour ! 😊 Je suis Marwa, l'assistante intelligente de Lina's Laser Center 🌷 Comment puis-je vous aider aujourd'hui ?",
-            "franco": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز لينا ليزر 🌷 كيف فيني أساعدك اليوم؟",
+            "franco": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناز ليزر 🌷 كيف فيني أساعدك اليوم؟",
         },
     },
     "router_fallback": {
@@ -161,17 +161,19 @@ def get_dynamic_message(key: str, lang: str = "ar") -> str:
         replacements = {
             "Marwa AI Assistant": "مروى",
             "Marwa": "مروى",
-            "Lina’s Laser Center": "مركز لينا ليزر",
-            "Lina's Laser Center": "مركز لينا ليزر",
-            "Lina’s Laser": "لينا ليزر",
-            "Lina's Laser": "لينا ليزر",
-            "مركز ليناس ليزر": "مركز لينا ليزر",
-            "ليناس ليزر": "لينا ليزر",
+            "Lina’s Laser Center": "مركز ليناز ليزر",
+            "Lina's Laser Center": "مركز ليناز ليزر",
+            "Lina’s Laser": "ليناز ليزر",
+            "Lina's Laser": "ليناز ليزر",
+            "مركز ليناس ليزر": "مركز ليناز ليزر",
+            "ليناس ليزر": "ليناز ليزر",
+            "مركز لينا ليزر": "مركز ليناز ليزر",
+            "لينا ليزر": "ليناز ليزر",
         }
         for latin_text, arabic_text in replacements.items():
             message = message.replace(latin_text, arabic_text)
 
         # Normalize accidental mixed-script leftovers around brand naming.
-        message = re.sub(r"\bLina(?:['’]s)?\b", "لينا", message, flags=re.IGNORECASE)
+        message = re.sub(r"\bLina(?:['’]s)?\b", "ليناز", message, flags=re.IGNORECASE)
         message = re.sub(r"\bLaser\b", "ليزر", message, flags=re.IGNORECASE)
     return message
