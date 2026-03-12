@@ -203,8 +203,7 @@ ALLOWED_GENERAL_QUERIES = [
 ]
 
 ASK_ONE_BY_ONE_ACTIONS = {
-    "initial_greet_and_ask_gender",
-    "ask_gender",
+    # Exclude ask_gender/initial_greet_and_ask_gender - send full AI reply (name + gender in one message)
     "ask_for_details_for_booking",
     "ask_for_service_type",
     "ask_for_details",
