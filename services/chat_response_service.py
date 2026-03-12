@@ -746,15 +746,20 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         + json_output_contract
     )
 
+    context_messages_for_ai = list(current_context_messages or [])
+    context_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
+    if context_cap > 0 and len(context_messages_for_ai) > context_cap:
+        context_messages_for_ai = context_messages_for_ai[-context_cap:]
+
     messages = [{"role": "system", "content": system_instruction_final}]
-    messages.extend(current_context_messages[-config.MAX_CONTEXT_MESSAGES:])
+    messages.extend(context_messages_for_ai)
 
     # Let GPT detect language naturally - no forced language reminder
     messages.append({"role": "user", "content": user_input})
 
     # Prepare flow metadata context early so Activity Flow remains informative
     # even when GPT fails before normal metadata assembly.
-    flow_context_count = len(current_context_messages) if current_context_messages else 0
+    flow_context_count = len(context_messages_for_ai)
     flow_sys_len = len(system_instruction_final) if system_instruction_final else 0
     flow_ai_query_summary = (
         f"Bot sent to AI (GPT):\n"
@@ -768,7 +773,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             f"{custom_knowledge_context}"
         )
     flow_context_dump = []
-    for msg in current_context_messages[-config.MAX_CONTEXT_MESSAGES:]:
+    for msg in context_messages_for_ai:
         role = msg.get("role", "unknown")
         content = str(msg.get("content", ""))
         flow_context_dump.append(f"[{role}] {content}")

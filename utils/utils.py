@@ -1208,7 +1208,12 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
         traceback.print_exc()
 
 
-async def get_conversation_history_from_firestore(user_id: str, conversation_id: str, max_messages: int = 10) -> list:
+async def get_conversation_history_from_firestore(
+    user_id: str,
+    conversation_id: str,
+    max_messages: int = 0,
+    window_hours: int = None,
+) -> list:
     """
     Fetches conversation history from Firestore for a specific conversation.
     Returns a list of messages in OpenAI format: [{"role": "user"/"assistant", "content": "text"}]
@@ -1216,7 +1221,8 @@ async def get_conversation_history_from_firestore(user_id: str, conversation_id:
     Args:
         user_id: The user's ID (room_id for Qiscus)
         conversation_id: The conversation document ID
-        max_messages: Maximum number of messages to fetch (default 10)
+        max_messages: Optional max number of messages after time filtering (0 = no hard cap)
+        window_hours: Optional lookback window in hours (None = use config.CONTEXT_WINDOW_HOURS)
     
     Returns:
         List of message dicts in OpenAI format
@@ -1237,11 +1243,46 @@ async def get_conversation_history_from_firestore(user_id: str, conversation_id:
         
         conversation_data = doc_snap.to_dict()
         messages = conversation_data.get('messages', [])
-        
-        # Convert to OpenAI format and take last N messages
+
+        # Time-based memory window (default 48h): include only recent messages.
+        effective_window_hours = (
+            window_hours
+            if window_hours is not None
+            else int(getattr(config, "CONTEXT_WINDOW_HOURS", 48) or 48)
+        )
+        filtered_messages = list(messages)
+        if effective_window_hours > 0:
+            cutoff = utc_now() - datetime.timedelta(hours=effective_window_hours)
+            filtered_messages = []
+            for msg in messages:
+                ts_raw = msg.get("timestamp")
+                # Keep legacy messages without timestamp for backward compatibility.
+                if ts_raw is None:
+                    filtered_messages.append(msg)
+                    continue
+                msg_ts = parse_timestamp_utc(
+                    ts_raw,
+                    fallback=datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc),
+                )
+                if msg_ts >= cutoff:
+                    filtered_messages.append(msg)
+
+        # Optional hard cap after time filtering.
+        effective_max_messages = int(max_messages or 0)
+        if effective_max_messages > 0:
+            selected_messages = filtered_messages[-effective_max_messages:]
+        else:
+            selected_messages = filtered_messages
+
+        # Global safety cap (0 = disabled).
+        global_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
+        if global_cap > 0 and len(selected_messages) > global_cap:
+            selected_messages = selected_messages[-global_cap:]
+
+        # Convert to OpenAI format
         # Valid OpenAI roles: 'system', 'assistant', 'user', 'function', 'tool'
         openai_messages = []
-        for msg in messages[-max_messages:]:
+        for msg in selected_messages:
             original_role = msg.get('role', 'user')
 
             # Map roles to OpenAI-compatible roles
@@ -1262,7 +1303,10 @@ async def get_conversation_history_from_firestore(user_id: str, conversation_id:
                 "content": msg.get('text', '')
             })
         
-        print(f"✅ Fetched {len(openai_messages)} messages from Firestore for conversation {conversation_id}")
+        print(
+            f"✅ Fetched {len(openai_messages)} messages from Firestore for conversation {conversation_id} "
+            f"(window={effective_window_hours}h, cap={global_cap if global_cap > 0 else 'none'})"
+        )
         return openai_messages
         
     except Exception as e:

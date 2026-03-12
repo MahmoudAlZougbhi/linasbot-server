@@ -1228,7 +1228,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             }
             user_data['awaiting_human_handover_confirmation'] = False
         else:
-            conversation_history = await get_conversation_history_from_firestore(user_id, current_conversation_id, max_messages=10)
+            conversation_history = await get_conversation_history_from_firestore(
+                user_id,
+                current_conversation_id,
+                max_messages=0,
+                window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
+            )
             gpt_response_data = await get_bot_chat_response(
                 user_id=user_id,
                 user_input=user_input_to_process,
@@ -1443,7 +1448,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             except Exception as e:
                 print(f"[_process_and_respond] ⚠️ Dynamic retrieval fallback: {e}")
 
-            conversation_history = await get_conversation_history_from_firestore(user_id, current_conversation_id, max_messages=10)
+            conversation_history = await get_conversation_history_from_firestore(
+                user_id,
+                current_conversation_id,
+                max_messages=0,
+                window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
+            )
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None

@@ -145,6 +145,11 @@ MAX_IMAGES_PER_SINGLE_MESSAGE = 10 # Hard limit per single inbound message
 MAX_TEXT_LINES_PER_SINGLE_MESSAGE = 30 # Hard limit per single inbound text message
 MAX_CONTEXT_MESSAGES = 20 # Max number of messages to keep in conversation context (increased from 15 for better booking flow)
 MAX_CONTEXT_MESSAGES_TRAINING = 10 # Max messages for training conversation context
+# Context window for AI memory:
+# - Include only messages from the last N hours in GPT context.
+# - If MAX_CONTEXT_MESSAGES_IN_WINDOW = 0, do not apply a hard count cap after time filtering.
+CONTEXT_WINDOW_HOURS = int(os.getenv("CONTEXT_WINDOW_HOURS", "48"))
+MAX_CONTEXT_MESSAGES_IN_WINDOW = int(os.getenv("MAX_CONTEXT_MESSAGES_IN_WINDOW", "0"))
 MAX_RELEVANT_CUSTOM_QA = 3 # Max relevant custom Q&A entries to fetch
 MAX_GENDER_ASK_ATTEMPTS = 3 # Max times bot will ask for gender before suggesting human handover
 
