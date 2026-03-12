@@ -1,4 +1,10 @@
-import React, { useState, useCallback } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
 import {
@@ -6,7 +12,6 @@ import {
   PhotoIcon,
   ChatBubbleLeftIcon,
   PlayIcon,
-  StopIcon,
   DocumentArrowUpIcon,
   SparklesIcon,
   LanguageIcon,
@@ -17,9 +22,33 @@ import {
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 
+const TESTING_CHAT_STORAGE_KEY = "testing_chat_sessions_v1";
+const DEFAULT_TEST_PHONE = "123456789";
+const MAX_CHAT_MESSAGES = 200;
+
+const safelyParseStoredChatSessions = () => {
+  if (typeof window === "undefined") return {};
+  try {
+    const storedSessions = localStorage.getItem(TESTING_CHAT_STORAGE_KEY);
+    const parsed = storedSessions ? JSON.parse(storedSessions) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+};
+
+const splitBotOutputIntoMessages = (output) => {
+  const normalizedOutput =
+    typeof output === "string" ? output : "Test response received";
+  const chunks = normalizedOutput
+    .split(/\n{2,}/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return chunks.length ? chunks : [normalizedOutput];
+};
+
 const Testing = () => {
   const {
-    testTextMessage,
     testVoiceTranscription,
     testImageAnalysis,
     testImageWithUrl,
@@ -37,7 +66,6 @@ const Testing = () => {
   const [textInput, setTextInput] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState("auto");
   const [testResults, setTestResults] = useState([]);
-  const [isRecording, setIsRecording] = useState(false);
   const [userPhone, setUserPhone] = useState("");
   const [userType, setUserType] = useState("customer");
   const [imageUrl, setImageUrl] = useState(
@@ -47,9 +75,105 @@ const Testing = () => {
   const [voiceText, setVoiceText] = useState(
     "مرحبا، أريد أعرف أسعار إزالة الشعر بالليزر للوجه"
   );
+  const [resultsView, setResultsView] = useState("chat");
+  const [chatSessions, setChatSessions] = useState(
+    safelyParseStoredChatSessions
+  );
+  const chatEndRef = useRef(null);
 
   // Hardcoded provider - MontyMobile (default)
   const selectedProvider = "montymobile";
+
+  const resolvedPhone = useMemo(() => {
+    const normalizedPhone = (userPhone || "").trim();
+    return normalizedPhone || DEFAULT_TEST_PHONE;
+  }, [userPhone]);
+
+  const activeChatKey = useMemo(
+    () => `${selectedProvider}:${resolvedPhone}`,
+    [selectedProvider, resolvedPhone]
+  );
+
+  const activeChatMessages = useMemo(
+    () => chatSessions[activeChatKey] || [],
+    [chatSessions, activeChatKey]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        TESTING_CHAT_STORAGE_KEY,
+        JSON.stringify(chatSessions)
+      );
+    } catch (error) {
+      // Ignore persistence errors so testing UI keeps working.
+    }
+  }, [chatSessions]);
+
+  useEffect(() => {
+    if (resultsView !== "chat") return;
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [activeChatMessages, resultsView]);
+
+  const appendToChat = useCallback(
+    (entries, phoneOverride = resolvedPhone) => {
+      const normalizedPhone =
+        (phoneOverride || DEFAULT_TEST_PHONE).trim() || DEFAULT_TEST_PHONE;
+      const chatKey = `${selectedProvider}:${normalizedPhone}`;
+
+      setChatSessions((prev) => {
+        const existingHistory = prev[chatKey] || [];
+        const nextMessages = entries
+          .filter((entry) => entry && entry.content)
+          .map((entry, index) => ({
+            id: `${Date.now()}-${index}-${Math.random()
+              .toString(36)
+              .slice(2, 8)}`,
+            role: entry.role || "assistant",
+            type: entry.type || "text",
+            content: entry.content,
+            timestamp: entry.timestamp || new Date().toLocaleTimeString(),
+            success: entry.success !== false,
+          }));
+
+        if (!nextMessages.length) return prev;
+        return {
+          ...prev,
+          [chatKey]: [...existingHistory, ...nextMessages].slice(
+            -MAX_CHAT_MESSAGES
+          ),
+        };
+      });
+    },
+    [resolvedPhone, selectedProvider]
+  );
+
+  const appendBotOutputToChat = useCallback(
+    (output, type = "text", phoneOverride = resolvedPhone, success = true) => {
+      const responseChunks = splitBotOutputIntoMessages(output);
+      appendToChat(
+        responseChunks.map((content) => ({
+          role: success ? "assistant" : "system",
+          type,
+          content,
+          success,
+        })),
+        phoneOverride
+      );
+    },
+    [appendToChat, resolvedPhone]
+  );
+
+  const clearActiveChat = useCallback(() => {
+    setChatSessions((prev) => {
+      if (!prev[activeChatKey]) return prev;
+      const next = { ...prev };
+      delete next[activeChatKey];
+      return next;
+    });
+    toast.success("Current chat cleared");
+  }, [activeChatKey]);
 
   const mainTabs = [
     {
@@ -104,33 +228,48 @@ const Testing = () => {
 
   // Handle text testing
   const handleTextTest = async () => {
-    if (!textInput.trim()) {
+    const outgoingMessage = textInput.trim();
+    const phoneForTest = resolvedPhone;
+
+    if (!outgoingMessage) {
       toast.error("Please enter a message to test");
       return;
     }
 
     try {
       const startTime = Date.now();
+      appendToChat(
+        [{ role: "user", type: "text", content: outgoingMessage }],
+        phoneForTest
+      );
       const result = await testMessageWithProvider(
-        textInput,
+        outgoingMessage,
         selectedProvider,
-        userPhone
+        phoneForTest
       );
       const responseTime = Date.now() - startTime;
+      const outputText =
+        result.bot_response || result.response || "Test response received";
+
+      appendBotOutputToChat(
+        outputText,
+        "text",
+        phoneForTest,
+        result.success !== false
+      );
 
       const testResult = {
         id: Date.now(),
         type: "text",
-        input: textInput,
+        input: outgoingMessage,
         language: selectedLanguage,
-        output:
-          result.bot_response || result.response || "Test response received",
+        output: outputText,
         responseTime: result.response_time_ms || responseTime,
         timestamp: new Date().toLocaleTimeString(),
         success: result.success !== false,
         mode: result.mode,
         userType: userType,
-        userPhone: userPhone,
+        userPhone: phoneForTest,
         provider: selectedProvider,
       };
 
@@ -141,16 +280,20 @@ const Testing = () => {
         setTextInput("");
       }
     } catch (error) {
+      const errorMessage = error.message || "Failed to process message";
+      appendBotOutputToChat(errorMessage, "text", phoneForTest, false);
+
       const testResult = {
         id: Date.now(),
         type: "text",
-        input: textInput,
+        input: outgoingMessage,
         language: selectedLanguage,
-        output: error.message,
+        output: errorMessage,
         responseTime: 0,
         timestamp: new Date().toLocaleTimeString(),
         success: false,
         provider: selectedProvider,
+        userPhone: phoneForTest,
       };
       setTestResults((prev) => [testResult, ...prev]);
     }
@@ -161,24 +304,37 @@ const Testing = () => {
     async (acceptedFiles) => {
       const file = acceptedFiles[0];
       if (!file) return;
+      const phoneForTest = resolvedPhone;
 
       try {
         const startTime = Date.now();
+        appendToChat(
+          [{ role: "user", type: "voice", content: `[Voice File] ${file.name}` }],
+          phoneForTest
+        );
         const result = await testVoiceTranscription(
           file,
           selectedProvider,
-          userPhone
+          phoneForTest
         );
         const responseTime = Date.now() - startTime;
+        const outputText =
+          result.bot_response ||
+          result.transcription ||
+          "Voice message processed successfully";
+
+        appendBotOutputToChat(
+          outputText,
+          "voice",
+          phoneForTest,
+          result.success !== false
+        );
 
         const testResult = {
           id: Date.now(),
           type: "voice",
           input: file.name,
-          output:
-            result.bot_response ||
-            result.transcription ||
-            "Voice message processed successfully",
+          output: outputText,
           responseTime: result.response_time_ms || responseTime,
           timestamp: new Date().toLocaleTimeString(),
           success: result.success !== false,
@@ -192,11 +348,14 @@ const Testing = () => {
 
         setTestResults((prev) => [testResult, ...prev]);
       } catch (error) {
+        const errorMessage = error.message || "Voice processing failed";
+        appendBotOutputToChat(errorMessage, "voice", phoneForTest, false);
+
         const testResult = {
           id: Date.now(),
           type: "voice",
           input: file.name,
-          output: error.message,
+          output: errorMessage,
           responseTime: 0,
           timestamp: new Date().toLocaleTimeString(),
           success: false,
@@ -204,7 +363,13 @@ const Testing = () => {
         setTestResults((prev) => [testResult, ...prev]);
       }
     },
-    [testVoiceTranscription]
+    [
+      appendBotOutputToChat,
+      appendToChat,
+      resolvedPhone,
+      selectedProvider,
+      testVoiceTranscription,
+    ]
   );
 
   // Image file dropzone
@@ -212,23 +377,38 @@ const Testing = () => {
     async (acceptedFiles) => {
       const file = acceptedFiles[0];
       if (!file) return;
+      const phoneForTest = resolvedPhone;
 
       try {
         const startTime = Date.now();
-        const result = await testImageAnalysis(file);
+        appendToChat(
+          [{ role: "user", type: "image", content: `[Image File] ${file.name}` }],
+          phoneForTest
+        );
+        const result = await testImageAnalysis(
+          file,
+          selectedProvider,
+          phoneForTest
+        );
         const responseTime = Date.now() - startTime;
+        const outputText =
+          result.bot_response || result.analysis || "Image analyzed successfully";
+
+        appendBotOutputToChat(
+          outputText,
+          "image",
+          phoneForTest,
+          result.success !== false
+        );
 
         const testResult = {
           id: Date.now(),
           type: "image",
           input: file.name,
-          output:
-            result.bot_response ||
-            result.analysis ||
-            "Image analyzed successfully",
+          output: outputText,
           responseTime,
           timestamp: new Date().toLocaleTimeString(),
-          success: true,
+          success: result.success !== false,
           metadata: {
             fileSize: file.size,
             dimensions: result.dimensions || "Unknown",
@@ -238,11 +418,14 @@ const Testing = () => {
 
         setTestResults((prev) => [testResult, ...prev]);
       } catch (error) {
+        const errorMessage = error.message || "Image analysis failed";
+        appendBotOutputToChat(errorMessage, "image", phoneForTest, false);
+
         const testResult = {
           id: Date.now(),
           type: "image",
           input: file.name,
-          output: error.message,
+          output: errorMessage,
           responseTime: 0,
           timestamp: new Date().toLocaleTimeString(),
           success: false,
@@ -250,7 +433,13 @@ const Testing = () => {
         setTestResults((prev) => [testResult, ...prev]);
       }
     },
-    [testImageAnalysis]
+    [
+      appendBotOutputToChat,
+      appendToChat,
+      resolvedPhone,
+      selectedProvider,
+      testImageAnalysis,
+    ]
   );
 
   const {
@@ -613,36 +802,58 @@ const Testing = () => {
 
                           <button
                             onClick={async () => {
-                              if (!textInput.trim()) {
+                              const outgoingMessage = textInput.trim();
+                              const phoneForTest = resolvedPhone;
+
+                              if (!outgoingMessage) {
                                 toast.error("Please enter a message to test");
                                 return;
                               }
 
+                              appendToChat(
+                                [
+                                  {
+                                    role: "user",
+                                    type: "webhook",
+                                    content: outgoingMessage,
+                                  },
+                                ],
+                                phoneForTest
+                              );
+
                               try {
                                 const startTime = Date.now();
                                 const result = await testWebhookSimulation(
-                                  textInput,
+                                  outgoingMessage,
                                   selectedProvider,
-                                  userPhone
+                                  phoneForTest
                                 );
                                 const responseTime = Date.now() - startTime;
+                                const outputText =
+                                  result.bot_response ||
+                                  result.response ||
+                                  "Webhook test response received";
+
+                                appendBotOutputToChat(
+                                  outputText,
+                                  "webhook",
+                                  phoneForTest,
+                                  result.success !== false
+                                );
 
                                 const testResult = {
                                   id: Date.now(),
                                   type: "webhook",
-                                  input: textInput,
+                                  input: outgoingMessage,
                                   language: selectedLanguage,
-                                  output:
-                                    result.bot_response ||
-                                    result.response ||
-                                    "Webhook test response received",
+                                  output: outputText,
                                   responseTime:
                                     result.response_time_ms || responseTime,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: result.success !== false,
                                   mode: result.mode,
                                   userType: userType,
-                                  userPhone: userPhone,
+                                  userPhone: phoneForTest,
                                   provider: selectedProvider,
                                   webhookPayload: result.webhook_payload,
                                 };
@@ -657,16 +868,26 @@ const Testing = () => {
                                   setTextInput("");
                                 }
                               } catch (error) {
+                                const errorMessage =
+                                  error.message || "Webhook simulation failed";
+                                appendBotOutputToChat(
+                                  errorMessage,
+                                  "webhook",
+                                  phoneForTest,
+                                  false
+                                );
+
                                 const testResult = {
                                   id: Date.now(),
                                   type: "webhook",
-                                  input: textInput,
+                                  input: outgoingMessage,
                                   language: selectedLanguage,
-                                  output: error.message,
+                                  output: errorMessage,
                                   responseTime: 0,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
                                   provider: selectedProvider,
+                                  userPhone: phoneForTest,
                                 };
                                 setTestResults((prev) => [testResult, ...prev]);
                               }
@@ -734,45 +955,79 @@ const Testing = () => {
 
                           <button
                             onClick={async () => {
-                              if (!voiceText.trim()) {
+                              const outgoingVoiceText = voiceText.trim();
+                              const phoneForTest = resolvedPhone;
+
+                              if (!outgoingVoiceText) {
                                 toast.error("Please enter voice text to test");
                                 return;
                               }
 
+                              appendToChat(
+                                [
+                                  {
+                                    role: "user",
+                                    type: "voice-text",
+                                    content: `[Voice] ${outgoingVoiceText}`,
+                                  },
+                                ],
+                                phoneForTest
+                              );
+
                               try {
                                 const startTime = Date.now();
                                 const result = await testVoiceWithText(
-                                  voiceText,
+                                  outgoingVoiceText,
                                   selectedProvider,
-                                  userPhone
+                                  phoneForTest
                                 );
                                 const responseTime = Date.now() - startTime;
+                                const outputText =
+                                  result.bot_response ||
+                                  "Voice message processed successfully";
+
+                                appendBotOutputToChat(
+                                  outputText,
+                                  "voice-text",
+                                  phoneForTest,
+                                  result.success !== false
+                                );
 
                                 const testResult = {
                                   id: Date.now(),
                                   type: "voice-text",
-                                  input: `[Voice: ${voiceText}]`,
-                                  output:
-                                    result.bot_response ||
-                                    "Voice message processed successfully",
+                                  input: `[Voice: ${outgoingVoiceText}]`,
+                                  output: outputText,
                                   responseTime:
                                     result.response_time_ms || responseTime,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: result.success !== false,
                                   provider: selectedProvider,
+                                  userPhone: phoneForTest,
                                 };
 
                                 setTestResults((prev) => [testResult, ...prev]);
                               } catch (error) {
+                                const errorMessage =
+                                  error.message ||
+                                  "Voice text processing failed";
+                                appendBotOutputToChat(
+                                  errorMessage,
+                                  "voice-text",
+                                  phoneForTest,
+                                  false
+                                );
+
                                 const testResult = {
                                   id: Date.now(),
                                   type: "voice-text",
-                                  input: `[Voice: ${voiceText}]`,
-                                  output: error.message,
+                                  input: `[Voice: ${outgoingVoiceText}]`,
+                                  output: errorMessage,
                                   responseTime: 0,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
                                   provider: selectedProvider,
+                                  userPhone: phoneForTest,
                                 };
                                 setTestResults((prev) => [testResult, ...prev]);
                               }
@@ -877,48 +1132,83 @@ const Testing = () => {
 
                           <button
                             onClick={async () => {
-                              if (!imageUrl.trim()) {
+                              const normalizedImageUrl = imageUrl.trim();
+                              const phoneForTest = resolvedPhone;
+                              if (!normalizedImageUrl) {
                                 toast.error(
                                   "Please enter an image URL to test"
                                 );
                                 return;
                               }
 
+                              const imagePrompt = `[Image: ${normalizedImageUrl}] ${
+                                imageCaption || ""
+                              }`.trim();
+                              appendToChat(
+                                [
+                                  {
+                                    role: "user",
+                                    type: "image-url",
+                                    content: imagePrompt,
+                                  },
+                                ],
+                                phoneForTest
+                              );
+
                               try {
                                 const startTime = Date.now();
                                 const result = await testImageWithUrl(
-                                  imageUrl,
+                                  normalizedImageUrl,
                                   imageCaption,
                                   selectedProvider,
-                                  userPhone
+                                  phoneForTest
                                 );
                                 const responseTime = Date.now() - startTime;
+                                const outputText =
+                                  result.bot_response ||
+                                  "Image analyzed successfully";
+
+                                appendBotOutputToChat(
+                                  outputText,
+                                  "image-url",
+                                  phoneForTest,
+                                  result.success !== false
+                                );
 
                                 const testResult = {
                                   id: Date.now(),
                                   type: "image-url",
-                                  input: `[Image: ${imageUrl}] ${imageCaption}`,
-                                  output:
-                                    result.bot_response ||
-                                    "Image analyzed successfully",
+                                  input: imagePrompt,
+                                  output: outputText,
                                   responseTime:
                                     result.response_time_ms || responseTime,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: result.success !== false,
                                   provider: selectedProvider,
+                                  userPhone: phoneForTest,
                                 };
 
                                 setTestResults((prev) => [testResult, ...prev]);
                               } catch (error) {
+                                const errorMessage =
+                                  error.message || "Image URL test failed";
+                                appendBotOutputToChat(
+                                  errorMessage,
+                                  "image-url",
+                                  phoneForTest,
+                                  false
+                                );
+
                                 const testResult = {
                                   id: Date.now(),
                                   type: "image-url",
-                                  input: `[Image: ${imageUrl}] ${imageCaption}`,
-                                  output: error.message,
+                                  input: imagePrompt,
+                                  output: errorMessage,
                                   responseTime: 0,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
                                   provider: selectedProvider,
+                                  userPhone: phoneForTest,
                                 };
                                 setTestResults((prev) => [testResult, ...prev]);
                               }
@@ -989,129 +1279,224 @@ const Testing = () => {
               {/* Results Section */}
               <div className="space-y-6">
                 <div className="card h-full">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-slate-800 font-display flex items-center">
-                      <ClockIcon className="w-6 h-6 mr-2 text-secondary-600" />
-                      Test Results
-                    </h2>
-                    {testResults.length > 0 && (
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-800 font-display flex items-center">
+                        <ClockIcon className="w-6 h-6 mr-2 text-secondary-600" />
+                        Testing Console
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Same phone + provider keeps the conversation open.
+                      </p>
+                    </div>
+                    <div className="glass rounded-lg p-1 inline-flex space-x-1">
                       <button
-                        onClick={clearResults}
-                        className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                        onClick={() => setResultsView("chat")}
+                        className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                          resultsView === "chat"
+                            ? "bg-primary-600 text-white"
+                            : "text-slate-600 hover:bg-white/70"
+                        }`}
                       >
-                        Clear All
+                        Chat View
                       </button>
-                    )}
+                      <button
+                        onClick={() => setResultsView("results")}
+                        className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                          resultsView === "results"
+                            ? "bg-primary-600 text-white"
+                            : "text-slate-600 hover:bg-white/70"
+                        }`}
+                      >
+                        Result Cards
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-4 max-h-96 overflow-y-auto scrollbar-hide">
-                    <AnimatePresence>
-                      {testResults.length === 0 ? (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="text-center py-12"
+                  <div className="glass rounded-xl p-3 bg-slate-50 border border-slate-200 mb-4">
+                    <div className="text-xs text-slate-600 flex items-center justify-between">
+                      <span>
+                        Session:{" "}
+                        <strong>{`${selectedProvider} • ${resolvedPhone}`}</strong>
+                      </span>
+                      {resultsView === "chat" && activeChatMessages.length > 0 && (
+                        <button
+                          onClick={clearActiveChat}
+                          className="text-red-600 hover:text-red-700 transition-colors"
                         >
+                          Clear Chat
+                        </button>
+                      )}
+                      {resultsView === "results" && testResults.length > 0 && (
+                        <button
+                          onClick={clearResults}
+                          className="text-slate-500 hover:text-slate-700 transition-colors"
+                        >
+                          Clear Results
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {resultsView === "chat" ? (
+                    <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-hide pr-1">
+                      {activeChatMessages.length === 0 ? (
+                        <div className="text-center py-12">
                           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <SparklesIcon className="w-8 h-8 text-slate-400" />
+                            <ChatBubbleLeftIcon className="w-8 h-8 text-slate-400" />
                           </div>
-                          <p className="text-slate-500">No test results yet</p>
+                          <p className="text-slate-500">No chat messages yet</p>
                           <p className="text-sm text-slate-400 mt-1">
-                            Run a test to see results here
+                            Send a test message to start this session
                           </p>
-                        </motion.div>
+                        </div>
                       ) : (
-                        testResults.map((result) => (
-                          <motion.div
-                            key={result.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3 }}
-                            className={`glass rounded-xl p-4 border-l-4 ${
-                              result.success
-                                ? "border-green-400"
-                                : "border-red-400"
+                        activeChatMessages.map((message) => (
+                          <div
+                            key={message.id}
+                            className={`flex ${
+                              message.role === "user"
+                                ? "justify-end"
+                                : "justify-start"
                             }`}
                           >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center space-x-2">
-                                <span
-                                  className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                    result.type === "text"
-                                      ? "bg-blue-100 text-blue-700"
-                                      : result.type === "voice"
-                                      ? "bg-purple-100 text-purple-700"
-                                      : result.type === "webhook"
-                                      ? "bg-indigo-100 text-indigo-700"
-                                      : result.type === "firebase"
-                                      ? "bg-orange-100 text-orange-700"
-                                      : "bg-green-100 text-green-700"
-                                  }`}
-                                >
-                                  {result.type === "firebase"
-                                    ? "🔥 firebase"
-                                    : result.type}
-                                </span>
-                                <span className="text-xs text-slate-500">
-                                  {result.timestamp}
-                                </span>
+                            <div
+                              className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
+                                message.role === "user"
+                                  ? "bg-primary-600 text-white"
+                                  : message.role === "system"
+                                  ? "bg-red-50 text-red-700 border border-red-200"
+                                  : "bg-white text-slate-800 border border-slate-200"
+                              }`}
+                            >
+                              <p className="text-sm whitespace-pre-wrap break-words">
+                                {message.content}
+                              </p>
+                              <div
+                                className={`text-[11px] mt-2 ${
+                                  message.role === "user"
+                                    ? "text-primary-100"
+                                    : "text-slate-400"
+                                }`}
+                              >
+                                {message.type} • {message.timestamp}
                               </div>
-                              <span className="text-xs text-slate-500">
-                                {result.responseTime}ms
-                              </span>
                             </div>
-
-                            <div className="space-y-2">
-                              <div>
-                                <p className="text-xs font-medium text-slate-600 mb-1">
-                                  Input:
-                                </p>
-                                <p className="text-sm text-slate-800 bg-slate-50 rounded p-2">
-                                  {result.input}
-                                </p>
-                              </div>
-
-                              <div>
-                                <p className="text-xs font-medium text-slate-600 mb-1">
-                                  Output:
-                                </p>
-                                <p
-                                  className={`text-sm rounded p-2 ${
-                                    result.success
-                                      ? "text-slate-800 bg-green-50"
-                                      : "text-red-700 bg-red-50"
-                                  }`}
-                                >
-                                  {result.output}
-                                </p>
-                              </div>
-
-                              {result.metadata && (
-                                <div className="text-xs text-slate-500 space-y-1">
-                                  {result.metadata.fileSize && (
-                                    <p>
-                                      Size:{" "}
-                                      {(
-                                        result.metadata.fileSize / 1024
-                                      ).toFixed(1)}
-                                      KB
-                                    </p>
-                                  )}
-                                  {result.metadata.detectedLanguage && (
-                                    <p>
-                                      Language:{" "}
-                                      {result.metadata.detectedLanguage}
-                                    </p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
+                          </div>
                         ))
                       )}
-                    </AnimatePresence>
-                  </div>
+                      <div ref={chatEndRef} />
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-96 overflow-y-auto scrollbar-hide">
+                      <AnimatePresence>
+                        {testResults.length === 0 ? (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="text-center py-12"
+                          >
+                            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <SparklesIcon className="w-8 h-8 text-slate-400" />
+                            </div>
+                            <p className="text-slate-500">No test results yet</p>
+                            <p className="text-sm text-slate-400 mt-1">
+                              Run a test to see results here
+                            </p>
+                          </motion.div>
+                        ) : (
+                          testResults.map((result) => (
+                            <motion.div
+                              key={result.id}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -20 }}
+                              transition={{ duration: 0.3 }}
+                              className={`glass rounded-xl p-4 border-l-4 ${
+                                result.success
+                                  ? "border-green-400"
+                                  : "border-red-400"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <span
+                                    className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                      result.type === "text"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : result.type === "voice"
+                                        ? "bg-purple-100 text-purple-700"
+                                        : result.type === "webhook"
+                                        ? "bg-indigo-100 text-indigo-700"
+                                        : result.type === "firebase"
+                                        ? "bg-orange-100 text-orange-700"
+                                        : "bg-green-100 text-green-700"
+                                    }`}
+                                  >
+                                    {result.type === "firebase"
+                                      ? "🔥 firebase"
+                                      : result.type}
+                                  </span>
+                                  <span className="text-xs text-slate-500">
+                                    {result.timestamp}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-slate-500">
+                                  {result.responseTime}ms
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                <div>
+                                  <p className="text-xs font-medium text-slate-600 mb-1">
+                                    Input:
+                                  </p>
+                                  <p className="text-sm text-slate-800 bg-slate-50 rounded p-2">
+                                    {result.input}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xs font-medium text-slate-600 mb-1">
+                                    Output:
+                                  </p>
+                                  <p
+                                    className={`text-sm rounded p-2 ${
+                                      result.success
+                                        ? "text-slate-800 bg-green-50"
+                                        : "text-red-700 bg-red-50"
+                                    }`}
+                                  >
+                                    {result.output}
+                                  </p>
+                                </div>
+
+                                {result.metadata && (
+                                  <div className="text-xs text-slate-500 space-y-1">
+                                    {result.metadata.fileSize && (
+                                      <p>
+                                        Size:{" "}
+                                        {(
+                                          result.metadata.fileSize / 1024
+                                        ).toFixed(1)}
+                                        KB
+                                      </p>
+                                    )}
+                                    {result.metadata.detectedLanguage && (
+                                      <p>
+                                        Language:{" "}
+                                        {result.metadata.detectedLanguage}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          ))
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
