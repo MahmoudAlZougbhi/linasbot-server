@@ -646,11 +646,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "operator_id": None,
                         })
                 # Canonical conversation_state for index
-                update_payload["conversation_state"] = _compute_conversation_state(
-                    update_payload.get("human_takeover_active", False),
-                    update_payload.get("operator_id"),
-                    update_payload.get("status", "active"),
-                )
+                # When is_smart_source, preserve existing takeover state (don't overwrite waiting_human with bot_active)
+                if is_smart_source:
+                    update_payload["conversation_state"] = _compute_conversation_state(
+                        bool(doc_data.get("human_takeover_active", False)),
+                        doc_data.get("operator_id"),
+                        doc_data.get("status", "active"),
+                    )
+                else:
+                    update_payload["conversation_state"] = _compute_conversation_state(
+                        update_payload.get("human_takeover_active", False),
+                        update_payload.get("operator_id"),
+                        update_payload.get("status", "active"),
+                    )
                 if role == "user" and previous_state in {"resolved", "archived"}:
                     update_payload.update({
                         "conversation_state": "bot_active",
@@ -789,11 +797,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "human_takeover_active": False,
                             "operator_id": None,
                         })
-                update_payload["conversation_state"] = _compute_conversation_state(
-                    update_payload.get("human_takeover_active", False),
-                    update_payload.get("operator_id"),
-                    update_payload.get("status", "active"),
-                )
+                # When is_smart_source, preserve existing takeover state (don't overwrite waiting_human with bot_active)
+                if is_smart_source:
+                    update_payload["conversation_state"] = _compute_conversation_state(
+                        bool(doc_data.get("human_takeover_active", False)),
+                        doc_data.get("operator_id"),
+                        doc_data.get("status", "active"),
+                    )
+                else:
+                    update_payload["conversation_state"] = _compute_conversation_state(
+                        update_payload.get("human_takeover_active", False),
+                        update_payload.get("operator_id"),
+                        update_payload.get("status", "active"),
+                    )
                 if role == "user" and prev_state in {"resolved", "archived"}:
                     update_payload.update({
                         "conversation_state": "bot_active",

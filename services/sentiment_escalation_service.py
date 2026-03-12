@@ -146,12 +146,13 @@ class SentimentEscalationService:
         ],
         "franco": [
             "5ara", "khara", "kol hawa", "kell hawa", "koul hawa",
-            "zbele", "zbale", "ya kalb", "ibn kalb", "tfou", "yl3an",
-            "3alek", "3layk", "3alayk",
+            "kol 5ara", "kol khara", "zbele", "zbale",
+            "ya kalb", "ibn kalb", "tfou", "yl3an", "3alek", "3layk", "3alayk",
             "ahbal", "a7bal", "hmar", "7mar", "kalb", "zbaleh", "zbeleh",
             "manyk", "emak", "e5tak", "e5t", "bhim", "bala fhem", "ma fhem",
             "eyre", "eyreh", "eyre fikon", "eyreh fikon", "m2yra", "ma3e",
             "kiss emak", "kiss e5tak", "bala fhem", "mafhem",
+            "le heak", "le heak sar", "le7ak", "le7e2", "sir 3al", "sir 3alek", "sir 3layk",
         ],
     }
     
@@ -310,6 +311,9 @@ class SentimentEscalationService:
         # For Franco, also check Arabic-script keywords because users often mix both.
         if language == "franco":
             keywords.extend(keyword_dict.get("ar", []))
+        # For offensive language: ALWAYS check franco (users mix English/Arabic with Franco insults)
+        if keyword_dict is self.OFFENSIVE_KEYWORDS and "franco" in keyword_dict:
+            keywords.extend(keyword_dict.get("franco", []))
 
         for keyword in keywords:
             # Use word boundaries to avoid substring matches (e.g., "bad" in "bade")
