@@ -458,6 +458,21 @@ class LanguageResolver:
         if detected:
             lang, prob = detected
             if prob >= self.LANGDETECT_CONF_THRESHOLD:
+                # Single short word (e.g. "laser", "hair") + user was in Arabic mode:
+                # Don't switch to English - user likely continuing in same language
+                words = raw.split()
+                prev_ar = state.lang_locked == "ar"
+                if (
+                    lang == "en"
+                    and len(words) <= 1
+                    and alpha_len(t) <= 8
+                    and prev_ar
+                ):
+                    state.last_reasons.append(
+                        f"single_word_en_keep_ar(len={alpha_len(t)},prev={state.lang_locked})"
+                    )
+                    self._cache[conversation_id] = state
+                    return state.lang_locked
                 state.lang_locked = lang
                 state.confidence = prob
                 state.last_reasons.append(f"langdetect_primary={lang}:{prob:.2f}")

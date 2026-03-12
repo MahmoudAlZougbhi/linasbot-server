@@ -636,7 +636,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         print("📄 GPT will skip price_list.txt in context (not a price-related question)")
 
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
-    name_is_known = user_name and user_name != "client"
+    # Treat placeholder names (Test User, Unknown, etc.) as NOT known - avoid "تست يوزر" in Arabic
+    _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
+    _name_lower = (user_name or "").strip().lower()
+    name_is_known = (
+        user_name
+        and user_name != "client"
+        and _name_lower not in _placeholder_names
+        and not _name_lower.startswith("test user")
+    )
     current_local_time = now_in_bot_tz()
     current_date_str = current_local_time.strftime("%Y-%m-%d")
     current_time_str = current_local_time.strftime("%H:%M:%S")
