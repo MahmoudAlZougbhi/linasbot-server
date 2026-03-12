@@ -225,11 +225,13 @@ def _get_default_general_and_style() -> str:
 
 
 def _ensure_style_included(merged: str, has_style: bool) -> str:
-    """Ensure at least one style file is in merged content."""
+    """Ensure style guidance exists without duplicating default style in final system prompt."""
     if has_style:
         return merged
+    # The final GPT system prompt already includes BOT_STYLE_GUIDE as a foundation section.
+    # Appending it here duplicates "Default Style" in custom selector context.
     if config.BOT_STYLE_GUIDE:
-        return (merged + "\n\n--- Default Style ---\n" + config.BOT_STYLE_GUIDE) if merged else config.BOT_STYLE_GUIDE
+        return merged
     return (merged + "\n\n--- Style ---\nBe professional, friendly, and helpful. Do not invent information.") if merged else "Be professional, friendly, and helpful. Do not invent information."
 
 
