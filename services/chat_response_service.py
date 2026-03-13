@@ -773,9 +773,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         )
 
     concise_turn_policy = (
-        "- **Turn-by-Turn Policy**: Keep the reply concise and proportional to the user's question.\n"
-        "- Ask at most ONE question in this turn.\n"
-        "- Do NOT send long numbered checklists or many questions at once unless the user explicitly asks for a full detailed list.\n"
+        "- **Turn-by-Turn Policy (CRITICAL)**: ONE message only. Short and focused.\n"
+        "- Either: (a) short answer + ONE question, OR (b) ONE question to gather info.\n"
+        "- For tattoo/pricing: ask first (body area? branch?) – next turn give full answer. Do NOT dump service info + availability + pricing + question all at once.\n"
+        "- Do NOT send 3+ paragraphs or multiple info blocks. Compress into one focused message.\n"
     )
 
     domain_scope_policy = (
