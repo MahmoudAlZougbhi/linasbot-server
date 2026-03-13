@@ -107,6 +107,7 @@ def log_interaction(
     tool_calls: Optional[List[str]] = None,
     flow_steps: Optional[List[Dict]] = None,
     flow_error: Optional[str] = None,
+    token_source: Optional[str] = None,
 ) -> None:
     """
     Log one interaction in the User → Bot → AI → Bot → User flow.
@@ -159,6 +160,7 @@ def log_interaction(
         "tool_calls": tool_calls,
         "flow_steps": flow_steps[:35] if flow_steps else None,
         "flow_error": (flow_error or "")[:2000] if flow_error else None,
+        "token_source": (token_source or "")[:50] if token_source else None,
     }
 
     _FLOW_BUFFER.append(entry)

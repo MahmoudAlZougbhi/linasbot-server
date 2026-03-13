@@ -237,12 +237,19 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
 
             {(entry.source === "gpt" || entry.source === "dynamic_retrieval") && (entry.tokens != null || entry.prompt_tokens != null || entry.completion_tokens != null || entry.model) && (
               <div className="mt-4 pt-4 border-t border-slate-200">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">GPT usage</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">GPT usage – كل التوكينات</p>
+                  {(entry.token_source || entry.prompt_tokens != null) && (
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${(entry.token_source || "backend") === "backend" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                      {(entry.token_source || "backend") === "backend" ? "Backend (GPT API)" : (entry.token_source || "Backend (GPT API)")}
+                    </span>
+                  )}
+                </div>
                 <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 text-sm text-slate-700 space-y-1">
                   {entry.model && <p>Model: <code className="bg-violet-100 px-1 rounded">{entry.model}</code></p>}
-                  {entry.prompt_tokens != null && <p>Input tokens: <strong>{entry.prompt_tokens}</strong>{entry.input_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.input_cost_usd.toFixed(6)})</span>}</p>}
-                  {entry.completion_tokens != null && <p>Output tokens: <strong>{entry.completion_tokens}</strong>{entry.output_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.output_cost_usd.toFixed(6)})</span>}</p>}
-                  {entry.tokens != null && <p>Total tokens: <strong>{entry.tokens}</strong></p>}
+                  {entry.prompt_tokens != null && <p>Input tokens: <strong>{entry.prompt_tokens.toLocaleString()}</strong>{entry.input_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.input_cost_usd.toFixed(6)})</span>}</p>}
+                  {entry.completion_tokens != null && <p>Output tokens: <strong>{entry.completion_tokens.toLocaleString()}</strong>{entry.output_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.output_cost_usd.toFixed(6)})</span>}</p>}
+                  {entry.tokens != null && <p>Total tokens: <strong>{entry.tokens.toLocaleString()}</strong></p>}
                   {entry.cost_usd != null && <p className="font-semibold text-emerald-700">Total cost: <strong>${entry.cost_usd.toFixed(6)}</strong></p>}
                   {entry.response_time_ms != null && <p>Response time: <strong>{Math.round(entry.response_time_ms)}ms</strong></p>}
                 </div>

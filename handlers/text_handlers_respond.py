@@ -1804,6 +1804,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         tool_calls=flow_meta.get("tool_calls"),
         flow_steps=flow_steps,
         flow_error=flow_error_for_log,
+        token_source="backend" if flow_meta.get("prompt_tokens") is not None else None,
     )
 
     # Token counting and cost: prefer real GPT usage from flow_meta when available

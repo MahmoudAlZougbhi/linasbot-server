@@ -1881,23 +1881,6 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
-                "name": "get_pricing_details",
-                "description": "Returns pricing details for appointments or services based on specified criteria.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "service_id": {"type": "integer", "description": "Service ID: 1=Hair Removal Men, 2=CO2 Laser, 3=Hair Removal Women, 4=Tattoo Removal, 5=Whitening."},
-                        "machine_id": {"type": "integer", "description": "Machine ID (optional): 2=Neo, 3=Quadro, 4=Trio, 5=Pico, 6=CO2, 7=DPL."},
-                        "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "IDs of body parts (optional)."},
-                        "branch_id": {"type": "integer", "description": "Branch ID (optional): 1=Beirut Manara, 2=Antelias."}
-                    },
-                    "required": ["service_id"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "get_missed_appointments",
                 "description": "Returns a list of missed appointments for the clinic.",
                 "parameters": {

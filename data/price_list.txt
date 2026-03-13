@@ -1,7 +1,8 @@
-PRICING SYNC RULES (SYSTEM SOURCE OF TRUTH)
+PRICING RULES (USE SELECTOR FILES ONLY)
 ------------------------------------------
-1) Do not provide prices from memory.
-2) For all pricing requests, use the system API (`get_pricing_details`).
-3) For services 1, 12, and 13, body part selection is mandatory before pricing.
-4) If discount fields are present in API response, show original + discounted totals exactly as returned.
-5) If required details are missing (service/body part), ask the customer first.
+1) Do NOT call get_pricing_details or use the system API for prices.
+2) Use prices ONLY from the ADDITIONAL RELEVANT CONTEXT (selector-retrieved files).
+3) The selector automatically includes price files when the user asks about pricing.
+4) For services 1, 12, and 13, body part selection may be needed – ask the customer first if unclear.
+5) If required details are missing (service/body part), ask the customer before giving prices.
+6) Present prices exactly as they appear in the retrieved files.

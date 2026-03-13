@@ -375,7 +375,7 @@ def _merge_pricing_args_with_booking_state(
     current_gender: str,
     user_input: str,
 ) -> None:
-    if function_name not in {"get_pricing_details", "create_appointment"}:
+    if function_name not in {"create_appointment"}:
         return
 
     inferred_service_id = _infer_service_id_for_pricing(user_input, current_gender, booking_state)
@@ -1169,26 +1169,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     user_input=user_input,
                 )
 
-                # Pricing requests for certain services must include body part selection.
-                if function_name == "get_pricing_details":
-                    service_id_for_pricing = _safe_int(function_args.get("service_id"))
-                    normalized_body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
-                    if normalized_body_part_ids:
-                        function_args["body_part_ids"] = normalized_body_part_ids
-                    if (
-                        service_id_for_pricing in body_part_required_service_ids
-                        and not normalized_body_part_ids
-                    ):
-                        print("SAFETY: Missing body_part_ids for pricing tool call. Asking for body area.")
-                        parsed_response = {
-                            "action": "ask_for_details_for_booking",
-                            "bot_reply": _pricing_missing_details_reply(current_preferred_lang, "body_part"),
-                            "detected_language": current_preferred_lang,
-                            "detected_gender": current_gender,
-                            "current_gender_from_config": current_gender,
-                        }
-                        return parsed_response
-
                 # SAFETY GUARD: Reschedule intent must never route to working-hours tool.
                 if function_name == "get_clinic_hours" and (is_reschedule_intent or user_requested_change):
                     phone_for_reschedule = (
@@ -1714,11 +1694,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             check_next_appointment_result = tool_output
                             print(f"DEBUG: Stored check_next_appointment result for auto-chaining")
 
-                        if function_name == "get_pricing_details" and isinstance(tool_output, dict) and tool_output.get("success"):
-                            latest_pricing_payload = tool_output.get("data")
-                            config.user_booking_state[user_id]["last_pricing_payload"] = latest_pricing_payload
-                            print("💰 Synced pricing payload captured from get_pricing_details")
-
                         # 📊 ANALYTICS: Track service when appointment is created
                         if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics
@@ -1903,9 +1878,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             print(f"💰 GPT usage: input={prompt_tokens_val} tokens (${cost_info.get('input_cost_usd', 0):.6f}) | output={completion_tokens_val} tokens (${cost_info.get('output_cost_usd', 0):.6f}) | total=${cost_info.get('cost_usd', 0):.6f}")
 
         # ============================================================
-        # PRICING SYNC: WhatsApp price must mirror system price exactly
+        # PRICING: Use selector files only (no system API)
+        # Prices come from ADDITIONAL RELEVANT CONTEXT (selector-retrieved files).
         # ============================================================
-        if is_price_question:
+        _USE_SYSTEM_API_FOR_PRICING = False  # Set True to revert to get_pricing_details API
+        if _USE_SYSTEM_API_FOR_PRICING and is_price_question:
             booking_state = config.user_booking_state[user_id]
             pricing_payload_to_send = latest_pricing_payload
             service_id_for_sync = _safe_int(booking_state.get("service_id"))
