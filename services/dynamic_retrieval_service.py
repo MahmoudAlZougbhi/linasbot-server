@@ -17,9 +17,9 @@ from services import content_files_service as cfs
 from services.llm_core_service import client
 import config
 
-SELECTOR_PROMPT = """You are a retrieval selector.
-Your job is NOT to answer the user.
-You must ONLY select which files are required to answer.
+SELECTOR_PROMPT = """You are a file selector. Your ONLY job is to pick which files to load.
+You do NOT decide actions, ask questions, or interpret the user. GPT does that.
+You ONLY select file IDs. That is all.
 
 Rules:
 - Select specific files over general ones.
@@ -27,30 +27,17 @@ Rules:
 - Include gender-specific files if user mentions men/women.
 - Always include one relevant style file.
 - Maximum 5 files total.
+- When unclear or vague, return empty files – the bot will use default content. GPT will decide if clarification is needed.
 - Return JSON only. No explanation.
 
-When to use ask_clarification vs fallback_to_general:
-- Use "ask_clarification" ONLY when the message is TRULY vague (e.g. "I want laser", "prices?", "how many sessions?") – no service type at all.
-- Use "fallback_to_general" when the message is partially clear, likely inferable, or mentions any specific service (hair removal, tattoo, acne, whitening, skin tightening). Let GPT handle nuance.
-- Prefer "fallback_to_general" over "ask_clarification" when in doubt – only ask clarification when genuinely vague.
-- Greeting and social check-in messages are NOT clarification cases.
-- For greetings like "hi", "hello", "مرحبا", "kifak", "kifak taemam", "how are you", return "fallback_to_general" (not "ask_clarification").
-
-Output format:
+Output format (ONLY these two):
 
 {
   "files": ["file_id_1", "file_id_2"],
   "action": "normal"
 }
 
-OR
-
-{
-  "files": [],
-  "action": "ask_clarification"
-}
-
-OR
+OR (when unclear which files to pick):
 
 {
   "files": [],
@@ -236,27 +223,6 @@ def _ensure_style_included(merged: str, has_style: bool) -> str:
     return (merged + "\n\n--- Style ---\nBe professional, friendly, and helpful. Do not invent information.") if merged else "Be professional, friendly, and helpful. Do not invent information."
 
 
-_GREETING_ONLY_RE = re.compile(
-    r"^(?:\s*)(?:"
-    r"hi|hello|hey|hey there|"
-    r"how are you(?: doing)?|"
-    r"bonjour|salut|bonsoir|"
-    r"مرحبا|مرحب[اًا]|اهلا|أهلا|هلا|سلام|"
-    r"kifak|kifik|kifkon|kifak taemam|kifak tamam|taemam|tamam|marhaba|ahla"
-    r")(?:[!?.,\s]*)$",
-    re.IGNORECASE | re.UNICODE,
-)
-
-
-def _is_greeting_only_message(user_message: str) -> bool:
-    """Heuristic guard: greetings/social check-ins should not trigger ask_clarification."""
-    text = (user_message or "").strip().lower()
-    if not text:
-        return False
-    # Keep this conservative: only pure greeting/check-in patterns.
-    return bool(_GREETING_ONLY_RE.match(text))
-
-
 async def retrieve_and_merge(
     user_message: str,
     include_price_hint: bool = False,
@@ -264,11 +230,11 @@ async def retrieve_and_merge(
 ) -> Tuple[str, Optional[str], str, Dict]:
     """
     Main entry: Select files via LLM, load content, merge.
+    Selector ONLY picks files – no actions. GPT decides clarification etc.
 
-    Returns: (merged_content, clarification_question, action, flow_meta)
-    - If action=ask_clarification: merged_content is empty, clarification_question has the question.
-    - If action=fallback_to_general: merged_content has default general + style.
-    - If action=normal: merged_content has selected file content.
+    Returns: (merged_content, None, action, flow_meta)
+    - action=fallback_to_general: merged_content has default general + style.
+    - action=normal: merged_content has selected file content.
     - flow_meta: {"titles_sent": [...], "selected_files": [...], "action": ...} for Activity Flow.
     """
     flow_meta: Dict = {"titles_sent": [], "selected_files": [], "action": "fallback_to_general"}
@@ -288,19 +254,12 @@ async def retrieve_and_merge(
     action = result.get("action", "normal")
     files = result.get("files", [])
 
-    # Guardrail: greeting-only messages must never map to ask_clarification.
-    if action == "ask_clarification" and _is_greeting_only_message(user_message):
-        print(
-            "ℹ️ Dynamic retrieval override: greeting-only message was misclassified as ask_clarification; forcing fallback_to_general."
-        )
+    # Selector ONLY picks files – never returns ask_clarification. If it does (legacy), treat as fallback.
+    if action == "ask_clarification":
+        print("ℹ️ Selector returned ask_clarification – selector only picks files, GPT decides. Forcing fallback_to_general.")
         action = "fallback_to_general"
-        # Keep Activity Flow aligned with the executed action.
         result["raw_response"] = json.dumps(
-            {
-                "files": files,
-                "action": action,
-                "override_reason": "greeting_only_guard",
-            },
+            {"files": files, "action": action, "override_reason": "selector_files_only"},
             ensure_ascii=False,
         )
 
@@ -314,16 +273,6 @@ async def retrieve_and_merge(
         + "Titles the Bot sent to AI (knowledge/price/style):\n"
         + "\n".join(f"  • {t.get('title', '')} (id: {t.get('id', '')})" for t in all_titles[:25])
     )
-
-    if action == "ask_clarification":
-        clarification_by_lang = {
-            "ar": "أكيد، ممكن توضّحلي أكتر شو الخدمة اللي بدك تستفسر عنها؟ مثلاً: ليزر شعر، إزالة وشم، تبييض، إلخ.",
-            "en": "Sure, could you share a bit more detail so I can give you an accurate answer? For example: which service are you asking about (hair removal, tattoo removal, whitening, etc.)?",
-            "fr": "Bien sûr, pourriez-vous préciser un peu plus pour que je vous réponde avec précision ? Par exemple : quel service vous intéresse (épilation, détatouage, blanchiment, etc.) ?",
-            "franco": "أكيد، ممكن توضحلي أكتر شو الخدمة اللي بدك تستفسر عنها؟ مثلاً: ليزر شعر، إزالة وشم، تبييض، إلخ.",
-        }
-        clarification = clarification_by_lang.get((response_lang or "ar").lower(), clarification_by_lang["ar"])
-        return "", clarification, "ask_clarification", flow_meta
 
     if action == "fallback_to_general":
         # If selector returned files but chose fallback_to_general, prefer selected files.

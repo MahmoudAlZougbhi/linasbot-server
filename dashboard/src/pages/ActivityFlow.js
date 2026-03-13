@@ -38,18 +38,19 @@ const FlowStep = ({ step, title, content }) => {
   const str = typeof content === "string" ? content : String(content ?? "");
   const isJsonLike = str.trim().startsWith("{") || str.trim().startsWith("[");
   const isLong = str.length > 800;
+  const isError = title && String(title).includes("❌");
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="flex gap-3">
-      <div className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-sm">
+      <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm ${isError ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
         {step}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{title}</p>
+        <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${isError ? "text-red-600" : "text-slate-500"}`}>{title}</p>
         <div
-          className={`p-3 bg-white rounded-lg border border-slate-200 text-sm text-slate-700 overflow-y-auto overflow-x-auto ${
-            expanded || !isLong ? "max-h-[32rem]" : "max-h-48"
-          }`}
+          className={`p-3 rounded-lg border text-sm overflow-y-auto overflow-x-auto ${
+            isError ? "bg-red-50 border-red-200 text-red-800" : "bg-white border-slate-200 text-slate-700"
+          } ${expanded || !isLong ? "max-h-[32rem]" : "max-h-48"}`}
           dir="auto"
         >
           {isJsonLike ? (
@@ -140,6 +141,12 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
           className="border-t border-slate-100 bg-slate-50/50"
         >
           <div className="p-4 space-y-4">
+            {entry.flow_error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">❌ Error</p>
+                <pre className="text-sm text-red-800 whitespace-pre-wrap m-0 font-sans" dir="auto">{entry.flow_error}</pre>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">User Info</p>

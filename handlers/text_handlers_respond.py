@@ -1318,6 +1318,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     action = gpt_response_data.get("action")
     bot_reply_text = gpt_response_data.get("bot_reply")
     handover_degree = str(gpt_response_data.get("handover_degree") or "none").strip().lower()
+    _flow_error_reason = None  # For Activity Flow: which step failed
     detected_gender_from_gpt = gpt_response_data.get("detected_gender")
     detected_language = gpt_response_data.get("detected_language")
     detected_name_from_gpt = gpt_response_data.get("detected_name")
@@ -1393,11 +1394,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             action = "answer_question"
             action_was_coerced = True
         else:
+            bad_action = action
             action = "unknown_query"
             bot_reply_text = (
                 get_dynamic_message("generic_error_message", current_preferred_lang)
                 or "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
             )
+            _flow_error_reason = f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')}"
+            print(f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → generic error. flow_error={flow_meta.get('error', 'none')}")
 
     # AI-PRIMARY: No bot-side overrides. Send AI reply as-is.
 
@@ -1647,9 +1651,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     else:
         sent_reply = "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
+        _flow_error_reason = f"Step: Bot → User | Unexpected action: '{action}'"
         await send_message_func(user_id, sent_reply)
         await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        print(f"[_process_and_respond] ERROR: User {user_id} received fallback reply due to unexpected action: {action}")
+        print(f"[_process_and_respond] ERROR: User {user_id} received fallback reply due to unexpected action: '{action}' | bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}")
 
     # Keep yes/no booking-follow-up state when we explicitly ask:
     # "Would you like to book a new appointment?"
@@ -1718,6 +1723,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         else:
             steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
             step_num += 1
+        if flow_meta.get("error") or _flow_error_reason:
+            err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}"})
+            step_num += 1
         steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
         flow_steps = steps
     else:
@@ -1751,8 +1760,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         else:
             steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
             step_num += 1
+        if flow_meta.get("error") or _flow_error_reason:
+            err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}"})
+            step_num += 1
         steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
         flow_steps = steps
+    flow_error_for_log = flow_meta.get("error") or _flow_error_reason
     log_interaction(
         user_id,
         user_input_to_process,
@@ -1776,6 +1790,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         response_time_ms=response_time_ms,
         tool_calls=flow_meta.get("tool_calls"),
         flow_steps=flow_steps,
+        flow_error=flow_error_for_log,
     )
 
     # Token counting and cost: prefer real GPT usage from flow_meta when available
