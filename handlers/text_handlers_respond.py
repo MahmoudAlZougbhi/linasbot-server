@@ -1099,6 +1099,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             max_messages=0,
             window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
         )
+        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+        last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
         gpt_response_data = await get_bot_chat_response(
             user_id=user_id,
             user_input=user_input_to_process,
@@ -1107,7 +1109,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             current_preferred_lang=current_preferred_lang,
             response_language=response_language,
             is_initial_message_after_start=is_initial_message_for_gpt,
-            initial_user_query_to_process=initial_user_query_to_process_original
+            initial_user_query_to_process=initial_user_query_to_process_original,
+            last_ai_response_at=last_ai_response_at,
         )
 
     elif not gpt_response_data:
@@ -1267,6 +1270,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 max_messages=0,
                 window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
             )
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+            last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None
@@ -1296,6 +1301,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 initial_user_query_to_process=None,
                 custom_knowledge_context=custom_context,
                 operational_context=operational_context,
+                last_ai_response_at=last_ai_response_at,
             )
 
     action = gpt_response_data.get("action")

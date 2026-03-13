@@ -590,7 +590,7 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     return "\n".join(lines)
 
 # user_id is the WhatsApp phone number
-async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None) -> dict:
+async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None, last_ai_response_at: Optional[datetime.datetime] = None) -> dict:
     user_name = config.user_names.get(user_id, "client")
     current_gender_attempts = config.gender_attempts.get(user_id, 0)
 
@@ -784,9 +784,23 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "- Respond with a short polite redirection to clinic-related help.\n"
     )
 
+    # Show greeting only when: new user (no prior messages) OR inactive 12+ hours
+    # Prefer Firestore last_ai_response_at (persists across restarts); fallback to in-memory
+    _now = datetime.datetime.now(datetime.timezone.utc)
+    _last_bot = last_ai_response_at if last_ai_response_at is not None else config.user_last_bot_response_time.get(user_id, _now)
+    if _last_bot and getattr(_last_bot, 'tzinfo', None) is None:
+        _last_bot = _last_bot.replace(tzinfo=datetime.timezone.utc)
+    try:
+        _hours_since = (_now - _last_bot).total_seconds() / 3600 if _last_bot else 0.0
+    except (TypeError, AttributeError):
+        _hours_since = 0.0
+    _is_new = len(current_context_messages or []) == 0
+    _show_greeting = _is_new or _hours_since >= 12
+
     # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
     dynamic_customer_context = (
         "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
+        f"- **Show greeting**: {_show_greeting} - Use greeting ONLY when True (new user or inactive 12+ hours). Otherwise go straight to the answer. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
         f"- **Customer Name**: {customer_name_context}\n"
         f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, create_appointment, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{current_gender}'"

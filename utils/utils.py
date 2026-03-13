@@ -636,6 +636,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "last_message_at": message_data.get("timestamp") or utc_now(),
                     "unread_count": new_unread,
                 }
+                if role == "ai":
+                    update_payload["last_ai_response_at"] = message_data.get("timestamp") or utc_now()
                 if not is_smart_source:
                     # Defensive: also treat as takeover if status/conversation_state indicate waiting
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
@@ -1348,6 +1350,35 @@ async def get_conversation_history_from_firestore(
         import traceback
         traceback.print_exc()
         return []
+
+
+async def get_conversation_last_ai_response_at(user_id: str, conversation_id: str, alternate_user_id: str = None):
+    """
+    Returns the timestamp of the last AI response for this conversation (from Firestore).
+    Used to compute show_greeting: if 12+ hours since last AI reply, show greeting again.
+    Returns None if not found or no prior AI response.
+    Tries user_id first, then alternate_user_id (e.g. canonical_user_id) if provided.
+    """
+    db = get_firestore_db()
+    if not db or not conversation_id:
+        return None
+    app_id = "linas-ai-bot-backend"
+    for uid in [user_id, alternate_user_id] if alternate_user_id and alternate_user_id != user_id else [user_id]:
+        if not uid:
+            continue
+        conv_ref = db.collection("artifacts").document(app_id).collection("users").document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        try:
+            snap = await asyncio.to_thread(conv_ref.get)
+            if not snap.exists:
+                continue
+            data = snap.to_dict() or {}
+            raw = data.get("last_ai_response_at")
+            if raw is None:
+                return None
+            return parse_timestamp_utc(raw, fallback=utc_now())
+        except Exception as e:
+            print(f"⚠️ get_conversation_last_ai_response_at failed for {uid}: {e}")
+    return None
 
 
 async def save_user_name_to_firestore(user_id: str, name: str):
