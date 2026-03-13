@@ -233,9 +233,10 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">GPT usage</p>
                 <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 text-sm text-slate-700 space-y-1">
                   {entry.model && <p>Model: <code className="bg-violet-100 px-1 rounded">{entry.model}</code></p>}
-                  {entry.prompt_tokens != null && <p>Prompt tokens: <strong>{entry.prompt_tokens}</strong></p>}
-                  {entry.completion_tokens != null && <p>Completion tokens: <strong>{entry.completion_tokens}</strong></p>}
+                  {entry.prompt_tokens != null && <p>Input tokens: <strong>{entry.prompt_tokens}</strong>{entry.input_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.input_cost_usd.toFixed(6)})</span>}</p>}
+                  {entry.completion_tokens != null && <p>Output tokens: <strong>{entry.completion_tokens}</strong>{entry.output_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.output_cost_usd.toFixed(6)})</span>}</p>}
                   {entry.tokens != null && <p>Total tokens: <strong>{entry.tokens}</strong></p>}
+                  {entry.cost_usd != null && <p className="font-semibold text-emerald-700">Total cost: <strong>${entry.cost_usd.toFixed(6)}</strong></p>}
                   {entry.response_time_ms != null && <p>Response time: <strong>{Math.round(entry.response_time_ms)}ms</strong></p>}
                 </div>
               </div>

@@ -1779,24 +1779,24 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         tokens=flow_meta.get("tokens"),
         prompt_tokens=flow_meta.get("prompt_tokens"),
         completion_tokens=flow_meta.get("completion_tokens"),
+        cost_usd=flow_meta.get("cost_usd"),
+        input_cost_usd=flow_meta.get("input_cost_usd"),
+        output_cost_usd=flow_meta.get("output_cost_usd"),
         response_time_ms=response_time_ms,
         tool_calls=flow_meta.get("tool_calls"),
         flow_steps=flow_steps,
     )
 
-    # Token counting and cost calculation
-    prompt_tokens = 0
-    completion_tokens = 0
-    cost = 0.0
-    
-    if user_input_to_process.strip() and not user_input_to_process.lower().startswith('/start'):
+    # Token counting and cost: prefer real GPT usage from flow_meta when available
+    prompt_tokens = flow_meta.get("prompt_tokens") or 0
+    completion_tokens = flow_meta.get("completion_tokens") or 0
+    cost = flow_meta.get("cost_usd") or 0.0
+    if cost == 0 and user_input_to_process.strip() and not user_input_to_process.lower().startswith('/start'):
         prompt_tokens = count_tokens(get_system_instruction(user_id, current_preferred_lang) + "\n\n" + user_input_to_process)
         completion_tokens = count_tokens(bot_reply_text)
         total_tokens = prompt_tokens + completion_tokens
-        cost = (prompt_tokens / 1_000_000 * 5) + (completion_tokens / 1_000_000 * 15)
-        print(f"[_process_and_respond] 🔹 Prompt tokens: {prompt_tokens}")
-        print(f"[_process_and_respond] 🔹 Completion tokens: {completion_tokens}")
-        print(f"[_process_and_respond] 📊 Total tokens: {total_tokens} | 💰 Estimated cost: ${cost:.6f}\n")
+        cost = (prompt_tokens / 1_000_000 * 1.25) + (completion_tokens / 1_000_000 * 10)  # gpt-5.1 pricing
+        print(f"[_process_and_respond] 🔹 Prompt tokens: {prompt_tokens} | Completion: {completion_tokens} | Est. cost: ${cost:.6f}")
         save_for_training_conversation_log(user_input_to_process, bot_reply_text)
     
     # 📊 ANALYTICS: Log bot's response with performance metrics
@@ -1809,7 +1809,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         sentiment="neutral",  # Could be enhanced with sentiment detection
         tokens=prompt_tokens + completion_tokens,
         cost_usd=cost,
-        model="gpt-4o",
+        model=flow_meta.get("model") or "gpt-5.1",
         response_time_ms=response_time_ms,
         message_length=len(bot_reply_text) if bot_reply_text else 0
     )

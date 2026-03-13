@@ -29,6 +29,24 @@ from services.dynamic_model_selector import select_optimal_model
 # Fixed bot timezone (UTC+0200) for all booking day comparisons
 BOOKING_TZ = BOT_FIXED_TZ
 
+# Model pricing per 1M tokens (input, output) - update from OpenAI pricing page
+MODEL_PRICING = {
+    "gpt-5.1": {"input": 1.25, "output": 10.0},
+    "gpt-4o": {"input": 2.50, "output": 10.0},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4-turbo": {"input": 10.0, "output": 30.0},
+}
+
+
+def _compute_cost_from_usage(model: str, prompt_tokens: int, completion_tokens: int) -> dict:
+    """Compute input_cost_usd, output_cost_usd, cost_usd from token counts."""
+    pricing = MODEL_PRICING.get(model, MODEL_PRICING.get("gpt-5.1", {"input": 1.25, "output": 10.0}))
+    pt = prompt_tokens or 0
+    ct = completion_tokens or 0
+    input_cost = (pt / 1_000_000) * pricing["input"]
+    output_cost = (ct / 1_000_000) * pricing["output"]
+    return {"input_cost_usd": round(input_cost, 6), "output_cost_usd": round(output_cost, 6), "cost_usd": round(input_cost + output_cost, 6)}
+
 _custom_qa_cache = {}
 
 PRICE_STRONG_KEYWORDS = [
@@ -553,22 +571,49 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
 
 # user_id is the WhatsApp phone number
 async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None) -> dict:
-    user_name = config.user_names.get(user_id, "client") 
+    user_name = config.user_names.get(user_id, "client")
     current_gender_attempts = config.gender_attempts.get(user_id, 0)
-    
+
     # Extract customer phone number (without country code for API calls)
     customer_phone_full = config.user_data_whatsapp.get(user_id, {}).get('phone_number')
+
+    # CRITICAL: Sync CRM lookup when we have phone but no known name (fixes race: defer_external
+    # runs in background, so AI was called before CRM name arrived - bot asked for name when customer has file)
+    _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
+    _name_lower = (user_name or "").strip().lower()
+    _name_unknown = (
+        not user_name or user_name == "client"
+        or _name_lower in _placeholder_names
+        or _name_lower.startswith("test user")
+    )
+    if customer_phone_full and _name_unknown:
+        from utils.phone_utils import normalize_phone
+        normalized_for_crm = normalize_phone(customer_phone_full) or (
+            str(customer_phone_full).strip() if str(customer_phone_full).strip().startswith("+") else ""
+        )
+        if normalized_for_crm:
+            try:
+                from services.customer_identity_service import resolve_customer_from_external
+                ext = await resolve_customer_from_external(normalized_for_crm)
+                if ext.get("exists") and ext.get("name"):
+                    config.user_names[user_id] = ext["name"]
+                    user_name = ext["name"]
+                    if user_id in config.user_data_whatsapp:
+                        config.user_data_whatsapp[user_id]["crm_customer_exists"] = True
+                        config.user_data_whatsapp[user_id]["customer_file_status"] = "existing_file"
+                    print(f"✅ CRM sync: loaded name '{user_name}' for {user_id} before AI call")
+                elif ext.get("exists"):
+                    if user_id in config.user_data_whatsapp:
+                        config.user_data_whatsapp[user_id]["crm_customer_exists"] = True
+                        config.user_data_whatsapp[user_id]["customer_file_status"] = "existing_file"
+                    print(f"✅ CRM sync: customer has file but no name in CRM for {user_id}")
+            except Exception as e:
+                print(f"⚠️ CRM sync lookup failed for {user_id}: {e}")
     customer_phone_clean = None
     if customer_phone_full:
         customer_phone_clean = str(customer_phone_full).replace("+", "").replace(" ", "").replace("-", "")
         if customer_phone_clean.startswith("961"):
             customer_phone_clean = customer_phone_clean[3:]  # Remove Lebanon country code
-    
-    # Extract first name only for natural conversation
-    customer_first_name = None
-    if user_name and user_name != "client":
-        parts = user_name.split()
-        customer_first_name = parts[0] if parts else user_name  # "Nour Jaffala" -> "Nour"
     
     # Check rate limits first
     within_limits, limit_message = await check_rate_limits(user_id, 'message')
@@ -637,6 +682,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
     # Treat placeholder names (Test User, Unknown, etc.) as NOT known - avoid "تست يوزر" in Arabic
+    # Re-read user_name after CRM sync (may have been updated above)
+    user_name = config.user_names.get(user_id, "client")
+    customer_first_name = (user_name.split()[0] if user_name and user_name != "client" else user_name) if user_name else None
     _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
     _name_lower = (user_name or "").strip().lower()
     name_is_known = (
@@ -645,6 +693,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         and _name_lower not in _placeholder_names
         and not _name_lower.startswith("test user")
     )
+    crm_customer_exists = config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
     current_local_time = now_in_bot_tz()
     current_date_str = current_local_time.strftime("%Y-%m-%d")
     current_time_str = current_local_time.strftime("%H:%M:%S")
@@ -663,6 +712,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if name_is_known:
         customer_name_context = (
             f"KNOWN - {user_name} (First name: {customer_first_name}). Do NOT ask for name again."
+        )
+    elif crm_customer_exists:
+        customer_name_context = (
+            "Customer has EXISTING FILE in CRM - do NOT ask for their name. "
+            "Use respectful address (حضرتك/أستاذ/عزيزتي) without requesting name. "
+            "Proceed to help with their inquiry."
         )
 
     arabic_addressing_policy = ""
@@ -1750,6 +1805,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
         prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
         completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
+        cost_info = _compute_cost_from_usage(selected_model, prompt_tokens_val or 0, completion_tokens_val or 0) if (prompt_tokens_val is not None or completion_tokens_val is not None) else {}
         flow_meta = {
             "model": selected_model,
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
@@ -1759,11 +1815,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "tokens": tokens_val,
             "prompt_tokens": prompt_tokens_val,
             "completion_tokens": completion_tokens_val,
+            **cost_info,
         }
         if tool_calls and tool_round_trips:
             flow_meta["ai_first_response"] = ai_first_response_with_tools[:1500] if ai_first_response_with_tools else None
             flow_meta["tool_round_trips"] = tool_round_trips
         parsed_response["_flow_meta"] = flow_meta
+
+        if cost_info:
+            print(f"💰 GPT usage: input={prompt_tokens_val} tokens (${cost_info.get('input_cost_usd', 0):.6f}) | output={completion_tokens_val} tokens (${cost_info.get('output_cost_usd', 0):.6f}) | total=${cost_info.get('cost_usd', 0):.6f}")
 
         # ============================================================
         # PRICING SYNC: WhatsApp price must mirror system price exactly
