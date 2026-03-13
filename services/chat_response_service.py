@@ -47,6 +47,26 @@ def _compute_cost_from_usage(model: str, prompt_tokens: int, completion_tokens: 
     output_cost = (ct / 1_000_000) * pricing["output"]
     return {"input_cost_usd": round(input_cost, 6), "output_cost_usd": round(output_cost, 6), "cost_usd": round(input_cost + output_cost, 6)}
 
+
+def _normalize_arabic_reply(text: str) -> str:
+    """Replace Latin brand/assistant names with Arabic when reply is in Arabic (no mixing)."""
+    if not text or not isinstance(text, str):
+        return text
+    replacements = [
+        ("Marwa AI Assistant", "مروى"),
+        ("Marwa", "مروى"),
+        ("Lina's Laser Center", "مركز ليناز ليزر"),
+        ("Lina's Laser", "ليناز ليزر"),
+    ]
+    for latin, arabic in replacements:
+        text = text.replace(latin, arabic)
+    # Catch Lina's (curly apostrophe) and standalone Laser
+    text = re.sub(r"Lina['']s\s*Laser\s*Center?", "مركز ليناز ليزر", text, flags=re.IGNORECASE)
+    text = re.sub(r"Lina['']s\s*Laser", "ليناز ليزر", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bLaser\b", "ليزر", text, flags=re.IGNORECASE)
+    return text
+
+
 _custom_qa_cache = {}
 
 PRICE_STRONG_KEYWORDS = [
@@ -700,10 +720,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     current_day_name = current_local_time.strftime("%A")
 
     arabic_script_policy = ""
-    if response_language == "ar":
+    if response_language in ("ar", "franco"):
         arabic_script_policy = (
-            "- **Arabic Script Only**: Your `bot_reply` MUST be in Arabic script only (no Latin letters at all). "
-            "This includes names, brands, and abbreviations; write them phonetically in Arabic letters.\n"
+            "- **Arabic Script Only (NO MIXING)**: Your `bot_reply` MUST be in Arabic script only (no Latin letters at all). "
+            "NEVER mix English/Arabic in the same message. Write clinic name as ليناز ليزر, assistant name as مروى. "
+            "All names, brands, abbreviations must be in Arabic letters.\n"
         )
 
     customer_name_context = (
@@ -721,7 +742,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         )
 
     arabic_addressing_policy = ""
-    if response_language == "ar":
+    if response_language in ("ar", "franco"):
         if current_gender == "male":
             preferred_title = "أستاذ"
         elif current_gender == "female":
@@ -745,9 +766,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         )
 
     arabic_brand_policy = ""
-    if response_language == "ar":
+    if response_language in ("ar", "franco"):
         arabic_brand_policy = (
-            "- **Arabic Clinic Naming Rule**: When mentioning the clinic in Arabic, write exactly: ليناز ليزر.\n"
+            "- **Arabic Clinic Naming Rule**: When mentioning the clinic, write exactly: ليناز ليزر (never Lina's Laser in Latin).\n"
+            "- **Assistant Name in Arabic**: Write your name as مروى (never Marwa AI Assistant in Latin when replying in Arabic).\n"
         )
 
     concise_turn_policy = (
@@ -1779,6 +1801,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         detected_language = ai_detected if ai_detected in ("ar", "en", "fr", "franco") else current_preferred_lang
         parsed_response['detected_language'] = detected_language
         print(f"🌐 AI detected language: {detected_language}")
+
+        # Sanitize: when replying in Arabic/franco, replace Latin brand names with Arabic (no mixing)
+        if detected_language in ("ar", "franco") and bot_reply:
+            bot_reply = _normalize_arabic_reply(bot_reply)
+            parsed_response["bot_reply"] = bot_reply
 
         # Ensure current_gender_from_config in the output reflects the *actual* config value
         # This is critical for GPT to "see" the current state of the bot's knowledge about gender.
