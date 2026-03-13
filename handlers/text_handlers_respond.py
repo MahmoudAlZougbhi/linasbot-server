@@ -1259,10 +1259,21 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
             print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
 
-            # AI-primary: GPT decides when to fetch knowledge. No pre-run selector.
-            # GPT can call retrieve_relevant_knowledge tool when it needs more context.
+            # ALWAYS run selector: fetch relevant files, pass to GPT.
+            from services.dynamic_retrieval_service import (
+                retrieve_and_merge,
+                is_dynamic_retrieval_available,
+            )
             custom_context = None
             _dynamic_retrieval_flow_meta = None
+            if is_dynamic_retrieval_available():
+                merged, _clar, _act, _dynamic_retrieval_flow_meta = await retrieve_and_merge(
+                    query_to_send_to_gpt,
+                    include_price_hint=is_price_intent,
+                    response_lang=current_preferred_lang,
+                )
+                custom_context = merged if merged else None
+                print(f"[_process_and_respond] ✅ Selector ran: action={_act}, context_len={len(custom_context or '')}")
 
             conversation_history = await get_conversation_history_from_firestore(
                 user_id,
