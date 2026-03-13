@@ -1054,8 +1054,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     awaiting_confirmation = user_data.get('awaiting_human_handover_confirmation', False)
     awaiting_booking_offer_confirmation = bool(user_data.get("awaiting_booking_offer_confirmation", False))
-    confirmation_keywords_ar = ["اه", "نعم", "اي", "ايه", "يا ريت", "خلصني", "موافق", "yes", "oui", "ok", "تمام"]
-    rejection_keywords_ar = ["لا", "ما بدي", "خليني معك", "مش ضروري", "no", "non"]
 
     gpt_response_data = {}
 
@@ -1093,43 +1091,24 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             user_data["awaiting_booking_offer_confirmation"] = False
             user_data["booking_offer_origin_query"] = None
 
-    if not gpt_response_data and awaiting_confirmation and not ai_primary_mode:
-        user_input_lower = user_input_to_process.lower()
-        if any(kw in user_input_lower for kw in confirmation_keywords_ar):
-            gpt_response_data = {
-                "action": "human_handover_confirmed",
-                "bot_reply": "تمام، تم إرسال طلبك! رح يتواصل معك حدا من فريقنا بأقرب وقت ممكن. شكراً لتفهمك! 👋",
-                "detected_language": current_preferred_lang,
-                "detected_gender": current_gender if current_gender != "unknown" else None,
-                "current_gender_from_config": current_gender
-            }
-            user_data['awaiting_human_handover_confirmation'] = False
-        elif any(kw in user_input_lower for kw in rejection_keywords_ar):
-            gpt_response_data = {
-                "action": "return_to_normal_chat",
-                "bot_reply": "تمام، ك��ف بقدر أساعدك الآن؟",
-                "detected_language": current_preferred_lang,
-                "detected_gender": current_gender if current_gender != "unknown" else None,
-                "current_gender_from_config": current_gender
-            }
-            user_data['awaiting_human_handover_confirmation'] = False
-        else:
-            conversation_history = await get_conversation_history_from_firestore(
-                user_id,
-                current_conversation_id,
-                max_messages=0,
-                window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
-            )
-            gpt_response_data = await get_bot_chat_response(
-                user_id=user_id,
-                user_input=user_input_to_process,
-                current_context_messages=conversation_history,
-                current_gender=current_gender,
-                current_preferred_lang=current_preferred_lang,
-                response_language=response_language,
-                is_initial_message_after_start=is_initial_message_for_gpt,
-                initial_user_query_to_process=initial_user_query_to_process_original
-            )
+    # AI interprets yes/no for handover confirmation - no bot-side keyword matching
+    if not gpt_response_data and awaiting_confirmation:
+        conversation_history = await get_conversation_history_from_firestore(
+            user_id,
+            current_conversation_id,
+            max_messages=0,
+            window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
+        )
+        gpt_response_data = await get_bot_chat_response(
+            user_id=user_id,
+            user_input=user_input_to_process,
+            current_context_messages=conversation_history,
+            current_gender=current_gender,
+            current_preferred_lang=current_preferred_lang,
+            response_language=response_language,
+            is_initial_message_after_start=is_initial_message_for_gpt,
+            initial_user_query_to_process=initial_user_query_to_process_original
+        )
 
     elif not gpt_response_data:
         # Only use raw input when not resuming from router (router already set query_to_send_to_gpt for resume)
@@ -1659,6 +1638,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         user_data['awaiting_human_handover_confirmation'] = True
 
     elif action == "human_handover_confirmed":
+        user_data['awaiting_human_handover_confirmation'] = False
         await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "customer_requested_human",
             trigger_source="ai_handover_confirmed"
@@ -1676,6 +1656,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
 
     elif action == "return_to_normal_chat":
+        user_data['awaiting_human_handover_confirmation'] = False
         await send_message_func(user_id, bot_reply_text)
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 

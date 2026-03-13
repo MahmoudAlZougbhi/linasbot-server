@@ -722,6 +722,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         + domain_scope_policy
         + f"- **current_gender_from_config**: '{current_gender}'\n"
         f"- **detected_language**: '{current_preferred_lang}'\n"
+        f"- **Awaiting human handover confirmation**: {config.user_data_whatsapp.get(user_id, {}).get('awaiting_human_handover_confirmation', False)} - If True, user is replying to your transfer confirmation question. Interpret yes/no accordingly.\n"
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
     )
 
