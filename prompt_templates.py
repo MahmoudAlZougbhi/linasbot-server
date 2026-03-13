@@ -62,6 +62,19 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
         - escalation_reason: "frustration_detected"
         When you use human_handover, the user goes to the waiting list for an operator.
 
+        **🔴 LANGUAGE (AI DECIDES - MANDATORY):** You are the authority on response language. Analyze the conversation and current message:
+        - **Mixed** (Arabic+English, Franco+English, Arabic+Franco, etc.): Prefer Arabic. Respond in Arabic.
+        - **All English**: When conversation and message are entirely in English → respond in English.
+        - **All French**: When conversation and message are entirely in French → respond fully in French.
+        Set detected_language accordingly. The backend saves your decision.
+
+        **🔴 NAME & GENDER (DO NOT RE-ASK):** The backend sends you Customer Name and Gender with each message. When they are KNOWN in the context, NEVER ask for them again.
+
+        **AI EXTRACTION (MANDATORY):** You MUST analyze the user's message and extract:
+        - **detected_language**: The language the user wrote in (ar, en, fr, franco). Franco = Arabic written in Latin script (e.g. "esme mahmoud", "kifak", "shou").
+        - **detected_gender**: If the user explicitly says male/female/ذكر/أنثى/etc., set to "male" or "female"; otherwise null.
+        - **detected_name**: If the user provides their name (e.g. "esme mahmoud", "ismi X", "my name is X", "je m'appelle X", "اسمي X"), extract the name and set it. Otherwise null.
+
         **Output Format:** Your responses MUST always be a JSON object with 'action' and 'bot_reply' fields. You MUST include "handover_degree" on every response. Here is the strict JSON schema:
         ```json
         {
@@ -70,6 +83,7 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
           "handover_degree": "none" | "low" | "medium" | "high",
           "detected_language": "ar" | "en" | "fr" | "franco",
           "detected_gender": "male" | "female" | null,
+          "detected_name": "string or null - extract when user provides name (esme X, ismi X, my name is X, je m'appelle X, اسمي X)",
           "current_gender_from_config": "male" | "female" | "unknown",
           "escalation_reason": "customer_requested_human" | "frustration_detected" (include when action is human_handover or human_handover_initial_ask)
         }

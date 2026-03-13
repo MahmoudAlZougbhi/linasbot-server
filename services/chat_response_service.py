@@ -714,7 +714,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, create_appointment, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{current_gender}'"
         + (" - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n" if current_gender in ['male', 'female'] else " - UNKNOWN. Follow gender collection rules in Style Guide.\n")
-        + f"- **Language**: Detected as '{current_preferred_lang}' - You MUST respond in: '{response_language}'\n"
+        + f"- **Language**: YOU decide. Current hint: '{current_preferred_lang}'. Follow LANGUAGE rules: prefer Arabic when mixed; full English when all English; full French when all French.\n"
         + arabic_script_policy
         + arabic_addressing_policy
         + arabic_brand_policy
@@ -837,6 +837,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     first_parsed.setdefault("detected_language", current_preferred_lang)
                     first_parsed["current_gender_from_config"] = current_gender
                     first_parsed.setdefault("detected_gender", None)
+                    first_parsed.setdefault("detected_name", None)
                     first_parsed["_flow_meta"] = {
                         "model": selected_model,
                         "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,

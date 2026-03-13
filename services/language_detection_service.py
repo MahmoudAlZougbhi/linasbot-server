@@ -54,6 +54,9 @@ FRANCO_MARKERS = (
     "as3ar",
     "mar7aba",
     "ahla",
+    "esme",  # "esme mahmoud" = my name is Mahmoud (Franco)
+    "ismi",
+    "esmi",
     "3",
     "7",
     "2",

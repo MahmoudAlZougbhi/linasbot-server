@@ -769,129 +769,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         message_length=len(user_input_to_process)
     )
 
-    # NEW: Check if we're awaiting name input after gender confirmation
-    if user_data.get('awaiting_name_input', False):
-        print(f"🔔 Received name input from user {user_id}: '{user_input_to_process}'")
-
-        # Extract actual name from common phrases
-        def extract_name_from_input(text):
-            """Extract the actual name from phrases like 'my name is jad', 'ana ismi jad', etc."""
-            text = text.strip()
-            text_lower = text.lower()
-
-            # Patterns to extract name from - MUST start at beginning of string (^)
-            # This prevents matching partial words in the middle of a name
-            patterns = [
-                # English patterns
-                r"^(?:my name is|i'm|i am|im|it's|its|call me|they call me|name's)\s+(.+)",
-                # Franco-Arabic patterns (common ways to say "my name is" in Franco)
-                r"^(?:ana ismi|ana esmi|ana isme|ismi|esmi|isme|esme)\s+(.+)",
-                # French patterns - handle all apostrophe variations:
-                # - je m'appelle (proper)
-                # - je mappelle (no apostrophe - common typing)
-                # - je m appelle (space instead of apostrophe)
-                r"^(?:je\s*m['\s]?appelle|je suis|mon nom est|c'est|moi c'est)\s+(.+)",
-            ]
-
-            for pattern in patterns:
-                match = re.match(pattern, text_lower)  # Use re.match instead of re.search
-                if match:
-                    # Get the name part, preserving original case from input
-                    name_start = match.start(1)
-                    name_end = match.end(1)
-                    # Find corresponding position in original text
-                    extracted = text[name_start:name_end].strip()
-                    # Clean up punctuation at the end
-                    extracted = re.sub(r'[.,!?]+$', '', extracted).strip()
-                    if extracted:
-                        print(f"DEBUG: Extracted name '{extracted}' from phrase '{text}'")
-                        return extracted
-
-            # Arabic patterns (separate due to RTL) - also anchor to start
-            arabic_patterns = [
-                r'^(?:اسمي|انا اسمي|انا)\s+(.+)',
-            ]
-            for pattern in arabic_patterns:
-                match = re.match(pattern, text)  # Use re.match
-                if match:
-                    extracted = match.group(1).strip()
-                    extracted = re.sub(r'[.,!?،؟]+$', '', extracted).strip()
-                    if extracted:
-                        print(f"DEBUG: Extracted Arabic name '{extracted}' from phrase '{text}'")
-                        return extracted
-
-            # No pattern matched - return original (user just typed their name)
-            print(f"DEBUG: No prefix pattern matched, using full input as name: '{text}'")
-            return text
-
-        extracted_name = extract_name_from_input(user_input_to_process)
-        
-        # Basic validation: name should be 2-50 characters, letters/spaces/hyphens/apostrophes only
-        name_pattern = r'^[A-Za-z\u00C0-\u00FF\u0600-\u06FF\s\-\']+$'
-        if 2 <= len(extracted_name) <= 50 and re.match(name_pattern, extracted_name, re.UNICODE):
-            # Save the name to memory
-            config.user_names[user_id] = extracted_name
-            print(f"✅ Saved name '{extracted_name}' to memory for user {user_id}")
-            
-            # CRITICAL: Save to user_data to prevent webhook from overwriting
-            user_data['collected_name'] = extracted_name
-            user_data['name_source'] = 'user_provided'
-            print(f"✅ Protected name in user_data: {extracted_name}")
-            
-            # Save to Firestore user document
-            db = get_firestore_db()
-            if db:
-                try:
-                    app_id_for_firestore = "linas-ai-bot-backend"
-                    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
-                    user_doc_ref.update({
-                        "name": extracted_name,
-                        "last_updated": datetime.datetime.now()
-                    })
-                    print(f"✅ Saved name '{extracted_name}' to Firestore for user {user_id}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save name to Firestore: {e}")
-            
-            # Clear the awaiting flag
-            user_data['awaiting_name_input'] = False
-            
-            # Mark greeting stage as complete
-            config.user_greeting_stage[user_id] = 2
-            print(f"✅ Greeting stage set to 2 for user {user_id}")
-            
-            # Send acknowledgment with the name
-            thanks_messages = {
-                # Keep Arabic replies fully in Arabic script; do not echo Latin names.
-                "ar": "شكراً! 😊 كيف بقدر ساعدك اليوم؟",
-                "en": f"Thanks, {extracted_name}! 😊 How can I help you today?",
-                "fr": f"Merci, {extracted_name}! 😊 Comment puis-je vous aider aujourd'hui?",
-                "franco": "شكراً! 😊 كيف فيني ساعدك اليوم؟"
-            }
-            
-            thanks_message = thanks_messages.get(current_preferred_lang, thanks_messages["ar"])
-            await send_message_func(user_id, thanks_message)
-            await save_conversation_message_to_firestore(user_id, "ai", thanks_message, current_conversation_id, extracted_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-            
-            # Log the event
-            log_report_event("name_saved", extracted_name, current_gender, {"method": "Post-Gender Confirmation", "whatsapp_id": user_id})
-            
-            return
-        else:
-            # Invalid name format
-            print(f"⚠️ Invalid name format from user {user_id}: '{extracted_name}'")
-            
-            error_messages = {
-                "ar": "عذراً، الاسم يجب أن يحتوي على حر��ف فقط. ممكن تكتب اسمك الكامل مرة تانية؟",
-                "en": "Sorry, the name should contain only letters. Could you write your full name again?",
-                "fr": "Désolé, le nom ne doit contenir que des lettres. Pourriez-vous écrire votre nom complet à nouveau?",
-                "franco": "عذراً، الاسم لازم يكون حروف بس. ممكن تكتب اسمك الكامل مرة تانية؟"
-            }
-            
-            error_message = error_messages.get(current_preferred_lang, error_messages["ar"])
-            await send_message_func(user_id, error_message)
-            await save_conversation_message_to_firestore(user_id, "ai", error_message, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-            
-            return
+    # AI-PRIMARY: Bot passes message to AI as-is. AI extracts language, gender, name and returns them.
+    # Bot saves what AI returns. No bot-side keyword/pattern extraction for name.
 
     # Check if human takeover is active
     if config.user_in_human_takeover_mode.get(user_id, False):
@@ -1497,6 +1376,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     handover_degree = str(gpt_response_data.get("handover_degree") or "none").strip().lower()
     detected_gender_from_gpt = gpt_response_data.get("detected_gender")
     detected_language = gpt_response_data.get("detected_language")
+    detected_name_from_gpt = gpt_response_data.get("detected_name")
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
     flow_meta = gpt_response_data.get("_flow_meta") or {}
 
@@ -1708,18 +1588,40 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         # Update local variable so all follow-up messages in this function use the detected language
         current_preferred_lang = detected_language
 
+    # Save detected_name from AI (AI-primary: AI extracts, bot saves)
+    if detected_name_from_gpt and isinstance(detected_name_from_gpt, str):
+        name_clean = detected_name_from_gpt.strip()
+        name_pattern = r"^[A-Za-z\u00C0-\u00FF\u0600-\u06FF\s\-\']+$"
+        if 2 <= len(name_clean) <= 50 and re.match(name_pattern, name_clean, re.UNICODE):
+            config.user_names[user_id] = name_clean
+            user_data["collected_name"] = name_clean
+            user_data["name_source"] = "ai_extracted"
+            user_data["awaiting_name_input"] = False
+            config.user_greeting_stage[user_id] = 2
+            db = get_firestore_db()
+            if db:
+                try:
+                    app_id_for_firestore = "linas-ai-bot-backend"
+                    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+                    user_doc_ref.update({"name": name_clean, "last_updated": datetime.datetime.now()})
+                except Exception as e:
+                    print(f"⚠️ Failed to save name to Firestore: {e}")
+            log_report_event("name_saved", name_clean, current_gender, {"method": "AI Extraction", "whatsapp_id": user_id})
+            print(f"✅ Saved name '{name_clean}' from AI for user {user_id}")
+            user_name = name_clean
+
     if detected_gender_from_gpt and config.user_gender.get(user_id) != detected_gender_from_gpt:
         config.user_gender[user_id] = detected_gender_from_gpt
         log_report_event("gender_updated", user_name, detected_gender_from_gpt, {"method": "User Input Detection"})
         config.gender_attempts[user_id] = 0
         config.user_greeting_stage[user_id] = 2
-        await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=user_name)
+        await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name))
     elif detected_gender_from_gpt and config.user_gender.get(user_id) == "unknown" and detected_gender_from_gpt in ["male", "female"]:
         config.user_gender[user_id] = detected_gender_from_gpt
         log_report_event("gender_updated", user_name, detected_gender_from_gpt, {"method": "GPT Detection"})
         config.gender_attempts[user_id] = 0
         config.user_greeting_stage[user_id] = 2
-        await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=user_name)
+        await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name))
 
     # Track what we send for flow logging
     sent_reply = bot_reply_text
