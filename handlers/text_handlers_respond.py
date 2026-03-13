@@ -1307,6 +1307,32 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
     flow_meta = gpt_response_data.get("_flow_meta") or {}
 
+    # When GPT fails (error in flow_meta) and user is in waiting queue → send waiting message, not error
+    if flow_meta.get("error"):
+        in_waiting = config.user_in_human_takeover_mode.get(user_id, False)
+        if not in_waiting and current_conversation_id:
+            try:
+                db = get_firestore_db()
+                if db:
+                    canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+                    users_coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("users")
+                    for uid in [canonical_user_id, user_id]:
+                        if not uid:
+                            continue
+                        ref = users_coll.document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                        snap = await asyncio.to_thread(ref.get)
+                        if snap.exists:
+                            d = snap.to_dict() or {}
+                            if d.get("human_takeover_active") and not d.get("operator_id"):
+                                in_waiting = True
+                            break
+            except Exception as e:
+                print(f"[_process_and_respond] ⚠️ Waiting-check on error failed: {e}")
+        if in_waiting:
+            bot_reply_text = get_dynamic_message("waiting_queue_message", current_preferred_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+            action = "answer_question"
+            print(f"[_process_and_respond] GPT error but user {user_id} in waiting queue → sending waiting message")
+
     # AI-assessed handover degree: if GPT says medium/high, override to human_handover
     if handover_degree in ("medium", "high") and action not in ("human_handover", "human_handover_confirmed", "human_handover_initial_ask"):
         print(f"[_process_and_respond] 🔄 handover_degree={handover_degree} → overriding action to human_handover")
