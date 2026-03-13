@@ -368,15 +368,15 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             import traceback
             traceback.print_exc()
 
-    # Human handoff: AI (GPT) detects intent from CONTEXT - no keyword matching for human requests
-    # Sentiment only escalates on anger/offensive/repetition - human request is understood by AI from context
+    # AI-primary: GPT decides when to transfer to human (handover_degree, human_handover action).
+    # Sentiment is still logged for dashboard; escalation decision is delegated to GPT.
     sentiment_analysis = sentiment_service.analyze_sentiment(
         user_id=user_id,
         message=raw_msg,
         language=user_data.get('user_preferred_lang', 'ar')
     )
     
-    # Update conversation sentiment in Firebase
+    # Update conversation sentiment in Firebase (for dashboard/analytics only)
     if db and user_data.get('current_conversation_id'):
         try:
             app_id_for_firestore = "linas-ai-bot-backend"
@@ -396,32 +396,6 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             print(f"✅ Updated conversation sentiment to: {sentiment_analysis['sentiment']}")
         except Exception as e:
             print(f"⚠️ Failed to update sentiment in Firebase: {e}")
-    
-    # Auto-escalate if needed
-    if sentiment_analysis["should_escalate"] and not config.user_in_human_takeover_mode.get(user_id, False):
-        print(f"🚨 AUTO-ESCALATION TRIGGERED for user {user_id}")
-        print(f"   Reason: {sentiment_analysis['escalation_reason']}")
-        print(f"   Score: {sentiment_analysis['escalation_score']}")
-        print(f"   Issues: {sentiment_analysis['detected_issues']}")
-        await _trigger_human_takeover(
-            trigger_source="sentiment_auto_escalation",
-            escalation_reason=sentiment_analysis['escalation_reason'],
-            customer_message=raw_msg,
-            escalation_score=sentiment_analysis['escalation_score'],
-            detected_issues=sentiment_analysis['detected_issues']
-        )
-        
-        # Log the escalation
-        log_report_event("auto_escalation", user_id, config.user_gender.get(user_id, "unknown"), {
-            "message": raw_msg,
-            "reason": sentiment_analysis['escalation_reason'],
-            "score": sentiment_analysis['escalation_score'],
-            "issues": sentiment_analysis['detected_issues']
-        })
-        
-        # Update metrics
-        await update_dashboard_metric_in_firestore(user_id, "auto_escalations", 1)
-        return
 
     # Check Firestore for human takeover status (use canonical path + alternate fallback)
     if db and user_data.get('current_conversation_id'):

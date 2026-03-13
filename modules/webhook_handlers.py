@@ -452,11 +452,7 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
         else:
             user_input_text = str(content)
         
-        if user_input_text.lower() == "/start":
-            await start_command_whatsapp(user_id, user_name)
-        elif user_input_text.lower() == "/train":
-            await start_training_mode_whatsapp(user_id)
-        elif user_input_text.lower() == "/exit":
+        if user_input_text.lower() == "/exit":
             await exit_training_mode_whatsapp(user_id)
         elif user_input_text.lower() == "/daily_report":
             await generate_daily_report_command_whatsapp(user_id)

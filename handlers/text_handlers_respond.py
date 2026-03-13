@@ -1256,62 +1256,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
             print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
 
-            # Dynamic retrieval: if content files exist, use file selection + merged content (reduces tokens)
+            # AI-primary: GPT decides when to fetch knowledge. No pre-run selector.
+            # GPT can call retrieve_relevant_knowledge tool when it needs more context.
             custom_context = None
-            try:
-                from services.dynamic_retrieval_service import (
-                    is_dynamic_retrieval_available,
-                    retrieve_and_merge,
-                )
-                if is_dynamic_retrieval_available() and not is_reschedule_intent:
-                    merged, clarification, action, dr_flow_meta = await retrieve_and_merge(
-                        query_to_send_to_gpt,
-                        include_price_hint=is_price_intent,
-                        response_lang=current_preferred_lang,
-                    )
-                    if action == "ask_clarification" and clarification:
-                        clarification = _apply_turn_by_turn_policy(
-                            "ask_clarification",
-                            clarification,
-                            current_preferred_lang,
-                        )
-                        user_data['pending_clarification_query'] = query_to_send_to_gpt
-                        user_data['original_question'] = query_to_send_to_gpt
-                        user_data['awaiting_clarification'] = True
-                        user_data['last_bot_question_type'] = 'clarification'
-                        bot_sent = dr_flow_meta.get("bot_sent_to_selector", "")
-                        ai_returned = dr_flow_meta.get("selector_ai_raw_response", '{"action": "ask_clarification"}')
-                        sel_titles = dr_flow_meta.get("selected_titles") or []
-                        ai_sel = f"AI selected: {', '.join(sel_titles)}" if sel_titles else "AI requested clarification."
-                        if ai_returned:
-                            ai_sel += f"\n\nRaw:\n{ai_returned}"
-                        flow_steps = [
-                            {"step": 1, "title": "User → Bot", "content": query_to_send_to_gpt},
-                            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent or "User message + file titles."},
-                            {"step": 3, "title": "AI → Bot", "content": ai_sel},
-                            {"step": 4, "title": "Bot → User", "content": clarification},
-                        ]
-                        await send_message_func(user_id, clarification)
-                        await save_conversation_message_to_firestore(user_id, "ai", clarification, current_conversation_id, user_name, user_data.get("phone_number"), metadata={"handled_by": "ai"})
-                        save_for_training_conversation_log(query_to_send_to_gpt, clarification)
-                        log_interaction(
-                            user_id,
-                            query_to_send_to_gpt,
-                            clarification,
-                            "dynamic_retrieval",
-                            user_name=user_name,
-                            user_phone=user_data.get("phone_number"),
-                            user_gender=current_gender,
-                            customer_exists=user_data.get("crm_customer_exists"),
-                            customer_file_status=user_data.get("customer_file_status"),
-                            flow_steps=flow_steps,
-                        )
-                        return
-                    custom_context = merged
-                    _dynamic_retrieval_flow_meta = dr_flow_meta
-                    print(f"[_process_and_respond] 📂 Dynamic retrieval: action={action}, context_len={len(merged) if merged else 0}")
-            except Exception as e:
-                print(f"[_process_and_respond] ⚠️ Dynamic retrieval fallback: {e}")
+            _dynamic_retrieval_flow_meta = None
 
             conversation_history = await get_conversation_history_from_firestore(
                 user_id,

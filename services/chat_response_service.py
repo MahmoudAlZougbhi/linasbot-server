@@ -1651,10 +1651,45 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 _remember_booking_selection(user_id, function_args)
 
-                if hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
+                # Special tool: GPT requests knowledge retrieval - bot runs selector, returns content to GPT
+                if function_name == "retrieve_relevant_knowledge":
+                    user_msg = function_args.get("user_message", user_input)
+                    try:
+                        from services.dynamic_retrieval_service import (
+                            is_dynamic_retrieval_available,
+                            select_files_llm,
+                            _load_content_by_ids,
+                            _get_default_general_and_style,
+                            _ensure_style_included,
+                        )
+                        if is_dynamic_retrieval_available():
+                            result = await select_files_llm(user_msg)
+                            action = result.get("action", "fallback_to_general")
+                            files = result.get("files", [])
+                            if action == "ask_clarification":
+                                tool_output = {"action": "ask_clarification", "content": "", "message": "User message needs clarification. Ask the user which service they mean (hair removal, tattoo, whitening, etc.)."}
+                            elif files:
+                                merged, has_style = _load_content_by_ids(files)
+                                merged = _ensure_style_included(merged, has_style) if merged else _get_default_general_and_style()
+                                tool_output = {"action": "normal", "content": merged or "", "files_loaded": files}
+                            else:
+                                merged = _get_default_general_and_style()
+                                merged = _ensure_style_included(merged, False)
+                                tool_output = {"action": "fallback_to_general", "content": merged or ""}
+                        else:
+                            tool_output = {"action": "fallback_to_general", "content": config.CORE_KNOWLEDGE_BASE or ""}
+                        tool_content = json.dumps(tool_output)
+                        tool_round_trips.append({"ai_requested": function_name, "args": json.dumps(function_args)[:300], "bot_returned": (tool_content[:600] + "...") if len(tool_content) > 600 else tool_content})
+                        messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": tool_content})
+                    except Exception as kr_e:
+                        print(f"⚠️ retrieve_relevant_knowledge error: {kr_e}")
+                        err_content = json.dumps({"success": False, "content": "", "message": str(kr_e)})
+                        tool_round_trips.append({"ai_requested": function_name, "args": json.dumps(function_args)[:300], "bot_returned": err_content[:600]})
+                        messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": err_content})
+                elif hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
                     function_to_call = getattr(api_integrations, function_name)
                     print(f"DEBUG: Executing tool: {function_name} with args: {function_args}")
-                    
+
                     try:
                         tool_output = await function_to_call(**function_args)
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")

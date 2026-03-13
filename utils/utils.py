@@ -1876,6 +1876,20 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
+                "name": "retrieve_relevant_knowledge",
+                "description": "Retrieve relevant knowledge/price/style files for the user's question. Call this when you need more context to answer accurately (e.g. body areas, service details, pricing philosophy). The bot will send the user message to a selector AI, get selected files, and return their content. Use that content to formulate your reply.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_message": {"type": "string", "description": "The user's message or question to match against available files."}
+                    },
+                    "required": ["user_message"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "create_customer",
                 "description": "Creates a new customer record within the clinic's database.",
                 "parameters": {
