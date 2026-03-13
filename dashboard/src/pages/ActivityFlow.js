@@ -34,7 +34,7 @@ const FILE_STATUS_META = {
 };
 
 /** Step block for the flow breakdown - supports long content with scroll */
-const FlowStep = ({ step, title, content }) => {
+const FlowStep = ({ step, title, content, tokens, isMaxTokens }) => {
   const str = typeof content === "string" ? content : String(content ?? "");
   const isJsonLike = str.trim().startsWith("{") || str.trim().startsWith("[");
   const isLong = str.length > 800;
@@ -46,7 +46,14 @@ const FlowStep = ({ step, title, content }) => {
         {step}
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${isError ? "text-red-600" : "text-slate-500"}`}>{title}</p>
+        <p className={`text-xs font-semibold uppercase tracking-wide mb-1 flex items-center gap-2 flex-wrap ${isError ? "text-red-600" : "text-slate-500"}`}>
+          {title}
+          {tokens != null && (
+            <span className={`text-xs font-normal normal-case ${isMaxTokens ? "bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded" : "text-slate-500"}`}>
+              {tokens.toLocaleString()} tokens {isMaxTokens && "↑ الأكثر"}
+            </span>
+          )}
+        </p>
         <div
           className={`p-3 rounded-lg border text-sm overflow-y-auto overflow-x-auto ${
             isError ? "bg-red-50 border-red-200 text-red-800" : "bg-white border-slate-200 text-slate-700"
@@ -166,14 +173,19 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
 
             {entry.flow_steps?.length > 0 ? (
               <div className="grid gap-4">
-                {entry.flow_steps.map((s) => (
-                  <FlowStep
-                    key={s.step}
-                    step={s.step}
-                    title={s.title}
-                    content={typeof s.content === "string" ? s.content : String(s.content ?? "")}
-                  />
-                ))}
+                {(() => {
+                  const maxT = Math.max(0, ...(entry.flow_steps || []).map((s) => (s.tokens != null ? s.tokens : 0)));
+                  return (entry.flow_steps || []).map((s) => (
+                    <FlowStep
+                      key={s.step}
+                      step={s.step}
+                      title={s.title}
+                      content={typeof s.content === "string" ? s.content : String(s.content ?? "")}
+                      tokens={s.tokens}
+                      isMaxTokens={s.tokens != null && s.tokens > 0 && s.tokens === maxT}
+                    />
+                  ));
+                })()}
               </div>
             ) : (
               <div className="grid gap-4">

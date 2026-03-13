@@ -1715,69 +1715,75 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             ai_selected_str += f"\n\nRaw AI response:\n{ai_selector_return}"
         elif not ai_selected_str:
             ai_selected_str = f"Files: {', '.join(dr.get('selected_files') or [])}, action: {dr.get('action', 'normal')}"
+        pt = flow_meta.get("prompt_tokens")
+        ct = flow_meta.get("completion_tokens")
         steps = [
-            {"step": 1, "title": "User → Bot", "content": user_input_to_process},
-            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles."},
-            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned."},
-            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block},
-            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT."},
+            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0},
+            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": 0},
+            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": 0},
+            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0},
+            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt},
         ]
         step_num = 6
         if tool_round_trips:
-            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls."})
+            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0})
             step_num += 1
             for tr in tool_round_trips:
-                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}"})
+                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}", "tokens": 0})
                 step_num += 1
-                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", "")})
+                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", ""), "tokens": 0})
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)"})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms", "tokens": ct})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}"})
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0})
             step_num += 1
-        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
+        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0})
         flow_steps = steps
     else:
         tool_round_trips = flow_meta.get("tool_round_trips") or []
         ai_first = flow_meta.get("ai_first_response")
         ai_error = flow_meta.get("error")
         ai_raw_or_error = flow_meta.get("ai_raw_response") or (f"AI error: {ai_error}" if ai_error else None)
+        pt = flow_meta.get("prompt_tokens")
+        ct = flow_meta.get("completion_tokens")
         steps = [
-            {"step": 1, "title": "User → Bot", "content": user_input_to_process},
-            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT."},
+            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0},
+            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt},
         ]
         step_num = 3
         if tool_round_trips:
-            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls."})
+            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0})
             step_num += 1
             for i, tr in enumerate(tool_round_trips):
                 steps.append({
                     "step": step_num,
                     "title": f"AI requested: {tr.get('ai_requested', '?')}",
                     "content": f"Args: {tr.get('args', '{}')}",
+                    "tokens": 0,
                 })
                 step_num += 1
                 steps.append({
                     "step": step_num,
                     "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})",
                     "content": tr.get("bot_returned", ""),
+                    "tokens": 0,
                 })
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)"})
+            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms"})
+            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms", "tokens": ct})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}"})
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0})
             step_num += 1
-        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)"})
+        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0})
         flow_steps = steps
     flow_error_for_log = flow_meta.get("error") or _flow_error_reason
     log_interaction(
