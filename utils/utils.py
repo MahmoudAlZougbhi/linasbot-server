@@ -1334,10 +1334,14 @@ async def get_conversation_history_from_firestore(
                 print(f"⚠️ Skipping message with unknown role: {original_role}")
                 continue
 
-            openai_messages.append({
-                "role": role,
-                "content": msg.get('text', '')
-            })
+            content = msg.get('text', '')
+            meta = msg.get('metadata', {}) or {}
+            src = meta.get('source', '')
+            if src == 'smart_message':
+                content = f"[Clinic notification we sent to user]\n{content}"
+            elif src == 'qa_database':
+                content = f"[FAQ answer we sent to user]\n{content}"
+            openai_messages.append({"role": role, "content": content})
         
         print(
             f"✅ Fetched {len(openai_messages)} messages from Firestore for conversation {conversation_id} "
@@ -1378,6 +1382,36 @@ async def get_conversation_last_ai_response_at(user_id: str, conversation_id: st
             return parse_timestamp_utc(raw, fallback=utc_now())
         except Exception as e:
             print(f"⚠️ get_conversation_last_ai_response_at failed for {uid}: {e}")
+    return None
+
+
+async def get_last_bot_message_from_conversation(user_id: str, conversation_id: str, alternate_user_id: str = None):
+    """
+    Returns the last message we sent to the user (ai or operator) with text and metadata.
+    Used to give GPT context when user replies after a smart message or any notification.
+    Returns None if not found.
+    """
+    db = get_firestore_db()
+    if not db or not conversation_id:
+        return None
+    app_id = "linas-ai-bot-backend"
+    for uid in [user_id, alternate_user_id] if alternate_user_id and alternate_user_id != user_id else [user_id]:
+        if not uid:
+            continue
+        conv_ref = db.collection("artifacts").document(app_id).collection("users").document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        try:
+            snap = await asyncio.to_thread(conv_ref.get)
+            if not snap.exists:
+                continue
+            data = snap.to_dict() or {}
+            messages = data.get("messages", [])
+            for msg in reversed(messages):
+                role = msg.get("role", "")
+                if role in ("ai", "operator"):
+                    return {"text": msg.get("text", ""), "metadata": msg.get("metadata", {})}
+            return None
+        except Exception as e:
+            print(f"⚠️ get_last_bot_message_from_conversation failed for {uid}: {e}")
     return None
 
 

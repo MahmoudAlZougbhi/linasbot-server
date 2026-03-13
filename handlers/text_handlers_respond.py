@@ -1283,6 +1283,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             )
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
             last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
+            last_bot_msg = await get_last_bot_message_from_conversation(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None
@@ -1300,6 +1301,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     f"Task: The user previously asked a question. The bot asked for clarification or gender. "
                     f"The user has now answered. Answer the ORIGINAL question. Do not ask for clarification again."
                 )
+            # When last message was from us (e.g. smart message, notification): give GPT context so it doesn't lose domain
+            if last_bot_msg and last_bot_msg.get("text"):
+                last_text = (last_bot_msg.get("text") or "")[:500]
+                is_smart = (last_bot_msg.get("metadata") or {}).get("source") == "smart_message"
+                ctx = (
+                    f"Last message we sent to the user: \"{last_text}\"\n"
+                    f"Domain: clinic (ليناز ليزر). "
+                )
+                if is_smart:
+                    ctx += "This was a clinic notification. The user might be replying to or asking about it. "
+                ctx += "Do not lose context – the user might be talking or asking about this."
+                operational_context = (operational_context + "\n\n" + ctx) if operational_context else ctx
 
             gpt_response_data = await get_bot_chat_response(
                 user_id=user_id,
