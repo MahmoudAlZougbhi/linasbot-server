@@ -1718,12 +1718,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         else:
             parsed_response = json.loads(gpt_raw_content)
 
-        # Language was pre-detected before GPT call - use it directly
-        # GPT was instructed to respond in the pre-detected language
+        # AI decides language - use AI's detected_language from response, fallback to pre-detected
         bot_reply = parsed_response.get("bot_reply", "")
-        detected_language = current_preferred_lang  # Use pre-detected language
-        parsed_response['detected_language'] = detected_language  # Ensure it's in the response
-        print(f"🌐 Using pre-detected language: {detected_language}")
+        ai_detected = parsed_response.get("detected_language")
+        detected_language = ai_detected if ai_detected in ("ar", "en", "fr", "franco") else current_preferred_lang
+        parsed_response['detected_language'] = detected_language
+        print(f"🌐 AI detected language: {detected_language}")
 
         # Ensure current_gender_from_config in the output reflects the *actual* config value
         # This is critical for GPT to "see" the current state of the bot's knowledge about gender.
@@ -1819,68 +1819,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     pricing_payload_to_send,
                 )
 
-        # ============================================================
-        # LANGUAGE VALIDATION: Regenerate if response is in wrong language
-        # ============================================================
-        final_bot_reply = parsed_response.get("bot_reply", "")
-        is_lang_valid, lang_error = validate_language_match(response_language, final_bot_reply, response_language)
-
-        if not is_lang_valid:
-            print(f"⚠️ {lang_error}")
-            print(f"🔄 Regenerating response in correct language: {response_language}")
-
-            # Build a strong language-only instruction
-            lang_correction_prompt = f"""Your previous response was in the WRONG language.
-
-The user's message was: "{user_input}"
-Your response was: "{final_bot_reply}"
-
-You MUST respond in **{response_language.upper()}** ONLY.
-- If response_language is "en": Write your ENTIRE response in English. NO Arabic characters.
-- If response_language is "ar": Write your ENTIRE response in Arabic script (العربية) with ZERO Latin letters.
-- For Arabic: names/brands/codes must be written phonetically in Arabic letters (example: Marwa -> مروى, Test -> تيست).
-- For Arabic addressing: use أستاذ (male), عزيزتي (female), حضرتك (unknown). Never use "يا" + transliterated names.
-- If Arabic and customer name is known, include it after the respectful title in Arabic letters.
-- In Arabic, write clinic name exactly as: ليناز ليزر.
-- Keep response concise and ask at most ONE question in this turn.
-- If response_language is "fr": Write your ENTIRE response in French. NO Arabic characters.
-
-Rewrite your response in the correct language. Return ONLY a JSON object with "action" and "bot_reply"."""
-
-            try:
-                correction_system_message = (
-                    f"You are a helpful assistant. Respond ONLY in {response_language}. "
-                    "Return JSON with 'action' and 'bot_reply' fields."
-                )
-                if response_language == "ar":
-                    correction_system_message += (
-                        " Arabic replies must contain Arabic script only with no Latin letters, including names."
-                        " Use respectful addressing: أستاذ (male), عزيزتي (female), حضرتك (unknown)."
-                        " Include customer name after title when known."
-                        " Use clinic name exactly as ليناز ليزر in Arabic."
-                        " Keep it concise and ask at most one question."
-                        " Do not use 'يا' + transliterated names."
-                    )
-                correction_response = await client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": correction_system_message},
-                        {"role": "user", "content": lang_correction_prompt}
-                    ],
-                    temperature=0,
-                    response_format={"type": "json_object"}
-                )
-                if not correction_response.choices:
-                    raise ValueError("GPT language correction returned no choices")
-                corrected_content = correction_response.choices[0].message.content.strip()
-                corrected_parsed = json.loads(corrected_content)
-                if "bot_reply" in corrected_parsed:
-                    parsed_response["bot_reply"] = corrected_parsed["bot_reply"]
-                    print(f"✅ Language corrected. New response: {parsed_response['bot_reply'][:100]}...")
-            except Exception as lang_fix_err:
-                print(f"❌ Failed to correct language: {lang_fix_err}")
-                # Keep original response if correction fails
-
+        # AI-PRIMARY: Bot sends AI reply as-is. No language validation/rewrite.
         return parsed_response
     except json.JSONDecodeError as e:
         print(f"â‌Œ JSON Decode Error from GPT chat response: {e}. Raw content: {gpt_raw_content}")

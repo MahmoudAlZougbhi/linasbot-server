@@ -1408,62 +1408,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 or "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
             )
 
-    # Concise guardrail for laser-hair discovery:
-    # if user asks generally for laser hair and AI returns a long structured block,
-    # force a single focused question about target area.
-    context_query = (
-        user_data.get("original_question")
-        or user_data.get("pending_clarification_query")
-        or user_input_to_process
-    )
-    looks_like_laser_hair_discovery = _is_laser_hair_intent(context_query) and not _has_body_area_hint(context_query)
-    looks_over_verbose = bool(
-        bot_reply_text
-        and (
-            len(str(bot_reply_text)) > 260
-            or "١️⃣" in str(bot_reply_text)
-            or "1️⃣" in str(bot_reply_text)
-            or "\n-" in str(bot_reply_text)
-        )
-    )
-    if (
-        current_preferred_lang in ("ar", "franco")
-        and looks_like_laser_hair_discovery
-        and (
-            action == "ask_gender"
-            or (
-                looks_over_verbose
-                and action in {
-                    "answer_question",
-                    "normal_chat",
-                    "provide_info",
-                    "unknown_query",
-                    "ask_for_details_for_booking",
-                    "ask_for_details",
-                    "ask_clarification",
-                }
-            )
-        )
-    ):
-        action = "ask_clarification"
-        bot_reply_text = _build_single_laser_area_question(current_gender, user_name)
+    # AI-PRIMARY: No bot-side overrides. Send AI reply as-is.
 
     # If we had to coerce an invalid action from GPT, keep the full AI wording
     # instead of compressing it into the brief turn-by-turn format.
     if action_was_coerced:
         bot_reply_text = _clean_reply_text(bot_reply_text)
-    else:
-        bot_reply_text = _apply_turn_by_turn_policy(
-            action,
-            bot_reply_text,
-            current_preferred_lang,
-        )
-
-    # Enforce greeting timing globally: greeting only for new session or >=12h inactivity.
-    # If AI includes an opening greeting in regular turns, strip only the leading greeting line.
-    greeting_eligible_this_turn = bool(user_data.get("_greeting_eligible_this_turn", False))
-    if not greeting_eligible_this_turn and action not in {"initial_greet_and_ask_gender", "ask_gender"}:
-        bot_reply_text = _strip_redundant_greeting_prefix(bot_reply_text)
+    # AI-PRIMARY: No turn-by-turn truncation or greeting strip. Send AI reply as-is.
 
     def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []
@@ -1715,7 +1666,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         booking_origin_query = (
             user_data.get("original_question")
             or user_data.get("pending_clarification_query")
-            or context_query
             or user_input_to_process
         )
         user_data["awaiting_booking_offer_confirmation"] = True
