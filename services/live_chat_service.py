@@ -622,6 +622,8 @@ class LiveChatService:
                 except Exception:
                     pass
 
+        crm_exists = customer_info.get("crm_customer_exists")
+        is_new_customer = crm_exists is False
         out = {
             "conversation_id": conv_data.get("conversation_id"),
             "user_id": user_id,
@@ -638,6 +640,7 @@ class LiveChatService:
             "is_live": is_live,
             "language": language,
             "customer_info": customer_info,
+            "is_new_customer": is_new_customer,
         }
         if recent_messages:
             out["recent_messages"] = recent_messages
@@ -955,6 +958,8 @@ class LiveChatService:
                         except Exception:
                             last_at = utc_now()
 
+                    customer_info_fb = conv_data.get("customer_info") or {}
+                    is_new_fb = customer_info_fb.get("crm_customer_exists") is False
                     chat_entry = {
                         "conversation_id": conv_doc.id,
                         "user_id": user_id,
@@ -969,6 +974,7 @@ class LiveChatService:
                         "language": config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
                         "sentiment": conv_data.get("sentiment", "neutral"),
                         "message_count": conv_data.get("message_count", len(conv_data.get("visible_messages", []))),
+                        "is_new_customer": is_new_fb,
                     }
 
                     if search_val:
@@ -1265,6 +1271,7 @@ class LiveChatService:
                     "language": data.get("language") or customer_info.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
                     "sentiment": data.get("sentiment", "neutral"),
                     "message_count": data.get("message_count", 0),
+                    "is_new_customer": data.get("is_new_customer", False),
                 }
                 chats.append(chat_entry)
 
@@ -1846,6 +1853,7 @@ class LiveChatService:
                     "unread_count": data.get("unread_count", 0),
                     "priority": priority,
                     "last_message": data.get("last_message_text", ""),
+                    "is_new_customer": data.get("is_new_customer", False),
                 }
 
                 waiting_queue.append(queue_item)
@@ -1919,6 +1927,7 @@ class LiveChatService:
                 sentiment = conv_data.get("sentiment", "neutral")
                 priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
 
+                is_new = customer_info.get("crm_customer_exists") is False
                 out.append({
                     "conversation_id": doc.id,
                     "user_id": user_id,
@@ -1933,6 +1942,7 @@ class LiveChatService:
                     "unread_count": conv_data.get("unread_count", 0),
                     "priority": priority,
                     "last_message": conv_data.get("last_message_text", ""),
+                    "is_new_customer": is_new,
                 })
             return out
 

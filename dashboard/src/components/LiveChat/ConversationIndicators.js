@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircleIcon, ClockIcon, UserIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ClockIcon, UserIcon, SparklesIcon } from "@heroicons/react/24/outline";
 
 const statusBadges = {
   bot: {
@@ -53,6 +53,19 @@ export const SentimentIndicator = ({ sentiment }) => {
   return (
     <span className={`text-lg ${indicator.color}`} title={sentiment}>
       {indicator.emoji}
+    </span>
+  );
+};
+
+export const NewCustomerBadge = ({ isNew }) => {
+  if (!isNew) return null;
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+      title="عميل جديد - لا يوجد له ملف عندنا"
+    >
+      <SparklesIcon className="w-3 h-3 mr-1" />
+      New
     </span>
   );
 };

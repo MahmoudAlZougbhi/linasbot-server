@@ -323,7 +323,9 @@ async def _update_customer_name_from_external_after_save(
             customer_info = dict(doc_data.get("customer_info") or {})
             customer_info["name"] = customer_name
             customer_info["last_updated"] = utc_now()
+            customer_info["crm_customer_exists"] = external.get("exists", False)
             await asyncio.to_thread(doc_ref.update, {"customer_info": customer_info})
+            _refresh_live_chat_index_async(canonical_user_id, conversation_id)
         if customer_name or external_id is not None:
             update_data = {"last_activity": utc_now(), "name": customer_name}
             if external_id is not None:
@@ -538,6 +540,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             effective_phone_full = existing_phone
             effective_phone_clean = _clean_phone_for_lookup(existing_phone)
 
+    user_data = config.user_data_whatsapp.get(canonical_user_id) or config.user_data_whatsapp.get(user_id) or {}
+    crm_exists = user_data.get("crm_customer_exists")
     customer_info = {
         "phone_full": effective_phone_full,
         "phone_clean": effective_phone_clean,
@@ -545,8 +549,10 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         "name": customer_name,
         "gender": user_gender_value,
         "greeting_stage": user_greeting_stage_value,
-        "last_updated": utc_now()
+        "last_updated": utc_now(),
     }
+    if crm_exists is not None:
+        customer_info["crm_customer_exists"] = bool(crm_exists)
 
     def _build_message_data() -> dict:
         safe_text = text if isinstance(text, str) else str(text or "")

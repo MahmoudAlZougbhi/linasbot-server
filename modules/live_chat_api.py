@@ -164,6 +164,7 @@ async def get_active_conversations(search: str = Query(default="", description="
                 "conversation_state": c.get("conversation_state"),
                 "operator_id": c.get("operator_id"),
                 "unread_count": c.get("unread_count", 0),
+                "is_new_customer": c.get("is_new_customer", False),
             }
             for c in unified.get("chats", [])
         ]

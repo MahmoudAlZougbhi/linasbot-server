@@ -29,6 +29,7 @@ import ModernAudioPlayer from "../components/LiveChat/ModernAudioPlayer";
 import {
   SentimentIndicator,
   StatusBadge,
+  NewCustomerBadge,
 } from "../components/LiveChat/ConversationIndicators";
 import { useLiveChatSSE } from "../hooks/useLiveChatSSE";
 import { useLiveChatMediaComposer } from "../hooks/useLiveChatMediaComposer";
@@ -172,6 +173,7 @@ const LiveChat = () => {
         reason: "user_request",
         sentiment: conv.sentiment || "neutral",
         language: conv.language || "ar",
+        is_new_customer: conv.is_new_customer,
       });
     });
     return merged;
@@ -2167,13 +2169,14 @@ const LiveChat = () => {
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                                   <p className="font-medium text-slate-800 text-sm">
                                     {conv.user_name}
                                   </p>
                                   <span className="inline-block px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
                                     Live
                                   </span>
+                                  <NewCustomerBadge isNew={conv.is_new_customer} />
                                   {newConversationIds.has(conv.conversation_id) && (
                                     <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
                                       New
@@ -2223,10 +2226,11 @@ const LiveChat = () => {
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                                   <p className="font-medium text-slate-800 text-sm">
                                     {conv.user_name}
                                   </p>
+                                  <NewCustomerBadge isNew={conv.is_new_customer} />
                                   {newConversationIds.has(conv.conversation_id) && (
                                     <span className="inline-block px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full animate-pulse">
                                       New
@@ -2369,7 +2373,10 @@ const LiveChat = () => {
                                   }}
                                 >
                                   <div className="flex items-start justify-between mb-1">
+                                    <div className="flex items-center gap-2">
                                     <p className="font-medium text-slate-800 text-sm truncate">{conv.user_name}</p>
+                                    <NewCustomerBadge isNew={conv.is_new_customer} />
+                                  </div>
                                     <SentimentIndicator sentiment={conv.sentiment} />
                                   </div>
                                   <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
@@ -2397,7 +2404,10 @@ const LiveChat = () => {
                                   }}
                                 >
                                   <div className="flex items-start justify-between mb-1">
-                                    <p className="font-medium text-slate-800 text-sm truncate">{conv.user_name}</p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium text-slate-800 text-sm truncate">{conv.user_name}</p>
+                                      <NewCustomerBadge isNew={conv.is_new_customer} />
+                                    </div>
                                     <SentimentIndicator sentiment={conv.sentiment} />
                                   </div>
                                   <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
@@ -2448,9 +2458,12 @@ const LiveChat = () => {
                       {selectedConversation.conversation.user_name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-bold text-slate-800">
-                        {selectedConversation.conversation.user_name}
-                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-slate-800">
+                          {selectedConversation.conversation.user_name}
+                        </p>
+                        <NewCustomerBadge isNew={selectedConversation.conversation.is_new_customer} />
+                      </div>
                       <div className="flex items-center space-x-3 text-xs text-slate-500">
                         <span className="flex items-center">
                           <PhoneIcon className="w-3 h-3 mr-1" />
@@ -2985,7 +2998,10 @@ const LiveChat = () => {
                             }}
                           >
                             <div className="flex items-center justify-between gap-1">
-                              <p className="font-medium text-slate-800 truncate">{item.user_name}</p>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <p className="font-medium text-slate-800 truncate">{item.user_name}</p>
+                                <NewCustomerBadge isNew={item.is_new_customer} />
+                              </div>
                               {unreadCount > 0 && (
                                 <span className="text-xs font-bold text-amber-600">{unreadCount}</span>
                               )}
@@ -3042,6 +3058,7 @@ const LiveChat = () => {
                           >
                             <div className="min-w-0 flex-1 pr-2">
                               <span className="font-medium text-slate-800 truncate block">{conv.user_name}</span>
+                              <NewCustomerBadge isNew={conv.is_new_customer} />
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {unreadCount > 0 && (
@@ -3071,9 +3088,12 @@ const LiveChat = () => {
                 <div className="space-y-3">
                   <div>
                     <p className="text-xs text-slate-500">Name</p>
-                    <p className="font-medium text-slate-800">
-                      {selectedConversation.conversation.user_name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-slate-800">
+                        {selectedConversation.conversation.user_name}
+                      </p>
+                      <NewCustomerBadge isNew={selectedConversation.conversation.is_new_customer} />
+                    </div>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Phone</p>
