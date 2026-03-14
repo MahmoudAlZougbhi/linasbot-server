@@ -9,9 +9,9 @@ from enum import Enum
 
 class ModelTier(Enum):
     """AI Model tiers from cheapest to most expensive"""
-    MINI = "gpt-4o-mini"           # $0.15 / 1M input, $0.60 / 1M output
+    MINI = "gpt-5-mini"            # $0.25 / 1M input, $2.00 / 1M output
     TURBO = "gpt-3.5-turbo"         # $0.50 / 1M input, $1.50 / 1M output  
-    GPT4 = "gpt-4o"                 # $2.50 / 1M input, $10.00 / 1M output
+    GPT4 = "gpt-5-mini"             # Same as MINI - unified on gpt-5-mini
     GPT4_ADVANCED = "gpt-4-turbo"  # $10.00 / 1M input, $30.00 / 1M output
 
 class QuestionComplexity(Enum):
@@ -118,11 +118,11 @@ class DynamicModelSelector:
             QuestionComplexity.EXPERT: ModelTier.GPT4,
         }
         
-        # Cost tracking (per 1K tokens)
+        # Cost tracking (per 1K tokens) - gpt-5-mini: $0.25/$2 per 1M
         self.model_costs = {
-            ModelTier.MINI: {'input': 0.00015, 'output': 0.0006},
+            ModelTier.MINI: {'input': 0.00025, 'output': 0.002},
             ModelTier.TURBO: {'input': 0.0005, 'output': 0.0015},
-            ModelTier.GPT4: {'input': 0.0025, 'output': 0.01},
+            ModelTier.GPT4: {'input': 0.00025, 'output': 0.002},
             ModelTier.GPT4_ADVANCED: {'input': 0.01, 'output': 0.03},
         }
 
@@ -265,7 +265,7 @@ class DynamicModelSelector:
         }
         return reasons.get(complexity, "General inquiry")
     
-    def get_cost_savings(self, question: str, actual_model: str, forced_model: str = "gpt-4o") -> float:
+    def get_cost_savings(self, question: str, actual_model: str, forced_model: str = "gpt-5-mini") -> float:
         """Calculate cost savings by using dynamic selection"""
         actual_cost = self._estimate_cost(question, ModelTier(actual_model))
         forced_cost = self._estimate_cost(question, ModelTier(forced_model))

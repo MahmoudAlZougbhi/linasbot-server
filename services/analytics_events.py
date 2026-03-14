@@ -94,7 +94,7 @@ class AnalyticsEvents:
             sentiment: "positive" | "neutral" | "negative"
             tokens: Number of tokens used (for bot messages)
             cost_usd: Cost in USD (for bot messages)
-            model: AI model used (e.g., "gpt-4o", "whisper-1")
+            model: AI model used (e.g., "gpt-5-mini", "whisper-1")
             response_time_ms: Response time in milliseconds (for bot messages)
             message_length: Length of message in characters
         """

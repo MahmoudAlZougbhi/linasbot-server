@@ -119,7 +119,7 @@ def log_interaction(
         source: "user" | "qa_database" | "gpt" | "dynamic_retrieval" | "rate_limit" | "moderation"
         ai_query_summary: Brief summary of what was sent to GPT (e.g. last N msgs)
         ai_raw_response: Raw GPT response (before parsing/tool handling)
-        model: AI model used (e.g. gpt-4o-mini)
+        model: AI model used (e.g. gpt-5-mini)
         tokens: Token count if available
         response_time_ms: Response time in ms
         qa_match_score: If from Q&A, the match score

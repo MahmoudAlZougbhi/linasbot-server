@@ -320,7 +320,7 @@ async def generate_answer_from_content(merged_content: str, user_message: str) -
     prompt = prompt.replace("{{USER_MESSAGE}}", user_message)
 
     response = await client.chat.completions.create(
-        model=getattr(config, "GPT_MODEL", None) or "gpt-4o-mini",
+        model=getattr(config, "GPT_MODEL", None) or "gpt-5-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )

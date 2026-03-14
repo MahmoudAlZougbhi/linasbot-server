@@ -69,7 +69,7 @@ async def process_training_request_with_gpt(user_id: int, training_instruction_t
 
     try:
         completion_args = {
-            "model": "gpt-4o",
+            "model": "gpt-5-mini",
             "messages": messages,
             "temperature": 0.7,
             "max_tokens": 2000,

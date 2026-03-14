@@ -32,6 +32,7 @@ BOOKING_TZ = BOT_FIXED_TZ
 # Model pricing per 1M tokens (input, output) - update from OpenAI pricing page
 MODEL_PRICING = {
     "gpt-5.1": {"input": 1.25, "output": 10.0},
+    "gpt-5-mini": {"input": 0.25, "output": 2.0},
     "gpt-4o": {"input": 2.50, "output": 10.0},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4-turbo": {"input": 10.0, "output": 30.0},
@@ -1806,7 +1807,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
 
             second_response = await client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5-mini",
                 messages=messages,
                 temperature=0.7,
                 response_format={"type": "json_object"}
