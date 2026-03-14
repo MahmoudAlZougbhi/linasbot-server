@@ -380,10 +380,17 @@ def _merge_pricing_args_with_booking_state(
         return
 
     inferred_service_id = _infer_service_id_for_pricing(user_input, current_gender, booking_state)
-    if function_args.get("service_id") is None and inferred_service_id is not None:
+    # Prefer booking_state > inferred > GPT: booking_state has API-valid IDs; GPT schema may not match backend
+    state_service = _safe_int(booking_state.get("service_id"))
+    state_machine = _safe_int(booking_state.get("machine_id"))
+    if state_service is not None:
+        function_args["service_id"] = state_service
+    elif inferred_service_id is not None:
         function_args["service_id"] = inferred_service_id
 
-    if function_args.get("machine_id") is None and booking_state.get("machine_id") is not None:
+    if state_machine is not None:
+        function_args["machine_id"] = state_machine
+    elif booking_state.get("machine_id") is not None:
         function_args["machine_id"] = booking_state.get("machine_id")
 
     if function_args.get("branch_id") is None and booking_state.get("branch_id") is not None:

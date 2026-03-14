@@ -1056,6 +1056,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     awaiting_booking_offer_confirmation = bool(user_data.get("awaiting_booking_offer_confirmation", False))
 
     gpt_response_data = {}
+    query_pre_set_from_booking_confirmation = False
 
     if awaiting_booking_offer_confirmation:
         booking_confirmation = _classify_booking_offer_confirmation_reply(user_input_to_process)
@@ -1069,13 +1070,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             user_data["original_question"] = booking_origin_query
             user_data["awaiting_booking_offer_confirmation"] = False
             user_data["booking_offer_origin_query"] = None
-            gpt_response_data = {
-                "action": "ask_for_details_for_booking",
-                "bot_reply": _build_booking_followup_question(current_preferred_lang),
-                "detected_language": current_preferred_lang,
-                "detected_gender": current_gender if current_gender != "unknown" else None,
-                "current_gender_from_config": current_gender,
-            }
+            # Pass to GPT with full context – user already discussed service/branch (e.g. tattoo removal Beirut).
+            # Do NOT overwrite with "لأي خدمة بتحب تحجز؟" – GPT will use discussed service + user's date/time.
+            query_to_send_to_gpt = (
+                f"[User confirmed booking. Previously discussed: {booking_origin_query}. User reply: {user_input_to_process}]"
+            )
+            query_pre_set_from_booking_confirmation = True
+            # Do NOT set gpt_response_data – let GPT proceed with create_appointment using context.
         elif booking_confirmation == "no":
             user_data["awaiting_booking_offer_confirmation"] = False
             user_data["booking_offer_origin_query"] = None
@@ -1114,8 +1115,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         )
 
     elif not gpt_response_data:
-        # Only use raw input when not resuming from router (router already set query_to_send_to_gpt for resume)
-        if not _resume_original_question:
+        # Only use raw input when not resuming; do NOT overwrite query pre-set from booking confirmation
+        if not _resume_original_question and not query_pre_set_from_booking_confirmation:
             query_to_send_to_gpt = user_input_to_process
 
         # Restore and combine original question when user replies to clarification (legacy path)

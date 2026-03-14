@@ -1734,8 +1734,8 @@ def get_openai_tools_schema():
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number, e.g., '71 123 456'."},
-                        "service_id": {"type": "integer", "description": "Service ID: 1=Hair Removal Men, 2=CO2 Laser, 3=Hair Removal Women, 4=Tattoo Removal, 5=Whitening. MUST match the service requested."},
-                        "machine_id": {"type": "integer", "description": "Machine ID: For Tattoo Removal use 5 (Pico), for Hair Removal use 2 (Neo)/3 (Quadro)/4 (Trio), for CO2 use 6, for Whitening use 7 (DPL)."},
+                        "service_id": {"type": "integer", "description": "Service ID: 1=Hair Men, 12=Hair Women, 2/11=CO2, 13=Tattoo, 4/5/14=Whitening. For female hair removal use 12, not 3."},
+                        "machine_id": {"type": "integer", "description": "Machine ID from API. For Hair: Neo/Quadro/Trio. For Tattoo: Pico. Call get_machines if unsure of valid IDs."},
                         "branch_id": {"type": "integer", "description": "Branch ID: 1=Beirut Manara, 2=Antelias. Default to 1 if not specified."},
                         # This is derived from the API Documentation PDF
                         "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). This date and time MUST be converted from user's natural language (e.g., 'tomorrow', 'next Saturday', 'in 3 days') to an exact future date and time based on current time. The date must be in the future and not more than 365 days from today."},

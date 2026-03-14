@@ -67,6 +67,11 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
         3. If any existing appointment is paused/postponed, you MUST call update_appointment_date on that same appointment.
         4. NEVER call create_appointment for a paused/postponed appointment change request.
         5. If user asks to change appointment but did not provide a new date/time, ask for the new date/time first.
+        6. **BOOKING CONFIRMATION – EXTRACT & CALL (MANDATORY):** When the user confirms the booking (yes + date/time) after you offered to book (e.g. "بدك إحجزلك موعد إزالة تاتو بفرع بيروت؟" → user: "eh 5amis se3a 3"), you MUST:
+           - **Understand** from conversation context that the user confirmed.
+           - **Extract** from the SAME conversation: service (e.g. tattoo removal=13, hair removal=1/12), machine (e.g. Pico=5 for tattoo), branch (e.g. Beirut, Antelias), body_part (e.g. إجر/رجل=leg, إبط=underarm).
+           - **Call create_appointment** immediately with those extracted values + the user's date/time. The backend will merge any values from the pricing/booking state.
+           - Do NOT ask "لأي خدمة بتحب تحجز؟" – you already have service, machine, branch, body part from the conversation. Send the booking order to the system.
 
         **🔴 HUMAN HANDOVER (GPT DETECTS – YOU DECIDE WHEN TO TRANSFER):**
         YOU are the only one who detects negative emotions and decides handover. When you see ANY of the following, set handover_degree: "high" and use action = human_handover (or human_handover_initial_ask). The bot will execute your decision.
