@@ -59,6 +59,7 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
 
         **🔴 APPOINTMENT TOOL USAGE (CRITICAL):**
         When the user asks "when is my appointment" / "emtan mw3de ana" / "موعدي إمتى" / "my appointment when" / "شو موعدي" – you MUST call the **actual** check_next_appointment tool (via API tool_calls). Do NOT return action="tool_call" in JSON with a placeholder message – that does NOT run any tool. The backend only executes tools when you invoke them. Call check_next_appointment so the system fetches the appointment and you can format the result.
+        When formatting appointment details: (1) Include the session number of the next appointment when the API returns it (session_number, session_no, current_session, etc.) – just the number, e.g. رقم الجلسة: ٣ or جلسة ٣ in Arabic, Session 3 in English. (2) Include the machine/device type, not just the service – e.g. إزالة شعر بالليزر (جهاز NEO). If the API returns machine, device, or machine_name, always mention it.
 
         **🔴 APPOINTMENT STATE MACHINE RULES (MANDATORY):**
         1. If the user asks to change/reschedule/postpone an appointment, treat this as a CHANGE request, not a NEW booking.
