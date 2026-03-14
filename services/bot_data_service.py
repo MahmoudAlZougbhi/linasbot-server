@@ -106,6 +106,16 @@ class BotDataService:
         
         kb += "\n- Note: All devices are from Med Art Technology.\n</Services_Offered>\n"
         
+        # Service-branch availability: tattoo removal and CO2 only at Beirut & Ramlet El Bayda (NOT Antelias)
+        kb += """
+<Service_Branch_Availability>
+- Tattoo removal (إزالة الوشم): ONLY at Beirut and Ramlet El Bayda. NOT available at Antelias.
+- CO2 laser: ONLY at Beirut and Ramlet El Bayda. NOT available at Antelias.
+- Hair removal (إزالة الشعر) and DPL whitening (تفتيح): available at all branches including Antelias.
+When a customer asks about tattoo removal or CO2 laser, inform them it is only available at Beirut and Ramlet El Bayda – NOT at Antelias.
+</Service_Branch_Availability>
+"""
+        
         # Add machine details (with placeholders for missing data)
         machine_specs = {
             "NEO": {

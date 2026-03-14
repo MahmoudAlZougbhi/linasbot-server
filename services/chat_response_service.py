@@ -739,8 +739,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if response_language in ("ar", "franco"):
         arabic_script_policy = (
             "- **Arabic Script Only (NO MIXING)**: Your `bot_reply` MUST be in Arabic script only (no Latin letters at all). "
-            "NEVER mix English/Arabic in the same message. Write clinic name as ليناز ليزر, assistant name as مروى. "
-            "All names, brands, abbreviations must be in Arabic letters.\n"
+            "NEVER mix English with Arabic. BANNED in Arabic messages: 'AI Assistant', 'Marwa', 'Lina's Laser', or ANY Latin/English words. "
+            "Write clinic as ليناز ليزر, assistant as مروى only. When introducing yourself: أهلاً، أنا مروى من ليناز ليزر – never 'مروى AI Assistant'.\n"
         )
 
     customer_name_context = (
@@ -786,7 +786,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if response_language in ("ar", "franco"):
         arabic_brand_policy = (
             "- **Arabic Clinic Naming Rule**: When mentioning the clinic, write exactly: ليناز ليزر (never Lina's Laser in Latin).\n"
-            "- **Assistant Name in Arabic**: Write your name as مروى (never Marwa AI Assistant in Latin when replying in Arabic).\n"
+            "- **Assistant Intro in Arabic**: Say أهلاً، أنا مروى من ليناز ليزر. NEVER write 'AI Assistant' or 'Marwa AI Assistant' – zero Latin script in Arabic messages.\n"
         )
         arabic_date_policy = (
             "- **Arabic Date/Time Rule (MANDATORY)**: When your bot_reply is in Arabic, ALL dates and times MUST be in Arabic format. "
