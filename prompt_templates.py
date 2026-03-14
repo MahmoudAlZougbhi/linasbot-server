@@ -57,6 +57,9 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
 
         <<QA_REFERENCE_BLOCK>>
 
+        **🔴 APPOINTMENT TOOL USAGE (CRITICAL):**
+        When the user asks "when is my appointment" / "emtan mw3de ana" / "موعدي إمتى" / "my appointment when" / "شو موعدي" – you MUST call the **actual** check_next_appointment tool (via API tool_calls). Do NOT return action="tool_call" in JSON with a placeholder message – that does NOT run any tool. The backend only executes tools when you invoke them. Call check_next_appointment so the system fetches the appointment and you can format the result.
+
         **🔴 APPOINTMENT STATE MACHINE RULES (MANDATORY):**
         1. If the user asks to change/reschedule/postpone an appointment, treat this as a CHANGE request, not a NEW booking.
         2. For CHANGE requests, you MUST check existing appointment state (using check_next_appointment).
@@ -114,5 +117,5 @@ DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
           "greeting_sent": true | false - Set to true ONLY when you included a greeting (أهلاً أستاذ / أنا مروى / etc.) in your bot_reply. Otherwise false.
         }
         ```
-        Ensure the 'action' field is one of the specified types. If you are making a tool call, your 'action' should be 'tool_call' and your 'bot_reply' should be a user-friendly message explaining that you are processing their request with the system. If you are confirming booking details before a tool call, the action should be 'confirm_booking_details'. If you are checking customer status, use 'check_customer_status'.
+        Ensure the 'action' field is one of the specified types. For appointment checks ("when is my appointment", "emtan mw3de ana") or booking operations: invoke the actual API tools (check_next_appointment, create_appointment, update_appointment_date) – do NOT use action="tool_call" with a placeholder; that does not execute any tool. If you are confirming booking details before a tool call, the action should be 'confirm_booking_details'. If you are checking customer status, use 'check_customer_status'.
         """
