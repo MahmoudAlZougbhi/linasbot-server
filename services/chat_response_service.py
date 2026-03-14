@@ -622,14 +622,29 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if user_id in config.user_data_whatsapp:
                         config.user_data_whatsapp[user_id]["crm_customer_exists"] = True
                         config.user_data_whatsapp[user_id]["customer_file_status"] = "existing_file"
-                    print(f"✅ CRM sync: loaded name '{user_name}' for {user_id} before AI call")
+                    # Also set gender from customer file so we don't ask when it's already in CRM
+                    if ext.get("gender") in ("male", "female"):
+                        config.user_gender[user_id] = ext["gender"]
+                        config.gender_attempts[user_id] = 0
+                        print(f"✅ CRM sync: loaded name '{user_name}' and gender '{ext['gender']}' for {user_id} before AI call")
+                    else:
+                        print(f"✅ CRM sync: loaded name '{user_name}' for {user_id} before AI call")
                 elif ext.get("exists"):
                     if user_id in config.user_data_whatsapp:
                         config.user_data_whatsapp[user_id]["crm_customer_exists"] = True
                         config.user_data_whatsapp[user_id]["customer_file_status"] = "existing_file"
-                    print(f"✅ CRM sync: customer has file but no name in CRM for {user_id}")
+                    # Customer has file but no name - still try to use gender if present
+                    if ext.get("gender") in ("male", "female"):
+                        config.user_gender[user_id] = ext["gender"]
+                        config.gender_attempts[user_id] = 0
+                        print(f"✅ CRM sync: customer has file, loaded gender '{ext['gender']}' for {user_id}")
+                    else:
+                        print(f"✅ CRM sync: customer has file but no name in CRM for {user_id}")
             except Exception as e:
                 print(f"⚠️ CRM sync lookup failed for {user_id}: {e}")
+        # Use gender from config if we just loaded it from CRM (for current request)
+        if config.user_gender.get(user_id) in ("male", "female"):
+            current_gender = config.user_gender[user_id]
     customer_phone_clean = None
     if customer_phone_full:
         customer_phone_clean = str(customer_phone_full).replace("+", "").replace(" ", "").replace("-", "")
@@ -767,10 +782,17 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         )
 
     arabic_brand_policy = ""
+    arabic_date_policy = ""
     if response_language in ("ar", "franco"):
         arabic_brand_policy = (
             "- **Arabic Clinic Naming Rule**: When mentioning the clinic, write exactly: ليناز ليزر (never Lina's Laser in Latin).\n"
             "- **Assistant Name in Arabic**: Write your name as مروى (never Marwa AI Assistant in Latin when replying in Arabic).\n"
+        )
+        arabic_date_policy = (
+            "- **Arabic Date/Time Rule (MANDATORY)**: When your bot_reply is in Arabic, ALL dates and times MUST be in Arabic format. "
+            "Use Arabic numerals (٠١٢٣٤٥٦٧٨٩) and Arabic month names. Example: 01/04/2026 10:00 → ١ نيسان ٢٠٢٦ الساعة ١٠:٠٠ صباحاً. "
+            "Months: يناير، فبراير، مارس، أبريل/نيسان، مايو، يونيو، يوليو، أغسطس، سبتمبر، أكتوبر، نوفمبر، ديسمبر (or Levantine: كانون الثاني، شباط، آذار، نيسان، أيار، حزيران، تموز، آب، أيلول، تشرين الأول، تشرين الثاني، كانون الأول). "
+            "NEVER use 01/04/2026 or DD/MM/YYYY in Arabic messages – always convert to Arabic.\n"
         )
 
     concise_turn_policy = (
@@ -811,6 +833,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         + arabic_script_policy
         + arabic_addressing_policy
         + arabic_brand_policy
+        + arabic_date_policy
         + concise_turn_policy
         + domain_scope_policy
         + f"- **current_gender_from_config**: '{current_gender}'\n"
