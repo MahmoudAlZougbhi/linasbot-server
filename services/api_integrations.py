@@ -285,6 +285,88 @@ async def get_paused_appointments_between_dates(start_date: str, end_date: str, 
         log_report_event("api_call", "System", "N/A", {"api": "get_paused_appointments_between_dates", "status": "failed", "error": response.get("message"), "start_date": start_date, "end_date": end_date, "service_id": service_id})
     return response
 
+async def get_appointment_details(appointment_id: int):
+    """Retrieves detailed information about a specific appointment by ID."""
+    print(f"API Call: get_appointment_details for appointment_id={appointment_id}")
+    params = {"appointment_id": appointment_id}
+    response = await _make_api_request("GET", "appointment", params=params)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "get_appointment_details", "status": "success", "appointment_id": appointment_id})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "get_appointment_details", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id})
+    return response
+
+async def pause_appointment(phone: str, appointment_id: int):
+    """Pauses an appointment by updating its status to Paused."""
+    phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
+    if phone_clean.startswith("961"):
+        phone_clean = phone_clean[3:]
+    print(f"API Call: pause_appointment for phone={phone_clean}, appointment_id={appointment_id}")
+    json_data = {"phone": phone_clean, "appointment_id": appointment_id}
+    response = await _make_api_request("POST", "appointments/pause", json_data=json_data)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "pause_appointment", "status": "success", "appointment_id": appointment_id})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "pause_appointment", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id})
+    return response
+
+async def get_clients_without_today(date: str = None, branch_id: int = None):
+    """Returns all active clients who do not have appointments on the given date."""
+    print(f"API Call: get_clients_without_today for date={date}, branch_id={branch_id}")
+    params = {}
+    if date:
+        params["date"] = date
+    if branch_id is not None:
+        params["branch_id"] = branch_id
+    response = await _make_api_request("GET", "appointments/clients/without-today", params=params)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "get_clients_without_today", "status": "success", "date": date})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "get_clients_without_today", "status": "failed", "error": response.get("message")})
+    return response
+
+async def get_customer_sessions(customer_id: int):
+    """Returns sessions (appointments) for a customer including service, area, status, and notes."""
+    print(f"API Call: get_customer_sessions for customer_id={customer_id}")
+    params = {"customer_id": customer_id}
+    response = await _make_api_request("GET", "customers/sessions", params=params)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "get_customer_sessions", "status": "success", "customer_id": customer_id})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "get_customer_sessions", "status": "failed", "error": response.get("message"), "customer_id": customer_id})
+    return response
+
+async def add_customer_note(phone: str, note: str):
+    """Adds a note to the customer record by phone number."""
+    phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
+    if phone_clean.startswith("961"):
+        phone_clean = phone_clean[3:]
+    print(f"API Call: add_customer_note for phone={phone_clean}")
+    json_data = {"phone": phone_clean, "note": note[:1000]}
+    response = await _make_api_request("POST", "customers/notes/add", json_data=json_data)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "add_customer_note", "status": "success", "phone": phone_clean})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "add_customer_note", "status": "failed", "error": response.get("message"), "phone": phone_clean})
+    return response
+
+async def get_all_customers(date: str = None, from_date: str = None, to_date: str = None):
+    """Returns all customers. Can filter by date, from_date, or to_date (creation date)."""
+    print(f"API Call: get_all_customers date={date} from={from_date} to={to_date}")
+    params = {}
+    if date:
+        params["date"] = date
+    if from_date:
+        params["from"] = from_date
+    if to_date:
+        params["to"] = to_date
+    response = await _make_api_request("GET", "customers/all", params=params)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "get_all_customers", "status": "success", "count": len(response.get("data", []))})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "get_all_customers", "status": "failed", "error": response.get("message")})
+    return response
+
 async def get_customer_by_phone(phone: str):
     """Retrieves customer details by phone number. Accepts any format; normalizes to E.164 then API local format."""
     from utils.phone_utils import normalize_phone

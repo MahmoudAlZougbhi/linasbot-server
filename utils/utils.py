@@ -1936,6 +1936,95 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
+                "name": "get_appointment_details",
+                "description": "Retrieves detailed information about a specific appointment by appointment ID (customer, date, time, service, machine, branch, status, price, payment_status).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "appointment_id": {"type": "integer", "description": "The ID of the appointment to retrieve."}
+                    },
+                    "required": ["appointment_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "pause_appointment",
+                "description": "Pauses an appointment by setting its status to Paused.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "phone": {"type": "string", "description": "Customer's phone number."},
+                        "appointment_id": {"type": "integer", "description": "The ID of the appointment to pause."}
+                    },
+                    "required": ["phone", "appointment_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_clients_without_today",
+                "description": "Returns active clients who do not have appointments on the given date. Useful for outreach or availability checks.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "date": {"type": "string", "format": "date", "description": "Date to check (YYYY-MM-DD). Defaults to today if not provided."},
+                        "branch_id": {"type": "integer", "description": "Filter by branch ID (optional)."}
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_customer_sessions",
+                "description": "Returns sessions (appointments) for a customer by customer_id, including service, body area, session number, status, and notes. Use customer_id from get_customer_by_phone response.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "customer_id": {"type": "integer", "description": "Customer ID (from get_customer_by_phone data.id)."}
+                    },
+                    "required": ["customer_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "add_customer_note",
+                "description": "Adds a note to the customer's record (e.g. follow-up request, preference, complaint).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "phone": {"type": "string", "description": "Customer's phone number."},
+                        "note": {"type": "string", "description": "Note content (max 1000 characters)."}
+                    },
+                    "required": ["phone", "note"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_all_customers",
+                "description": "Returns a list of all customers. Can filter by creation date (date, from, to).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "date": {"type": "string", "format": "date", "description": "Customers created on this date (YYYY-MM-DD)."},
+                        "from_date": {"type": "string", "format": "date", "description": "Customers created on or after this date (YYYY-MM-DD)."},
+                        "to_date": {"type": "string", "format": "date", "description": "Customers created on or before this date (YYYY-MM-DD)."}
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "create_customer",
                 "description": "Creates a new customer record within the clinic's database.",
                 "parameters": {
