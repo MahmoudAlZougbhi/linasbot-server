@@ -44,7 +44,6 @@ async def get_gender_from_gpt(user_input: str) -> str:
         response = await client.chat.completions.create(
             model="gpt-5-mini",
             messages=messages,
-            temperature=0.15, # Adjusted temperature for more confident gender detection
             max_tokens=10
         )
         if not response.choices:

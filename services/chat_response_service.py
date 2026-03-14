@@ -1809,7 +1809,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             second_response = await client.chat.completions.create(
                 model="gpt-5-mini",
                 messages=messages,
-                temperature=0.7,
                 response_format={"type": "json_object"}
             )
             if not second_response.choices:

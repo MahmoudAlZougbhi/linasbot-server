@@ -1671,7 +1671,6 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
             response_standard = await client.chat.completions.create(
                 model="gpt-5-mini",
                 messages=messages_standard,
-                temperature=0.2,
                 response_format={"type": "json_object"}
             )
             if not response_standard.choices:
@@ -1706,7 +1705,6 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
             response_franco = await client.chat.completions.create(
                 model="gpt-5-mini",
                 messages=messages_franco,
-                temperature=0.7,
                 response_format={"type": "json_object"}
             )
             if not response_franco.choices:

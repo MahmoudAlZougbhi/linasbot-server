@@ -71,7 +71,6 @@ async def process_training_request_with_gpt(user_id: int, training_instruction_t
         completion_args = {
             "model": "gpt-5-mini",
             "messages": messages,
-            "temperature": 0.7,
             "max_tokens": 2000,
         }
         if is_qa_generation_request or is_summary_qa_request:
