@@ -285,18 +285,19 @@ async def retrieve_and_merge(
                 if include_price_hint and config.PRICE_LIST and "price" not in merged.lower()[:200]:
                     merged += "\n\n--- Price List ---\n" + config.PRICE_LIST
                 return merged, None, "normal", flow_meta
-        merged = _get_default_general_and_style()
-        flow_meta["loaded_content_full"] = merged
-        merged = _ensure_style_included(merged, False)
-        return merged, None, "fallback_to_general", flow_meta
+        # Do NOT send default KB+Style again: system prompt already has them as foundation.
+        # Sending them here would duplicate ~same content and inflate tokens (e.g. 13k+).
+        flow_meta["loaded_content_full"] = ""
+        return "", None, "fallback_to_general", flow_meta
 
     # action == normal: load selected files
     merged, has_style = _load_content_by_ids(files)
     if not merged:
-        # Selector returned files but none could be loaded (wrong IDs/titles) - fall back to default
-        print(f"⚠️ Dynamic retrieval: selected files {files} could not be loaded. Using default general + style.")
-        merged = _get_default_general_and_style()
-        has_style = bool(config.BOT_STYLE_GUIDE)
+        # Selector returned files but none could be loaded (wrong IDs/titles).
+        # Do NOT re-send default KB+Style (already in system prompt foundation) to avoid duplication.
+        print(f"⚠️ Dynamic retrieval: selected files {files} could not be loaded. Relying on foundation KB/Style only.")
+        merged = ""
+        has_style = False
     else:
         merged = _ensure_style_included(merged, has_style)
     flow_meta["loaded_content_full"] = merged
