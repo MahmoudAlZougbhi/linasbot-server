@@ -1260,35 +1260,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
             print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
 
-            # Moderation first: avoid running selector/GPT when content is not safe (saves tokens, clear Activity Flow).
-            from services.moderation_service import moderate_content, get_safe_response_for_violation
-            is_safe, _mod_result = await moderate_content(user_input_to_process, user_id)
-            if not is_safe:
-                safe_reply = (get_safe_response_for_violation(current_preferred_lang) or "").strip() or (
-                    get_dynamic_message("generic_error_message", current_preferred_lang)
-                    or "عذراً، لا أستطيع معالجة هذا الطلب. يرجى التواصل مع فريق الدعم إذا كنت بحاجة للمساعدة."
-                )
-                await send_message_func(user_id, safe_reply)
-                await save_conversation_message_to_firestore(user_id, "ai", safe_reply, current_conversation_id, user_name, user_data.get("phone_number"), metadata={"handled_by": "ai", "action": "content_moderated"})
-                flow_steps_mod = [
-                    {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
-                    {"step": 2, "title": "Moderation", "content": "Content flagged. No selector or GPT call.", "tokens": 0, "model": None, "cost_usd": None},
-                    {"step": 3, "title": "Bot → User", "content": safe_reply, "tokens": 0, "model": None, "cost_usd": None},
-                ]
-                log_interaction(
-                    user_id,
-                    user_input_to_process,
-                    safe_reply,
-                    "moderation",
-                    user_name=user_name,
-                    user_phone=user_data.get("phone_number"),
-                    user_gender=current_gender,
-                    customer_exists=user_data.get("crm_customer_exists"),
-                    customer_file_status=user_data.get("customer_file_status"),
-                    flow_steps=flow_steps_mod,
-                )
-                return
-
             # Fetch conversation history once (same 12h window as normal context) – use for selector and for GPT.
             conversation_history = await get_conversation_history_from_firestore(
                 user_id,
