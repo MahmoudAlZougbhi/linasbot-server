@@ -34,15 +34,16 @@ const FILE_STATUS_META = {
 };
 
 /** Step block for the flow breakdown - supports long content with scroll */
-const FlowStep = ({ step, title, content, tokens, isMaxTokens }) => {
+const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd }) => {
   const str = typeof content === "string" ? content : String(content ?? "");
   const isJsonLike = str.trim().startsWith("{") || str.trim().startsWith("[");
   const isLong = str.length > 800;
   const isError = title && String(title).includes("❌");
+  const isSummary = title && String(title).includes("Summary");
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="flex gap-3">
-      <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm ${isError ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+      <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm ${isError ? "bg-red-100 text-red-700" : isSummary ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
         {step}
       </div>
       <div className="flex-1 min-w-0">
@@ -52,6 +53,12 @@ const FlowStep = ({ step, title, content, tokens, isMaxTokens }) => {
             <span className={`text-xs font-normal normal-case ${isMaxTokens ? "bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded" : "text-slate-500"}`}>
               {tokens.toLocaleString()} tokens {isMaxTokens && "↑ الأكثر"}
             </span>
+          )}
+          {model && (
+            <span className="text-xs font-normal normal-case bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{model}</span>
+          )}
+          {costUsd != null && (
+            <span className="text-xs font-normal normal-case text-emerald-700 font-medium">${Number(costUsd).toFixed(6)}</span>
           )}
         </p>
         <div
@@ -98,7 +105,7 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card overflow-hidden"
+      className="card"
     >
       <div
         className="p-4 cursor-pointer hover:bg-slate-50/50 transition"
@@ -172,20 +179,24 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
             </p>
 
             {entry.flow_steps?.length > 0 ? (
-              <div className="grid gap-4">
-                {(() => {
-                  const maxT = Math.max(0, ...(entry.flow_steps || []).map((s) => (s.tokens != null ? s.tokens : 0)));
-                  return (entry.flow_steps || []).map((s) => (
-                    <FlowStep
-                      key={s.step}
-                      step={s.step}
-                      title={s.title}
-                      content={typeof s.content === "string" ? s.content : String(s.content ?? "")}
-                      tokens={s.tokens}
-                      isMaxTokens={s.tokens != null && s.tokens > 0 && s.tokens === maxT}
-                    />
-                  ));
-                })()}
+              <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden pr-1 -mr-1">
+                <div className="grid gap-4">
+                  {(() => {
+                    const maxT = Math.max(0, ...(entry.flow_steps || []).map((s) => (s.tokens != null ? s.tokens : 0)));
+                    return (entry.flow_steps || []).map((s) => (
+                      <FlowStep
+                        key={s.step}
+                        step={s.step}
+                        title={s.title}
+                        content={typeof s.content === "string" ? s.content : String(s.content ?? "")}
+                        tokens={s.tokens}
+                        isMaxTokens={s.tokens != null && s.tokens > 0 && s.tokens === maxT}
+                        model={s.model}
+                        costUsd={s.cost_usd}
+                      />
+                    ));
+                  })()}
+                </div>
               </div>
             ) : (
               <div className="grid gap-4">

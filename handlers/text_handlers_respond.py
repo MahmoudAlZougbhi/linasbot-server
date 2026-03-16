@@ -1653,6 +1653,20 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         config.user_greeting_stage[user_id] = 2
 
+    elif action in ["content_moderated", "rate_limit_exceeded"]:
+        # Moderation or rate limit: send the safe/limit message from the service (no GPT call).
+        user_data['awaiting_gender'] = False
+        user_data['awaiting_clarification'] = False
+        user_data['pending_clarification_query'] = None
+        reply_to_send = (bot_reply_text or "").strip() or (
+            get_dynamic_message("generic_error_message", current_preferred_lang)
+            or "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
+        )
+        sent_reply = reply_to_send
+        await send_message_func(user_id, reply_to_send)
+        await save_conversation_message_to_firestore(user_id, "ai", reply_to_send, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "action": action})
+        config.user_greeting_stage[user_id] = 2
+
     elif action in ["answer_question", "normal_chat", "unknown_query", "provide_info", "tool_call", "check_customer_status", "confirm_appointment_reschedule"]:
         user_data['awaiting_gender'] = False
         user_data['awaiting_clarification'] = False
