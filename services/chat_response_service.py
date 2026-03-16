@@ -3,6 +3,7 @@ import json
 import random
 import config
 from utils.utils import detect_language, get_system_instruction, get_openai_tools_schema
+from prompt_templates import CUSTOMER_STATUS_TOKEN
 from services.llm_core_service import client
 from services.gender_recognition_service import get_gender_from_gpt
 from services.moderation_service import moderate_content, check_rate_limits, get_safe_response_for_violation, get_rate_limit_response
@@ -869,14 +870,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "- Do not return markdown, code fences, or extra text outside json.\n"
     )
 
-    # Combine system instruction with dynamic context
-    system_instruction_final = (
-        system_instruction_core
-        + "\n\n"
-        + dynamic_customer_context
-        + routing_guardrail
-        + json_output_contract
-    )
+    # Combine system instruction with dynamic context (replace token or append)
+    if CUSTOMER_STATUS_TOKEN in system_instruction_core:
+        system_instruction_final = (
+            system_instruction_core.replace(CUSTOMER_STATUS_TOKEN, "\n\n" + dynamic_customer_context)
+            + routing_guardrail
+            + json_output_contract
+        )
+    else:
+        system_instruction_final = (
+            system_instruction_core
+            + "\n\n"
+            + dynamic_customer_context
+            + routing_guardrail
+            + json_output_contract
+        )
 
     context_messages_for_ai = list(current_context_messages or [])
     context_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
