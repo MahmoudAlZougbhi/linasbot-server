@@ -42,7 +42,7 @@ async def get_gender_from_gpt(user_input: str) -> str:
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-5-mini",
+            model="gpt-4o-mini",
             messages=messages,
             max_tokens=10
         )

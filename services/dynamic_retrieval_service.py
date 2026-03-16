@@ -124,7 +124,7 @@ async def select_files_llm(user_message: str) -> Dict:
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-5.1",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )
@@ -321,7 +321,7 @@ async def generate_answer_from_content(merged_content: str, user_message: str) -
     prompt = prompt.replace("{{USER_MESSAGE}}", user_message)
 
     response = await client.chat.completions.create(
-        model=getattr(config, "GPT_MODEL", None) or "gpt-5-mini",
+        model=getattr(config, "GPT_MODEL", None) or "gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
     )
     return (response.choices[0].message.content or "").strip()

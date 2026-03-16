@@ -244,7 +244,7 @@ class LanguageDetectionService:
 
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": prompt},

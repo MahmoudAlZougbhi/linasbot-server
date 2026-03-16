@@ -168,7 +168,7 @@ class TrainingModeManager:
         """Rewrite answer professionally using AI"""
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
@@ -195,7 +195,7 @@ class TrainingModeManager:
         """Generate translations for all languages"""
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",

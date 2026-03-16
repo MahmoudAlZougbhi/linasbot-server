@@ -1669,7 +1669,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
 
         try:
             response_standard = await client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 messages=messages_standard,
                 response_format={"type": "json_object"}
             )
@@ -1703,7 +1703,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
         ]
         try:
             response_franco = await client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 messages=messages_franco,
                 response_format={"type": "json_object"}
             )

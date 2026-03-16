@@ -1837,7 +1837,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
 
             second_response = await client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 messages=messages,
                 response_format={"type": "json_object"}
             )

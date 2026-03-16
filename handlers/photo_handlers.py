@@ -112,7 +112,7 @@ async def handle_photo_message(user_id: str, user_name: str, image_url: str, use
             sentiment="neutral",
             tokens=estimated_tokens,
             cost_usd=vision_cost,
-            model="gpt-5.1",
+            model="gpt-4o-mini",
             response_time_ms=response_time_ms,
             message_length=0  # Images don't have text length
         )
@@ -129,7 +129,7 @@ async def handle_photo_message(user_id: str, user_name: str, image_url: str, use
             sentiment="neutral",
             tokens=int(bot_tokens),
             cost_usd=bot_cost,
-            model="gpt-5.1",
+            model="gpt-4o-mini",
             response_time_ms=response_time_ms,
             message_length=len(bot_reply)
         )
