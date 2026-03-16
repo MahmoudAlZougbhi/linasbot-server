@@ -1822,7 +1822,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         prompt_tokens = count_tokens(get_system_instruction(user_id, current_preferred_lang) + "\n\n" + user_input_to_process)
         completion_tokens = count_tokens(bot_reply_text)
         total_tokens = prompt_tokens + completion_tokens
-        cost = (prompt_tokens / 1_000_000 * 1.25) + (completion_tokens / 1_000_000 * 10)  # gpt-5.1 pricing
+        cost = (prompt_tokens / 1_000_000 * 0.15) + (completion_tokens / 1_000_000 * 0.60)  # gpt-4o-mini pricing
         print(f"[_process_and_respond] 🔹 Prompt tokens: {prompt_tokens} | Completion: {completion_tokens} | Est. cost: ${cost:.6f}")
         save_for_training_conversation_log(user_input_to_process, bot_reply_text)
     
@@ -1836,7 +1836,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         sentiment="neutral",  # Could be enhanced with sentiment detection
         tokens=prompt_tokens + completion_tokens,
         cost_usd=cost,
-        model=flow_meta.get("model") or "gpt-5.1",
+        model=flow_meta.get("model") or "gpt-4o-mini",
         response_time_ms=response_time_ms,
         message_length=len(bot_reply_text) if bot_reply_text else 0
     )
