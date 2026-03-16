@@ -1098,7 +1098,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             user_id,
             current_conversation_id,
             max_messages=0,
-            window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
+            window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 12),
         )
         canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
         last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
@@ -1260,7 +1260,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
             print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
 
-            # ALWAYS run selector: fetch relevant files, pass to GPT.
+            # Fetch conversation history once (same 12h window as normal context) – use for selector and for GPT.
+            conversation_history = await get_conversation_history_from_firestore(
+                user_id,
+                current_conversation_id,
+                max_messages=0,
+                window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 12),
+            )
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+            last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
+            last_bot_msg = await get_last_bot_message_from_conversation(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
+
+            # ALWAYS run selector: pass query + context_messages so selector understands what the conversation is about (e.g. user "eh" / "beirut" after we asked branch).
             from services.dynamic_retrieval_service import (
                 retrieve_and_merge,
                 is_dynamic_retrieval_available,
@@ -1272,19 +1283,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     query_to_send_to_gpt,
                     include_price_hint=is_price_intent,
                     response_lang=current_preferred_lang,
+                    context_messages=conversation_history,
                 )
                 custom_context = merged if merged else None
                 print(f"[_process_and_respond] ✅ Selector ran: action={_act}, context_len={len(custom_context or '')}")
-
-            conversation_history = await get_conversation_history_from_firestore(
-                user_id,
-                current_conversation_id,
-                max_messages=0,
-                window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 48),
-            )
-            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-            last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
-            last_bot_msg = await get_last_bot_message_from_conversation(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None
@@ -1716,34 +1718,42 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             ai_selected_str += f"\n\nRaw AI response:\n{ai_selector_return}"
         elif not ai_selected_str:
             ai_selected_str = f"Files: {', '.join(dr.get('selected_files') or [])}, action: {dr.get('action', 'normal')}"
+        sel_pt = dr.get("selector_prompt_tokens") or 0
+        sel_ct = dr.get("selector_completion_tokens") or 0
         pt = flow_meta.get("prompt_tokens")
         ct = flow_meta.get("completion_tokens")
+        main_model = flow_meta.get("model") or "gpt-5.1"
+        main_cost = flow_meta.get("cost_usd") or 0.0
+        selector_cost = (sel_pt / 1_000_000 * 0.15) + (sel_ct / 1_000_000 * 0.60)
         steps = [
-            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0},
-            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": 0},
-            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": 0},
-            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0},
-            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt},
+            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
+            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": sel_pt, "model": "gpt-4o-mini", "cost_usd": round((sel_pt / 1_000_000 * 0.15), 6) if sel_pt else None},
+            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": sel_ct, "model": "gpt-4o-mini", "cost_usd": round((sel_ct / 1_000_000 * 0.60), 6) if sel_ct else None},
+            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0, "model": None, "cost_usd": None},
+            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None},
         ]
         step_num = 6
         if tool_round_trips:
-            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0})
+            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
             step_num += 1
             for tr in tool_round_trips:
-                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}", "tokens": 0})
+                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}", "tokens": 0, "model": None, "cost_usd": None})
                 step_num += 1
-                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", ""), "tokens": 0})
+                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", ""), "tokens": 0, "model": None, "cost_usd": None})
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms", "tokens": ct})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0})
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0, "model": None, "cost_usd": None})
             step_num += 1
-        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0})
+        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None})
+        total_cost = selector_cost + main_cost
+        summary_parts = [f"Selector (gpt-4o-mini): {sel_pt + sel_ct} tokens, ${selector_cost:.6f}", f"Main GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${total_cost:.6f}"]
+        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0), "model": None, "cost_usd": round(total_cost, 6)})
         flow_steps = steps
     else:
         tool_round_trips = flow_meta.get("tool_round_trips") or []
@@ -1752,13 +1762,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         ai_raw_or_error = flow_meta.get("ai_raw_response") or (f"AI error: {ai_error}" if ai_error else None)
         pt = flow_meta.get("prompt_tokens")
         ct = flow_meta.get("completion_tokens")
+        main_model = flow_meta.get("model") or "gpt-5.1"
+        main_cost = flow_meta.get("cost_usd") or 0.0
         steps = [
-            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0},
-            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt},
+            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
+            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None},
         ]
         step_num = 3
         if tool_round_trips:
-            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0})
+            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
             step_num += 1
             for i, tr in enumerate(tool_round_trips):
                 steps.append({
@@ -1766,6 +1778,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "title": f"AI requested: {tr.get('ai_requested', '?')}",
                     "content": f"Args: {tr.get('args', '{}')}",
                     "tokens": 0,
+                    "model": None,
+                    "cost_usd": None,
                 })
                 step_num += 1
                 steps.append({
@@ -1773,18 +1787,22 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})",
                     "content": tr.get("bot_returned", ""),
                     "tokens": 0,
+                    "model": None,
+                    "cost_usd": None,
                 })
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct})
+            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {flow_meta.get('model', '?')} | Tokens: {flow_meta.get('tokens', '?')} | Time: {response_time_ms:.0f}ms", "tokens": ct})
+            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0})
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0, "model": None, "cost_usd": None})
             step_num += 1
-        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0})
+        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None})
+        summary_parts = [f"GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${main_cost:.6f}"]
+        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (pt or 0) + (ct or 0), "model": None, "cost_usd": round(main_cost, 6)})
         flow_steps = steps
     flow_error_for_log = flow_meta.get("error") or _flow_error_reason
     log_interaction(

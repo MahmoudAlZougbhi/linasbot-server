@@ -1284,7 +1284,7 @@ async def get_conversation_history_from_firestore(
         effective_window_hours = (
             window_hours
             if window_hours is not None
-            else int(getattr(config, "CONTEXT_WINDOW_HOURS", 48) or 48)
+            else int(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
         )
         filtered_messages = list(messages)
         if effective_window_hours > 0:

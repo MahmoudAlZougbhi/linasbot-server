@@ -28,6 +28,7 @@ Rules:
 - Always include one relevant style file.
 - Maximum 5 files total.
 - When unclear or vague, return empty files – the bot will use default content. GPT will decide if clarification is needed.
+- Use RECENT CONVERSATION (if provided) to understand what the dialogue is about. The current user message may be short (e.g. "eh", "beirut", "ok") – the conversation context tells you the topic (pricing, branch, booking, etc.) so you can pick the right files.
 - Return JSON only. No explanation.
 
 Output format (ONLY these two):
@@ -43,6 +44,8 @@ OR (when unclear which files to pick):
   "files": [],
   "action": "fallback_to_general"
 }
+
+{{CONTEXT_BLOCK}}
 
 USER MESSAGE:
 {{USER_MESSAGE}}
@@ -110,14 +113,40 @@ def _has_any_content_files() -> bool:
     return len(k) > 0 or len(p) > 0 or len(s) > 0
 
 
-async def select_files_llm(user_message: str) -> Dict:
+def _format_context_for_selector(context_messages: Optional[List[dict]] = None, max_messages: int = 6) -> str:
+    """Format last N conversation messages for selector so it understands the topic."""
+    if not context_messages:
+        return "RECENT CONVERSATION: (none)"
+    # Take last N messages (user/assistant), format as "Role: content"
+    last = context_messages[-max_messages:] if len(context_messages) > max_messages else context_messages
+    lines = []
+    for msg in last:
+        role = (msg.get("role") or "user").lower()
+        if role == "assistant":
+            role_label = "Bot"
+        elif role == "user":
+            role_label = "User"
+        else:
+            role_label = role
+        content = (msg.get("content") or "").strip()
+        if content:
+            lines.append(f"{role_label}: {content[:400]}{'...' if len(content) > 400 else ''}")
+    if not lines:
+        return "RECENT CONVERSATION: (none)"
+    return "RECENT CONVERSATION (use this to understand what the user is replying to):\n" + "\n".join(lines)
+
+
+async def select_files_llm(user_message: str, context_messages: Optional[List[dict]] = None) -> Dict:
     """
     Step 1: LLM selects which file IDs are needed.
+    context_messages: optional list of {role, content} so selector understands the conversation topic.
     Returns: {"files": [id1, id2], "action": str, "raw_response": str} for Activity Flow.
     """
     k_titles, p_titles, s_titles = _get_all_titles()
 
-    prompt = SELECTOR_PROMPT.replace("{{USER_MESSAGE}}", user_message)
+    context_block = _format_context_for_selector(context_messages)
+    prompt = SELECTOR_PROMPT.replace("{{CONTEXT_BLOCK}}", context_block)
+    prompt = prompt.replace("{{USER_MESSAGE}}", user_message)
     prompt = prompt.replace("{{KNOWLEDGE_TITLES}}", _format_titles_for_prompt(k_titles))
     prompt = prompt.replace("{{PRICE_TITLES}}", _format_titles_for_prompt(p_titles))
     prompt = prompt.replace("{{STYLE_TITLES}}", _format_titles_for_prompt(s_titles))
@@ -128,6 +157,9 @@ async def select_files_llm(user_message: str) -> Dict:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )
+        usage = getattr(response, "usage", None)
+        prompt_tokens = usage.prompt_tokens if usage and getattr(usage, "prompt_tokens", None) is not None else 0
+        completion_tokens = usage.completion_tokens if usage and getattr(usage, "completion_tokens", None) is not None else 0
         text = response.choices[0].message.content.strip()
         raw_response = text
         m = re.search(r"\{[\s\S]*\}", text)
@@ -137,10 +169,12 @@ async def select_files_llm(user_message: str) -> Dict:
                 "files": data.get("files", []) if isinstance(data.get("files"), list) else [],
                 "action": data.get("action", "normal"),
                 "raw_response": raw_response[:600] if raw_response else None,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
             }
     except Exception as e:
         print(f"⚠️ Dynamic retrieval select_files_llm error: {e}")
-    return {"files": [], "action": "fallback_to_general", "raw_response": None}
+    return {"files": [], "action": "fallback_to_general", "raw_response": None, "prompt_tokens": 0, "completion_tokens": 0}
 
 
 def _normalize_for_match(s: str) -> str:
@@ -227,9 +261,11 @@ async def retrieve_and_merge(
     user_message: str,
     include_price_hint: bool = False,
     response_lang: str = "ar",
+    context_messages: Optional[List[dict]] = None,
 ) -> Tuple[str, Optional[str], str, Dict]:
     """
     Main entry: Select files via LLM, load content, merge.
+    context_messages: optional list of {role, content} so selector understands conversation topic (e.g. when user replies "eh" or "beirut").
     Selector ONLY picks files – no actions. GPT decides clarification etc.
 
     Returns: (merged_content, None, action, flow_meta)
@@ -240,7 +276,7 @@ async def retrieve_and_merge(
     flow_meta: Dict = {"titles_sent": [], "selected_files": [], "action": "fallback_to_general"}
 
     if not _has_any_content_files():
-        return _get_default_general_and_style(), None, "fallback_to_general", flow_meta
+        return "", None, "fallback_to_general", flow_meta
 
     k_titles, p_titles, s_titles = _get_all_titles()
     all_titles = []
@@ -250,7 +286,7 @@ async def retrieve_and_merge(
         all_titles.append({"id": tid, "title": ttitle})
     flow_meta["titles_sent"] = all_titles
 
-    result = await select_files_llm(user_message)
+    result = await select_files_llm(user_message, context_messages=context_messages)
     action = result.get("action", "normal")
     files = result.get("files", [])
 
@@ -266,6 +302,8 @@ async def retrieve_and_merge(
     flow_meta["action"] = action
     flow_meta["selected_files"] = files
     flow_meta["selector_ai_raw_response"] = result.get("raw_response")
+    flow_meta["selector_prompt_tokens"] = result.get("prompt_tokens", 0)
+    flow_meta["selector_completion_tokens"] = result.get("completion_tokens", 0)
     id_to_title = {t.get("id", ""): t.get("title", "Untitled") for t in all_titles}
     flow_meta["selected_titles"] = [id_to_title.get(fid, fid) for fid in files]
     flow_meta["bot_sent_to_selector"] = (
