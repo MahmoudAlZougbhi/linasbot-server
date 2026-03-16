@@ -6,7 +6,7 @@ from utils.utils import detect_language, get_system_instruction, get_openai_tool
 from prompt_templates import CUSTOMER_STATUS_TOKEN
 from services.llm_core_service import client
 from services.gender_recognition_service import get_gender_from_gpt
-from services.moderation_service import moderate_content, check_rate_limits, get_safe_response_for_violation, get_rate_limit_response
+from services.moderation_service import check_rate_limits, get_rate_limit_response
 from difflib import SequenceMatcher
 import datetime
 import re
@@ -665,17 +665,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         return {
             "action": "rate_limit_exceeded",
             "bot_reply": get_rate_limit_response(current_preferred_lang, limit_message),
-            "detected_language": current_preferred_lang,
-            "current_gender_from_config": current_gender
-        }
-    
-    # Moderate content for policy violations
-    is_safe, moderation_result = await moderate_content(user_input, user_id)
-    if not is_safe:
-        print(f"âڑ ï¸ڈ Content flagged for user {user_id}: {moderation_result}")
-        return {
-            "action": "content_moderated",
-            "bot_reply": get_safe_response_for_violation(current_preferred_lang),
             "detected_language": current_preferred_lang,
             "current_gender_from_config": current_gender
         }
