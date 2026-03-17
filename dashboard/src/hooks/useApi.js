@@ -1269,7 +1269,9 @@ export const useApi = () => {
     try {
       const params = new URLSearchParams({ limit });
       if (search && search.trim()) params.set("search", search.trim());
-      const response = await api.get(`/api/flow/logs?${params.toString()}`);
+      const response = await api.get(`/api/flow/logs?${params.toString()}`, {
+        timeout: 12000,
+      });
       return response.data;
     } catch (error) {
       console.error("Error getting flow logs:", error);

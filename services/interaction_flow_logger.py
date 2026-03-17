@@ -26,8 +26,8 @@ def _ensure_data_dir() -> None:
     ensure_dirs()
 
 
-def _tail_lines(path: str, max_lines: int, max_bytes: int = 5 * 1024 * 1024) -> List[str]:
-    """Read last max_lines from file without loading entire file (tail). max_bytes caps read size."""
+def _tail_lines(path: str, max_lines: int, max_bytes: int = 1024 * 1024) -> List[str]:
+    """Read last max_lines from file without loading entire file (tail). max_bytes caps read size (default 1MB)."""
     if not os.path.isfile(path):
         return []
     size = os.path.getsize(path)
@@ -62,8 +62,8 @@ def _load_from_file() -> None:
     if not os.path.isfile(FLOW_LOG_FILE):
         return
     try:
-        # Read only last N lines from file (tail) so large files load fast
-        lines = _tail_lines(FLOW_LOG_FILE, _BUFFER_MAXLEN * 2, max_bytes=5 * 1024 * 1024)
+        # Read only last N lines from file (tail); 1MB cap for fast first load
+        lines = _tail_lines(FLOW_LOG_FILE, _BUFFER_MAXLEN * 2, max_bytes=1024 * 1024)
         for line in lines:
             try:
                 entry = json.loads(line)

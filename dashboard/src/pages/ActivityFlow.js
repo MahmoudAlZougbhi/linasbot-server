@@ -290,7 +290,7 @@ const ActivityFlow = () => {
   const [flows, setFlows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [limit, setLimit] = useState(30);
+  const [limit, setLimit] = useState(15);
   const [searchPhone, setSearchPhone] = useState("");
 
   const fetchFlows = useCallback(async (isRefresh = false) => {
