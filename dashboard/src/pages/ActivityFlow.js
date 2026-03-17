@@ -293,9 +293,9 @@ const ActivityFlow = () => {
   const [limit, setLimit] = useState(30);
   const [searchPhone, setSearchPhone] = useState("");
 
-  const fetchFlows = useCallback(async () => {
+  const fetchFlows = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
       const res = await getFlowLogs(limit, searchPhone);
       if (res.success && res.data) {
         setFlows(res.data.slice().reverse());
@@ -309,17 +309,31 @@ const ActivityFlow = () => {
     }
   }, [getFlowLogs, limit, searchPhone]);
 
-  useEffect(() => {
-    fetchFlows();
-    const interval = setInterval(fetchFlows, 8000);
-    return () => clearInterval(interval);
-  }, [fetchFlows]);
+  const fetchFlowsRef = React.useRef(fetchFlows);
+  fetchFlowsRef.current = fetchFlows;
 
-  // Refetch when search changes (debounced)
+  // Initial load + polling every 20s (no full-page loading on refresh)
   useEffect(() => {
-    const t = setTimeout(fetchFlows, 400);
+    let mounted = true;
+    const run = () => mounted && fetchFlowsRef.current?.(false);
+    run();
+    const interval = setInterval(() => mounted && fetchFlowsRef.current?.(true), 20000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Refetch when search or limit changes (debounced); skip on initial mount
+  const didMount = React.useRef(false);
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true;
+      return;
+    }
+    const t = setTimeout(() => fetchFlowsRef.current?.(false), 400);
     return () => clearTimeout(t);
-  }, [searchPhone, fetchFlows]);
+  }, [searchPhone, limit]);
 
   return (
     <div className="space-y-6">
@@ -357,12 +371,12 @@ const ActivityFlow = () => {
           </div>
         </div>
         <button
-          onClick={fetchFlows}
+          onClick={() => fetchFlows(false)}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 transition"
         >
           <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          Refresh
+          {loading && flows.length > 0 ? "Updating…" : "Refresh"}
         </button>
       </div>
 

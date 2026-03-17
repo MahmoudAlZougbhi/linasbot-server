@@ -33,6 +33,8 @@ BOOKING_TZ = BOT_FIXED_TZ
 # Model pricing per 1M tokens (input, output) - update from OpenAI pricing page
 MODEL_PRICING = {
     "gpt-5.1": {"input": 1.25, "output": 10.0},
+    "gpt-5.4": {"input": 1.25, "output": 10.0},
+    "gpt-5.4-mini": {"input": 0.25, "output": 2.0},
     "gpt-5-mini": {"input": 0.25, "output": 2.0},
     "gpt-4o": {"input": 2.50, "output": 10.0},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
@@ -919,10 +921,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     gpt_raw_content = "" # Initialize gpt_raw_content here to make it accessible in except blocks
 
     # Main GPT model is fixed per latest routing policy.
-    selected_model = "gpt-5.1"
+    selected_model = "gpt-5.4"
     model_metadata = {
         "complexity": "FIXED",
-        "reason": "Main flow forced to gpt-5.1",
+        "reason": "Main flow using gpt-5.4",
     }
     print(f"🤖 Model selected: {selected_model} | Reason: {model_metadata['reason']}")
 
@@ -1834,7 +1836,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
 
             second_response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-mini",
                 messages=messages,
                 response_format={"type": "json_object"}
             )

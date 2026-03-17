@@ -113,12 +113,14 @@ def _has_any_content_files() -> bool:
     return len(k) > 0 or len(p) > 0 or len(s) > 0
 
 
-def _format_context_for_selector(context_messages: Optional[List[dict]] = None, max_messages: int = 14, max_content_len: int = 600) -> str:
-    """Format last N conversation messages so selector sees the full conversation and understands the topic."""
+def _format_context_for_selector(context_messages: Optional[List[dict]] = None, max_messages: Optional[int] = None, max_content_len: int = 600) -> str:
+    """Format last N conversation messages so selector sees the full conversation and understands the topic.
+    Uses config.MAX_CONTEXT_MESSAGES (e.g. 20) so selector always sees the same last N messages as the rest of the bot."""
     if not context_messages:
         return "RECENT CONVERSATION: (none)"
-    # Take last N messages (user/assistant) so selector sees the whole dialogue
-    last = context_messages[-max_messages:] if len(context_messages) > max_messages else context_messages
+    cap = int(max_messages) if max_messages is not None else getattr(config, "MAX_CONTEXT_MESSAGES", 20)
+    # Take last N messages (user/assistant) so selector sees the whole dialogue and picks the right files
+    last = context_messages[-cap:] if len(context_messages) > cap else context_messages
     lines = []
     for msg in last:
         role = (msg.get("role") or "user").lower()
@@ -153,7 +155,7 @@ async def select_files_llm(user_message: str, context_messages: Optional[List[di
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5.4-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )
@@ -359,7 +361,7 @@ async def generate_answer_from_content(merged_content: str, user_message: str) -
     prompt = prompt.replace("{{USER_MESSAGE}}", user_message)
 
     response = await client.chat.completions.create(
-        model=getattr(config, "GPT_MODEL", None) or "gpt-4o-mini",
+        model=getattr(config, "GPT_MODEL", None) or "gpt-5.4-mini",
         messages=[{"role": "user", "content": prompt}],
     )
     return (response.choices[0].message.content or "").strip()

@@ -26,8 +26,35 @@ def _ensure_data_dir() -> None:
     ensure_dirs()
 
 
+def _tail_lines(path: str, max_lines: int, max_bytes: int = 5 * 1024 * 1024) -> List[str]:
+    """Read last max_lines from file without loading entire file (tail). max_bytes caps read size."""
+    if not os.path.isfile(path):
+        return []
+    size = os.path.getsize(path)
+    if size == 0:
+        return []
+    try:
+        with open(path, "rb") as f:
+            to_read = min(size, max_bytes)
+            f.seek(max(0, size - to_read))
+            chunk = f.read()
+        # Decode; if we seeked mid-UTF8, drop the first (possibly partial) line
+        try:
+            text = chunk.decode("utf-8")
+        except UnicodeDecodeError:
+            text = chunk.decode("utf-8", errors="replace")
+        if size > max_bytes:
+            first_nl = text.find("\n")
+            if first_nl != -1:
+                text = text[first_nl + 1 :]
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        return lines[-max_lines:] if len(lines) > max_lines else lines
+    except OSError:
+        return []
+
+
 def _load_from_file() -> None:
-    """Load last N entries from disk into buffer (called on first use)."""
+    """Load last N entries from disk into buffer (called on first use). Uses tail to avoid reading whole file."""
     global _INITIALIZED
     if _INITIALIZED:
         return
@@ -35,13 +62,9 @@ def _load_from_file() -> None:
     if not os.path.isfile(FLOW_LOG_FILE):
         return
     try:
-        with open(FLOW_LOG_FILE, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        # Last N lines (newest at end)
-        for line in lines[-_BUFFER_MAXLEN * 2:]:  # Read more, buffer will trim
-            line = line.strip()
-            if not line:
-                continue
+        # Read only last N lines from file (tail) so large files load fast
+        lines = _tail_lines(FLOW_LOG_FILE, _BUFFER_MAXLEN * 2, max_bytes=5 * 1024 * 1024)
+        for line in lines:
             try:
                 entry = json.loads(line)
                 _FLOW_BUFFER.append(entry)
