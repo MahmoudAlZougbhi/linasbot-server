@@ -186,14 +186,27 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         )
 
         # Update local user_data with the conversation_id (might have been created)
-        new_conv_id = config.user_data_whatsapp[user_id].get('current_conversation_id')
+        # Save uses canonical_user_id; we must read from both so context is available for GPT.
+        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, phone_for_save)
+        new_conv_id = (
+            config.user_data_whatsapp.get(user_id, {}).get('current_conversation_id')
+            or config.user_data_whatsapp.get(canonical_user_id, {}).get('current_conversation_id')
+        )
+        if new_conv_id:
+            if user_id not in config.user_data_whatsapp:
+                config.user_data_whatsapp[user_id] = {}
+            config.user_data_whatsapp[user_id]['current_conversation_id'] = new_conv_id
         print(f"📍 After save: conversation_id is now: {new_conv_id}")
         user_data['current_conversation_id'] = new_conv_id
     else:
         print(f"[handle_message] INFO: Skipping Firestore save (called from voice_handler with skip_firestore_save=True)")
-        # Just ensure current_conversation_id is up-to-date
+        # Just ensure current_conversation_id is up-to-date (check both user_id and canonical)
         if 'current_conversation_id' not in user_data or not user_data['current_conversation_id']:
-            user_data['current_conversation_id'] = config.user_data_whatsapp[user_id].get('current_conversation_id')
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get('phone_number'))
+            user_data['current_conversation_id'] = (
+                config.user_data_whatsapp.get(user_id, {}).get('current_conversation_id')
+                or config.user_data_whatsapp.get(canonical_user_id, {}).get('current_conversation_id')
+            )
         was_new_conversation = not user_data.get('current_conversation_id')
 
     current_conversation_id = user_data.get('current_conversation_id')
