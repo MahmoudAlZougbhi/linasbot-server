@@ -1249,17 +1249,20 @@ async def get_conversation_history_from_firestore(
     conversation_id: str,
     max_messages: int = 0,
     window_hours: int = None,
+    alternate_user_id: str = None,
 ) -> list:
     """
     Fetches conversation history from Firestore for a specific conversation.
     Returns a list of messages in OpenAI format: [{"role": "user"/"assistant", "content": "text"}]
-    
+    Tries user_id first, then alternate_user_id (e.g. canonical), since save uses canonical_user_id.
+
     Args:
-        user_id: The user's ID (room_id for Qiscus)
+        user_id: The user's ID (room_id for Qiscus / raw WhatsApp id)
         conversation_id: The conversation document ID
         max_messages: Optional max number of messages after time filtering (0 = no hard cap)
         window_hours: Optional lookback window in hours (None = use config.CONTEXT_WINDOW_HOURS)
-    
+        alternate_user_id: Optional alternate user id (e.g. canonical) to try if user_id doc not found
+
     Returns:
         List of message dicts in OpenAI format
     """
@@ -1269,13 +1272,31 @@ async def get_conversation_history_from_firestore(
         return []
 
     app_id_for_firestore = "linas-ai-bot-backend"
-    conv_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+    users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+    candidate_ids = [user_id]
+    if alternate_user_id and alternate_user_id != user_id:
+        candidate_ids.append(alternate_user_id)
+
+    doc_snap = None
+    used_uid = None
+    for uid in candidate_ids:
+        if not uid:
+            continue
+        conv_doc_ref = users_coll.document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        try:
+            doc_snap = conv_doc_ref.get()
+            if doc_snap.exists:
+                used_uid = uid
+                break
+        except Exception as e:
+            print(f"⚠️ get_conversation_history try uid={uid}: {e}")
+            continue
+
+    if not doc_snap or not doc_snap.exists:
+        print(f"⚠️ Conversation {conversation_id} not found for user(s) {candidate_ids}")
+        return []
 
     try:
-        doc_snap = conv_doc_ref.get()
-        if not doc_snap.exists:
-            print(f"⚠️ Conversation {conversation_id} not found for user {user_id}")
-            return []
         
         conversation_data = doc_snap.to_dict()
         messages = conversation_data.get('messages', [])
@@ -1345,7 +1366,7 @@ async def get_conversation_history_from_firestore(
         
         print(
             f"✅ Fetched {len(openai_messages)} messages from Firestore for conversation {conversation_id} "
-            f"(window={effective_window_hours}h, cap={global_cap if global_cap > 0 else 'none'})"
+            f"(user={used_uid or user_id}, window={effective_window_hours}h, cap={global_cap if global_cap > 0 else 'none'})"
         )
         return openai_messages
         

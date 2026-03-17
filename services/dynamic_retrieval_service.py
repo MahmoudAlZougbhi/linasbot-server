@@ -28,7 +28,7 @@ Rules:
 - Always include one relevant style file.
 - Maximum 5 files total.
 - When unclear or vague, return empty files – the bot will use default content. GPT will decide if clarification is needed.
-- Use RECENT CONVERSATION (if provided) to understand what the dialogue is about. The current user message may be short (e.g. "eh", "beirut", "ok") – the conversation context tells you the topic (pricing, branch, booking, etc.) so you can pick the right files.
+- Use the FULL RECENT CONVERSATION below to understand the whole dialogue: what the user asked, what the bot replied, and what the user is asking now. The current user message may be short (e.g. "eh", "beirut", "tattoo", "ok") – the conversation context tells you the topic (pricing, branch, booking, tattoo removal, etc.) so you MUST pick the right files based on the full context.
 - Return JSON only. No explanation.
 
 Output format (ONLY these two):
@@ -113,11 +113,11 @@ def _has_any_content_files() -> bool:
     return len(k) > 0 or len(p) > 0 or len(s) > 0
 
 
-def _format_context_for_selector(context_messages: Optional[List[dict]] = None, max_messages: int = 6) -> str:
-    """Format last N conversation messages for selector so it understands the topic."""
+def _format_context_for_selector(context_messages: Optional[List[dict]] = None, max_messages: int = 14, max_content_len: int = 600) -> str:
+    """Format last N conversation messages so selector sees the full conversation and understands the topic."""
     if not context_messages:
         return "RECENT CONVERSATION: (none)"
-    # Take last N messages (user/assistant), format as "Role: content"
+    # Take last N messages (user/assistant) so selector sees the whole dialogue
     last = context_messages[-max_messages:] if len(context_messages) > max_messages else context_messages
     lines = []
     for msg in last:
@@ -130,10 +130,10 @@ def _format_context_for_selector(context_messages: Optional[List[dict]] = None, 
             role_label = role
         content = (msg.get("content") or "").strip()
         if content:
-            lines.append(f"{role_label}: {content[:400]}{'...' if len(content) > 400 else ''}")
+            lines.append(f"{role_label}: {content[:max_content_len]}{'...' if len(content) > max_content_len else ''}")
     if not lines:
         return "RECENT CONVERSATION: (none)"
-    return "RECENT CONVERSATION (use this to understand what the user is replying to):\n" + "\n".join(lines)
+    return "RECENT CONVERSATION (full dialogue – use it to understand the whole conversation and pick the right files):\n" + "\n".join(lines)
 
 
 async def select_files_llm(user_message: str, context_messages: Optional[List[dict]] = None) -> Dict:

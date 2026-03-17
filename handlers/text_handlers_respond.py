@@ -1094,13 +1094,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # AI interprets yes/no for handover confirmation - no bot-side keyword matching
     if not gpt_response_data and awaiting_confirmation:
+        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
         conversation_history = await get_conversation_history_from_firestore(
             user_id,
             current_conversation_id,
             max_messages=0,
             window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 12),
+            alternate_user_id=canonical_user_id,
         )
-        canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
         last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
         gpt_response_data = await get_bot_chat_response(
             user_id=user_id,
@@ -1261,13 +1262,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
 
             # Fetch conversation history once (same 12h window as normal context) – use for selector and for GPT.
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
             conversation_history = await get_conversation_history_from_firestore(
                 user_id,
                 current_conversation_id,
                 max_messages=0,
                 window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 12),
+                alternate_user_id=canonical_user_id,
             )
-            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
             last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
             last_bot_msg = await get_last_bot_message_from_conversation(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
 
