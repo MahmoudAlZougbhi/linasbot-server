@@ -1880,6 +1880,93 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
+
+        # Fallback: when AI returns action create_appointment but never called the tool (e.g. after get_machines
+        # the second GPT call only returns JSON, so the booking was never executed). Run create_appointment here.
+        if parsed_response.get("action") == "create_appointment" and "create_appointment" not in tool_names:
+            booking_state = config.user_booking_state[user_id]
+            phone = (
+                config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                or customer_phone_clean
+                or (user_id if (user_id and (user_id.startswith("+") or user_id.replace("+", "").replace("-", "").replace(" ", "").isdigit())) else None)
+            )
+            if phone:
+                # Collect user text for date parsing (same logic as in-tool path)
+                recent_user = []
+                for msg in (current_context_messages or [])[-12:]:
+                    if msg.get("role") == "user" and msg.get("content"):
+                        recent_user.append(str(msg.get("content", "")).strip())
+                recent_user = recent_user[-4:]
+                if (user_input or "").strip() and (not recent_user or recent_user[-1] != (user_input or "").strip()):
+                    recent_user.append((user_input or "").strip())
+                all_user_text = " ".join(recent_user).strip()
+                if text_mentions_datetime(all_user_text):
+                    now = now_in_bot_tz()
+                    dt_obj = resolve_relative_datetime(all_user_text, reference=now)
+                    if dt_obj:
+                        if dt_obj <= now:
+                            dt_obj = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)
+                        max_allowed = now + datetime.timedelta(days=365)
+                        if dt_obj > max_allowed:
+                            dt_obj = max_allowed.replace(second=0, microsecond=0)
+                        date_str = dt_obj.astimezone(BOOKING_TZ).strftime("%Y-%m-%d %H:%M:%S")
+                        service_id = _safe_int(booking_state.get("service_id")) or _infer_service_id_for_pricing(user_input, current_gender, booking_state) or config.DEFAULT_SERVICE_ID
+                        machine_id = _safe_int(booking_state.get("machine_id")) or config.DEFAULT_MACHINE_ID
+                        branch_id = _safe_int(booking_state.get("branch_id")) or config.DEFAULT_BRANCH_ID
+                        body_part_ids = _normalize_body_part_ids(booking_state.get("body_part_ids")) or None
+                        # Ensure customer exists then call create_appointment (even if body_part_ids missing for tattoo; API may accept or return error)
+                        customer_exists = False
+                        cust_resp = await api_integrations.get_customer_by_phone(phone=phone)
+                        if cust_resp and cust_resp.get("success") and cust_resp.get("data"):
+                            customer_exists = True
+                        if not customer_exists:
+                            customer_name = config.user_names.get(user_id) or config.user_data_whatsapp.get(user_id, {}).get("collected_name")
+                            if not customer_name or re.search(r"[\u0600-\u06FF]", customer_name or ""):
+                                customer_name = "Customer"
+                            gender_cap = (current_gender or "male").capitalize()
+                            create_cust = await api_integrations.create_customer(
+                                name=customer_name, phone=phone, gender=gender_cap, branch_id=config.DEFAULT_BRANCH_ID
+                            )
+                            if create_cust and create_cust.get("success"):
+                                customer_exists = True
+                        if customer_exists:
+                            try:
+                                result = await api_integrations.create_appointment(
+                                    phone=phone,
+                                    service_id=service_id,
+                                    machine_id=machine_id,
+                                    branch_id=branch_id,
+                                    date=date_str,
+                                    body_part_ids=body_part_ids,
+                                )
+                                if result and result.get("success"):
+                                    _ar = "تم حجز موعدك بنجاح. رح تصلك تأكيدات من الفرع."
+                                    _en = "Your appointment has been booked successfully. You will receive confirmation from the branch."
+                                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                                    print("create_appointment fallback: booking succeeded.")
+                                else:
+                                    err_msg = (result or {}).get("message", "Unknown error")
+                                    _ar = "عفواً، ما قدرنا نكمل الحجز. جرّب مرة تانية أو تواصل مع الفرع."
+                                    _en = "Sorry, we couldn't complete the booking. Please try again or contact the branch."
+                                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                                    print(f"create_appointment fallback: API failed: {err_msg}")
+                            except Exception as e:
+                                print(f"create_appointment fallback error: {e}")
+                                _ar = "حدث خطأ أثناء الحجز. جرّب لاحقاً أو تواصل مع الفرع."
+                                _en = "An error occurred while booking. Please try again later or contact the branch."
+                                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                        else:
+                            _ar = "لإتمام الحجز نحتاج اسمك الكامل. ممكن تخبرني شو اسمك؟"
+                            _en = "To complete the booking we need your full name. What is your name?"
+                            parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                    else:
+                        _ar = "لإتمام الحجز خبرني التاريخ والوقت (مثلاً خميس الساعة ١ بعد الظهر)."
+                        _en = "To complete the booking please tell me the date and time (e.g. Thursday 1pm)."
+                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+            else:
+                _ar = "لإتمام الحجز نحتاج رقم هاتفك. تواصل معنا عبر الواتساب من الرقم اللي بدك تحجز فيه."
+                _en = "To complete the booking we need your phone number. Please contact us from the number you want to book with."
+                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
         usage = (getattr(second_response, "usage", None) if tool_calls else getattr(response, "usage", None))
         tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
         prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
