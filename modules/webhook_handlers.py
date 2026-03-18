@@ -13,6 +13,7 @@ import time
 from typing import Dict, Any, Optional
 
 from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
 import httpx
 
 from modules.core import app, whatsapp_api_client, dashboard_bot_responses
@@ -132,7 +133,7 @@ async def receive_webhook(request: Request):
                 time_since_last = current_time - _webhook_dedup_cache[message_id]
                 print(f"⚠️ DUPLICATE WEBHOOK DETECTED: message_id={message_id} (received {time_since_last:.2f}s ago)")
                 print(f"Skipping duplicate processing to prevent duplicate image analysis")
-                return {"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id}
+                return JSONResponse(status_code=200, content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id})
             
             # Record this message as processed
             if message_id:
@@ -155,13 +156,15 @@ async def receive_webhook(request: Request):
                 if e0 and isinstance(e0, list):
                     print(f"Webhook entry[0] keys: {list(e0[0].keys()) if isinstance(e0[0], dict) else 'N/A'}")
 
-        return {"status": "success"}
+        # Explicit JSONResponse: MontyMobile expects 200 + JSON body. Returning null causes "Response Body: null" in their logs.
+        return JSONResponse(status_code=200, content={"status": "success"})
         
     except Exception as e:
         print(f"CRITICAL ERROR processing webhook: {e}")
         import traceback
         traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+        # Return 200 with error payload to avoid MontyMobile retries on parse/server errors
+        return JSONResponse(status_code=200, content={"status": "error", "message": str(e)})
 
 
 def _parse_webhook_raw_dict(webhook_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

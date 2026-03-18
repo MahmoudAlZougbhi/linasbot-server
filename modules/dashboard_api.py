@@ -99,16 +99,18 @@ async def health():
 async def webhook_status():
     """Debug: webhook reachability and config (no secrets). Use when WhatsApp messages don't reach the AI."""
     from modules.webhook_handlers import get_webhook_debug_status
-    base = os.getenv("PUBLIC_URL", "https://YOUR_SERVER")  # e.g. ngrok URL or production domain
+    base = (os.getenv("PUBLIC_URL") or "").strip() or "https://YOUR_SERVER"
     debug = get_webhook_debug_status()
+    webhook_url = f"{base.rstrip('/')}/webhook"
     return {
         "ok": True,
         "provider": WhatsAppFactory.get_current_provider(),
-        "webhook_url": f"{base.rstrip('/')}/webhook",
+        "webhook_url": webhook_url,
+        "public_url_configured": bool((os.getenv("PUBLIC_URL") or "").strip()),
         "last_webhook_received": debug.get("last_received_iso"),
         "seconds_since_last_webhook": debug.get("seconds_since_received"),
         "last_parsed_user_id": debug.get("last_parsed_user_id"),
-        "hint": "Configure this URL in MontyMobile. If last_webhook_received is null, webhooks are NOT reaching the server. For local dev: use ngrok (ngrok http 8003) and set PUBLIC_URL to the ngrok URL.",
+        "hint": "Configure this EXACT URL in MontyMobile dashboard. If Response Body is null in Monty logs, the webhook URL is wrong or the server is unreachable. Set PUBLIC_URL in .env to your domain (e.g. https://linasaibot.com).",
         "test_flow": "POST /api/debug/simulate-webhook with body {\"phone\":\"9613000000\",\"text\":\"مرحبا\"} to test if the flow works.",
     }
 
