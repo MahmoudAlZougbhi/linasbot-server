@@ -603,42 +603,68 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     return "\n".join(lines)
 
 
-def _extract_first_json_object(raw: str) -> str:
+def _extract_json_objects(raw: str):
     """
-    Extract the first complete JSON object from a string that may contain multiple JSON objects.
-    Handles GPT returning e.g. action/bot_reply on line 1 and appointment_status on line 2 (Extra data error).
+    Extract all complete JSON objects from a string. GPT sometimes returns multiple objects:
+    - First: preferred_service, preferred_branch, etc. (no action/bot_reply)
+    - Second: action, bot_reply (the actual response)
+    Yields (start, end) slices for each object.
     """
     s = (raw or "").strip()
-    if not s or s[0] != "{":
-        return s
-    depth = 0
-    in_string = False
-    escape = False
-    i = 0
-    while i < len(s):
-        c = s[i]
-        if escape:
-            escape = False
+    pos = 0
+    while pos < len(s):
+        # Find next {
+        idx = s.find("{", pos)
+        if idx < 0:
+            break
+        depth = 0
+        in_string = False
+        escape = False
+        i = idx
+        while i < len(s):
+            c = s[i]
+            if escape:
+                escape = False
+                i += 1
+                continue
+            if c == "\\" and in_string:
+                escape = True
+                i += 1
+                continue
+            if not in_string:
+                if c == '"':
+                    in_string = True
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        yield s[idx : i + 1]
+                        pos = i + 1
+                        break
+            else:
+                if c == '"':
+                    in_string = False
             i += 1
-            continue
-        if c == "\\" and in_string:
-            escape = True
-            i += 1
-            continue
-        if not in_string:
-            if c == '"':
-                in_string = True
-            elif c == "{":
-                depth += 1
-            elif c == "}":
-                depth -= 1
-                if depth == 0:
-                    return s[: i + 1]
         else:
-            if c == '"':
-                in_string = False
-        i += 1
-    return s
+            break
+
+
+def _parse_gpt_response_json(raw: str) -> dict:
+    """
+    Parse GPT response that may contain multiple JSON objects. Returns the first object
+    that has both action and bot_reply. GPT sometimes returns two objects:
+    - First: preferred_service, preferred_branch, etc. (no action/bot_reply)
+    - Second: action, bot_reply (the actual response)
+    """
+    for obj_str in _extract_json_objects(raw):
+        try:
+            parsed = json.loads(obj_str)
+            if isinstance(parsed, dict) and parsed.get("action") and parsed.get("bot_reply"):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            continue
+    raise json.JSONDecodeError("No valid JSON object with action and bot_reply found", raw, 0)
 
 
 async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Optional[str]:
@@ -1123,7 +1149,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Otherwise a second response after tools can replace it with booking flow (date/time/branch).
         if tool_calls and current_gender == "unknown" and gpt_raw_content:
             try:
-                first_parsed = json.loads(_extract_first_json_object(gpt_raw_content))
+                first_parsed = _parse_gpt_response_json(gpt_raw_content)
                 first_action = (first_parsed.get("action") or "").strip().lower()
                 if first_action in ["ask_gender", "initial_greet_and_ask_gender"]:
                     first_parsed.setdefault("detected_language", current_preferred_lang)
@@ -2015,9 +2041,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             gpt_raw_content = second_response.choices[0].message.content.strip() if second_response.choices[0].message.content else ""
             print(f"GPT Raw Response (after tool call): {gpt_raw_content}")
 
-            parsed_response = json.loads(_extract_first_json_object(gpt_raw_content))
+            parsed_response = _parse_gpt_response_json(gpt_raw_content)
         else:
-            parsed_response = json.loads(_extract_first_json_object(gpt_raw_content))
+            parsed_response = _parse_gpt_response_json(gpt_raw_content)
 
         # AI decides language - use AI's detected_language from response, fallback to pre-detected
         bot_reply = parsed_response.get("bot_reply", "")
