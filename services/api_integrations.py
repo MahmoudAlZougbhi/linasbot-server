@@ -101,6 +101,19 @@ async def get_machines():
         log_report_event("api_call", "System", "N/A", {"api": "get_machines", "status": "failed", "error": response.get("message")})
     return response
 
+async def get_body_parts(service_id: int = None):
+    """Returns list of body parts (id, name) for pricing/booking. Optional service_id filter."""
+    print("API Call: get_body_parts")
+    params = {}
+    if service_id is not None:
+        params["service_id"] = service_id
+    response = await _make_api_request("GET", "body-parts", params=params if params else None)
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "status": "success", "count": len(response.get("data", []))})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "status": "failed", "error": response.get("message")})
+    return response
+
 async def get_clinic_hours():
     """Returns the clinic's working hours for each day of the week."""
     print("API Call: get_clinic_hours")

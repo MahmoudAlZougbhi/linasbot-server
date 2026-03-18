@@ -667,6 +667,68 @@ def _parse_gpt_response_json(raw: str) -> dict:
     raise json.JSONDecodeError("No valid JSON object with action and bot_reply found", raw, 0)
 
 
+def _extract_preferred_booking_from_gpt(raw: str) -> dict:
+    """
+    Extract preferred_* fields from GPT response (first JSON object). Used by booking fallback
+    to populate machine_id and body_part_ids when GPT returns confirmation but didn't call the tool.
+    """
+    out = {}
+    for obj_str in _extract_json_objects(raw):
+        try:
+            parsed = json.loads(obj_str)
+            if not isinstance(parsed, dict):
+                continue
+            if parsed.get("preferred_machine_id") is not None:
+                out["preferred_machine_id"] = _safe_int(parsed.get("preferred_machine_id"))
+            if parsed.get("preferred_area"):
+                out["preferred_area"] = str(parsed.get("preferred_area", "")).strip()
+            if parsed.get("preferred_service"):
+                out["preferred_service"] = str(parsed.get("preferred_service", "")).strip()
+            if parsed.get("preferred_branch"):
+                out["preferred_branch"] = str(parsed.get("preferred_branch", "")).strip()
+            if out:
+                return out
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return out
+
+
+def _area_name_to_body_part_ids(area_name: str, service_id: int) -> Optional[List[int]]:
+    """
+    Map area name (e.g. full body, full kel shi) to body_part_ids. Uses app_settings mapping
+    first, then common full-body detection. Returns None if no mapping found.
+    """
+    if not area_name or not str(area_name).strip():
+        return None
+    area_lower = str(area_name).strip().lower()
+    mapping = _get_area_to_body_part_mapping()
+    # Check explicit mapping first
+    for key in ["full_body", "full body", "full", "full_body_laser"]:
+        if key in mapping:
+            ids = mapping[key]
+            if isinstance(ids, list) and ids:
+                return [int(x) for x in ids if _safe_int(x) is not None]
+    # Full body variants - use mapping if available
+    full_body_keys = ["full body", "full kel shi", "full kel chi", "جسم كامل", "كامل", "full", "full body laser"]
+    if any(k in area_lower or area_lower == k for k in full_body_keys):
+        return mapping.get("full_body") or mapping.get("full")
+    return mapping.get(area_lower)
+
+
+def _get_area_to_body_part_mapping() -> dict:
+    """Load area->body_part_ids mapping from app_settings or use defaults."""
+    try:
+        from storage.persistent_storage import APP_SETTINGS_FILE
+        with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+        m = settings.get("booking", {}).get("areaToBodyPartIds", {})
+        if m:
+            return m
+    except Exception:
+        pass
+    return {}
+
+
 async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Optional[str]:
     """
     Fetch full customer file summary for AI context: services, sessions (done + available only),
@@ -1920,6 +1982,28 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             check_next_appointment_result = tool_output
                             print(f"DEBUG: Stored check_next_appointment result for auto-chaining")
 
+                        # Store machine_id to booking_state when get_machines returns and user said Candela/Neo/Quadro
+                        if function_name == "get_machines" and isinstance(tool_output, dict) and tool_output.get("success"):
+                            data = tool_output.get("data", [])
+                            all_txt = (all_user_text_for_date or user_input or "").lower()
+                            machine_keywords = [
+                                ("candela", "كانديلا", "candila"),
+                                ("neo", "نيو"),
+                                ("quadro", "كوادرو"),
+                            ]
+                            for kw_en, *rest in machine_keywords:
+                                kw_ar = rest[0] if rest else ""
+                                kw_alt = rest[1] if len(rest) > 1 else ""
+                                if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or kw_alt in all_txt:
+                                    for m in data if isinstance(data, list) else []:
+                                        name = (m.get("name") or "").strip().lower()
+                                        if name and kw_en in name:
+                                            if user_id not in config.user_booking_state:
+                                                config.user_booking_state[user_id] = {}
+                                            config.user_booking_state[user_id]["machine_id"] = _safe_int(m.get("id"))
+                                            break
+                                    break
+
                         # 📊 ANALYTICS: Track service when appointment is created
                         if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics
@@ -2093,6 +2177,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             if user_id not in config.user_booking_state:
                 config.user_booking_state[user_id] = {}
             booking_state = config.user_booking_state[user_id]
+            # Extract preferred_machine_id, preferred_area from GPT's first JSON object (when it returns two objects)
+            preferred = _extract_preferred_booking_from_gpt(gpt_raw_content) if gpt_raw_content else {}
+            if preferred.get("preferred_machine_id") is not None:
+                booking_state["machine_id"] = preferred["preferred_machine_id"]
+            if preferred.get("preferred_area"):
+                bp_ids = _area_name_to_body_part_ids(preferred["preferred_area"], _safe_int(booking_state.get("service_id")) or 12)
+                if bp_ids:
+                    booking_state["body_part_ids"] = bp_ids
             # If get_machines was called and user said Candela, extract machine_id from tool result
             try:
                 _tr = tool_round_trips
@@ -2133,6 +2225,44 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         booking_state["branch_id"] = 1
                     elif any(x in all_user_text.lower() for x in ["antelias", "أنطلياس"]):
                         booking_state["branch_id"] = 2
+                # Resolve machine_id from get_machines when user said Candela/Neo/Quadro but we don't have it yet
+                if _safe_int(booking_state.get("machine_id")) is None:
+                    all_lower = all_user_text.lower()
+                    machine_keywords = [
+                        ("candela", "كانديلا", "candila"),
+                        ("neo", "نيو"),
+                        ("quadro", "كوادرو"),
+                    ]
+                    for kw_en, kw_ar, kw_alt in machine_keywords:
+                        if kw_en in all_lower or (kw_ar and kw_ar in (user_input or "")) or kw_alt in all_lower:
+                            try:
+                                machines_resp = await api_integrations.get_machines()
+                                if machines_resp.get("success") and machines_resp.get("data"):
+                                    for m in machines_resp["data"]:
+                                        name = (m.get("name") or "").strip().lower()
+                                        if name and kw_en in name:
+                                            booking_state["machine_id"] = _safe_int(m.get("id"))
+                                            break
+                            except Exception as e:
+                                print(f"Fallback get_machines for {kw_en}: {e}")
+                            break
+                # Resolve body_part_ids from preferred_area when missing
+                if not _normalize_body_part_ids(booking_state.get("body_part_ids")) and preferred.get("preferred_area"):
+                    svc_id = _safe_int(booking_state.get("service_id")) or _infer_service_id_for_pricing(user_input, current_gender, booking_state) or 12
+                    bp_ids = _area_name_to_body_part_ids(preferred["preferred_area"], svc_id)
+                    if not bp_ids:
+                        # Try get_body_parts API: "full body" -> all body part IDs
+                        area_lower = (preferred["preferred_area"] or "").strip().lower()
+                        full_keys = ["full body", "full kel shi", "full kel chi", "جسم كامل", "كامل", "full"]
+                        if any(k in area_lower or area_lower == k for k in full_keys):
+                            try:
+                                bp_resp = await api_integrations.get_body_parts(service_id=svc_id)
+                                if bp_resp.get("success") and bp_resp.get("data"):
+                                    bp_ids = [x for x in (_safe_int(item.get("id")) for item in bp_resp["data"]) if x is not None]
+                            except Exception as e:
+                                print(f"Fallback get_body_parts: {e}")
+                    if bp_ids:
+                        booking_state["body_part_ids"] = bp_ids
                 if text_mentions_datetime(all_user_text):
                     now = now_in_bot_tz()
                     dt_obj = resolve_relative_datetime(all_user_text, reference=now)
