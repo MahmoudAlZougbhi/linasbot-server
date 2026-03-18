@@ -819,11 +819,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         _hours_since = 0.0
     _is_new = len(current_context_messages or []) == 0
     _show_greeting = _is_new or _hours_since >= 12
+    if _show_greeting:
+        _greeting_reason = "new user (first message)" if _is_new else "inactive 12+ hours since last contact"
+    else:
+        _greeting_reason = "ongoing conversation (less than 12 hours since last contact)"
 
     # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
     dynamic_customer_context = (
         "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
-        f"- **Show greeting**: {_show_greeting} - Use greeting ONLY when True (new user or inactive 12+ hours). Otherwise go straight to the answer. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
+        f"- **Show greeting**: {_show_greeting} - Reason: {_greeting_reason}. Use greeting ONLY when True (new user or inactive 12+ hours). Otherwise go straight to the answer. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
         f"- **Customer Name**: {customer_name_context}\n"
         f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, create_appointment, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{current_gender}'"
