@@ -330,13 +330,20 @@ class MontyMobileAdapter(WhatsAppAdapter):
                 print(f"🔔 MontyMobile webhook: object={webhook_data.get('object', 'N/A')}")
             
             # MontyMobile sends Meta/WhatsApp Cloud API format
-            # Check for Meta format first (most common)
-            if webhook_data.get("object") == "whatsapp_business_account" and "entry" in webhook_data:
-                print(f"✅ Detected Meta/WhatsApp format from MontyMobile")
-                return self._parse_meta_format(webhook_data)
+            # Try Meta format if we have entry+changes structure (object may vary)
+            if "entry" in webhook_data and webhook_data.get("entry"):
+                entry0 = webhook_data["entry"][0] if isinstance(webhook_data["entry"], list) else {}
+                changes = entry0.get("changes", []) if isinstance(entry0, dict) else []
+                if changes and len(changes) > 0 and isinstance(changes[0], dict):
+                    val = changes[0].get("value", {})
+                    if isinstance(val, dict) and ("messages" in val or "contacts" in val):
+                        print(f"✅ Detected Meta/WhatsApp format (entry+changes)")
+                        result = self._parse_meta_format(webhook_data)
+                        if result:
+                            return result
             
             # Fallback: Old Qiscus format (for backward compatibility)
-            elif webhook_data.get("type") in ["post_comment_mobile", "post_comment_rest"]:
+            if webhook_data.get("type") in ["post_comment_mobile", "post_comment_rest"]:
                 print(f"✅ Detected old Qiscus format")
                 return self._parse_qiscus_format(webhook_data)
             

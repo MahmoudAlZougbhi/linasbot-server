@@ -71,6 +71,7 @@ async def receive_webhook(request: Request):
 
     try:
         raw_body = await request.body()
+        print(f"📥 Webhook POST received ({len(raw_body)} bytes)")
         if _debug:
             print(f"📦 Raw body: {len(raw_body)} bytes")
 
@@ -94,6 +95,8 @@ async def receive_webhook(request: Request):
         if not parsed_message:
             print("Trying Meta fallback parser...")
             parsed_message = await handle_meta_webhook(webhook_data)
+        if not parsed_message:
+            parsed_message = _parse_webhook_raw_dict(webhook_data)
         
         # Check for duplicate webhooks
         if parsed_message:
@@ -125,6 +128,11 @@ async def receive_webhook(request: Request):
             print("Message queued for processing (background)")
         else:
             print("ERROR: Could not parse webhook from any provider")
+            print(f"Webhook keys: {list(webhook_data.keys()) if isinstance(webhook_data, dict) else 'not-dict'}")
+            if isinstance(webhook_data, dict) and "entry" in webhook_data:
+                e0 = webhook_data.get("entry", [])
+                if e0 and isinstance(e0, list):
+                    print(f"Webhook entry[0] keys: {list(e0[0].keys()) if isinstance(e0[0], dict) else 'N/A'}")
 
         return {"status": "success"}
         
@@ -133,6 +141,52 @@ async def receive_webhook(request: Request):
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
+
+def _parse_webhook_raw_dict(webhook_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Last-resort: extract from entry/changes/value/messages using raw dict (no Pydantic)."""
+    try:
+        entries = webhook_data.get("entry") or []
+        if not entries or not isinstance(entries, list):
+            return None
+        entry = entries[0] if isinstance(entries[0], dict) else {}
+        changes = entry.get("changes") or []
+        if not changes or not isinstance(changes, list):
+            return None
+        ch = changes[0] if isinstance(changes[0], dict) else {}
+        value = ch.get("value") or {}
+        if not isinstance(value, dict):
+            return None
+        if "statuses" in value:
+            return None
+        messages = value.get("messages") or []
+        if not messages or not isinstance(messages, list):
+            return None
+        msg = messages[0] if isinstance(messages[0], dict) else {}
+        msg_from = str(msg.get("from") or "").strip()
+        if not msg_from:
+            contacts = value.get("contacts") or []
+            if contacts and isinstance(contacts[0], dict):
+                msg_from = str(contacts[0].get("wa_id") or "").strip()
+        if not msg_from:
+            return None
+        phone = f"+{msg_from}" if msg_from and not msg_from.startswith("+") else msg_from
+        msg_type = msg.get("type") or "text"
+        text_body = (msg.get("text") or {}) if isinstance(msg.get("text"), dict) else {}
+        text = str(text_body.get("body") or "")
+        content = {"text": text} if msg_type == "text" else {"raw": msg}
+        return {
+            "user_id": phone,
+            "user_name": phone,
+            "message_id": f"raw_{msg.get('id', '')}",
+            "timestamp": msg.get("timestamp", ""),
+            "type": msg_type,
+            "content": content,
+            "phone_number": phone,
+        }
+    except Exception as e:
+        print(f"Raw webhook parse failed: {e}")
+        return None
 
 
 async def handle_meta_webhook(webhook_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
