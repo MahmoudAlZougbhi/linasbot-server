@@ -44,7 +44,7 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
         return
 
     if not PYDUB_AVAILABLE:
-        await send_message_func(user_id, "عذراً، معالجة الرسائل الصوتية غير متاحة @@الياً. الرجاء إرسال رسالتك نصياً.")
+        await send_message_func(user_id, "عذراً، معالجة الرسائل الصوتية غير متاحة حالياً. الرجاء إرسال رسالتك نصياً.")
         return
 
     # ✅ NEW: Save user's voice message to Firestore with metadata

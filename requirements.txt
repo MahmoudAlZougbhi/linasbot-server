@@ -21,7 +21,7 @@ google-cloud-firestore==2.11.1
 
 # Audio Processing
 pydub==0.25.1
-# pyaudioop==0.3.2  # Only needed for Python 3.13+ (using Python 3.11 instead)
+audioop-lts>=0.2.0  # Required for Python 3.13+ (audioop removed from stdlib)
 
 # Image Processing (>=11.0 for Python 3.13 compatibility)
 Pillow>=11.0.0
