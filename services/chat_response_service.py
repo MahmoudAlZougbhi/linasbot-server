@@ -1973,11 +1973,29 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 _ar = "لإتمام الحجز نحتاج رقم هاتفك. تواصل معنا عبر الواتساب من الرقم اللي بدك تحجز فيه."
                 _en = "To complete the booking we need your phone number. Please contact us from the number you want to book with."
                 parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+        # Token usage: when tool calls exist, sum BOTH first and second API call usage (second_response alone misses first call's output)
+        first_usage = getattr(response, "usage", None) if tool_calls else None
         usage = (getattr(second_response, "usage", None) if tool_calls else getattr(response, "usage", None))
-        tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
-        prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
-        completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
-        cost_info = _compute_cost_from_usage(selected_model, prompt_tokens_val or 0, completion_tokens_val or 0) if (prompt_tokens_val is not None or completion_tokens_val is not None) else {}
+        if tool_calls and first_usage and usage:
+            pt1 = getattr(first_usage, "prompt_tokens", 0) or 0
+            ct1 = getattr(first_usage, "completion_tokens", 0) or 0
+            pt2 = getattr(usage, "prompt_tokens", 0) or 0
+            ct2 = getattr(usage, "completion_tokens", 0) or 0
+            prompt_tokens_val = pt1 + pt2
+            completion_tokens_val = ct1 + ct2
+            cost1 = _compute_cost_from_usage(selected_model, pt1, ct1)
+            cost2 = _compute_cost_from_usage("gpt-5.4-mini", pt2, ct2)
+            tokens_val = prompt_tokens_val + completion_tokens_val
+            cost_info = {
+                "input_cost_usd": round((cost1.get("input_cost_usd", 0) or 0) + (cost2.get("input_cost_usd", 0) or 0), 6),
+                "output_cost_usd": round((cost1.get("output_cost_usd", 0) or 0) + (cost2.get("output_cost_usd", 0) or 0), 6),
+                "cost_usd": round((cost1.get("cost_usd", 0) or 0) + (cost2.get("cost_usd", 0) or 0), 6),
+            }
+        else:
+            tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
+            prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
+            completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
+            cost_info = _compute_cost_from_usage(selected_model, prompt_tokens_val or 0, completion_tokens_val or 0) if (prompt_tokens_val is not None or completion_tokens_val is not None) else {}
         flow_meta = {
             "model": selected_model,
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
