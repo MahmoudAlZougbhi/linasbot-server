@@ -817,7 +817,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     takeover_still_active = False
                     should_send_waiting = False
                     config.user_in_human_takeover_mode[user_id] = False
-                    print(f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; resuming normal bot flow.")
+                    user_data['just_returned_from_human_takeover'] = True
+                    print(f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; resuming normal bot flow (just_returned).")
         except Exception as takeover_check_error:
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
 
@@ -1292,9 +1293,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None
+            if user_data.pop('just_returned_from_human_takeover', False):
+                operational_context = (
+                    "**USER JUST RETURNED FROM HUMAN TAKEOVER (CRITICAL):**\n"
+                    "- A human operator just finished with this user. The conversation was released back to the bot.\n"
+                    "- Do NOT re-escalate to human based on OLD frustration or complaints in the conversation history.\n"
+                    "- Only hand over if the user EXPLICITLY asks for a human in THIS current message.\n"
+                    "- Treat this as a fresh start. Answer their current question normally."
+                )
             if _resume_original_question:
                 orig_q = user_data.get('original_question') or conv_state.get('original_question')
-                operational_context = (
+                ctx = (
                     f"Conversation State:\n"
                     f"- gender: {current_gender}\n"
                     f"- awaiting_gender: false\n"
@@ -1306,6 +1315,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     f"Task: The user previously asked a question. The bot asked for clarification or gender. "
                     f"The user has now answered. Answer the ORIGINAL question. Do not ask for clarification again."
                 )
+                operational_context = (operational_context + "\n\n" + ctx) if operational_context else ctx
             # When last message was from us (e.g. smart message, notification): give GPT context so it doesn't lose domain
             if last_bot_msg and last_bot_msg.get("text"):
                 last_text = (last_bot_msg.get("text") or "")[:500]
