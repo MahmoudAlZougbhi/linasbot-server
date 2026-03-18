@@ -108,9 +108,74 @@ def check_adapter_parse():
         traceback.print_exc()
 
 
+def check_webhook_post():
+    """5. فحص استقبال الويب هوك (يحتاج السيرفر شغال)"""
+    _step(5, "فحص استقبال الويب هوك (POST /webhook)")
+    try:
+        import httpx
+        base = os.getenv("WEBHOOK_TEST_URL", "http://localhost:8003")
+        url = f"{base.rstrip('/')}/webhook"
+        payload = {
+            "object": "whatsapp_business_account",
+            "entry": [{
+                "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
+                "changes": [{
+                    "field": "messages",
+                    "value": {
+                        "messaging_product": "whatsapp",
+                        "metadata": {"display_phone_number": "96178974402", "phone_number_id": "123"},
+                        "contacts": [{"wa_id": "96178974402", "profile": {"name": "Test"}}],
+                        "messages": [{
+                            "from": "96178974402",
+                            "id": "wamid.check_" + str(int(__import__("time").time())),
+                            "timestamp": "1234567890",
+                            "type": "text",
+                            "text": {"body": "test webhook"}
+                        }]
+                    }
+                }]
+            }]
+        }
+        r = httpx.post(url, json=payload, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("status") == "success":
+                _ok(f"الويب هوك يستقبل: POST {url} → 200 OK")
+            elif data.get("status") == "skipped" and "duplicate" in str(data.get("reason", "")):
+                _ok(f"الويب هوك يستقبل (رسالة مكررة تم تجاهلها): POST {url} → 200")
+            else:
+                _ok(f"الويب هوك استجاب: {data}")
+        else:
+            _fail(f"الويب هوك رجع {r.status_code}: {r.text[:200]}")
+    except httpx.ConnectError:
+        _warn("لا يمكن الاتصال بالويب هوك – شغّل السيرفر أولاً: python3 main.py")
+    except Exception as e:
+        _fail(f"خطأ في فحص الويب هوك: {e}")
+
+
+async def check_montymobile_send_async():
+    """6. فحص إرسال MontyMobile (dry-run في local)"""
+    _step(6, "فحص MontyMobile إرسال (محاكاة)")
+    try:
+        from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+        adapter = WhatsAppFactory.get_adapter()
+        result = await adapter.send_text_message("9613000000", "Test من check_message_flow")
+        if isinstance(result, dict) and result.get("success"):
+            if result.get("dry_run"):
+                _ok("MontyMobile adapter جاهز (dry-run – لم يرسل فعلياً)")
+            else:
+                _ok("MontyMobile أرسل بنجاح ✅")
+        elif isinstance(result, dict) and not result.get("success"):
+            _fail(f"MontyMobile API رفض: {result.get('error', 'Unknown')}")
+        else:
+            _ok("MontyMobile adapter جاهز")
+    except Exception as e:
+        _fail(f"خطأ في MontyMobile إرسال: {e}")
+
+
 async def check_full_flow():
-    """4. محاكاة رسالة كاملة: webhook → handle_message → AI → رد"""
-    _step(4, "محاكاة مسار كامل (رسالة → AI → رد)")
+    """7. محاكاة رسالة كاملة: webhook → handle_message → AI → رد"""
+    _step(7, "محاكاة مسار كامل (رسالة → AI → رد)")
     try:
         from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
         from modules.webhook_handlers import handle_message_whatsapp_with_adapter
@@ -174,16 +239,17 @@ def main():
     check_env()
     check_firestore()
     check_adapter_parse()
+    check_webhook_post()
+    asyncio.run(check_montymobile_send_async())
     asyncio.run(check_full_flow())
 
     print("\n" + "=" * 60)
     print("📋 ملخص:")
-    print("   - إذا كل الفحوصات ✅: المسار يعمل، المشكلة قد تكون:")
-    print("     1) رابط الويب هوك في MontyMobile خاطئ أو السيرفر غير متاح من الإنترنت")
-    print("     2) استخدم ngrok للاختبار المحلي: ngrok http 8003")
-    print("   - إذا ❌ في فحص الـ parse: صيغة الويب هوك من MontyMobile قد تكون مختلفة")
-    print("   - إذا ❌ في Firestore: الرسائل لن تُحفظ ولن تظهر في الـ dashboard/live chat")
-    print("   - إذا ❌ في OpenAI: الـ AI لن يرد")
+    print("   - خطوة 5 (الويب هوك): شغّل السيرفر أولاً (python3 main.py) في terminal آخر")
+    print("     ثم شغّل السكربت – أو استخدم WEBHOOK_TEST_URL=https://ngrok-xxx/webhook")
+    print("   - خطوة 6 (MontyMobile): في APP_MODE=local يكون dry-run ولا يرسل فعلياً")
+    print("   - إذا كل الفحوصات ✅: المسار يعمل. المشكلة غالباً رابط الويب هوك في MontyMobile")
+    print("   - استخدم ngrok للاختبار المحلي: ngrok http 8003")
     print("=" * 60)
 
 
