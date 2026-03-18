@@ -21,6 +21,8 @@ SELECTOR_PROMPT = """You are a file selector. Your ONLY job is to pick which fil
 You do NOT decide actions, ask questions, or interpret the user. GPT does that.
 You ONLY select file IDs. That is all.
 
+You receive the last up to 20 messages of the conversation below. Use them to understand what the user is asking and what the conversation is about, then pick the right files.
+
 Rules:
 - Select specific files over general ones.
 - Include price file if pricing is mentioned.
@@ -113,12 +115,16 @@ def _has_any_content_files() -> bool:
     return len(k) > 0 or len(p) > 0 or len(s) > 0
 
 
+# Number of conversation messages to send to the selector so it understands the dialogue and picks the right files.
+SELECTOR_CONTEXT_MESSAGES = int(getattr(config, "MAX_CONTEXT_MESSAGES", 20))
+
+
 def _format_context_for_selector(context_messages: Optional[List[dict]] = None, max_messages: Optional[int] = None, max_content_len: int = 600) -> str:
     """Format last N conversation messages so selector sees the full conversation and understands the topic.
-    Uses config.MAX_CONTEXT_MESSAGES (e.g. 20) so selector always sees the same last N messages as the rest of the bot."""
+    Sends last 20 messages (SELECTOR_CONTEXT_MESSAGES) so the selector can choose files based on the whole dialogue."""
     if not context_messages:
-        return "RECENT CONVERSATION: (none)"
-    cap = int(max_messages) if max_messages is not None else getattr(config, "MAX_CONTEXT_MESSAGES", 20)
+        return "RECENT CONVERSATION (last up to 20 messages): (none)"
+    cap = int(max_messages) if max_messages is not None else SELECTOR_CONTEXT_MESSAGES
     # Take last N messages (user/assistant) so selector sees the whole dialogue and picks the right files
     last = context_messages[-cap:] if len(context_messages) > cap else context_messages
     lines = []
@@ -134,8 +140,8 @@ def _format_context_for_selector(context_messages: Optional[List[dict]] = None, 
         if content:
             lines.append(f"{role_label}: {content[:max_content_len]}{'...' if len(content) > max_content_len else ''}")
     if not lines:
-        return "RECENT CONVERSATION: (none)"
-    return "RECENT CONVERSATION (full dialogue – use it to understand the whole conversation and pick the right files):\n" + "\n".join(lines)
+        return "RECENT CONVERSATION (last up to 20 messages): (none)"
+    return "RECENT CONVERSATION (last up to 20 messages – use this to understand the whole dialogue and pick the right files):\n" + "\n".join(lines)
 
 
 async def select_files_llm(user_message: str, context_messages: Optional[List[dict]] = None) -> Dict:
