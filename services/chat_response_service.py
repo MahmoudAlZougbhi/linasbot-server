@@ -1,4 +1,5 @@
 # services/chat_response_service.py
+import asyncio
 import json
 import random
 import config
@@ -600,6 +601,100 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
 
     return "\n".join(lines)
 
+
+async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Optional[str]:
+    """
+    Fetch full customer file summary for AI context: services, sessions (done + available only),
+    body parts per service, payment, dates, machines. Excludes postponed sessions.
+    Returns formatted summary string or None if customer not found / API error.
+    """
+    if not customer_phone_clean or not str(customer_phone_clean).strip():
+        return None
+    try:
+        cust_resp = await api_integrations.get_customer_by_phone(phone=customer_phone_clean)
+        if not cust_resp.get("success") or not cust_resp.get("data"):
+            return None
+        data = cust_resp["data"]
+        customer_id = data.get("id")
+        if customer_id is None:
+            return None
+
+        # Fetch sessions and payment in parallel (faster)
+        sessions_resp, payment_resp = await asyncio.gather(
+            api_integrations.get_customer_sessions(customer_id=customer_id),
+            api_integrations.check_appointment_payment(phone=customer_phone_clean),
+        )
+
+        lines = ["**📁 CUSTOMER FILE SUMMARY (use this when answering about their treatments):**"]
+
+        # Sessions: only done + available (exclude postponed, paused)
+        INCLUDE_STATUSES = {"done", "available"}
+        sessions_raw = []
+        if sessions_resp.get("success") and sessions_resp.get("data"):
+            sess_data = sessions_resp["data"]
+            if isinstance(sess_data, list):
+                sessions_raw = sess_data
+            elif isinstance(sess_data, dict) and "sessions" in sess_data:
+                sessions_raw = sess_data.get("sessions", [])
+            elif isinstance(sess_data, dict) and "data" in sess_data:
+                sessions_raw = sess_data.get("data", [])
+
+        sessions_included = []
+        for s in sessions_raw:
+            status = (s.get("status") or "").strip().lower()
+            if status in INCLUDE_STATUSES:
+                sessions_included.append(s)
+
+        if sessions_included:
+            # Group by service
+            by_service: Dict[str, List[dict]] = {}
+            for s in sessions_included:
+                svc = (s.get("service") or s.get("service_name") or "Unknown").strip()
+                if svc not in by_service:
+                    by_service[svc] = []
+                by_service[svc].append(s)
+
+            for svc_name, svc_sessions in by_service.items():
+                lines.append(f"\n- **Service**: {svc_name} ({len(svc_sessions)} sessions)")
+                body_parts = set()
+                for s in svc_sessions:
+                    bp = s.get("body_part") or s.get("body_area") or s.get("area")
+                    if bp:
+                        body_parts.add(str(bp).strip())
+                if body_parts:
+                    lines.append(f"  - Body parts: {', '.join(sorted(body_parts))}")
+                for s in svc_sessions:
+                    date_str = s.get("date") or s.get("appointment_date") or ""
+                    machine = s.get("machine") or s.get("machine_name") or ""
+                    sess_num = s.get("session_number")
+                    status = s.get("status", "")
+                    parts = [f"  - {status}"]
+                    if date_str:
+                        parts.append(f"date: {date_str}")
+                    if machine:
+                        parts.append(f"machine: {machine}")
+                    if sess_num is not None:
+                        parts.append(f"session #{sess_num}")
+                    lines.append(" ".join(parts))
+        else:
+            lines.append("\n- No sessions (done or available) found.")
+
+        # Payment
+        if payment_resp.get("success") and payment_resp.get("data"):
+            pay = payment_resp["data"]
+            amount = pay.get("amount") or pay.get("paid") or pay.get("total_paid")
+            if amount is not None:
+                lines.append(f"\n- **Payment**: {amount}")
+            status_pay = pay.get("status") or pay.get("payment_status")
+            if status_pay:
+                lines.append(f"- **Payment status**: {status_pay}")
+
+        return "\n".join(lines) if len(lines) > 1 else None
+    except Exception as e:
+        print(f"⚠️ _fetch_customer_file_summary_for_ai failed for {customer_phone_clean}: {e}")
+        return None
+
+
 # user_id is the WhatsApp phone number
 async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None, last_ai_response_at: Optional[datetime.datetime] = None, user_image_base64: str = None, user_image_format: str = "jpeg") -> dict:
     user_name = config.user_names.get(user_id, "client")
@@ -796,10 +891,20 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     concise_turn_policy = (
         "- **Turn-by-Turn Policy (CRITICAL)**: ONE message only. Short and focused.\n"
+        "- **Response Length (MANDATORY)**: Keep bot_reply concise. Aim for ~30% shorter than a full detailed answer. "
+        "Neither too long (avoid 3+ paragraphs, long numbered lists, repeated points) nor too short (keep essential info). "
+        "One focused paragraph or 2–3 brief bullet points max. Cut filler and repetition.\n"
         "- Either: (a) short answer + ONE question, OR (b) ONE question to gather info.\n"
         "- For tattoo/pricing: ask first (body area? branch?) – next turn give full answer. Do NOT dump service info + availability + pricing + question all at once.\n"
         "- Do NOT send 3+ paragraphs or multiple info blocks. Compress into one focused message.\n"
     )
+
+    # Fetch full customer file summary for AI (services, sessions done+available, body parts, payment, dates, machines)
+    customer_file_summary = ""
+    if customer_phone_clean:
+        customer_file_summary_raw = await _fetch_customer_file_summary_for_ai(customer_phone_clean)
+        if customer_file_summary_raw:
+            customer_file_summary = "\n\n" + customer_file_summary_raw
 
     domain_scope_policy = (
         "- **Domain Scope Policy**: You only support ليناز ليزر clinic topics (services, pricing, appointments, branches, preparation).\n"
@@ -843,6 +948,19 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"- **detected_language**: '{current_preferred_lang}'\n"
         f"- **Awaiting human handover confirmation**: {config.user_data_whatsapp.get(user_id, {}).get('awaiting_human_handover_confirmation', False)} - If True, user is replying to your transfer confirmation question. Interpret yes/no accordingly.\n"
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
+        f"{customer_file_summary}"
+    )
+
+    # Compact customer context for Activity Flow visibility (what Bot sends to AI about this customer)
+    _file_raw = customer_file_summary.strip().lstrip("\n") if customer_file_summary else ""
+    flow_customer_context_sent = (
+        "=== CUSTOMER STATUS ===\n"
+        f"- Name: {customer_name_context}\n"
+        f"- Phone: {customer_phone_clean or '(none)'}\n"
+        f"- Gender: {current_gender}\n"
+        f"- Language hint: {current_preferred_lang}\n\n"
+        "=== CUSTOMER FILE (services, sessions, body parts, payment, dates – done+available only) ===\n"
+        + (_file_raw if _file_raw else "(No file or customer not found)")
     )
 
     routing_guardrail = ""
@@ -978,6 +1096,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
                         "ai_query_summary": flow_ai_query_summary,
                         "bot_sent_to_ai": flow_bot_sent_to_ai_full,
+                        "customer_context_sent": flow_customer_context_sent,
                     }
                     print(f"PRIORITY: First response is ask_gender (gender unknown). Skipping tool calls and sending gender question.")
                     return first_parsed
@@ -2009,6 +2128,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
             "ai_query_summary": flow_ai_query_summary,
             "bot_sent_to_ai": flow_bot_sent_to_ai_full,
+            "customer_context_sent": flow_customer_context_sent,
             "tool_calls": tool_names if tool_names else None,
             "tokens": tokens_val,
             "prompt_tokens": prompt_tokens_val,
@@ -2105,6 +2225,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
                 "ai_query_summary": flow_ai_query_summary,
                 "bot_sent_to_ai": flow_bot_sent_to_ai_full,
+                "customer_context_sent": flow_customer_context_sent,
                 "error": f"json_decode_error: {e}",
             },
         }
@@ -2132,6 +2253,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
                 "ai_query_summary": flow_ai_query_summary,
                 "bot_sent_to_ai": flow_bot_sent_to_ai_full,
+                "customer_context_sent": flow_customer_context_sent,
                 "error": f"{type(e).__name__}: {e}",
             },
         }

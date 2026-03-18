@@ -230,8 +230,15 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
             ) : (
               <div className="grid gap-4">
                 <FlowStep step={1} title="User sent to Bot" content={entry.user_message || "(no message)"} />
+                {entry.customer_context_sent && (
+                  <FlowStep
+                    step={2}
+                    title="Bot → AI (Customer context)"
+                    content={entry.customer_context_sent}
+                  />
+                )}
                 <FlowStep
-                  step={2}
+                  step={entry.customer_context_sent ? 3 : 2}
                   title="Bot sent to AI"
                   content={
                     entry.bot_sent_to_ai_full ||
@@ -252,7 +259,7 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                 />
                 {isGptFlow && (
                   <FlowStep
-                    step={3}
+                    step={entry.customer_context_sent ? 4 : 3}
                     title="AI processed"
                     content={
                       <span>
@@ -270,7 +277,7 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                 )}
                 {isGptFlow && entry.ai_raw_response && (
                   <FlowStep
-                    step={4}
+                    step={entry.customer_context_sent ? 5 : 4}
                     title="AI returned to Bot"
                     content={
                       <pre className="text-xs overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap m-0" dir="auto">
@@ -280,7 +287,11 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                   />
                 )}
                 <FlowStep
-                  step={isGptFlow && entry.ai_raw_response ? 5 : (isGptFlow ? 4 : 3)}
+                  step={
+                    entry.customer_context_sent
+                      ? (isGptFlow && entry.ai_raw_response ? 6 : isGptFlow ? 5 : 4)
+                      : (isGptFlow && entry.ai_raw_response ? 5 : isGptFlow ? 4 : 3)
+                  }
                   title="Bot sent to User"
                   content={entry.bot_to_user || "(no response)"}
                 />

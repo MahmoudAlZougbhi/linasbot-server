@@ -1802,9 +1802,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": sel_pt, "model": "gpt-4o-mini", "cost_usd": round((sel_pt / 1_000_000 * 0.15), 6) if sel_pt else None, "event_type": "selector_started"},
             {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": sel_ct, "model": "gpt-4o-mini", "cost_usd": round((sel_ct / 1_000_000 * 0.60), 6) if sel_ct else None, "event_type": "selector_completed", "metadata": {"selected_files": selected_titles, "selected_count": len(selected_titles)}},
             {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0, "model": None, "cost_usd": None, "event_type": "retrieval_completed"},
-            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"},
         ]
-        step_num = 6
+        cust_ctx = flow_meta.get("customer_context_sent")
+        if cust_ctx:
+            steps.append({"step": 5, "title": "Bot → AI (Customer context)", "content": cust_ctx, "tokens": 0, "model": None, "cost_usd": None, "event_type": "customer_context_sent"})
+        steps.append({"step": len(steps) + 1, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
+        step_num = len(steps) + 1
         if tool_round_trips:
             steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
             step_num += 1
@@ -1842,9 +1845,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         main_cost = flow_meta.get("cost_usd") or 0.0
         steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
-            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"},
         ]
-        step_num = 3
+        cust_ctx = flow_meta.get("customer_context_sent")
+        if cust_ctx:
+            steps.append({"step": 2, "title": "Bot → AI (Customer context)", "content": cust_ctx, "tokens": 0, "model": None, "cost_usd": None, "event_type": "customer_context_sent"})
+        steps.append({"step": len(steps) + 1, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
+        step_num = len(steps) + 1
         if tool_round_trips:
             steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
             step_num += 1
@@ -1897,6 +1903,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         customer_file_status=user_data.get("customer_file_status"),
         ai_query_summary=flow_meta.get("ai_query_summary"),
         bot_sent_to_ai_full=flow_meta.get("bot_sent_to_ai"),
+        customer_context_sent=flow_meta.get("customer_context_sent"),
         ai_raw_response=flow_meta.get("ai_raw_response"),
         model=flow_meta.get("model"),
         tokens=flow_meta.get("tokens"),

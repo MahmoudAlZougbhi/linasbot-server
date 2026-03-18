@@ -117,6 +117,7 @@ def log_interaction(
     customer_file_status: Optional[str] = None,
     ai_query_summary: Optional[str] = None,
     bot_sent_to_ai_full: Optional[str] = None,
+    customer_context_sent: Optional[str] = None,
     ai_raw_response: Optional[str] = None,
     model: Optional[str] = None,
     tokens: Optional[int] = None,
@@ -171,6 +172,7 @@ def log_interaction(
         # Keep full AI query summary for transparency (includes full dynamic context)
         "ai_query_summary": (ai_query_summary or "")[:120000] if ai_query_summary else None,
         "bot_sent_to_ai_full": (bot_sent_to_ai_full or "")[:250000] if bot_sent_to_ai_full else None,
+        "customer_context_sent": (customer_context_sent or "")[:50000] if customer_context_sent else None,
         "ai_raw_response": (ai_raw_response or "")[:2000] if ai_raw_response else None,
         "model": model,
         "tokens": tokens,
