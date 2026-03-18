@@ -384,6 +384,34 @@ async def end_conversation(request: dict):
     return await _run_endpoint(_handler)
 
 
+@app.get("/api/live-chat/status")
+async def live_chat_status():
+    """Quick status: index count, users count. If index empty but users exist, call rebuild-index."""
+    try:
+        from utils.utils import get_firestore_db
+        db = get_firestore_db()
+        if not db:
+            return {"success": False, "error": "Firestore not available", "index_count": 0, "users_count": 0}
+        app_id = "linas-ai-bot-backend"
+        idx_coll = db.collection("artifacts").document(app_id).collection("live_chat_index")
+        users_coll = db.collection("artifacts").document(app_id).collection("users")
+        index_docs = list(idx_coll.limit(1000).stream())
+        users_docs = list(users_coll.limit(1000).stream())
+        index_count = len(index_docs)
+        users_count = len(users_docs)
+        suggestion = None
+        if users_count > 0 and index_count == 0:
+            suggestion = "Call POST /api/live-chat/rebuild-index to populate from Firestore conversations"
+        return {
+            "success": True,
+            "index_count": index_count,
+            "users_count": users_count,
+            "suggestion": suggestion,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "index_count": 0, "users_count": 0}
+
+
 @app.get("/api/live-chat/debug-firestore")
 async def debug_firestore():
     """Debug endpoint to check Firestore data without cache"""

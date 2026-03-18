@@ -95,6 +95,7 @@ const LiveChat = () => {
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
+  const [rebuildingIndex, setRebuildingIndex] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [botPanelOpen, setBotPanelOpen] = useState(false); // With bot floating panel when sidebar collapsed
 
@@ -509,6 +510,8 @@ const LiveChat = () => {
     getUnifiedChats,
     getLiveConversations,
     getWaitingQueue,
+    getLiveChatStatus,
+    rebuildLiveChatIndex,
     getConversationMessages,
     takeoverConversation,
     releaseConversation,
@@ -2139,6 +2142,35 @@ const LiveChat = () => {
                   className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
                 >
                   Clear
+                </button>
+                <button
+                  type="button"
+                  disabled={rebuildingIndex}
+                  onClick={async () => {
+                    setRebuildingIndex(true);
+                    try {
+                      const r = await rebuildLiveChatIndex();
+                      if (r?.success) {
+                        toast.success(`Index rebuilt (${r.written ?? "?"} conversations)`);
+                        const refreshed = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
+                        if (refreshed?.success && Array.isArray(refreshed.chats)) {
+                          applyServerConversations(refreshed.chats);
+                          setHasMoreChats(refreshed.has_more ?? false);
+                          setNextCursor(refreshed.next_cursor ?? null);
+                        }
+                      } else {
+                        toast.error(r?.error || "Rebuild failed");
+                      }
+                    } catch (e) {
+                      toast.error(e?.message || "Rebuild failed");
+                    } finally {
+                      setRebuildingIndex(false);
+                    }
+                  }}
+                  className="text-xs px-2 py-1 rounded border border-amber-200 hover:bg-amber-50 text-amber-700"
+                  title="If chats don't show, rebuild index from Firestore"
+                >
+                  {rebuildingIndex ? "Rebuilding..." : "Rebuild index"}
                 </button>
                 {isBotDateFilterActive && (
                   <span className="text-[11px] text-slate-500">

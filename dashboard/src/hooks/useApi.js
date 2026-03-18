@@ -531,6 +531,24 @@ export const useApi = () => {
     }
   }, []);
 
+  const getLiveChatStatus = useCallback(async () => {
+    try {
+      const response = await api.get("/api/live-chat/status", { timeout: 5000 });
+      return response.data;
+    } catch (e) {
+      return { success: false, index_count: 0, users_count: 0 };
+    }
+  }, []);
+
+  const rebuildLiveChatIndex = useCallback(async () => {
+    try {
+      const response = await api.post("/api/live-chat/rebuild-index", null, { timeout: 60000 });
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
+  }, []);
+
   /** Same axios as getUnifiedChats – use for loading conversation messages so request goes to same origin. */
   const getConversationMessages = useCallback(
     async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
@@ -1393,6 +1411,8 @@ export const useApi = () => {
     getUnifiedChats,
     getLiveConversations,
     getWaitingQueue,
+    getLiveChatStatus,
+    rebuildLiveChatIndex,
     getConversationMessages,
     takeoverConversation,
     releaseConversation,

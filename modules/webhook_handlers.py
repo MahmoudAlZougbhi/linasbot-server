@@ -32,6 +32,23 @@ from handlers.training_handlers import start_training_mode, exit_training_mode
 _webhook_dedup_cache = {}
 WEBHOOK_DEDUP_WINDOW_SECONDS = 60  # Consider duplicate if received within 60 seconds (Qiscus can send duplicates up to 15+ seconds apart)
 
+# Debug: last webhook received/parsed (for /api/debug/webhook-status)
+_last_webhook_received_at = None
+_last_webhook_parsed_at = None
+_last_webhook_user_id = None
+
+
+def get_webhook_debug_status():
+    """Return last webhook timestamps for /api/debug/webhook-status."""
+    import datetime
+    return {
+        "last_received_at": _last_webhook_received_at,
+        "last_received_iso": datetime.datetime.fromtimestamp(_last_webhook_received_at).isoformat() if _last_webhook_received_at else None,
+        "last_parsed_at": _last_webhook_parsed_at,
+        "last_parsed_user_id": _last_webhook_user_id,
+        "seconds_since_received": round(time.time() - _last_webhook_received_at, 1) if _last_webhook_received_at else None,
+    }
+
 
 @app.get("/webhook")
 async def verify_webhook(request: Request):
@@ -69,8 +86,10 @@ async def receive_webhook(request: Request):
         print(f"⏰ {datetime.datetime.now()} | IP: {request.client.host if request.client else 'Unknown'}")
         print("="*80)
 
+    global _last_webhook_received_at, _last_webhook_parsed_at, _last_webhook_user_id
     try:
         raw_body = await request.body()
+        _last_webhook_received_at = time.time()
         print(f"📥 Webhook POST received ({len(raw_body)} bytes)")
         if _debug:
             print(f"📦 Raw body: {len(raw_body)} bytes")
@@ -121,6 +140,8 @@ async def receive_webhook(request: Request):
                 print(f"✅ Webhook recorded in dedup cache: {message_id}")
         
         if parsed_message:
+            _last_webhook_parsed_at = time.time()
+            _last_webhook_user_id = parsed_message.get("user_id", "")
             print(f"Processing parsed message: {parsed_message}")
             # IMPORTANT: Process in background so we return 200 immediately.
             # MontyMobile throttles/backs off if webhook responses are slow.
