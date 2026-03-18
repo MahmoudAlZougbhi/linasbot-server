@@ -18,6 +18,7 @@ from services import api_integrations
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
+    detect_day_reference,
     detect_reschedule_intent,
     now_in_bot_tz,
     parse_datetime_flexible,
@@ -2014,10 +2015,36 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
 
-        # Fallback: when AI returns action create_appointment but never called the tool (e.g. after get_machines
-        # the second GPT call only returns JSON, so the booking was never executed). Run create_appointment here.
-        if parsed_response.get("action") == "create_appointment" and "create_appointment" not in tool_names:
+        # Fallback: when AI returns action create_appointment OR confirm_booking_details but never called the tool
+        # (e.g. after get_machines the second GPT call only returns JSON, so the booking was never executed).
+        # Run create_appointment here so the appointment actually appears in the system.
+        _run_booking_fallback = (
+            (parsed_response.get("action") in ("create_appointment", "confirm_booking_details"))
+            and "create_appointment" not in tool_names
+        )
+        if _run_booking_fallback:
+            if user_id not in config.user_booking_state:
+                config.user_booking_state[user_id] = {}
             booking_state = config.user_booking_state[user_id]
+            # If get_machines was called and user said Candela, extract machine_id from tool result
+            try:
+                _tr = tool_round_trips
+            except NameError:
+                _tr = []
+            for tr in _tr:
+                if tr.get("ai_requested") == "get_machines":
+                    try:
+                        ret = json.loads(tr.get("bot_returned", "{}"))
+                        data = ret.get("data", [])
+                        user_lower = (user_input or "").strip().lower()
+                        for m in data if isinstance(data, list) else []:
+                            name = (m.get("name") or "").strip().lower()
+                            if name and ("candela" in user_lower or "كانديلا" in (user_input or "") or "candila" in user_lower) and "candela" in name:
+                                booking_state["machine_id"] = _safe_int(m.get("id"))
+                                break
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    break
             phone = (
                 config.user_data_whatsapp.get(user_id, {}).get("phone_number")
                 or customer_phone_clean
@@ -2033,9 +2060,27 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 if (user_input or "").strip() and (not recent_user or recent_user[-1] != (user_input or "").strip()):
                     recent_user.append((user_input or "").strip())
                 all_user_text = " ".join(recent_user).strip()
+                # Infer branch from conversation when not in booking_state
+                if _safe_int(booking_state.get("branch_id")) is None:
+                    if any(x in all_user_text.lower() for x in ["beirut", "بيروت", "beyrouth"]):
+                        booking_state["branch_id"] = 1
+                    elif any(x in all_user_text.lower() for x in ["antelias", "أنطلياس"]):
+                        booking_state["branch_id"] = 2
                 if text_mentions_datetime(all_user_text):
                     now = now_in_bot_tz()
                     dt_obj = resolve_relative_datetime(all_user_text, reference=now)
+                    # Fallback: "bokra" alone may not match resolve_relative_datetime; use detect_day_reference
+                    if dt_obj is None and detect_day_reference(all_user_text) == "tomorrow":
+                        # Try to extract hour (se3a 9, 9am, etc.) or default to 9:00
+                        hour, minute = 9, 0
+                        _h9 = re.search(r"(?:se3a|saa|ساعة|hour)\s*(\d{1,2})", all_user_text, re.I)
+                        if _h9:
+                            hour = min(23, max(0, int(_h9.group(1) or 9)))
+                        _h2 = re.search(r"\b(\d{1,2})\s*(?:am|pm|صباحا|مساء|صبح)", all_user_text, re.I)
+                        if _h2:
+                            hour = min(23, max(0, int(_h2.group(1) or 9)))
+                        tomorrow = (now + datetime.timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+                        dt_obj = tomorrow
                     if dt_obj:
                         if dt_obj <= now:
                             dt_obj = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)

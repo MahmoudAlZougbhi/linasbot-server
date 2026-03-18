@@ -191,7 +191,9 @@ TOOL USAGE RULES
   - machine type if returned
 
 3. create_appointment
-- If the user confirms booking and the needed details are already known from the conversation, call create_appointment directly.
+- If the user confirms booking and the needed details are already known from the conversation, you MUST call create_appointment directly.
+- NEVER return action confirm_booking_details with a message like "تم تحديد الموعد" without actually calling create_appointment. The appointment will NOT appear in the system unless you call the tool.
+- If you need machine_id, call get_machines first, then call create_appointment with the correct machine_id from the response.
 - Extract from the conversation:
   - service
   - branch
