@@ -549,6 +549,15 @@ export const useApi = () => {
     }
   }, []);
 
+  const simulateWebhook = useCallback(async (phone = "9613000000", text = "مرحبا") => {
+    try {
+      const response = await api.post("/api/debug/simulate-webhook", { phone, text }, { timeout: 15000 });
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
+  }, []);
+
   /** Same axios as getUnifiedChats – use for loading conversation messages so request goes to same origin. */
   const getConversationMessages = useCallback(
     async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
@@ -1413,6 +1422,7 @@ export const useApi = () => {
     getWaitingQueue,
     getLiveChatStatus,
     rebuildLiveChatIndex,
+    simulateWebhook,
     getConversationMessages,
     takeoverConversation,
     releaseConversation,

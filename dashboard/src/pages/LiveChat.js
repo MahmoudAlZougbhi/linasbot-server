@@ -512,6 +512,7 @@ const LiveChat = () => {
     getWaitingQueue,
     getLiveChatStatus,
     rebuildLiveChatIndex,
+    simulateWebhook,
     getConversationMessages,
     takeoverConversation,
     releaseConversation,
@@ -2171,6 +2172,31 @@ const LiveChat = () => {
                   title="If chats don't show, rebuild index from Firestore"
                 >
                   {rebuildingIndex ? "Rebuilding..." : "Rebuild index"}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const r = await simulateWebhook("9613000000", "مرحبا");
+                      if (r?.success) {
+                        toast.success("Test message sent – check Live Chat in a few seconds");
+                        setTimeout(async () => {
+                          const refreshed = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
+                          if (refreshed?.success && Array.isArray(refreshed.chats)) {
+                            applyServerConversations(refreshed.chats);
+                          }
+                        }, 2000);
+                      } else {
+                        toast.error(r?.error || "Simulate failed");
+                      }
+                    } catch (e) {
+                      toast.error(e?.message || "Simulate failed");
+                    }
+                  }}
+                  className="text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700"
+                  title="Test if message flow works (simulates webhook)"
+                >
+                  Test flow
                 </button>
                 {isBotDateFilterActive && (
                   <span className="text-[11px] text-slate-500">

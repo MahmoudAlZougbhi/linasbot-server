@@ -12,7 +12,7 @@ import io
 import json
 from typing import Dict, Any
 
-from fastapi import File, UploadFile, Form
+from fastapi import File, UploadFile, Form, Request
 import httpx
 
 from modules.core import app, dashboard_stats, dashboard_bot_responses
@@ -108,8 +108,43 @@ async def webhook_status():
         "last_webhook_received": debug.get("last_received_iso"),
         "seconds_since_last_webhook": debug.get("seconds_since_received"),
         "last_parsed_user_id": debug.get("last_parsed_user_id"),
-        "hint": "Configure this URL in MontyMobile. If last_webhook_received is null, webhooks are NOT reaching the server (check URL, ngrok, firewall).",
+        "hint": "Configure this URL in MontyMobile. If last_webhook_received is null, webhooks are NOT reaching the server. For local dev: use ngrok (ngrok http 8003) and set PUBLIC_URL to the ngrok URL.",
+        "test_flow": "POST /api/debug/simulate-webhook with body {\"phone\":\"9613000000\",\"text\":\"مرحبا\"} to test if the flow works.",
     }
+
+
+@app.post("/api/debug/simulate-webhook")
+async def simulate_webhook(req: Request):
+    """
+    Simulate receiving a webhook (for testing when real WhatsApp messages don't arrive).
+    Body: { "phone": "9613000000", "text": "مرحبا" }
+    Runs the same flow as a real webhook - message should appear in Live Chat.
+    """
+    try:
+        from modules.webhook_handlers import process_parsed_message
+        try:
+            body = await req.json()
+        except Exception:
+            body = {}
+        phone = str(body.get("phone", "9613000000")).strip()
+        text = str(body.get("text", "Test message")).strip()
+        if not phone:
+            return {"success": False, "error": "phone required"}
+        adapter = WhatsAppFactory.get_adapter()
+        parsed = {
+            "user_id": f"+{phone}" if not phone.startswith("+") else phone,
+            "user_name": f"Test {phone}",
+            "message_id": f"sim_{int(datetime.datetime.now().timestamp() * 1000)}",
+            "type": "text",
+            "content": {"text": text},
+            "phone_number": f"+{phone}" if not phone.startswith("+") else phone,
+        }
+        await process_parsed_message(parsed, adapter)
+        return {"success": True, "message": "Simulated webhook processed", "phone": phone}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/test")

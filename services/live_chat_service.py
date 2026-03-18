@@ -1149,21 +1149,27 @@ class LiveChatService:
                 else:
                     query = query.where("conversation_state", "in", state_values)
 
-            start_after_values = None
+            start_after_doc = None
             if cursor:
                 try:
-                    ts_part, conv_part = cursor.split("|", 1)
-                    ts_val = self._parse_timestamp(ts_part)
-                    start_after_values = [ts_val, conv_part]
+                    _ts_part, conv_part = cursor.split("|", 1)
+                    # Firestore start_after requires DocumentSnapshot; conv_id is the doc ID
+                    doc_ref = index_coll.document(conv_part)
+                    start_after_doc = await self._run_blocking_with_timeout(
+                        lambda: doc_ref.get(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS),
+                        self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                    )
+                    if not start_after_doc or not start_after_doc.exists:
+                        start_after_doc = None
                 except Exception:
-                    start_after_values = None
+                    start_after_doc = None
 
             fetch_limit = safe_size + 1  # fetch one extra to know if there's more
 
-            def _stream_page(q):
+            def _stream_page(q, after_doc=None):
                 use_q = q
-                if start_after_values:
-                    use_q = use_q.start_after(*start_after_values)
+                if after_doc:
+                    use_q = use_q.start_after(after_doc)
                 return list(
                     use_q.limit(fetch_limit).stream(
                         timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
@@ -1172,7 +1178,7 @@ class LiveChatService:
                 )
 
             docs = await self._run_blocking_with_timeout(
-                lambda: _stream_page(query),
+                lambda: _stream_page(query, start_after_doc),
                 self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
             )
             print(
