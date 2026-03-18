@@ -946,8 +946,25 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
 
     except Exception as e:
         print(f"ERROR processing image {image_id} for user {user_id}: {e}")
-        await adapter.send_text_message(user_id, "عذراً، واجهت مشكلة في معالجة صورتك. الرجاء المحاولة مرة أخرى.")
+        error_reply = "عذراً، واجهت مشكلة في معالجة صورتك. الرجاء المحاولة مرة أخرى."
+        await adapter.send_text_message(user_id, error_reply)
         log_report_event("whatsapp_media_download_failed", user_name, config.user_gender.get(user_id, "unspecified"), {"media_type": "image", "error": str(e)})
+        try:
+            from services.interaction_flow_logger import log_interaction, is_flow_logging_enabled
+            if is_flow_logging_enabled():
+                log_interaction(
+                    user_id, "[صورة]", error_reply, "gpt",
+                    user_name=user_name, user_phone=config.user_data_whatsapp.get(user_id, {}).get("phone_number"),
+                    user_gender=config.user_gender.get(user_id, "unknown"),
+                    flow_steps=[
+                        {"step": 1, "title": "Image received", "content": "User sent image.", "event_type": "image_received", "status": "success"},
+                        {"step": 2, "title": "Image download/prepare failed", "content": str(e), "event_type": "error", "status": "error"},
+                        {"step": 3, "title": "Bot → User (fallback)", "content": error_reply, "event_type": "fallback_triggered"},
+                    ],
+                    flow_error=str(e), message_type="image",
+                )
+        except Exception as log_err:
+            print(f"⚠️ Could not log image error to Activity Flow: {log_err}")
 
 
 async def handle_voice_message_whatsapp_with_adapter(user_id: str, audio_id: str, user_name: str, adapter):

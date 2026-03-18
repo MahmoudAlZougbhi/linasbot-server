@@ -1224,11 +1224,20 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             config.user_greeting_stage[user_id] = 2
             save_for_training_conversation_log(query_to_send_to_gpt, qa_response)
             flow_match_title = "Q&A Match (Exact)" if match_tier == "exact" else "Q&A Match (≥90%)"
-            flow_steps = [
+            qa_steps = [
                 {"step": 1, "title": "User → Bot", "content": query_to_send_to_gpt},
                 {"step": 2, "title": flow_match_title, "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
-                {"step": 3, "title": "Bot → User", "content": qa_response},
+                {"step": 3, "title": "Bot → User", "content": qa_response, "event_type": "response_sent"},
             ]
+            voice_meta = user_data.pop("_voice_flow_meta", None)
+            if voice_meta:
+                qa_steps = [
+                    {"step": 1, "title": "Voice received", "content": "User sent voice message.", "event_type": "voice_received", "status": "success", "message_type": "voice"},
+                    {"step": 2, "title": "Transcription completed", "content": f"Result: {voice_meta.get('transcription_length', 0)} chars. Model: {voice_meta.get('transcription_model', 'gpt-4o-transcribe')}.", "event_type": "transcription_completed", "status": "success", "duration_ms": voice_meta.get("transcription_duration_ms")},
+                    {"step": 3, "title": "User → Bot", "content": query_to_send_to_gpt},
+                    {"step": 4, "title": flow_match_title, "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
+                    {"step": 5, "title": "Bot → User", "content": qa_response, "event_type": "response_sent"},
+                ]
             log_interaction(
                 user_id,
                 query_to_send_to_gpt,
@@ -1240,7 +1249,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 customer_exists=user_data.get("crm_customer_exists"),
                 customer_file_status=user_data.get("customer_file_status"),
                 qa_match_score=match_score,
-                flow_steps=flow_steps,
+                flow_steps=qa_steps,
+                message_type="voice" if voice_meta else "text",
             )
             return
         else:
@@ -1730,6 +1740,31 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     response_time_ms = (time.time() - start_time) * 1000
     flow_source = "rate_limit" if action == "rate_limit_exceeded" else "moderation" if action == "content_moderated" else "gpt"
     flow_steps = None
+    msg_type = "text"
+
+    # Build multimodal prepended steps for Activity Flow
+    def _prepend_multimodal_steps(steps_list, step_start: int) -> tuple:
+        prepended = []
+        offset = 0
+        voice_meta = user_data.pop("_voice_flow_meta", None)
+        if voice_meta:
+            prepended.extend([
+                {"step": step_start, "title": "Voice received", "content": "User sent voice message.", "event_type": "voice_received", "status": "success", "message_type": "voice"},
+                {"step": step_start + 1, "title": "Voice downloaded/prepared", "content": f"Audio converted to MP3. Duration: {voice_meta.get('audio_duration_seconds', 0):.2f}s.", "event_type": "voice_downloaded", "status": "success", "message_type": "voice"},
+                {"step": step_start + 2, "title": "Transcription started", "content": f"Sent to {voice_meta.get('transcription_model', 'gpt-4o-transcribe')}.", "event_type": "transcription_started", "model": voice_meta.get("transcription_model"), "message_type": "voice"},
+                {"step": step_start + 3, "title": "Transcription completed", "content": f"Result: {voice_meta.get('transcription_length', 0)} chars in {voice_meta.get('transcription_duration_ms', 0):.0f}ms.", "event_type": "transcription_completed", "status": voice_meta.get("status", "success"), "duration_ms": voice_meta.get("transcription_duration_ms"), "message_type": "voice"},
+            ])
+            offset = 4
+        if user_image_base64:
+            prepended.extend([
+                {"step": step_start + offset, "title": "Image received", "content": "User sent image.", "event_type": "image_received", "status": "success", "message_type": "image"},
+                {"step": step_start + offset + 1, "title": "Image prepared", "content": f"Extracted base64, format: {user_image_format}.", "event_type": "image_prepared", "status": "success", "metadata": {"image_format": user_image_format}, "message_type": "image"},
+            ])
+            offset += 2
+        for s in steps_list:
+            s["step"] = s["step"] + offset
+        return prepended + steps_list, "voice" if voice_meta else ("image" if user_image_base64 else "text")
+
     if _dynamic_retrieval_flow_meta:
         dr = _dynamic_retrieval_flow_meta
         bot_sent_selector = dr.get("bot_sent_to_selector", "")
@@ -1764,10 +1799,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         selector_cost = (sel_pt / 1_000_000 * 0.15) + (sel_ct / 1_000_000 * 0.60)
         steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
-            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": sel_pt, "model": "gpt-4o-mini", "cost_usd": round((sel_pt / 1_000_000 * 0.15), 6) if sel_pt else None},
-            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": sel_ct, "model": "gpt-4o-mini", "cost_usd": round((sel_ct / 1_000_000 * 0.60), 6) if sel_ct else None},
-            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0, "model": None, "cost_usd": None},
-            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None},
+            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": sel_pt, "model": "gpt-4o-mini", "cost_usd": round((sel_pt / 1_000_000 * 0.15), 6) if sel_pt else None, "event_type": "selector_started"},
+            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": sel_ct, "model": "gpt-4o-mini", "cost_usd": round((sel_ct / 1_000_000 * 0.60), 6) if sel_ct else None, "event_type": "selector_completed", "metadata": {"selected_files": selected_titles, "selected_count": len(selected_titles)}},
+            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0, "model": None, "cost_usd": None, "event_type": "retrieval_completed"},
+            {"step": 5, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"},
         ]
         step_num = 6
         if tool_round_trips:
@@ -1778,20 +1813,24 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 step_num += 1
                 steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", ""), "tokens": 0, "model": None, "cost_usd": None})
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0, "model": None, "cost_usd": None})
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"})
             step_num += 1
-        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None})
+        resp_step = {"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None, "event_type": "response_sent"}
+        if action in ("human_handover", "human_handover_confirmed"):
+            resp_step["event_type"] = "handover_triggered"
+            resp_step["metadata"] = {"handover": True}
+        steps.append(resp_step)
         total_cost = selector_cost + main_cost
         summary_parts = [f"Selector (gpt-4o-mini): {sel_pt + sel_ct} tokens, ${selector_cost:.6f}", f"Main GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${total_cost:.6f}"]
         steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0), "model": None, "cost_usd": round(total_cost, 6)})
-        flow_steps = steps
+        flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     else:
         tool_round_trips = flow_meta.get("tool_round_trips") or []
         ai_first = flow_meta.get("ai_first_response")
@@ -1803,7 +1842,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         main_cost = flow_meta.get("cost_usd") or 0.0
         steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
-            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None},
+            {"step": 2, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"},
         ]
         step_num = 3
         if tool_round_trips:
@@ -1828,19 +1867,23 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "cost_usd": None,
                 })
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None})
+            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None})
+            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0, "model": None, "cost_usd": None})
+            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"})
             step_num += 1
-        steps.append({"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None})
+        resp_step = {"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None, "event_type": "response_sent"}
+        if action in ("human_handover", "human_handover_confirmed"):
+            resp_step["event_type"] = "handover_triggered"
+            resp_step["metadata"] = {"handover": True}
+        steps.append(resp_step)
         summary_parts = [f"GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${main_cost:.6f}"]
         steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (pt or 0) + (ct or 0), "model": None, "cost_usd": round(main_cost, 6)})
-        flow_steps = steps
+        flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     flow_error_for_log = flow_meta.get("error") or _flow_error_reason
     log_interaction(
         user_id,
@@ -1867,6 +1910,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         flow_steps=flow_steps,
         flow_error=flow_error_for_log,
         token_source="backend" if flow_meta.get("prompt_tokens") is not None else None,
+        message_type=msg_type,
     )
 
     # Token counting and cost: prefer real GPT usage from flow_meta when available

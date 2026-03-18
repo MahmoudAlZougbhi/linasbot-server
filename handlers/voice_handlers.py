@@ -157,6 +157,19 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
 
         user_text_input = transcription_response.text
         print(f"👂 تم تحويل الصوت إلى نص: {user_text_input}")
+
+        # Activity Flow: store voice pipeline metadata for multimodal flow display
+        transcription_duration_ms = (time.time() - start_time) * 1000
+        audio_duration_seconds = len(audio) / 1000.0
+        user_data["_voice_flow_meta"] = {
+            "voice_received": True,
+            "voice_downloaded": True,
+            "transcription_model": "gpt-4o-transcribe",
+            "transcription_duration_ms": round(transcription_duration_ms, 0),
+            "transcription_length": len(user_text_input),
+            "audio_duration_seconds": round(audio_duration_seconds, 2),
+            "status": "success",
+        }
         
         # 📊 ANALYTICS: Log voice message from user
         audio_duration_seconds = len(audio) / 1000.0  # pydub duration is in milliseconds
@@ -214,6 +227,24 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
         await send_message_func(user_id, error_reply)
         # NEW: Save error reply to Firestore
         await save_conversation_message_to_firestore(user_id, "ai", error_reply, user_data['current_conversation_id'], user_name, user_data.get('phone_number'))
+        # Activity Flow: log voice error for visibility
+        try:
+            from services.interaction_flow_logger import log_interaction, is_flow_logging_enabled
+            if is_flow_logging_enabled():
+                log_interaction(
+                    user_id, "[رسالة صوتية]", error_reply, "gpt",
+                    user_name=user_name, user_phone=user_data.get("phone_number"),
+                    user_gender=config.user_gender.get(user_id, "unknown"),
+                    flow_steps=[
+                        {"step": 1, "title": "Voice received", "content": "User sent voice message.", "event_type": "voice_received", "status": "success"},
+                        {"step": 2, "title": "Voice downloaded", "content": "Audio prepared for transcription.", "event_type": "voice_downloaded", "status": "success"},
+                        {"step": 3, "title": "Transcription failed", "content": str(e), "event_type": "error", "status": "error"},
+                        {"step": 4, "title": "Bot → User (fallback)", "content": error_reply, "event_type": "fallback_triggered"},
+                    ],
+                    flow_error=str(e), message_type="voice",
+                )
+        except Exception as log_err:
+            print(f"⚠️ Could not log voice error to Activity Flow: {log_err}")
         notify_human_on_whatsapp(
             user_name,
             config.user_gender.get(user_id, "غير محدد"),

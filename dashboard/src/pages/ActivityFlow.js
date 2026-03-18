@@ -21,6 +21,12 @@ const SOURCE_LABELS = {
   moderation: { label: "Moderation", color: "bg-rose-100 text-rose-700", icon: "🛡" },
 };
 
+const MESSAGE_TYPE_LABELS = {
+  text: { label: "Text", color: "bg-slate-100 text-slate-600", icon: "💬" },
+  voice: { label: "Voice", color: "bg-blue-100 text-blue-700", icon: "🎤" },
+  image: { label: "Image", color: "bg-pink-100 text-pink-700", icon: "🖼" },
+};
+
 const GENDER_META = {
   male: { label: "Male", color: "bg-sky-100 text-sky-700" },
   female: { label: "Female", color: "bg-pink-100 text-pink-700" },
@@ -34,7 +40,7 @@ const FILE_STATUS_META = {
 };
 
 /** Step block for the flow breakdown - supports long content with scroll */
-const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd }) => {
+const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd, eventType, status, durationMs, metadata }) => {
   const str = typeof content === "string" ? content : String(content ?? "");
   const isJsonLike = str.trim().startsWith("{") || str.trim().startsWith("[");
   const isLong = str.length > 800;
@@ -49,6 +55,15 @@ const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd })
       <div className="flex-1 min-w-0">
         <p className={`text-xs font-semibold uppercase tracking-wide mb-1 flex items-center gap-2 flex-wrap ${isError ? "text-red-600" : "text-slate-500"}`}>
           {title}
+          {eventType && (
+            <span className="text-[10px] font-normal normal-case bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{eventType}</span>
+          )}
+          {status && (
+            <span className={`text-[10px] font-normal normal-case px-1.5 py-0.5 rounded ${status === "success" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{status}</span>
+          )}
+          {durationMs != null && (
+            <span className="text-[10px] font-normal normal-case text-slate-500">{durationMs}ms</span>
+          )}
           {tokens != null && (
             <span className={`text-xs font-normal normal-case ${isMaxTokens ? "bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded" : "text-slate-500"}`}>
               {tokens.toLocaleString()} tokens {isMaxTokens && "↑ الأكثر"}
@@ -73,6 +88,12 @@ const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd })
             <pre className="text-sm whitespace-pre-wrap m-0 font-sans">{str}</pre>
           )}
         </div>
+        {metadata && Object.keys(metadata).length > 0 && (
+          <div className="mt-2 pt-2 border-t border-slate-100">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Metadata</p>
+            <pre className="text-[10px] text-slate-600 whitespace-pre-wrap m-0 font-mono">{JSON.stringify(metadata, null, 2)}</pre>
+          </div>
+        )}
         {isLong && (
           <button
             type="button"
@@ -89,6 +110,7 @@ const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd })
 
 const FlowCard = ({ entry, isExpanded, onToggle }) => {
   const meta = SOURCE_LABELS[entry.source] || { label: entry.source, color: "bg-slate-100 text-slate-700", icon: "?" };
+  const msgTypeMeta = MESSAGE_TYPE_LABELS[entry.message_type] || MESSAGE_TYPE_LABELS.text;
   const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
   const genderKey = (entry.user_gender || "unknown").toLowerCase();
   const genderMeta = GENDER_META[genderKey] || GENDER_META.unknown;
@@ -115,6 +137,9 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${meta.color}`}>
               {meta.icon} {meta.label}
+            </div>
+            <div className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${msgTypeMeta.color}`}>
+              {msgTypeMeta.icon} {msgTypeMeta.label}
             </div>
             <span className="text-xs font-semibold text-slate-700">{displayName}</span>
             <span className="text-xs text-slate-500">{displayPhone}</span>
@@ -193,6 +218,10 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                         isMaxTokens={s.tokens != null && s.tokens > 0 && s.tokens === maxT}
                         model={s.model}
                         costUsd={s.cost_usd}
+                        eventType={s.event_type}
+                        status={s.status}
+                        durationMs={s.duration_ms}
+                        metadata={s.metadata}
                       />
                     ));
                   })()}
