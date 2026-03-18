@@ -142,7 +142,7 @@ async def handle_training_input(user_id: str, user_name: str = "مدرب", user_
             mp3_buffer.name = "voice_training_instruction.mp3"
 
             transcription_response = await openai_client.audio.transcriptions.create(
-                model="whisper-1",
+                model="gpt-4o-transcribe",
                 file=mp3_buffer,
                 language="ar" # Arabic for transcription
             )

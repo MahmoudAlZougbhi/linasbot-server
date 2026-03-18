@@ -150,7 +150,7 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
         mp3_buffer.name = "voice_message.mp3" # Name is needed for openai_client.audio.transcriptions.create
 
         transcription_response = await openai_client.audio.transcriptions.create(
-            model="whisper-1",
+            model="gpt-4o-transcribe",
             file=mp3_buffer,
             language="ar" # Assuming primary language is Arabic for transcription
         )
@@ -170,7 +170,7 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
             sentiment="neutral",
             tokens=0,  # Whisper doesn't report tokens
             cost_usd=whisper_cost,
-            model="whisper-1",
+            model="gpt-4o-transcribe",
             response_time_ms=(time.time() - start_time) * 1000,
             message_length=len(user_text_input)
         )

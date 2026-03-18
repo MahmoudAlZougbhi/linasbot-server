@@ -722,7 +722,7 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
     return cleaned
 
 
-async def _process_and_respond(user_id: str, user_name: str, user_input_to_process: str, user_data: dict, send_message_func, send_action_func):
+async def _process_and_respond(user_id: str, user_name: str, user_input_to_process: str, user_data: dict, send_message_func, send_action_func, user_image_base64: str = None, user_image_format: str = "jpeg"):
     """
     Core logic for processing user input and generating bot response.
     This function is adapted from the original `_process_and_respond`
@@ -837,7 +837,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             return
 
     # Hard guardrail: refuse clearly out-of-clinic questions before AI call.
-    if _is_out_of_clinic_scope_query(user_input_to_process):
+    # Skip for images – they are always in scope (tattoo analysis).
+    if not user_image_base64 and _is_out_of_clinic_scope_query(user_input_to_process):
         out_of_scope_reply = _build_out_of_scope_reply(current_preferred_lang)
         await send_message_func(user_id, out_of_scope_reply)
         await save_conversation_message_to_firestore(
@@ -1281,9 +1282,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             )
             custom_context = None
             _dynamic_retrieval_flow_meta = None
+            selector_query = query_to_send_to_gpt
+            if user_image_base64:
+                selector_query = "صورة تاتو إزالة وشم"
+                is_price_intent = True
             if is_dynamic_retrieval_available():
                 merged, _clar, _act, _dynamic_retrieval_flow_meta = await retrieve_and_merge(
-                    query_to_send_to_gpt,
+                    selector_query,
                     include_price_hint=is_price_intent,
                     response_lang=current_preferred_lang,
                     context_messages=conversation_history,
@@ -1293,14 +1298,32 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None
-            if user_data.pop('just_returned_from_human_takeover', False):
+            if user_image_base64:
                 operational_context = (
+                    "**USER SENT AN IMAGE – MANDATORY RULES:**\n\n"
+                    "1. **IMAGE TYPE DETECTION (CRITICAL):**\n"
+                    "- If the image shows: BURN (حرق), SENSITIVE SKIN REACTION (حساسية), SEXUAL/INAPPROPRIATE content, or anything WRONG/UNSAFE → "
+                    "use action = human_handover, handover_degree = high. "
+                    "Tell the user clearly that you are transferring them to a staff member (e.g. 'بحولك عند أحد موظفينا فوراً' / 'Transferring you to our team now').\n\n"
+                    "2. **RESULTS IMAGES (tattoo removal, hair removal, laser results, etc.):**\n"
+                    "- You MUST always describe what you see in the image. Never skip this.\n"
+                    "- If you see IMPROVEMENT (تحسن): give positive feedback (e.g. واو، كفى، خليك محافظ، ممتاز، تحسن واضح).\n"
+                    "- If the result is UNCLEAR or you CANNOT properly interpret what you see: "
+                    "say something like 'ما بتقدر أحكم على النتيجة من الصورة، بحولك عند أحد موظفينا يحلّلك المشكلة' (or equivalent in user's language). "
+                    "Then use action = human_handover, handover_degree = high.\n\n"
+                    "3. **TATTOO FOR PRICING:**\n"
+                    "- If it shows a tattoo (for pricing): estimate size, location, give session price from knowledge.\n\n"
+                    "4. **LANGUAGE:** Reply in user's language."
+                )
+            if user_data.pop('just_returned_from_human_takeover', False):
+                takeover_ctx = (
                     "**USER JUST RETURNED FROM HUMAN TAKEOVER (CRITICAL):**\n"
                     "- A human operator just finished with this user. The conversation was released back to the bot.\n"
                     "- Do NOT re-escalate to human based on OLD frustration or complaints in the conversation history.\n"
                     "- Only hand over if the user EXPLICITLY asks for a human in THIS current message.\n"
                     "- Treat this as a fresh start. Answer their current question normally."
                 )
+                operational_context = (operational_context + "\n\n" + takeover_ctx) if operational_context else takeover_ctx
             if _resume_original_question:
                 orig_q = user_data.get('original_question') or conv_state.get('original_question')
                 ctx = (
@@ -1341,6 +1364,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 custom_knowledge_context=custom_context,
                 operational_context=operational_context,
                 last_ai_response_at=last_ai_response_at,
+                user_image_base64=user_image_base64,
+                user_image_format=user_image_format,
             )
 
     action = gpt_response_data.get("action")
@@ -1639,11 +1664,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
             trigger_source="ai_handover_direct"
         )
-        # Use standardized handoff message (same as sentiment escalation) - triggers human request
+        # For image handover: if AI explained why (e.g. burn, unclear result), use that message
         handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
-        sent_reply = handoff_msg
-        await send_message_func(user_id, handoff_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        if user_image_base64 and (bot_reply_text or "").strip():
+            sent_reply = bot_reply_text.strip()
+        else:
+            sent_reply = handoff_msg
+        await send_message_func(user_id, sent_reply)
+        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         log_report_event("human_handover", user_id, current_gender, {
             "message": user_input_to_process,
             "status": "direct",

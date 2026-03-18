@@ -485,7 +485,9 @@ class MontyMobileAdapter(WhatsAppAdapter):
             elif message_type == "image":
                 content = {"image_id": message.get("image", {}).get("id", "")}
             elif message_type == "audio":
-                content = {"audio_id": message.get("audio", {}).get("id", "")}
+                audio_obj = message.get("audio", {}) or {}
+                audio_id = audio_obj.get("id") or audio_obj.get("link") or audio_obj.get("url") or ""
+                content = {"audio_id": audio_id}
             elif message_type == "video":
                 content = {"video_id": message.get("video", {}).get("id", "")}
             elif message_type == "document":
@@ -547,17 +549,20 @@ class MontyMobileAdapter(WhatsAppAdapter):
             message_id = webhook_data.get("messageId", str(__import__('time').time()))
             timestamp = webhook_data.get("timestamp", int(__import__('time').time() * 1000))
 
-            # Extract content based on type
-            content = ""
+            # Extract content based on type (must be dict with *_id for webhook handler)
+            content = {}
             if message_type == "text":
                 text_data = webhook_data.get("text", {})
-                content = text_data.get("body", "") if isinstance(text_data, dict) else str(text_data)
+                body = text_data.get("body", "") if isinstance(text_data, dict) else str(text_data)
+                content = {"text": body}
             elif message_type == "image":
                 image_data = webhook_data.get("image", {})
-                content = image_data.get("link", "") if isinstance(image_data, dict) else ""
+                img_id = image_data.get("id") or image_data.get("link", "") if isinstance(image_data, dict) else ""
+                content = {"image_id": img_id}
             elif message_type == "audio":
                 audio_data = webhook_data.get("audio", {})
-                content = audio_data.get("link", "") if isinstance(audio_data, dict) else ""
+                audio_id = (audio_data.get("id") or audio_data.get("link") or audio_data.get("url", "")) if isinstance(audio_data, dict) else ""
+                content = {"audio_id": audio_id}
 
             parsed_message = {
                 "user_id": phone_number,
@@ -663,6 +668,14 @@ class MontyMobileAdapter(WhatsAppAdapter):
             
             return {"document_id": url, "filename": caption or "document"}
                 
+        elif msg_type == "audio":
+            audio_obj = message.get("audio", {})
+            if isinstance(audio_obj, dict):
+                audio_id = audio_obj.get("id") or audio_obj.get("link") or audio_obj.get("url") or ""
+            else:
+                audio_id = ""
+            return {"audio_id": audio_id} if audio_id else {"raw": message}
+
         elif msg_type == "location":
             payload = message.get("payload", {})
             return {

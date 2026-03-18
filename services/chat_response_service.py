@@ -601,7 +601,7 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     return "\n".join(lines)
 
 # user_id is the WhatsApp phone number
-async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None, last_ai_response_at: Optional[datetime.datetime] = None) -> dict:
+async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None, last_ai_response_at: Optional[datetime.datetime] = None, user_image_base64: str = None, user_image_format: str = "jpeg") -> dict:
     user_name = config.user_names.get(user_id, "client")
     current_gender_attempts = config.gender_attempts.get(user_id, 0)
 
@@ -889,8 +889,16 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     messages = [{"role": "system", "content": system_instruction_final}]
     messages.extend(context_messages_for_ai)
 
-    # Let GPT detect language naturally - no forced language reminder
-    messages.append({"role": "user", "content": user_input})
+    # Build user message: text only, or multimodal (text + image) when image provided
+    if user_image_base64:
+        image_url = f"data:image/{user_image_format};base64,{user_image_base64}"
+        user_content = [
+            {"type": "text", "text": user_input or "المستخدم أرسل صورة. حللها وفق سياسة التاتو والأسعار وأجب بشكل مناسب."},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ]
+        messages.append({"role": "user", "content": user_content})
+    else:
+        messages.append({"role": "user", "content": user_input})
 
     # Prepare flow metadata context early so Activity Flow remains informative
     # even when GPT fails before normal metadata assembly.

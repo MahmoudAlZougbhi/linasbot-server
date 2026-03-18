@@ -297,7 +297,7 @@ async def test_voice_message(
 
                 # Transcribe with Whisper
                 transcription_response = await openai_client.audio.transcriptions.create(
-                    model="whisper-1",
+                    model="gpt-4o-transcribe",
                     file=mp3_buffer,
                     language="ar"
                 )

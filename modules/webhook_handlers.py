@@ -21,10 +21,10 @@ from modules.models import WebhookRequest
 import config
 from config import WHATSAPP_API_TOKEN
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-from utils.utils import get_firestore_db, set_human_takeover_status
+from utils.utils import get_firestore_db, set_human_takeover_status, save_conversation_message_to_firestore
 from services.api_integrations import log_report_event
-from handlers.text_handlers import handle_message, start_command, _delayed_processing_tasks
-from handlers.photo_handlers import handle_photo_message
+from handlers.text_handlers import handle_message, start_command, _delayed_processing_tasks, _process_and_respond
+from handlers.training_handlers import handle_training_input
 from handlers.voice_handlers import handle_voice_message
 from handlers.training_handlers import start_training_mode, exit_training_mode
 
@@ -198,7 +198,18 @@ def _parse_webhook_raw_dict(webhook_data: Dict[str, Any]) -> Optional[Dict[str, 
         msg_type = msg.get("type") or "text"
         text_body = (msg.get("text") or {}) if isinstance(msg.get("text"), dict) else {}
         text = str(text_body.get("body") or "")
-        content = {"text": text} if msg_type == "text" else {"raw": msg}
+        if msg_type == "text":
+            content = {"text": text}
+        elif msg_type == "audio":
+            audio_obj = msg.get("audio") or {}
+            audio_id = audio_obj.get("id") or audio_obj.get("link") or audio_obj.get("url") or "" if isinstance(audio_obj, dict) else ""
+            content = {"audio_id": audio_id}
+        elif msg_type == "image":
+            img_obj = msg.get("image") or {}
+            img_id = img_obj.get("id") or "" if isinstance(img_obj, dict) else ""
+            content = {"image_id": img_id}
+        else:
+            content = {"raw": msg}
         return {
             "user_id": phone,
             "user_name": phone,
@@ -563,10 +574,16 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
             print(f"DEBUG: Image received - processing with GPT-4 Vision analysis")
             await handle_photo_message_whatsapp_with_adapter(user_id, image_id, user_name, adapter)
             
-    elif message_type == "audio":
-        audio_id = content.get("audio_id")
+    elif message_type in ("audio", "voice", "ptt"):
+        audio_id = None
+        if isinstance(content, dict):
+            audio_id = content.get("audio_id") or content.get("link") or content.get("url")
+        elif isinstance(content, str) and content.strip():
+            audio_id = content.strip()
         if audio_id:
             await handle_voice_message_whatsapp_with_adapter(user_id, audio_id, user_name, adapter)
+        else:
+            print(f"⚠️ Audio/voice message received but no audio_id/link: content={type(content).__name__}")
             
     elif message_type == "file_attachment":
         file_url = content.get("image_id") or content.get("audio_id") or content.get("document_id")
@@ -683,8 +700,40 @@ async def handle_message_whatsapp_with_adapter(user_id: str, user_input_text: st
     )
 
 
+async def _extract_image_base64_and_format(image_url: str, headers: Optional[Dict[str, str]] = None) -> tuple:
+    """Extract base64 string and format from image_url (data: or http)."""
+    import base64
+    if image_url.startswith("data:image/"):
+        parts = image_url.split(",", 1)
+        if len(parts) != 2:
+            raise ValueError("Invalid data URL format")
+        mime_part = parts[0]
+        base64_data = parts[1]
+        fmt = mime_part.replace("data:image/", "").replace(";base64", "").strip()
+        if fmt == "jpg":
+            fmt = "jpeg"
+        return base64_data, fmt or "jpeg"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(image_url, headers=headers or {}, timeout=30)
+        resp.raise_for_status()
+        content_type = resp.headers.get("content-type", "").lower()
+        image_bytes = resp.content
+    magic = image_bytes[:12] if len(image_bytes) >= 12 else image_bytes
+    if magic[:3] == b'\xff\xd8\xff':
+        fmt = "jpeg"
+    elif magic[:4] == b'\x89PNG':
+        fmt = "png"
+    elif magic[:6] in (b'GIF87a', b'GIF89a'):
+        fmt = "gif"
+    elif len(magic) >= 12 and magic[:4] == b'RIFF' and magic[8:12] == b'WEBP':
+        fmt = "webp"
+    else:
+        fmt = "jpeg" if ("jpeg" in content_type or "jpg" in content_type) else "png" if "png" in content_type else "jpeg"
+    return base64.b64encode(image_bytes).decode("utf-8"), fmt
+
+
 async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str, user_name: str, adapter):
-    """Handle photo message with specific adapter"""
+    """Handle photo message: route image to main AI flow (no photo_analysis_service)."""
     try:
         current_provider = WhatsAppFactory.get_current_provider()
         
@@ -833,6 +882,8 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             if not image_url:
                 raise ValueError("Image URL not found in API response.")
 
+        download_headers = {"Authorization": f"Bearer {WHATSAPP_API_TOKEN}"} if current_provider not in ("qiscus", "montymobile") else None
+
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
                 'user_preferred_lang': 'ar', 
@@ -840,6 +891,37 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
                 'awaiting_human_handover_confirmation': False, 
                 'current_conversation_id': None
             }
+
+        user_data = config.user_data_whatsapp[user_id]
+        base64_image, image_format = await _extract_image_base64_and_format(image_url, headers=download_headers)
+
+        if config.user_in_training_mode.get(user_id, False):
+            image_url_for_training = f"data:image/{image_format};base64,{base64_image}"
+            async def adapter_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+                if message_text:
+                    return await adapter.send_text_message(to_number, message_text)
+                elif image_url:
+                    return await adapter.send_image_message(to_number, image_url)
+                elif audio_url:
+                    return await adapter.send_audio_message(to_number, audio_url)
+                return False
+            from modules.whatsapp_adapters import send_whatsapp_typing_indicator
+            await handle_training_input(
+                user_id=user_id, user_name=user_name, image_url=image_url_for_training,
+                user_data=user_data, send_message_func=adapter_send_message, send_action_func=send_whatsapp_typing_indicator
+            )
+            return
+
+        source_message_id = user_data.pop("_source_message_id", None)
+        image_metadata = {"type": "image"}
+        if source_message_id:
+            image_metadata["source_message_id"] = source_message_id
+        await save_conversation_message_to_firestore(
+            user_id, "user", "[صورة]",
+            user_data.get('current_conversation_id'),
+            user_name, user_data.get('phone_number'),
+            metadata=image_metadata
+        )
 
         async def adapter_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
             if message_text:
@@ -851,13 +933,15 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             return False
 
         from modules.whatsapp_adapters import send_whatsapp_typing_indicator
-        await handle_photo_message(
+        await _process_and_respond(
             user_id=user_id,
             user_name=user_name,
-            image_url=image_url,
-            user_data=config.user_data_whatsapp[user_id],
+            user_input_to_process="[صورة]",
+            user_data=user_data,
             send_message_func=adapter_send_message,
-            send_action_func=send_whatsapp_typing_indicator
+            send_action_func=send_whatsapp_typing_indicator,
+            user_image_base64=base64_image,
+            user_image_format=image_format,
         )
 
     except Exception as e:
