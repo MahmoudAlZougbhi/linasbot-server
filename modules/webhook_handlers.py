@@ -59,7 +59,10 @@ async def verify_webhook(request: Request):
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     """Endpoint for receiving WhatsApp messages from different providers."""
+    # Auto-enable debug in local/dev so you can see if webhooks reach the server
     _debug = os.getenv("DEBUG_WEBHOOK_LOGGING", "false").lower() == "true"
+    if not _debug and getattr(config, "is_local_env", lambda: False)():
+        _debug = True
     if _debug:
         print("\n" + "="*80)
         print("🚨 WEBHOOK HIT DETECTED!")

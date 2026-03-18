@@ -95,6 +95,18 @@ async def health():
     return {"ok": True}
 
 
+@app.get("/api/debug/webhook-status")
+async def webhook_status():
+    """Debug: webhook reachability and config (no secrets). Use when WhatsApp messages don't reach the AI."""
+    base = os.getenv("PUBLIC_URL", "https://YOUR_SERVER")  # e.g. ngrok URL or production domain
+    return {
+        "ok": True,
+        "provider": WhatsAppFactory.get_current_provider(),
+        "webhook_url": f"{base.rstrip('/')}/webhook",
+        "hint": "Configure this URL in MontyMobile/Meta dashboard. If messages don't reach: 1) Check URL is public (ngrok for local), 2) Set DEBUG_WEBHOOK_LOGGING=true and check server logs, 3) Verify provider credentials in .env",
+    }
+
+
 @app.get("/api/test")
 async def test_api():
     """Test endpoint for dashboard health check"""
