@@ -198,11 +198,15 @@ async def get_waiting_queue():
 async def takeover_conversation(request: TakeoverRequest):
     """Operator takes over a conversation"""
     async def _handler():
-        return await live_chat_service.takeover_conversation(
+        result = await live_chat_service.takeover_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
             operator_id=request.operator_id,
         )
+        if result.get("success"):
+            # Broadcast so all clients (including other tabs) refresh and move conv from Waiting to Active
+            await broadcast_sse_event("conversations", {"trigger_refresh": True})
+        return result
 
     return await _run_endpoint(_handler)
 
@@ -211,10 +215,13 @@ async def takeover_conversation(request: TakeoverRequest):
 async def release_conversation(request: ReleaseRequest):
     """Release conversation back to bot"""
     async def _handler():
-        return await live_chat_service.release_conversation(
+        result = await live_chat_service.release_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
         )
+        if result.get("success"):
+            await broadcast_sse_event("conversations", {"trigger_refresh": True})
+        return result
 
     return await _run_endpoint(_handler)
 

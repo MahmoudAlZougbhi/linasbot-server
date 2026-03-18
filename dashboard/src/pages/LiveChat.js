@@ -370,11 +370,9 @@ const LiveChat = () => {
   const applyWaitingQueue = (queueResponse) => {
     const incoming = queueResponse?.queue;
     if (!Array.isArray(incoming)) return;
-    if (incoming.length === 0) {
-      if (waitingQueueRef.current?.length || cachedWaitingQueueRef.current?.length) {
-        return;
-      }
-    }
+    // Always apply valid queue response - including empty. Previously we skipped empty
+    // when we had cached items, which caused taken-over conversations to stay in
+    // Waiting after refresh (API correctly returns empty/smaller queue, but we kept stale state).
     setWaitingQueue(mergeSelectedIntoWaitingQueue(incoming, selectedConversationRef));
   };
 
@@ -1625,9 +1623,12 @@ const LiveChat = () => {
             },
           }));
         }
-        // Remove from queue
+        // Remove from waiting queue (match by both user_id and conversation_id)
         setWaitingQueue((prev) =>
-          prev.filter((item) => item.conversation_id !== conversationId)
+          prev.filter(
+            (item) =>
+              !(item.conversation_id === conversationId && item.user_id === userId)
+          )
         );
       } else {
         console.error("❌ Takeover failed:", result.error);
@@ -1722,8 +1723,31 @@ const LiveChat = () => {
     const messageToSend = messageInput.trim();
     setMessageInput(""); // Clear immediately to prevent duplicate sends
 
+    // Optimistic append BEFORE API call so it's in state when SSE arrives (prevents double display).
+    // If we append after API: SSE can arrive first → add message → API returns → append again = duplicate.
+    const optimisticMessage = {
+      message_id: `local_op_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      is_user: false,
+      role: "operator",
+      handled_by: "human",
+      type: "text",
+      content: messageToSend,
+      text: messageToSend,
+    };
+    appendMessageToSelectedConversation(optimisticMessage);
+    saveOperatorMessageToSession(
+      selectedConversation.conversation.user_id,
+      selectedConversation.conversation.conversation_id,
+      optimisticMessage
+    );
+    updateChatListLocally(
+      selectedConversation.conversation.conversation_id,
+      selectedConversation.conversation.user_id,
+      optimisticMessage
+    );
+
     try {
-      // Call API to send message via WhatsApp
       const result = await sendOperatorMessage(
         selectedConversation.conversation.conversation_id,
         selectedConversation.conversation.user_id,
@@ -1732,37 +1756,45 @@ const LiveChat = () => {
       );
 
       if (result.success) {
-        // Optimistic append so operator sees the message immediately even if SSE is delayed.
-        const optimisticMessage = {
-          message_id: `local_op_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          is_user: false,
-          role: "operator",
-          handled_by: "human",
-          type: "text",
-          content: messageToSend,
-          text: messageToSend,
-        };
-        appendMessageToSelectedConversation(optimisticMessage);
-        // Persist immediately so message stays visible after page refresh/tab switch
-        // even if SSE delivery is delayed.
-        saveOperatorMessageToSession(
-          selectedConversation.conversation.user_id,
-          selectedConversation.conversation.conversation_id,
-          optimisticMessage
-        );
-        updateChatListLocally(
-          selectedConversation.conversation.conversation_id,
-          selectedConversation.conversation.user_id,
-          optimisticMessage
-        );
         toast.success("Message sent to customer");
       } else {
         toast.error("Failed to send message");
+        // Rollback optimistic message on failure
+        setSelectedConversation((prev) => {
+          if (!prev?.history) return prev;
+          const filtered = prev.history.filter((m) => m.message_id !== optimisticMessage.message_id);
+          if (messageCacheRef?.current && prev.conversation) {
+            const cacheKey = `${prev.conversation.user_id}_${prev.conversation.conversation_id}`;
+            const existing = messageCacheRef.current.get(cacheKey);
+            messageCacheRef.current.set(cacheKey, {
+              messages: filtered,
+              hasMore: existing?.hasMore ?? false,
+              cachedAt: Date.now(),
+              isPartial: existing?.isPartial ?? false,
+            });
+          }
+          return { ...prev, history: filtered };
+        });
       }
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Error sending message");
+      // Rollback optimistic message on error
+      setSelectedConversation((prev) => {
+        if (!prev?.history) return prev;
+        const filtered = prev.history.filter((m) => m.message_id !== optimisticMessage.message_id);
+        if (messageCacheRef?.current && prev.conversation) {
+          const cacheKey = `${prev.conversation.user_id}_${prev.conversation.conversation_id}`;
+          const existing = messageCacheRef.current.get(cacheKey);
+          messageCacheRef.current.set(cacheKey, {
+            messages: filtered,
+            hasMore: existing?.hasMore ?? false,
+            cachedAt: Date.now(),
+            isPartial: existing?.isPartial ?? false,
+          });
+        }
+        return { ...prev, history: filtered };
+      });
     } finally {
       setIsSending(false);
       sendingRef.current = false;
