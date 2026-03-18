@@ -1284,37 +1284,24 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             _dynamic_retrieval_flow_meta = None
             selector_query = query_to_send_to_gpt
             if user_image_base64:
-                selector_query = "صورة تاتو إزالة وشم"
-                is_price_intent = True
+                selector_query = (
+                    "The user sent an image (attached below). Examine the image and the conversation context. "
+                    "Select which files to load. Do not assume – pick based on what you observe."
+                )
             if is_dynamic_retrieval_available():
                 merged, _clar, _act, _dynamic_retrieval_flow_meta = await retrieve_and_merge(
                     selector_query,
                     include_price_hint=is_price_intent,
                     response_lang=current_preferred_lang,
                     context_messages=conversation_history,
+                    user_image_base64=user_image_base64,
+                    user_image_format=user_image_format,
                 )
                 custom_context = merged if merged else None
                 print(f"[_process_and_respond] ✅ Selector ran: action={_act}, context_len={len(custom_context or '')}")
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None
-            if user_image_base64:
-                operational_context = (
-                    "**USER SENT AN IMAGE – MANDATORY RULES:**\n\n"
-                    "1. **IMAGE TYPE DETECTION (CRITICAL):**\n"
-                    "- If the image shows: BURN (حرق), SENSITIVE SKIN REACTION (حساسية), SEXUAL/INAPPROPRIATE content, or anything WRONG/UNSAFE → "
-                    "use action = human_handover, handover_degree = high. "
-                    "Tell the user clearly that you are transferring them to a staff member (e.g. 'بحولك عند أحد موظفينا فوراً' / 'Transferring you to our team now').\n\n"
-                    "2. **RESULTS IMAGES (tattoo removal, hair removal, laser results, etc.):**\n"
-                    "- You MUST always describe what you see in the image. Never skip this.\n"
-                    "- If you see IMPROVEMENT (تحسن): give positive feedback (e.g. واو، كفى، خليك محافظ، ممتاز، تحسن واضح).\n"
-                    "- If the result is UNCLEAR or you CANNOT properly interpret what you see: "
-                    "say something like 'ما بتقدر أحكم على النتيجة من الصورة، بحولك عند أحد موظفينا يحلّلك المشكلة' (or equivalent in user's language). "
-                    "Then use action = human_handover, handover_degree = high.\n\n"
-                    "3. **TATTOO FOR PRICING:**\n"
-                    "- If it shows a tattoo (for pricing): estimate size, location, give session price from knowledge.\n\n"
-                    "4. **LANGUAGE:** Reply in user's language."
-                )
             if user_data.pop('just_returned_from_human_takeover', False):
                 takeover_ctx = (
                     "**USER JUST RETURNED FROM HUMAN TAKEOVER (CRITICAL):**\n"
@@ -1664,13 +1651,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
             trigger_source="ai_handover_direct"
         )
-        # For image handover: if AI explained why (e.g. burn, unclear result), use that message
         handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
-        if user_image_base64 and (bot_reply_text or "").strip():
-            sent_reply = bot_reply_text.strip()
-        else:
-            sent_reply = handoff_msg
-        await send_message_func(user_id, sent_reply)
+        sent_reply = handoff_msg
+        await send_message_func(user_id, handoff_msg)
         await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         log_report_event("human_handover", user_id, current_gender, {
             "message": user_input_to_process,

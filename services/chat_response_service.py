@@ -893,7 +893,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if user_image_base64:
         image_url = f"data:image/{user_image_format};base64,{user_image_base64}"
         user_content = [
-            {"type": "text", "text": user_input or "المستخدم أرسل صورة. حللها وفق سياسة التاتو والأسعار وأجب بشكل مناسب."},
+            {"type": "text", "text": user_input or "المستخدم أرسل صورة."},
             {"type": "image_url", "image_url": {"url": image_url}}
         ]
         messages.append({"role": "user", "content": user_content})

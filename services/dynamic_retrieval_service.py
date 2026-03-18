@@ -144,10 +144,16 @@ def _format_context_for_selector(context_messages: Optional[List[dict]] = None, 
     return "RECENT CONVERSATION (last up to 20 messages – use this to understand the whole dialogue and pick the right files):\n" + "\n".join(lines)
 
 
-async def select_files_llm(user_message: str, context_messages: Optional[List[dict]] = None) -> Dict:
+async def select_files_llm(
+    user_message: str,
+    context_messages: Optional[List[dict]] = None,
+    user_image_base64: Optional[str] = None,
+    user_image_format: str = "jpeg",
+) -> Dict:
     """
     Step 1: LLM selects which file IDs are needed.
     context_messages: optional list of {role, content} so selector understands the conversation topic.
+    user_image_base64: when user sent an image, pass it so selector can examine it and pick relevant files.
     Returns: {"files": [id1, id2], "action": str, "raw_response": str} for Activity Flow.
     """
     k_titles, p_titles, s_titles = _get_all_titles()
@@ -159,10 +165,20 @@ async def select_files_llm(user_message: str, context_messages: Optional[List[di
     prompt = prompt.replace("{{PRICE_TITLES}}", _format_titles_for_prompt(p_titles))
     prompt = prompt.replace("{{STYLE_TITLES}}", _format_titles_for_prompt(s_titles))
 
+    if user_image_base64:
+        image_url = f"data:image/{user_image_format};base64,{user_image_base64}"
+        user_content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ]
+        messages = [{"role": "user", "content": user_content}]
+    else:
+        messages = [{"role": "user", "content": prompt}]
+
     try:
         response = await client.chat.completions.create(
             model="gpt-5.4-mini",
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             temperature=0.1,
         )
         usage = getattr(response, "usage", None)
@@ -270,6 +286,8 @@ async def retrieve_and_merge(
     include_price_hint: bool = False,
     response_lang: str = "ar",
     context_messages: Optional[List[dict]] = None,
+    user_image_base64: Optional[str] = None,
+    user_image_format: str = "jpeg",
 ) -> Tuple[str, Optional[str], str, Dict]:
     """
     Main entry: Select files via LLM, load content, merge.
@@ -294,7 +312,12 @@ async def retrieve_and_merge(
         all_titles.append({"id": tid, "title": ttitle})
     flow_meta["titles_sent"] = all_titles
 
-    result = await select_files_llm(user_message, context_messages=context_messages)
+    result = await select_files_llm(
+        user_message,
+        context_messages=context_messages,
+        user_image_base64=user_image_base64,
+        user_image_format=user_image_format,
+    )
     action = result.get("action", "normal")
     files = result.get("files", [])
 
@@ -314,8 +337,9 @@ async def retrieve_and_merge(
     flow_meta["selector_completion_tokens"] = result.get("completion_tokens", 0)
     id_to_title = {t.get("id", ""): t.get("title", "Untitled") for t in all_titles}
     flow_meta["selected_titles"] = [id_to_title.get(fid, fid) for fid in files]
+    img_note = " [Image attached]" if user_image_base64 else ""
     flow_meta["bot_sent_to_selector"] = (
-        f"User message: {user_message[:300]}{'...' if len(user_message) > 300 else ''}\n\n"
+        f"User message: {user_message[:300]}{'...' if len(user_message) > 300 else ''}{img_note}\n\n"
         + "Titles the Bot sent to AI (knowledge/price/style):\n"
         + "\n".join(f"  • {t.get('title', '')} (id: {t.get('id', '')})" for t in all_titles[:25])
     )
