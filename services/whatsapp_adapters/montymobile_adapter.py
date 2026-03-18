@@ -433,13 +433,7 @@ class MontyMobileAdapter(WhatsAppAdapter):
                 print(f"⚠️ Ignoring status update webhook (not a user message)")
                 return None
             
-            # Extract contact info
-            contacts = value.get("contacts", [])
-            contact = contacts[0] if contacts else {}
-            phone_number = contact.get("wa_id", "")
-            user_name = contact.get("profile", {}).get("name", phone_number)
-            
-            # Extract message
+            # Extract message first (message.from is the canonical sender)
             messages = value.get("messages", [])
             if not messages:
                 print(f"❌ No messages in webhook")
@@ -447,21 +441,28 @@ class MontyMobileAdapter(WhatsAppAdapter):
                 
             message = messages[0]
             message_id = message.get("id", "")
-            message_from = message.get("from", "")
+            message_from = str(message.get("from", "")).strip()
             message_type = message.get("type", "text")
             timestamp = message.get("timestamp", str(int(__import__('time').time())))
             
-            # CRITICAL FIX: Verify the message is FROM the customer, not TO the customer
-            # If 'from' field doesn't match the contact's wa_id, it might be our own message
-            if message_from and phone_number and message_from != phone_number:
-                print(f"⚠️ WARNING: Message 'from' ({message_from}) doesn't match contact wa_id ({phone_number})")
-                print(f"⚠️ This might be a bot's own message being echoed back. Ignoring.")
-                return None
+            # CRITICAL: Use message.from as PRIMARY for user_id – it's the actual sender.
+            # contacts[0].wa_id can be wrong (e.g. MontyMobile sending same contact for all).
+            contacts = value.get("contacts", [])
+            contact = contacts[0] if contacts else {}
+            contact_wa_id = contact.get("wa_id", "")
+            phone_number = message_from if message_from else contact_wa_id
+            user_name = contact.get("profile", {}).get("name", "") or phone_number
+            
+            if message_from and contact_wa_id and message_from != contact_wa_id:
+                print(f"⚠️ WARNING: message.from ({message_from}) != contact.wa_id ({contact_wa_id}) – using message.from as sender")
             
             # CRITICAL FIX: Check if message is from our bot number
-            # Our source number is self.source_number (e.g., "96178974402")
-            if message_from == self.source_number or message_from == f"+{self.source_number}":
+            if message_from and (message_from == self.source_number or message_from == f"+{self.source_number}"):
                 print(f"⚠️ Ignoring message from our own bot number: {message_from}")
+                return None
+            
+            if not phone_number:
+                print(f"❌ No sender (message.from or contact.wa_id)")
                 return None
             
             # Add + prefix to phone if not present

@@ -89,7 +89,7 @@ async def receive_webhook(request: Request):
 
         parsed_message = adapter.parse_webhook_message(webhook_data)
         if _debug and parsed_message:
-            print(f"Parsed: message_id={parsed_message.get('message_id', 'N/A')}")
+            print(f"Parsed: user_id={parsed_message.get('user_id', 'N/A')} phone={parsed_message.get('phone_number', 'N/A')} message_id={parsed_message.get('message_id', 'N/A')}")
         
         if not parsed_message:
             print("Trying Meta fallback parser...")
@@ -255,6 +255,8 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
         persist_room_to_phone_mapping(raw_user_id, normalized_phone)
 
     print(f"DEBUG: identity raw_user_id={raw_user_id} normalized_phone={normalized_phone} canonical_user_id={canonical_user_id}")
+    if raw_user_id != canonical_user_id:
+        print(f"🔄 Identity resolved: {raw_user_id} → {canonical_user_id}")
 
     # Migrate in-memory state from raw to canonical so we don't lose conversation_id etc.
     if raw_user_id != user_id and raw_user_id in config.user_data_whatsapp:

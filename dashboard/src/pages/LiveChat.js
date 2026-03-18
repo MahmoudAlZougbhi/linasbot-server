@@ -78,6 +78,18 @@ const LiveChat = () => {
     (value) => String(value || "").trim().replace(/^\+/, ""),
     []
   );
+  /** Format phone for display: +9613000000 → +961 3 000 000 */
+  const formatPhoneForDisplay = React.useCallback((phone) => {
+    const s = String(phone || "").trim();
+    if (!s || s === "Unknown") return s;
+    const digits = s.replace(/\D/g, "");
+    if (digits.startsWith("961") && digits.length >= 10) {
+      const national = digits.slice(3);
+      return `+961 ${national.slice(0, 1)} ${national.slice(1, 4)} ${national.slice(4)}`;
+    }
+    if (s.startsWith("+")) return s;
+    return s;
+  }, []);
   const CHAT_LIST_PAGE_SIZE = 30;
   const [chatPage, setChatPage] = useState(1);
   const [nextCursor, setNextCursor] = useState(null);
@@ -2184,7 +2196,7 @@ const LiveChat = () => {
                                   )}
                                 </div>
                                 <p className="text-xs text-slate-500">
-                                  {conv.user_phone || conv.phone_number || ""}
+                                  {formatPhoneForDisplay(conv.user_phone || conv.phone_number || "")}
                                 </p>
                               </div>
                               <SentimentIndicator sentiment={conv.sentiment} />
@@ -2238,7 +2250,7 @@ const LiveChat = () => {
                                   )}
                                 </div>
                                 <p className="text-xs text-slate-500">
-                                  {conv.user_phone || conv.phone_number || ""}
+                                  {formatPhoneForDisplay(conv.user_phone || conv.phone_number || "")}
                                 </p>
                               </div>
                               <SentimentIndicator sentiment={conv.sentiment} />
@@ -2379,7 +2391,7 @@ const LiveChat = () => {
                                   </div>
                                     <SentimentIndicator sentiment={conv.sentiment} />
                                   </div>
-                                  <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
+                                  <p className="text-xs text-slate-500 truncate">{formatPhoneForDisplay(conv.user_phone || conv.phone_number || "")}</p>
                                   <p className="text-[11px] text-slate-400 mt-1">{formatConversationListDate(conv)}</p>
                                 </div>
                               ))}
@@ -2410,7 +2422,7 @@ const LiveChat = () => {
                                     </div>
                                     <SentimentIndicator sentiment={conv.sentiment} />
                                   </div>
-                                  <p className="text-xs text-slate-500 truncate">{conv.user_phone || conv.phone_number || ""}</p>
+                                  <p className="text-xs text-slate-500 truncate">{formatPhoneForDisplay(conv.user_phone || conv.phone_number || "")}</p>
                                   <p className="text-[11px] text-slate-400 mt-1">{formatConversationListDate(conv)}</p>
                                 </div>
                               ))}
@@ -2467,7 +2479,7 @@ const LiveChat = () => {
                       <div className="flex items-center space-x-3 text-xs text-slate-500">
                         <span className="flex items-center">
                           <PhoneIcon className="w-3 h-3 mr-1" />
-                          {selectedConversation.conversation.user_phone || selectedConversation.conversation.phone_number || ""}
+                          {formatPhoneForDisplay(selectedConversation.conversation.user_phone || selectedConversation.conversation.phone_number || "")}
                         </span>
                         <span className="flex items-center">
                           <GlobeAltIcon className="w-3 h-3 mr-1" />
@@ -3098,7 +3110,7 @@ const LiveChat = () => {
                   <div>
                     <p className="text-xs text-slate-500">Phone</p>
                     <p className="font-medium text-slate-800">
-                      {selectedConversation.conversation.user_phone}
+                      {formatPhoneForDisplay(selectedConversation.conversation.user_phone)}
                     </p>
                   </div>
                   <div>

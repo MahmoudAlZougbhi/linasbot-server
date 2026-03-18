@@ -23,7 +23,7 @@ from services.live_chat_contracts import (
     utc_now,
 )
 from utils.utils import get_firestore_db, set_human_takeover_status, get_canonical_user_id_and_phone
-from utils.phone_utils import normalize_phone
+from utils.phone_utils import normalize_phone, is_phone_like_user_id
 from services.media_service import build_whatsapp_audio_delivery_url
 
 
@@ -3104,7 +3104,11 @@ class LiveChatService:
         3) static phone_to_room_mapping.json
         """
         customer_info = customer_info or {}
+        # Try both user_id formats (9613000000 vs +9613000000) for memory lookup
         user_data = config.user_data_whatsapp.get(user_id, {})
+        if not user_data and user_id:
+            alt_key = f"+{user_id}" if not str(user_id).startswith("+") else str(user_id).lstrip("+")
+            user_data = config.user_data_whatsapp.get(alt_key, {})
 
         phone_full = str(customer_info.get("phone_full") or "").strip()
         phone_clean_raw = str(customer_info.get("phone_clean") or "").strip()
@@ -3149,6 +3153,13 @@ class LiveChatService:
             e164 = normalize_phone("+" + clean_digits if clean_digits.startswith("961") else "961" + clean_digits)
             if e164:
                 phone_full = e164
+        # Fallback: user_id may be the phone (e.g. 9613000000 from Firestore doc ID)
+        if (not phone_full or phone_full == "Unknown") and is_phone_like_user_id(user_id):
+            e164 = normalize_phone(user_id)
+            if e164:
+                phone_full = e164
+                if not clean_digits:
+                    clean_digits = self._normalize_phone_digits(user_id)
         # Backward-compatible "clean" format used elsewhere in the app.
         if clean_digits.startswith("961") and len(clean_digits) > 8:
             phone_clean = clean_digits[3:]
