@@ -603,6 +603,44 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     return "\n".join(lines)
 
 
+def _extract_first_json_object(raw: str) -> str:
+    """
+    Extract the first complete JSON object from a string that may contain multiple JSON objects.
+    Handles GPT returning e.g. action/bot_reply on line 1 and appointment_status on line 2 (Extra data error).
+    """
+    s = (raw or "").strip()
+    if not s or s[0] != "{":
+        return s
+    depth = 0
+    in_string = False
+    escape = False
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if escape:
+            escape = False
+            i += 1
+            continue
+        if c == "\\" and in_string:
+            escape = True
+            i += 1
+            continue
+        if not in_string:
+            if c == '"':
+                in_string = True
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    return s[: i + 1]
+        else:
+            if c == '"':
+                in_string = False
+        i += 1
+    return s
+
+
 async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Optional[str]:
     """
     Fetch full customer file summary for AI context: services, sessions (done + available only),
@@ -1085,7 +1123,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Otherwise a second response after tools can replace it with booking flow (date/time/branch).
         if tool_calls and current_gender == "unknown" and gpt_raw_content:
             try:
-                first_parsed = json.loads(gpt_raw_content)
+                first_parsed = json.loads(_extract_first_json_object(gpt_raw_content))
                 first_action = (first_parsed.get("action") or "").strip().lower()
                 if first_action in ["ask_gender", "initial_greet_and_ask_gender"]:
                     first_parsed.setdefault("detected_language", current_preferred_lang)
@@ -1977,9 +2015,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             gpt_raw_content = second_response.choices[0].message.content.strip() if second_response.choices[0].message.content else ""
             print(f"GPT Raw Response (after tool call): {gpt_raw_content}")
 
-            parsed_response = json.loads(gpt_raw_content)
+            parsed_response = json.loads(_extract_first_json_object(gpt_raw_content))
         else:
-            parsed_response = json.loads(gpt_raw_content)
+            parsed_response = json.loads(_extract_first_json_object(gpt_raw_content))
 
         # AI decides language - use AI's detected_language from response, fallback to pre-detected
         bot_reply = parsed_response.get("bot_reply", "")
@@ -2015,11 +2053,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
 
-        # Fallback: when AI returns action create_appointment OR confirm_booking_details but never called the tool
-        # (e.g. after get_machines the second GPT call only returns JSON, so the booking was never executed).
-        # Run create_appointment here so the appointment actually appears in the system.
+        # Fallback: when AI returns action create_appointment, confirm_booking_details, OR answer_question with
+        # booking-confirmation wording but never called the tool. Run create_appointment so it appears in the system.
+        _bot_reply = (parsed_response.get("bot_reply") or "").strip().lower()
+        _booking_confirm_phrases = ["تمّ حجز", "تم حجز", "تم تحديد الموعد", "تم تحديد موعد", "booked", "حجز موعد"]
+        _says_booked = any(p in _bot_reply for p in _booking_confirm_phrases)
         _run_booking_fallback = (
-            (parsed_response.get("action") in ("create_appointment", "confirm_booking_details"))
+            (parsed_response.get("action") in ("create_appointment", "confirm_booking_details")
+             or (parsed_response.get("action") == "answer_question" and _says_booked))
             and "create_appointment" not in tool_names
         )
         if _run_booking_fallback:
