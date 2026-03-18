@@ -285,11 +285,15 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
   );
 };
 
+/** Stable key per entry so auto-refresh doesn't collapse the expanded card */
+const getEntryKey = (entry) =>
+  [entry.timestamp, entry.user_id || "", entry.user_phone || ""].filter(Boolean).join("|");
+
 const ActivityFlow = () => {
   const { getFlowLogs } = useApi();
   const [flows, setFlows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState(null);
+  const [expandedKey, setExpandedKey] = useState(null);
   const [limit, setLimit] = useState(15);
   const [searchPhone, setSearchPhone] = useState("");
 
@@ -312,16 +316,9 @@ const ActivityFlow = () => {
   const fetchFlowsRef = React.useRef(fetchFlows);
   fetchFlowsRef.current = fetchFlows;
 
-  // Initial load + polling every 20s (no full-page loading on refresh)
+  // Initial load only; no auto-refresh (user can click Refresh)
   useEffect(() => {
-    let mounted = true;
-    const run = () => mounted && fetchFlowsRef.current?.(false);
-    run();
-    const interval = setInterval(() => mounted && fetchFlowsRef.current?.(true), 20000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
+    fetchFlowsRef.current?.(false);
   }, []);
 
   // Refetch when search or limit changes (debounced); skip on initial mount
@@ -435,14 +432,17 @@ const ActivityFlow = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {flows.map((entry, idx) => (
-            <FlowCard
-              key={`${entry.timestamp}-${idx}`}
-              entry={entry}
-              isExpanded={expandedId === idx}
-              onToggle={() => setExpandedId(expandedId === idx ? null : idx)}
-            />
-          ))}
+          {flows.map((entry) => {
+            const key = getEntryKey(entry);
+            return (
+              <FlowCard
+                key={key}
+                entry={entry}
+                isExpanded={expandedKey === key}
+                onToggle={() => setExpandedKey(expandedKey === key ? null : key)}
+              />
+            );
+          })}
         </div>
       )}
     </div>
