@@ -646,6 +646,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         or doc_data.get("conversation_state") == "waiting_for_operator"
                     ):
                         existing_takeover = True
+                    # After release: doc has post_release window — never re-open waiting from stale status fields
+                    if firestore_post_release_waiting_blocked(doc_data):
+                        existing_takeover = False
                     existing_operator = doc_data.get("operator_id")
                     if existing_takeover:
                         update_payload.update({
@@ -662,11 +665,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 # Canonical conversation_state for index
                 # When is_smart_source, preserve existing takeover state (don't overwrite waiting_human with bot_active)
                 if is_smart_source:
-                    update_payload["conversation_state"] = _compute_conversation_state(
-                        bool(doc_data.get("human_takeover_active", False)),
-                        doc_data.get("operator_id"),
-                        doc_data.get("status", "active"),
-                    )
+                    if firestore_post_release_waiting_blocked(doc_data):
+                        update_payload.update({
+                            "conversation_state": "bot_active",
+                            "human_takeover_active": False,
+                            "status": "active",
+                            "operator_id": None,
+                        })
+                    else:
+                        update_payload["conversation_state"] = _compute_conversation_state(
+                            bool(doc_data.get("human_takeover_active", False)),
+                            doc_data.get("operator_id"),
+                            doc_data.get("status", "active"),
+                        )
                 else:
                     update_payload["conversation_state"] = _compute_conversation_state(
                         update_payload.get("human_takeover_active", False),
@@ -804,6 +815,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         or doc_data.get("conversation_state") == "waiting_for_operator"
                     ):
                         existing_takeover = True
+                    if firestore_post_release_waiting_blocked(doc_data):
+                        existing_takeover = False
                     existing_operator = doc_data.get("operator_id")
                     if existing_takeover:
                         update_payload.update({
@@ -819,11 +832,19 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         })
                 # When is_smart_source, preserve existing takeover state (don't overwrite waiting_human with bot_active)
                 if is_smart_source:
-                    update_payload["conversation_state"] = _compute_conversation_state(
-                        bool(doc_data.get("human_takeover_active", False)),
-                        doc_data.get("operator_id"),
-                        doc_data.get("status", "active"),
-                    )
+                    if firestore_post_release_waiting_blocked(doc_data):
+                        update_payload.update({
+                            "conversation_state": "bot_active",
+                            "human_takeover_active": False,
+                            "status": "active",
+                            "operator_id": None,
+                        })
+                    else:
+                        update_payload["conversation_state"] = _compute_conversation_state(
+                            bool(doc_data.get("human_takeover_active", False)),
+                            doc_data.get("operator_id"),
+                            doc_data.get("status", "active"),
+                        )
                 else:
                     update_payload["conversation_state"] = _compute_conversation_state(
                         update_payload.get("human_takeover_active", False),
