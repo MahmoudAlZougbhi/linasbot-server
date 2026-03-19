@@ -824,11 +824,11 @@ def _should_preserve_booking_fallback_reply(parsed: dict) -> bool:
         return False
     action = (parsed.get("action") or "").strip().lower()
     br = (parsed.get("bot_reply") or "").strip()
+    if action == "confirm_booking_details":
+        # AI is clarifying schedule/branch/time or next steps — never overwrite with backend filler.
+        return bool(br)
     if len(br) < 30:
         return False
-    if action == "confirm_booking_details":
-        # Clarifying schedule/branch/time — do not overwrite with a generic body-part line.
-        return len(br) >= 35
     if action == "answer_question":
         lower = br.lower()
         markers = ("تم حجز", "تمّ حجز", "تم تثبيت", "موعد", "الساعة", "بيروت", "فرع")
@@ -2611,8 +2611,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             if _detect_same_day_change_intent(user_input or "") and "update_appointment_date" not in tool_names and phone_for_same_day:
                 api_failure_reason = None
 
-        # Fallback: when AI returns action create_appointment, confirm_booking_details, OR answer_question with
-        # booking-confirmation wording but never called the tool. Run create_appointment so it appears in the system.
+        # Fallback: when AI returns action create_appointment OR answer_question with booking-confirmation
+        # wording but never called the tool — try create_appointment so it appears in the system.
+        # Do NOT run this for confirm_booking_details: that action means the model is clarifying with the user,
+        # not asking the backend to auto-book; running fallback here overwrote bot_reply with generic body-part text.
         _bot_reply = (parsed_response.get("bot_reply") or "").strip().lower()
         _booking_confirm_phrases = [
             "تمّ حجز",
@@ -2626,7 +2628,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         ]
         _says_booked = any(p in _bot_reply for p in _booking_confirm_phrases)
         _run_booking_fallback = (
-            (parsed_response.get("action") in ("create_appointment", "confirm_booking_details")
+            (parsed_response.get("action") == "create_appointment"
              or (parsed_response.get("action") == "answer_question" and _says_booked))
             and "create_appointment" not in tool_names
         )
