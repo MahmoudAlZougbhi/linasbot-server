@@ -785,6 +785,50 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
     return out
 
 
+async def _coerce_body_part_ids_from_gpt_booking_args(
+    booking_args: dict, service_id: int
+) -> Optional[List[int]]:
+    """
+    GPT sometimes emits body_part_ids as a list of objects, e.g.
+    [{"body_part": "dahreh", "session_number": 1}] — normalize to integer IDs for the API.
+    """
+    raw = booking_args.get("body_part_ids") if booking_args else None
+    if raw is None or not isinstance(raw, list):
+        return None
+    out: List[int] = []
+    for item in raw:
+        if isinstance(item, int):
+            iid = _safe_int(item)
+            if iid is not None:
+                out.append(iid)
+        elif isinstance(item, dict):
+            iid = _safe_int(item.get("body_part_id") or item.get("id"))
+            if iid is not None:
+                out.append(iid)
+                continue
+            area = item.get("body_part") or item.get("name") or item.get("area")
+            if area:
+                resolved = await _resolve_body_part_ids_from_area_hint(str(area), service_id)
+                if resolved:
+                    out.extend(resolved)
+    normalized = _normalize_body_part_ids(out)
+    return normalized if normalized else None
+
+
+def _should_preserve_ai_booking_reply(parsed: dict) -> bool:
+    """If the model already sent a full booking answer, do not replace it with a generic system blocker."""
+    if not isinstance(parsed, dict):
+        return False
+    if (parsed.get("action") or "").strip().lower() != "answer_question":
+        return False
+    br = (parsed.get("bot_reply") or "").strip()
+    if len(br) < 30:
+        return False
+    lower = br.lower()
+    markers = ("تم حجز", "تمّ حجز", "تم تثبيت", "موعد", "الساعة", "بيروت", "فرع")
+    return any(m in lower for m in markers)
+
+
 def _service_hint_to_service_id(val: Any) -> Optional[int]:
     if val is None:
         return None
@@ -2598,6 +2642,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     booking_state["service_id"] = _sid
                 if booking_args.get("machine_id") is not None:
                     booking_state["machine_id"] = _safe_int(booking_args.get("machine_id"))
+                _svc_bp = (
+                    _safe_int(booking_state.get("service_id"))
+                    or _service_hint_to_service_id(booking_args.get("service"))
+                    or 13
+                )
+                bp_coerced = await _coerce_body_part_ids_from_gpt_booking_args(booking_args, _svc_bp)
+                if bp_coerced:
+                    booking_state["body_part_ids"] = bp_coerced
                 gpt_dt = _datetime_from_gpt_booking_args(booking_args)
                 # Infer branch from conversation when not in booking_state
                 if _safe_int(booking_state.get("branch_id")) is None:
@@ -2698,7 +2750,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         if service_id in body_part_required_service_ids and not body_part_ids:
                             _ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدك (مثلاً: جسم كامل، أرجل، باكيني، وجه...)."
                             _en = "To save the appointment on the system, I need to know which body area(s) you want (e.g. full body, legs, bikini, face...)."
-                            parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                            if _should_preserve_ai_booking_reply(parsed_response):
+                                print(
+                                    "BOOKING FALLBACK: missing body_part_ids — preserving AI bot_reply (do not replace with generic blocker)."
+                                )
+                            else:
+                                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
                         else:
                             customer_exists = False
                             cust_resp = await api_integrations.get_customer_by_phone(phone=phone)
