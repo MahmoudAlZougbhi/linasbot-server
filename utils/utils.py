@@ -1162,6 +1162,30 @@ async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, i
         import traceback
         traceback.print_exc()
 
+def set_post_takeover_escalation_cooldown(user_data: dict) -> None:
+    """After release from human queue, suppress AI auto handover (frustration/error paths) for a cooldown window."""
+    if not isinstance(user_data, dict):
+        return
+    try:
+        mins = int(getattr(config, "POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", 45))
+    except (TypeError, ValueError):
+        mins = 45
+    user_data["post_takeover_escalation_cooldown_until"] = utc_now() + datetime.timedelta(minutes=mins)
+
+
+def is_post_takeover_escalation_cooldown(user_data: dict) -> bool:
+    """True while we should not auto-escalate from handover_degree or GPT error paths."""
+    if not isinstance(user_data, dict):
+        return False
+    until = user_data.get("post_takeover_escalation_cooldown_until")
+    if until is None:
+        return False
+    try:
+        return until > utc_now()
+    except TypeError:
+        return False
+
+
 def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str):
     """Clear config.user_in_human_takeover_mode for all user_id variants so release works regardless of message format."""
     variants = {v for v in (resolved_user_id, raw_user_id, canonical_user_id) if v}

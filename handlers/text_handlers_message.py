@@ -432,6 +432,8 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 if was_in_takeover and not new_takeover:
                     user_data['just_returned_from_human_takeover'] = True
+                    from utils.utils import set_post_takeover_escalation_cooldown
+                    set_post_takeover_escalation_cooldown(user_data)
                     print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")
                 if config.user_in_human_takeover_mode[user_id]:
                     operator_id = conv_data.get('operator_id')

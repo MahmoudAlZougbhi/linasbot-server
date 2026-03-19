@@ -722,12 +722,46 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
     return cleaned
 
 
+def _user_explicitly_requests_human_agent(text: str) -> bool:
+    """True if the current user message clearly asks to speak with a person (not inferred from history)."""
+    if not text or not str(text).strip():
+        return False
+    m = str(text).lower()
+    needles = (
+        "human",
+        "agent",
+        "person",
+        "staff",
+        "representative",
+        "operator",
+        "speak to",
+        "talk to someone",
+        "real person",
+        "live agent",
+        "customer service",
+        "advisor",
+        "supervisor",
+        "موظف",
+        "شخص",
+        "بشري",
+        "حد بشري",
+        "خدمة العملاء",
+        "بدي حدا",
+        "بدي موظف",
+        "بدي اتكلم",
+        "مدير",
+    )
+    return any(n in m for n in needles)
+
+
 async def _process_and_respond(user_id: str, user_name: str, user_input_to_process: str, user_data: dict, send_message_func, send_action_func, user_image_base64: str = None, user_image_format: str = "jpeg"):
     """
     Core logic for processing user input and generating bot response.
     This function is adapted from the original `_process_and_respond`
     but now works with WhatsApp IDs and sender functions.
     """
+    from utils.utils import is_post_takeover_escalation_cooldown, set_post_takeover_escalation_cooldown
+
     # Start timing for response time tracking
     start_time = time.time()
     _dynamic_retrieval_flow_meta = None  # Set when dynamic retrieval is used (for Activity Flow)
@@ -819,6 +853,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     from utils.utils import _clear_takeover_flags_for_user
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                     user_data['just_returned_from_human_takeover'] = True
+                    set_post_takeover_escalation_cooldown(user_data)
                     print(f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; resuming normal bot flow (just_returned).")
         except Exception as takeover_check_error:
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
@@ -1350,6 +1385,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 ctx += "Do not lose context – the user might be talking or asking about this."
                 operational_context = (operational_context + "\n\n" + ctx) if operational_context else ctx
 
+            if is_post_takeover_escalation_cooldown(user_data):
+                cooldown_ctx = (
+                    "**POST-RELEASE COOLDOWN (CRITICAL):** This user was recently returned to the bot from human support.\n"
+                    "- Do NOT set handover_degree to medium or high based on old messages or past frustration.\n"
+                    "- Do NOT choose action human_handover unless they clearly ask to speak to a person **in this message**.\n"
+                    "- Answer their current message normally; ignore stale anger/complaints in history for escalation."
+                )
+                operational_context = (operational_context + "\n\n" + cooldown_ctx) if operational_context else cooldown_ctx
+
             gpt_response_data = await get_bot_chat_response(
                 user_id=user_id,
                 user_input=query_to_send_to_gpt,
@@ -1402,16 +1446,34 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             action = "answer_question"
             print(f"[_process_and_respond] GPT error but user {user_id} in waiting queue → sending waiting message")
         else:
-            # Error/API/system issue → hand over to human
-            action = "human_handover"
-            escalation_reason_from_gpt = "technical_error"
-            print(f"[_process_and_respond] GPT/system error → handing over to human. error={flow_meta.get('error')}")
+            if is_post_takeover_escalation_cooldown(user_data):
+                bot_reply_text = (
+                    get_dynamic_message("generic_error_message", current_preferred_lang)
+                    or "عذراً، واجهت مشكلة تقنية لحظية. جرّب إعادة صياغة سؤالك أو انتظر لحظة ثم أعد المحاولة."
+                )
+                action = "answer_question"
+                print(
+                    f"[_process_and_respond] GPT/system error during post-release cooldown → generic reply, no handover. error={flow_meta.get('error')}"
+                )
+            else:
+                # Error/API/system issue → hand over to human
+                action = "human_handover"
+                escalation_reason_from_gpt = "technical_error"
+                print(f"[_process_and_respond] GPT/system error → handing over to human. error={flow_meta.get('error')}")
 
     # AI-assessed handover degree: if GPT says medium/high, override to human_handover
-    if handover_degree in ("medium", "high") and action not in ("human_handover", "human_handover_confirmed", "human_handover_initial_ask"):
+    if (
+        handover_degree in ("medium", "high")
+        and action not in ("human_handover", "human_handover_confirmed", "human_handover_initial_ask")
+        and not is_post_takeover_escalation_cooldown(user_data)
+    ):
         print(f"[_process_and_respond] 🔄 handover_degree={handover_degree} → overriding action to human_handover")
         action = "human_handover"
         escalation_reason_from_gpt = escalation_reason_from_gpt or "frustration_detected"
+    elif handover_degree in ("medium", "high") and is_post_takeover_escalation_cooldown(user_data):
+        print(
+            f"[_process_and_respond] post-release cooldown: ignoring handover_degree={handover_degree} (keeping action={action})"
+        )
 
     # Defensive normalization: GPT can occasionally return non-schema actions like "none".
     # If we still have a usable bot reply, treat it as a normal answer instead of failing to fallback.
@@ -1451,10 +1513,20 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             action_was_coerced = True
         else:
             bad_action = action
-            action = "human_handover"
-            escalation_reason_from_gpt = "technical_error"
-            _flow_error_reason = f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')}"
-            print(f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → handing over to human. flow_error={flow_meta.get('error', 'none')}")
+            if is_post_takeover_escalation_cooldown(user_data):
+                action = "answer_question"
+                bot_reply_text = (
+                    get_dynamic_message("generic_error_message", current_preferred_lang)
+                    or "عذراً، لم أتمكن من معالجة طلبك الآن. حاول مرة أخرى بصياغة أبسط."
+                )
+                print(
+                    f"[_process_and_respond] WARN: bad GPT action '{bad_action}' during cooldown → generic reply, no handover"
+                )
+            else:
+                action = "human_handover"
+                escalation_reason_from_gpt = "technical_error"
+                _flow_error_reason = f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')}"
+                print(f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → handing over to human. flow_error={flow_meta.get('error', 'none')}")
 
     # AI-PRIMARY: No bot-side overrides. Send AI reply as-is.
 
@@ -1463,6 +1535,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     if action_was_coerced:
         bot_reply_text = _clean_reply_text(bot_reply_text)
     # AI-PRIMARY: No turn-by-turn truncation or greeting strip. Send AI reply as-is.
+
+    if (
+        is_post_takeover_escalation_cooldown(user_data)
+        and action == "human_handover"
+        and bot_reply_text
+        and not _user_explicitly_requests_human_agent(user_input_to_process)
+    ):
+        print(
+            "[_process_and_respond] post-release cooldown: AI chose human_handover without explicit user request → answer_question"
+        )
+        action = "answer_question"
 
     def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []
