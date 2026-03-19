@@ -448,6 +448,88 @@ async def _ensure_live_chat_index_after_save(
         _refresh_live_chat_index_async(canonical_user_id, conversation_id)
 
 
+async def _propagate_takeover_state_to_sibling_conversation_docs(
+    db,
+    app_id_for_firestore: str,
+    conversation_id: str,
+    raw_user_id: str,
+    canonical_user_id: str,
+    primary_doc_ref,
+    update_payload: dict,
+):
+    """
+    save_conversation_message updates only one users/{variant}/conversations/{id} document.
+    Duplicate docs under other id variants (phone formats) can keep human_takeover_active=True
+    and keep the chat appearing in "waiting". Merge canonical takeover fields onto siblings.
+    """
+    if not db or not conversation_id or not primary_doc_ref or not update_payload:
+        return
+    sync_keys = (
+        "human_takeover_active",
+        "conversation_state",
+        "status",
+        "operator_id",
+        "post_release_escalation_suppressed_until",
+        "ai_context_reset_at",
+        "human_takeover_requested",
+    )
+    sub = {k: update_payload[k] for k in sync_keys if k in update_payload}
+    if "human_takeover_active" not in sub:
+        return
+    # Cooldown / GPT reset often exist only on the doc we wrote — copy from primary so siblings match.
+    if sub.get("human_takeover_active") is False:
+        try:
+            primary_snap = await asyncio.to_thread(primary_doc_ref.get)
+            if primary_snap.exists:
+                pd = primary_snap.to_dict() or {}
+                for k in ("post_release_escalation_suppressed_until", "ai_context_reset_at"):
+                    if k in pd and pd[k] is not None:
+                        sub[k] = pd[k]
+        except Exception as e:
+            _log.debug("propagate_takeover primary re-read failed: %s", e)
+
+    users_root = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+    primary_path = primary_doc_ref.path
+    any_updated = False
+    for vid in merge_conversation_user_id_variants(raw_user_id or "", canonical_user_id or ""):
+        if not vid:
+            continue
+        coll = users_root.document(vid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+        ref = coll.document(conversation_id)
+        if ref.path == primary_path:
+            continue
+        try:
+            snap = await asyncio.to_thread(ref.get)
+            if not snap.exists:
+                continue
+            d = snap.to_dict() or {}
+            mismatch = False
+            for k, v in sub.items():
+                if v is None:
+                    continue
+                if d.get(k) != v:
+                    mismatch = True
+                    break
+            if not mismatch:
+                continue
+            await asyncio.to_thread(ref.update, sub)
+            any_updated = True
+            _log.info(
+                "propagate_takeover aligned sibling conv=%s user_variant=%s",
+                conversation_id,
+                vid,
+            )
+        except Exception as ex:
+            _log.warning(
+                "propagate_takeover failed conv=%s path=%s: %s",
+                conversation_id,
+                getattr(ref, "path", "?"),
+                ex,
+            )
+    if any_updated:
+        _invalidate_live_chat_cache()
+
+
 async def save_conversation_message_to_firestore(user_id: str, role: str, text: str, conversation_id: str = None, user_name: str = None, phone_number: str = None, metadata: dict = None):
     """
     Saves a message (user or bot) to Firestore.
@@ -779,6 +861,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         "operator_id": None,
                     })
                 await asyncio.to_thread(doc_ref.update, update_payload)
+                await _propagate_takeover_state_to_sibling_conversation_docs(
+                    db,
+                    app_id_for_firestore,
+                    conversation_id,
+                    user_id,
+                    canonical_user_id,
+                    doc_ref,
+                    update_payload,
+                )
                 _invalidate_live_chat_cache()
                 await _ensure_live_chat_index_after_save(
                     canonical_user_id, conversation_id, doc_data, update_payload
@@ -968,6 +1059,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         "operator_id": None,
                     })
                 await asyncio.to_thread(doc_ref.update, update_payload)
+                await _propagate_takeover_state_to_sibling_conversation_docs(
+                    db,
+                    app_id_for_firestore,
+                    resolved_conversation_id,
+                    user_id,
+                    canonical_user_id,
+                    doc_ref,
+                    update_payload,
+                )
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = resolved_conversation_id
