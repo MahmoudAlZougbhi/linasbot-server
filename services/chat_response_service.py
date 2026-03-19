@@ -815,18 +815,64 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
     return normalized if normalized else None
 
 
-def _should_preserve_ai_booking_reply(parsed: dict) -> bool:
-    """If the model already sent a full booking answer, do not replace it with a generic system blocker."""
+def _should_preserve_booking_fallback_reply(parsed: dict) -> bool:
+    """
+    If the model already sent a substantive booking reply, do not replace it with the generic
+    body-area blocker (wrong tone or wrong service, e.g. hair examples for tattoo).
+    """
     if not isinstance(parsed, dict):
         return False
-    if (parsed.get("action") or "").strip().lower() != "answer_question":
-        return False
+    action = (parsed.get("action") or "").strip().lower()
     br = (parsed.get("bot_reply") or "").strip()
     if len(br) < 30:
         return False
-    lower = br.lower()
-    markers = ("تم حجز", "تمّ حجز", "تم تثبيت", "موعد", "الساعة", "بيروت", "فرع")
-    return any(m in lower for m in markers)
+    if action == "confirm_booking_details":
+        # Clarifying schedule/branch/time — do not overwrite with a generic body-part line.
+        return len(br) >= 35
+    if action == "answer_question":
+        lower = br.lower()
+        markers = ("تم حجز", "تمّ حجز", "تم تثبيت", "موعد", "الساعة", "بيروت", "فرع")
+        return any(m in lower for m in markers)
+    return False
+
+
+def _missing_body_part_booking_prompt(service_id: Optional[int], lang: str) -> str:
+    """Ask for body area in wording that matches the service (tattoo vs hair vs other)."""
+    sid = _safe_int(service_id)
+    if sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
+        ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدك (مثلاً: جسم كامل، أرجل، باكيني، وجه...)."
+        en = "To save the appointment on the system, I need to know which body area(s) you want (e.g. full body, legs, bikini, face...)."
+        fr = "Pour enregistrer le rendez-vous, j’ai besoin de savoir quelle(s) zone(s) du corps (ex. corps entier, jambes, maillot, visage...)."
+    elif sid == 13:
+        ar = (
+            "كرمال نثبّت الموعد على السيستم، لازم نعرف على أي منطقة بالجسم مكان الوشم "
+            "(مثلاً: ظهر، ذراع، ساق، رقبة، معصم، وجه...)."
+        )
+        en = (
+            "To save the appointment, we need to know which part of the body the tattoo is on "
+            "(e.g. back, arm, leg, neck, wrist, face...)."
+        )
+        fr = (
+            "Pour enregistrer le rendez-vous, j’ai besoin de savoir sur quelle zone du corps se trouve le tatouage "
+            "(ex. dos, bras, jambe, cou, poignet, visage...)."
+        )
+    elif sid in (2, 11):
+        ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدّك نعالجها بالليزر (مثلاً: وجه، بطن، منطقة التمدد...)."
+        en = "To save the appointment, I need to know which body area to treat with the laser (e.g. face, abdomen, stretch-mark area...)."
+        fr = "Pour enregistrer le rendez-vous, j’ai besoin de la zone du corps à traiter au laser (ex. visage, abdomen, vergetures...)."
+    elif sid in (4, 5, 14):
+        ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدّك تفتيحها (مثلاً: إبط، ركبة، أكواع...)."
+        en = "To save the appointment, I need to know which body area you want to lighten (e.g. underarms, knees, elbows...)."
+        fr = "Pour enregistrer le rendez-vous, j’ai besoin de la zone à éclaircir (ex. aisselles, genoux, coudes...)."
+    else:
+        ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم نخصّصها للموعد."
+        en = "To save the appointment, I need to know which body area to book."
+        fr = "Pour enregistrer le rendez-vous, j’ai besoin de la zone du corps concernée."
+    if lang == "fr":
+        return fr
+    if lang in ("ar", "franco"):
+        return ar
+    return en
 
 
 def _service_hint_to_service_id(val: Any) -> Optional[int]:
@@ -2750,14 +2796,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         body_part_ids = _normalize_body_part_ids(booking_state.get("body_part_ids")) or None
                         # BLOCK: All configured services require body_part_ids. Do NOT create without them.
                         if service_id in body_part_required_service_ids and not body_part_ids:
-                            _ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدك (مثلاً: جسم كامل، أرجل، باكيني، وجه...)."
-                            _en = "To save the appointment on the system, I need to know which body area(s) you want (e.g. full body, legs, bikini, face...)."
-                            if _should_preserve_ai_booking_reply(parsed_response):
+                            _bp_msg = _missing_body_part_booking_prompt(service_id, current_preferred_lang)
+                            if _should_preserve_booking_fallback_reply(parsed_response):
                                 print(
                                     "BOOKING FALLBACK: missing body_part_ids — preserving AI bot_reply (do not replace with generic blocker)."
                                 )
                             else:
-                                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                                parsed_response["bot_reply"] = _bp_msg
                         else:
                             customer_exists = False
                             cust_resp = await api_integrations.get_customer_by_phone(phone=phone)
