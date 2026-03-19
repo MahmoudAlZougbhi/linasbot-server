@@ -1178,7 +1178,11 @@ class LiveChatService:
                 except Exception:
                     start_after_doc = None
 
+            # Stale index rows can still match Firestore equality on conversation_state; we post-filter
+            # by normalized state, so over-fetch when a state filter is active (not "all").
             fetch_limit = safe_size + 1  # fetch one extra to know if there's more
+            if state_values and not search_val:
+                fetch_limit = min(max((safe_size + 1) * 15, 150), 500)
 
             def _stream_page(q, after_doc=None):
                 use_q = q
@@ -1262,9 +1266,13 @@ class LiveChatService:
                 )
 
             chats: List[Dict[str, Any]] = []
+            allowed_states = set(state_values) if state_values else None
             for doc in docs:
                 data = doc.to_dict() or {}
                 state = self._normalize_conversation_state(data)
+                # Firestore matched raw conversation_state; stale index rows must not appear under wrong tab
+                if allowed_states is not None and state not in allowed_states:
+                    continue
                 customer_info = data.get("customer_info") or {}
                 user_id = data.get("user_id")
                 user_name = data.get("user_name") or customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
@@ -1804,25 +1812,41 @@ class LiveChatService:
                 return []
 
             index_coll = self._index_collection(db)
-            query = (
-                index_coll
-                .where("conversation_state", "==", self.STATE_WAITING_OPERATOR)
-                .order_by("last_message_at", direction=firestore.Query.DESCENDING)
-                .limit(300)
-            )
+            # Prefer human_takeover_active==True so released chats never match (stale conversation_state).
+            docs = []
             try:
                 docs = await asyncio.to_thread(
                     lambda: list(
-                        query.stream(
+                        index_coll
+                        .where("human_takeover_active", "==", True)
+                        .order_by("last_message_at", direction=firestore.Query.DESCENDING)
+                        .limit(300)
+                        .stream(
                             timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
                             retry=None,
                         )
                     )
                 )
-            except Exception as idx_err:
-                # Missing index or transient Firestore issues should not zero-out Waiting UI.
-                print(f"⚠️ waiting_queue index query failed, switching to source fallback: {idx_err}")
-                docs = []
+            except Exception as hta_err:
+                print(
+                    f"⚠️ waiting_queue index query (human_takeover_active) failed, trying conversation_state: {hta_err}"
+                )
+                try:
+                    docs = await asyncio.to_thread(
+                        lambda: list(
+                            index_coll
+                            .where("conversation_state", "==", self.STATE_WAITING_OPERATOR)
+                            .order_by("last_message_at", direction=firestore.Query.DESCENDING)
+                            .limit(300)
+                            .stream(
+                                timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                                retry=None,
+                            )
+                        )
+                    )
+                except Exception as idx_err:
+                    print(f"⚠️ waiting_queue index query failed, switching to source fallback: {idx_err}")
+                    docs = []
 
             if not docs:
                 fallback_queue = await self._fallback_waiting_queue_from_source()
@@ -1838,6 +1862,8 @@ class LiveChatService:
             for doc in docs:
                 data = doc.to_dict() or {}
                 data["conversation_id"] = doc.id
+                if data.get("human_takeover_active") is False:
+                    continue
                 state = self._normalize_conversation_state(data)
                 if state != self.STATE_WAITING_OPERATOR:
                     continue

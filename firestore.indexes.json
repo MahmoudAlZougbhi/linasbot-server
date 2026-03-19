@@ -16,6 +16,14 @@
         { "fieldPath": "last_message_at", "order": "DESCENDING" },
         { "fieldPath": "conversation_id", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "live_chat_index",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "human_takeover_active", "order": "ASCENDING" },
+        { "fieldPath": "last_message_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
