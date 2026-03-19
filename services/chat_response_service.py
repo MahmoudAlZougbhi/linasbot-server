@@ -2086,9 +2086,67 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             )
                             print(f"📊 Analytics: Appointment booked - {service_name}")
                         elif function_name == "create_appointment" and isinstance(tool_output, dict) and not tool_output.get("success"):
-                            err_msg = (tool_output or {}).get("message", "Unknown error")
-                            api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
-                            print(f"create_appointment tool: API failed: {err_msg}")
+                            err_msg_raw = (tool_output or {}).get("message", "Unknown error")
+                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
+                            machine_id_invalid = "machine_id" in err_msg.lower() or "invalid" in err_msg.lower()
+                            if machine_id_invalid and isinstance(function_args, dict):
+                                try:
+                                    machines_resp = await api_integrations.get_machines()
+                                    if machines_resp.get("success") and machines_resp.get("data"):
+                                        all_txt = (all_user_text_for_date or user_input or "").lower()
+                                        machine_keywords = [
+                                            ("candela", "كانديلا", "candila"),
+                                            ("neo", "نيو"),
+                                            ("quadro", "كوادرو"),
+                                        ]
+                                        retry_machine_id = None
+                                        for kw_en, *rest in machine_keywords:
+                                            kw_ar = rest[0] if rest else ""
+                                            kw_alt = rest[1] if len(rest) > 1 else ""
+                                            if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or kw_alt in all_txt:
+                                                for m in machines_resp["data"] if isinstance(machines_resp["data"], list) else []:
+                                                    name = (m.get("name") or "").strip().lower()
+                                                    if name and kw_en in name:
+                                                        retry_machine_id = _safe_int(m.get("id"))
+                                                        break
+                                                if retry_machine_id:
+                                                    break
+                                        if not retry_machine_id and machines_resp["data"]:
+                                            retry_machine_id = _safe_int(machines_resp["data"][0].get("id"))
+                                        if retry_machine_id:
+                                            new_args = dict(function_args)
+                                            new_args["machine_id"] = retry_machine_id
+                                            tool_output = await api_integrations.create_appointment(**new_args)
+                                            if tool_output and tool_output.get("success"):
+                                                api_failure_reason = None
+                                                if user_id not in config.user_booking_state:
+                                                    config.user_booking_state[user_id] = {}
+                                                config.user_booking_state[user_id]["machine_id"] = retry_machine_id
+                                                try:
+                                                    from services.analytics_events import analytics
+                                                    raw = tool_output.get("data", {}) or {}
+                                                    apt = raw.get("appointment", raw) if isinstance(raw, dict) else {}
+                                                    svc = apt.get("service", {}) if isinstance(apt, dict) else {}
+                                                    svc_name = svc.get("name", "laser_hair_removal") if isinstance(svc, dict) else "laser_hair_removal"
+                                                    analytics.log_appointment(user_id=user_id, service=svc_name, status="booked", messages_count=len(current_context_messages))
+                                                except Exception:
+                                                    pass
+                                                print(f"create_appointment retry with machine_id={retry_machine_id} succeeded")
+                                            else:
+                                                api_failure_reason = f"create_appointment_tool_failed: {(tool_output or {}).get('message', err_msg)}"
+                                                print(f"create_appointment retry failed: {tool_output}")
+                                        else:
+                                            api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+                                            print(f"create_appointment tool: API failed (machine_id invalid), no valid machine from get_machines)")
+                                    else:
+                                        api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+                                        print(f"create_appointment tool: API failed: {err_msg}")
+                                except Exception as retry_e:
+                                    api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+                                    print(f"create_appointment tool: API failed, retry error: {retry_e}")
+                            else:
+                                api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+                                print(f"create_appointment tool: API failed: {err_msg}")
                         
                         # 📊 ANALYTICS: Track appointment reschedule
                         elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and tool_output.get("success"):
@@ -2257,6 +2315,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     _ar = "صار خطأ أثناء محاولة تعديل الموعد. جرّبي تتواصلي مع الفرع مباشرة."
                     _en = "An error occurred while trying to update the appointment. Please contact the branch directly."
                     parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+            # When same-day fallback ran and we set a response, clear api_failure_reason from create_appointment
+            # (GPT may have wrongly called create_appointment; we've now handled the intent)
+            if _detect_same_day_change_intent(user_input or "") and "update_appointment_date" not in tool_names and phone_for_same_day:
+                api_failure_reason = None
 
         # Fallback: when AI returns action create_appointment, confirm_booking_details, OR answer_question with
         # booking-confirmation wording but never called the tool. Run create_appointment so it appears in the system.
