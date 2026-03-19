@@ -639,9 +639,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 if role == "ai":
                     update_payload["last_ai_response_at"] = message_data.get("timestamp") or utc_now()
                 if not is_smart_source:
-                    # Defensive: also treat as takeover if status/conversation_state indicate waiting
+                    # human_takeover_active is source of truth; only infer from status when field is missing (legacy)
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
-                    if not existing_takeover and (
+                    if not existing_takeover and "human_takeover_active" not in doc_data and (
                         doc_data.get("status") == "waiting_human"
                         or doc_data.get("conversation_state") == "waiting_for_operator"
                     ):
@@ -797,9 +797,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 }
                 # Smart campaign messages should not reopen/take over live conversations.
                 if not is_smart_source:
-                    # Defensive: also treat as takeover if status/conversation_state indicate waiting
+                    # human_takeover_active is source of truth; only infer from status when field is missing (legacy)
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
-                    if not existing_takeover and (
+                    if not existing_takeover and "human_takeover_active" not in doc_data and (
                         doc_data.get("status") == "waiting_human"
                         or doc_data.get("conversation_state") == "waiting_for_operator"
                     ):
@@ -1176,6 +1176,19 @@ def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, cano
         config.user_in_human_takeover_mode.pop(v, None)
 
 
+def _build_user_id_variants_for_release(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> list:
+    """Build all user_id variants that might have a conversation doc (for release - update all paths)."""
+    variants = {v for v in (resolved_user_id, raw_user_id, canonical_user_id) if v}
+    if is_phone_like_user_id(resolved_user_id or raw_user_id):
+        normalized = normalize_phone(resolved_user_id or raw_user_id)
+        if normalized:
+            variants.add(normalized)
+            variants.add(normalized.lstrip("+"))
+            if normalized.startswith("+961") and len(normalized) > 4:
+                variants.add(normalized[4:])  # 3956607
+    return list(variants)
+
+
 async def set_human_takeover_status(user_id: str, conversation_id: str, status: bool, operator_id: str = None, operator_name: str = None, request_user_id: str = None):
     """
     Sets the human takeover status for a specific conversation in Firestore.
@@ -1248,6 +1261,23 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
 
         # ✅ Use asyncio.to_thread to prevent blocking the event loop
         await asyncio.to_thread(conv_doc_ref.update, update_data)
+
+        # Release: update ALL conversation docs under every user path variant (fixes duplicate docs in waiting queue)
+        if not status:
+            raw = request_user_id or user_id
+            variants = _build_user_id_variants_for_release(resolved_user_id, raw, canonical_user_id)
+            for variant in variants:
+                if variant == resolved_user_id:
+                    continue  # already updated above
+                alt_ref = users_coll.document(variant).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                try:
+                    alt_snap = await asyncio.to_thread(alt_ref.get)
+                    if alt_snap.exists:
+                        await asyncio.to_thread(alt_ref.update, update_data)
+                        print(f"   ✅ Also cleared takeover on alternate path users/{variant}/conversations/{conversation_id}")
+                except Exception as alt_err:
+                    print(f"   ⚠️ Alternate path update users/{variant}: {alt_err}")
+
         if status:
             config.user_in_human_takeover_mode[resolved_user_id] = True
         else:
