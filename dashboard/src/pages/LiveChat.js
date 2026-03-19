@@ -137,7 +137,22 @@ const LiveChat = () => {
 
     // Safety net: if backend status is temporarily stale but last bot message is a clear
     // handover/waiting phrase and no operator is assigned yet, surface it as waiting_human.
-    if (normalizedStatus === "bot" && !conv.operator_id) {
+    // After "release to bot", last text can still be the waiting-queue line — do not re-classify as waiting.
+    const hta = conv.human_takeover_active;
+    let postReleaseCooldownActive = false;
+    const supUntil = conv.post_release_escalation_suppressed_until;
+    if (supUntil) {
+      const t = new Date(supUntil).getTime();
+      if (!Number.isNaN(t) && t > Date.now()) {
+        postReleaseCooldownActive = true;
+      }
+    }
+    if (
+      normalizedStatus === "bot" &&
+      !conv.operator_id &&
+      hta !== false &&
+      !postReleaseCooldownActive
+    ) {
       const lastText = String(
         (normalizedLastMessage && normalizedLastMessage.content) ||
           conv.last_message_text ||

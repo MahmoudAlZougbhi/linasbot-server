@@ -998,6 +998,10 @@ class LiveChatService:
                         "last_message_at": last_at.isoformat(),
                         "conversation_state": state,
                         "operator_id": conv_data.get("operator_id"),
+                        "human_takeover_active": conv_data.get("human_takeover_active"),
+                        "post_release_escalation_suppressed_until": conv_data.get(
+                            "post_release_escalation_suppressed_until"
+                        ),
                         "unread_count": conv_data.get("unread_count", 0),
                         "language": config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
                         "sentiment": conv_data.get("sentiment", "neutral"),
@@ -1092,6 +1096,10 @@ class LiveChatService:
                     "status": c.get("status") or self._conversation_state_to_status(c.get("conversation_state")),
                     "conversation_state": c.get("conversation_state"),
                     "operator_id": c.get("operator_id"),
+                    "human_takeover_active": c.get("human_takeover_active"),
+                    "post_release_escalation_suppressed_until": c.get(
+                        "post_release_escalation_suppressed_until"
+                    ),
                     "unread_count": c.get("unread_count", 0),
                 }
                 for c in unified.get("chats", [])
@@ -1319,6 +1327,11 @@ class LiveChatService:
                     "last_message_at": last_at.isoformat() if hasattr(last_at, "isoformat") else str(last_at),
                     "conversation_state": state,
                     "operator_id": data.get("operator_id"),
+                    # Exposed for dashboard: after release, last_message may still be waiting-queue text — UI must not re-classify as waiting.
+                    "human_takeover_active": data.get("human_takeover_active"),
+                    "post_release_escalation_suppressed_until": data.get(
+                        "post_release_escalation_suppressed_until"
+                    ),
                     "unread_count": data.get("unread_count", 0),
                     "language": data.get("language") or customer_info.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
                     "sentiment": data.get("sentiment", "neutral"),
