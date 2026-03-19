@@ -1875,7 +1875,9 @@ class LiveChatService:
             for doc in docs:
                 data = doc.to_dict() or {}
                 data["conversation_id"] = doc.id
-                if data.get("human_takeover_active") is False:
+                # Explicit True only: fallback query uses conversation_state and can return rows missing
+                # human_takeover_active (stale index) — those must not appear as waiting after release.
+                if data.get("human_takeover_active") is not True:
                     continue
                 # Stale index rows can still have hta=True; honor release cooldown if present on index
                 try:
@@ -2314,16 +2316,24 @@ class LiveChatService:
             if db:
                 idx_ref = self._index_collection(db).document(conversation_id)
                 try:
-                    await asyncio.to_thread(
-                        lambda: idx_ref.set(
+                    try:
+                        _cd_mins = int(getattr(config, "POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", 45))
+                    except (TypeError, ValueError):
+                        _cd_mins = 45
+                    _post_rel = utc_now() + datetime.timedelta(minutes=_cd_mins)
+
+                    def _merge_release_index():
+                        idx_ref.set(
                             {
                                 "conversation_state": self.STATE_BOT_ACTIVE,
                                 "operator_id": None,
                                 "human_takeover_active": False,
+                                "post_release_escalation_suppressed_until": _post_rel,
                             },
                             merge=True,
                         )
-                    )
+
+                    await asyncio.to_thread(_merge_release_index)
                 except Exception as idx_err:
                     print(f"⚠️ Direct index update on release failed: {idx_err}")
             await self._refresh_index_for_conversation(resolved_user_id, conversation_id)
