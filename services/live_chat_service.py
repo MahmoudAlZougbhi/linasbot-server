@@ -145,6 +145,17 @@ class LiveChatService:
         if resolved_at or status in {"resolved", "closed"}:
             return self.STATE_RESOLVED
 
+        # Release cooldown on the doc: never classify as waiting from stale status/state (fallback scanner, etc.)
+        try:
+            raw_sup = data.get("post_release_escalation_suppressed_until")
+            if raw_sup is not None:
+                sup_until = parse_timestamp_utc(raw_sup)
+                if sup_until and sup_until > utc_now():
+                    if hta_raw is not True:
+                        return self.STATE_BOT_ACTIVE
+        except Exception:
+            pass
+
         # Explicit False: released — stale waiting_for_operator on source or live_chat_index must not win
         if hta_raw is False:
             if state in (self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED):
@@ -647,6 +658,7 @@ class LiveChatService:
             "message_count": message_count,
             "conversation_state": state,
             "human_takeover_active": bool(conv_data.get("human_takeover_active")),
+            "post_release_escalation_suppressed_until": conv_data.get("post_release_escalation_suppressed_until"),
             "operator_id": conv_data.get("operator_id"),
             "unread_count": unread_count,
             "sentiment": sentiment,
@@ -685,6 +697,7 @@ class LiveChatService:
                 str(payload.get("operator_id") or ""),
                 int(payload.get("unread_count") or 0),
                 str(payload.get("human_takeover_active")),
+                str(payload.get("post_release_escalation_suppressed_until")),
             )
             if self._index_signature_cache.get(conv_id) == signature:
                 print(f"[live_chat:index] skip unchanged write conv={conv_id}")
@@ -1864,6 +1877,15 @@ class LiveChatService:
                 data["conversation_id"] = doc.id
                 if data.get("human_takeover_active") is False:
                     continue
+                # Stale index rows can still have hta=True; honor release cooldown if present on index
+                try:
+                    _raw_sup = data.get("post_release_escalation_suppressed_until")
+                    if _raw_sup is not None:
+                        _sup = parse_timestamp_utc(_raw_sup)
+                        if _sup and _sup > utc_now():
+                            continue
+                except Exception:
+                    pass
                 state = self._normalize_conversation_state(data)
                 if state != self.STATE_WAITING_OPERATOR:
                     continue

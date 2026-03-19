@@ -233,4 +233,7 @@ def normalize_conversation_document(
         "resolved_at": parse_timestamp_utc(resolved_raw) if resolved_raw is not None else None,
         "archived_at": parse_timestamp_utc(archived_raw) if archived_raw is not None else None,
         "escalation_reason": data.get("escalation_reason"),
+        # Pass-through for live_chat_service state normalization (release cooldown must not be dropped)
+        "post_release_escalation_suppressed_until": data.get("post_release_escalation_suppressed_until"),
+        "release_time": data.get("release_time"),
     }
