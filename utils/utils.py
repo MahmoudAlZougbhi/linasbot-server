@@ -369,6 +369,54 @@ def _conversation_state_fields_changed(doc_before, update_payload: dict) -> bool
     return False
 
 
+async def _resolve_conversation_doc_for_save(
+    db,
+    app_id_for_firestore: str,
+    conversation_id: str,
+    raw_user_id: str,
+    canonical_user_id: str,
+):
+    """
+    Find users/*/conversations/{conversation_id} across the same id variants as handover/release.
+    If several duplicates exist, prefer the doc that looks released to bot (hta False / post_release cooldown)
+    so we do not append to a stale waiting copy after dashboard release.
+    Returns (doc_ref, snapshot, conversations_collection) or (None, None, None) if missing everywhere.
+    """
+    if not conversation_id:
+        return None, None, None
+    users_root = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+    found: list = []
+    for vid in merge_conversation_user_id_variants(raw_user_id or "", canonical_user_id or ""):
+        if not vid:
+            continue
+        coll = users_root.document(vid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+        ref = coll.document(conversation_id)
+        snap = await asyncio.to_thread(ref.get)
+        if snap.exists:
+            found.append((ref, snap, coll))
+
+    if not found:
+        return None, None, None
+    if len(found) == 1:
+        return found[0]
+
+    def _pick_score(item):
+        _, snap, _ = item
+        d = snap.to_dict() or {}
+        hta = d.get("human_takeover_active")
+        if hta is False:
+            tier = 3
+        elif hta is True:
+            tier = 1
+        else:
+            tier = 2
+        cooldown = 1 if firestore_post_release_waiting_blocked(d) else 0
+        return (tier, cooldown)
+
+    best = max(found, key=_pick_score)
+    return best
+
+
 async def _ensure_live_chat_index_after_save(
     canonical_user_id: str,
     conversation_id: str,
@@ -628,25 +676,18 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     saved_conv_id = None  # for deferred external name update (user role)
     try:
         if conversation_id:
-            # Update existing conversation document
-            doc_ref = conversations_collection_for_user.document(conversation_id)
-            doc_snap = await asyncio.to_thread(doc_ref.get)
+            # Resolve doc across all user id variants (same as release/handover) — avoid stale duplicate path
+            doc_ref, doc_snap, coll_found = await _resolve_conversation_doc_for_save(
+                db,
+                app_id_for_firestore,
+                conversation_id,
+                user_id,
+                canonical_user_id,
+            )
+            if coll_found is not None:
+                conversations_collection_for_user = coll_found
 
-            # Fallback: try alternate user_id path (with/without +) for smart-notification users
-            if not doc_snap.exists and canonical_user_id and (
-                canonical_user_id.startswith("+") or (canonical_user_id.isdigit() and len(canonical_user_id) >= 10)
-            ):
-                alt_user_id = canonical_user_id[1:] if canonical_user_id.startswith("+") else f"+{canonical_user_id}"
-                alt_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(
-                    alt_user_id
-                ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-                alt_ref = alt_coll.document(conversation_id)
-                alt_snap = await asyncio.to_thread(alt_ref.get)
-                if alt_snap.exists:
-                    doc_ref, doc_snap = alt_ref, alt_snap
-                    conversations_collection_for_user = alt_coll
-
-            if doc_snap.exists:
+            if doc_snap and doc_snap.exists:
                 saved_conv_id = conversation_id
                 doc_data = doc_snap.to_dict() or {}
                 current_messages = doc_data.get("messages", [])
@@ -819,12 +860,30 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             message_data = _build_message_data()
             is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
 
+            doc_ref = None
+            doc_snap = None
+            coll_resolved = None
+            resolved_exists = False
             if resolved_conversation_id:
+                doc_ref, doc_snap, coll_resolved = await _resolve_conversation_doc_for_save(
+                    db,
+                    app_id_for_firestore,
+                    resolved_conversation_id,
+                    user_id,
+                    canonical_user_id,
+                )
+                if coll_resolved is not None:
+                    conversations_collection_for_user = coll_resolved
+                resolved_exists = bool(doc_snap and doc_snap.exists)
+                if resolved_conversation_id and not resolved_exists:
+                    print(
+                        f"⚠️ Resolved conversation {resolved_conversation_id} not found on any user path; "
+                        f"creating new thread for {canonical_user_id}"
+                    )
+
+            if resolved_conversation_id and resolved_exists:
                 saved_conv_id = resolved_conversation_id
-                # Append to existing conversation
-                doc_ref = conversations_collection_for_user.document(resolved_conversation_id)
-                doc_snap = await asyncio.to_thread(doc_ref.get)
-                doc_data = doc_snap.to_dict() if doc_snap.exists else {}
+                doc_data = doc_snap.to_dict() or {}
                 current_messages = doc_data.get("messages", [])
 
                 if _is_duplicate_message(current_messages, message_data):
