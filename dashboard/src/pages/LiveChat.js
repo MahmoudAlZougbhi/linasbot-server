@@ -119,10 +119,31 @@ const LiveChat = () => {
 
   const normalizeIncomingConversation = React.useCallback((conv) => {
     if (!conv || typeof conv !== "object") return conv;
+    const hta = conv.human_takeover_active;
+    let postReleaseCooldownActive = false;
+    const supUntil = conv.post_release_escalation_suppressed_until;
+    if (supUntil) {
+      const t = new Date(supUntil).getTime();
+      if (!Number.isNaN(t) && t > Date.now()) {
+        postReleaseCooldownActive = true;
+      }
+    }
+
     let normalizedStatus = normalizeConversationStatus(
       conv.status,
       conv.conversation_state
     );
+
+    // Firestore/index can still have waiting_for_operator while human_takeover_active is false — trust release.
+    if (hta === false || postReleaseCooldownActive) {
+      if (normalizedStatus === "waiting_human") {
+        normalizedStatus = "bot";
+      }
+      if (normalizedStatus === "human" && !conv.operator_id) {
+        normalizedStatus = "bot";
+      }
+    }
+
     const lastActivity = conv.last_activity || conv.last_message_at || null;
     const hasLastMessageObject = conv.last_message && typeof conv.last_message === "object";
     const normalizedLastMessage = hasLastMessageObject
@@ -138,15 +159,6 @@ const LiveChat = () => {
     // Safety net: if backend status is temporarily stale but last bot message is a clear
     // handover/waiting phrase and no operator is assigned yet, surface it as waiting_human.
     // After "release to bot", last text can still be the waiting-queue line — do not re-classify as waiting.
-    const hta = conv.human_takeover_active;
-    let postReleaseCooldownActive = false;
-    const supUntil = conv.post_release_escalation_suppressed_until;
-    if (supUntil) {
-      const t = new Date(supUntil).getTime();
-      if (!Number.isNaN(t) && t > Date.now()) {
-        postReleaseCooldownActive = true;
-      }
-    }
     if (
       normalizedStatus === "bot" &&
       !conv.operator_id &&
@@ -171,9 +183,15 @@ const LiveChat = () => {
       }
     }
 
+    let outConversationState = conv.conversation_state;
+    if ((hta === false || postReleaseCooldownActive) && normalizedStatus === "bot") {
+      outConversationState = "bot_active";
+    }
+
     return {
       ...conv,
       status: normalizedStatus,
+      conversation_state: outConversationState,
       user_phone: conv.user_phone || conv.phone_number || "",
       last_activity: lastActivity,
       last_message: normalizedLastMessage,
@@ -210,7 +228,9 @@ const LiveChat = () => {
   const mergeMissingActiveChats = React.useCallback((incoming, existing) => {
     if (!Array.isArray(incoming)) return incoming || [];
     const existingList = existing || [];
-    const keep = existingList.filter((conv) => ["human", "waiting_human"].includes(conv.status));
+    // Only preserve assigned-operator rows across pagination gaps. Stale waiting_human from a prior
+    // render must not be re-injected when the conv drops off page 1 after release-to-bot (shows as "back on waiting").
+    const keep = existingList.filter((conv) => conv.status === "human");
     if (!keep.length) return incoming;
     const incomingKeys = new Set(incoming.map((conv) => `${conv.user_id}_${conv.conversation_id}`));
     const missing = keep.filter((conv) => !incomingKeys.has(`${conv.user_id}_${conv.conversation_id}`));
@@ -1666,12 +1686,26 @@ const LiveChat = () => {
 
       if (result?.success) {
         toast.success("Conversation released to bot!");
+        const postRelUntil = new Date(Date.now() + 45 * 60 * 1000).toISOString();
         // Update conversation status locally
         setActiveConversations((prev) =>
           prev.map((conv) =>
             conv.conversation_id === conversationId && conv.user_id === userId
-              ? { ...conv, status: "bot", operator_id: null }
+              ? {
+                  ...conv,
+                  status: "bot",
+                  operator_id: null,
+                  human_takeover_active: false,
+                  post_release_escalation_suppressed_until: postRelUntil,
+                  conversation_state: "bot_active",
+                }
               : conv
+          )
+        );
+        setWaitingQueue((prev) =>
+          prev.filter(
+            (item) =>
+              !(item.conversation_id === conversationId && item.user_id === userId)
           )
         );
         // Update selected conversation if it's the one we released
@@ -1684,6 +1718,9 @@ const LiveChat = () => {
               ...prev.conversation,
               status: "bot",
               operator_id: null,
+              human_takeover_active: false,
+              post_release_escalation_suppressed_until: postRelUntil,
+              conversation_state: "bot_active",
             },
           }));
         }
