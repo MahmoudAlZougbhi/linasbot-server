@@ -2251,7 +2251,19 @@ class LiveChatService:
                     "operator_id": None,
                 })
 
-            # Refresh index
+            # Force index update: clear signature cache so refresh doesn't skip write, update index directly
+            self._index_signature_cache.pop(conversation_id, None)
+            if db:
+                idx_ref = self._index_collection(db).document(conversation_id)
+                try:
+                    await asyncio.to_thread(
+                        lambda: idx_ref.set(
+                            {"conversation_state": self.STATE_BOT_ACTIVE, "operator_id": None},
+                            merge=True,
+                        )
+                    )
+                except Exception as idx_err:
+                    print(f"⚠️ Direct index update on release failed: {idx_err}")
             await self._refresh_index_for_conversation(resolved_user_id, conversation_id)
 
             # Invalidate cache
