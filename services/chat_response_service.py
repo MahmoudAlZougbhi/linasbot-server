@@ -106,17 +106,19 @@ PRICE_WEAK_KEYWORDS = [
 
 
 def _detect_same_day_change_intent(text: str) -> bool:
-    """Detect when user asks to move/change appointment to today (hotle mw3ad el yom, ajlo el yom, etc.)."""
+    """
+    True only when the user asks to move/change an *existing* appointment to today
+    (reschedule/postpone to today). NOT when they want a *new* booking for today —
+    that must stay with the AI/tools and must never trigger the same-day API fallback.
+    """
     if not text or not isinstance(text, str):
+        return False
+    if not detect_reschedule_intent(text):
         return False
     t = text.strip().lower()
     today_keywords = ["el yom", "elyom", "اليوم", "today", "aujourd'hui", "halyom"]
-    mw3ad_keywords = ["mw3ad", "m3ad", "mo3ad", "موعد", "مواعيد", "appointment"]
-    move_keywords = ["hotle", "hote", "hotoe", "ajlo", "ajel", "2ajel", "ghayer", "غير", "أجل", "حط", "حطلي"]
-    has_today = any(k in t for k in today_keywords)
-    has_mw3ad = any(k in t for k in mw3ad_keywords)
-    has_move = any(k in t for k in move_keywords)
-    return has_today and (has_mw3ad or has_move)
+    has_today = any(k in t for k in today_keywords) or detect_day_reference(text) == "today"
+    return has_today
 
 
 def _extract_appointment_id_from_check_response(response: dict) -> Optional[int]:
