@@ -918,7 +918,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 1. Human handover (top priority) - transfer immediately
     if (not ai_primary_mode) and router_action == "human_handover":
-        async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str):
+        async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str) -> bool:
+            wrote = False
             db = get_firestore_db()
             if db and current_conversation_id:
                 try:
@@ -932,10 +933,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                             alt = c[1:] if c.startswith("+") else f"+{c}"
                             if alt not in candidate_user_ids:
                                 candidate_user_ids.append(alt)
+                    from utils.utils import firestore_post_release_waiting_blocked
                     for cid in candidate_user_ids:
                         ref = users_coll.document(cid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
                         snap = await asyncio.to_thread(ref.get)
                         if snap.exists:
+                            if firestore_post_release_waiting_blocked(snap.to_dict() or {}):
+                                print("⚠️ router handover blocked: post-release cooldown on doc")
+                                return False
                             await asyncio.to_thread(ref.update, {
                                 "status": "waiting_human", "human_takeover_active": True,
                                 "human_takeover_requested": True, "operator_id": None,
@@ -945,9 +950,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                                 "last_updated": datetime.datetime.now(),
                                 "post_release_escalation_suppressed_until": None,
                             })
+                            wrote = True
                             break
                 except Exception as e:
                     print(f"⚠️ Failed to update handover state: {e}")
+            if not wrote:
+                return False
             config.user_in_human_takeover_mode[user_id] = True
             notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification=f"AI handover - {escalation_reason}")
             try:
@@ -961,14 +969,20 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 )
             except Exception as notify_error:
                 print(f"⚠️ Failed to send handoff: {notify_error}")
+            return True
 
-        await _activate_ai_handover_router("customer_requested_human", "router_human_handover")
-        handoff_msg = {"ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏", "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏", "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"}
-        sent_reply = handoff_msg.get(current_preferred_lang, handoff_msg["ar"])
-        await send_message_func(user_id, sent_reply)
-        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        log_report_event("human_handover", user_id, current_gender, {"message": user_input_to_process, "status": "router_direct", "source": "router"})
-        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        router_handover_ok = await _activate_ai_handover_router("customer_requested_human", "router_human_handover")
+        if router_handover_ok:
+            handoff_msg = {"ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏", "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏", "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"}
+            sent_reply = handoff_msg.get(current_preferred_lang, handoff_msg["ar"])
+            await send_message_func(user_id, sent_reply)
+            await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            log_report_event("human_handover", user_id, current_gender, {"message": user_input_to_process, "status": "router_direct", "source": "router"})
+            await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        else:
+            fb = get_dynamic_message("generic_error_message", current_preferred_lang) or "كيف فيني ساعدك؟"
+            await send_message_func(user_id, fb)
+            await save_conversation_message_to_firestore(user_id, "ai", fb, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
         return
 
     # 2. Greeting only (Phase 7)
@@ -1578,8 +1592,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 return candidate_ref, candidate_snap, candidate_user_id
         return last_ref, last_snap, canonical_user_id
 
-    async def _activate_ai_handover(escalation_reason: str, trigger_source: str):
-        """Switch conversation to waiting_human, notify admins from settings, and write audit."""
+    async def _activate_ai_handover(escalation_reason: str, trigger_source: str) -> bool:
+        """Switch conversation to waiting_human, notify admins. Returns True if Firestore was updated."""
+        from utils.utils import firestore_post_release_waiting_blocked
+
+        wrote = False
         db = get_firestore_db()
         if db and current_conversation_id:
             try:
@@ -1603,7 +1620,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "post_release_escalation_suppressed_until": None,
                 }
                 if doc_snap.exists:
+                    pre = doc_snap.to_dict() or {}
+                    # User explicitly confirmed transfer — allow even during cooldown
+                    if firestore_post_release_waiting_blocked(pre) and trigger_source not in (
+                        "ai_handover_confirmed",
+                    ):
+                        print(
+                            f"⚠️ _activate_ai_handover skipped: post-release cooldown (trigger={trigger_source}) conv={current_conversation_id}"
+                        )
+                        return False
                     await asyncio.to_thread(conv_doc_ref.update, update_payload)
+                    wrote = True
                     print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision)")
                     try:
                         from services.live_chat_service import live_chat_service
@@ -1615,6 +1642,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     print(f"⚠️ Conversation {current_conversation_id} not found in Firestore (tried canonical + alternate path)")
             except Exception as e:
                 print(f"⚠️ Failed to update handover state in Firestore: {e}")
+
+        if not wrote:
+            return False
 
         config.user_in_human_takeover_mode[user_id] = True
 
@@ -1640,6 +1670,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             )
         except Exception as notify_error:
             print(f"⚠️ Failed to send AI handoff template/audit: {notify_error}")
+        return True
 
     # Update language from GPT's detection
     if detected_language and detected_language in ['en', 'ar', 'fr', 'franco']:
@@ -1725,21 +1756,29 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     elif action == "human_handover_confirmed":
         user_data['awaiting_human_handover_confirmation'] = False
-        await _activate_ai_handover(
+        handover_ok = await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "customer_requested_human",
             trigger_source="ai_handover_confirmed"
         )
-        # Use standardized handoff message (same as sentiment escalation) - triggers human request
-        handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
-        sent_reply = handoff_msg
-        await send_message_func(user_id, handoff_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        log_report_event("human_handover", user_id, current_gender, {
-            "message": user_input_to_process,
-            "status": "confirmed",
-            "source": "ai_handover_confirmed"
-        })
-        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        if handover_ok:
+            handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+            sent_reply = handoff_msg
+            await send_message_func(user_id, handoff_msg)
+            await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            log_report_event("human_handover", user_id, current_gender, {
+                "message": user_input_to_process,
+                "status": "confirmed",
+                "source": "ai_handover_confirmed"
+            })
+            await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        else:
+            fallback = (bot_reply_text or "").strip() or (
+                get_dynamic_message("generic_error_message", current_preferred_lang)
+                or "تمام، كيف فيني ساعدك بهاللحظة؟"
+            )
+            sent_reply = fallback
+            await send_message_func(user_id, fallback)
+            await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     elif action == "return_to_normal_chat":
         user_data['awaiting_human_handover_confirmation'] = False
@@ -1747,20 +1786,29 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     elif action == "human_handover":
-        await _activate_ai_handover(
+        handover_ok = await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
             trigger_source="ai_handover_direct"
         )
-        handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
-        sent_reply = handoff_msg
-        await send_message_func(user_id, handoff_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        log_report_event("human_handover", user_id, current_gender, {
-            "message": user_input_to_process,
-            "status": "direct",
-            "source": "ai_handover_direct"
-        })
-        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        if handover_ok:
+            handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+            sent_reply = handoff_msg
+            await send_message_func(user_id, handoff_msg)
+            await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            log_report_event("human_handover", user_id, current_gender, {
+                "message": user_input_to_process,
+                "status": "direct",
+                "source": "ai_handover_direct"
+            })
+            await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        else:
+            fallback = (bot_reply_text or "").strip() or (
+                get_dynamic_message("generic_error_message", current_preferred_lang)
+                or "كيف فيني ساعدك بهاللحظة؟"
+            )
+            sent_reply = fallback
+            await send_message_func(user_id, fallback)
+            await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     elif action in ["ask_for_details_for_booking", "ask_for_service_type", "ask_for_details", "ask_for_tattoo_photo", "ask_clarification"]:
         # Clarification anchor should point to the question being clarified now.
@@ -1806,20 +1854,29 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         # Unexpected action → hand over to human instead of generic error
         _flow_error_reason = f"Step: Bot → User | Unexpected action: '{action}'"
         print(f"[_process_and_respond] ERROR: Unexpected action '{action}' → handing over to human. bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}")
-        await _activate_ai_handover(
+        handover_ok = await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "technical_error",
             trigger_source="unexpected_action"
         )
-        handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
-        sent_reply = handoff_msg
-        await send_message_func(user_id, handoff_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        log_report_event("human_handover", user_id, current_gender, {
-            "message": user_input_to_process,
-            "status": "direct",
-            "source": "unexpected_action"
-        })
-        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        if handover_ok:
+            handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+            sent_reply = handoff_msg
+            await send_message_func(user_id, handoff_msg)
+            await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            log_report_event("human_handover", user_id, current_gender, {
+                "message": user_input_to_process,
+                "status": "direct",
+                "source": "unexpected_action"
+            })
+            await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+        else:
+            fallback = (bot_reply_text or "").strip() or (
+                get_dynamic_message("generic_error_message", current_preferred_lang)
+                or "عذراً، صار خطأ بسيط. جرّب توضّح طلبك مرة ثانية."
+            )
+            sent_reply = fallback
+            await send_message_func(user_id, fallback)
+            await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     # Keep yes/no booking-follow-up state when we explicitly ask:
     # "Would you like to book a new appointment?"

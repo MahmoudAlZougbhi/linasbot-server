@@ -272,7 +272,6 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 app_id_for_firestore = "linas-ai-bot-backend"
                 users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-                conv_doc_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
                 update_payload = {
                     "status": "waiting_human",
                     "human_takeover_active": True,
@@ -295,6 +294,10 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                     canonical_user_id,
                 )
                 if doc_snap.exists:
+                    from utils.utils import firestore_post_release_waiting_blocked
+                    if firestore_post_release_waiting_blocked(doc_snap.to_dict() or {}):
+                        print("⚠️ _trigger_human_takeover skipped: post-release cooldown on doc")
+                        return
                     await asyncio.to_thread(conv_doc_ref.update, update_payload)
                     print(f"✅ Conversation marked as waiting_human in Firebase")
                     try:
@@ -305,8 +308,10 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                         print(f"⚠️ Index refresh after handover: {idx_err}")
                 else:
                     print(f"⚠️ Conversation {current_conversation_id} not found in Firestore (tried canonical + alternate path)")
+                    return
             except Exception as e:
                 print(f"⚠️ Failed to mark conversation as waiting_human: {e}")
+                return
 
         config.user_in_human_takeover_mode[user_id] = True
 

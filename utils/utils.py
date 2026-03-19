@@ -1188,6 +1188,22 @@ def is_post_takeover_escalation_cooldown(user_data: dict) -> bool:
         return False
 
 
+def firestore_post_release_waiting_blocked(conv_payload: dict) -> bool:
+    """
+    True if the conversation document forbids re-entering the waiting queue (after release to bot).
+    Used to block set_human_takeover_status / direct Firestore handover writes during cooldown.
+    """
+    if not isinstance(conv_payload, dict):
+        return False
+    raw = conv_payload.get("post_release_escalation_suppressed_until")
+    if raw is None:
+        return False
+    try:
+        return parse_timestamp_utc(raw) > utc_now()
+    except Exception:
+        return False
+
+
 def sync_post_release_cooldown_from_conv_payload(user_data: dict, conv_data: dict) -> None:
     """
     Copy post-release escalation cooldown from Firestore conversation doc into user_data.
@@ -1233,7 +1249,15 @@ def _build_user_id_variants_for_release(resolved_user_id: str, raw_user_id: str,
     return list(variants)
 
 
-async def set_human_takeover_status(user_id: str, conversation_id: str, status: bool, operator_id: str = None, operator_name: str = None, request_user_id: str = None):
+async def set_human_takeover_status(
+    user_id: str,
+    conversation_id: str,
+    status: bool,
+    operator_id: str = None,
+    operator_name: str = None,
+    request_user_id: str = None,
+    force_waiting_queue: bool = False,
+):
     """
     Sets the human takeover status for a specific conversation in Firestore.
     This will control the AI's response for that chat.
@@ -1244,6 +1268,7 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
         status: True to activate human takeover, False to release
         operator_id: Optional operator ID who is taking over
         operator_name: Optional operator name for display to customer
+        force_waiting_queue: If True, allow waiting-queue state even when post-release cooldown is active (e.g. /takeover).
     """
     import asyncio
 
@@ -1285,6 +1310,12 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
             else:
                 print(f"🔄 Setting conversation status to 'human' for operator takeover")
         elif status:
+            pre_snap = conv_snap.to_dict() or {}
+            if firestore_post_release_waiting_blocked(pre_snap) and not force_waiting_queue:
+                print(
+                    f"⚠️ set_human_takeover_status: blocked waiting_human (post_release cooldown active on doc conv={conversation_id})"
+                )
+                return
             # Human takeover requested but not assigned yet (waiting queue state).
             update_data["operator_id"] = None
             update_data["operator_name"] = None

@@ -553,7 +553,15 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
         elif user_input_text.lower() == "/takeover":
             current_conv_id = config.user_data_whatsapp[user_id].get('current_conversation_id')
             if current_conv_id:
-                await set_human_takeover_status(user_id, current_conv_id, True)
+                await set_human_takeover_status(
+                    user_id,
+                    current_conv_id,
+                    True,
+                    None,
+                    None,
+                    None,
+                    True,  # force_waiting_queue (admin /takeover)
+                )
                 await adapter.send_text_message(user_id, "تم تفعيل وضع التحكم البشري لهذه المحادثة. البوت لن يرد عليها.")
             else:
                 await adapter.send_text_message(user_id, "لا توجد محادثة جارية لتفعيل التحكم البشري عليها.")
