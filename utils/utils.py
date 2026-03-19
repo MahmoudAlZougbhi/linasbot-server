@@ -2238,18 +2238,18 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "create_appointment",
-                "description": "Creates a new appointment record. Requires client phone number, service ID, machine ID, branch ID, date (including time), and body_part_ids (REQUIRED for hair removal and tattoo removal services). Do NOT call without body_part_ids for hair removal or tattoo services. NEVER use this for a change/reschedule request when a paused/postponed appointment already exists; use update_appointment_date instead.",
+                "description": "Creates a new appointment record. Requires phone, service_id, branch_id, date/time, body_part_ids (REQUIRED for every bookable service), and machine_id. Session numbers are sent as body_parts with session_number=1 for new bookings. Only laser hair removal (service_id 1 or 12) uses customer-chosen device: call get_machines and pick Neo/Quadro/Candela/Trio as discussed. For tattoo (13), CO2 (2/11), and whitening/DPL (4/5/14), still pass machine_id from get_machines (backend maps device); do not ask the customer to choose a device for those services. NEVER use this for reschedule when a paused appointment exists—use update_appointment_date instead.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number, e.g., '71 123 456'."},
                         "service_id": {"type": "integer", "description": "Service ID: 1=Hair Men, 12=Hair Women, 2/11=CO2, 13=Tattoo, 4/5/14=Whitening. For female hair removal use 12, not 3."},
-                        "machine_id": {"type": "integer", "description": "Machine ID from API. For Hair: Neo/Quadro/Trio. For Tattoo: Pico. Call get_machines if unsure of valid IDs."},
+                        "machine_id": {"type": "integer", "description": "From get_machines. REQUIRED for API. For hair removal (1/12) the value must match the device the customer chose. For tattoo/CO2/whitening pass any valid id from list—the system assigns the correct device."},
                         "branch_id": {"type": "integer", "description": "Branch ID: 1=Beirut Manara, 2=Antelias. Default to 1 if not specified."},
                         # This is derived from the API Documentation PDF
                         "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). This date and time MUST be converted from user's natural language (e.g., 'tomorrow', 'next Saturday', 'in 3 days') to an exact future date and time based on current time. The date must be in the future and not more than 365 days from today."},
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
-                        "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "**REQUIRED for Hair Removal (service_id 1, 12) and Tattoo Removal (service_id 13)**. Body part IDs specifying which areas to treat. You MUST ask the customer which body area they want before calling this function. Do NOT call create_appointment without body_part_ids for these services."}
+                        "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Body part IDs to treat. Ask which area(s) before calling. First session uses session_number 1 per body part (sent via body_parts in API)."}
                     },
                     "required": ["phone", "service_id", "machine_id", "branch_id", "date"]
                 }
@@ -2292,7 +2292,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "get_machines",
-                "description": "Retrieves a list of all machines available in the clinic.",
+                "description": "Lists machines in the clinic. Call when booking laser hair removal (service 1 or 12) to pick the device the customer agreed to (Neo, Quadro, Candela, Trio). For tattoo, CO2, or whitening you may still call once to get a valid machine_id for the API, but do not ask the customer to choose a device for those services.",
                 "parameters": {"type": "object", "properties": {}}
             }
         },

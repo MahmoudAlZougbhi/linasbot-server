@@ -24,6 +24,7 @@ from utils.datetime_utils import (
     parse_datetime_flexible,
     resolve_relative_datetime,
     text_mentions_datetime,
+    to_bot_tz,
 )
 
 # Import dynamic model selector for cost optimization
@@ -204,7 +205,10 @@ OFF_TOPIC_PRICE_FALSE_POSITIVE_HINTS = [
     "invented",
 ]
 
-DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS = {1, 12, 13}
+# All bookable laser services must send body_part_ids + session_number on create.
+# Hair removal (1, 12) is the only family where the customer chooses the device (Neo/Quadro/Candela/…).
+DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS = {1, 2, 4, 5, 11, 12, 13, 14}
+LASER_HAIR_REMOVAL_SERVICE_IDS = {1, 12}
 
 def validate_language_match(user_language: str, bot_response: str, detected_response_lang: str) -> tuple:
     """
@@ -405,6 +409,20 @@ def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_
     text = str(user_input or "").lower()
     if any(keyword in text for keyword in ["tattoo", "وشم", "تاتو", "détatouage"]):
         return 13
+    if any(
+        keyword in text
+        for keyword in [
+            "co2",
+            "scar",
+            "acne scar",
+            "stretch mark",
+            "ندوب",
+            "ندبة",
+            "اثار حب الشباب",
+            "علامات التمدد",
+        ]
+    ):
+        return 2
     if any(keyword in text for keyword in ["whitening", "dpl", "تبييض", "تفتيح", "blanchiment"]):
         return 4
     if any(keyword in text for keyword in ["hair", "epilation", "إزالة الشعر", "ليزر", "شعر"]):
@@ -731,6 +749,177 @@ def _extract_preferred_booking_from_gpt(raw: str) -> dict:
         except (json.JSONDecodeError, TypeError):
             continue
     return out
+
+
+def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
+    """
+    Parse tool-style JSON blobs emitted before the action JSON (e.g. date/time/service/machine)
+    when the model confirms booking in text but does not call create_appointment.
+    """
+    out: Dict[str, Any] = {}
+    for obj_str in _extract_json_objects(raw or ""):
+        try:
+            parsed = json.loads(obj_str)
+            if not isinstance(parsed, dict):
+                continue
+            if parsed.get("action") and parsed.get("bot_reply"):
+                continue
+            for k in (
+                "date",
+                "time",
+                "machine_id",
+                "service_id",
+                "service",
+                "branch",
+                "branch_id",
+                "body_part",
+                "phone",
+                "body_part_ids",
+            ):
+                if k in parsed and parsed[k] is not None:
+                    out[k] = parsed[k]
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return out
+
+
+def _service_hint_to_service_id(val: Any) -> Optional[int]:
+    if val is None:
+        return None
+    sid = _safe_int(val)
+    if sid is not None:
+        return sid
+    s = str(val).strip().lower()
+    if any(x in s for x in ("tattoo", "وشم", "تاتو", "détatouage")):
+        return 13
+    if any(x in s for x in ("whiten", "dpl", "تبييض", "تفتيح", "blanch")):
+        return 4
+    if any(x in s for x in ("co2", "scar", "stretch", "ندوب", "ندبة")):
+        return 2
+    return None
+
+
+def _branch_hint_to_branch_id(val: Any) -> Optional[int]:
+    if val is None:
+        return None
+    bid = _safe_int(val)
+    if bid is not None:
+        return bid
+    s = str(val).strip().lower()
+    if any(x in s for x in ("beirut", "بيروت", "beyrouth", "manara")):
+        return 1
+    if any(x in s for x in ("antelias", "أنطلياس", "انطلياس")):
+        return 2
+    return None
+
+
+def _datetime_from_gpt_booking_args(booking_args: dict) -> Optional[datetime.datetime]:
+    """Build an aware datetime from GPT-emitted date + optional time fields."""
+    if not booking_args:
+        return None
+    d = booking_args.get("date")
+    if d is None or not str(d).strip():
+        return None
+    ds = str(d).strip()
+    t = booking_args.get("time")
+    if t is not None and str(t).strip() != "":
+        ts = str(t).strip()
+        if ":" in ts:
+            combined = f"{ds} {ts}" if len(ts) >= 8 else f"{ds} {ts}:00"
+        elif ts.isdigit():
+            h = int(ts)
+            combined = f"{ds} {h:02d}:00:00"
+        else:
+            combined = f"{ds} {ts}"
+    else:
+        combined = ds
+    parsed = parse_datetime_flexible(combined)
+    if parsed is None:
+        return None
+    return to_bot_tz(parsed)
+
+
+async def _resolve_body_part_ids_from_area_hint(area_hint: str, service_id: int) -> Optional[List[int]]:
+    """Resolve body_part_ids when only a human-readable area (e.g. back) is known."""
+    if not area_hint or not str(area_hint).strip():
+        return None
+    static_ids = _area_name_to_body_part_ids(area_hint, service_id)
+    if static_ids:
+        return static_ids
+    al = area_hint.strip().lower()
+    needle_terms = ("back", "ظهر", "ضهر", "dahr", "dahre", "عمود فقري")
+    try:
+        bp_resp = await api_integrations.get_body_parts(service_id=service_id)
+        if not bp_resp.get("success") or not isinstance(bp_resp.get("data"), list):
+            return None
+        for item in bp_resp["data"]:
+            name = (item.get("name") or item.get("body_part") or item.get("title") or "").strip().lower()
+            if not name:
+                continue
+            if any(term in name for term in needle_terms):
+                bid = _safe_int(item.get("id"))
+                return [bid] if bid is not None else None
+        for item in bp_resp["data"]:
+            name = (item.get("name") or "").strip().lower()
+            if al in name or name in al:
+                bid = _safe_int(item.get("id"))
+                return [bid] if bid is not None else None
+    except Exception as ex:
+        print(f"_resolve_body_part_ids_from_area_hint: {ex}")
+    return None
+
+
+async def _resolve_machine_for_booking(service_id: Optional[int], candidate: Optional[int]) -> int:
+    """
+    Only laser hair removal (1, 12) uses the customer's machine choice from get_machines.
+    Tattoo, CO2, whitening, etc. have a fixed device on the backend — ignore wrong GPT picks
+    and map by machine name from the API list.
+    """
+    sid = _safe_int(service_id)
+    cand = _safe_int(candidate)
+    fallback = _safe_int(getattr(config, "DEFAULT_MACHINE_ID", None))
+    if fallback is None:
+        fallback = 1
+    if sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
+        return cand if cand is not None else fallback
+    try:
+        resp = await api_integrations.get_machines()
+        if not resp.get("success") or not isinstance(resp.get("data"), list):
+            return cand if cand is not None else fallback
+        machines = resp["data"]
+
+        def nm(m: dict) -> str:
+            return (m.get("name") or "").strip().lower()
+
+        def first_id(pred) -> Optional[int]:
+            for m in machines:
+                if pred(nm(m)):
+                    mid = _safe_int(m.get("id"))
+                    if mid is not None:
+                        return mid
+            return None
+
+        if sid == 13:
+            mid = first_id(lambda n: "pico" in n)
+            if mid is not None:
+                return mid
+            mid = first_id(lambda n: "tattoo" in n or "وشم" in n)
+            if mid is not None:
+                return mid
+        if sid in (2, 11):
+            mid = first_id(lambda n: "co2" in n)
+            if mid is not None:
+                return mid
+        if sid in (4, 5, 14):
+            mid = first_id(lambda n: "dpl" in n)
+            if mid is not None:
+                return mid
+            mid = first_id(lambda n: "trio" in n and "hair" not in n)
+            if mid is not None:
+                return mid
+    except Exception as ex:
+        print(f"_resolve_machine_for_booking: {ex}")
+    return cand if cand is not None else fallback
 
 
 def _area_name_to_body_part_ids(area_name: str, service_id: int) -> Optional[List[int]]:
@@ -1062,8 +1251,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "Neither too long (avoid 3+ paragraphs, long numbered lists, repeated points) nor too short (keep essential info). "
         "One focused paragraph or 2–3 brief bullet points max. Cut filler and repetition.\n"
         "- Either: (a) short answer + ONE question, OR (b) ONE question to gather info.\n"
-        "- For tattoo/pricing: ask first (body area? branch?) – next turn give full answer. Do NOT dump service info + availability + pricing + question all at once.\n"
-        "- Do NOT send 3+ paragraphs or multiple info blocks. Compress into one focused message.\n"
+        "- **Do NOT** ask for booking details (body part, machine, service, size, branch, date, time, name) unless the user is "
+        "**booking** or **needs a price that depends on missing data**. On general questions, answer directly without pushing extra questions.\n"
+        "- When booking/pricing needs more data: ask **only missing** fields (body part, machine only for hair removal, service, size for tattoo, branch, date, time). Never re-ask known facts.\n"
+        "- After confirming a slot or total price: state clearly **when**, **what service/area**, and **cost** if relevant.\n"
+        "- Do NOT dump service info + availability + pricing + multiple questions in one message unless the user explicitly asked for that depth.\n"
     )
 
     # Fetch full customer file summary for AI (services, sessions done+available, body parts, payment, dates, machines)
@@ -1423,15 +1615,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 'today/tomorrow' intent wins over stale history.
                 """
                 recent_user_messages = []
-                for msg in context_messages[-12:]:
+                for msg in context_messages[-24:]:
                     if msg.get("role") != "user":
                         continue
                     content = msg.get("content", "")
                     if isinstance(content, str) and content.strip():
                         recent_user_messages.append(content.strip())
 
-                # Keep only the most recent few user turns to avoid stale date leakage.
-                recent_user_messages = recent_user_messages[-4:]
+                # Keep recent user turns (wider window so "today" + time stay in scope when user says "Ok").
+                recent_user_messages = recent_user_messages[-12:]
 
                 latest_clean = (latest_user_input or "").strip()
                 if latest_clean and (not recent_user_messages or recent_user_messages[-1] != latest_clean):
@@ -1897,6 +2089,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     _remember_booking_selection(user_id, function_args)
 
                     selected_service_id = _safe_int(function_args.get("service_id"))
+                    function_args["machine_id"] = await _resolve_machine_for_booking(
+                        selected_service_id, _safe_int(function_args.get("machine_id"))
+                    )
+                    _remember_booking_selection(user_id, function_args)
+
                     selected_body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
                     if selected_body_part_ids:
                         function_args["body_part_ids"] = selected_body_part_ids
@@ -1924,9 +2121,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
 
-                    # For hair removal/tattoo: send body_parts with session_number=1 for first session (API may require this)
-                    if function_name == "create_appointment" and selected_body_part_ids and selected_service_id in body_part_required_service_ids:
-                        function_args["body_parts_with_sessions"] = [{"body_part_id": bp_id, "session_number": 1} for bp_id in selected_body_part_ids]
+                    # Every bookable service sends body_parts with session_number=1 for first session (API contract).
+                    if function_name == "create_appointment" and selected_body_part_ids:
+                        function_args["body_parts_with_sessions"] = [
+                            {"body_part_id": bp_id, "session_number": 1} for bp_id in selected_body_part_ids
+                        ]
 
                 if function_name == "update_appointment_date":
                     if user_requested_change and not text_mentions_datetime(all_user_text_for_date):
@@ -2323,7 +2522,16 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Fallback: when AI returns action create_appointment, confirm_booking_details, OR answer_question with
         # booking-confirmation wording but never called the tool. Run create_appointment so it appears in the system.
         _bot_reply = (parsed_response.get("bot_reply") or "").strip().lower()
-        _booking_confirm_phrases = ["تمّ حجز", "تم حجز", "تم تحديد الموعد", "تم تحديد موعد", "booked", "حجز موعد"]
+        _booking_confirm_phrases = [
+            "تمّ حجز",
+            "تم حجز",
+            "تم تحديد الموعد",
+            "تم تحديد موعد",
+            "تم تثبيت",
+            "تمّ تثبيت",
+            "booked",
+            "حجز موعد",
+        ]
         _says_booked = any(p in _bot_reply for p in _booking_confirm_phrases)
         _run_booking_fallback = (
             (parsed_response.get("action") in ("create_appointment", "confirm_booking_details")
@@ -2367,15 +2575,28 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 or (user_id if (user_id and (user_id.startswith("+") or user_id.replace("+", "").replace("-", "").replace(" ", "").isdigit())) else None)
             )
             if phone:
-                # Collect user text for date parsing (same logic as in-tool path)
+                # Collect user text for date parsing — use last 12 user turns so "today" + time
+                # are not dropped when the user only says "Ok" after confirming details.
                 recent_user = []
-                for msg in (current_context_messages or [])[-12:]:
+                for msg in (current_context_messages or [])[-24:]:
                     if msg.get("role") == "user" and msg.get("content"):
                         recent_user.append(str(msg.get("content", "")).strip())
-                recent_user = recent_user[-4:]
+                recent_user = recent_user[-12:]
                 if (user_input or "").strip() and (not recent_user or recent_user[-1] != (user_input or "").strip()):
                     recent_user.append((user_input or "").strip())
                 all_user_text = " ".join(recent_user).strip()
+                booking_args = _extract_booking_args_from_gpt_raw(gpt_raw_content) if gpt_raw_content else {}
+                if booking_args.get("branch") or booking_args.get("branch_id") is not None:
+                    _bid = _branch_hint_to_branch_id(booking_args.get("branch_id") if booking_args.get("branch_id") is not None else booking_args.get("branch"))
+                    if _bid is not None:
+                        booking_state["branch_id"] = _bid
+                _svc_hint = booking_args.get("service_id") if booking_args.get("service_id") is not None else booking_args.get("service")
+                _sid = _service_hint_to_service_id(_svc_hint)
+                if _sid is not None:
+                    booking_state["service_id"] = _sid
+                if booking_args.get("machine_id") is not None:
+                    booking_state["machine_id"] = _safe_int(booking_args.get("machine_id"))
+                gpt_dt = _datetime_from_gpt_booking_args(booking_args)
                 # Infer branch from conversation when not in booking_state
                 if _safe_int(booking_state.get("branch_id")) is None:
                     if any(x in all_user_text.lower() for x in ["beirut", "بيروت", "beyrouth"]):
@@ -2420,9 +2641,32 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 print(f"Fallback get_body_parts: {e}")
                     if bp_ids:
                         booking_state["body_part_ids"] = bp_ids
-                if text_mentions_datetime(all_user_text):
+                if not _normalize_body_part_ids(booking_state.get("body_part_ids")) and booking_args.get("body_part"):
+                    _svc_bp = (
+                        _safe_int(booking_state.get("service_id"))
+                        or _service_hint_to_service_id(booking_args.get("service"))
+                        or 13
+                    )
+                    bp_res = await _resolve_body_part_ids_from_area_hint(str(booking_args.get("body_part")), _svc_bp)
+                    if bp_res:
+                        booking_state["body_part_ids"] = bp_res
+                if not _normalize_body_part_ids(booking_state.get("body_part_ids")):
+                    _svc_t = _safe_int(booking_state.get("service_id")) or _infer_service_id_for_pricing(
+                        user_input, current_gender, booking_state
+                    )
+                    if _svc_t == 13 and any(
+                        x in all_user_text.lower()
+                        for x in ("dahre", "dahr", "ضهر", "ظهر", "back", "dahreh")
+                    ):
+                        bp_res = await _resolve_body_part_ids_from_area_hint("back", 13)
+                        if bp_res:
+                            booking_state["body_part_ids"] = bp_res
+                has_datetime_for_booking = bool(gpt_dt) or text_mentions_datetime(all_user_text)
+                if has_datetime_for_booking:
                     now = now_in_bot_tz()
-                    dt_obj = resolve_relative_datetime(all_user_text, reference=now)
+                    dt_obj = gpt_dt
+                    if dt_obj is None:
+                        dt_obj = resolve_relative_datetime(all_user_text, reference=now)
                     # Fallback: "bokra" alone may not match resolve_relative_datetime; use detect_day_reference
                     if dt_obj is None and detect_day_reference(all_user_text) == "tomorrow":
                         # Try to extract hour (se3a 9, 9am, etc.) or default to 9:00
@@ -2443,10 +2687,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             dt_obj = max_allowed.replace(second=0, microsecond=0)
                         date_str = dt_obj.astimezone(BOOKING_TZ).strftime("%Y-%m-%d %H:%M:%S")
                         service_id = _safe_int(booking_state.get("service_id")) or _infer_service_id_for_pricing(user_input, current_gender, booking_state) or config.DEFAULT_SERVICE_ID
-                        machine_id = _safe_int(booking_state.get("machine_id")) or config.DEFAULT_MACHINE_ID
+                        machine_id = await _resolve_machine_for_booking(
+                            service_id, _safe_int(booking_state.get("machine_id")) or config.DEFAULT_MACHINE_ID
+                        )
                         branch_id = _safe_int(booking_state.get("branch_id")) or config.DEFAULT_BRANCH_ID
                         body_part_ids = _normalize_body_part_ids(booking_state.get("body_part_ids")) or None
-                        # BLOCK: Hair removal (1,12) and tattoo (13) REQUIRE body_part_ids. Do NOT create without them.
+                        # BLOCK: All configured services require body_part_ids. Do NOT create without them.
                         if service_id in body_part_required_service_ids and not body_part_ids:
                             _ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدك (مثلاً: جسم كامل، أرجل، باكيني، وجه...)."
                             _en = "To save the appointment on the system, I need to know which body area(s) you want (e.g. full body, legs, bikini, face...)."
@@ -2468,10 +2714,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     customer_exists = True
                             if customer_exists:
                                 try:
-                                    # For hair removal/tattoo: send body_parts with session_number=1 for first session
                                     body_parts_with_sessions = None
-                                    if body_part_ids and service_id in body_part_required_service_ids:
-                                        body_parts_with_sessions = [{"body_part_id": bp_id, "session_number": 1} for bp_id in body_part_ids]
+                                    if body_part_ids:
+                                        body_parts_with_sessions = [
+                                            {"body_part_id": bp_id, "session_number": 1} for bp_id in body_part_ids
+                                        ]
                                     result = await api_integrations.create_appointment(
                                         phone=phone,
                                         service_id=service_id,

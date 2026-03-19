@@ -67,8 +67,13 @@
     "sourceOfTruth": "api_get_pricing_details",
     "requireBodyPartServiceIds": [
       1,
+      2,
+      4,
+      5,
+      11,
       12,
-      13
+      13,
+      14
     ],
     "discountRules": {
       "preferSystemDiscountValues": true,
