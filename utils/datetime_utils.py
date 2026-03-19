@@ -247,8 +247,28 @@ def resolve_relative_datetime(text: str, reference: Optional[datetime.datetime] 
     """Resolve supported relative phrases to a concrete +0200 datetime."""
     now = to_bot_tz(reference) if reference is not None else now_in_bot_tz()
     intent = detect_relative_intent(text)
-    if not intent:
-        return None
+    day_ref = detect_day_reference(text)
+
+    # Extract hour from text (se3a 9, 9am, 9:00, ساعة ٩, etc.)
+    hour, minute = 9, 0
+    hour_match = re.search(
+        r"(?:se3a|saa|ساعة|hour|at)\s*(\d{1,2})|"
+        r"\b(\d{1,2})\s*(?:am|pm|صباحا|مساء|صبح|ص)?|"
+        r"\b(\d{1,2}):(\d{2})",
+        (text or ""),
+        re.I,
+    )
+    if hour_match:
+        g = hour_match.groups()
+        h = next((x for x in (g[0], g[1], g[2]) if x is not None), None)
+        m = g[3] if len(g) > 3 and g[3] is not None else 0
+        if h:
+            hour = min(23, max(0, int(h)))
+        if m:
+            minute = min(59, max(0, int(m)))
+        if "pm" in (text or "").lower() or "مساء" in (text or "") or "مسا" in (text or "").lower():
+            if hour < 12:
+                hour += 12
 
     if intent == "after_two_hours":
         return (now + datetime.timedelta(hours=2)).replace(second=0, microsecond=0)
@@ -261,6 +281,16 @@ def resolve_relative_datetime(text: str, reference: Optional[datetime.datetime] 
         if candidate.date() != now.date():
             candidate = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)
         return candidate
+
+    # "today" + time (el yom se3a 9, today at 9, اليوم الساعة ٩)
+    if day_ref == "today":
+        today_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if today_dt <= now:
+            today_dt = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)
+        return today_dt
+
+    if not intent:
+        return None
 
     return None
 

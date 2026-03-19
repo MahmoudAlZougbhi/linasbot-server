@@ -1375,7 +1375,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
     flow_meta = gpt_response_data.get("_flow_meta") or {}
 
-    # When GPT fails (error in flow_meta) and user is in waiting queue → send waiting message, not error
+    # When GPT fails (error in flow_meta): if user in waiting queue → waiting message; else → hand over to human
     if flow_meta.get("error"):
         in_waiting = config.user_in_human_takeover_mode.get(user_id, False)
         if not in_waiting and current_conversation_id:
@@ -1400,6 +1400,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             bot_reply_text = get_dynamic_message("waiting_queue_message", current_preferred_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
             action = "answer_question"
             print(f"[_process_and_respond] GPT error but user {user_id} in waiting queue → sending waiting message")
+        else:
+            # Error/API/system issue → hand over to human
+            action = "human_handover"
+            escalation_reason_from_gpt = "technical_error"
+            print(f"[_process_and_respond] GPT/system error → handing over to human. error={flow_meta.get('error')}")
 
     # AI-assessed handover degree: if GPT says medium/high, override to human_handover
     if handover_degree in ("medium", "high") and action not in ("human_handover", "human_handover_confirmed", "human_handover_initial_ask"):
@@ -1445,13 +1450,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             action_was_coerced = True
         else:
             bad_action = action
-            action = "unknown_query"
-            bot_reply_text = (
-                get_dynamic_message("generic_error_message", current_preferred_lang)
-                or "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
-            )
+            action = "human_handover"
+            escalation_reason_from_gpt = "technical_error"
             _flow_error_reason = f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')}"
-            print(f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → generic error. flow_error={flow_meta.get('error', 'none')}")
+            print(f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → handing over to human. flow_error={flow_meta.get('error', 'none')}")
 
     # AI-PRIMARY: No bot-side overrides. Send AI reply as-is.
 
@@ -1713,11 +1715,23 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         config.user_greeting_stage[user_id] = 2
 
     else:
-        sent_reply = "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
+        # Unexpected action → hand over to human instead of generic error
         _flow_error_reason = f"Step: Bot → User | Unexpected action: '{action}'"
-        await send_message_func(user_id, sent_reply)
+        print(f"[_process_and_respond] ERROR: Unexpected action '{action}' → handing over to human. bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}")
+        await _activate_ai_handover(
+            escalation_reason=escalation_reason_from_gpt or "technical_error",
+            trigger_source="unexpected_action"
+        )
+        handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+        sent_reply = handoff_msg
+        await send_message_func(user_id, handoff_msg)
         await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        print(f"[_process_and_respond] ERROR: User {user_id} received fallback reply due to unexpected action: '{action}' | bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}")
+        log_report_event("human_handover", user_id, current_gender, {
+            "message": user_input_to_process,
+            "status": "direct",
+            "source": "unexpected_action"
+        })
+        await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
 
     # Keep yes/no booking-follow-up state when we explicitly ask:
     # "Would you like to book a new appointment?"

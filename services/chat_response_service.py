@@ -1206,6 +1206,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         parsed_response = {}
         latest_pricing_payload = None
+        api_failure_reason = None  # Set when create_appointment or other API fails → triggers human handover
 
         # When GPT asks for gender (unknown), send that reply and do NOT run tool calls.
         # Otherwise a second response after tools can replace it with booking flow (date/time/branch).
@@ -1883,6 +1884,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
 
+                    # For hair removal/tattoo: send body_parts with session_number=1 for first session (API may require this)
+                    if function_name == "create_appointment" and selected_body_part_ids and selected_service_id in body_part_required_service_ids:
+                        function_args["body_parts_with_sessions"] = [{"body_part_id": bp_id, "session_number": 1} for bp_id in selected_body_part_ids]
+
                 if function_name == "update_appointment_date":
                     if user_requested_change and not text_mentions_datetime(all_user_text_for_date):
                         print("SAFETY: update_appointment_date requested without explicit date/time. Asking user for new date/time.")
@@ -2040,6 +2045,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 messages_count=len(current_context_messages)
                             )
                             print(f"📊 Analytics: Appointment booked - {service_name}")
+                        elif function_name == "create_appointment" and isinstance(tool_output, dict) and not tool_output.get("success"):
+                            err_msg = (tool_output or {}).get("message", "Unknown error")
+                            api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+                            print(f"create_appointment tool: API failed: {err_msg}")
                         
                         # 📊 ANALYTICS: Track appointment reschedule
                         elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and tool_output.get("success"):
@@ -2083,6 +2092,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             }
                         )
                     except Exception as tool_e:
+                        api_failure_reason = f"tool_execution_error:{function_name}: {tool_e}"
                         print(f"â‌Œ ERROR executing tool {function_name}: {tool_e}")
                         err_content = json.dumps({"success": False, "message": f"Error executing tool: {tool_e}"})
                         tool_round_trips.append({
@@ -2099,6 +2109,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             }
                         )
                 else:
+                    api_failure_reason = f"tool_not_found:{function_name}"
                     print(f"â‌Œ ERROR: Tool function '{function_name}' not found in api_integrations.")
                     err_content = json.dumps({"success": False, "message": f"Tool function '{function_name}' not implemented."})
                     tool_round_trips.append({
@@ -2289,51 +2300,63 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         machine_id = _safe_int(booking_state.get("machine_id")) or config.DEFAULT_MACHINE_ID
                         branch_id = _safe_int(booking_state.get("branch_id")) or config.DEFAULT_BRANCH_ID
                         body_part_ids = _normalize_body_part_ids(booking_state.get("body_part_ids")) or None
-                        # Ensure customer exists then call create_appointment (even if body_part_ids missing for tattoo; API may accept or return error)
-                        customer_exists = False
-                        cust_resp = await api_integrations.get_customer_by_phone(phone=phone)
-                        if cust_resp and cust_resp.get("success") and cust_resp.get("data"):
-                            customer_exists = True
-                        if not customer_exists:
-                            customer_name = config.user_names.get(user_id) or config.user_data_whatsapp.get(user_id, {}).get("collected_name")
-                            if not customer_name or re.search(r"[\u0600-\u06FF]", customer_name or ""):
-                                customer_name = "Customer"
-                            gender_cap = (current_gender or "male").capitalize()
-                            create_cust = await api_integrations.create_customer(
-                                name=customer_name, phone=phone, gender=gender_cap, branch_id=config.DEFAULT_BRANCH_ID
-                            )
-                            if create_cust and create_cust.get("success"):
-                                customer_exists = True
-                        if customer_exists:
-                            try:
-                                result = await api_integrations.create_appointment(
-                                    phone=phone,
-                                    service_id=service_id,
-                                    machine_id=machine_id,
-                                    branch_id=branch_id,
-                                    date=date_str,
-                                    body_part_ids=body_part_ids,
-                                )
-                                if result and result.get("success"):
-                                    _ar = "تم حجز موعدك بنجاح. رح تصلك تأكيدات من الفرع."
-                                    _en = "Your appointment has been booked successfully. You will receive confirmation from the branch."
-                                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                                    print("create_appointment fallback: booking succeeded.")
-                                else:
-                                    err_msg = (result or {}).get("message", "Unknown error")
-                                    _ar = "عفواً، ما قدرنا نكمل الحجز. جرّب مرة تانية أو تواصل مع الفرع."
-                                    _en = "Sorry, we couldn't complete the booking. Please try again or contact the branch."
-                                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                                    print(f"create_appointment fallback: API failed: {err_msg}")
-                            except Exception as e:
-                                print(f"create_appointment fallback error: {e}")
-                                _ar = "حدث خطأ أثناء الحجز. جرّب لاحقاً أو تواصل مع الفرع."
-                                _en = "An error occurred while booking. Please try again later or contact the branch."
-                                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                        else:
-                            _ar = "لإتمام الحجز نحتاج اسمك الكامل. ممكن تخبرني شو اسمك؟"
-                            _en = "To complete the booking we need your full name. What is your name?"
+                        # BLOCK: Hair removal (1,12) and tattoo (13) REQUIRE body_part_ids. Do NOT create without them.
+                        if service_id in body_part_required_service_ids and not body_part_ids:
+                            _ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدك (مثلاً: جسم كامل، أرجل، باكيني، وجه...)."
+                            _en = "To save the appointment on the system, I need to know which body area(s) you want (e.g. full body, legs, bikini, face...)."
                             parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                        else:
+                            customer_exists = False
+                            cust_resp = await api_integrations.get_customer_by_phone(phone=phone)
+                            if cust_resp and cust_resp.get("success") and cust_resp.get("data"):
+                                customer_exists = True
+                            if not customer_exists:
+                                customer_name = config.user_names.get(user_id) or config.user_data_whatsapp.get(user_id, {}).get("collected_name")
+                                if not customer_name or re.search(r"[\u0600-\u06FF]", customer_name or ""):
+                                    customer_name = "Customer"
+                                gender_cap = (current_gender or "male").capitalize()
+                                create_cust = await api_integrations.create_customer(
+                                    name=customer_name, phone=phone, gender=gender_cap, branch_id=config.DEFAULT_BRANCH_ID
+                                )
+                                if create_cust and create_cust.get("success"):
+                                    customer_exists = True
+                            if customer_exists:
+                                try:
+                                    # For hair removal/tattoo: send body_parts with session_number=1 for first session
+                                    body_parts_with_sessions = None
+                                    if body_part_ids and service_id in body_part_required_service_ids:
+                                        body_parts_with_sessions = [{"body_part_id": bp_id, "session_number": 1} for bp_id in body_part_ids]
+                                    result = await api_integrations.create_appointment(
+                                        phone=phone,
+                                        service_id=service_id,
+                                        machine_id=machine_id,
+                                        branch_id=branch_id,
+                                        date=date_str,
+                                        body_part_ids=body_part_ids if not body_parts_with_sessions else None,
+                                        body_parts_with_sessions=body_parts_with_sessions,
+                                    )
+                                    if result and result.get("success"):
+                                        _ar = "تم حجز موعدك بنجاح. رح تصلك تأكيدات من الفرع."
+                                        _en = "Your appointment has been booked successfully. You will receive confirmation from the branch."
+                                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                                        print("create_appointment fallback: booking succeeded.")
+                                    else:
+                                        err_msg = (result or {}).get("message", "Unknown error")
+                                        api_failure_reason = f"create_appointment_failed: {err_msg}"
+                                        _ar = "عفواً، ما قدرنا نكمل الحجز. جرّب مرة تانية أو تواصل مع الفرع."
+                                        _en = "Sorry, we couldn't complete the booking. Please try again or contact the branch."
+                                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                                        print(f"create_appointment fallback: API failed: {err_msg}")
+                                except Exception as e:
+                                    api_failure_reason = f"create_appointment_exception: {e}"
+                                    print(f"create_appointment fallback error: {e}")
+                                    _ar = "حدث خطأ أثناء الحجز. جرّب لاحقاً أو تواصل مع الفرع."
+                                    _en = "An error occurred while booking. Please try again later or contact the branch."
+                                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                            else:
+                                _ar = "لإتمام الحجز نحتاج اسمك الكامل. ممكن تخبرني شو اسمك؟"
+                                _en = "To complete the booking we need your full name. What is your name?"
+                                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
                     else:
                         _ar = "لإتمام الحجز خبرني التاريخ والوقت (مثلاً خميس الساعة ١ بعد الظهر)."
                         _en = "To complete the booking please tell me the date and time (e.g. Thursday 1pm)."
@@ -2377,6 +2400,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "completion_tokens": completion_tokens_val,
             **cost_info,
         }
+        if api_failure_reason:
+            flow_meta["error"] = api_failure_reason
         if tool_calls and tool_round_trips:
             flow_meta["ai_first_response"] = ai_first_response_with_tools[:1500] if ai_first_response_with_tools else None
             flow_meta["tool_round_trips"] = tool_round_trips

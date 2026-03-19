@@ -418,8 +418,13 @@ async def get_customer_appointments(phone: str):
     
     return response
 
-async def create_appointment(phone: str, service_id: int, machine_id: int, branch_id: int, date: str, user_code: str = None, body_part_ids: list = None):
-    """Creates a new appointment record."""
+async def create_appointment(phone: str, service_id: int, machine_id: int, branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None):
+    """
+    Creates a new appointment record.
+    body_part_ids: list of body part IDs (e.g. [1, 2, 3])
+    body_parts_with_sessions: optional list of {body_part_id, session_number} for new bookings.
+      For first session, use session_number=1 for each body part. Example: [{body_part_id: 1, session_number: 1}, ...]
+    """
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
     if phone_clean.startswith("961"):
@@ -434,7 +439,10 @@ async def create_appointment(phone: str, service_id: int, machine_id: int, branc
         "date": date
     }
     if user_code: json_data["user_code"] = user_code
-    if body_part_ids: json_data["body_part_ids"] = body_part_ids
+    if body_parts_with_sessions:
+        json_data["body_parts"] = body_parts_with_sessions
+    elif body_part_ids:
+        json_data["body_part_ids"] = body_part_ids
     response = await _make_api_request("POST", "appointments/create", json_data=json_data)
     if response.get("success"):
         log_report_event("api_call", "System", "N/A", {"api": "create_appointment", "status": "success", "phone": phone, "appointment": response.get("data")})
