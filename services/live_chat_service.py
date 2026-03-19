@@ -122,14 +122,16 @@ class LiveChatService:
     def _normalize_conversation_state(self, conv_data: dict) -> str:
         """
         Resolve a safe canonical conversation_state without downgrading valid states.
-        Priority:
-        1) Preserve existing valid conversation_state
-        2) Derive from lifecycle markers (archived/resolved/operator takeover)
-        3) Fallback to waiting/bot
+        human_takeover_active explicitly False means released to bot — never trust stale
+        conversation_state waiting/assigned (common after release when index/doc briefly disagree).
         """
-
         data = conv_data or {}
         state = data.get("conversation_state")
+        status = str(data.get("status", "")).lower()
+        resolved_at = data.get("resolved_at")
+        archived_at = data.get("archived_at")
+        hta_raw = data.get("human_takeover_active")
+        operator_id = data.get("operator_id")
         valid_states = {
             self.STATE_BOT_ACTIVE,
             self.STATE_WAITING_OPERATOR,
@@ -138,19 +140,29 @@ class LiveChatService:
             self.STATE_ARCHIVED,
         }
 
-        if state in valid_states:
-            return state
-
-        status = str(data.get("status", "")).lower()
-        resolved_at = data.get("resolved_at")
-        archived_at = data.get("archived_at")
-        human_takeover = bool(data.get("human_takeover_active"))
-        operator_id = data.get("operator_id")
-
         if archived_at or status == "archived":
             return self.STATE_ARCHIVED
         if resolved_at or status in {"resolved", "closed"}:
             return self.STATE_RESOLVED
+
+        # Explicit False: released — stale waiting_for_operator on source or live_chat_index must not win
+        if hta_raw is False:
+            if state in (self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED):
+                return self.STATE_BOT_ACTIVE
+            if state in valid_states:
+                return state
+            if status in {"waiting", "waiting_for_operator", "pending", "waiting_human"}:
+                return self.STATE_BOT_ACTIVE
+            return self.STATE_BOT_ACTIVE
+
+        if hta_raw is True:
+            return self.STATE_ASSIGNED if operator_id else self.STATE_WAITING_OPERATOR
+
+        # Legacy: human_takeover_active field absent — keep old behavior (trust conversation_state if set)
+        if state in valid_states:
+            return state
+
+        human_takeover = bool(data.get("human_takeover_active", False))
         if human_takeover:
             return self.STATE_ASSIGNED if operator_id else self.STATE_WAITING_OPERATOR
         if status in {"waiting", "waiting_for_operator", "pending", "waiting_human"}:
@@ -634,6 +646,7 @@ class LiveChatService:
             "last_message_at": last_ts,
             "message_count": message_count,
             "conversation_state": state,
+            "human_takeover_active": bool(conv_data.get("human_takeover_active")),
             "operator_id": conv_data.get("operator_id"),
             "unread_count": unread_count,
             "sentiment": sentiment,
@@ -671,6 +684,7 @@ class LiveChatService:
                 str(payload.get("conversation_state") or ""),
                 str(payload.get("operator_id") or ""),
                 int(payload.get("unread_count") or 0),
+                str(payload.get("human_takeover_active")),
             )
             if self._index_signature_cache.get(conv_id) == signature:
                 print(f"[live_chat:index] skip unchanged write conv={conv_id}")
@@ -2221,24 +2235,20 @@ class LiveChatService:
     async def release_conversation(self, conversation_id: str, user_id: str) -> Dict[str, Any]:
         """Release conversation back to bot"""
         try:
-            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
             db = get_firestore_db()
             conv_ref = None
-            resolved_user_id = canonical_user_id
+            resolved_user_id = user_id
             if db:
-                users_coll = db.collection("artifacts").document(self.APP_ID).collection("users")
-                conv_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-                conv_snap = await asyncio.to_thread(conv_ref.get)
-                if not conv_snap.exists and user_id != canonical_user_id:
-                    conv_ref = users_coll.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-                    conv_snap = await asyncio.to_thread(conv_ref.get)
-                    if conv_snap.exists:
-                        resolved_user_id = user_id
+                conv_ref, conv_snap, resolved_user_id = await self._resolve_conversation_doc_ref(
+                    db, user_id, conversation_id
+                )
                 if not conv_snap.exists:
                     return {
                         "success": False,
                         "error": f"Conversation not found. Check user_id and conversation_id.",
                     }
+            else:
+                resolved_user_id, _ = get_canonical_user_id_and_phone(user_id)
             await set_human_takeover_status(resolved_user_id, conversation_id, False, request_user_id=user_id)
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
@@ -2258,7 +2268,11 @@ class LiveChatService:
                 try:
                     await asyncio.to_thread(
                         lambda: idx_ref.set(
-                            {"conversation_state": self.STATE_BOT_ACTIVE, "operator_id": None},
+                            {
+                                "conversation_state": self.STATE_BOT_ACTIVE,
+                                "operator_id": None,
+                                "human_takeover_active": False,
+                            },
                             merge=True,
                         )
                     )
