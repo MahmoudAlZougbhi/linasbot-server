@@ -103,6 +103,46 @@ PRICE_WEAK_KEYWORDS = [
     "kam",
 ]
 
+
+def _detect_same_day_change_intent(text: str) -> bool:
+    """Detect when user asks to move/change appointment to today (hotle mw3ad el yom, ajlo el yom, etc.)."""
+    if not text or not isinstance(text, str):
+        return False
+    t = text.strip().lower()
+    today_keywords = ["el yom", "elyom", "اليوم", "today", "aujourd'hui", "halyom"]
+    mw3ad_keywords = ["mw3ad", "m3ad", "mo3ad", "موعد", "مواعيد", "appointment"]
+    move_keywords = ["hotle", "hote", "hotoe", "ajlo", "ajel", "2ajel", "ghayer", "غير", "أجل", "حط", "حطلي"]
+    has_today = any(k in t for k in today_keywords)
+    has_mw3ad = any(k in t for k in mw3ad_keywords)
+    has_move = any(k in t for k in move_keywords)
+    return has_today and (has_mw3ad or has_move)
+
+
+def _extract_appointment_id_from_check_response(response: dict) -> Optional[int]:
+    """Extract appointment_id from check_next_appointment API response."""
+    if not isinstance(response, dict):
+        return None
+    data = response.get("data")
+    if isinstance(data, dict):
+        apt = data.get("appointment")
+        if isinstance(apt, dict):
+            for key in ("appointment_id", "id", "appointmentId"):
+                v = apt.get(key)
+                if v is not None:
+                    try:
+                        return int(v)
+                    except (TypeError, ValueError):
+                        pass
+        for key in ("appointment_id", "id", "appointmentId"):
+            v = data.get(key)
+            if v is not None:
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    pass
+    return None
+
+
 CLINIC_PRICE_CONTEXT_KEYWORDS = [
     "laser",
     "ليزر",
@@ -2173,6 +2213,50 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
+
+        # SAME-DAY FALLBACK: When user asks to move appointment to today but GPT didn't call update_appointment_date
+        if _detect_same_day_change_intent(user_input or "") and "update_appointment_date" not in tool_names:
+            phone_for_same_day = (
+                config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                or customer_phone_clean
+                or (user_id if (user_id and (user_id.startswith("+") or user_id.replace("+", "").replace("-", "").replace(" ", "").isdigit())) else None)
+            )
+            if phone_for_same_day:
+                try:
+                    check_resp = await api_integrations.check_next_appointment(phone=phone_for_same_day)
+                    apt_id = _extract_appointment_id_from_check_response(check_resp)
+                    target_dt = resolve_relative_datetime(user_input or "")
+                    if apt_id and target_dt and target_dt.date() == now_in_bot_tz().date():
+                        date_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")
+                        update_resp = await api_integrations.update_appointment_date(
+                            appointment_id=apt_id,
+                            phone=phone_for_same_day,
+                            date=date_str,
+                        )
+                        if update_resp and update_resp.get("success"):
+                            _ar = "تمّ تقديم موعدِك لليوم الساعة " + target_dt.strftime("%H:%M") + " بنجاح 🌷"
+                            _en = "Your appointment has been moved to today at " + target_dt.strftime("%H:%M") + " successfully 🌷"
+                            parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                            parsed_response["action"] = "answer_question"
+                            print(f"SAME-DAY FALLBACK: Successfully updated appointment {apt_id} to {date_str}")
+                        else:
+                            err_msg = (update_resp or {}).get("message", "Unknown error")
+                            _ar = "للأسف ما قدرنا نعدّل الموعد لليوم. جرّبي تتواصلي مع فرع بيروت مباشرة."
+                            _en = "Sorry, we couldn't update the appointment to today. Please contact Beirut branch directly."
+                            parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                            api_failure_reason = f"same_day_update_failed: {err_msg}"
+                            print(f"SAME-DAY FALLBACK: update_appointment_date failed: {err_msg}")
+                    elif not apt_id:
+                        _ar = "ما في موعد قادم مسجّل إلك. إذا بدِّك تحجزي موعد جديد لليوم، تواصلي مع الفرع."
+                        _en = "No upcoming appointment found. To book for today, please contact the branch."
+                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+                        print("SAME-DAY FALLBACK: No appointment_id from check_next_appointment")
+                except Exception as same_day_err:
+                    api_failure_reason = f"same_day_fallback_exception: {same_day_err}"
+                    print(f"SAME-DAY FALLBACK: Exception: {same_day_err}")
+                    _ar = "صار خطأ أثناء محاولة تعديل الموعد. جرّبي تتواصلي مع الفرع مباشرة."
+                    _en = "An error occurred while trying to update the appointment. Please contact the branch directly."
+                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
 
         # Fallback: when AI returns action create_appointment, confirm_booking_details, OR answer_question with
         # booking-confirmation wording but never called the tool. Run create_appointment so it appears in the system.
