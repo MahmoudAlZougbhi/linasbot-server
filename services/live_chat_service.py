@@ -66,7 +66,8 @@ class LiveChatService:
     INDEX_WRITE_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_WRITE_TIMEOUT_SECONDS", 4)
     INDEX_REFRESH_TIMEOUT_SECONDS = _env_float("LIVECHAT_INDEX_REFRESH_TIMEOUT_SECONDS", 4)
     INDEX_WRITE_COOLDOWN_SECONDS = _env_int("LIVECHAT_INDEX_WRITE_COOLDOWN_SECONDS", 180)
-    INDEX_COUNTERS_CACHE_TTL = _env_int("LIVECHAT_INDEX_COUNTERS_CACHE_TTL_SECONDS", 180)
+    # Short default so badge counts track tab filters soon after release/takeover (was 180s → visible flicker).
+    INDEX_COUNTERS_CACHE_TTL = _env_int("LIVECHAT_INDEX_COUNTERS_CACHE_TTL_SECONDS", 25)
     INDEX_COUNTER_SCAN_LIMIT = _env_int("LIVECHAT_INDEX_COUNTER_SCAN_LIMIT", 250)
     INDEX_REFRESH_MIN_INTERVAL_SECONDS = _env_int("LIVECHAT_INDEX_REFRESH_MIN_INTERVAL_SECONDS", 120)
     SEARCH_WIDEN_MAX_DOCS = _env_int("LIVECHAT_SEARCH_WIDEN_MAX_DOCS", 1000)
@@ -1286,6 +1287,16 @@ class LiveChatService:
                 # Firestore matched raw conversation_state; stale index rows must not appear under wrong tab
                 if allowed_states is not None and state not in allowed_states:
                     continue
+                # Extra tab hygiene: index can briefly disagree with human_takeover_active / operator_id
+                if allowed_states == {self.STATE_WAITING_OPERATOR}:
+                    if data.get("human_takeover_active") is not True:
+                        continue
+                elif allowed_states == {self.STATE_BOT_ACTIVE}:
+                    if data.get("human_takeover_active") is True:
+                        continue
+                elif allowed_states == {self.STATE_ASSIGNED}:
+                    if not data.get("operator_id"):
+                        continue
                 customer_info = data.get("customer_info") or {}
                 user_id = data.get("user_id")
                 user_name = data.get("user_name") or customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
