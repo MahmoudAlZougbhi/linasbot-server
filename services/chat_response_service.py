@@ -777,6 +777,7 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
                 "body_part",
                 "phone",
                 "body_part_ids",
+                "body_parts",
             ):
                 if k in parsed and parsed[k] is not None:
                     out[k] = parsed[k]
@@ -791,8 +792,13 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
     """
     GPT sometimes emits body_part_ids as a list of objects, e.g.
     [{"body_part": "dahreh", "session_number": 1}] — normalize to integer IDs for the API.
+    Also accepts body_parts with string slug id, e.g. [{"id": "hands", "session_number": 1}].
     """
-    raw = booking_args.get("body_part_ids") if booking_args else None
+    raw = None
+    if booking_args:
+        raw = booking_args.get("body_part_ids")
+        if raw is None:
+            raw = booking_args.get("body_parts")
     if raw is None or not isinstance(raw, list):
         return None
     out: List[int] = []
@@ -802,17 +808,36 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
             if iid is not None:
                 out.append(iid)
         elif isinstance(item, dict):
-            iid = _safe_int(item.get("body_part_id") or item.get("id"))
+            _raw_id = item.get("id")
+            iid = _safe_int(item.get("body_part_id") or _raw_id)
             if iid is not None:
                 out.append(iid)
                 continue
             area = item.get("body_part") or item.get("name") or item.get("area")
+            if not area and isinstance(_raw_id, str) and _raw_id.strip() and not str(_raw_id).strip().isdigit():
+                area = str(_raw_id).strip()
             if area:
                 resolved = await _resolve_body_part_ids_from_area_hint(str(area), service_id)
                 if resolved:
                     out.extend(resolved)
     normalized = _normalize_body_part_ids(out)
     return normalized if normalized else None
+
+
+def _reply_claims_booking_completed(bot_reply: str) -> bool:
+    """True when the model's text asserts the appointment was already saved (must match API reality)."""
+    br = (bot_reply or "").strip().lower()
+    phrases = (
+        "تمّ حجز",
+        "تم حجز",
+        "تم تحديد الموعد",
+        "تم تحديد موعد",
+        "تم تثبيت",
+        "تمّ تثبيت",
+        "booked",
+        "حجز موعد",
+    )
+    return any(p in br for p in phrases)
 
 
 def _should_preserve_booking_fallback_reply(parsed: dict) -> bool:
@@ -825,7 +850,9 @@ def _should_preserve_booking_fallback_reply(parsed: dict) -> bool:
     action = (parsed.get("action") or "").strip().lower()
     br = (parsed.get("bot_reply") or "").strip()
     if action == "confirm_booking_details":
-        # AI is clarifying schedule/branch/time or next steps — never overwrite with backend filler.
+        # Clarifying next steps: preserve. Claiming "تم تثبيت" without create_appointment: allow fallback to fix.
+        if _reply_claims_booking_completed(br):
+            return False
         return bool(br)
     if len(br) < 30:
         return False
@@ -940,10 +967,20 @@ async def _resolve_body_part_ids_from_area_hint(area_hint: str, service_id: int)
         return static_ids
     al = area_hint.strip().lower()
     needle_terms = ("back", "ظهر", "ضهر", "dahr", "dahre", "عمود فقري")
+    hand_terms = ("hand", "hands", "eideh", "eide", "يد", "اليد", "معصم", "wrist", "forearm", "arm")
     try:
         bp_resp = await api_integrations.get_body_parts(service_id=service_id)
         if not bp_resp.get("success") or not isinstance(bp_resp.get("data"), list):
             return None
+        if al in hand_terms or any(t in al for t in ("eideh", "eide", "hand", "hands", "wrist", "معصم", "forearm")):
+            for item in bp_resp["data"]:
+                name = (item.get("name") or item.get("body_part") or item.get("title") or "").strip().lower()
+                if not name:
+                    continue
+                if any(h in name for h in ("hand", "يد", "معصم", "wrist", "forearm", "arm", "ذراع")):
+                    bid = _safe_int(item.get("id"))
+                    if bid is not None:
+                        return [bid]
         for item in bp_resp["data"]:
             name = (item.get("name") or item.get("body_part") or item.get("title") or "").strip().lower()
             if not name:
@@ -2611,25 +2648,18 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             if _detect_same_day_change_intent(user_input or "") and "update_appointment_date" not in tool_names and phone_for_same_day:
                 api_failure_reason = None
 
-        # Fallback: when AI returns action create_appointment OR answer_question with booking-confirmation
-        # wording but never called the tool — try create_appointment so it appears in the system.
-        # Do NOT run this for confirm_booking_details: that action means the model is clarifying with the user,
-        # not asking the backend to auto-book; running fallback here overwrote bot_reply with generic body-part text.
-        _bot_reply = (parsed_response.get("bot_reply") or "").strip().lower()
-        _booking_confirm_phrases = [
-            "تمّ حجز",
-            "تم حجز",
-            "تم تحديد الموعد",
-            "تم تحديد موعد",
-            "تم تثبيت",
-            "تمّ تثبيت",
-            "booked",
-            "حجز موعد",
-        ]
-        _says_booked = any(p in _bot_reply for p in _booking_confirm_phrases)
+        # Fallback: when AI returns create_appointment, answer_question, or confirm_booking_details with
+        # booking-done wording but never called create_appointment — call the API so it appears in the system.
+        # confirm_booking_details is often misused for "تم تثبيت الموعد" without a tool call; include it when
+        # the reply claims completion. Pure clarifications (no completion phrases) stay excluded.
+        _says_booked = _reply_claims_booking_completed(parsed_response.get("bot_reply") or "")
+        _act = (parsed_response.get("action") or "").strip().lower()
         _run_booking_fallback = (
-            (parsed_response.get("action") == "create_appointment"
-             or (parsed_response.get("action") == "answer_question" and _says_booked))
+            (
+                _act == "create_appointment"
+                or (_act == "answer_question" and _says_booked)
+                or (_act == "confirm_booking_details" and _says_booked)
+            )
             and "create_appointment" not in tool_names
         )
         if _run_booking_fallback:
@@ -2763,6 +2793,24 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         for x in ("dahre", "dahr", "ضهر", "ظهر", "back", "dahreh")
                     ):
                         bp_res = await _resolve_body_part_ids_from_area_hint("back", 13)
+                        if bp_res:
+                            booking_state["body_part_ids"] = bp_res
+                    elif _svc_t == 13 and any(
+                        x in all_user_text.lower()
+                        for x in (
+                            "eideh",
+                            "eide",
+                            "hand",
+                            "hands",
+                            "wrist",
+                            "معصم",
+                            "يد",
+                            "اليد",
+                            "eltlak",
+                            "el tlk",
+                        )
+                    ):
+                        bp_res = await _resolve_body_part_ids_from_area_hint("hands", 13)
                         if bp_res:
                             booking_state["body_part_ids"] = bp_res
                 has_datetime_for_booking = bool(gpt_dt) or text_mentions_datetime(all_user_text)
