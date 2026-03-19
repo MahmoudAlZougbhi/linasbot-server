@@ -2284,7 +2284,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             for kw_en, *rest in machine_keywords:
                                 kw_ar = rest[0] if rest else ""
                                 kw_alt = rest[1] if len(rest) > 1 else ""
-                                if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or kw_alt in all_txt:
+                                if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or (kw_alt and kw_alt in all_txt):
                                     for m in data if isinstance(data, list) else []:
                                         name = (m.get("name") or "").strip().lower()
                                         if name and kw_en in name:
@@ -2348,7 +2348,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                         for kw_en, *rest in machine_keywords:
                                             kw_ar = rest[0] if rest else ""
                                             kw_alt = rest[1] if len(rest) > 1 else ""
-                                            if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or kw_alt in all_txt:
+                                            if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or (kw_alt and kw_alt in all_txt):
                                                 for m in machines_resp["data"] if isinstance(machines_resp["data"], list) else []:
                                                     name = (m.get("name") or "").strip().lower()
                                                     if name and kw_en in name:
@@ -2665,8 +2665,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         ("neo", "نيو"),
                         ("quadro", "كوادرو"),
                     ]
-                    for kw_en, kw_ar, kw_alt in machine_keywords:
-                        if kw_en in all_lower or (kw_ar and kw_ar in (user_input or "")) or kw_alt in all_lower:
+                    for kw_en, *rest in machine_keywords:
+                        kw_ar = rest[0] if rest else ""
+                        kw_alt = rest[1] if len(rest) > 1 else ""
+                        if kw_en in all_lower or (kw_ar and kw_ar in (user_input or "")) or (kw_alt and kw_alt in all_lower):
                             try:
                                 machines_resp = await api_integrations.get_machines()
                                 if machines_resp.get("success") and machines_resp.get("data"):
