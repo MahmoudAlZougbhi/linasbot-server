@@ -919,44 +919,41 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # 1. Human handover (top priority) - transfer immediately
     if (not ai_primary_mode) and router_action == "human_handover":
         async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str) -> bool:
+            from utils.utils import (
+                conversation_any_path_post_release_blocked,
+                merge_conversation_user_id_variants,
+                update_conversation_on_all_existing_paths,
+            )
+
             wrote = False
             db = get_firestore_db()
             if db and current_conversation_id:
                 try:
-                    canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-                    users_coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("users")
-                    candidate_user_ids = []
-                    for c in [canonical_user_id, user_id]:
-                        if c and c not in candidate_user_ids:
-                            candidate_user_ids.append(c)
-                        if c and (c.startswith("+") or (c.isdigit() and len(c) >= 10)):
-                            alt = c[1:] if c.startswith("+") else f"+{c}"
-                            if alt not in candidate_user_ids:
-                                candidate_user_ids.append(alt)
-                    from utils.utils import firestore_post_release_waiting_blocked
-                    for cid in candidate_user_ids:
-                        ref = users_coll.document(cid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
-                        snap = await asyncio.to_thread(ref.get)
-                        if snap.exists:
-                            if firestore_post_release_waiting_blocked(snap.to_dict() or {}):
-                                print("⚠️ router handover blocked: post-release cooldown on doc")
-                                return False
-                            await asyncio.to_thread(ref.update, {
-                                "status": "waiting_human", "human_takeover_active": True,
-                                "human_takeover_requested": True, "operator_id": None,
-                                "conversation_state": "waiting_for_operator",
-                                "escalation_reason": escalation_reason,
-                                "escalation_time": datetime.datetime.now(),
-                                "last_updated": datetime.datetime.now(),
-                                "post_release_escalation_suppressed_until": None,
-                            })
-                            wrote = True
-                            break
+                    if await conversation_any_path_post_release_blocked(current_conversation_id, user_id):
+                        print("⚠️ router handover blocked: post-release cooldown on at least one path")
+                        return False
+                    payload = {
+                        "status": "waiting_human",
+                        "human_takeover_active": True,
+                        "human_takeover_requested": True,
+                        "operator_id": None,
+                        "conversation_state": "waiting_for_operator",
+                        "escalation_reason": escalation_reason,
+                        "escalation_time": datetime.datetime.now(),
+                        "last_updated": datetime.datetime.now(),
+                        "post_release_escalation_suppressed_until": None,
+                    }
+                    n = await update_conversation_on_all_existing_paths(
+                        current_conversation_id, user_id, payload
+                    )
+                    if n > 0:
+                        wrote = True
                 except Exception as e:
                     print(f"⚠️ Failed to update handover state: {e}")
             if not wrote:
                 return False
-            config.user_in_human_takeover_mode[user_id] = True
+            for vid in merge_conversation_user_id_variants("", user_id):
+                config.user_in_human_takeover_mode[vid] = True
             notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification=f"AI handover - {escalation_reason}")
             try:
                 from services.human_takeover_notification_service import human_takeover_notification_service
@@ -1594,20 +1591,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     async def _activate_ai_handover(escalation_reason: str, trigger_source: str) -> bool:
         """Switch conversation to waiting_human, notify admins. Returns True if Firestore was updated."""
-        from utils.utils import firestore_post_release_waiting_blocked
+        from utils.utils import (
+            conversation_any_path_post_release_blocked,
+            merge_conversation_user_id_variants,
+            update_conversation_on_all_existing_paths,
+        )
 
         wrote = False
         db = get_firestore_db()
         if db and current_conversation_id:
             try:
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-                app_id_for_firestore = "linas-ai-bot-backend"
-                users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-                conv_doc_ref, doc_snap, canonical_user_id = await _resolve_conversation_doc_ref(
-                    users_coll,
-                    current_conversation_id,
-                    canonical_user_id,
-                )
                 update_payload = {
                     "status": "waiting_human",
                     "human_takeover_active": True,
@@ -1619,34 +1613,41 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "last_updated": datetime.datetime.now(),
                     "post_release_escalation_suppressed_until": None,
                 }
-                if doc_snap.exists:
-                    pre = doc_snap.to_dict() or {}
-                    # User explicitly confirmed transfer — allow even during cooldown
-                    if firestore_post_release_waiting_blocked(pre) and trigger_source not in (
-                        "ai_handover_confirmed",
-                    ):
+                # User explicitly confirmed transfer — allow even during cooldown
+                if trigger_source not in ("ai_handover_confirmed",):
+                    if await conversation_any_path_post_release_blocked(current_conversation_id, user_id):
                         print(
                             f"⚠️ _activate_ai_handover skipped: post-release cooldown (trigger={trigger_source}) conv={current_conversation_id}"
                         )
                         return False
-                    await asyncio.to_thread(conv_doc_ref.update, update_payload)
+                n = await update_conversation_on_all_existing_paths(
+                    current_conversation_id, user_id, update_payload
+                )
+                if n == 0:
+                    print(
+                        f"⚠️ Conversation {current_conversation_id} not found in Firestore on any user path"
+                    )
+                else:
                     wrote = True
-                    print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision)")
+                    print(
+                        f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision, {n} path(s))"
+                    )
                     try:
                         from services.live_chat_service import live_chat_service
                         live_chat_service.invalidate_cache()
-                        await live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id)
+                        await live_chat_service._refresh_index_for_conversation(
+                            canonical_user_id, current_conversation_id
+                        )
                     except Exception as idx_err:
                         print(f"⚠️ Index refresh after AI handover: {idx_err}")
-                else:
-                    print(f"⚠️ Conversation {current_conversation_id} not found in Firestore (tried canonical + alternate path)")
             except Exception as e:
                 print(f"⚠️ Failed to update handover state in Firestore: {e}")
 
         if not wrote:
             return False
 
-        config.user_in_human_takeover_mode[user_id] = True
+        for vid in merge_conversation_user_id_variants("", user_id):
+            config.user_in_human_takeover_mode[vid] = True
 
         notify_human_on_whatsapp(
             user_name,

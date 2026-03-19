@@ -267,53 +267,61 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
         detected_issues: list = None
     ):
         """Mark conversation as waiting_human, notify admins, and write audit event."""
-        if db and current_conversation_id:
+        if not current_conversation_id:
+            return
+        if not db:
+            print("⚠️ _trigger_human_takeover skipped: Firestore not available")
+            return
+
+        from utils.utils import (
+            conversation_any_path_post_release_blocked,
+            merge_conversation_user_id_variants,
+            update_conversation_on_all_existing_paths,
+        )
+
+        if await conversation_any_path_post_release_blocked(current_conversation_id, user_id):
+            print("⚠️ _trigger_human_takeover skipped: post-release cooldown on at least one user path")
+            return
+
+        update_payload = {
+            "status": "waiting_human",
+            "human_takeover_active": True,
+            "human_takeover_requested": True,
+            "operator_id": None,
+            "conversation_state": "waiting_for_operator",
+            "escalation_reason": escalation_reason,
+            "escalation_time": datetime.datetime.now(),
+            "last_updated": datetime.datetime.now(),
+            "post_release_escalation_suppressed_until": None,
+        }
+        if escalation_score is not None:
+            update_payload["escalation_score"] = escalation_score
+        if detected_issues:
+            update_payload["detected_issues"] = detected_issues
+
+        try:
+            n = await update_conversation_on_all_existing_paths(
+                current_conversation_id, user_id, update_payload
+            )
+            if n == 0:
+                print(f"⚠️ Conversation {current_conversation_id} not found in Firestore on any user path")
+                return
+            print(f"✅ Conversation marked as waiting_human in Firebase ({n} doc path(s))")
             try:
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-                app_id_for_firestore = "linas-ai-bot-backend"
-                users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-                update_payload = {
-                    "status": "waiting_human",
-                    "human_takeover_active": True,
-                    "human_takeover_requested": True,
-                    "operator_id": None,
-                    "conversation_state": "waiting_for_operator",
-                    "escalation_reason": escalation_reason,
-                    "escalation_time": datetime.datetime.now(),
-                    "last_updated": datetime.datetime.now(),
-                    "post_release_escalation_suppressed_until": None,
-                }
-                if escalation_score is not None:
-                    update_payload["escalation_score"] = escalation_score
-                if detected_issues:
-                    update_payload["detected_issues"] = detected_issues
-
-                conv_doc_ref, doc_snap, canonical_user_id = await _resolve_conversation_doc_ref(
-                    users_coll,
-                    current_conversation_id,
-                    canonical_user_id,
+                from services.live_chat_service import live_chat_service
+                live_chat_service.invalidate_cache()
+                asyncio.create_task(
+                    live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id)
                 )
-                if doc_snap.exists:
-                    from utils.utils import firestore_post_release_waiting_blocked
-                    if firestore_post_release_waiting_blocked(doc_snap.to_dict() or {}):
-                        print("⚠️ _trigger_human_takeover skipped: post-release cooldown on doc")
-                        return
-                    await asyncio.to_thread(conv_doc_ref.update, update_payload)
-                    print(f"✅ Conversation marked as waiting_human in Firebase")
-                    try:
-                        from services.live_chat_service import live_chat_service
-                        live_chat_service.invalidate_cache()
-                        asyncio.create_task(live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id))
-                    except Exception as idx_err:
-                        print(f"⚠️ Index refresh after handover: {idx_err}")
-                else:
-                    print(f"⚠️ Conversation {current_conversation_id} not found in Firestore (tried canonical + alternate path)")
-                    return
-            except Exception as e:
-                print(f"⚠️ Failed to mark conversation as waiting_human: {e}")
-                return
+            except Exception as idx_err:
+                print(f"⚠️ Index refresh after handover: {idx_err}")
+        except Exception as e:
+            print(f"⚠️ Failed to mark conversation as waiting_human: {e}")
+            return
 
-        config.user_in_human_takeover_mode[user_id] = True
+        for vid in merge_conversation_user_id_variants("", user_id):
+            config.user_in_human_takeover_mode[vid] = True
 
         escalation_messages = {
             "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
@@ -345,13 +353,6 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             user_data.get('phone_number'),
             metadata={"handled_by": "ai", "source": "smart_message", "event": "auto_handover_escalation"},
         )
-        # Safety re-assertion: avoid any downstream save path from accidentally
-        # reverting the conversation back to bot_active.
-        try:
-            if current_conversation_id:
-                await set_human_takeover_status(user_id, current_conversation_id, True)
-        except Exception as takeover_fix_error:
-            print(f"⚠️ Failed to re-assert takeover status after escalation save: {takeover_fix_error}")
 
         notify_human_on_whatsapp(
             user_name,

@@ -1209,6 +1209,100 @@ def is_post_takeover_escalation_cooldown(user_data: dict) -> bool:
         return False
 
 
+def iter_conversation_parent_user_ids_for_firestore(user_id: str) -> list:
+    """
+    All users/{id}/conversations/... parent IDs that might hold a duplicate doc.
+    Matches live_chat_service candidate order (+/- phone) plus normalized phone forms.
+    """
+    if not user_id:
+        return []
+    canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
+    out: list = []
+
+    def add(x: str):
+        if x and x not in out:
+            out.append(x)
+
+    def add_alt_phone(c: str):
+        if not c:
+            return
+        if c.startswith("+") or (c.isdigit() and len(str(c)) >= 10):
+            alt = c[1:] if c.startswith("+") else f"+{c}"
+            add(alt)
+
+    add(user_id)
+    add(canonical_user_id)
+    add_alt_phone(user_id)
+    add_alt_phone(canonical_user_id)
+    bases = list(out)
+    for b in bases:
+        if is_phone_like_user_id(b):
+            normalized = normalize_phone(b)
+            if normalized:
+                add(normalized)
+                add(normalized.lstrip("+"))
+                if normalized.startswith("+961") and len(normalized) > 4:
+                    add(normalized[4:])
+    return out
+
+
+def merge_conversation_user_id_variants(*seeds: str) -> list:
+    """Union of iter_conversation_parent_user_ids_for_firestore for each non-empty seed, stable order."""
+    seen = set()
+    merged = []
+    for s in seeds:
+        if not s:
+            continue
+        for v in iter_conversation_parent_user_ids_for_firestore(s):
+            if v not in seen:
+                seen.add(v)
+                merged.append(v)
+    return merged
+
+
+async def conversation_any_path_post_release_blocked(
+    conversation_id: str, user_id: str, request_user_id: str = None
+) -> bool:
+    """True if any duplicate conversation doc under users/* has an active post-release cooldown."""
+    db = get_firestore_db()
+    if not db or not conversation_id or not (user_id or request_user_id):
+        return False
+    app_id_for_firestore = "linas-ai-bot-backend"
+    users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+    for vid in merge_conversation_user_id_variants(request_user_id or "", user_id or ""):
+        ref = users_coll.document(vid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        snap = await asyncio.to_thread(ref.get)
+        if snap.exists and firestore_post_release_waiting_blocked(snap.to_dict() or {}):
+            return True
+    return False
+
+
+async def update_conversation_on_all_existing_paths(
+    conversation_id: str,
+    user_id: str,
+    update_payload: dict,
+    request_user_id: str = None,
+) -> int:
+    """Merge-update every users/*/conversations/{conversation_id} that exists. Returns write count."""
+    db = get_firestore_db()
+    if not db or not conversation_id or not user_id or not update_payload:
+        return 0
+    app_id_for_firestore = "linas-ai-bot-backend"
+    users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+    variants = merge_conversation_user_id_variants(request_user_id or "", user_id or "")
+    n = 0
+    for vid in variants:
+        ref = users_coll.document(vid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        snap = await asyncio.to_thread(ref.get)
+        if snap.exists:
+            try:
+                await asyncio.to_thread(ref.update, update_payload)
+                n += 1
+            except Exception as ex:
+                print(f"⚠️ update_conversation_on_all_existing_paths failed users/{vid}/conversations/{conversation_id}: {ex}")
+    return n
+
+
 def firestore_post_release_waiting_blocked(conv_payload: dict) -> bool:
     """
     True if the conversation document forbids re-entering the waiting queue (after release to bot).
@@ -1259,15 +1353,11 @@ def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, cano
 
 def _build_user_id_variants_for_release(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> list:
     """Build all user_id variants that might have a conversation doc (for release - update all paths)."""
-    variants = {v for v in (resolved_user_id, raw_user_id, canonical_user_id) if v}
-    if is_phone_like_user_id(resolved_user_id or raw_user_id):
-        normalized = normalize_phone(resolved_user_id or raw_user_id)
-        if normalized:
-            variants.add(normalized)
-            variants.add(normalized.lstrip("+"))
-            if normalized.startswith("+961") and len(normalized) > 4:
-                variants.add(normalized[4:])  # 3956607
-    return list(variants)
+    return merge_conversation_user_id_variants(
+        raw_user_id or "",
+        resolved_user_id or "",
+        canonical_user_id or "",
+    )
 
 
 async def set_human_takeover_status(
@@ -1293,25 +1383,37 @@ async def set_human_takeover_status(
     """
     import asyncio
 
+    if not conversation_id:
+        print("❌ set_human_takeover_status: missing conversation_id")
+        return
+
     canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
     db = get_firestore_db()
     if not db:
         print("❌ Firestore not initialized. Cannot set human takeover status.")
         return
 
-    # Correct path: artifacts (collection) -> {appId} (document) -> users (collection) -> {userId} (document) -> conversations (collection) -> {conversationId} (document)
     app_id_for_firestore = "linas-ai-bot-backend"
     users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-    conv_doc_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-    conv_snap = await asyncio.to_thread(conv_doc_ref.get)
-    resolved_user_id = canonical_user_id
-    if not conv_snap.exists and user_id != canonical_user_id:
-        conv_doc_ref = users_coll.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-        conv_snap = await asyncio.to_thread(conv_doc_ref.get)
-        if conv_snap.exists:
-            resolved_user_id = user_id
-    if not conv_snap.exists:
-        raise ValueError(f"Conversation not found (user={canonical_user_id or user_id}, conv={conversation_id})")
+
+    variants = merge_conversation_user_id_variants(request_user_id or "", user_id or "")
+    if not variants:
+        print("❌ set_human_takeover_status: no user id variants to search")
+        return
+
+    existing = []
+    for vid in variants:
+        ref = users_coll.document(vid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        snap = await asyncio.to_thread(ref.get)
+        if snap.exists:
+            existing.append((vid, ref, snap))
+
+    if not existing:
+        raise ValueError(
+            f"Conversation not found (conv={conversation_id}, searched {len(variants)} user id variants)"
+        )
+
+    resolved_user_id = existing[0][0]
 
     try:
         update_data = {
@@ -1331,12 +1433,13 @@ async def set_human_takeover_status(
             else:
                 print(f"🔄 Setting conversation status to 'human' for operator takeover")
         elif status:
-            pre_snap = conv_snap.to_dict() or {}
-            if firestore_post_release_waiting_blocked(pre_snap) and not force_waiting_queue:
-                print(
-                    f"⚠️ set_human_takeover_status: blocked waiting_human (post_release cooldown active on doc conv={conversation_id})"
-                )
-                return
+            if not force_waiting_queue:
+                for _, _, snap in existing:
+                    if firestore_post_release_waiting_blocked(snap.to_dict() or {}):
+                        print(
+                            f"⚠️ set_human_takeover_status: blocked waiting_human (post_release cooldown on at least one path conv={conversation_id})"
+                        )
+                        return
             # Human takeover requested but not assigned yet (waiting queue state).
             update_data["operator_id"] = None
             update_data["operator_name"] = None
@@ -1367,33 +1470,24 @@ async def set_human_takeover_status(
             # Clear persisted cooldown when entering takeover again
             update_data["post_release_escalation_suppressed_until"] = None
 
-        # ✅ Use asyncio.to_thread to prevent blocking the event loop
-        await asyncio.to_thread(conv_doc_ref.update, update_data)
-
-        # Release: update ALL conversation docs under every user path variant (fixes duplicate docs in waiting queue)
-        if not status:
-            raw = request_user_id or user_id
-            variants = _build_user_id_variants_for_release(resolved_user_id, raw, canonical_user_id)
-            for variant in variants:
-                if variant == resolved_user_id:
-                    continue  # already updated above
-                alt_ref = users_coll.document(variant).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-                try:
-                    alt_snap = await asyncio.to_thread(alt_ref.get)
-                    if alt_snap.exists:
-                        await asyncio.to_thread(alt_ref.update, update_data)
-                        print(f"   ✅ Also cleared takeover on alternate path users/{variant}/conversations/{conversation_id}")
-                except Exception as alt_err:
-                    print(f"   ⚠️ Alternate path update users/{variant}: {alt_err}")
+        for vid, ref, _ in existing:
+            try:
+                await asyncio.to_thread(ref.update, update_data)
+                if len(existing) > 1:
+                    print(f"   ✅ Synced users/{vid}/conversations/{conversation_id}")
+            except Exception as path_err:
+                print(f"   ⚠️ Failed update users/{vid}/conversations/{conversation_id}: {path_err}")
 
         if status:
-            config.user_in_human_takeover_mode[resolved_user_id] = True
+            for vid in variants:
+                config.user_in_human_takeover_mode[vid] = True
         else:
-            # Release: clear ALL user_id variants so next message (any format) is handled by bot
             _clear_takeover_flags_for_user(resolved_user_id, request_user_id or user_id, canonical_user_id)
 
         operator_info = f" by operator {operator_name or operator_id}" if operator_id else ""
-        print(f"✅ Set human takeover status for conversation {conversation_id} (user {resolved_user_id}) to {status}{operator_info}.")
+        print(
+            f"✅ Set human takeover status for conversation {conversation_id} (user {resolved_user_id}) to {status}{operator_info} ({len(existing)} doc path(s))."
+        )
     except Exception as e:
         print(f"❌ ERROR setting human takeover status for conversation {conversation_id} (user {user_id}): {e}")
         import traceback
