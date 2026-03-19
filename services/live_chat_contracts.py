@@ -236,4 +236,5 @@ def normalize_conversation_document(
         # Pass-through for live_chat_service state normalization (release cooldown must not be dropped)
         "post_release_escalation_suppressed_until": data.get("post_release_escalation_suppressed_until"),
         "release_time": data.get("release_time"),
+        "ai_context_reset_at": data.get("ai_context_reset_at"),
     }

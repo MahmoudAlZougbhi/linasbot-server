@@ -1518,11 +1518,14 @@ async def set_human_takeover_status(
             update_data["post_release_escalation_suppressed_until"] = utc_now() + datetime.timedelta(
                 minutes=_cd_mins
             )
+            # GPT context: only messages at/after this timestamp are sent to the AI (fresh session after operator)
+            update_data["ai_context_reset_at"] = utc_now()
             print(f"🔄 Setting conversation status to 'active' for bot release")
 
         if status:
             # Clear persisted cooldown when entering takeover again
             update_data["post_release_escalation_suppressed_until"] = None
+            update_data["ai_context_reset_at"] = None
 
         for vid, ref, _ in existing:
             try:
@@ -1639,6 +1642,28 @@ async def get_conversation_history_from_firestore(
         global_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
         if global_cap > 0 and len(selected_messages) > global_cap:
             selected_messages = selected_messages[-global_cap:]
+
+        # After "release to bot": drop pre-handover messages so GPT starts from a clean window (see set_human_takeover_status release).
+        reset_raw = conversation_data.get("ai_context_reset_at")
+        if reset_raw is not None:
+            try:
+                reset_at = parse_timestamp_utc(reset_raw)
+                _epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+                trimmed = []
+                for msg in selected_messages:
+                    ts_raw = msg.get("timestamp")
+                    if ts_raw is None:
+                        continue
+                    msg_ts = parse_timestamp_utc(ts_raw, fallback=_epoch)
+                    if msg_ts >= reset_at:
+                        trimmed.append(msg)
+                selected_messages = trimmed
+                print(
+                    f"   📎 ai_context_reset_at applied for conv {conversation_id}: "
+                    f"{len(trimmed)} message(s) kept after operator release"
+                )
+            except Exception as _reset_err:
+                print(f"⚠️ ai_context_reset_at filter skipped: {_reset_err}")
 
         # Convert to OpenAI format
         # Valid OpenAI roles: 'system', 'assistant', 'user', 'function', 'tool'

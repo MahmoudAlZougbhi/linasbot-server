@@ -1366,7 +1366,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 takeover_ctx = (
                     "**USER JUST RETURNED FROM HUMAN TAKEOVER (CRITICAL):**\n"
                     "- A human operator just finished with this user. The conversation was released back to the bot.\n"
-                    "- Do NOT re-escalate to human based on OLD frustration or complaints in the conversation history.\n"
+                    "- **Conversation history sent to you may omit messages from before the release** (technical reset for a clean AI session).\n"
+                    "- Do NOT re-escalate to human based on OLD frustration or complaints that are no longer in the history.\n"
                     "- Only hand over if the user EXPLICITLY asks for a human in THIS current message.\n"
                     "- Treat this as a fresh start. Answer their current question normally."
                 )
