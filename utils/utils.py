@@ -1162,7 +1162,21 @@ async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, i
         import traceback
         traceback.print_exc()
 
-async def set_human_takeover_status(user_id: str, conversation_id: str, status: bool, operator_id: str = None, operator_name: str = None):
+def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str):
+    """Clear config.user_in_human_takeover_mode for all user_id variants so release works regardless of message format."""
+    variants = {v for v in (resolved_user_id, raw_user_id, canonical_user_id) if v}
+    if is_phone_like_user_id(resolved_user_id or raw_user_id):
+        normalized = normalize_phone(resolved_user_id or raw_user_id)
+        if normalized:
+            variants.add(normalized)
+            variants.add(normalized.lstrip("+"))
+            if normalized.startswith("+961") and len(normalized) > 4:
+                variants.add(normalized[4:])  # 3956607
+    for v in variants:
+        config.user_in_human_takeover_mode.pop(v, None)
+
+
+async def set_human_takeover_status(user_id: str, conversation_id: str, status: bool, operator_id: str = None, operator_name: str = None, request_user_id: str = None):
     """
     Sets the human takeover status for a specific conversation in Firestore.
     This will control the AI's response for that chat.
@@ -1234,7 +1248,11 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
 
         # ✅ Use asyncio.to_thread to prevent blocking the event loop
         await asyncio.to_thread(conv_doc_ref.update, update_data)
-        config.user_in_human_takeover_mode[resolved_user_id] = status  # Update local config as well
+        if status:
+            config.user_in_human_takeover_mode[resolved_user_id] = True
+        else:
+            # Release: clear ALL user_id variants so next message (any format) is handled by bot
+            _clear_takeover_flags_for_user(resolved_user_id, request_user_id or user_id, canonical_user_id)
 
         operator_info = f" by operator {operator_name or operator_id}" if operator_id else ""
         print(f"✅ Set human takeover status for conversation {conversation_id} (user {resolved_user_id}) to {status}{operator_info}.")

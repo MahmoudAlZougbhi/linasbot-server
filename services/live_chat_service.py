@@ -2239,8 +2239,7 @@ class LiveChatService:
                         "success": False,
                         "error": f"Conversation not found. Check user_id and conversation_id.",
                     }
-            await set_human_takeover_status(resolved_user_id, conversation_id, False)
-            config.user_in_human_takeover_mode[resolved_user_id] = False
+            await set_human_takeover_status(resolved_user_id, conversation_id, False, request_user_id=user_id)
             if conversation_id in self.operator_sessions:
                 del self.operator_sessions[conversation_id]
 

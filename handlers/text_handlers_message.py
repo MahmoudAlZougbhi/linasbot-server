@@ -425,7 +425,11 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                 conv_data = doc_snap.to_dict()
                 was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
                 new_takeover = conv_data.get('human_takeover_active', False)
-                config.user_in_human_takeover_mode[user_id] = new_takeover
+                if new_takeover:
+                    config.user_in_human_takeover_mode[user_id] = True
+                else:
+                    from utils.utils import _clear_takeover_flags_for_user
+                    _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 if was_in_takeover and not new_takeover:
                     user_data['just_returned_from_human_takeover'] = True
                     print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")

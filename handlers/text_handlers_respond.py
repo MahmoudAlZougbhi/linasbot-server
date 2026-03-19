@@ -816,7 +816,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     # Firestore says takeover ended; release stale local flag and continue normal AI flow.
                     takeover_still_active = False
                     should_send_waiting = False
-                    config.user_in_human_takeover_mode[user_id] = False
+                    from utils.utils import _clear_takeover_flags_for_user
+                    _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                     user_data['just_returned_from_human_takeover'] = True
                     print(f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; resuming normal bot flow (just_returned).")
         except Exception as takeover_check_error:
