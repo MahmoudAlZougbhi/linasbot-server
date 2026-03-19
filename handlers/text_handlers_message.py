@@ -282,6 +282,7 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                     "escalation_reason": escalation_reason,
                     "escalation_time": datetime.datetime.now(),
                     "last_updated": datetime.datetime.now(),
+                    "post_release_escalation_suppressed_until": None,
                 }
                 if escalation_score is not None:
                     update_payload["escalation_score"] = escalation_score
@@ -423,6 +424,8 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             )
             if doc_snap.exists:
                 conv_data = doc_snap.to_dict()
+                from utils.utils import sync_post_release_cooldown_from_conv_payload
+                sync_post_release_cooldown_from_conv_payload(user_data, conv_data)
                 was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
                 new_takeover = conv_data.get('human_takeover_active', False)
                 if new_takeover:
@@ -432,8 +435,9 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 if was_in_takeover and not new_takeover:
                     user_data['just_returned_from_human_takeover'] = True
-                    from utils.utils import set_post_takeover_escalation_cooldown
-                    set_post_takeover_escalation_cooldown(user_data)
+                    from utils.utils import set_post_takeover_escalation_cooldown, is_post_takeover_escalation_cooldown
+                    if not is_post_takeover_escalation_cooldown(user_data):
+                        set_post_takeover_escalation_cooldown(user_data)
                     print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")
                 if config.user_in_human_takeover_mode[user_id]:
                     operator_id = conv_data.get('operator_id')

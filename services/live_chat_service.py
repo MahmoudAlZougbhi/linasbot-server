@@ -2309,6 +2309,15 @@ class LiveChatService:
             # Invalidate cache
             self.invalidate_cache()
 
+            # Same-process WhatsApp session: prime cooldown so AI anti-re-escalation applies before next Firestore read
+            try:
+                from utils.utils import set_post_takeover_escalation_cooldown, _build_user_id_variants_for_release
+                canonical_uid, _ = get_canonical_user_id_and_phone(user_id)
+                for vid in _build_user_id_variants_for_release(resolved_user_id, user_id, canonical_uid):
+                    set_post_takeover_escalation_cooldown(config.user_data_whatsapp[vid])
+            except Exception as mem_cd_err:
+                print(f"⚠️ Release in-memory cooldown prime skipped: {mem_cd_err}")
+
             print(f"✅ Conversation {conversation_id} released back to bot")
 
             return {

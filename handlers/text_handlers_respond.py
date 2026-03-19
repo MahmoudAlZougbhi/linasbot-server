@@ -850,10 +850,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     # Firestore says takeover ended; release stale local flag and continue normal AI flow.
                     takeover_still_active = False
                     should_send_waiting = False
-                    from utils.utils import _clear_takeover_flags_for_user
+                    from utils.utils import _clear_takeover_flags_for_user, sync_post_release_cooldown_from_conv_payload
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
+                    sync_post_release_cooldown_from_conv_payload(user_data, conv_data)
                     user_data['just_returned_from_human_takeover'] = True
-                    set_post_takeover_escalation_cooldown(user_data)
+                    if not is_post_takeover_escalation_cooldown(user_data):
+                        set_post_takeover_escalation_cooldown(user_data)
                     print(f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; resuming normal bot flow (just_returned).")
         except Exception as takeover_check_error:
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
@@ -941,6 +943,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                                 "escalation_reason": escalation_reason,
                                 "escalation_time": datetime.datetime.now(),
                                 "last_updated": datetime.datetime.now(),
+                                "post_release_escalation_suppressed_until": None,
                             })
                             break
                 except Exception as e:
@@ -1597,6 +1600,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "escalation_reason": escalation_reason,
                     "escalation_time": datetime.datetime.now(),
                     "last_updated": datetime.datetime.now(),
+                    "post_release_escalation_suppressed_until": None,
                 }
                 if doc_snap.exists:
                     await asyncio.to_thread(conv_doc_ref.update, update_payload)

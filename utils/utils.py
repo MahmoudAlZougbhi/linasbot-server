@@ -1181,9 +1181,29 @@ def is_post_takeover_escalation_cooldown(user_data: dict) -> bool:
     if until is None:
         return False
     try:
+        if not isinstance(until, datetime.datetime):
+            until = parse_timestamp_utc(until)
         return until > utc_now()
     except TypeError:
         return False
+
+
+def sync_post_release_cooldown_from_conv_payload(user_data: dict, conv_data: dict) -> None:
+    """
+    Copy post-release escalation cooldown from Firestore conversation doc into user_data.
+    Survives dashboard-only release (no prior in-memory takeover flag) and multi-instance workers.
+    """
+    if not isinstance(user_data, dict) or not isinstance(conv_data, dict):
+        return
+    raw_until = conv_data.get("post_release_escalation_suppressed_until")
+    if raw_until is None:
+        return
+    try:
+        parsed = parse_timestamp_utc(raw_until)
+        if parsed > utc_now():
+            user_data["post_takeover_escalation_cooldown_until"] = parsed
+    except Exception:
+        pass
 
 
 def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str):
@@ -1281,7 +1301,19 @@ async def set_human_takeover_status(user_id: str, conversation_id: str, status: 
             update_data["status"] = "active"
             update_data["conversation_state"] = "bot_active"
             update_data["human_takeover_requested"] = False
+            try:
+                _cd_mins = int(getattr(config, "POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", 45))
+            except (TypeError, ValueError):
+                _cd_mins = 45
+            # Persist cooldown on the doc so any worker / next message applies AI anti-re-escalation
+            update_data["post_release_escalation_suppressed_until"] = utc_now() + datetime.timedelta(
+                minutes=_cd_mins
+            )
             print(f"🔄 Setting conversation status to 'active' for bot release")
+
+        if status:
+            # Clear persisted cooldown when entering takeover again
+            update_data["post_release_escalation_suppressed_until"] = None
 
         # ✅ Use asyncio.to_thread to prevent blocking the event loop
         await asyncio.to_thread(conv_doc_ref.update, update_data)
