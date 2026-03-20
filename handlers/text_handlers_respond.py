@@ -1951,17 +1951,25 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             ai_selected_str += f"\n\nRaw AI response:\n{ai_selector_return}"
         elif not ai_selected_str:
             ai_selected_str = f"Files: {', '.join(dr.get('selected_files') or [])}, action: {dr.get('action', 'normal')}"
+        from services.dynamic_retrieval_service import (
+            SELECTOR_MODEL,
+            SELECTOR_MODEL_INPUT_PER_1M_USD,
+            SELECTOR_MODEL_OUTPUT_PER_1M_USD,
+        )
+
         sel_pt = dr.get("selector_prompt_tokens") or 0
         sel_ct = dr.get("selector_completion_tokens") or 0
         pt = flow_meta.get("prompt_tokens")
         ct = flow_meta.get("completion_tokens")
         main_model = flow_meta.get("model") or "gpt-5.1"
         main_cost = flow_meta.get("cost_usd") or 0.0
-        selector_cost = (sel_pt / 1_000_000 * 0.15) + (sel_ct / 1_000_000 * 0.60)
+        selector_cost = (sel_pt / 1_000_000 * SELECTOR_MODEL_INPUT_PER_1M_USD) + (
+            sel_ct / 1_000_000 * SELECTOR_MODEL_OUTPUT_PER_1M_USD
+        )
         steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
-            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": sel_pt, "model": "gpt-4o-mini", "cost_usd": round((sel_pt / 1_000_000 * 0.15), 6) if sel_pt else None, "event_type": "selector_started"},
-            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": sel_ct, "model": "gpt-4o-mini", "cost_usd": round((sel_ct / 1_000_000 * 0.60), 6) if sel_ct else None, "event_type": "selector_completed", "metadata": {"selected_files": selected_titles, "selected_count": len(selected_titles)}},
+            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": sel_pt, "model": SELECTOR_MODEL, "cost_usd": round((sel_pt / 1_000_000 * SELECTOR_MODEL_INPUT_PER_1M_USD), 6) if sel_pt else None, "event_type": "selector_started"},
+            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": sel_ct, "model": SELECTOR_MODEL, "cost_usd": round((sel_ct / 1_000_000 * SELECTOR_MODEL_OUTPUT_PER_1M_USD), 6) if sel_ct else None, "event_type": "selector_completed", "metadata": {"selected_files": selected_titles, "selected_count": len(selected_titles)}},
             {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0, "model": None, "cost_usd": None, "event_type": "retrieval_completed"},
         ]
         cust_ctx = flow_meta.get("customer_context_sent")
@@ -1992,7 +2000,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             resp_step["metadata"] = {"handover": True}
         steps.append(resp_step)
         total_cost = selector_cost + main_cost
-        summary_parts = [f"Selector (gpt-4o-mini): {sel_pt + sel_ct} tokens, ${selector_cost:.6f}", f"Main GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${total_cost:.6f}"]
+        summary_parts = [f"Selector ({SELECTOR_MODEL}): {sel_pt + sel_ct} tokens, ${selector_cost:.6f}", f"Main GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${total_cost:.6f}"]
         steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0), "model": None, "cost_usd": round(total_cost, 6)})
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     else:

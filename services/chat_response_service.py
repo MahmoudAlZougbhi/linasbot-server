@@ -1258,6 +1258,9 @@ def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
     sid = _safe_int(leaked.get("service_id"))
     if sid is not None:
         return sid
+    hint_sid = _service_hint_to_service_id(leaked.get("service"))
+    if hint_sid is not None:
+        return hint_sid
     svc = str(leaked.get("service") or "").strip().lower()
     if "hair" in svc or "شعر" in svc or "laser hair" in svc:
         return 12 if current_gender == "female" else 1
@@ -1632,16 +1635,16 @@ def _missing_body_part_booking_prompt(service_id: Optional[int], lang: str) -> s
         fr = "Pour enregistrer le rendez-vous, j’ai besoin de savoir quelle(s) zone(s) du corps (ex. corps entier, jambes, maillot, visage...)."
     elif sid == 13:
         ar = (
-            "كرمال نثبّت الموعد على السيستم، لازم نعرف على أي منطقة بالجسم مكان الوشم "
-            "(مثلاً: ظهر، ذراع، ساق، رقبة، معصم، وجه...)."
+            "كرمال نثبّت موعد إزالة الوشم على السيستم، لازم نعرف مكان الوشم بالجسم تقريباً "
+            "(مثلاً: معصم، ذراع، ظهر، رقبة…) وأبعاده تقريباً بالسنتيمتر (العرض × الارتفاع)."
         )
         en = (
-            "To save the appointment, we need to know which part of the body the tattoo is on "
-            "(e.g. back, arm, leg, neck, wrist, face...)."
+            "To book laser tattoo removal, I need the body area (e.g. wrist, arm, back, neck) and "
+            "the approximate size in cm (width × height)."
         )
         fr = (
-            "Pour enregistrer le rendez-vous, j’ai besoin de savoir sur quelle zone du corps se trouve le tatouage "
-            "(ex. dos, bras, jambe, cou, poignet, visage...)."
+            "Pour réserver le détatouage au laser, j’ai besoin de la zone du corps "
+            "et de la taille approximative en cm (largeur × hauteur)."
         )
     elif sid in (2, 11):
         ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدّك نعالجها بالليزر (مثلاً: وجه، بطن، منطقة التمدد...)."
@@ -3537,7 +3540,44 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     "appointment has been booked",
                 )
             ):
-                api_failure_reason = "booking_claimed_without_create_appointment_tool"
+                tattoo_soft_recover = False
+                try:
+                    leaked_book = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")
+                    inf_sid = _infer_service_id_from_leak(leaked_book, current_gender)
+                    st = config.user_booking_state.get(user_id) or {}
+                    st_sid = _safe_int(st.get("service_id"))
+                    bp_leak = _normalize_body_part_ids(leaked_book.get("body_part_ids"))
+                    bp_state = (
+                        _normalize_body_part_ids(st.get("body_part_ids"))
+                        if st_sid == inf_sid
+                        else []
+                    )
+                    if (
+                        inf_sid == 13
+                        and 13 in body_part_required_service_ids
+                        and not (bp_leak or bp_state)
+                    ):
+                        tattoo_soft_recover = True
+                        parsed_response["action"] = "ask_for_details_for_booking"
+                        parsed_response["bot_reply"] = _missing_body_part_booking_prompt(
+                            13, detected_language
+                        )
+                        partial_state: Dict[str, Any] = {"service_id": 13}
+                        bid = _resolve_branch_id_from_leak(leaked_book)
+                        if bid is not None:
+                            partial_state["branch_id"] = bid
+                        mid = _safe_int(leaked_book.get("machine_id"))
+                        if mid is not None:
+                            partial_state["machine_id"] = mid
+                        _remember_booking_selection(user_id, partial_state)
+                        if detected_language in ("ar", "franco") and parsed_response.get("bot_reply"):
+                            parsed_response["bot_reply"] = _normalize_arabic_reply(
+                                parsed_response["bot_reply"]
+                            )
+                except Exception as tattoo_soft_e:
+                    print(f"⚠️ Tattoo soft recover (missing body parts) failed: {tattoo_soft_e}")
+                if not tattoo_soft_recover:
+                    api_failure_reason = "booking_claimed_without_create_appointment_tool"
 
         # «تم تعديل كل المواعيد» etc. without enough successful update_appointment_date calls (bulk user request).
         if not api_failure_reason and _bot_reply_claims_bulk_all_appointments_updated(

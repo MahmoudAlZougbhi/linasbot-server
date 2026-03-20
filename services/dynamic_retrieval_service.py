@@ -17,6 +17,12 @@ from services import content_files_service as cfs
 from services.llm_core_service import client
 import config
 
+# Knowledge/price/style file picker — keep in sync with Activity Flow labels (text_handlers_respond).
+SELECTOR_MODEL = "gpt-5.4-mini"
+# Per 1M tokens; align with chat_response_service.MODEL_PRICING["gpt-5.4-mini"]
+SELECTOR_MODEL_INPUT_PER_1M_USD = 0.25
+SELECTOR_MODEL_OUTPUT_PER_1M_USD = 2.0
+
 SELECTOR_PROMPT = """You are a file selector. Your ONLY job is to pick which files to load.
 You do NOT decide actions, ask questions, or interpret the user. GPT does that.
 You ONLY select file IDs. That is all.
@@ -177,7 +183,7 @@ async def select_files_llm(
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-5.4-mini",
+            model=SELECTOR_MODEL,
             messages=messages,
             temperature=0.1,
         )
