@@ -418,7 +418,7 @@ async def get_customer_appointments(phone: str):
     
     return response
 
-async def create_appointment(phone: str, service_id: int, machine_id: int, branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None):
+async def create_appointment(phone: str, service_id: int, machine_id: int, branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
     """
     Creates a new appointment record.
     body_part_ids: list of body part IDs (e.g. [1, 2, 3])

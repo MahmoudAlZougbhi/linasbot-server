@@ -348,6 +348,11 @@ def _normalize_body_part_ids(raw_value: Any) -> List[int]:
     if isinstance(raw_value, list):
         result = []
         for item in raw_value:
+            if isinstance(item, dict):
+                iid = _safe_int(item.get("body_part_id") or item.get("id"))
+                if iid is not None:
+                    result.append(iid)
+                continue
             parsed = _safe_int(item)
             if parsed is not None:
                 result.append(parsed)
@@ -2101,6 +2106,37 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
                     _remember_booking_selection(user_id, function_args)
 
+                    # GPT often sends body_part_ids as objects or area names; merge layer only normalizes ints.
+                    sid_for_coerce = (
+                        selected_service_id
+                        if selected_service_id is not None
+                        else _safe_int(config.DEFAULT_SERVICE_ID)
+                    )
+                    coerced_bp = await _coerce_body_part_ids_from_gpt_booking_args(
+                        function_args, sid_for_coerce if sid_for_coerce is not None else 1
+                    )
+                    if coerced_bp:
+                        function_args["body_part_ids"] = coerced_bp
+                        _remember_booking_selection(user_id, function_args)
+
+                    # If the model passed body_parts_with_sessions, normalize and align body_part_ids.
+                    bps_raw = function_args.get("body_parts_with_sessions")
+                    if isinstance(bps_raw, list) and bps_raw:
+                        cleaned_sessions: List[Dict[str, Any]] = []
+                        for item in bps_raw:
+                            if not isinstance(item, dict):
+                                continue
+                            bid = _safe_int(item.get("body_part_id") or item.get("id"))
+                            if bid is None:
+                                continue
+                            sn = _safe_int(item.get("session_number"))
+                            sess_num = int(sn) if sn is not None and sn >= 1 else 1
+                            cleaned_sessions.append({"body_part_id": bid, "session_number": sess_num})
+                        if cleaned_sessions:
+                            function_args["body_parts_with_sessions"] = cleaned_sessions
+                            function_args["body_part_ids"] = [x["body_part_id"] for x in cleaned_sessions]
+                            _remember_booking_selection(user_id, function_args)
+
                     selected_body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
                     if selected_body_part_ids:
                         function_args["body_part_ids"] = selected_body_part_ids
@@ -2180,9 +2216,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                     # Every bookable service sends body_parts with session_number=1 for first session (API contract).
                     if function_name == "create_appointment" and selected_body_part_ids:
-                        function_args["body_parts_with_sessions"] = [
-                            {"body_part_id": bp_id, "session_number": 1} for bp_id in selected_body_part_ids
-                        ]
+                        if not function_args.get("body_parts_with_sessions"):
+                            function_args["body_parts_with_sessions"] = [
+                                {"body_part_id": bp_id, "session_number": 1}
+                                for bp_id in selected_body_part_ids
+                            ]
 
                 if function_name == "update_appointment_date":
                     phone_for_pause_guard = normalize_phone_for_lookup(

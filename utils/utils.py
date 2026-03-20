@@ -2265,9 +2265,25 @@ def get_openai_tools_schema():
                         # This is derived from the API Documentation PDF
                         "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). Must match date_components when provided. Convert natural language using CURRENT DATE AND TIME / CALENDAR ANCHOR. For 'today'/'tomorrow' set calendar_day_intent. For next-Thursday-style phrases, prefer filling date_components."},
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
-                        "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Body part IDs to treat. Ask which area(s) before calling. First session uses session_number 1 per body part (sent via body_parts in API)."}
+                        "body_part_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "minItems": 1,
+                            "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Non-empty array of numeric body_part_id values from get_body_parts for the chosen service_id. Ask which area(s) before calling. For a brand-new customer or first session, the server sends session_number=1 per part to the API via body_parts—still you must pass the correct IDs here.",
+                        },
+                        "body_parts_with_sessions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "body_part_id": {"type": "integer"},
+                                    "session_number": {"type": "integer", "description": "Use 1 for new/first-time bookings unless the API context says otherwise."},
+                                },
+                            },
+                            "description": "Optional. If omitted, the server builds [{body_part_id, session_number: 1}, ...] from body_part_ids. Prefer passing body_part_ids only unless you have a specific session map.",
+                        },
                     },
-                    "required": ["phone", "service_id", "machine_id", "branch_id", "date"]
+                    "required": ["phone", "service_id", "machine_id", "branch_id", "date", "body_part_ids"]
                 }
             }
         },
@@ -2356,7 +2372,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "check_next_appointment",
-                "description": "Returns the client's next appointment and (when available) a customer_appointments list with all of their appointment records from the system. Use next for reschedule chaining; when answering 'when is my appointment' or similar, summarize every relevant upcoming/active row in customer_appointments, not only the single next slot. If status is paused/postponed, update the existing appointment and do not create a new one.",
+                "description": "Returns the client's next appointment and (when available) customer_appointments: all rows from the system. For user-facing replies, list each upcoming appointment with date, time, service, branch, and any fields present in JSON: machine/device, body areas/parts, price/pricing—never invent prices. Do not use awkward 'viewable' phrasing; say upcoming appointments naturally. Use next for reschedule chaining. If status is paused/postponed, update the existing appointment and do not create a new one.",
                 "parameters": {
                     "type": "object",
                     "properties": {
