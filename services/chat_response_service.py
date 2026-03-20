@@ -2841,7 +2841,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             not api_failure_reason
             and tool_calls
             and not had_update_tool
-            and is_reschedule_intent(user_input)
+            and is_reschedule_intent
         ):
             if any(
                 m in _brl_flow
