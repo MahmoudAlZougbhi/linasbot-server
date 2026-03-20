@@ -679,6 +679,8 @@ def _normalize_body_part_ids(raw_value: Any) -> List[int]:
     if isinstance(raw_value, list):
         result = []
         for item in raw_value:
+            if item is None:
+                continue
             if isinstance(item, dict):
                 iid = _safe_int(item.get("body_part_id") or item.get("id"))
                 if iid is not None and iid > 0:
@@ -1361,6 +1363,7 @@ async def _try_infer_body_part_ids_from_conversation(
     blob = _recent_booking_context_blob(context_messages, user_input).lower()
     if not blob.strip():
         return None
+    compact = re.sub(r"[\s_\-]+", "", blob)
     underarm_franco = any(
         t in blob
         for t in (
@@ -1373,7 +1376,14 @@ async def _try_infer_body_part_ids_from_conversation(
         )
     )
     underarm_ar = "ابط" in blob or "إبط" in blob or "اباط" in blob
-    underarm_en = "underarm" in blob or "armpit" in blob
+    # "under arms", "under arm", "underarms" → compact contains underarm
+    underarm_en = (
+        "underarm" in compact
+        or "armpit" in blob
+        or "arm pit" in blob
+        or "aisselle" in blob
+        or "axilla" in blob
+    )
     if underarm_franco or underarm_ar or underarm_en:
         for hint in ("underarm", "إبط", "ابط", "armpit"):
             resolved = await _resolve_body_part_ids_from_area_hint(hint, service_id)
@@ -1748,6 +1758,21 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     if _safe_int(leaked.get("machine_id")) is None:
         return None
     bp_norm = _normalize_body_part_ids(leaked.get("body_part_ids"))
+    lw = dict(leaked)
+    _fix_misassigned_tattoo_service_for_hair_booking(
+        lw, current_gender, user_input, current_context_messages
+    )
+    if lw.get("service_id") is not None:
+        leaked["service_id"] = lw["service_id"]
+    temp_sid = _safe_int(leaked.get("service_id"))
+    if temp_sid is None:
+        temp_sid = _infer_service_id_from_leak(leaked, current_gender)
+    if not bp_norm and temp_sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
+        inferred_bp = await _try_infer_body_part_ids_from_conversation(
+            temp_sid, user_input, current_context_messages
+        )
+        if inferred_bp:
+            bp_norm = inferred_bp
     if not bp_norm:
         return None
 
@@ -1908,6 +1933,8 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
         return None
     out: List[int] = []
     for item in raw:
+        if item is None:
+            continue
         if isinstance(item, int):
             iid = _safe_int(item)
             if iid is not None and iid > 0:
@@ -2036,6 +2063,7 @@ async def _resolve_body_part_ids_from_area_hint(area_hint: str, service_id: int)
     if static_ids:
         return static_ids
     al = area_hint.strip().lower()
+    al_compact = re.sub(r"[\s_\-]+", "", al)
     needle_terms = ("back", "ظهر", "ضهر", "dahr", "dahre", "عمود فقري")
     hand_terms = ("hand", "hands", "eideh", "eide", "يد", "اليد", "معصم", "wrist", "forearm", "arm")
     try:
@@ -2043,9 +2071,10 @@ async def _resolve_body_part_ids_from_area_hint(area_hint: str, service_id: int)
         if not bp_resp.get("success") or not isinstance(bp_resp.get("data"), list):
             return None
         underarm_hint = (
-            "underarm" in al
+            "underarm" in al_compact
             or "armpit" in al
             or "aisselle" in al
+            or "axilla" in al
             or "ابط" in area_hint
             or "إبط" in area_hint
         )
@@ -3819,13 +3848,37 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         _brl_flow = (parsed_response.get("bot_reply") or "").strip().lower()
         had_update_tool = bool(tool_calls) and "update_appointment_date" in tool_names
 
+        _leaked_rec = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")
+        _rec_has_date = bool(_leaked_rec.get("date") or _leaked_rec.get("date_components"))
+        _rec_mach = _safe_int(_leaked_rec.get("machine_id"))
+        _rec_lw = dict(_leaked_rec)
+        _fix_misassigned_tattoo_service_for_hair_booking(
+            _rec_lw, current_gender, user_input, current_context_messages
+        )
+        _rec_sid = _safe_int(_rec_lw.get("service_id")) or _infer_service_id_from_leak(
+            _leaked_rec, current_gender
+        )
+        stuck_hair_booking_recovery = (
+            (parsed_response.get("action") or "").strip().lower() == "ask_for_details_for_booking"
+            and _rec_has_date
+            and _rec_mach is not None
+            and _rec_sid in LASER_HAIR_REMOVAL_SERVICE_IDS
+        )
+
         # Model sometimes puts create_appointment-shaped JSON in the assistant text but only calls get_machines.
         if (
             tool_calls
             and "create_appointment" not in tool_names
             and not api_failure_reason
-            and _bot_reply_claims_completed_booking(parsed_response.get("bot_reply") or "")
-            and not _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
+            and (
+                (
+                    _bot_reply_claims_completed_booking(parsed_response.get("bot_reply") or "")
+                    and not _bot_reply_claims_completed_appointment_update(
+                        parsed_response.get("bot_reply") or ""
+                    )
+                )
+                or stuck_hair_booking_recovery
+            )
         ):
             rec_api = await _try_recover_create_appointment_from_auxiliary_gpt_json(
                 gpt_raw_content,
@@ -3850,6 +3903,17 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 )
                 if rec_api.get("success"):
                     recovered_create_appointment_ok = True
+                    if stuck_hair_booking_recovery:
+                        parsed_response["action"] = "answer_question"
+                        if detected_language in ("ar", "franco"):
+                            parsed_response["bot_reply"] = _normalize_arabic_reply(
+                                "تم تثبيت الحجز على السيستم. إذا بدك تعديل بالوقت أو الفرع، خبرني 🌷"
+                            )
+                        else:
+                            parsed_response["bot_reply"] = (
+                                "Your appointment has been saved in the system. "
+                                "Let me know if you need to change the time or branch."
+                            )
                     try:
                         from services.analytics_events import analytics
 
