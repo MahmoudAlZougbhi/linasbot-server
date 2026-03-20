@@ -284,6 +284,108 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
     )
 
 
+def _user_message_is_acknowledgment_only(text: str) -> bool:
+    """True for ok/تمام/yes and similar short replies that cannot carry new booking args."""
+    raw = (text or "").strip()
+    if not raw:
+        return True
+    t = raw.lower()
+    t = re.sub(r"[^\w\s\u0600-\u06FF]", "", t).strip()
+    if not t:
+        return True
+    ack = {
+        "ok",
+        "okay",
+        "oki",
+        "oke",
+        "oky",
+        "kk",
+        "k",
+        "yes",
+        "yeah",
+        "yep",
+        "ya",
+        "sure",
+        "fine",
+        "deal",
+        "alright",
+        "tamam",
+        "تمام",
+        "mashi",
+        "mashy",
+        "mashe",
+        "mache",
+        "naam",
+        "نعم",
+        "na3am",
+        "eh",
+        "eih",
+        "ay",
+        "اي",
+        "ايه",
+        "ah",
+        "ahh",
+        "تم",
+        "حسنا",
+        "حسناً",
+        "طيب",
+        "ماشي",
+        "اوكي",
+        "merci",
+        "thanks",
+        "thankyou",
+        "thx",
+    }
+    if t in ack:
+        return True
+    t_spaced = " ".join(t.split())
+    if t_spaced in {"go ahead", "no problem", "all good", "sounds good"}:
+        return True
+    if len(t) <= 3 and t in {"ok", "kk", "k", "تم", "اي", "eh"}:
+        return True
+    return False
+
+
+def _operational_context_promises_imminent_appointment_update(ctx: Optional[str]) -> bool:
+    """Last bot line said it will update/reschedule (but tools may not have run yet)."""
+    if not ctx or not str(ctx).strip():
+        return False
+    c = str(ctx)
+    c_low = c.lower()
+    needles_ar = (
+        "رح أعدّل",
+        "رح اعدل",
+        "رح أعدل",
+        "رح نعدّل",
+        "سأعدّل",
+        "سوف أعدّل",
+        "رح أغيّر",
+        "رح اغير",
+    )
+    needles_en = (
+        "will update your appointment",
+        "will reschedule",
+        "i will move your appointment",
+        "going to update your appointment",
+    )
+    return any(n in c for n in needles_ar) or any(n in c_low for n in needles_en)
+
+
+def _bot_reply_claims_completed_appointment_update(bot_reply: str) -> bool:
+    br = (bot_reply or "").strip().lower()
+    if "تم تثبيت تعديل" in br or "تمّ تثبيت تعديل" in br:
+        return True
+    if "تم تثبيت طلبك" in br and ("تعديل" in br or "موعد" in br):
+        return True
+    if "تم تأكيد التعديل" in br or "تم تأكيد تعديل" in br:
+        return True
+    if "appointment has been updated" in br or "appointment has been rescheduled" in br:
+        return True
+    if "تم تحديث الموعد" in br or "تم نقل الموعد" in br:
+        return True
+    return False
+
+
 CLINIC_PRICE_CONTEXT_KEYWORDS = [
     "laser",
     "ليزر",
@@ -1598,6 +1700,25 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             + json_output_contract
         )
 
+    # Steer the model when the user only confirms after we promised an appointment update (Ok/deal/تمام…).
+    if not user_image_base64 and _user_message_is_acknowledgment_only(user_input):
+        _pend_update = _operational_context_promises_imminent_appointment_update(operational_context)
+        if not _pend_update:
+            for _msg in reversed(current_context_messages or []):
+                if _msg.get("role") == "assistant":
+                    _pend_update = _operational_context_promises_imminent_appointment_update(
+                        str(_msg.get("content") or "")
+                    )
+                    break
+        if _pend_update:
+            system_instruction_final += (
+                "\n\n**⚡ PENDING-OPERATION CONFIRMATION (THIS TURN ONLY):**\n"
+                "- The user's latest message is only a short **yes / ok / proceed** style confirmation.\n"
+                "- Your previous assistant turn (or thread context) already committed to **updating or rescheduling** an appointment.\n"
+                "- **Interpret** their reply as authorization to **execute that same operation now**.\n"
+                "- You MUST call the real tools in this response: `check_next_appointment` if you still need `appointment_id`, then **`update_appointment_date`** using the **date/time and service/branch already agreed** in the conversation. Do **not** claim the update is done in `bot_reply` unless `update_appointment_date` actually succeeded in this request.\n"
+            )
+
     context_messages_for_ai = list(current_context_messages or [])
     context_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
     if context_cap > 0 and len(context_messages_for_ai) > context_cap:
@@ -2693,14 +2814,66 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
+        _brl_flow = (parsed_response.get("bot_reply") or "").strip().lower()
+        had_update_tool = bool(tool_calls) and "update_appointment_date" in tool_names
 
         # Structured booking only: no same-day or text-based booking fallbacks.
 
-        # If the model text claims a completed booking but never called create_appointment → handover signal.
-        if tool_calls and "create_appointment" not in tool_names:
-            _brl = (parsed_response.get("bot_reply") or "").strip().lower()
+        # User replied Ok/تمام after bot said it WILL update (e.g. "رح أعدّل موعد…") — model must not claim "تم تثبيت التعديل" without tools.
+        if not api_failure_reason and not had_update_tool:
+            _pending_update_promise = _operational_context_promises_imminent_appointment_update(operational_context)
+            if not _pending_update_promise:
+                for _msg in reversed(current_context_messages or []):
+                    if _msg.get("role") == "assistant":
+                        _pending_update_promise = _operational_context_promises_imminent_appointment_update(
+                            str(_msg.get("content") or "")
+                        )
+                        break
+            if (
+                _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
+                and _user_message_is_acknowledgment_only(user_input)
+                and _pending_update_promise
+            ):
+                api_failure_reason = "update_claimed_without_tool_after_pending_promise"
+
+        # Reschedule wording in user message + completion text but no update_appointment_date in this turn.
+        if (
+            not api_failure_reason
+            and tool_calls
+            and not had_update_tool
+            and is_reschedule_intent(user_input)
+        ):
             if any(
-                x in _brl
+                m in _brl_flow
+                for m in (
+                    "تم تأجيل",
+                    "تمّ تأجيل",
+                    "تم التأجيل",
+                    "تم تعديل الموعد",
+                    "تمّ تعديل الموعد",
+                    "تم تغيير الموعد",
+                    "تم تحديث الموعد",
+                    "تم نقل الموعد",
+                    "صار موعدك",
+                    "أصبح موعدك",
+                    "rescheduled",
+                    "postponed your appointment",
+                    "moved your appointment",
+                    "appointment has been updated",
+                )
+            ):
+                api_failure_reason = "reschedule_claimed_without_update_appointment_date_tool"
+
+        # If the model text claims a completed booking but never called create_appointment → handover signal.
+        # Skip when reply is clearly an appointment *update* completion (handled above).
+        if (
+            not api_failure_reason
+            and tool_calls
+            and "create_appointment" not in tool_names
+            and not _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
+        ):
+            if any(
+                x in _brl_flow
                 for x in (
                     "تم تثبيت",
                     "تمّ تثبيت",
