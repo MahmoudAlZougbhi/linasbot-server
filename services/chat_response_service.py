@@ -543,6 +543,9 @@ OFF_TOPIC_PRICE_FALSE_POSITIVE_HINTS = [
 # Hair removal (1, 12) is the only family where the customer chooses the device (Neo/Quadro/Candela/…).
 DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS = {1, 2, 4, 5, 11, 12, 13, 14}
 LASER_HAIR_REMOVAL_SERVICE_IDS = {1, 12}
+# get_machines IDs that are laser-hair devices (Quadro, Trio, NEO, Candela) — not Pico/tattoo/DPL.
+# If GPT sends service_id 13 (tattoo) with one of these, it is almost always a hair booking misfire.
+HAIR_REMOVAL_MACHINE_IDS = frozenset({9, 10, 13, 15})
 
 def validate_language_match(user_language: str, bot_response: str, detected_response_lang: str) -> tuple:
     """
@@ -678,11 +681,11 @@ def _normalize_body_part_ids(raw_value: Any) -> List[int]:
         for item in raw_value:
             if isinstance(item, dict):
                 iid = _safe_int(item.get("body_part_id") or item.get("id"))
-                if iid is not None:
+                if iid is not None and iid > 0:
                     result.append(iid)
                 continue
             parsed = _safe_int(item)
-            if parsed is not None:
+            if parsed is not None and parsed > 0:
                 result.append(parsed)
         return result
 
@@ -691,12 +694,12 @@ def _normalize_body_part_ids(raw_value: Any) -> List[int]:
         result = []
         for part in pieces:
             parsed = _safe_int(part)
-            if parsed is not None:
+            if parsed is not None and parsed > 0:
                 result.append(parsed)
         return result
 
     parsed_single = _safe_int(raw_value)
-    return [parsed_single] if parsed_single is not None else []
+    return [parsed_single] if parsed_single is not None and parsed_single > 0 else []
 
 
 def _get_body_part_required_service_ids() -> set:
@@ -746,6 +749,11 @@ def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_
         return existing
 
     text = str(user_input or "").lower()
+    if any(
+        keyword in text
+        for keyword in ("candela", "كانديلا", "kandila", "quadro", "كوادرو", "trio", " neo", "neo ")
+    ):
+        return 12 if current_gender == "female" else 1
     if any(keyword in text for keyword in ["tattoo", "وشم", "تاتو", "détatouage"]):
         return 13
     if any(
@@ -824,7 +832,7 @@ def _finalize_create_appointment_payload_for_api(function_args: Dict[str, Any]) 
             if not isinstance(x, dict):
                 continue
             bid = _safe_int(x.get("body_part_id") or x.get("id"))
-            if bid is None:
+            if bid is None or bid <= 0:
                 continue
             cleaned.append({"body_part_id": bid, "session_number": 1})
         if cleaned:
@@ -1262,6 +1270,9 @@ def _resolve_branch_id_from_leak(leaked: dict) -> Optional[int]:
 
 def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
     sid = _safe_int(leaked.get("service_id"))
+    mid = _safe_int(leaked.get("machine_id"))
+    if sid == 13 and mid is not None and mid in HAIR_REMOVAL_MACHINE_IDS:
+        return 12 if current_gender == "female" else 1
     if sid is not None:
         return sid
     hint_sid = _service_hint_to_service_id(leaked.get("service"))
@@ -1271,6 +1282,104 @@ def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
     if "hair" in svc or "شعر" in svc or "laser hair" in svc:
         return 12 if current_gender == "female" else 1
     return int(config.DEFAULT_SERVICE_ID or 1)
+
+
+def _fix_misassigned_tattoo_service_for_hair_booking(
+    function_args: Dict[str, Any],
+    current_gender: str,
+    user_input: str,
+    context_messages: Optional[List[dict]],
+) -> None:
+    """
+    GPT often confuses tattoo service_id (13) with NEO machine id (13) or sends 13 + Candela/Quadro.
+    If the chosen machine is a hair device or the thread clearly mentions hair/Candela/underarm, remap to 1/12.
+    """
+    sid = _safe_int(function_args.get("service_id"))
+    if sid != 13:
+        return
+    if current_gender not in ("male", "female"):
+        return
+    mid = _safe_int(function_args.get("machine_id"))
+    blob = (user_input or "").lower()
+    for msg in (context_messages or [])[-24:]:
+        if isinstance(msg.get("content"), str):
+            blob += " " + msg["content"].lower()
+    hair_thread = any(
+        t in blob
+        for t in (
+            "candela",
+            "كانديلا",
+            "kandila",
+            "quadro",
+            "كوادرو",
+            " neo",
+            "neo ",
+            "niyo",
+            "trio",
+            "ليزر شعر",
+            "إزالة شعر",
+            "ازالة شعر",
+            "ta7t el bat",
+            "taht el bat",
+            "t7t el bat",
+            "تحت الإبط",
+            "تحت الابط",
+            "mw3ad",
+            "maw3ad",
+            "حجز",
+            "موعد",
+        )
+    )
+    tattoo_thread = any(t in blob for t in ("tattoo", "وشم", "تاتو", "détatouage", "detatouage"))
+    if mid in HAIR_REMOVAL_MACHINE_IDS or (hair_thread and not tattoo_thread):
+        new_sid = 12 if current_gender == "female" else 1
+        print(
+            f"DEBUG: Corrected service_id 13 → {new_sid} (hair booking; machine_id={mid}, hair_thread={hair_thread})"
+        )
+        function_args["service_id"] = new_sid
+
+
+def _recent_booking_context_blob(context_messages: Optional[List[dict]], user_input: str, last_n: int = 24) -> str:
+    parts: List[str] = []
+    if user_input and str(user_input).strip():
+        parts.append(str(user_input))
+    for msg in (context_messages or [])[-last_n:]:
+        c = msg.get("content")
+        if isinstance(c, str) and c.strip():
+            parts.append(c)
+    return " ".join(parts)
+
+
+async def _try_infer_body_part_ids_from_conversation(
+    service_id: int,
+    user_input: str,
+    context_messages: Optional[List[dict]],
+) -> Optional[List[int]]:
+    """When GPT omitted valid IDs but the user already named an area (e.g. underarm / ta7t el bat)."""
+    if _safe_int(service_id) not in LASER_HAIR_REMOVAL_SERVICE_IDS:
+        return None
+    blob = _recent_booking_context_blob(context_messages, user_input).lower()
+    if not blob.strip():
+        return None
+    underarm_franco = any(
+        t in blob
+        for t in (
+            "ta7t el bat",
+            "taht el bat",
+            "t7t el bat",
+            "7t el bat",
+            "ta7t l bat",
+            "ta7t elbet",
+        )
+    )
+    underarm_ar = "ابط" in blob or "إبط" in blob or "اباط" in blob
+    underarm_en = "underarm" in blob or "armpit" in blob
+    if underarm_franco or underarm_ar or underarm_en:
+        for hint in ("underarm", "إبط", "ابط", "armpit"):
+            resolved = await _resolve_body_part_ids_from_area_hint(hint, service_id)
+            if resolved:
+                return resolved
+    return None
 
 
 def _is_placeholder_booking_customer_name(name: Optional[str]) -> bool:
@@ -1719,6 +1828,11 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
 
     sid = _infer_service_id_from_leak(fa, current_gender)
     fa["service_id"] = sid
+    _fix_misassigned_tattoo_service_for_hair_booking(
+        fa, current_gender, user_input, current_context_messages
+    )
+    sid = _safe_int(fa.get("service_id")) or sid
+    fa["service_id"] = sid
 
     branch_id = _resolve_branch_id_from_leak(fa)
     if branch_id is None:
@@ -1732,6 +1846,11 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     fa["machine_id"] = machine_id
 
     selected_body_part_ids = _normalize_body_part_ids(fa.get("body_part_ids"))
+    if sid in LASER_HAIR_REMOVAL_SERVICE_IDS and not selected_body_part_ids:
+        inf_bp = await _try_infer_body_part_ids_from_conversation(sid, user_input, current_context_messages)
+        if inf_bp:
+            selected_body_part_ids = inf_bp
+            fa["body_part_ids"] = inf_bp
     if sid in body_part_required_service_ids and not selected_body_part_ids:
         print("RECOVERY create_appointment: missing body_part_ids for service")
         return None
@@ -1791,12 +1910,12 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
     for item in raw:
         if isinstance(item, int):
             iid = _safe_int(item)
-            if iid is not None:
+            if iid is not None and iid > 0:
                 out.append(iid)
         elif isinstance(item, dict):
             _raw_id = item.get("id")
             iid = _safe_int(item.get("body_part_id") or _raw_id)
-            if iid is not None:
+            if iid is not None and iid > 0:
                 out.append(iid)
                 continue
             area = item.get("body_part") or item.get("name") or item.get("area")
@@ -1814,7 +1933,11 @@ def _missing_body_part_booking_prompt(service_id: Optional[int], lang: str) -> s
     """Ask for body area in wording that matches the service (tattoo vs hair vs other)."""
     sid = _safe_int(service_id)
     if sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
-        ar = "كرمال نثبّت الموعد على السيستم، لازم نعرف أي منطقة بالجسم بدك (مثلاً: جسم كامل، أرجل، باكيني، وجه...)."
+        ar = (
+            "كرمال نثبّت الموعد على السيستم، لازم نحدّد منطقة الجسم بنفس الاسم اللي بالقائمة "
+            "(مثلاً: إبط، ظهر، وجه…). ما في داعي لرقم تقني من عندك — إذا حابب، قلّي المنطقة بالعربي أو الفرانكو "
+            "وبقلّك الاسم الظاهر بالنظام، أو منقدر نمرّق على الخيارات سوا."
+        )
         en = "To save the appointment on the system, I need to know which body area(s) you want (e.g. full body, legs, bikini, face...)."
         fr = "Pour enregistrer le rendez-vous, j’ai besoin de savoir quelle(s) zone(s) du corps (ex. corps entier, jambes, maillot, visage...)."
     elif sid == 13:
@@ -1919,6 +2042,25 @@ async def _resolve_body_part_ids_from_area_hint(area_hint: str, service_id: int)
         bp_resp = await api_integrations.get_body_parts(service_id=service_id)
         if not bp_resp.get("success") or not isinstance(bp_resp.get("data"), list):
             return None
+        underarm_hint = (
+            "underarm" in al
+            or "armpit" in al
+            or "aisselle" in al
+            or "ابط" in area_hint
+            or "إبط" in area_hint
+        )
+        if underarm_hint:
+            for item in bp_resp["data"]:
+                name = (item.get("name") or item.get("body_part") or item.get("title") or "").strip().lower()
+                if not name:
+                    continue
+                if any(
+                    u in name
+                    for u in ("underarm", "armpit", "ابط", "إبط", "aisselle", "axilla")
+                ):
+                    bid = _safe_int(item.get("id"))
+                    if bid is not None and bid > 0:
+                        return [bid]
         if al in hand_terms or any(t in al for t in ("eideh", "eide", "hand", "hands", "wrist", "معصم", "forearm")):
             for item in bp_resp["data"]:
                 name = (item.get("name") or item.get("body_part") or item.get("title") or "").strip().lower()
@@ -2866,6 +3008,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 
                 # --- create_appointment: structured tool args only (no user-text booking inference) ---
                 if function_name == "create_appointment":
+                    _fix_misassigned_tattoo_service_for_hair_booking(
+                        function_args,
+                        current_gender,
+                        user_input,
+                        current_context_messages,
+                    )
                     # Extract customer name and phone from the conversation if not provided in tool args
                     # CRITICAL FIX: For Qiscus, user_id is room_id, NOT phone number
                     # Get actual phone number from user_data_whatsapp
@@ -3166,7 +3314,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             if not isinstance(item, dict):
                                 continue
                             bid = _safe_int(item.get("body_part_id") or item.get("id"))
-                            if bid is None:
+                            if bid is None or bid <= 0:
                                 continue
                             sn = _safe_int(item.get("session_number"))
                             sess_num = int(sn) if sn is not None and sn >= 1 else 1
@@ -3180,6 +3328,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if selected_body_part_ids:
                         function_args["body_part_ids"] = selected_body_part_ids
                         _remember_booking_selection(user_id, function_args)
+                    elif selected_service_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
+                        inferred_bp = await _try_infer_body_part_ids_from_conversation(
+                            selected_service_id, user_input, current_context_messages
+                        )
+                        if inferred_bp:
+                            function_args["body_part_ids"] = inferred_bp
+                            selected_body_part_ids = inferred_bp
+                            _remember_booking_selection(user_id, function_args)
                     if (
                         selected_service_id in body_part_required_service_ids
                         and not selected_body_part_ids
