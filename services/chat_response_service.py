@@ -19,13 +19,10 @@ from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
     datetime_from_ai_date_components,
-    detect_day_reference,
     detect_reschedule_intent,
     format_clinic_calendar_anchor,
     now_in_bot_tz,
     parse_datetime_flexible,
-    resolve_relative_datetime,
-    text_mentions_datetime,
     to_bot_tz,
 )
 
@@ -105,22 +102,6 @@ PRICE_WEAK_KEYWORDS = [
     "2adesh",
     "kam",
 ]
-
-
-def _detect_same_day_change_intent(text: str) -> bool:
-    """
-    True only when the user asks to move/change an *existing* appointment to today
-    (reschedule/postpone to today). NOT when they want a *new* booking for today —
-    that must stay with the AI/tools and must never trigger the same-day API fallback.
-    """
-    if not text or not isinstance(text, str):
-        return False
-    if not detect_reschedule_intent(text):
-        return False
-    t = text.strip().lower()
-    today_keywords = ["el yom", "elyom", "اليوم", "today", "aujourd'hui", "halyom"]
-    has_today = any(k in t for k in today_keywords) or detect_day_reference(text) == "today"
-    return has_today
 
 
 def _extract_appointment_id_from_check_response(response: dict) -> Optional[int]:
@@ -824,45 +805,6 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
                     out.extend(resolved)
     normalized = _normalize_body_part_ids(out)
     return normalized if normalized else None
-
-
-def _reply_claims_booking_completed(bot_reply: str) -> bool:
-    """True when the model's text asserts the appointment was already saved (must match API reality)."""
-    br = (bot_reply or "").strip().lower()
-    phrases = (
-        "تمّ حجز",
-        "تم حجز",
-        "تم تحديد الموعد",
-        "تم تحديد موعد",
-        "تم تثبيت",
-        "تمّ تثبيت",
-        "booked",
-        "حجز موعد",
-    )
-    return any(p in br for p in phrases)
-
-
-def _should_preserve_booking_fallback_reply(parsed: dict) -> bool:
-    """
-    If the model already sent a substantive booking reply, do not replace it with the generic
-    body-area blocker (wrong tone or wrong service, e.g. hair examples for tattoo).
-    """
-    if not isinstance(parsed, dict):
-        return False
-    action = (parsed.get("action") or "").strip().lower()
-    br = (parsed.get("bot_reply") or "").strip()
-    if action == "confirm_booking_details":
-        # Clarifying next steps: preserve. Claiming "تم تثبيت" without create_appointment: allow fallback to fix.
-        if _reply_claims_booking_completed(br):
-            return False
-        return bool(br)
-    if len(br) < 30:
-        return False
-    if action == "answer_question":
-        lower = br.lower()
-        markers = ("تم حجز", "تمّ حجز", "تم تثبيت", "موعد", "الساعة", "بيروت", "فرع")
-        return any(m in lower for m in markers)
-    return False
 
 
 def _missing_body_part_booking_prompt(service_id: Optional[int], lang: str) -> str:
@@ -1763,69 +1705,59 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 return " ".join(recent_user_messages).strip()
 
-            def normalize_tool_date(function_name: str, function_args: dict, all_user_text: str) -> None:
+            def normalize_tool_date(function_name: str, function_args: dict) -> bool:
                 """
-                Normalize tool date using fixed +0200 timezone and multilingual relative phrases.
-                Keeps original date if parsing fails.
+                Build API datetime from AI tool arguments only (date_components, date string,
+                calendar_day_intent). Does not parse user chat text. False → handover (flow_meta.error).
                 """
+                nonlocal api_failure_reason
                 if "date" not in function_args:
-                    return
+                    api_failure_reason = "booking_date_missing_field"
+                    return False
 
                 original_date_str = str(function_args.get("date") or "").strip()
                 now = now_in_bot_tz()
-                latest_u = (user_input or "").strip()
-                # Model-only hints (never forward to HTTP).
                 ai_day_raw = function_args.pop("calendar_day_intent", None)
                 dc_raw = function_args.pop("date_components", None)
                 forced_day_ref = None
                 if isinstance(ai_day_raw, str) and ai_day_raw.strip().lower() in ("today", "tomorrow"):
                     forced_day_ref = ai_day_raw.strip().lower()
-                if forced_day_ref is None:
-                    forced_day_ref = detect_day_reference(latest_u) if latest_u else None
 
                 dt_obj = datetime_from_ai_date_components(dc_raw)
-                if dt_obj:
+                if dt_obj is not None:
                     print(f"DEBUG: Using date_components for {function_name}: {dc_raw} -> {dt_obj}")
-                elif not original_date_str:
-                    print(f"WARNING: No date string and invalid date_components for {function_name}. Skipping normalize.")
-                    return
                 else:
-                    dt_obj = resolve_relative_datetime(
-                        all_user_text, reference=now, forced_day_ref=forced_day_ref
-                    )
-                    if dt_obj:
-                        print(f"DEBUG: Resolved relative datetime from user text ({function_name}): {all_user_text} -> {dt_obj}")
-                    else:
-                        dt_obj = parse_datetime_flexible(original_date_str)
-                        if not dt_obj:
-                            print(f"WARNING: Could not parse tool date '{original_date_str}' for {function_name}. Keeping original.")
-                            return
-                        if forced_day_ref in ("today", "tomorrow"):
-                            align_text = forced_day_ref
-                        elif latest_u and detect_day_reference(latest_u):
-                            align_text = latest_u
-                        else:
-                            align_text = all_user_text
-                        dt_obj = align_datetime_to_day_reference(dt_obj, align_text, reference=now)
+                    if not original_date_str:
+                        print(f"WARNING: {function_name}: missing date_components and empty date string.")
+                        api_failure_reason = "booking_structured_date_invalid"
+                        return False
+                    dt_obj = parse_datetime_flexible(original_date_str)
+                    if not dt_obj:
+                        print(f"WARNING: Could not parse AI date '{original_date_str}' for {function_name}.")
+                        api_failure_reason = "booking_date_parse_failed"
+                        return False
+                    if forced_day_ref in ("today", "tomorrow"):
+                        dt_obj = align_datetime_to_day_reference(dt_obj, forced_day_ref, reference=now)
 
-                # If GPT provided a past year, keep intent but move to current year.
                 if dt_obj.year < now.year:
                     dt_obj = dt_obj.replace(year=now.year)
-                    print(f"WARNING: GPT proposed past year. Adjusted to current year: {dt_obj}")
+                    print(f"WARNING: AI date year adjusted to current year: {dt_obj}")
 
-                # Cap to 365 days ahead.
                 max_allowed = now + datetime.timedelta(days=365)
                 if dt_obj > max_allowed:
-                    dt_obj = max_allowed.replace(second=0, microsecond=0)
-                    print(f"WARNING: Date too far in future. Capped to: {dt_obj}")
-
-                # Must stay in the future for API validation.
+                    print(f"WARNING: AI date beyond allowed window: {dt_obj}")
+                    api_failure_reason = "booking_date_out_of_window"
+                    return False
                 if dt_obj <= now:
-                    dt_obj = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)
-                    print(f"WARNING: Date was not in future. Adjusted to: {dt_obj}")
+                    print(f"WARNING: AI date not strictly in the future: {dt_obj} (now={now})")
+                    api_failure_reason = "booking_date_in_past_or_now"
+                    return False
 
-                function_args["date"] = dt_obj.astimezone(BOOKING_TZ).strftime('%Y-%m-%d %H:%M:%S')
-                print(f"DEBUG: Normalized date for {function_name}: {original_date_str} -> {function_args['date']}")
+                function_args["date"] = dt_obj.astimezone(BOOKING_TZ).strftime("%Y-%m-%d %H:%M:%S")
+                print(
+                    f"DEBUG: Normalized date for {function_name}: {original_date_str or dc_raw} -> {function_args['date']}"
+                )
+                return True
 
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
@@ -1868,21 +1800,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         or user_id
                     )
 
-                    # Prevent hallucinated date/time for change requests too.
-                    if not text_mentions_datetime(all_user_text_for_date):
-                        print("SAFETY: Change request detected without explicit date/time. Asking user for date/time.")
-                        parsed_response = {
-                            "action": "ask_for_details_for_booking",
-                            "bot_reply": "What new date and time would you like for your appointment?" if current_preferred_lang == "en" else
-                                        "أكيد، شو التاريخ والوقت الجديد يلي بدك ياه لموعدك؟" if current_preferred_lang == "ar" else
-                                        "Bien sûr, quelle nouvelle date et heure souhaitez-vous pour votre rendez-vous?" if current_preferred_lang == "fr" else
-                                        "أكيد، shu el tarekh w el wa2et el jdid li badak yeh lal maw3ad?",
-                            "detected_language": current_preferred_lang,
-                            "detected_gender": current_gender,
-                            "current_gender_from_config": current_gender
-                        }
-                        return parsed_response
-
                     paused_appointment_id = await find_paused_appointment_id(phone_for_pause_guard)
                     if paused_appointment_id:
                         requested_date = function_args.get("date")
@@ -1897,78 +1814,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             f"SAFETY: Converted create_appointment -> update_appointment_date for paused appointment_id={paused_appointment_id}"
                         )
                 
-                # --- NEW LOGIC: Pre-process date/time for create_appointment tool call ---
+                # --- create_appointment: structured tool args only (no user-text booking inference) ---
                 if function_name == "create_appointment":
-                    # === CRITICAL VALIDATION: Ensure user explicitly provided date/time ===
-                    # GPT sometimes makes up dates - we must verify the user actually specified one
-                    def user_provided_datetime(messages, user_input):
-                        """Check if user explicitly mentioned date/time in multilingual text."""
-                        all_user_text = collect_user_datetime_text(messages, user_input)
-                        has_datetime_hint = text_mentions_datetime(all_user_text)
-                        if has_datetime_hint:
-                            print(f"DEBUG: Date/time hint detected in user messages: {all_user_text}")
-                        return has_datetime_hint
-
-                    # Validate that user actually provided a date/time
-                    if not user_provided_datetime(current_context_messages, user_input):
-                        print("ERROR: GPT attempted to book without user specifying date/time. Rejecting.")
-                        # Return response asking for date/time
-                        parsed_response = {
-                            "action": "ask_for_details_for_booking",
-                            "bot_reply": "What date and time would work best for your appointment?" if current_preferred_lang == "en" else
-                                        "شو التاريخ والوقت يلي بيناسبك للموعد؟" if current_preferred_lang == "ar" else
-                                        "Quel jour et quelle heure vous conviendraient pour le rendez-vous?" if current_preferred_lang == "fr" else
-                                        "shu el tarekh w el wa2et li byesbak lal maw3ad?",
-                            "detected_language": current_preferred_lang,
-                            "detected_gender": current_gender,
-                            "current_gender_from_config": current_gender
-                        }
-                        return parsed_response
-
-                    # === CRITICAL VALIDATION: Ensure user explicitly provided branch location ===
-                    def user_provided_branch(messages, user_input):
-                        """Check if user explicitly mentioned a branch location in their messages."""
-                        branch_patterns = [
-                            # Branch names
-                            r'\b(?:beirut|beyrouth|بيروت|bayrut)\b',
-                            r'\b(?:manara|منارة|el manara|el-manara)\b',
-                            r'\b(?:antelias|انطلياس|antilyas)\b',
-                            r'\b(?:center\s*haj|haj\s*building)\b',
-                            # Generic branch references with location
-                            r'\b(?:branch\s+(?:1|2|one|two))\b',
-                            r'\b(?:first\s+branch|second\s+branch)\b',
-                            r'\b(?:main\s+branch)\b',
-                        ]
-
-                        # Check user input and recent user messages
-                        all_user_text = user_input.lower()
-                        for msg in messages:
-                            if msg.get("role") == "user":
-                                all_user_text += " " + msg.get("content", "").lower()
-
-                        for pattern in branch_patterns:
-                            if re.search(pattern, all_user_text, re.IGNORECASE):
-                                print(f"DEBUG: Found branch pattern in user messages: {pattern}")
-                                return True
-
-                        return False
-
-                    # Validate that user actually provided a branch
-                    if not user_provided_branch(current_context_messages, user_input):
-                        print("ERROR: GPT attempted to book without user specifying branch. Rejecting.")
-                        # Return response asking for branch
-                        parsed_response = {
-                            "action": "ask_for_details_for_booking",
-                            "bot_reply": "Which branch would you prefer? We have Beirut (Manara) and Antelias (Center Haj Building)." if current_preferred_lang == "en" else
-                                        "أي فرع بتفضل؟ عنا بيروت (المنارة) وأنطلياس (سنتر الحاج)." if current_preferred_lang == "ar" else
-                                        "Quelle branche préférez-vous? Nous avons Beyrouth (Manara) et Antelias (Center Haj)." if current_preferred_lang == "fr" else
-                                        "ayya far3 btfadel? 3anna beirut (manara) w antelias (center haj).",
-                            "detected_language": current_preferred_lang,
-                            "detected_gender": current_gender,
-                            "current_gender_from_config": current_gender
-                        }
-                        return parsed_response
-
                     # Extract customer name and phone from the conversation if not provided in tool args
                     # CRITICAL FIX: For Qiscus, user_id is room_id, NOT phone number
                     # Get actual phone number from user_data_whatsapp
@@ -2256,18 +2103,68 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         selected_service_id in body_part_required_service_ids
                         and not selected_body_part_ids
                     ):
-                        print("SAFETY: create_appointment called without body_part_ids for body-part-required service.")
-                        parsed_response = {
-                            "action": "ask_for_details_for_booking",
-                            "bot_reply": _pricing_missing_details_reply(current_preferred_lang, "body_part"),
+                        print("SAFETY: create_appointment missing body_part_ids — handover (no user-text fallback).")
+                        return {
+                            "action": "human_handover",
+                            "handover_degree": "high",
+                            "bot_reply": "عذراً، ما قدرنا نكمل الحجز آلياً. رح نوصلك لواحد من فريقنا يكمّل معك 🙏"
+                            if current_preferred_lang in ("ar", "franco")
+                            else "Sorry, we could not complete booking automatically. A team member will assist you shortly.",
                             "detected_language": current_preferred_lang,
                             "detected_gender": current_gender,
                             "current_gender_from_config": current_gender,
+                            "escalation_reason": "frustration_detected",
+                            "_flow_meta": {"error": "create_appointment_missing_body_part_ids"},
                         }
-                        return parsed_response
 
-                    # Date normalization and intent alignment (+0200)
-                    normalize_tool_date(function_name, function_args, all_user_text_for_date)
+                    if _safe_int(function_args.get("branch_id")) not in (1, 2):
+                        api_failure_reason = "invalid_branch_id"
+                        err_content = json.dumps(
+                            {
+                                "success": False,
+                                "message": "branch_id must be 1 (Beirut) or 2 (Antelias) in tool args.",
+                            }
+                        )
+                        tool_round_trips.append(
+                            {
+                                "ai_requested": function_name,
+                                "args": json.dumps(function_args)[:300],
+                                "bot_returned": err_content[:600],
+                            }
+                        )
+                        messages.append(
+                            {
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": err_content,
+                            }
+                        )
+                        continue
+
+                    if not normalize_tool_date(function_name, function_args):
+                        err_content = json.dumps(
+                            {
+                                "success": False,
+                                "message": "Booking date validation failed; structured date/date_components required from AI.",
+                            }
+                        )
+                        tool_round_trips.append(
+                            {
+                                "ai_requested": function_name,
+                                "args": json.dumps(function_args)[:300],
+                                "bot_returned": err_content[:600],
+                            }
+                        )
+                        messages.append(
+                            {
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": err_content,
+                            }
+                        )
+                        continue
                     
                     # NEW: Remove 'name' from function_args as create_appointment does not accept it directly.
                     # This resolves the `unexpected keyword argument 'name'` error.
@@ -2282,20 +2179,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         ]
 
                 if function_name == "update_appointment_date":
-                    if user_requested_change and not text_mentions_datetime(all_user_text_for_date):
-                        print("SAFETY: update_appointment_date requested without explicit date/time. Asking user for new date/time.")
-                        parsed_response = {
-                            "action": "ask_for_details_for_booking",
-                            "bot_reply": "Sure, what new date and time would you like for your appointment?" if current_preferred_lang == "en" else
-                                        "أكيد، شو التاريخ والوقت الجديد يلي بدك ياه لموعدك؟" if current_preferred_lang == "ar" else
-                                        "Bien sûr, quelle nouvelle date et heure souhaitez-vous pour votre rendez-vous?" if current_preferred_lang == "fr" else
-                                        "أكيد، shu el tarekh w el wa2et el jdid li badak yeh lal maw3ad?",
-                            "detected_language": current_preferred_lang,
-                            "detected_gender": current_gender,
-                            "current_gender_from_config": current_gender
-                        }
-                        return parsed_response
-
                     phone_for_pause_guard = normalize_phone_for_lookup(
                         function_args.get("phone")
                         or customer_phone_clean
@@ -2315,7 +2198,29 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if phone_for_pause_guard and not function_args.get("phone"):
                         function_args["phone"] = phone_for_pause_guard
 
-                    normalize_tool_date(function_name, function_args, all_user_text_for_date)
+                    if not normalize_tool_date(function_name, function_args):
+                        err_content = json.dumps(
+                            {
+                                "success": False,
+                                "message": "Reschedule date validation failed; structured date/date_components required from AI.",
+                            }
+                        )
+                        tool_round_trips.append(
+                            {
+                                "ai_requested": function_name,
+                                "args": json.dumps(function_args)[:300],
+                                "bot_returned": err_content[:600],
+                            }
+                        )
+                        messages.append(
+                            {
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": err_content,
+                            }
+                        )
+                        continue
 
                 # --- FIX: Auto-chain appointment_id from check_next_appointment to update_appointment_date ---
                 # When GPT calls both tools together, it can't know the real appointment_id until check_next_appointment returns.
@@ -2380,28 +2285,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             check_next_appointment_result = tool_output
                             print(f"DEBUG: Stored check_next_appointment result for auto-chaining")
 
-                        # Store machine_id to booking_state when get_machines returns and user said Candela/Neo/Quadro
-                        if function_name == "get_machines" and isinstance(tool_output, dict) and tool_output.get("success"):
-                            data = tool_output.get("data", [])
-                            all_txt = (all_user_text_for_date or user_input or "").lower()
-                            machine_keywords = [
-                                ("candela", "كانديلا", "candila"),
-                                ("neo", "نيو"),
-                                ("quadro", "كوادرو"),
-                            ]
-                            for kw_en, *rest in machine_keywords:
-                                kw_ar = rest[0] if rest else ""
-                                kw_alt = rest[1] if len(rest) > 1 else ""
-                                if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or (kw_alt and kw_alt in all_txt):
-                                    for m in data if isinstance(data, list) else []:
-                                        name = (m.get("name") or "").strip().lower()
-                                        if name and kw_en in name:
-                                            if user_id not in config.user_booking_state:
-                                                config.user_booking_state[user_id] = {}
-                                            config.user_booking_state[user_id]["machine_id"] = _safe_int(m.get("id"))
-                                            break
-                                    break
-
                         # 📊 ANALYTICS: Track service when appointment is created
                         if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics
@@ -2441,65 +2324,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         elif function_name == "create_appointment" and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
-                            machine_id_invalid = "machine_id" in err_msg.lower() or "invalid" in err_msg.lower()
-                            if machine_id_invalid and isinstance(function_args, dict):
-                                try:
-                                    machines_resp = await api_integrations.get_machines()
-                                    if machines_resp.get("success") and machines_resp.get("data"):
-                                        all_txt = (all_user_text_for_date or user_input or "").lower()
-                                        machine_keywords = [
-                                            ("candela", "كانديلا", "candila"),
-                                            ("neo", "نيو"),
-                                            ("quadro", "كوادرو"),
-                                        ]
-                                        retry_machine_id = None
-                                        for kw_en, *rest in machine_keywords:
-                                            kw_ar = rest[0] if rest else ""
-                                            kw_alt = rest[1] if len(rest) > 1 else ""
-                                            if kw_en in all_txt or (kw_ar and kw_ar in (user_input or "")) or (kw_alt and kw_alt in all_txt):
-                                                for m in machines_resp["data"] if isinstance(machines_resp["data"], list) else []:
-                                                    name = (m.get("name") or "").strip().lower()
-                                                    if name and kw_en in name:
-                                                        retry_machine_id = _safe_int(m.get("id"))
-                                                        break
-                                                if retry_machine_id:
-                                                    break
-                                        if not retry_machine_id and machines_resp["data"]:
-                                            retry_machine_id = _safe_int(machines_resp["data"][0].get("id"))
-                                        if retry_machine_id:
-                                            new_args = dict(function_args)
-                                            new_args["machine_id"] = retry_machine_id
-                                            tool_output = await api_integrations.create_appointment(**new_args)
-                                            if tool_output and tool_output.get("success"):
-                                                api_failure_reason = None
-                                                if user_id not in config.user_booking_state:
-                                                    config.user_booking_state[user_id] = {}
-                                                config.user_booking_state[user_id]["machine_id"] = retry_machine_id
-                                                try:
-                                                    from services.analytics_events import analytics
-                                                    raw = tool_output.get("data", {}) or {}
-                                                    apt = raw.get("appointment", raw) if isinstance(raw, dict) else {}
-                                                    svc = apt.get("service", {}) if isinstance(apt, dict) else {}
-                                                    svc_name = svc.get("name", "laser_hair_removal") if isinstance(svc, dict) else "laser_hair_removal"
-                                                    analytics.log_appointment(user_id=user_id, service=svc_name, status="booked", messages_count=len(current_context_messages))
-                                                except Exception:
-                                                    pass
-                                                print(f"create_appointment retry with machine_id={retry_machine_id} succeeded")
-                                            else:
-                                                api_failure_reason = f"create_appointment_tool_failed: {(tool_output or {}).get('message', err_msg)}"
-                                                print(f"create_appointment retry failed: {tool_output}")
-                                        else:
-                                            api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
-                                            print(f"create_appointment tool: API failed (machine_id invalid), no valid machine from get_machines)")
-                                    else:
-                                        api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
-                                        print(f"create_appointment tool: API failed: {err_msg}")
-                                except Exception as retry_e:
-                                    api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
-                                    print(f"create_appointment tool: API failed, retry error: {retry_e}")
-                            else:
-                                api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
-                                print(f"create_appointment tool: API failed: {err_msg}")
+                            api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+                            print(f"create_appointment tool: API failed (no user-text retry): {err_msg}")
                         
                         # 📊 ANALYTICS: Track appointment reschedule
                         elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and tool_output.get("success"):
@@ -2527,7 +2353,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 messages_count=0
                             )
                             print(f"📊 Analytics: Appointment rescheduled - {service_name}")
-                        
+                        elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and not tool_output.get("success"):
+                            err_msg_raw = (tool_output or {}).get("message", "Unknown error")
+                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
+                            api_failure_reason = f"update_appointment_date_tool_failed: {err_msg}"
+                            print(f"update_appointment_date tool: API failed: {err_msg}")
+
                         tool_content = json.dumps(tool_output)
                         tool_round_trips.append({
                             "ai_requested": function_name,
@@ -2625,328 +2456,24 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
 
-        # SAME-DAY FALLBACK: When user asks to move appointment to today but GPT didn't call update_appointment_date
-        if _detect_same_day_change_intent(user_input or "") and "update_appointment_date" not in tool_names:
-            phone_for_same_day = (
-                config.user_data_whatsapp.get(user_id, {}).get("phone_number")
-                or customer_phone_clean
-                or (user_id if (user_id and (user_id.startswith("+") or user_id.replace("+", "").replace("-", "").replace(" ", "").isdigit())) else None)
-            )
-            if phone_for_same_day:
-                try:
-                    check_resp = await api_integrations.check_next_appointment(phone=phone_for_same_day)
-                    apt_id = _extract_appointment_id_from_check_response(check_resp)
-                    _u_same = (user_input or "").strip()
-                    _fd_same = detect_day_reference(_u_same) if _u_same else None
-                    target_dt = resolve_relative_datetime(
-                        _u_same, reference=now_in_bot_tz(), forced_day_ref=_fd_same
-                    )
-                    if apt_id and target_dt and target_dt.date() == now_in_bot_tz().date():
-                        date_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")
-                        update_resp = await api_integrations.update_appointment_date(
-                            appointment_id=apt_id,
-                            phone=phone_for_same_day,
-                            date=date_str,
-                        )
-                        if update_resp and update_resp.get("success"):
-                            _ar = "تمّ تقديم موعدِك لليوم الساعة " + target_dt.strftime("%H:%M") + " بنجاح 🌷"
-                            _en = "Your appointment has been moved to today at " + target_dt.strftime("%H:%M") + " successfully 🌷"
-                            parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                            parsed_response["action"] = "answer_question"
-                            print(f"SAME-DAY FALLBACK: Successfully updated appointment {apt_id} to {date_str}")
-                        else:
-                            err_msg = (update_resp or {}).get("message", "Unknown error")
-                            _ar = "للأسف ما قدرنا نعدّل الموعد لليوم. جرّبي تتواصلي مع فرع بيروت مباشرة."
-                            _en = "Sorry, we couldn't update the appointment to today. Please contact Beirut branch directly."
-                            parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                            api_failure_reason = f"same_day_update_failed: {err_msg}"
-                            print(f"SAME-DAY FALLBACK: update_appointment_date failed: {err_msg}")
-                    elif not apt_id:
-                        _ar = "ما في موعد قادم مسجّل إلك. إذا بدِّك تحجزي موعد جديد لليوم، تواصلي مع الفرع."
-                        _en = "No upcoming appointment found. To book for today, please contact the branch."
-                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                        print("SAME-DAY FALLBACK: No appointment_id from check_next_appointment")
-                except Exception as same_day_err:
-                    api_failure_reason = f"same_day_fallback_exception: {same_day_err}"
-                    print(f"SAME-DAY FALLBACK: Exception: {same_day_err}")
-                    _ar = "صار خطأ أثناء محاولة تعديل الموعد. جرّبي تتواصلي مع الفرع مباشرة."
-                    _en = "An error occurred while trying to update the appointment. Please contact the branch directly."
-                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-            # When same-day fallback ran and we set a response, clear api_failure_reason from create_appointment
-            # (GPT may have wrongly called create_appointment; we've now handled the intent)
-            if _detect_same_day_change_intent(user_input or "") and "update_appointment_date" not in tool_names and phone_for_same_day:
-                api_failure_reason = None
+        # Structured booking only: no same-day or text-based booking fallbacks.
 
-        # Fallback: when AI returns create_appointment, answer_question, or confirm_booking_details with
-        # booking-done wording but never called create_appointment — call the API so it appears in the system.
-        # confirm_booking_details is often misused for "تم تثبيت الموعد" without a tool call; include it when
-        # the reply claims completion. Pure clarifications (no completion phrases) stay excluded.
-        _says_booked = _reply_claims_booking_completed(parsed_response.get("bot_reply") or "")
-        _act = (parsed_response.get("action") or "").strip().lower()
-        _run_booking_fallback = (
-            (
-                _act == "create_appointment"
-                or (_act == "answer_question" and _says_booked)
-                or (_act == "confirm_booking_details" and _says_booked)
-            )
-            and "create_appointment" not in tool_names
-        )
-        if _run_booking_fallback:
-            if user_id not in config.user_booking_state:
-                config.user_booking_state[user_id] = {}
-            booking_state = config.user_booking_state[user_id]
-            # Extract preferred_machine_id, preferred_area from GPT's first JSON object (when it returns two objects)
-            preferred = _extract_preferred_booking_from_gpt(gpt_raw_content) if gpt_raw_content else {}
-            if preferred.get("preferred_machine_id") is not None:
-                booking_state["machine_id"] = preferred["preferred_machine_id"]
-            if preferred.get("preferred_area"):
-                bp_ids = _area_name_to_body_part_ids(preferred["preferred_area"], _safe_int(booking_state.get("service_id")) or 12)
-                if bp_ids:
-                    booking_state["body_part_ids"] = bp_ids
-            # If get_machines was called and user said Candela, extract machine_id from tool result
-            try:
-                _tr = tool_round_trips
-            except NameError:
-                _tr = []
-            for tr in _tr:
-                if tr.get("ai_requested") == "get_machines":
-                    try:
-                        ret = json.loads(tr.get("bot_returned", "{}"))
-                        data = ret.get("data", [])
-                        user_lower = (user_input or "").strip().lower()
-                        for m in data if isinstance(data, list) else []:
-                            name = (m.get("name") or "").strip().lower()
-                            if name and ("candela" in user_lower or "كانديلا" in (user_input or "") or "candila" in user_lower) and "candela" in name:
-                                booking_state["machine_id"] = _safe_int(m.get("id"))
-                                break
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                    break
-            phone = (
-                config.user_data_whatsapp.get(user_id, {}).get("phone_number")
-                or customer_phone_clean
-                or (user_id if (user_id and (user_id.startswith("+") or user_id.replace("+", "").replace("-", "").replace(" ", "").isdigit())) else None)
-            )
-            if phone:
-                # Collect user text for date parsing — use last 12 user turns so "today" + time
-                # are not dropped when the user only says "Ok" after confirming details.
-                recent_user = []
-                for msg in (current_context_messages or [])[-24:]:
-                    if msg.get("role") == "user" and msg.get("content"):
-                        recent_user.append(str(msg.get("content", "")).strip())
-                recent_user = recent_user[-12:]
-                if (user_input or "").strip() and (not recent_user or recent_user[-1] != (user_input or "").strip()):
-                    recent_user.append((user_input or "").strip())
-                all_user_text = " ".join(recent_user).strip()
-                booking_args = _extract_booking_args_from_gpt_raw(gpt_raw_content) if gpt_raw_content else {}
-                if booking_args.get("branch") or booking_args.get("branch_id") is not None:
-                    _bid = _branch_hint_to_branch_id(booking_args.get("branch_id") if booking_args.get("branch_id") is not None else booking_args.get("branch"))
-                    if _bid is not None:
-                        booking_state["branch_id"] = _bid
-                _svc_hint = booking_args.get("service_id") if booking_args.get("service_id") is not None else booking_args.get("service")
-                _sid = _service_hint_to_service_id(_svc_hint)
-                if _sid is not None:
-                    booking_state["service_id"] = _sid
-                if booking_args.get("machine_id") is not None:
-                    booking_state["machine_id"] = _safe_int(booking_args.get("machine_id"))
-                _svc_bp = (
-                    _safe_int(booking_state.get("service_id"))
-                    or _service_hint_to_service_id(booking_args.get("service"))
-                    or 13
+        # If the model text claims a completed booking but never called create_appointment → handover signal.
+        if tool_calls and "create_appointment" not in tool_names:
+            _brl = (parsed_response.get("bot_reply") or "").strip().lower()
+            if any(
+                x in _brl
+                for x in (
+                    "تم تثبيت",
+                    "تمّ تثبيت",
+                    "تم حجز",
+                    "تمّ حجز",
+                    "booked successfully",
+                    "appointment has been booked",
                 )
-                bp_coerced = await _coerce_body_part_ids_from_gpt_booking_args(booking_args, _svc_bp)
-                if bp_coerced:
-                    booking_state["body_part_ids"] = bp_coerced
-                gpt_dt = _datetime_from_gpt_booking_args(booking_args)
-                # Infer branch from conversation when not in booking_state
-                if _safe_int(booking_state.get("branch_id")) is None:
-                    if any(x in all_user_text.lower() for x in ["beirut", "بيروت", "beyrouth"]):
-                        booking_state["branch_id"] = 1
-                    elif any(x in all_user_text.lower() for x in ["antelias", "أنطلياس"]):
-                        booking_state["branch_id"] = 2
-                # Resolve machine_id from get_machines when user said Candela/Neo/Quadro but we don't have it yet
-                if _safe_int(booking_state.get("machine_id")) is None:
-                    all_lower = all_user_text.lower()
-                    machine_keywords = [
-                        ("candela", "كانديلا", "candila"),
-                        ("neo", "نيو"),
-                        ("quadro", "كوادرو"),
-                    ]
-                    for kw_en, *rest in machine_keywords:
-                        kw_ar = rest[0] if rest else ""
-                        kw_alt = rest[1] if len(rest) > 1 else ""
-                        if kw_en in all_lower or (kw_ar and kw_ar in (user_input or "")) or (kw_alt and kw_alt in all_lower):
-                            try:
-                                machines_resp = await api_integrations.get_machines()
-                                if machines_resp.get("success") and machines_resp.get("data"):
-                                    for m in machines_resp["data"]:
-                                        name = (m.get("name") or "").strip().lower()
-                                        if name and kw_en in name:
-                                            booking_state["machine_id"] = _safe_int(m.get("id"))
-                                            break
-                            except Exception as e:
-                                print(f"Fallback get_machines for {kw_en}: {e}")
-                            break
-                # Resolve body_part_ids from preferred_area when missing
-                if not _normalize_body_part_ids(booking_state.get("body_part_ids")) and preferred.get("preferred_area"):
-                    svc_id = _safe_int(booking_state.get("service_id")) or _infer_service_id_for_pricing(user_input, current_gender, booking_state) or 12
-                    bp_ids = _area_name_to_body_part_ids(preferred["preferred_area"], svc_id)
-                    if not bp_ids:
-                        # Try get_body_parts API: "full body" -> all body part IDs
-                        area_lower = (preferred["preferred_area"] or "").strip().lower()
-                        full_keys = ["full body", "full kel shi", "full kel chi", "جسم كامل", "كامل", "full"]
-                        if any(k in area_lower or area_lower == k for k in full_keys):
-                            try:
-                                bp_resp = await api_integrations.get_body_parts(service_id=svc_id)
-                                if bp_resp.get("success") and bp_resp.get("data"):
-                                    bp_ids = [x for x in (_safe_int(item.get("id")) for item in bp_resp["data"]) if x is not None]
-                            except Exception as e:
-                                print(f"Fallback get_body_parts: {e}")
-                    if bp_ids:
-                        booking_state["body_part_ids"] = bp_ids
-                if not _normalize_body_part_ids(booking_state.get("body_part_ids")) and booking_args.get("body_part"):
-                    _svc_bp = (
-                        _safe_int(booking_state.get("service_id"))
-                        or _service_hint_to_service_id(booking_args.get("service"))
-                        or 13
-                    )
-                    bp_res = await _resolve_body_part_ids_from_area_hint(str(booking_args.get("body_part")), _svc_bp)
-                    if bp_res:
-                        booking_state["body_part_ids"] = bp_res
-                if not _normalize_body_part_ids(booking_state.get("body_part_ids")):
-                    _svc_t = _safe_int(booking_state.get("service_id")) or _infer_service_id_for_pricing(
-                        user_input, current_gender, booking_state
-                    )
-                    if _svc_t == 13 and any(
-                        x in all_user_text.lower()
-                        for x in ("dahre", "dahr", "ضهر", "ظهر", "back", "dahreh")
-                    ):
-                        bp_res = await _resolve_body_part_ids_from_area_hint("back", 13)
-                        if bp_res:
-                            booking_state["body_part_ids"] = bp_res
-                    elif _svc_t == 13 and any(
-                        x in all_user_text.lower()
-                        for x in (
-                            "eideh",
-                            "eide",
-                            "hand",
-                            "hands",
-                            "wrist",
-                            "معصم",
-                            "يد",
-                            "اليد",
-                            "eltlak",
-                            "el tlk",
-                        )
-                    ):
-                        bp_res = await _resolve_body_part_ids_from_area_hint("hands", 13)
-                        if bp_res:
-                            booking_state["body_part_ids"] = bp_res
-                has_datetime_for_booking = bool(gpt_dt) or text_mentions_datetime(all_user_text)
-                if has_datetime_for_booking:
-                    now = now_in_bot_tz()
-                    dt_obj = gpt_dt
-                    if dt_obj is None:
-                        _ui_fb = (user_input or "").strip()
-                        _fd_fb = detect_day_reference(_ui_fb) if _ui_fb else None
-                        dt_obj = resolve_relative_datetime(
-                            all_user_text, reference=now, forced_day_ref=_fd_fb
-                        )
-                    # Fallback: "bokra" alone may not match resolve_relative_datetime; use detect_day_reference
-                    if dt_obj is None and detect_day_reference(all_user_text) == "tomorrow":
-                        # Try to extract hour (se3a 9, 9am, etc.) or default to 9:00
-                        hour, minute = 9, 0
-                        _h9 = re.search(r"(?:se3a|saa|ساعة|hour)\s*(\d{1,2})", all_user_text, re.I)
-                        if _h9:
-                            hour = min(23, max(0, int(_h9.group(1) or 9)))
-                        _h2 = re.search(r"\b(\d{1,2})\s*(?:am|pm|صباحا|مساء|صبح)", all_user_text, re.I)
-                        if _h2:
-                            hour = min(23, max(0, int(_h2.group(1) or 9)))
-                        tomorrow = (now + datetime.timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
-                        dt_obj = tomorrow
-                    if dt_obj:
-                        if dt_obj <= now:
-                            dt_obj = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)
-                        max_allowed = now + datetime.timedelta(days=365)
-                        if dt_obj > max_allowed:
-                            dt_obj = max_allowed.replace(second=0, microsecond=0)
-                        date_str = dt_obj.astimezone(BOOKING_TZ).strftime("%Y-%m-%d %H:%M:%S")
-                        service_id = _safe_int(booking_state.get("service_id")) or _infer_service_id_for_pricing(user_input, current_gender, booking_state) or config.DEFAULT_SERVICE_ID
-                        machine_id = await _resolve_machine_for_booking(
-                            service_id, _safe_int(booking_state.get("machine_id")) or config.DEFAULT_MACHINE_ID
-                        )
-                        branch_id = _safe_int(booking_state.get("branch_id")) or config.DEFAULT_BRANCH_ID
-                        body_part_ids = _normalize_body_part_ids(booking_state.get("body_part_ids")) or None
-                        # BLOCK: All configured services require body_part_ids. Do NOT create without them.
-                        if service_id in body_part_required_service_ids and not body_part_ids:
-                            _bp_msg = _missing_body_part_booking_prompt(service_id, current_preferred_lang)
-                            if _should_preserve_booking_fallback_reply(parsed_response):
-                                print(
-                                    "BOOKING FALLBACK: missing body_part_ids — preserving AI bot_reply (do not replace with generic blocker)."
-                                )
-                            else:
-                                parsed_response["bot_reply"] = _bp_msg
-                        else:
-                            customer_exists = False
-                            cust_resp = await api_integrations.get_customer_by_phone(phone=phone)
-                            if cust_resp and cust_resp.get("success") and cust_resp.get("data"):
-                                customer_exists = True
-                            if not customer_exists:
-                                customer_name = config.user_names.get(user_id) or config.user_data_whatsapp.get(user_id, {}).get("collected_name")
-                                if not customer_name or re.search(r"[\u0600-\u06FF]", customer_name or ""):
-                                    customer_name = "Customer"
-                                gender_cap = (current_gender or "male").capitalize()
-                                create_cust = await api_integrations.create_customer(
-                                    name=customer_name, phone=phone, gender=gender_cap, branch_id=config.DEFAULT_BRANCH_ID
-                                )
-                                if create_cust and create_cust.get("success"):
-                                    customer_exists = True
-                            if customer_exists:
-                                try:
-                                    body_parts_with_sessions = None
-                                    if body_part_ids:
-                                        body_parts_with_sessions = [
-                                            {"body_part_id": bp_id, "session_number": 1} for bp_id in body_part_ids
-                                        ]
-                                    result = await api_integrations.create_appointment(
-                                        phone=phone,
-                                        service_id=service_id,
-                                        machine_id=machine_id,
-                                        branch_id=branch_id,
-                                        date=date_str,
-                                        body_part_ids=body_part_ids if not body_parts_with_sessions else None,
-                                        body_parts_with_sessions=body_parts_with_sessions,
-                                    )
-                                    if result and result.get("success"):
-                                        _ar = "تم حجز موعدك بنجاح. رح تصلك تأكيدات من الفرع."
-                                        _en = "Your appointment has been booked successfully. You will receive confirmation from the branch."
-                                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                                        print("create_appointment fallback: booking succeeded.")
-                                    else:
-                                        err_msg = (result or {}).get("message", "Unknown error")
-                                        api_failure_reason = f"create_appointment_failed: {err_msg}"
-                                        _ar = "عفواً، ما قدرنا نكمل الحجز. جرّب مرة تانية أو تواصل مع الفرع."
-                                        _en = "Sorry, we couldn't complete the booking. Please try again or contact the branch."
-                                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                                        print(f"create_appointment fallback: API failed: {err_msg}")
-                                except Exception as e:
-                                    api_failure_reason = f"create_appointment_exception: {e}"
-                                    print(f"create_appointment fallback error: {e}")
-                                    _ar = "حدث خطأ أثناء الحجز. جرّب لاحقاً أو تواصل مع الفرع."
-                                    _en = "An error occurred while booking. Please try again later or contact the branch."
-                                    parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                            else:
-                                _ar = "لإتمام الحجز نحتاج اسمك الكامل. ممكن تخبرني شو اسمك؟"
-                                _en = "To complete the booking we need your full name. What is your name?"
-                                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-                    else:
-                        _ar = "لإتمام الحجز خبرني التاريخ والوقت (مثلاً خميس الساعة ١ بعد الظهر)."
-                        _en = "To complete the booking please tell me the date and time (e.g. Thursday 1pm)."
-                        parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
-            else:
-                _ar = "لإتمام الحجز نحتاج رقم هاتفك. تواصل معنا عبر الواتساب من الرقم اللي بدك تحجز فيه."
-                _en = "To complete the booking we need your phone number. Please contact us from the number you want to book with."
-                parsed_response["bot_reply"] = _ar if current_preferred_lang in ("ar", "franco") else _en
+            ):
+                api_failure_reason = "booking_claimed_without_create_appointment_tool"
+
         # Token usage: when tool calls exist, sum BOTH first and second API call usage (second_response alone misses first call's output)
         first_usage = getattr(response, "usage", None) if tool_calls else None
         usage = (getattr(second_response, "usage", None) if tool_calls else getattr(response, "usage", None))
