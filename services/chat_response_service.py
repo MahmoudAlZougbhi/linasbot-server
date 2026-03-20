@@ -1112,6 +1112,8 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
                 "date_components",
                 "calendar_day_intent",
                 "customer_phone",
+                "detected_name",
+                "customer_name",
             ):
                 if k in parsed and parsed[k] is not None:
                     out[k] = parsed[k]
@@ -1229,6 +1231,176 @@ def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
     return int(config.DEFAULT_SERVICE_ID or 1)
 
 
+def _is_placeholder_booking_customer_name(name: Optional[str]) -> bool:
+    if not name or not str(name).strip():
+        return True
+    n = str(name).strip().lower()
+    placeholders = {
+        "client",
+        "unknown",
+        "unknown customer",
+        "test user",
+        "guest",
+        "user",
+        "customer",
+        "new user",
+        "anonymous",
+        "not known",
+        "n/a",
+        "na",
+    }
+    if n in placeholders:
+        return True
+    if n.startswith("test user"):
+        return True
+    return False
+
+
+def _fallback_whatsapp_customer_display_name(phone_number: str) -> str:
+    """Latin-only placeholder for CRM when the user never gave a name (matches API expectations)."""
+    digits = re.sub(r"\D", "", str(phone_number or ""))
+    tail = digits[-4:] if len(digits) >= 4 else (digits or "0000")
+    return f"WhatsApp Client {tail}"
+
+
+def _extract_customer_name_from_conversation_for_booking(
+    user_id: str,
+    current_context_messages: Optional[List[dict]],
+    user_input: str,
+) -> Optional[str]:
+    """
+    Same heuristics as create_appointment tool path (conversation scan).
+    Returns None if no usable Latin / structured name found.
+    """
+    customer_name = None
+    ctx = list(current_context_messages or [])
+    for msg_entry in reversed(ctx + [{"role": "user", "content": user_input}]):
+        msg_content = (msg_entry.get("content") or "").strip()
+        msg_role = msg_entry.get("role")
+        if not msg_content:
+            continue
+
+        if msg_role == "user":
+            name_match = re.search(
+                r"(?:my name is|i am|i'm|call me|انا اسمي|اسمي|اسمي هو|je\s*m['\s]?appelle|je suis|moi c'est)\s+([A-Za-zÀ-ÿا-ي\s]{2,50})",
+                msg_content,
+                re.IGNORECASE | re.UNICODE,
+            )
+            if name_match:
+                potential_name = name_match.group(1).strip()
+                booking_keywords = [
+                    "book",
+                    "appointment",
+                    "schedule",
+                    "reserve",
+                    "موعد",
+                    "حجز",
+                    "want",
+                    "need",
+                    "like",
+                    "please",
+                    "tomorrow",
+                    "today",
+                    "بدي",
+                    "بحب",
+                    "just",
+                    "an",
+                    "the",
+                    "a",
+                    "have",
+                    "get",
+                ]
+                if not any(keyword in potential_name.lower() for keyword in booking_keywords):
+                    customer_name = potential_name
+                    break
+
+        elif msg_role == "assistant":
+            name_match = re.search(
+                r"(?:your name is|you are|you\'re called|اسمك|اسمك هو|ton nom est)\s+([A-Za-zÀ-ÿا-ي\s]{2,50})",
+                msg_content,
+                re.IGNORECASE | re.UNICODE,
+            )
+            if name_match:
+                potential_name = name_match.group(1).strip()
+                potential_name = re.sub(r"\s+(and|et|و|،|,|\.).*$", "", potential_name, flags=re.IGNORECASE)
+                if 2 <= len(potential_name) <= 50:
+                    customer_name = potential_name
+                    break
+
+        elif msg_role == "user" and not customer_name:
+            words = msg_content.split()
+            if 1 <= len(words) <= 4:
+                if re.match(r"^[A-ZÀ-Ÿا-ي]", msg_content, re.UNICODE) and re.match(
+                    r"^[A-Za-zÀ-ÿا-ي\s\-\']+$", msg_content, re.UNICODE
+                ):
+                    excluded_words = [
+                        "yes",
+                        "no",
+                        "ok",
+                        "okay",
+                        "sure",
+                        "please",
+                        "thanks",
+                        "hello",
+                        "hi",
+                        "book",
+                        "appointment",
+                        "schedule",
+                        "tomorrow",
+                        "today",
+                        "now",
+                        "نعم",
+                        "لا",
+                        "تمام",
+                        "ماشي",
+                        "شكرا",
+                        "مرحبا",
+                        "موعد",
+                        "حجز",
+                        "oui",
+                        "non",
+                        "merci",
+                        "bonjour",
+                        "salut",
+                    ]
+                    if msg_content.lower() not in excluded_words:
+                        asking_for_name = False
+                        for prev_msg in reversed(ctx):
+                            if prev_msg.get("role") == "assistant":
+                                prev_content = str(prev_msg.get("content") or "").lower()
+                                if any(
+                                    phrase in prev_content
+                                    for phrase in [
+                                        "your name",
+                                        "full name",
+                                        "what is your name",
+                                        "may i have your name",
+                                        "اسمك",
+                                        "ما اسمك",
+                                        "شو اسمك",
+                                        "votre nom",
+                                        "ton nom",
+                                        "quel est votre nom",
+                                    ]
+                                ):
+                                    asking_for_name = True
+                                    break
+                            if prev_msg.get("role") == "assistant":
+                                break
+                        if asking_for_name:
+                            customer_name = msg_content.strip()
+                            break
+
+        if customer_name:
+            break
+
+    if customer_name and re.search(r"[\u0600-\u06FF]", customer_name):
+        return None
+    if _is_placeholder_booking_customer_name(customer_name):
+        return None
+    return customer_name
+
+
 async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     gpt_raw_content: str,
     *,
@@ -1279,13 +1451,32 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
         return None
 
     user_data_dict = config.user_data_whatsapp.get(user_id, {})
-    customer_name = user_data_dict.get("collected_name")
+    customer_name = None
+    for leak_key in ("detected_name", "customer_name"):
+        raw_nm = leaked.get(leak_key)
+        if isinstance(raw_nm, str) and raw_nm.strip() and not _is_placeholder_booking_customer_name(raw_nm):
+            customer_name = raw_nm.strip()
+            break
+
+    if not customer_name:
+        customer_name = user_data_dict.get("collected_name")
     if not customer_name:
         customer_name = config.user_names.get(user_id)
-        if customer_name and re.search(r"[\u0600-\u06FF]", customer_name):
-            customer_name = None
+    if customer_name and re.search(r"[\u0600-\u06FF]", customer_name):
+        customer_name = None
+    if _is_placeholder_booking_customer_name(customer_name):
+        customer_name = None
+
+    if not customer_name:
+        customer_name = _extract_customer_name_from_conversation_for_booking(
+            user_id, current_context_messages, user_input
+        )
 
     customer_gender_for_api = current_gender.capitalize() if current_gender in ("male", "female") else "Male"
+
+    if not customer_name and customer_gender_for_api in ("Male", "Female"):
+        customer_name = _fallback_whatsapp_customer_display_name(phone_number)
+        print(f"RECOVERY: using fallback CRM display name for new user: {customer_name}")
 
     customer_exists = False
     customer_check_response = await api_integrations.get_customer_by_phone(phone=phone_number)
@@ -1300,9 +1491,17 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
         )
         if create_customer_response and create_customer_response.get("success"):
             customer_exists = True
+            try:
+                config.user_data_whatsapp.setdefault(user_id, {})["user_name"] = customer_name
+                config.user_names[user_id] = customer_name
+                from utils.utils import save_user_name_to_firestore
+
+                await save_user_name_to_firestore(user_id, customer_name)
+            except Exception as persist_e:
+                print(f"RECOVERY: could not persist new customer name: {persist_e}")
 
     if not customer_exists:
-        print("RECOVERY create_appointment: skipped (customer not in CRM and no creatable name)")
+        print("RECOVERY create_appointment: skipped (customer not in CRM and create_customer failed or blocked)")
         return None
 
     fa: Dict[str, Any] = dict(leaked)
