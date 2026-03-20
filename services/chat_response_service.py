@@ -209,6 +209,7 @@ def _filter_appointments_for_reschedule_overview(appointments: List[dict]) -> Li
 
 
 def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
+    """One CRM row for prompts: emphasize appointment_id + service/branch/datetime/machine/areas/price from JSON only."""
     aid = apt.get("appointment_id") or apt.get("id") or apt.get("appointmentId")
     d0 = apt.get("date") or apt.get("appointment_date") or apt.get("start_date") or ""
     t0 = apt.get("time") or apt.get("start_time") or apt.get("appointment_time") or ""
@@ -219,9 +220,14 @@ def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
     if isinstance(br, dict):
         br = (br.get("name") or "").strip()
     st = apt.get("status") or ""
-    bits = [f"{idx}."]
+    mach = apt.get("machine") or apt.get("machine_name") or ""
+    if isinstance(mach, dict):
+        mach = (mach.get("name") or mach.get("title") or "").strip()
+    bits: List[str] = []
     if aid is not None:
-        bits.append(f"id={aid}")
+        bits.append(f"appointment_id={aid}")
+    else:
+        bits.append(f"line={idx}")
     if d0:
         bits.append(f"date={d0}")
     if t0:
@@ -230,9 +236,45 @@ def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
         bits.append(f"service={svc}")
     if br:
         bits.append(f"branch={br}")
+    if mach:
+        bits.append(f"machine={mach}")
+
+    bp_raw = apt.get("body_parts") or apt.get("areas") or apt.get("body_part")
+    area_labels: List[str] = []
+    if isinstance(bp_raw, list):
+        for it in bp_raw[:8]:
+            if isinstance(it, dict):
+                nm = it.get("name") or it.get("body_part") or it.get("title") or it.get("part")
+                if nm:
+                    area_labels.append(str(nm).strip())
+            elif it is not None:
+                s = str(it).strip()
+                if s:
+                    area_labels.append(s)
+    elif isinstance(bp_raw, str) and bp_raw.strip():
+        area_labels.append(bp_raw.strip())
+    if area_labels:
+        bits.append("areas=" + ", ".join(area_labels[:6]))
+
+    price_set = False
+    for pk in ("total", "price", "amount"):
+        v = apt.get(pk)
+        if v is not None and str(v).strip():
+            bits.append(f"{pk}={v}")
+            price_set = True
+            break
+    if not price_set:
+        pr = apt.get("pricing")
+        if isinstance(pr, dict):
+            for pk in ("total", "price", "amount"):
+                v = pr.get(pk)
+                if v is not None and str(v).strip():
+                    bits.append(f"pricing.{pk}={v}")
+                    break
+
     if st:
         bits.append(f"status={st}")
-    return f"[{_reschedule_row_kind_tag(apt)}] " + " ".join(bits)
+    return f"{idx}. [{_reschedule_row_kind_tag(apt)}] " + " | ".join(bits)
 
 
 async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
@@ -272,7 +314,7 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
         mix_block = (
             "\n**⏸️ PAUSED vs ✅ AVAILABLE/ACTIVE (same customer):**\n"
             "- They have **both** paused/on-hold rows and **Available/active** upcoming rows—often **different services**. "
-            "You MUST confirm **which row** they mean (by number, service name, branch, date, or `id`) before any reschedule tool.\n"
+            "You MUST confirm **which row** they mean — **prefer asking for `appointment_id` (رقم الموعد في النظام)** shown on each line, or line number 1/2/3 matching your list — before any reschedule tool.\n"
             "- **FORBIDDEN:** Do **NOT** call **`pause_appointment`** to «تأجيل» or move to another day—that tool only **puts** a slot on hold without a new calendar time. "
             "**Postpone / new day / إخراج من البوز بتاريخ جديد** = **`update_appointment_date`** with structured `date` (+ `calendar_day_intent` / `date_components` when needed) on the correct `appointment_id`.\n"
             "- **PAUSED row:** In `bot_reply`, you may explain that this service's appointment is **موقوف حالياً**; if they want a new slot, take the new date/time then call **`update_appointment_date`** on **that paused row's id** (this effectively moves them off pause onto the new datetime—do **not** stack another pause).\n"
@@ -282,12 +324,10 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
         "\n**🔁 MULTIPLE APPOINTMENTS ON FILE (reschedule — do not guess):**\n"
         f"This customer has **at least {len(rows)}** relevant appointment row(s). Tags: [PAUSED] vs [AVAILABLE]/[ACTIVE]. Lines:\n{body}\n"
         f"{mix_block}"
-        "- If the latest user message does **not** clearly identify **which** appointment to move "
-        "(by date/time, service, branch, or appointment id), reply with **one** short question: "
-        "list the options as **1 / 2 / 3** (use the same facts) and ask them to pick. **Never** assume "
-        "«the next appointment» or pick arbitrarily.\n"
-        "- After they specify, call **`update_appointment_date`** with the matching **`appointment_id`** "
-        "(use **`check_next_appointment`** first if you still need to confirm the id).\n"
+        "- If the latest user message does **not** clearly identify **which** appointment to move, list **each row on its own line** with: "
+        "**`appointment_id`**, date/time, service, branch, machine/device, body areas/parts, **price/total only if present in JSON** (never invent prices), status. "
+        "Then ask **one** question: e.g. «ابعتلي رقم الموعد (appointment_id) اللي بدك ترجّعو/تعدّلو» or Franco «ابعتيلي الـ id تبع الموعد» — they may also answer with the **line number** (1/2/3) matching your list.\n"
+        "- After they specify the **`appointment_id`** (or the line number maps to that id), call **`update_appointment_date`** with that **`appointment_id`**, structured **`date`** (and phone). Pass the same facts the user confirmed; **never** assume «the next appointment» or pick arbitrarily.\n"
         "- **Never** use **`pause_appointment`** as a shortcut for postponing; only if they explicitly ask to **hold without a new date**.\n"
     )
 
@@ -331,7 +371,8 @@ async def _build_live_crm_appointments_snapshot(phone_clean: str) -> str:
     return (
         "\n\n**LIVE CRM APPOINTMENT SNAPSHOT (authoritative for this request):**\n"
         f"- **Listed row count: {len(display)}** (of {len(rows)} relevant). "
-        "Your `bot_reply` must use **one bullet per row below** — same count; do not merge several `id`s into one line.\n"
+        "Your `bot_reply` must use **one bullet per row below** — same count; do not merge several `appointment_id`s into one line. "
+        "Each line must include **`appointment_id`** plus service, branch, date/time, machine, areas, price (only if shown below).\n"
         f"{body}{more}"
         "- Also call `check_next_appointment` when rules require it; if tool JSON disagrees, prefer the **tool** result.\n"
     )
@@ -461,6 +502,155 @@ def _operational_context_promises_imminent_appointment_update(ctx: Optional[str]
         "going to update your appointment",
     )
     return any(n in c for n in needles_ar) or any(n in c_low for n in needles_en)
+
+
+def _user_intent_resume_paused_appointment(user_text: str) -> bool:
+    """True when the user is trying to re-activate a paused row / set a new date on paused (not move an active slot)."""
+    t = (user_text or "").strip().lower()
+    if not t:
+        return False
+    if re.search(
+        r"موقوف|موقف|الموقوف|المعلّق|المعلق|من\s*البوز|البوز|طلع.*موقوف|شيل.*موقوف|فك.*موقوف|"
+        r"إخراج.*موقوف|رجع.*موعد|ارجع.*موعد|كمّل.*جلس|كمل.*جلس|تكمل",
+        t,
+        re.I,
+    ):
+        return True
+    if re.search(
+        r"\b(pause|paused|mw2of|mwouf|mwou2af|boz)\b.*(\bmw3ad|appointment)|"
+        r"(\bmw3ad|appointment).*\b(pause|paused|mw2of|boz)\b|"
+        r"\b(kmel|kammel|kml)\b.*(\bmw3ad|pause|boz|mw2of)|"
+        r"\b(rod|rj3|rje3)\b.*(\bavailable|\bavail|\bmw3ad)|"
+        r"\b(available|avail)\b.*(\bboz|\bpause|mw2of)",
+        t,
+        re.I,
+    ):
+        return True
+    return False
+
+
+def _bot_reply_claims_pause_lifted_or_resumed(bot_reply: str) -> bool:
+    """bot_reply asserts the paused appointment was cleared / re-scheduled / became active."""
+    br = (bot_reply or "").strip().lower()
+    if not br:
+        return False
+    needles = (
+        "انشال من البوز",
+        "طلعنا من البوز",
+        "طلع من البوز",
+        "شلنا من البوز",
+        "شيلنا من البوز",
+        "مو بقى موقوف",
+        "ما بقى موقوف",
+        "رجّعنا الموعد",
+        "رجعنا الموعد",
+        "صار موعدك متاح",
+        "خلص من الموقوف",
+        "no longer paused",
+        "lifted from pause",
+        "removed from pause",
+        "reactivated your appointment",
+    )
+    if any(n in br for n in needles):
+        return True
+    if ("تم" in br or "تمّ" in br) and ("موقوف" in br or "البوز" in br or "paused" in br):
+        return True
+    if "available" in br and ("pause" in br or "paused" in br or "موقوف" in br):
+        return True
+    return False
+
+
+def _arabic_indic_digits_to_ascii(text: str) -> str:
+    if not text:
+        return ""
+    return text.translate(
+        str.maketrans(
+            "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
+            "01234567890123456789",
+        )
+    )
+
+
+def _appointment_numeric_id(apt: Optional[dict]) -> Optional[int]:
+    if not isinstance(apt, dict):
+        return None
+    for key in ("appointment_id", "id", "appointmentId"):
+        v = apt.get(key)
+        if v is None or v == "":
+            continue
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _customer_appointments_embedded_in_payload(payload: dict) -> List[dict]:
+    """check_next_appointment enriched shape: data.customer_appointments."""
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if isinstance(data, dict):
+        ca = data.get("customer_appointments")
+        if isinstance(ca, list) and ca:
+            return [x for x in ca if isinstance(x, dict)]
+    return []
+
+
+def _ordered_paused_appointments_from_snapshot(payload: Optional[dict]) -> List[dict]:
+    """Stable CRM order: paused rows only, deduped by id (check_next enrich or get_customer_appointments)."""
+    if not isinstance(payload, dict):
+        return []
+    rows = _customer_appointments_embedded_in_payload(payload)
+    if not rows:
+        rows = _extract_customer_appointments_list(payload)
+    rows = _filter_appointments_for_reschedule_overview(rows)
+    out: List[dict] = []
+    seen: set = set()
+    for apt in rows:
+        st = str(apt.get("status") or apt.get("appointment_status") or "")
+        if not _is_paused_like_appointment_status(st):
+            continue
+        aid = _appointment_numeric_id(apt)
+        if aid is None or aid in seen:
+            continue
+        seen.add(aid)
+        out.append(apt)
+    return out
+
+
+def _resolve_user_chosen_paused_appointment_id(user_text: str, paused_ids: List[int]) -> Optional[int]:
+    """
+    After the bot listed paused rows 1..N, map the user's reply to the CRM appointment_id.
+    Avoids treating '3' inside a long datetime sentence as a list index (length + pattern guards).
+    """
+    if not user_text or not paused_ids:
+        return None
+    n = len(paused_ids)
+    t_raw = user_text.strip()
+    t = _arabic_indic_digits_to_ascii(t_raw)
+
+    for aid in sorted(set(paused_ids), reverse=True):
+        if re.search(rf"(?<!\d){int(aid)}(?!\d)", t):
+            return int(aid)
+
+    m2 = re.search(
+        r"(?:رقم|number|#|اختر|اختار|choice|option|n\s*)\s*(\d{1,2})\b",
+        t,
+        re.I,
+    )
+    if m2:
+        idx = int(m2.group(1))
+        if 1 <= idx <= n:
+            return paused_ids[idx - 1]
+
+    m1 = re.match(r"^[\s#]*(\d{1,2})[\s.):،,-]*$", t)
+    if m1 and len(t) <= 22:
+        idx = int(m1.group(1))
+        if 1 <= idx <= n:
+            return paused_ids[idx - 1]
+
+    return None
 
 
 def _bot_reply_claims_completed_appointment_update(bot_reply: str) -> bool:
@@ -2508,6 +2698,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "Neither too long (avoid 3+ paragraphs, long numbered lists, repeated points) nor too short (keep essential info). "
         "One focused paragraph or 2–3 brief bullet points max. Cut filler and repetition.\n"
         "- Either: (a) short answer + ONE question, OR (b) ONE question to gather info.\n"
+        "- **Exception — multiple CRM appointments:** If you must list several rows for the user to choose (reschedule / resume pause), use **one compact line per row** "
+        "(appointment_id + date/time + service + branch + machine + areas + price only if in JSON), then **one** question asking for **`appointment_id`** or line number.\n"
         "- **Do NOT** ask for booking details (body part, machine, service, size, branch, date, time, name) unless the user is "
         "**booking** or **needs a price that depends on missing data**. On general questions, answer directly without pushing extra questions.\n"
         "- When booking/pricing needs more data: ask **only missing** fields (body part, machine only for hair removal, service, size for tattoo, branch, date, time). Never re-ask known facts.\n"
@@ -2603,9 +2795,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "**📅 APPOINTMENT STATUS / LISTING (THIS MESSAGE — MANDATORY):**\n"
             "- The user is asking **when** their appointment is, **what** is on file, or to **list** bookings (including paused / موقوف) — e.g. Franco «emtan mw3de», Arabic «موعدي إمتى», English «when is my appointment», «sho hene el mw3id el wa2fe», etc.\n"
             "- A **LIVE CRM APPOINTMENT SNAPSHOT** block is appended below this prompt with the current rows — **ground your list on it** (correct row count and ids). You **MUST** still call **`check_next_appointment`** this turn with the customer phone from context.\n"
-            "- The tool response is enriched with **`customer_appointments`**: list **every** row returned (each distinct `id` / date+time+service+status). Use **one bullet or line per row**.\n"
+            "- The tool response is enriched with **`customer_appointments`**: list **every** row returned. **One line per row**, each with **`appointment_id`**, date & time, service, branch, machine if present, body areas if present, price/total **only if JSON has it**.\n"
             "- **Never merge** several paused or active rows into one vague line (e.g. do not collapse multiple men's hair rows into «مرتين بنفس الوقت» unless the API literally returns a single row). If there are 5 paused lines, show **5** lines.\n"
             "- Clearly separate **active/upcoming** vs **paused** using the **status** field from JSON — do not guess.\n"
+            "- If they need to **choose one** row to change: ask for **`appointment_id`** (رقم الموعد) or the line number matching your list.\n"
         )
 
     if is_bulk_reschedule_all_intent and customer_phone_clean:
@@ -2893,6 +3086,28 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 paused_appointment_lookup_cache[normalized_phone] = paused_appointment_id
                 return paused_appointment_id
+
+            async def list_paused_appointment_ids(phone_to_lookup: str) -> list:
+                normalized_phone = normalize_phone_for_lookup(phone_to_lookup)
+                if not normalized_phone:
+                    return []
+                out: list = []
+                try:
+                    customer_appointments = await api_integrations.get_customer_appointments(
+                        phone=normalized_phone
+                    )
+                    if isinstance(customer_appointments, dict) and customer_appointments.get("success"):
+                        for appointment_payload in extract_customer_appointments(customer_appointments):
+                            if is_paused_status(extract_appointment_status(appointment_payload)):
+                                aid = extract_appointment_id(appointment_payload)
+                                if aid is not None:
+                                    try:
+                                        out.append(int(aid))
+                                    except (TypeError, ValueError):
+                                        pass
+                except Exception as list_p_e:
+                    print(f"WARNING: list_paused_appointment_ids failed: {list_p_e}")
+                return out
 
             def collect_user_datetime_text(context_messages: list, latest_user_input: str) -> str:
                 """
@@ -3478,6 +3693,81 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 )
                                 function_args["appointment_id"] = paused_appointment_id
                                 forced_update_appointment_id = paused_appointment_id
+
+                    # When "next" from check_next is an active/Available row but the file has exactly ONE
+                    # paused row and the user wording is "resume / lift from pause", the model often chains
+                    # appointment_id to the active row — CRM then never moves the paused row.
+                    if (
+                        user_requested_change
+                        and phone_for_pause_guard
+                        and not forced_update_appointment_id
+                        and _user_intent_resume_paused_appointment(user_input)
+                    ):
+                        paused_rows = await list_paused_appointment_ids(phone_for_pause_guard)
+                        if len(paused_rows) == 1:
+                            single_paused = paused_rows[0]
+                            _next_pl_mix = (
+                                extract_check_next_appointment(check_next_appointment_result)
+                                if check_next_appointment_result
+                                else {}
+                            )
+                            _next_id_mix = extract_appointment_id(_next_pl_mix)
+                            _next_st_mix = extract_appointment_status(_next_pl_mix)
+                            if _next_id_mix is not None and not is_paused_status(_next_st_mix):
+                                try:
+                                    gpt_aid_mix = (
+                                        int(function_args.get("appointment_id"))
+                                        if function_args.get("appointment_id") is not None
+                                        and str(function_args.get("appointment_id")).strip() != ""
+                                        else None
+                                    )
+                                except (TypeError, ValueError):
+                                    gpt_aid_mix = None
+                                if gpt_aid_mix is None or gpt_aid_mix == _next_id_mix:
+                                    print(
+                                        f"SAFETY: Next appointment is active id={_next_id_mix} but user resumes "
+                                        f"single paused id={single_paused} — overriding update_appointment_date"
+                                    )
+                                    function_args["appointment_id"] = single_paused
+                                    forced_update_appointment_id = single_paused
+
+                    # Many paused rows: user picks "3" / "رقم 5" / pastes CRM id — model often passes wrong id or chains "next".
+                    # Do not require user_requested_change: a lone "3" after a numbered list is not detected as reschedule text.
+                    if phone_for_pause_guard and not forced_update_appointment_id:
+                        paused_order = _ordered_paused_appointments_from_snapshot(
+                            check_next_appointment_result
+                        )
+                        if len(paused_order) < 2:
+                            try:
+                                ph = normalize_phone_for_lookup(phone_for_pause_guard) or phone_for_pause_guard
+                                fresh_apts = await api_integrations.get_customer_appointments(phone=ph)
+                                if isinstance(fresh_apts, dict) and fresh_apts.get("success"):
+                                    paused_order = _ordered_paused_appointments_from_snapshot(fresh_apts)
+                            except Exception as multi_pause_e:
+                                print(
+                                    f"WARNING: multi-paused pick: get_customer_appointments refresh failed: {multi_pause_e}"
+                                )
+                        if len(paused_order) >= 2:
+                            pids = [_appointment_numeric_id(r) for r in paused_order]
+                            pids = [x for x in pids if x is not None]
+                            chosen_pid = _resolve_user_chosen_paused_appointment_id(user_input, pids)
+                            if chosen_pid is not None:
+                                try:
+                                    gpt_aid_pick = (
+                                        int(function_args.get("appointment_id"))
+                                        if function_args.get("appointment_id") is not None
+                                        and str(function_args.get("appointment_id")).strip() != ""
+                                        else None
+                                    )
+                                except (TypeError, ValueError):
+                                    gpt_aid_pick = None
+                                if gpt_aid_pick is None or gpt_aid_pick != chosen_pid:
+                                    print(
+                                        f"SAFETY: {len(pids)} paused rows: user choice -> appointment_id={chosen_pid} "
+                                        f"(gpt had {gpt_aid_pick})"
+                                    )
+                                    function_args["appointment_id"] = chosen_pid
+                                    forced_update_appointment_id = chosen_pid
 
                     if phone_for_pause_guard and not function_args.get("phone"):
                         function_args["phone"] = phone_for_pause_guard
@@ -4092,6 +4382,24 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 )
             ):
                 api_failure_reason = "reschedule_claimed_without_update_appointment_date_tool"
+
+        # Claims paused appointment was cleared / became active without a successful CRM update.
+        if (
+            not api_failure_reason
+            and tool_calls
+            and had_update_tool
+            and update_appointment_date_success_count == 0
+            and _bot_reply_claims_pause_lifted_or_resumed(parsed_response.get("bot_reply") or "")
+        ):
+            api_failure_reason = "pause_resume_claimed_without_successful_update_appointment_date"
+
+        if (
+            not api_failure_reason
+            and tool_calls
+            and not had_update_tool
+            and _bot_reply_claims_pause_lifted_or_resumed(parsed_response.get("bot_reply") or "")
+        ):
+            api_failure_reason = "pause_resume_claimed_without_update_appointment_date_tool"
 
         # If the model text claims a completed booking but never called create_appointment → handover signal.
         # Skip when reply is clearly an appointment *update* completion (handled above).

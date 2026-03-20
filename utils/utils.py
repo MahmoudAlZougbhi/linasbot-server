@@ -2382,11 +2382,20 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "update_appointment_date",
-                "description": "Updates the date/time of an existing appointment on the calendar. Use for reschedule/postpone/change to a NEW slot (Arabic «تأجيل الموعد»). Same tool to put a PAUSED row onto a new datetime (user picks new day/time)—do NOT call pause_appointment for that. Call check_next_appointment if you need appointment_id. Available/active rows are normal bookings. If mix of paused + Available across services, ask which row first. Do NOT use pause_appointment to move to another day.",
+                "description": (
+                    "Updates the date/time of an existing appointment on the calendar. Use for reschedule/postpone/change to a NEW slot (Arabic «تأجيل الموعد»). "
+                    "Same tool to put a PAUSED row onto a new datetime once the user chose the slot—do NOT call pause_appointment for that. "
+                    "You MUST pass the **exact appointment_id** the user selected (from check_next_appointment / customer_appointments JSON), plus structured **date**. "
+                    "If multiple rows: first show each row to the user with appointment_id + service + machine + areas + price (if in JSON), ask them for the id (or line number), then call this tool. "
+                    "Do NOT use pause_appointment to move to another day."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "appointment_id": {"type": "integer", "description": "The ID of the appointment to update (get this from check_next_appointment)."},
+                        "appointment_id": {
+                            "type": "integer",
+                            "description": "Numeric appointment id from CRM JSON (appointment_id / id)—the row the user chose to move or re-activate from pause.",
+                        },
                         "phone": {"type": "string", "description": "Client's phone number (without country code), e.g., '71 123 456'."},
                         "calendar_day_intent": {
                             "type": "string",
@@ -2493,7 +2502,14 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "check_next_appointment",
-                "description": "Returns the client's next appointment and (when available) customer_appointments: all rows from the system. For user-facing replies, list each upcoming appointment with date, time, service, branch, and any fields present in JSON: machine/device, body areas/parts, price/pricing—never invent prices. Do not use awkward 'viewable' phrasing; say upcoming appointments naturally. Use next for reschedule chaining. If status is paused/postponed, update the existing appointment and do not create a new one.",
+                "description": (
+                    "Returns the client's next appointment and (when available) customer_appointments: all rows from the system. "
+                    "For user-facing replies: **one line per row**, each starting with the numeric **appointment_id** from JSON (same as id). "
+                    "Include date, time, service, branch, machine/device, body areas/parts, and price/total **only if** those fields exist in the JSON—never invent prices. "
+                    "When several rows exist and the user must choose (reschedule, resume from pause, etc.), ask them to send the **appointment_id** they want "
+                    "(or the line number 1/2/3 matching your list). Use tool JSON to map their answer to the correct id for update_appointment_date. "
+                    "If status is paused/postponed, update that existing row—do not create a new appointment."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
