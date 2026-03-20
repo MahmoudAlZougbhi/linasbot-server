@@ -154,9 +154,44 @@ _EXCLUDED_RESCHEDULE_SUMMARY_STATUSES = frozenset(
     {"done", "completed", "cancelled", "canceled", "missed", "no_show", "noshow"}
 )
 
+_PAUSED_LIKE_STATUS_NORMALIZED = frozenset(
+    {
+        "pause",
+        "paused",
+        "postpone",
+        "postponed",
+        "on hold",
+        "hold",
+        "paused appointment",
+        "مؤجل",
+        "مؤجل",
+        "تاجيل",
+        "تأجيل",
+    }
+)
+
+
+def _normalize_appointment_status_token(status_val: str) -> str:
+    return str(status_val or "").strip().lower().replace("_", " ").replace("-", " ")
+
+
+def _is_paused_like_appointment_status(status_val: str) -> bool:
+    """True when CRM row is paused/on-hold/postponed (not the same as Available/active)."""
+    return _normalize_appointment_status_token(status_val) in _PAUSED_LIKE_STATUS_NORMALIZED
+
 
 def _appointment_row_status_lower(apt: dict) -> str:
     return str(apt.get("status") or "").strip().lower()
+
+
+def _reschedule_row_kind_tag(apt: dict) -> str:
+    st = str(apt.get("status") or "")
+    if _is_paused_like_appointment_status(st):
+        return "PAUSED"
+    sl = _appointment_row_status_lower(apt)
+    if sl == "available" or sl.startswith("available"):
+        return "AVAILABLE"
+    return "ACTIVE"
 
 
 def _filter_appointments_for_reschedule_overview(appointments: List[dict]) -> List[dict]:
@@ -189,7 +224,7 @@ def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
         bits.append(f"branch={br}")
     if st:
         bits.append(f"status={st}")
-    return " ".join(bits)
+    return f"[{_reschedule_row_kind_tag(apt)}] " + " ".join(bits)
 
 
 async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
@@ -217,15 +252,35 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
     if len(rows) > max_lines:
         lines.append(f"... +{len(rows) - max_lines} more in system")
     body = "\n".join(f"  - {ln}" for ln in lines)
+    has_paused = any(_is_paused_like_appointment_status(str(a.get("status") or "")) for a in rows)
+    has_non_paused = any(
+        not _is_paused_like_appointment_status(str(a.get("status") or ""))
+        and _appointment_row_status_lower(a) not in _EXCLUDED_RESCHEDULE_SUMMARY_STATUSES
+        for a in rows
+    )
+    mixed_pause_and_active = has_paused and has_non_paused
+    mix_block = ""
+    if mixed_pause_and_active:
+        mix_block = (
+            "\n**⏸️ PAUSED vs ✅ AVAILABLE/ACTIVE (same customer):**\n"
+            "- They have **both** paused/on-hold rows and **Available/active** upcoming rows—often **different services**. "
+            "You MUST confirm **which row** they mean (by number, service name, branch, date, or `id`) before any reschedule tool.\n"
+            "- **FORBIDDEN:** Do **NOT** call **`pause_appointment`** to «تأجيل» or move to another day—that tool only **puts** a slot on hold without a new calendar time. "
+            "**Postpone / new day / إخراج من البوز بتاريخ جديد** = **`update_appointment_date`** with structured `date` (+ `calendar_day_intent` / `date_components` when needed) on the correct `appointment_id`.\n"
+            "- **PAUSED row:** In `bot_reply`, you may explain that this service's appointment is **موقوف حالياً**; if they want a new slot, take the new date/time then call **`update_appointment_date`** on **that paused row's id** (this effectively moves them off pause onto the new datetime—do **not** stack another pause).\n"
+            "- **AVAILABLE / ACTIVE row:** Normal upcoming booking—reschedule only with **`update_appointment_date`**.\n"
+        )
     return (
         "\n**🔁 MULTIPLE APPOINTMENTS ON FILE (reschedule — do not guess):**\n"
-        f"This customer has **at least {len(rows)}** relevant appointment row(s). Reference lines:\n{body}\n"
+        f"This customer has **at least {len(rows)}** relevant appointment row(s). Tags: [PAUSED] vs [AVAILABLE]/[ACTIVE]. Lines:\n{body}\n"
+        f"{mix_block}"
         "- If the latest user message does **not** clearly identify **which** appointment to move "
         "(by date/time, service, branch, or appointment id), reply with **one** short question: "
         "list the options as **1 / 2 / 3** (use the same facts) and ask them to pick. **Never** assume "
         "«the next appointment» or pick arbitrarily.\n"
         "- After they specify, call **`update_appointment_date`** with the matching **`appointment_id`** "
         "(use **`check_next_appointment`** first if you still need to confirm the id).\n"
+        "- **Never** use **`pause_appointment`** as a shortcut for postponing; only if they explicitly ask to **hold without a new date**.\n"
     )
 
 
@@ -1696,20 +1751,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 return str(raw_status or "").strip()
 
             def is_paused_status(status_value: str) -> bool:
-                status_normalized = str(status_value or "").strip().lower().replace("_", " ").replace("-", " ")
-                return status_normalized in {
-                    "pause",
-                    "paused",
-                    "postpone",
-                    "postponed",
-                    "on hold",
-                    "hold",
-                    "paused appointment",
-                    "مؤجل",
-                    "مؤجل",
-                    "تاجيل",
-                    "تأجيل",
-                }
+                return _is_paused_like_appointment_status(str(status_value or ""))
 
             def extract_check_next_appointment(response_payload: dict) -> dict:
                 if not isinstance(response_payload, dict):
@@ -1886,8 +1928,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     function_name = "check_next_appointment"
                     function_args = {"phone": phone_for_reschedule}
 
-                # SAFETY GUARD: If a paused appointment exists and user asks to change/reschedule,
-                # never allow create_appointment. Force update_appointment_date.
+                # SAFETY GUARD: If the canonical *next* appointment is paused/postponed and the user
+                # asks to change/reschedule, never allow create_appointment — force update on that row.
+                # Do NOT use an older paused record when the API's "next" slot is an active booking (e.g. Available).
                 if function_name == "create_appointment" and user_requested_change:
                     phone_for_pause_guard = normalize_phone_for_lookup(
                         function_args.get("phone")
@@ -1897,7 +1940,19 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
 
                     paused_appointment_id = await find_paused_appointment_id(phone_for_pause_guard)
-                    if paused_appointment_id:
+                    _next_pl_create = (
+                        extract_check_next_appointment(check_next_appointment_result)
+                        if check_next_appointment_result
+                        else {}
+                    )
+                    _next_id_create = extract_appointment_id(_next_pl_create)
+                    _next_st_create = extract_appointment_status(_next_pl_create)
+                    if (
+                        paused_appointment_id
+                        and _next_id_create is not None
+                        and _next_id_create == paused_appointment_id
+                        and is_paused_status(_next_st_create)
+                    ):
                         requested_date = function_args.get("date")
                         function_name = "update_appointment_date"
                         function_args = {
@@ -1907,7 +1962,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         }
                         forced_update_appointment_id = paused_appointment_id
                         print(
-                            f"SAFETY: Converted create_appointment -> update_appointment_date for paused appointment_id={paused_appointment_id}"
+                            f"SAFETY: Converted create_appointment -> update_appointment_date for paused NEXT appointment_id={paused_appointment_id}"
                         )
                 
                 # --- create_appointment: structured tool args only (no user-text booking inference) ---
@@ -2317,12 +2372,32 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                     if user_requested_change and phone_for_pause_guard:
                         paused_appointment_id = await find_paused_appointment_id(phone_for_pause_guard)
-                        if paused_appointment_id and function_args.get("appointment_id") != paused_appointment_id:
-                            print(
-                                f"SAFETY: Overriding update_appointment_date appointment_id with paused appointment_id={paused_appointment_id}"
-                            )
-                            function_args["appointment_id"] = paused_appointment_id
-                            forced_update_appointment_id = paused_appointment_id
+                        _next_pl_upd = (
+                            extract_check_next_appointment(check_next_appointment_result)
+                            if check_next_appointment_result
+                            else {}
+                        )
+                        _next_id_upd = extract_appointment_id(_next_pl_upd)
+                        _next_st_upd = extract_appointment_status(_next_pl_upd)
+                        # Only force paused id when the system's NEXT row is that paused appointment.
+                        # If next is Active/Available, rescheduling must target that id — not an older paused record.
+                        if (
+                            paused_appointment_id
+                            and check_next_appointment_result
+                            and _next_id_upd is not None
+                            and _next_id_upd == paused_appointment_id
+                            and is_paused_status(_next_st_upd)
+                        ):
+                            try:
+                                gpt_aid_int = int(function_args.get("appointment_id"))
+                            except (TypeError, ValueError):
+                                gpt_aid_int = None
+                            if gpt_aid_int != paused_appointment_id:
+                                print(
+                                    f"SAFETY: Overriding update_appointment_date appointment_id with paused NEXT appointment_id={paused_appointment_id}"
+                                )
+                                function_args["appointment_id"] = paused_appointment_id
+                                forced_update_appointment_id = paused_appointment_id
 
                     if phone_for_pause_guard and not function_args.get("phone"):
                         function_args["phone"] = phone_for_pause_guard
@@ -2351,16 +2426,23 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         )
                         continue
 
-                # --- FIX: Auto-chain appointment_id from check_next_appointment to update_appointment_date ---
-                # When GPT calls both tools together, it can't know the real appointment_id until check_next_appointment returns.
-                # This code automatically uses the correct appointment_id from the check result.
+                # --- Auto-chain appointment_id from check_next when GPT omitted it ---
+                # If GPT already set appointment_id (e.g. user picked from a multi-appointment list), do not overwrite.
                 if function_name == "update_appointment_date" and check_next_appointment_result and not forced_update_appointment_id:
                     actual_appointment_id = extract_appointment_id(extract_check_next_appointment(check_next_appointment_result))
                     if actual_appointment_id:
-                        gpt_provided_id = function_args.get("appointment_id")
-                        if gpt_provided_id != actual_appointment_id:
-                            print(f"DEBUG: Auto-chaining appointment_id: GPT provided {gpt_provided_id}, actual is {actual_appointment_id}")
+                        gpt_raw = function_args.get("appointment_id")
+                        try:
+                            gpt_provided_id = int(gpt_raw) if gpt_raw is not None and gpt_raw != "" else None
+                        except (TypeError, ValueError):
+                            gpt_provided_id = None
+                        if gpt_provided_id is None:
+                            print(f"DEBUG: Auto-chaining appointment_id (missing) -> {actual_appointment_id}")
                             function_args["appointment_id"] = actual_appointment_id
+                        elif gpt_provided_id != actual_appointment_id:
+                            print(
+                                f"DEBUG: Keeping GPT appointment_id={gpt_provided_id} (check_next next id={actual_appointment_id})"
+                            )
                         else:
                             print(f"DEBUG: appointment_id already correct: {actual_appointment_id}")
 

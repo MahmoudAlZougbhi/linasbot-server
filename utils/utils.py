@@ -2291,7 +2291,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "update_appointment_date",
-                "description": "Updates the date/time of an existing appointment on the calendar. Use when the customer wants to reschedule/postpone/change to a NEW slot (including Arabic «تأجيل الموعد»). Call check_next_appointment if you need appointment_id. If they have several appointments and did not say which (date/time/service/branch/id), ask a numbered list and wait for their pick—never guess appointment_id. For paused/postponed records, update the same appointment; never create a new one. Do NOT use pause_appointment to move to another day—that needs this tool with the new date.",
+                "description": "Updates the date/time of an existing appointment on the calendar. Use for reschedule/postpone/change to a NEW slot (Arabic «تأجيل الموعد»). Same tool to put a PAUSED row onto a new datetime (user picks new day/time)—do NOT call pause_appointment for that. Call check_next_appointment if you need appointment_id. Available/active rows are normal bookings. If mix of paused + Available across services, ask which row first. Do NOT use pause_appointment to move to another day.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -2508,7 +2508,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "pause_appointment",
-                "description": "Sets appointment status to Paused (on hold) without choosing a new calendar slot. Use ONLY when the customer explicitly wants to suspend/hold and has NOT agreed on a new date/time. Do NOT use for normal postpone-to-another-day—that is update_appointment_date with a concrete new date.",
+                "description": "FORBIDDEN as a way to «postpone» or reschedule: never call this to move an appointment to another day or to «تأجيل». It only sets status Paused with NO new datetime. Use ONLY when the customer explicitly asks to hold/suspend without picking a new date yet. If they want a new day (including lifting a paused slot onto a new date), use update_appointment_date—not another pause. If they have both paused and Available appointments, confirm which row first; do not pause the active one to «help».",
                 "parameters": {
                     "type": "object",
                     "properties": {
