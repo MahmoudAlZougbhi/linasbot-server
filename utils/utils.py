@@ -2446,7 +2446,9 @@ def get_openai_tools_schema():
                     "(1 = laser hair removal men, 12 = women, 13 = tattoo, etc.). "
                     "Match each user-mentioned area to rows in this response and pass every matching id in submit_booking_intent.body_part_ids "
                     "(multiple areas = multiple ids). The list is per service_id, not per machine—but machine_id in the booking must still "
-                    "match the device the user chose (from get_machines). Do not guess ids from memory or pricing text; use this tool."
+                    "match the device the user chose (from get_machines). Do not guess ids from memory or pricing text; use this tool. "
+                    "If this tool returns success=false, read hint_for_model if present: do NOT ask the user for 'CRM/system' area names when "
+                    "they already described the body location; use submit_booking_intent.body_part with their wording instead when possible."
                 ),
                 "parameters": {
                     "type": "object",

@@ -454,6 +454,24 @@ async def handle_submit_booking_intent(
             missing.append("machine")
             mach_miss = "machine"
 
+    if svc_id == TATTOO_SERVICE_ID and not str(intent.get("body_part") or "").strip():
+        um = (raw_msg or "").lower()
+        if any(
+            tok in um
+            for tok in (
+                "ra2be",
+                "ra2bet",
+                "ra2bte",
+                "رقبة",
+                "رقبت",
+                "neck",
+                "عنق",
+                "3an2",
+            )
+        ):
+            intent = dict(intent)
+            intent["body_part"] = (raw_msg or "").strip()[:280]
+
     body_ids: List[int] = []
     bp_miss: Optional[str] = None
     if svc_id is not None:

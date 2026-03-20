@@ -101,18 +101,46 @@ async def get_machines():
         log_report_event("api_call", "System", "N/A", {"api": "get_machines", "status": "failed", "error": response.get("message")})
     return response
 
+def _body_part_endpoint_candidates() -> list:
+    """Ordered GET paths; override with LINASLASER_GET_BODY_PARTS_PATH when your host uses a different route."""
+    out = []
+    custom = (os.getenv("LINASLASER_GET_BODY_PARTS_PATH") or "").strip().lstrip("/")
+    if custom:
+        out.append(custom)
+    for p in ("body-parts", "body_parts"):
+        if p not in out:
+            out.append(p)
+    return out
+
+
 async def get_body_parts(service_id: int = None):
     """Returns list of body parts (id, name) for pricing/booking. Optional service_id filter."""
     print("API Call: get_body_parts")
     params = {}
     if service_id is not None:
         params["service_id"] = service_id
-    response = await _make_api_request("GET", "body-parts", params=params if params else None)
-    if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "status": "success", "count": len(response.get("data", []))})
-    else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "status": "failed", "error": response.get("message")})
-    return response
+    q = params if params else None
+    last: dict = {"success": False, "message": "get_body_parts: no endpoint tried"}
+    for ep in _body_part_endpoint_candidates():
+        response = await _make_api_request("GET", ep, params=q)
+        last = response
+        if response.get("success"):
+            log_report_event(
+                "api_call",
+                "System",
+                "N/A",
+                {"api": "get_body_parts", "path": ep, "status": "success", "count": len(response.get("data") or [])},
+            )
+            return response
+        msg = str(response.get("message") or "").lower()
+        sc = response.get("status_code")
+        if sc == 404 or "not found" in msg:
+            print(f"API Call: get_body_parts retry — {ep} failed, trying next path")
+            continue
+        log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "path": ep, "status": "failed", "error": response.get("message")})
+        return response
+    log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "status": "failed", "error": last.get("message")})
+    return last
 
 async def get_clinic_hours():
     """Returns the clinic's working hours for each day of the week."""

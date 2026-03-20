@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,6 +17,7 @@ from services.booking.constants import (
     HAIR_MEN,
     HAIR_WOMEN,
     LASER_HAIR_REMOVAL_SERVICE_IDS,
+    TATTOO_SERVICE_ID,
 )
 
 
@@ -180,6 +183,32 @@ def pick_default_machine_for_non_hair(service_id: int, machines: List[dict]) -> 
     return None
 
 
+def _tattoo_body_part_id_from_env_synonyms(label: str) -> Optional[int]:
+    """
+    When GET body-parts is down or empty, map user wording to a CRM id for service 13 only.
+    Env: LINASLASER_TATTOO_BODY_SYNONYMS_JSON e.g. {"ra2be": 5, "رقبة": 5, "neck": 5, "عنق": 5}
+    """
+    raw = (os.getenv("LINASLASER_TATTOO_BODY_SYNONYMS_JSON") or "").strip()
+    if not raw:
+        return None
+    try:
+        m = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(m, dict):
+        return None
+    ll = (label or "").strip().lower()
+    if not ll:
+        return None
+    for k, v in m.items():
+        ks = str(k).strip().lower()
+        if not ks:
+            continue
+        if ks in ll or ll in ks:
+            return _safe_int(v)
+    return None
+
+
 def pick_pico_or_default_machine(machines: List[dict]) -> Optional[int]:
     """Prefer a Pico-labeled machine for tattoo; else first available id."""
     for m in machines:
@@ -208,6 +237,10 @@ async def resolve_body_part_ids(
         return [], "body_part"
     r = await api_integrations.get_body_parts(service_id=service_id)
     rows = _norm_api_list(r.get("data")) if r.get("success") else []
+    if service_id == TATTOO_SERVICE_ID and label and (not r.get("success") or not rows):
+        env_id = _tattoo_body_part_id_from_env_synonyms(label)
+        if env_id is not None and env_id > 0:
+            return [env_id], None
     if not rows:
         return [], "body_part"
     ll = label.lower()

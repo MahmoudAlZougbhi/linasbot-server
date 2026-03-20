@@ -3700,6 +3700,19 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             )
                         else:
                             tool_output = await function_to_call(**function_args)
+                        if (
+                            function_name == "get_body_parts"
+                            and isinstance(tool_output, dict)
+                            and not tool_output.get("success")
+                        ):
+                            tool_output = dict(tool_output)
+                            tool_output["hint_for_model"] = (
+                                "CRM body-part list failed to load. Do NOT ask the user for 'the area name as registered in the system' "
+                                "when they already described the location (e.g. neck / رقبة / ra2be). "
+                                "Call submit_booking_intent with body_part set to their wording and body_part_ids empty when possible "
+                                "so the server resolves IDs, or briefly apologize and offer branch contact if resolution is impossible. "
+                                "Ops: LINASLASER_GET_BODY_PARTS_PATH or LINASLASER_TATTOO_BODY_SYNONYMS_JSON."
+                            )
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
 
                         # Enrich "next" with full customer list so the model can list every upcoming booking.

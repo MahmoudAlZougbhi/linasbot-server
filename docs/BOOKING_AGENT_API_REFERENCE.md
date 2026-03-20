@@ -7,6 +7,12 @@ This document complements `AGENT_API_DOCUMENTATION.pdf` and matches the **strict
 - Config: `LINASLASER_API_BASE_URL`, `LINASLASER_API_TOKEN` (Bearer).
 - Client: `services/api_integrations.py` → `httpx.AsyncClient`.
 
+### Body-parts GET (path quirks)
+
+Some hosts return HTML 404 for `GET body-parts` while other routes work. The client tries **`LINASLASER_GET_BODY_PARTS_PATH`** (if set), then `body-parts`, then `body_parts`.
+
+For **laser tattoo removal (service 13)** only, if the list stays unavailable, you may set **`LINASLASER_TATTOO_BODY_SYNONYMS_JSON`** so the booking resolver can map user phrases to a CRM id, e.g. `{"ra2be":5,"رقبة":5,"neck":5,"عنق":5}` (replace `5` with the real id from your CRM).
+
 ## Endpoints used for booking
 
 | Method | Path | Role |
