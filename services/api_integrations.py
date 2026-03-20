@@ -355,11 +355,16 @@ async def get_appointment_details(appointment_id: int):
         log_report_event("api_call", "System", "N/A", {"api": "get_appointment_details", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id})
     return response
 
-async def pause_appointment(phone: str, appointment_id: int):
-    """Pauses an appointment by updating its status to Paused."""
+def _phone_clean_for_appointment_api(phone: str) -> str:
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]
+    return phone_clean
+
+
+async def pause_appointment(phone: str, appointment_id: int):
+    """Pauses an appointment by updating its status to Paused."""
+    phone_clean = _phone_clean_for_appointment_api(phone)
     print(f"API Call: pause_appointment for phone={phone_clean}, appointment_id={appointment_id}")
     json_data = {"phone": phone_clean, "appointment_id": appointment_id}
     response = await _make_api_request("POST", "appointments/pause", json_data=json_data)
@@ -368,6 +373,37 @@ async def pause_appointment(phone: str, appointment_id: int):
     else:
         log_report_event("api_call", "System", "N/A", {"api": "pause_appointment", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id})
     return response
+
+
+async def resume_appointment(phone: str, appointment_id: int, endpoint: str = None):
+    """
+    Clears Paused / sets appointment back to active (Available) when the Agent API exposes a resume endpoint.
+
+    **LINASLASER_APPOINTMENT_RESUME_PATH** overrides the POST path (e.g. ``appointments/unpause``).
+    If unset, defaults to ``appointments/resume`` (symmetric with ``appointments/pause``).
+    Set to ``off``, ``0``, ``false``, or ``none`` to skip the call entirely.
+    """
+    phone_clean = _phone_clean_for_appointment_api(phone)
+    if endpoint is not None:
+        path = str(endpoint).strip()
+    else:
+        raw = os.getenv("LINASLASER_APPOINTMENT_RESUME_PATH")
+        if raw is None:
+            path = "appointments/resume"
+        else:
+            path = str(raw).strip()
+    if not path or path.lower() in ("0", "false", "off", "none"):
+        return {"success": False, "message": "resume_skipped_no_path", "skipped": True}
+    print(f"API Call: resume_appointment for phone={phone_clean}, appointment_id={appointment_id}, path={path}")
+    json_data = {"phone": phone_clean, "appointment_id": appointment_id}
+    response = await _make_api_request("POST", path, json_data=json_data)
+    merged = dict(response) if isinstance(response, dict) else {"success": False, "message": str(response)}
+    merged["path"] = path
+    if response.get("success"):
+        log_report_event("api_call", "System", "N/A", {"api": "resume_appointment", "status": "success", "appointment_id": appointment_id, "path": path})
+    else:
+        log_report_event("api_call", "System", "N/A", {"api": "resume_appointment", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id, "path": path})
+    return merged
 
 async def get_clients_without_today(date: str = None, branch_id: int = None):
     """Returns all active clients who do not have appointments on the given date."""
@@ -557,10 +593,7 @@ async def create_appointment(phone: str, service_id: int, machine_id: int, branc
 
 async def update_appointment_date(appointment_id: int, phone: str, date: str, user_code: str = None):
     """Updates the date/time of an existing appointment."""
-    # Clean phone number to match API expected format (without + prefix and country code)
-    phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
-    if phone_clean.startswith("961"):
-        phone_clean = phone_clean[3:]  # Remove Lebanon country code
+    phone_clean = _phone_clean_for_appointment_api(phone)
 
     print(f"API Call: update_appointment_date for appointment_id={appointment_id}, phone={phone_clean} (original: {phone}), date={date}")
     json_data = {
@@ -568,10 +601,28 @@ async def update_appointment_date(appointment_id: int, phone: str, date: str, us
         "phone": phone_clean,
         "date": date
     }
-    if user_code: json_data["user_code"] = user_code
+    if user_code:
+        json_data["user_code"] = user_code
+    # Optional: same-request hint for CRMs that clear pause when this field is present (confirm with Agent API spec).
+    if os.getenv("LINASLASER_UPDATE_DATE_SET_STATUS_AVAILABLE", "").lower() in ("1", "true", "yes"):
+        json_data["status"] = "Available"
+
     response = await _make_api_request("POST", "appointments/update/date", json_data=json_data)
     if response.get("success"):
         log_report_event("api_call", "System", "N/A", {"api": "update_appointment_date", "status": "success", "phone": phone, "appointment_id": appointment_id, "new_date": date})
+        # After reschedule: try to clear Paused → Available (CRM UI) via resume endpoint; see resume_appointment docstring.
+        resume_resp = await resume_appointment(phone, appointment_id)
+        response = dict(response)
+        if resume_resp.get("skipped"):
+            response["resume_appointment"] = {"attempted": False, "skipped": True}
+        else:
+            response["resume_appointment"] = {
+                "attempted": True,
+                "success": bool(resume_resp.get("success")),
+                "skipped": False,
+                "message": resume_resp.get("message"),
+                "path": resume_resp.get("path"),
+            }
     else:
         log_report_event("api_call", "System", "N/A", {"api": "update_appointment_date", "status": "failed", "error": response.get("message"), "phone": phone, "appointment_id": appointment_id})
     return response

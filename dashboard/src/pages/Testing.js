@@ -1729,6 +1729,14 @@ const APITestingPanel = () => {
         requiresAuth: true,
       },
       {
+        id: "resume-appointment",
+        name: "Resume Appointment (Paused → Available)",
+        method: "POST",
+        endpoint: "/agent/appointments/resume",
+        body: { appointment_id: 30053, phone: "3956607" },
+        requiresAuth: true,
+      },
+      {
         id: "cancel-appointment",
         name: "Cancel Appointment",
         method: "POST",

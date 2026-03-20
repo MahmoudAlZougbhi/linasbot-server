@@ -317,7 +317,7 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
             "You MUST confirm **which row** they mean — **prefer asking for `appointment_id` (رقم الموعد في النظام)** shown on each line, or line number 1/2/3 matching your list — before any reschedule tool.\n"
             "- **FORBIDDEN:** Do **NOT** call **`pause_appointment`** to «تأجيل» or move to another day—that tool only **puts** a slot on hold without a new calendar time. "
             "**Postpone / new day / إخراج من البوز بتاريخ جديد** = **`update_appointment_date`** with structured `date` (+ `calendar_day_intent` / `date_components` when needed) on the correct `appointment_id`.\n"
-            "- **PAUSED row:** In `bot_reply`, you may explain that this service's appointment is **موقوف حالياً**; if they want a new slot, take the new date/time then call **`update_appointment_date`** on **that paused row's id** (this effectively moves them off pause onto the new datetime—do **not** stack another pause).\n"
+            "- **PAUSED row:** Take the new date/time then call **`update_appointment_date`** on **that paused row's id**. The server may also call the CRM **resume** endpoint after a successful date update so status becomes **Available**—check tool JSON `resume_appointment` (success vs failed vs skipped). In `bot_reply`, if resume succeeded, say the موعد صار فعّال/متاح بالوقت الجديد; if resume failed or skipped but date update succeeded, say الوقت اتعدّل وإذا لسا ظاهر موقوف يتأكد الاستقبال.\n"
             "- **AVAILABLE / ACTIVE row:** Normal upcoming booking—reschedule only with **`update_appointment_date`**.\n"
         )
     return (
@@ -4003,6 +4003,40 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 "so the server resolves IDs, or briefly apologize and offer branch contact if resolution is impossible. "
                                 "Ops: LINASLASER_GET_BODY_PARTS_PATH or LINASLASER_TATTOO_BODY_SYNONYMS_JSON."
                             )
+                        if (
+                            function_name == "update_appointment_date"
+                            and isinstance(tool_output, dict)
+                            and tool_output.get("success")
+                        ):
+                            tool_output = dict(tool_output)
+                            ra = tool_output.get("resume_appointment") or {}
+                            base = (
+                                "This tool returned success — the Agent API accepted the new datetime (see data.old_date / new_date). "
+                            )
+                            if ra.get("attempted") and ra.get("success"):
+                                base += (
+                                    "A follow-up **resume** call also succeeded — the CRM should show the slot as active/Available "
+                                    "(not Paused) in addition to the new time. Say so briefly in Arabic if bot_reply is Arabic. "
+                                )
+                            elif ra.get("attempted") and not ra.get("success"):
+                                base += (
+                                    f"A follow-up **resume** call was attempted ({ra.get('path')!r}) but failed: {ra.get('message')!r}. "
+                                    "Datetime was still updated. If status still shows «موقوف», ask reception to clear pause or fix the resume endpoint; "
+                                    "do not claim the datetime change failed. "
+                                )
+                            elif ra.get("skipped"):
+                                base += (
+                                    "Resume-from-pause was skipped (LINASLASER_APPOINTMENT_RESUME_PATH=off or empty). "
+                                    "If the row stays Paused in the CRM, enable resume path or ask backend to clear pause on date update. "
+                                )
+                            else:
+                                base += (
+                                    "If the customer says the clinic computer still shows the old time: explain that the booking API "
+                                    "confirmed the update; reception software may need refresh; rows can still show «موقوف» while "
+                                    "the time field was updated—staff can verify by appointment_id. "
+                                )
+                            base += "Do not claim the update failed unless a later tool result contradicts this."
+                            tool_output["hint_for_model"] = base
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
 
                         # Enrich "next" with full customer list so the model can list every upcoming booking.

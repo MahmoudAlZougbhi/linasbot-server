@@ -2387,7 +2387,8 @@ def get_openai_tools_schema():
                     "Same tool to put a PAUSED row onto a new datetime once the user chose the slot—do NOT call pause_appointment for that. "
                     "You MUST pass the **exact appointment_id** the user selected (from check_next_appointment / customer_appointments JSON), plus structured **date**. "
                     "If multiple rows: first show each row to the user with appointment_id + service + machine + areas + price (if in JSON), ask them for the id (or line number), then call this tool. "
-                    "Do NOT use pause_appointment to move to another day."
+                    "Do NOT use pause_appointment to move to another day. "
+                    "When the response is success=true, the Agent API accepted the change. The payload may include resume_appointment: after date update the server may POST a resume endpoint so Paused→Available—if resume_appointment.success is true, tell the user the slot is active at the new time; if resume failed or was skipped, datetime still changed but status may stay Paused until staff or API fixes it. Read hint_for_model."
                 ),
                 "parameters": {
                     "type": "object",

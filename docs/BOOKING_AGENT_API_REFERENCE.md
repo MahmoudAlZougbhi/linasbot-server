@@ -25,6 +25,17 @@ For **laser tattoo removal (service 13)** only, if the list stays unavailable, y
 | POST | `customers/create` (via `create_customer`) | New file when needed — **`branch_id` always sent** (callers may omit arg → `config.DEFAULT_BRANCH_ID`; invalid/missing resolved id → no HTTP call, structured error) |
 | POST | `appointments/create` | **Authoritative** booking creation |
 
+## Reschedule + clearing **Paused** status
+
+`POST appointments/update/date` may only change the datetime while the CRM row stays **Paused**. After a **successful** date update, this bot calls **`resume_appointment`** (same phone + `appointment_id` as `appointments/pause`):
+
+- **Default POST path:** `appointments/resume` (when `LINASLASER_APPOINTMENT_RESUME_PATH` is unset).
+- **Override path:** set `LINASLASER_APPOINTMENT_RESUME_PATH` (e.g. `appointments/unpause`) if your Agent API uses a different route.
+- **Disable follow-up:** set `LINASLASER_APPOINTMENT_RESUME_PATH=off` (or `0` / `false` / `none`).
+- **Same-request alternative (CRM-dependent):** set `LINASLASER_UPDATE_DATE_SET_STATUS_AVAILABLE=1` to add `"status": "Available"` to the `appointments/update/date` JSON (only if your API accepts it).
+
+The tool result for `update_appointment_date` includes **`resume_appointment`**: `attempted`, `success`, `path`, `message` — the model uses this to tell the user whether the slot should now show as active.
+
 ## POST `appointments/create` — payload shape (this bot)
 
 The Python client in `api_integrations.create_appointment` sends JSON with at least:
