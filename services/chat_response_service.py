@@ -27,6 +27,12 @@ from utils.datetime_utils import (
     parse_datetime_flexible,
     to_bot_tz,
 )
+from utils.appointment_slot_rules import (
+    extract_appointment_booking_fields,
+    find_appointment_row_in_check_next_payload,
+    parse_normalized_api_datetime,
+    validate_booking_slot,
+)
 
 # Import dynamic model selector for cost optimization
 from services.dynamic_model_selector import select_optimal_model
@@ -1292,6 +1298,167 @@ def _is_placeholder_booking_customer_name(name: Optional[str]) -> bool:
     return False
 
 
+def _extract_latin_name_from_franco_booking_bundle(text: str) -> Optional[str]:
+    """
+    Infer Latin customer name from Franco one-liners like:
+    se3a 3 bilal bilal bilal esm
+    Also scans [User clarified: ...] blocks when the main query is a stub.
+    """
+    if not text or not str(text).strip():
+        return None
+    chunks: List[str] = []
+    for m in re.finditer(r"\[User clarified:\s*(.+?)\]", text, flags=re.IGNORECASE | re.DOTALL):
+        inner = (m.group(1) or "").strip()
+        if inner:
+            chunks.append(inner.split("\n")[0].strip())
+    tail = str(text).strip().split("\n")[0].strip()
+    if tail and tail not in chunks:
+        chunks.append(tail)
+
+    noise_tokens = {
+        "se3a",
+        "sa3a",
+        "s3a",
+        "seaa",
+        "saa",
+        "so3a",
+        "wa2t",
+        "wakt",
+        "waket",
+        "please",
+        "pls",
+        "ok",
+        "okay",
+        "eh",
+        "ah",
+        "mw3ad",
+        "mwede",
+        "mw3ede",
+        "maw3ad",
+        "mawede",
+        "7ajez",
+        "hajez",
+        "bede",
+        "bade",
+        "bedi",
+        "tanen",
+        "tenen",
+        "tunun",
+        "beirut",
+        "beyrouth",
+        "antelias",
+        "antaliyas",
+        "kifak",
+        "kifek",
+        "hi",
+        "hey",
+        "hello",
+    }
+
+    for raw in chunks:
+        line = raw.strip()
+        line = re.sub(
+            r"\b(esm|esmi|esme|ism|isme|ismi|name)\b\.?$",
+            "",
+            line,
+            flags=re.IGNORECASE,
+        ).strip()
+        if not line:
+            continue
+        tokens = line.split()
+        latin_words: List[str] = []
+        for t in tokens:
+            tl = re.sub(r"^[^\w]+|[^\w]+$", "", t, flags=re.UNICODE)
+            if not tl:
+                continue
+            low = tl.lower()
+            if low in noise_tokens:
+                continue
+            if tl.isdigit():
+                continue
+            if re.fullmatch(r"\d{1,2}:\d{2}", tl):
+                continue
+            if re.search(r"[\u0600-\u06FF]", tl):
+                continue
+            if len(low) < 2:
+                continue
+            if not re.fullmatch(r"[A-Za-zÀ-ÿ]+(?:-[A-Za-zÀ-ÿ]+)?", tl):
+                continue
+            latin_words.append(tl)
+        if not latin_words:
+            continue
+        lows = [w.lower() for w in latin_words]
+        if len(set(lows)) == 1:
+            cand = latin_words[0][:1].upper() + latin_words[0][1:].lower() if latin_words[0] else ""
+        else:
+            cand = " ".join(w[:1].upper() + w[1:].lower() if w else "" for w in latin_words)
+        cand = cand.strip()
+        if 2 <= len(cand) <= 80 and not _is_placeholder_booking_customer_name(cand):
+            return cand
+    return None
+
+
+def _apply_inferred_name_from_user_bundle(
+    user_id: str,
+    user_input: str,
+    parsed_response: Dict[str, Any],
+) -> None:
+    """Backfill detected_name + session name when GPT missed Franco time+name bundles."""
+    inferred = _extract_latin_name_from_franco_booking_bundle(user_input or "")
+    if not inferred:
+        return
+    existing = (parsed_response.get("detected_name") or "").strip()
+    if not existing:
+        parsed_response["detected_name"] = inferred
+    try:
+        ud = config.user_data_whatsapp.setdefault(user_id, {})
+        if not (str(ud.get("collected_name") or "")).strip():
+            ud["collected_name"] = inferred
+        config.user_names[user_id] = inferred
+    except Exception as persist_e:
+        print(f"⚠️ inferred name persist (bundle): {persist_e}")
+
+
+def _prune_redundant_booking_questions_when_name_from_bundle(
+    user_input: str,
+    parsed_response: Dict[str, Any],
+) -> None:
+    """
+    If the user already bundled time + Latin name (Franco) but the model still asks for
+    name / which Monday, strip those lines from bot_reply (Arabic-only; no Latin in reply).
+    """
+    if not _extract_latin_name_from_franco_booking_bundle(user_input or ""):
+        return
+    if (parsed_response.get("action") or "").strip().lower() != "ask_for_details_for_booking":
+        return
+    br = (parsed_response.get("bot_reply") or "").strip()
+    if not br:
+        return
+    br2 = re.sub(
+        r"(?m)^[^\n]*[١1]\)\s*[^\n]*(الاسم|اللاتين|الهوية|متل\s+الهوية)[^\n]*\n?",
+        "",
+        br,
+    )
+    br2 = re.sub(
+        r"(?m)^[^\n]*[٢2]\)\s*[^\n]*(أي نهار|أي يوم)[^\n]*(تنين|إثنين|اثنين|الإثنين|الاثنين)[^\n]*\n?",
+        "",
+        br2,
+    )
+    br2 = re.sub(r"\n{3,}", "\n\n", br2).strip()
+    if br2 == br:
+        return
+    still_numbered = bool(re.search(r"(?m)^\s*[١٢٣123][\).]", br2))
+    if not still_numbered and (
+        len(re.sub(r"\s+", "", br2)) < 20
+        or re.search(r"(شغلتين|سؤالين|أسألك)", br2)
+    ):
+        parsed_response["bot_reply"] = (
+            "تمام أستاذ 🌷 تم تسجيل اسمك والوقت اللي ذكرتهما من رسالتك؛ منتابع لإكمال الحجز."
+        )
+    else:
+        parsed_response["bot_reply"] = br2
+
+
 def _extract_customer_name_from_conversation_for_booking(
     user_id: str,
     current_context_messages: Optional[List[dict]],
@@ -1301,6 +1468,10 @@ def _extract_customer_name_from_conversation_for_booking(
     Same heuristics as create_appointment tool path (conversation scan).
     Returns None if no usable Latin / structured name found.
     """
+    bundle_name = _extract_latin_name_from_franco_booking_bundle(user_input or "")
+    if bundle_name:
+        return bundle_name
+
     customer_name = None
     ctx = list(current_context_messages or [])
     for msg_entry in reversed(ctx + [{"role": "user", "content": user_input}]):
@@ -1569,6 +1740,19 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     if not date_ok:
         print(f"RECOVERY create_appointment: date normalize failed: {date_err}")
         return None
+
+    dt_local = parse_normalized_api_datetime(str(fa.get("date") or "").strip(), BOOKING_TZ)
+    if dt_local is not None:
+        vr = validate_booking_slot(
+            dt_local=dt_local,
+            service_id=_safe_int(fa.get("service_id")),
+            branch_id=_safe_int(fa.get("branch_id")),
+            machine_id=_safe_int(fa.get("machine_id")),
+            gender_raw=current_gender,
+        )
+        if not vr.get("ok"):
+            print(f"RECOVERY create_appointment: slot_validation failed: {vr.get('slot_validation')}")
+            return None
 
     fa["body_parts_with_sessions"] = [
         {"body_part_id": bp_id, "session_number": 1} for bp_id in selected_body_part_ids
@@ -3161,6 +3345,68 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         else:
                             print(f"DEBUG: appointment_id already correct: {actual_appointment_id}")
 
+                # Reject day/time that violate clinic rules (service + gender + branch + device) before CRM.
+                if function_name in ("create_appointment", "update_appointment_date"):
+                    date_s = function_args.get("date")
+                    dt_local = None
+                    if isinstance(date_s, str) and date_s.strip():
+                        dt_local = parse_normalized_api_datetime(date_s.strip(), BOOKING_TZ)
+                    if dt_local is not None:
+                        sid = bid = None
+                        mid: Optional[int] = None
+                        if function_name == "create_appointment":
+                            sid = _safe_int(function_args.get("service_id"))
+                            bid = _safe_int(function_args.get("branch_id"))
+                            mid = _safe_int(function_args.get("machine_id"))
+                        else:
+                            aid = _safe_int(function_args.get("appointment_id"))
+                            row = find_appointment_row_in_check_next_payload(
+                                check_next_appointment_result, aid
+                            )
+                            if row is not None:
+                                sid, bid, mid = extract_appointment_booking_fields(row)
+                            else:
+                                print(
+                                    "DEBUG: slot_validation skipped update_appointment_date "
+                                    f"(no CRM row for appointment_id={aid})"
+                                )
+                        if sid is not None and bid is not None:
+                            vr = validate_booking_slot(
+                                dt_local=dt_local,
+                                service_id=sid,
+                                branch_id=bid,
+                                machine_id=mid,
+                                gender_raw=current_gender,
+                            )
+                            if not vr.get("ok"):
+                                sv = vr.get("slot_validation") or {}
+                                err_content = json.dumps(
+                                    {
+                                        "success": False,
+                                        "message": sv.get(
+                                            "explanation_en",
+                                            "This day/time is not available for the selected service, branch, and gender.",
+                                        ),
+                                        "slot_validation": sv,
+                                    }
+                                )
+                                tool_round_trips.append(
+                                    {
+                                        "ai_requested": function_name,
+                                        "args": json.dumps(function_args)[:300],
+                                        "bot_returned": err_content[:600],
+                                    }
+                                )
+                                messages.append(
+                                    {
+                                        "tool_call_id": tool_call.id,
+                                        "role": "tool",
+                                        "name": function_name,
+                                        "content": err_content,
+                                    }
+                                )
+                                continue
+
                 _remember_booking_selection(user_id, function_args)
 
                 # Special tool: GPT requests knowledge retrieval - bot runs selector, returns content to GPT
@@ -3377,6 +3623,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
         else:
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
+
+        _apply_inferred_name_from_user_bundle(user_id, user_input, parsed_response)
+        _prune_redundant_booking_questions_when_name_from_bundle(user_input, parsed_response)
 
         # AI decides language - use AI's detected_language from response, fallback to pre-detected
         bot_reply = parsed_response.get("bot_reply", "")
