@@ -795,8 +795,41 @@ def _merge_pricing_args_with_booking_state(
     incoming_body_part_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
     if incoming_body_part_ids:
         function_args["body_part_ids"] = incoming_body_part_ids
-    elif booking_state.get("body_part_ids"):
-        function_args["body_part_ids"] = booking_state.get("body_part_ids")
+    else:
+        st_bp = booking_state.get("body_part_ids")
+        st_sid = _safe_int(booking_state.get("service_id"))
+        arg_sid = _safe_int(function_args.get("service_id"))
+        if st_bp and _normalize_body_part_ids(st_bp):
+            # Only reuse saved areas when they belong to the same service as this booking (avoid wrong IDs).
+            if st_sid is None or arg_sid is None or st_sid == arg_sid:
+                function_args["body_part_ids"] = booking_state.get("body_part_ids")
+
+
+def _finalize_create_appointment_payload_for_api(function_args: Dict[str, Any]) -> None:
+    """
+    create_appointment must send body_parts with session_number=1 for each area (new booking / first session).
+    Reconciles GPT body_parts_with_sessions (may omit or wrong session) with body_part_ids.
+    """
+    raw_bps = function_args.get("body_parts_with_sessions")
+    ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
+    if isinstance(raw_bps, list) and raw_bps:
+        cleaned: List[Dict[str, Any]] = []
+        for x in raw_bps:
+            if not isinstance(x, dict):
+                continue
+            bid = _safe_int(x.get("body_part_id") or x.get("id"))
+            if bid is None:
+                continue
+            cleaned.append({"body_part_id": bid, "session_number": 1})
+        if cleaned:
+            function_args["body_parts_with_sessions"] = cleaned
+            function_args["body_part_ids"] = [c["body_part_id"] for c in cleaned]
+            return
+    if ids:
+        function_args["body_parts_with_sessions"] = [
+            {"body_part_id": bid, "session_number": 1} for bid in ids
+        ]
+        function_args["body_part_ids"] = list(ids)
 
 
 def _remember_booking_selection(user_id: str, function_args: Dict[str, Any]) -> None:
@@ -3164,6 +3197,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": err_content})
                 elif hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
                     function_to_call = getattr(api_integrations, function_name)
+                    if function_name == "create_appointment":
+                        _finalize_create_appointment_payload_for_api(function_args)
                     print(f"DEBUG: Executing tool: {function_name} with args: {function_args}")
 
                     try:

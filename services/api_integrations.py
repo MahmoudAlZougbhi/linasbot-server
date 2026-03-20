@@ -438,11 +438,20 @@ async def create_appointment(phone: str, service_id: int, machine_id: int, branc
         "branch_id": branch_id,
         "date": date
     }
-    if user_code: json_data["user_code"] = user_code
+    if user_code:
+        json_data["user_code"] = user_code
+    # API expects structured body_parts with session_number for new bookings; bare body_part_ids often omit session 1.
     if body_parts_with_sessions:
         json_data["body_parts"] = body_parts_with_sessions
     elif body_part_ids:
-        json_data["body_part_ids"] = body_part_ids
+        parts_payload = []
+        for bid in body_part_ids:
+            try:
+                parts_payload.append({"body_part_id": int(bid), "session_number": 1})
+            except (TypeError, ValueError):
+                continue
+        if parts_payload:
+            json_data["body_parts"] = parts_payload
     response = await _make_api_request("POST", "appointments/create", json_data=json_data)
     if response.get("success"):
         log_report_event("api_call", "System", "N/A", {"api": "create_appointment", "status": "success", "phone": phone, "appointment": response.get("data")})
