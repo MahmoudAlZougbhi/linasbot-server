@@ -2237,6 +2237,84 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
+                "name": "submit_booking_intent",
+                "description": (
+                    "PREFERRED for new bookings: send structured extraction from the conversation. "
+                    "The bot validates every field, resolves names to IDs using live CRM lists, enforces clinic slot rules, "
+                    "then calls create_appointment only if validation passes. "
+                    "Do NOT tell the user the appointment is booked unless this tool returns success with booking_flow_state=booked. "
+                    "Leave IDs null when unsure; use get_services/get_branches/get_machines/get_body_parts first if needed. "
+                    "For reschedule use update_appointment_date, not this tool."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "intent": {
+                            "type": "string",
+                            "enum": ["create_appointment"],
+                            "description": "Must be create_appointment for a new booking.",
+                        },
+                        "phone": {
+                            "type": "string",
+                            "description": "Customer phone without country code when possible; omit if same as runtime context.",
+                        },
+                        "service_name": {"type": "string", "description": "Human-readable service from user."},
+                        "service_id": {"type": "integer", "description": "Only if already verified from get_services."},
+                        "body_part": {"type": "string", "description": "Area text, e.g. back, bikini, underarms."},
+                        "body_part_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Prefer numeric IDs from get_body_parts for the chosen service_id.",
+                        },
+                        "machine_name": {"type": "string", "description": "Device name for hair removal (Neo/Quadro/Candela/Trio)."},
+                        "machine_id": {"type": "integer", "description": "Only if verified from get_machines."},
+                        "branch_name": {"type": "string", "description": "Beirut or Antelias."},
+                        "branch_id": {"type": "integer", "description": "1=Beirut, 2=Antelias when known."},
+                        "gender": {"type": "string", "enum": ["male", "female"], "description": "Required for schedule rules if not already in session."},
+                        "customer_name": {
+                            "type": "string",
+                            "description": "Full name in Latin for new CRM customers when file does not exist.",
+                        },
+                        "raw_user_date_text": {"type": "string"},
+                        "raw_user_time_text": {"type": "string"},
+                        "normalized_date": {"type": "string", "description": "If resolved, e.g. YYYY-MM-DD."},
+                        "normalized_time": {"type": "string", "description": "If resolved, e.g. 15:00 or 3 PM phrasing already converted."},
+                        "timezone": {
+                            "type": "string",
+                            "description": "Always Asia/Beirut; server uses fixed clinic +02:00 clock.",
+                        },
+                        "calendar_day_intent": {"type": "string", "enum": ["today", "tomorrow"]},
+                        "date_components": {
+                            "type": "object",
+                            "description": "Concrete civil datetime after resolving vague weekday phrases.",
+                            "properties": {
+                                "year": {"type": "integer"},
+                                "month": {"type": "integer"},
+                                "day": {"type": "integer"},
+                                "hour": {"type": "integer"},
+                                "minute": {"type": "integer"},
+                            },
+                        },
+                        "date": {
+                            "type": "string",
+                            "description": "Full API datetime YYYY-MM-DD HH:MM:SS if already resolved.",
+                        },
+                        "missing_fields": {"type": "array", "items": {"type": "string"}},
+                        "ambiguities": {"type": "array", "items": {"type": "string"}},
+                        "needs_clarification": {"type": "boolean"},
+                        "confidence_notes": {"type": "array", "items": {"type": "string"}},
+                        "execute_booking": {
+                            "type": "boolean",
+                            "description": "Default true: after validation, call CRM create. Set false to dry-run only.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "create_appointment",
                 "description": "Creates a new appointment record. Requires phone, service_id, branch_id, date/time, body_part_ids (REQUIRED for every bookable service), and machine_id. Session numbers are sent as body_parts with session_number=1 for new bookings. Only laser hair removal (service_id 1 or 12) uses customer-chosen device: call get_machines and pick Neo/Quadro/Candela/Trio as discussed. For tattoo (13), CO2 (2/11), and whitening/DPL (4/5/14), still pass machine_id from get_machines (backend maps device); do not ask the customer to choose a device for those services. NEVER use this for reschedule when a paused appointment exists—use update_appointment_date instead.",
                 "parameters": {

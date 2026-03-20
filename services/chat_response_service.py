@@ -3629,6 +3629,64 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         err_content = json.dumps({"success": False, "content": "", "message": str(kr_e)})
                         tool_round_trips.append({"ai_requested": function_name, "args": json.dumps(function_args)[:300], "bot_returned": err_content[:600]})
                         messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": err_content})
+                elif function_name == "submit_booking_intent":
+                    from services.booking.intent_pipeline import handle_submit_booking_intent
+
+                    _sb_phone = (
+                        function_args.get("phone")
+                        or customer_phone_clean
+                        or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                        or ""
+                    )
+                    tool_output = await handle_submit_booking_intent(
+                        user_id=user_id,
+                        phone=str(_sb_phone).strip(),
+                        current_gender=current_gender,
+                        user_input=user_input,
+                        function_args=function_args,
+                    )
+                    tool_content = json.dumps(tool_output, default=str)
+                    tool_round_trips.append(
+                        {
+                            "ai_requested": function_name,
+                            "args": json.dumps(function_args)[:300],
+                            "bot_returned": (tool_content[:600] + "...") if len(tool_content) > 600 else tool_content,
+                        }
+                    )
+                    messages.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": tool_content,
+                        }
+                    )
+                    if isinstance(tool_output, dict) and tool_output.get("success") and tool_output.get("booking_flow_state") == "booked":
+                        recovered_create_appointment_ok = True
+                        try:
+                            from services.analytics_events import analytics
+
+                            api_wrapped = tool_output.get("api_response") or {}
+                            raw_data_payload = api_wrapped.get("data", {})
+                            appointment_data = (
+                                raw_data_payload.get("appointment")
+                                if isinstance(raw_data_payload, dict)
+                                else {}
+                            ) or {}
+                            service_info = appointment_data.get("service") or {}
+                            service_name = (
+                                service_info.get("name", "unknown_service")
+                                if isinstance(service_info, dict)
+                                else str(service_info)
+                            )
+                            analytics.log_appointment(
+                                user_id=user_id,
+                                service=service_name,
+                                status="booked",
+                                messages_count=len(current_context_messages or []),
+                            )
+                        except Exception as an_sb:
+                            print(f"WARNING: analytics (submit_booking_intent): {an_sb}")
                 elif hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
                     function_to_call = getattr(api_integrations, function_name)
                     if function_name == "create_appointment":
@@ -3869,6 +3927,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         if (
             tool_calls
             and "create_appointment" not in tool_names
+            and "submit_booking_intent" not in tool_names
             and not api_failure_reason
             and (
                 (
