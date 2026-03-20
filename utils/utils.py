@@ -2261,11 +2261,14 @@ def get_openai_tools_schema():
                         },
                         "service_name": {"type": "string", "description": "Human-readable service from user."},
                         "service_id": {"type": "integer", "description": "Only if already verified from get_services."},
-                        "body_part": {"type": "string", "description": "Area text, e.g. back, bikini, underarms."},
+                        "body_part": {
+                            "type": "string",
+                            "description": "Optional human-readable area hint; for booking you must still set body_part_ids from get_body_parts.",
+                        },
                         "body_part_ids": {
                             "type": "array",
                             "items": {"type": "integer"},
-                            "description": "Prefer numeric IDs from get_body_parts for the chosen service_id.",
+                            "description": "Non-empty list of CRM ids: call get_body_parts(service_id=…) and map every user-mentioned area to ids (multiple areas = multiple ids).",
                         },
                         "machine_name": {"type": "string", "description": "Device name for hair removal (Neo/Quadro/Candela/Trio)."},
                         "machine_id": {"type": "integer", "description": "Only if verified from get_machines."},
@@ -2430,6 +2433,34 @@ def get_openai_tools_schema():
                 "name": "get_machines",
                 "description": "Lists machines in the clinic. Call when booking laser hair removal (service 1 or 12) to pick the device the customer agreed to (Neo, Quadro, Candela, Trio). For tattoo, CO2, or whitening you may still call once to get a valid machine_id for the API, but do not ask the customer to choose a device for those services.",
                 "parameters": {"type": "object", "properties": {}}
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_body_parts",
+                "description": (
+                    "Returns the official CRM list of bookable body areas (id + name) for a service. "
+                    "REQUIRED before submit_booking_intent whenever the user names one or more areas (Arabic/English/franco) "
+                    "or you need numeric body_part_ids. Always pass the same service_id you are booking "
+                    "(1 = laser hair removal men, 12 = women, 13 = tattoo, etc.). "
+                    "Match each user-mentioned area to rows in this response and pass every matching id in submit_booking_intent.body_part_ids "
+                    "(multiple areas = multiple ids). The list is per service_id, not per machine—but machine_id in the booking must still "
+                    "match the device the user chose (from get_machines). Do not guess ids from memory or pricing text; use this tool."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "service_id": {
+                            "type": "integer",
+                            "description": (
+                                "Same service as the booking conversation, e.g. 1 or 12 for laser hair removal "
+                                "(use 1 for male / شاب، 12 for female / صبية). Required for correct area ids."
+                            ),
+                        },
+                    },
+                    "required": ["service_id"],
+                },
             }
         },
         {
