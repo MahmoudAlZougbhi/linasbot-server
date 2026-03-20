@@ -425,6 +425,78 @@ def resolve_relative_datetime(
     return None
 
 
+# Levantine / Franco weekday hints for reschedule threads (Monday=0 .. Sunday=6, Python weekday).
+_WEEKDAY_INTENT_PATTERNS: list[tuple[int, re.Pattern]] = [
+    (0, re.compile(r"\b(tanen|tnen|tnine|monday|الاثنين|اثنين)\b", re.I)),
+    (
+        1,
+        re.compile(
+            r"\b(talta|tlata|tlate|tuesday|الثلاثاء|ثلاثاء|نهار\s+ال(?:تلاتا|تلاثا|ثلاثا))\b",
+            re.I,
+        ),
+    ),
+    (
+        2,
+        re.compile(
+            r"\b(arbaa|arbe3|arbe2|arb3a|wednesday|الاربعاء|الأربعاء|اربعاء|نهار\s+الاربعا)\b",
+            re.I,
+        ),
+    ),
+    (
+        3,
+        re.compile(
+            r"\b(khamis|5amis|5ames|5amess|thursday|الخميس|خميس|نهار\s+الخميس)\b",
+            re.I,
+        ),
+    ),
+    (4, re.compile(r"\b(jom3a|jum3a|jem3a|friday|الجمعة|جمعة)\b", re.I)),
+    (5, re.compile(r"\b(sabt|sbt|saturday|السبت|سبت)\b", re.I)),
+    (6, re.compile(r"\b(ahad|7ad|had|sunday|الاحد|الأحد|احد)\b", re.I)),
+]
+
+
+def detect_last_weekday_intent_from_user_text(text: str) -> Optional[int]:
+    """
+    Return the weekday (0=Mon .. 6=Sun) of the **last** weekday phrase in user-authored text.
+    Used when the model sends the wrong calendar day but the customer already named a target day
+    (e.g. «نهار التلاتا») and then only sends an appointment_id.
+    """
+    if not text or not str(text).strip():
+        return None
+    best_end = -1
+    best_wd: Optional[int] = None
+    for wd, rx in _WEEKDAY_INTENT_PATTERNS:
+        for m in rx.finditer(text):
+            if m.end() > best_end:
+                best_end = m.end()
+                best_wd = wd
+    return best_wd
+
+
+def next_future_datetime_matching_weekday(
+    reference: datetime.datetime,
+    target_weekday: int,
+    hour: int,
+    minute: int,
+) -> Optional[datetime.datetime]:
+    """
+    First datetime strictly after `reference` on `target_weekday` (Python weekday) with given hour/minute in same tz.
+    """
+    reference = to_bot_tz(reference)
+    if not (0 <= target_weekday <= 6 and 0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    d0 = reference.date()
+    for add in range(0, 15):
+        d = d0 + datetime.timedelta(days=add)
+        if d.weekday() == target_weekday:
+            cand = datetime.datetime(
+                d.year, d.month, d.day, hour, minute, 0, tzinfo=reference.tzinfo, microsecond=0
+            )
+            if cand > reference:
+                return cand
+    return None
+
+
 def format_clinic_calendar_anchor(reference: Optional[datetime.datetime] = None) -> str:
     """
     Single unambiguous line for the AI: English weekday + ISO date for today and tomorrow in bot TZ (+02:00).

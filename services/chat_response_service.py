@@ -21,8 +21,10 @@ from utils.datetime_utils import (
     datetime_from_ai_date_components,
     detect_appointment_inquiry_intent,
     detect_bulk_reschedule_all_intent,
+    detect_last_weekday_intent_from_user_text,
     detect_reschedule_intent,
     format_clinic_calendar_anchor,
+    next_future_datetime_matching_weekday,
     now_in_bot_tz,
     parse_datetime_flexible,
     to_bot_tz,
@@ -3123,8 +3125,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if isinstance(content, str) and content.strip():
                         recent_user_messages.append(content.strip())
 
-                # Keep recent user turns (wider window so "today" + time stay in scope when user says "Ok").
-                recent_user_messages = recent_user_messages[-12:]
+                # Keep recent user turns (wider window: weekday + id-only replies stay linked).
+                recent_user_messages = recent_user_messages[-30:]
 
                 latest_clean = (latest_user_input or "").strip()
                 if latest_clean and (not recent_user_messages or recent_user_messages[-1] != latest_clean):
@@ -3132,7 +3134,30 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 return " ".join(recent_user_messages).strip()
 
-            def normalize_tool_date(function_name: str, function_args: dict) -> bool:
+            def collect_recent_user_only_schedule_text(
+                context_messages: list, latest_user_input: str, max_user_messages: int = 40
+            ) -> str:
+                """User messages only (no assistant lists) — for weekday intent when user sends id-only reply."""
+                recent_user_messages = []
+                for msg in context_messages[-100:]:
+                    if msg.get("role") != "user":
+                        continue
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and content.strip():
+                        recent_user_messages.append(content.strip())
+                recent_user_messages = recent_user_messages[-max_user_messages:]
+                latest_clean = (latest_user_input or "").strip()
+                if latest_clean and (not recent_user_messages or recent_user_messages[-1] != latest_clean):
+                    recent_user_messages.append(latest_clean)
+                return " ".join(recent_user_messages).strip()
+
+            def normalize_tool_date(
+                function_name: str,
+                function_args: dict,
+                *,
+                user_input_for_date: Optional[str] = None,
+                context_messages_for_date: Optional[list] = None,
+            ) -> bool:
                 """
                 Build API datetime from AI tool arguments only (date_components, date string,
                 calendar_day_intent). Does not parse user chat text. False → handover (flow_meta.error).
@@ -3165,6 +3190,29 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         return False
                     if forced_day_ref in ("today", "tomorrow"):
                         dt_obj = align_datetime_to_day_reference(dt_obj, forced_day_ref, reference=now)
+
+                # Reschedule: user named a weekday then sent only appointment_id — model often keeps the old slot's day and changes hour only.
+                if (
+                    function_name == "update_appointment_date"
+                    and user_input_for_date is not None
+                    and context_messages_for_date is not None
+                ):
+                    uid = (user_input_for_date or "").strip()
+                    if re.fullmatch(r"\d{4,7}", uid):
+                        u_sched = collect_recent_user_only_schedule_text(
+                            context_messages_for_date, user_input_for_date, max_user_messages=40
+                        )
+                        tw = detect_last_weekday_intent_from_user_text(u_sched)
+                        if tw is not None and dt_obj.weekday() != tw:
+                            adjusted = next_future_datetime_matching_weekday(
+                                now, tw, dt_obj.hour, dt_obj.minute
+                            )
+                            if adjusted is not None:
+                                print(
+                                    f"SAFETY: update_appointment_date weekday align {dt_obj} -> {adjusted} "
+                                    f"(user id-only; thread weekday={tw})"
+                                )
+                                dt_obj = adjusted
 
                 if dt_obj.year < now.year:
                     dt_obj = dt_obj.replace(year=now.year)
@@ -3627,7 +3675,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         )
                         continue
 
-                    if not normalize_tool_date(function_name, function_args):
+                    if not normalize_tool_date(
+                        function_name,
+                        function_args,
+                        user_input_for_date=user_input,
+                        context_messages_for_date=current_context_messages,
+                    ):
                         err_content = json.dumps(
                             {
                                 "success": False,
@@ -3772,7 +3825,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if phone_for_pause_guard and not function_args.get("phone"):
                         function_args["phone"] = phone_for_pause_guard
 
-                    if not normalize_tool_date(function_name, function_args):
+                    if not normalize_tool_date(
+                        function_name,
+                        function_args,
+                        user_input_for_date=user_input,
+                        context_messages_for_date=current_context_messages,
+                    ):
                         err_content = json.dumps(
                             {
                                 "success": False,
