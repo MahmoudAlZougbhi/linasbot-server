@@ -11,7 +11,7 @@ from services.moderation_service import check_rate_limits, get_rate_limit_respon
 from difflib import SequenceMatcher
 import datetime
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Import all API functions from api_integrations
 from services import api_integrations
@@ -1109,12 +1109,257 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
                 "phone",
                 "body_part_ids",
                 "body_parts",
+                "date_components",
+                "calendar_day_intent",
+                "customer_phone",
             ):
                 if k in parsed and parsed[k] is not None:
                     out[k] = parsed[k]
         except (json.JSONDecodeError, TypeError):
             continue
     return out
+
+
+def _detect_change_request_intent(user_text: str) -> bool:
+    text = str(user_text or "").strip().lower()
+    if not text:
+        return False
+    change_patterns = [
+        r"\b(reschedule|rescheduling|postpone|postponing|push back|move appointment|change appointment|shift appointment)\b",
+        r"\b(reporter|decaler|décaler|deplacer|déplacer|changer rendez[- ]?vous)\b",
+        r"(تأجيل|اجل|أجل|أجّل|تغيير الموعد|غير الموعد|غيّر الموعد|نقل الموعد|تبديل الموعد|موعد تاني|موعد اخر|موعد آخر)",
+        r"\b(2ajel|ajjel|ghayer el maw3ed|ghayer maw3ed|postpone el maw3ed|reschedule el maw3ed)\b",
+    ]
+    return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns)
+
+
+def _collect_recent_user_text_for_change_intent(
+    context_messages: Optional[List[dict]], latest_user_input: str, max_parts: int = 15
+) -> str:
+    parts: List[str] = []
+    for msg in (context_messages or [])[-24:]:
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, str) and content.strip():
+            parts.append(content.strip())
+    latest_clean = (latest_user_input or "").strip()
+    if latest_clean and (not parts or parts[-1] != latest_clean):
+        parts.append(latest_clean)
+    return " ".join(parts[-max_parts:]).strip()
+
+
+def _normalize_booking_date_for_tool_args(function_args: dict) -> Tuple[bool, Optional[str]]:
+    """
+    Same rules as inline normalize_tool_date for create/update, without touching api_failure_reason.
+    Mutates function_args (pops calendar_day_intent, date_components); sets date API string.
+    Returns (ok: bool, error_code: Optional[str]).
+    """
+    if not function_args.get("date") and not function_args.get("date_components"):
+        return False, "booking_date_missing_field"
+    original_date_str = str(function_args.get("date") or "").strip()
+    now = now_in_bot_tz()
+    ai_day_raw = function_args.pop("calendar_day_intent", None)
+    dc_raw = function_args.pop("date_components", None)
+    forced_day_ref = None
+    if isinstance(ai_day_raw, str) and ai_day_raw.strip().lower() in ("today", "tomorrow"):
+        forced_day_ref = ai_day_raw.strip().lower()
+
+    dt_obj = datetime_from_ai_date_components(dc_raw)
+    if dt_obj is not None:
+        pass
+    else:
+        if not original_date_str:
+            return False, "booking_structured_date_invalid"
+        dt_obj = parse_datetime_flexible(original_date_str)
+        if not dt_obj:
+            return False, "booking_date_parse_failed"
+        if forced_day_ref in ("today", "tomorrow"):
+            dt_obj = align_datetime_to_day_reference(dt_obj, forced_day_ref, reference=now)
+
+    if dt_obj.year < now.year:
+        dt_obj = dt_obj.replace(year=now.year)
+
+    max_allowed = now + datetime.timedelta(days=365)
+    if dt_obj > max_allowed:
+        return False, "booking_date_out_of_window"
+    if dt_obj <= now:
+        return False, "booking_date_in_past_or_now"
+
+    function_args["date"] = dt_obj.astimezone(BOOKING_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    return True, None
+
+
+def _bot_reply_claims_completed_booking(bot_reply: str) -> bool:
+    br = (bot_reply or "").strip().lower()
+    if not br:
+        return False
+    return any(
+        x in br
+        for x in (
+            "تم تثبيت",
+            "تمّ تثبيت",
+            "تم حجز",
+            "تمّ حجز",
+            "booked successfully",
+            "appointment has been booked",
+        )
+    )
+
+
+def _resolve_branch_id_from_leak(leaked: dict) -> Optional[int]:
+    bid = _safe_int(leaked.get("branch_id"))
+    if bid in (1, 2):
+        return bid
+    br = str(leaked.get("branch") or "").strip().lower()
+    if "beirut" in br or "بيروت" in br:
+        return 1
+    if "antelias" in br or "انطلياس" in br or "antaliyas" in br:
+        return 2
+    return None
+
+
+def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
+    sid = _safe_int(leaked.get("service_id"))
+    if sid is not None:
+        return sid
+    svc = str(leaked.get("service") or "").strip().lower()
+    if "hair" in svc or "شعر" in svc or "laser hair" in svc:
+        return 12 if current_gender == "female" else 1
+    return int(config.DEFAULT_SERVICE_ID or 1)
+
+
+async def _try_recover_create_appointment_from_auxiliary_gpt_json(
+    gpt_raw_content: str,
+    *,
+    user_id: str,
+    customer_phone_clean: Optional[str],
+    current_gender: str,
+    current_preferred_lang: str,
+    current_context_messages: Optional[List[dict]],
+    user_input: str,
+    body_part_required_service_ids: set,
+    is_reschedule_intent: bool,
+    tool_names_so_far: List[str],
+) -> Optional[dict]:
+    """
+    GPT sometimes emits a first JSON blob with create_appointment-shaped fields then only calls
+    get_machines (or similar). If the blob is complete and the user is not in a reschedule flow,
+    run create_appointment here so we do not false-trigger booking_claimed_without_create_appointment_tool.
+    Returns API response dict if a call was made; None if skipped.
+    """
+    if is_reschedule_intent:
+        return None
+    recent = _collect_recent_user_text_for_change_intent(current_context_messages, user_input)
+    if _detect_change_request_intent(recent):
+        return None
+    # Typical failure mode: tooling stopped after get_machines.
+    if tool_names_so_far and not any(
+        n in tool_names_so_far for n in ("get_machines", "get_body_parts", "check_next_appointment")
+    ):
+        return None
+
+    leaked = _extract_booking_args_from_gpt_raw(gpt_raw_content)
+    if not leaked.get("date") and not leaked.get("date_components"):
+        return None
+    if _safe_int(leaked.get("machine_id")) is None:
+        return None
+    bp_norm = _normalize_body_part_ids(leaked.get("body_part_ids"))
+    if not bp_norm:
+        return None
+
+    phone_number = config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+    if not phone_number:
+        uid = str(user_id)
+        if uid.startswith("+") or (
+            uid.replace("+", "").replace("-", "").replace(" ", "").isdigit() and len(uid) >= 8
+        ):
+            phone_number = uid
+    if not phone_number:
+        return None
+
+    user_data_dict = config.user_data_whatsapp.get(user_id, {})
+    customer_name = user_data_dict.get("collected_name")
+    if not customer_name:
+        customer_name = config.user_names.get(user_id)
+        if customer_name and re.search(r"[\u0600-\u06FF]", customer_name):
+            customer_name = None
+
+    customer_gender_for_api = current_gender.capitalize() if current_gender in ("male", "female") else "Male"
+
+    customer_exists = False
+    customer_check_response = await api_integrations.get_customer_by_phone(phone=phone_number)
+    if customer_check_response and customer_check_response.get("success") and customer_check_response.get("data"):
+        customer_exists = True
+    elif customer_name and customer_gender_for_api:
+        create_customer_response = await api_integrations.create_customer(
+            name=customer_name,
+            phone=phone_number,
+            gender=customer_gender_for_api,
+            branch_id=config.DEFAULT_BRANCH_ID,
+        )
+        if create_customer_response and create_customer_response.get("success"):
+            customer_exists = True
+
+    if not customer_exists:
+        print("RECOVERY create_appointment: skipped (customer not in CRM and no creatable name)")
+        return None
+
+    fa: Dict[str, Any] = dict(leaked)
+    if fa.get("customer_phone"):
+        fa.pop("customer_phone", None)
+    fa["phone"] = phone_number
+    fa["body_part_ids"] = bp_norm
+
+    booking_state = config.user_booking_state.get(user_id, {})
+    _merge_pricing_args_with_booking_state(
+        function_name="create_appointment",
+        function_args=fa,
+        booking_state=booking_state,
+        current_gender=current_gender,
+        user_input=user_input,
+    )
+
+    sid = _infer_service_id_from_leak(fa, current_gender)
+    fa["service_id"] = sid
+
+    branch_id = _resolve_branch_id_from_leak(fa)
+    if branch_id is None:
+        branch_id = _safe_int(fa.get("branch_id")) or _safe_int(config.DEFAULT_BRANCH_ID) or 1
+    fa["branch_id"] = branch_id
+    if branch_id not in (1, 2):
+        print(f"RECOVERY create_appointment: invalid branch_id={branch_id}")
+        return None
+
+    machine_id = await _resolve_machine_for_booking(sid, _safe_int(fa.get("machine_id")))
+    fa["machine_id"] = machine_id
+
+    selected_body_part_ids = _normalize_body_part_ids(fa.get("body_part_ids"))
+    if sid in body_part_required_service_ids and not selected_body_part_ids:
+        print("RECOVERY create_appointment: missing body_part_ids for service")
+        return None
+
+    date_ok, date_err = _normalize_booking_date_for_tool_args(fa)
+    if not date_ok:
+        print(f"RECOVERY create_appointment: date normalize failed: {date_err}")
+        return None
+
+    fa["body_parts_with_sessions"] = [
+        {"body_part_id": bp_id, "session_number": 1} for bp_id in selected_body_part_ids
+    ]
+    _remember_booking_selection(user_id, fa)
+
+    print(
+        f"RECOVERY: executing create_appointment from auxiliary GPT JSON (tools were: {tool_names_so_far})"
+    )
+    return await api_integrations.create_appointment(
+        phone=phone_number,
+        service_id=int(fa["service_id"]),
+        machine_id=int(fa["machine_id"]),
+        branch_id=int(fa["branch_id"]),
+        date=fa["date"],
+        body_parts_with_sessions=fa["body_parts_with_sessions"],
+    )
 
 
 async def _coerce_body_part_ids_from_gpt_booking_args(
@@ -1920,6 +2165,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         latest_pricing_payload = None
         api_failure_reason = None  # Set when create_appointment or other API fails → triggers human handover
         update_appointment_date_success_count = 0  # Successful API updates this turn (bulk guard)
+        tool_round_trips: List[Dict[str, Any]] = []
+        ai_first_response_with_tools = ""
+        recovered_create_appointment_ok = False
 
         # When GPT asks for gender (unknown), send that reply and do NOT run tool calls.
         # Otherwise a second response after tools can replace it with booking flow (date/time/branch).
@@ -1946,7 +2194,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         if tool_calls:
             messages.append(first_response_message)
-            tool_round_trips = []  # For Activity Flow: AI request → Bot response
+            tool_round_trips.clear()
             ai_first_response_with_tools = gpt_raw_content  # Save before overwrite
 
             # Track check_next_appointment result to auto-chain appointment_id for update_appointment_date
@@ -2938,6 +3186,65 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         _brl_flow = (parsed_response.get("bot_reply") or "").strip().lower()
         had_update_tool = bool(tool_calls) and "update_appointment_date" in tool_names
 
+        # Model sometimes puts create_appointment-shaped JSON in the assistant text but only calls get_machines.
+        if (
+            tool_calls
+            and "create_appointment" not in tool_names
+            and not api_failure_reason
+            and _bot_reply_claims_completed_booking(parsed_response.get("bot_reply") or "")
+            and not _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
+        ):
+            rec_api = await _try_recover_create_appointment_from_auxiliary_gpt_json(
+                gpt_raw_content,
+                user_id=user_id,
+                customer_phone_clean=customer_phone_clean,
+                current_gender=current_gender,
+                current_preferred_lang=current_preferred_lang,
+                current_context_messages=current_context_messages,
+                user_input=user_input,
+                body_part_required_service_ids=body_part_required_service_ids,
+                is_reschedule_intent=is_reschedule_intent,
+                tool_names_so_far=tool_names,
+            )
+            if rec_api is not None:
+                rec_dump = json.dumps(rec_api)
+                tool_round_trips.append(
+                    {
+                        "ai_requested": "create_appointment_recovered_from_auxiliary_gpt_json",
+                        "args": "(parsed from model output before action JSON)",
+                        "bot_returned": (rec_dump[:600] + "...") if len(rec_dump) > 600 else rec_dump,
+                    }
+                )
+                if rec_api.get("success"):
+                    recovered_create_appointment_ok = True
+                    try:
+                        from services.analytics_events import analytics
+
+                        raw_data_payload = rec_api.get("data", {})
+                        appointment_data = (
+                            raw_data_payload.get("appointment") if isinstance(raw_data_payload, dict) else {}
+                        ) or {}
+                        service_info = appointment_data.get("service") or {}
+                        service_name = (
+                            service_info.get("name", "unknown_service")
+                            if isinstance(service_info, dict)
+                            else str(service_info)
+                        )
+                        analytics.log_appointment(
+                            user_id=user_id,
+                            service=service_name,
+                            status="booked",
+                            messages_count=len(current_context_messages or []),
+                        )
+                    except Exception as an_e:
+                        print(f"WARNING: analytics (recovered create_appointment): {an_e}")
+                else:
+                    err_msg_raw = (rec_api or {}).get("message", "Unknown error")
+                    err_msg = (
+                        str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
+                    )
+                    api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+
         # Structured booking only: no same-day or text-based booking fallbacks.
 
         # User replied Ok/تمام after bot said it WILL update (e.g. "رح أعدّل موعد…") — model must not claim "تم تثبيت التعديل" without tools.
@@ -2991,6 +3298,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             not api_failure_reason
             and tool_calls
             and "create_appointment" not in tool_names
+            and not recovered_create_appointment_ok
             and not _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
         ):
             if any(
