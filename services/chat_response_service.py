@@ -19,6 +19,7 @@ from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
     datetime_from_ai_date_components,
+    detect_appointment_inquiry_intent,
     detect_reschedule_intent,
     format_clinic_calendar_anchor,
     now_in_bot_tz,
@@ -281,6 +282,51 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
         "- After they specify, call **`update_appointment_date`** with the matching **`appointment_id`** "
         "(use **`check_next_appointment`** first if you still need to confirm the id).\n"
         "- **Never** use **`pause_appointment`** as a shortcut for postponing; only if they explicitly ask to **hold without a new date**.\n"
+    )
+
+
+async def _build_live_crm_appointments_snapshot(phone_clean: str) -> str:
+    """
+    Inject current get_customer_appointments rows into the system prompt so listing answers
+    (emtan mw3de, paused slots, etc.) cannot be invented or merged from chat memory.
+    """
+    if not phone_clean or not str(phone_clean).strip():
+        return ""
+    try:
+        resp = await api_integrations.get_customer_appointments(phone=phone_clean)
+    except Exception as ex:
+        print(f"WARNING: live CRM snapshot get_customer_appointments failed: {ex}")
+        return (
+            "\n\n**LIVE CRM APPOINTMENT SNAPSHOT:** unavailable (API error). "
+            "You MUST still call `check_next_appointment` this turn; do not list appointments from memory alone.\n"
+        )
+    if not isinstance(resp, dict) or not resp.get("success"):
+        return (
+            "\n\n**LIVE CRM APPOINTMENT SNAPSHOT:** API returned unsuccessful. "
+            "You MUST call `check_next_appointment` this turn; do not invent rows.\n"
+        )
+    raw = _extract_customer_appointments_list(resp)
+    if not raw:
+        return (
+            "\n\n**LIVE CRM APPOINTMENT SNAPSHOT:** empty — no rows for this phone on this endpoint. "
+            "Still call `check_next_appointment` once; answer honestly if still empty.\n"
+        )
+    rows = _filter_appointments_for_reschedule_overview(raw)
+    if not rows:
+        rows = raw[:30]
+    max_lines = 25
+    display = rows[:max_lines]
+    lines = [_format_appointment_row_for_reschedule_hint(i + 1, display[i]) for i in range(len(display))]
+    body = "\n".join(f"  - {ln}" for ln in lines)
+    more = ""
+    if len(rows) > max_lines:
+        more = f"\n  - ... +{len(rows) - max_lines} more row(s) truncated here — call `check_next_appointment` for full tool JSON.\n"
+    return (
+        "\n\n**LIVE CRM APPOINTMENT SNAPSHOT (authoritative for this request):**\n"
+        f"- **Listed row count: {len(display)}** (of {len(rows)} relevant). "
+        "Your `bot_reply` must use **one bullet per row below** — same count; do not merge several `id`s into one line.\n"
+        f"{body}{more}"
+        "- Also call `check_next_appointment` when rules require it; if tool JSON disagrees, prefer the **tool** result.\n"
     )
 
 
@@ -1463,8 +1509,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         print(f"DEBUG GPT Gender Recognition: Input '{user_input}' -> Detected as '{explicitly_detected_gender_from_input}' (for logging/debug, GPT will decide action)")
 
     is_reschedule_intent = detect_reschedule_intent(user_input)
+    is_appointment_inquiry_intent = detect_appointment_inquiry_intent(user_input)
     if is_reschedule_intent:
         print("🔁 Intent routing lock: reschedule/postpone intent detected.")
+    if is_appointment_inquiry_intent:
+        print("📅 Intent routing: appointment status / listing inquiry detected.")
 
     # NOTE: conversation_log.jsonl is NO LONGER USED
     # Q&A matching is now handled by qa_database_service.py (API-based)
@@ -1675,6 +1724,17 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         if reschedule_multi_hint:
             routing_guardrail += reschedule_multi_hint
 
+    if is_appointment_inquiry_intent and customer_phone_clean:
+        routing_guardrail += (
+            "\n\n"
+            "**📅 APPOINTMENT STATUS / LISTING (THIS MESSAGE — MANDATORY):**\n"
+            "- The user is asking **when** their appointment is, **what** is on file, or to **list** bookings (including paused / موقوف) — e.g. Franco «emtan mw3de», Arabic «موعدي إمتى», English «when is my appointment», «sho hene el mw3id el wa2fe», etc.\n"
+            "- A **LIVE CRM APPOINTMENT SNAPSHOT** block is appended below this prompt with the current rows — **ground your list on it** (correct row count and ids). You **MUST** still call **`check_next_appointment`** this turn with the customer phone from context.\n"
+            "- The tool response is enriched with **`customer_appointments`**: list **every** row returned (each distinct `id` / date+time+service+status). Use **one bullet or line per row**.\n"
+            "- **Never merge** several paused or active rows into one vague line (e.g. do not collapse multiple men's hair rows into «مرتين بنفس الوقت» unless the API literally returns a single row). If there are 5 paused lines, show **5** lines.\n"
+            "- Clearly separate **active/upcoming** vs **paused** using the **status** field from JSON — do not guess.\n"
+        )
+
     # Enforce explicit json contract whenever response_format={"type":"json_object"} is used.
     # Some OpenAI endpoints reject requests if the messages omit the word "json".
     json_output_contract = (
@@ -1718,6 +1778,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 "- **Interpret** their reply as authorization to **execute that same operation now**.\n"
                 "- You MUST call the real tools in this response: `check_next_appointment` if you still need `appointment_id`, then **`update_appointment_date`** using the **date/time and service/branch already agreed** in the conversation. Do **not** claim the update is done in `bot_reply` unless `update_appointment_date` actually succeeded in this request.\n"
             )
+
+    # Authoritative CRM rows in-system so «emtan mw3de» / multi-paused listings cannot be hallucinated or merged.
+    if (is_appointment_inquiry_intent or is_reschedule_intent) and customer_phone_clean:
+        _live_snap = await _build_live_crm_appointments_snapshot(customer_phone_clean)
+        if _live_snap:
+            system_instruction_final += _live_snap
 
     context_messages_for_ai = list(current_context_messages or [])
     context_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)

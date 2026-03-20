@@ -117,6 +117,46 @@ _RESCHEDULE_INTENT_PATTERNS = [
     r"\b(reporter|reprogrammer|replanifier|d[ée]caler|changer)\b.*\b(rendez[- ]?vous)\b",
 ]
 
+# User wants to *see* appointment(s): when, what is booked, list paused, etc. (not necessarily reschedule).
+_APPOINTMENT_INQUIRY_INTENT_PATTERNS = [
+    # Franco: emtan/2mtan/mtan + mw3ad / mw3de / maw3ad…
+    r"\b(?:e|i)?mtan\s+mw3",
+    r"\b2mtan\s+mw3",
+    r"\bmtan\s+mw3",
+    r"\bemtan\s+mou?3",
+    r"\bmw3(?:ad|de)\s+ana\b",
+    r"\bmaw3ad\s+ana\b",
+    r"\bmou3ad\s+ana\b",
+    # Arabic
+    r"(?:شو|إمتى|امتى|متى|وين)\s*(?:هو\s*)?موعدي",
+    r"موعدي\s*(?:شو|إمتى|امتى|متى|وين|ايمتا)",
+    r"\bاعرف\s+موعدي\b",
+    r"\ba3ref\s+mw3ad\b",
+    r"\b(?:شو\s+هي|شو\s+هني)\s+المواعيد",
+    r"\bشو\s+ه(?:ني|ي)\s+el\s+mw3",
+    # English
+    r"\bwhen\s+is\s+my\s+appointment\b",
+    r"\bwhat(?:'s|s| is)\s+my\s+appointment\b",
+    r"\bmy\s+appointment\s+(?:when|what|time)\b",
+    # How many / list paused
+    r"\bkam\s+mw3ad\b",
+    r"\bkam\s+maw3ad\b",
+    r"\bmw3(?:ad|id|ed)\s+el\s+wa2?f",
+    r"\bmo?wa2?f(?:een|in|e)?\b.*\b(mw3|maw3|mou3|appointment)\b",
+    r"\b(mw3|maw3|mou3|appointment)\b.*\bmo?wa2?f(?:een|in|e)?\b",
+    # French
+    r"\bmon\s+rendez[- ]?vous\b",
+    r"\bquand\s+est\s+(?:mon\s+)?rendez[- ]?vous\b",
+]
+
+
+def detect_appointment_inquiry_intent(text: str) -> bool:
+    """True when the user asks to see / list / when their appointment(s) are (incl. paused)."""
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _APPOINTMENT_INQUIRY_INTENT_PATTERNS)
+
 
 def detect_relative_intent(text: str) -> Optional[str]:
     """

@@ -6,6 +6,7 @@ from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
     datetime_from_ai_date_components,
+    detect_appointment_inquiry_intent,
     detect_day_reference,
     detect_relative_intent,
     detect_reschedule_intent,
@@ -188,3 +189,33 @@ def test_detect_reschedule_intent_multilingual_positive(text):
 )
 def test_detect_reschedule_intent_negative(text):
     assert detect_reschedule_intent(text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Emtan mw3de",
+        "Kifak emtan mw3de ana",
+        "emtan mw3ad ana",
+        "2mtan mw3de",
+        "when is my appointment",
+        "kam mw3ad 3end mw2f le",
+        "sho hene el mw3id el wa2fe",
+        "موعدي إمتى",
+        "quand est mon rendez-vous",
+    ],
+)
+def test_detect_appointment_inquiry_intent_positive(text):
+    assert detect_appointment_inquiry_intent(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "postpone my appointment to tomorrow",
+        "hello kifak",
+        "book laser tomorrow",
+    ],
+)
+def test_detect_appointment_inquiry_intent_negative(text):
+    assert detect_appointment_inquiry_intent(text) is False
