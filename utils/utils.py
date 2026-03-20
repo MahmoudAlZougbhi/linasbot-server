@@ -2239,10 +2239,11 @@ def get_openai_tools_schema():
             "function": {
                 "name": "submit_booking_intent",
                 "description": (
-                    "PREFERRED for new bookings: send structured extraction from the conversation. "
+                    "DEFAULT and REQUIRED path for every NEW booking: send structured extraction from the conversation. "
                     "The bot validates every field, resolves names to IDs using live CRM lists, enforces clinic slot rules, "
-                    "then calls create_appointment only if validation passes. "
+                    "then calls the CRM create endpoint only if validation passes. "
                     "Do NOT tell the user the appointment is booked unless this tool returns success with booking_flow_state=booked. "
+                    "Do NOT use create_appointment for normal new bookings—use this tool first. "
                     "Leave IDs null when unsure; use get_services/get_branches/get_machines/get_body_parts first if needed. "
                     "For reschedule use update_appointment_date, not this tool."
                 ),
@@ -2316,7 +2317,16 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "create_appointment",
-                "description": "Creates a new appointment record. Requires phone, service_id, branch_id, date/time, body_part_ids (REQUIRED for every bookable service), and machine_id. Session numbers are sent as body_parts with session_number=1 for new bookings. Only laser hair removal (service_id 1 or 12) uses customer-chosen device: call get_machines and pick Neo/Quadro/Candela/Trio as discussed. For tattoo (13), CO2 (2/11), and whitening/DPL (4/5/14), still pass machine_id from get_machines (backend maps device); do not ask the customer to choose a device for those services. NEVER use this for reschedule when a paused appointment exists—use update_appointment_date instead.",
+                "description": (
+                    "INTERNAL / LEGACY ONLY — do not call for normal new bookings. "
+                    "Always use submit_booking_intent first; the server may still accept this tool for backward compatibility "
+                    "but it runs the same CRM create step and returns the same structured success or validation-style failure "
+                    "as submit_booking_intent (including when the calendar rejects the slot after local rules pass). "
+                    "Requires phone, service_id, branch_id, date/time, body_part_ids, machine_id. "
+                    "Only laser hair removal (1/12) uses customer-chosen device (get_machines: Neo/Quadro/Candela/Trio). "
+                    "For tattoo/CO2/whitening pass a valid machine_id from get_machines without asking the customer. "
+                    "NEVER use for reschedule when a paused appointment exists—use update_appointment_date."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {

@@ -1736,10 +1736,10 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     """
     GPT sometimes emits a first JSON blob with create_appointment-shaped fields then only calls
     get_machines (or similar). If the blob is complete and the user is not in a reschedule flow,
-    run create_appointment here so we do not false-trigger booking_claimed_without_create_appointment_tool.
+    run the same legacy CRM booking path here so we do not false-trigger booking_claimed_without_create_appointment_tool.
     Does **not** create a fake CRM name: if the customer has no file yet, a **real** name must come from
     the thread or auxiliary JSON (never auto-generated placeholders).
-    Returns API response dict if a call was made; None if skipped.
+    Returns the same tool-output dict as create_appointment (success + api_response, or validation_error) if executed; None if skipped.
     """
     if is_reschedule_intent:
         return None
@@ -1906,13 +1906,14 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     print(
         f"RECOVERY: executing create_appointment from auxiliary GPT JSON (tools were: {tool_names_so_far})"
     )
-    return await api_integrations.create_appointment(
-        phone=phone_number,
-        service_id=int(fa["service_id"]),
-        machine_id=int(fa["machine_id"]),
-        branch_id=int(fa["branch_id"]),
-        date=fa["date"],
-        body_parts_with_sessions=fa["body_parts_with_sessions"],
+    _finalize_create_appointment_payload_for_api(fa)
+    from services.booking.intent_pipeline import legacy_create_appointment_tool_output
+
+    return await legacy_create_appointment_tool_output(
+        user_id=user_id,
+        function_args=fa,
+        current_gender=current_gender,
+        user_input=user_input,
     )
 
 
@@ -2546,7 +2547,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
         f"- **Show greeting**: {_show_greeting} - Reason: {_greeting_reason}. Use greeting ONLY when True (new user or inactive 12+ hours). Otherwise go straight to the answer. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
         f"- **Customer Name**: {customer_name_context}\n"
-        f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, create_appointment, update_appointment_date). Do NOT ask for phone number.\n"
+        f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, submit_booking_intent, create_appointment if ever used, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{current_gender}'"
         + (" - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n" if current_gender in ['male', 'female'] else " - UNKNOWN. Follow gender collection rules in Style Guide.\n")
         + f"- **Language**: YOU decide. Current hint: '{current_preferred_lang}'. Follow LANGUAGE rules: prefer Arabic when mixed; full English when all English; full French when all French.\n"
@@ -3689,12 +3690,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"WARNING: analytics (submit_booking_intent): {an_sb}")
                 elif hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
                     function_to_call = getattr(api_integrations, function_name)
-                    if function_name == "create_appointment":
-                        _finalize_create_appointment_payload_for_api(function_args)
                     print(f"DEBUG: Executing tool: {function_name} with args: {function_args}")
 
                     try:
-                        tool_output = await function_to_call(**function_args)
+                        if function_name == "create_appointment":
+                            _finalize_create_appointment_payload_for_api(function_args)
+                            from services.booking.intent_pipeline import legacy_create_appointment_tool_output
+
+                            tool_output = await legacy_create_appointment_tool_output(
+                                user_id=user_id,
+                                function_args=function_args,
+                                current_gender=current_gender,
+                                user_input=user_input,
+                            )
+                        else:
+                            tool_output = await function_to_call(**function_args)
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
 
                         # Enrich "next" with full customer list so the model can list every upcoming booking.
@@ -3733,8 +3743,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             from services.analytics_events import analytics
 
-                            # Get service and machine names from API response
-                            raw_data_payload = tool_output.get("data", {})
+                            api_wrapped = (
+                                tool_output.get("api_response")
+                                if isinstance(tool_output.get("api_response"), dict)
+                                else tool_output
+                            )
+                            raw_data_payload = (
+                                api_wrapped.get("data", {}) if isinstance(api_wrapped, dict) else {}
+                            )
                             if isinstance(raw_data_payload, dict):
                                 appointment_data = raw_data_payload.get("appointment") or {}
                                 pricing_from_appointment = (
@@ -3765,8 +3781,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 messages_count=len(current_context_messages)
                             )
                             print(f"📊 Analytics: Appointment booked - {service_name}")
+                            if tool_output.get("booking_flow_state") == "booked":
+                                recovered_create_appointment_ok = True
                         elif function_name == "create_appointment" and isinstance(tool_output, dict) and not tool_output.get("success"):
-                            err_msg_raw = (tool_output or {}).get("message", "Unknown error")
+                            _api = tool_output.get("api_response") if isinstance(tool_output.get("api_response"), dict) else {}
+                            err_msg_raw = (
+                                _api.get("message")
+                                if isinstance(_api, dict) and _api.get("message") is not None
+                                else tool_output.get("human_readable_reason", "Unknown error")
+                            )
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
                             api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
                             print(f"create_appointment tool: API failed (no user-text retry): {err_msg}")
@@ -3960,7 +3983,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         "bot_returned": (rec_dump[:600] + "...") if len(rec_dump) > 600 else rec_dump,
                     }
                 )
-                if rec_api.get("success"):
+                if rec_api.get("success") and rec_api.get("booking_flow_state") == "booked":
                     recovered_create_appointment_ok = True
                     if stuck_hair_booking_recovery:
                         parsed_response["action"] = "answer_question"
@@ -3976,7 +3999,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     try:
                         from services.analytics_events import analytics
 
-                        raw_data_payload = rec_api.get("data", {})
+                        _rec_api = (
+                            rec_api.get("api_response")
+                            if isinstance(rec_api.get("api_response"), dict)
+                            else rec_api
+                        )
+                        raw_data_payload = _rec_api.get("data", {}) if isinstance(_rec_api, dict) else {}
                         appointment_data = (
                             raw_data_payload.get("appointment") if isinstance(raw_data_payload, dict) else {}
                         ) or {}
@@ -3995,7 +4023,16 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     except Exception as an_e:
                         print(f"WARNING: analytics (recovered create_appointment): {an_e}")
                 else:
-                    err_msg_raw = (rec_api or {}).get("message", "Unknown error")
+                    _rec_fail = (
+                        (rec_api or {}).get("api_response")
+                        if isinstance((rec_api or {}).get("api_response"), dict)
+                        else (rec_api or {})
+                    )
+                    err_msg_raw = (
+                        _rec_fail.get("message")
+                        if isinstance(_rec_fail, dict) and _rec_fail.get("message") is not None
+                        else (rec_api or {}).get("human_readable_reason", "Unknown error")
+                    )
                     err_msg = (
                         str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
                     )

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Strict booking pipeline: AI submits extraction JSON → backend validates → optional create_appointment.
+Strict booking pipeline: AI submits extraction JSON → backend validates → CRM create only when valid.
 
-The model must not treat a booking as confirmed unless this pipeline returns API success.
+All CRM creates for new appointments go through `finalize_crm_booking_tool_output` (shared with the
+legacy `create_appointment` tool path). The model must not treat a booking as confirmed unless the
+tool result has success and booking_flow_state=booked (with api_response from the CRM).
 """
 
 from __future__ import annotations
@@ -110,6 +112,195 @@ def _build_api_datetime(intent: Dict[str, Any]) -> Tuple[Optional[datetime.datet
         amb.append("date_in_past_or_now")
 
     return dt, missing, amb
+
+
+def _coerce_int_id(value: Any) -> Optional[int]:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _crm_rejection_validation_error(
+    norm_vals: Dict[str, Any], api_resp: Dict[str, Any]
+) -> Dict[str, Any]:
+    api_msg = str(api_resp.get("message") or "").strip()
+    inv: Dict[str, Any] = {"calendar": "slot_unavailable_or_conflict"}
+    if api_msg:
+        inv["api_detail"] = api_msg[:800]
+    low = api_msg.lower()
+    if any(
+        x in low
+        for x in (
+            "connection",
+            "network",
+            "timeout",
+            "http error",
+            "unexpected error",
+            "invalid json",
+        )
+    ):
+        hr = (
+            "A temporary system or network error occurred while contacting the clinic calendar. "
+            "Do not confirm a booking. Ask the user to try again in a moment or offer human assistance."
+        )
+    else:
+        hr = (
+            "The clinic calendar could not accept this slot (it may already be taken or blocked). "
+            "Do not tell the user the appointment was confirmed. Ask them to pick another time or day "
+            "within allowed hours, then call submit_booking_intent again with the updated choice."
+        )
+    err = validation_error_response(
+        invalid_fields=inv,
+        normalized_values=norm_vals,
+        human_readable_reason=hr,
+        suggested_slots=[],
+    )
+    err["crm_rejection"] = True
+    err["api_response"] = api_resp
+    return err
+
+
+async def finalize_crm_booking_tool_output(
+    *,
+    user_id: str,
+    raw_user_message: str,
+    ai_extracted: Dict[str, Any],
+    norm_vals: Dict[str, Any],
+    payload: Dict[str, Any],
+    phase: str,
+) -> Dict[str, Any]:
+    """
+    Single CRM create + logging + tool JSON shape for submit_booking_intent and legacy create_appointment.
+    """
+    api_resp = await api_integrations.create_appointment(**payload)
+    ok = bool(api_resp.get("success"))
+    st = config.user_booking_state[user_id]
+
+    _log_booking_attempt(
+        {
+            "phase": phase,
+            "raw_user_message": raw_user_message,
+            "ai_extracted": ai_extracted,
+            "normalized_values": norm_vals,
+            "endpoint_called": "POST appointments/create",
+            "endpoint_payload": payload,
+            "endpoint_response": {"success": ok, "message": api_resp.get("message")},
+            "response_category": "booked" if ok else "api_rejected",
+        }
+    )
+
+    if ok:
+        st["booking_flow_state"] = "booked"
+        st["last_booking_success"] = copy.deepcopy(api_resp.get("data"))
+        return {
+            "success": True,
+            "booking_flow_state": "booked",
+            "message": "Booking created in CRM. You may confirm to the user using ONLY these facts from the API response.",
+            "normalized_values": norm_vals,
+            "api_response": api_resp,
+        }
+
+    st["booking_flow_state"] = "validation_failed"
+    err = _crm_rejection_validation_error(norm_vals, api_resp)
+    st["last_validation_error"] = err
+    return err
+
+
+async def legacy_create_appointment_tool_output(
+    *,
+    user_id: str,
+    function_args: Dict[str, Any],
+    current_gender: str,
+    user_input: str,
+) -> Dict[str, Any]:
+    """
+    Internal/legacy path: after chat_response_service preprocessing, run the same CRM create + response
+    shape as submit_booking_intent (success + api_response wrapper, or validation_error on CRM reject).
+    """
+    fa = dict(function_args or {})
+    sid = _coerce_int_id(fa.get("service_id"))
+    bid = _coerce_int_id(fa.get("branch_id"))
+    mid = _coerce_int_id(fa.get("machine_id"))
+    date_str = str(fa.get("date") or "").strip()
+    phone = str(fa.get("phone") or "").strip()
+
+    bps = fa.get("body_parts_with_sessions")
+    body_ids: List[int] = []
+    if isinstance(bps, list) and bps:
+        for item in bps:
+            if not isinstance(item, dict):
+                continue
+            pid = _coerce_int_id(item.get("body_part_id") or item.get("id"))
+            if pid is not None and pid > 0:
+                body_ids.append(pid)
+    else:
+        for x in fa.get("body_part_ids") or []:
+            pid = _coerce_int_id(x)
+            if pid is not None and pid > 0:
+                body_ids.append(pid)
+
+    norm_vals: Dict[str, Any] = {
+        "service_id": sid,
+        "branch_id": bid,
+        "machine_id": mid,
+        "body_part_ids": body_ids,
+        "timezone": BOOKING_TIMEZONE_LABEL,
+        "api_date": date_str,
+    }
+
+    missing: List[str] = []
+    if not phone:
+        missing.append("phone")
+    if sid is None:
+        missing.append("service_id")
+    if bid is None:
+        missing.append("branch_id")
+    if mid is None:
+        missing.append("machine_id")
+    if not date_str:
+        missing.append("date")
+    if missing:
+        st = config.user_booking_state[user_id]
+        st["booking_flow_state"] = "validation_failed"
+        err = validation_error_response(
+            missing_fields=sorted(set(missing)),
+            normalized_values=norm_vals,
+            human_readable_reason="Incomplete arguments for legacy create_appointment; gather required fields and prefer submit_booking_intent.",
+        )
+        st["last_validation_error"] = err
+        return err
+
+    payload: Dict[str, Any] = {
+        "phone": phone,
+        "service_id": int(sid),
+        "machine_id": int(mid),
+        "branch_id": int(bid),
+        "date": date_str,
+    }
+    uc = fa.get("user_code")
+    if uc:
+        payload["user_code"] = uc
+    if isinstance(bps, list) and bps:
+        payload["body_parts_with_sessions"] = fa["body_parts_with_sessions"]
+    elif body_ids:
+        payload["body_part_ids"] = body_ids
+
+    ai_snapshot = {
+        "source": "legacy_create_appointment_tool",
+        "gender_context": current_gender,
+        "user_input_excerpt": (user_input or "")[:240],
+    }
+    return await finalize_crm_booking_tool_output(
+        user_id=user_id,
+        raw_user_message=user_input,
+        ai_extracted=ai_snapshot,
+        norm_vals=norm_vals,
+        payload=payload,
+        phase="legacy_create_appointment_execute",
+    )
 
 
 async def _ensure_customer(
@@ -424,38 +615,11 @@ async def handle_submit_booking_intent(
         "date": api_date,
         "body_part_ids": body_ids,
     }
-    api_resp = await api_integrations.create_appointment(**payload)
-    ok = bool(api_resp.get("success"))
-
-    _log_booking_attempt(
-        {
-            "phase": "submit_booking_intent_execute",
-            "raw_user_message": raw_msg,
-            "ai_extracted": intent,
-            "normalized_values": norm_vals,
-            "endpoint_called": "POST appointments/create",
-            "endpoint_payload": payload,
-            "endpoint_response": {"success": ok, "message": api_resp.get("message")},
-            "response_category": "booked" if ok else "api_rejected",
-        }
+    return await finalize_crm_booking_tool_output(
+        user_id=user_id,
+        raw_user_message=raw_msg,
+        ai_extracted=intent,
+        norm_vals=norm_vals,
+        payload=payload,
+        phase="submit_booking_intent_execute",
     )
-
-    if ok:
-        st["booking_flow_state"] = "booked"
-        st["last_booking_success"] = copy.deepcopy(api_resp.get("data"))
-        return {
-            "success": True,
-            "booking_flow_state": "booked",
-            "message": "Booking created in CRM. You may confirm to the user using ONLY these facts from the API response.",
-            "normalized_values": norm_vals,
-            "api_response": api_resp,
-        }
-
-    st["booking_flow_state"] = "validation_failed"
-    err = validation_error_response(
-        human_readable_reason=str(api_resp.get("message") or "API rejected booking."),
-        normalized_values=norm_vals,
-        invalid_fields={"api": api_resp.get("message")},
-    )
-    err["api_response"] = api_resp
-    return err

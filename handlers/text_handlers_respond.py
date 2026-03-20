@@ -1128,7 +1128,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 f"[User confirmed booking. Previously discussed: {booking_origin_query}. User reply: {user_input_to_process}]"
             )
             query_pre_set_from_booking_confirmation = True
-            # Do NOT set gpt_response_data – let GPT proceed with create_appointment using context.
+            # Do NOT set gpt_response_data – let GPT proceed with submit_booking_intent (or tools) using context.
         elif booking_confirmation == "no":
             user_data["awaiting_booking_offer_confirmation"] = False
             user_data["booking_offer_origin_query"] = None
