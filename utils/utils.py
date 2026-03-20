@@ -2291,7 +2291,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "update_appointment_date",
-                "description": "Updates the date/time of an existing appointment. Use this when customer wants to reschedule, postpone, or change their appointment. This MUST be used for paused/postponed appointments (never create a new appointment in that case).",
+                "description": "Updates the date/time of an existing appointment on the calendar. Use when the customer wants to reschedule/postpone/change to a NEW slot (including Arabic «تأجيل الموعد»). Call check_next_appointment if you need appointment_id. If they have several appointments and did not say which (date/time/service/branch/id), ask a numbered list and wait for their pick—never guess appointment_id. For paused/postponed records, update the same appointment; never create a new one. Do NOT use pause_appointment to move to another day—that needs this tool with the new date.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -2508,7 +2508,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "pause_appointment",
-                "description": "Pauses an appointment by setting its status to Paused.",
+                "description": "Sets appointment status to Paused (on hold) without choosing a new calendar slot. Use ONLY when the customer explicitly wants to suspend/hold and has NOT agreed on a new date/time. Do NOT use for normal postpone-to-another-day—that is update_appointment_date with a concrete new date.",
                 "parameters": {
                     "type": "object",
                     "properties": {

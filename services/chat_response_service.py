@@ -150,6 +150,85 @@ def _extract_customer_appointments_list(response_payload: dict) -> list:
     return []
 
 
+_EXCLUDED_RESCHEDULE_SUMMARY_STATUSES = frozenset(
+    {"done", "completed", "cancelled", "canceled", "missed", "no_show", "noshow"}
+)
+
+
+def _appointment_row_status_lower(apt: dict) -> str:
+    return str(apt.get("status") or "").strip().lower()
+
+
+def _filter_appointments_for_reschedule_overview(appointments: List[dict]) -> List[dict]:
+    """Prefer rows that are not clearly finished/cancelled when listing choices for reschedule."""
+    kept = [a for a in appointments if _appointment_row_status_lower(a) not in _EXCLUDED_RESCHEDULE_SUMMARY_STATUSES]
+    return kept if len(kept) >= 2 else list(appointments)
+
+
+def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
+    aid = apt.get("appointment_id") or apt.get("id") or apt.get("appointmentId")
+    d0 = apt.get("date") or apt.get("appointment_date") or apt.get("start_date") or ""
+    t0 = apt.get("time") or apt.get("start_time") or apt.get("appointment_time") or ""
+    svc = apt.get("service") or apt.get("service_name") or ""
+    if isinstance(svc, dict):
+        svc = (svc.get("name") or svc.get("title") or "").strip()
+    br = apt.get("branch") or apt.get("branch_name") or ""
+    if isinstance(br, dict):
+        br = (br.get("name") or "").strip()
+    st = apt.get("status") or ""
+    bits = [f"{idx}."]
+    if aid is not None:
+        bits.append(f"id={aid}")
+    if d0:
+        bits.append(f"date={d0}")
+    if t0:
+        bits.append(f"time={t0}")
+    if svc:
+        bits.append(f"service={svc}")
+    if br:
+        bits.append(f"branch={br}")
+    if st:
+        bits.append(f"status={st}")
+    return " ".join(bits)
+
+
+async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
+    """
+    If the customer has 2+ appointment rows and asks to reschedule, give the model a concrete list
+    so it asks which slot to move instead of guessing.
+    """
+    if not phone_clean or not str(phone_clean).strip():
+        return ""
+    try:
+        resp = await api_integrations.get_customer_appointments(phone=phone_clean)
+    except Exception as ex:
+        print(f"WARNING: get_customer_appointments for reschedule hint failed: {ex}")
+        return ""
+    if not isinstance(resp, dict) or not resp.get("success"):
+        return ""
+    raw = _extract_customer_appointments_list(resp)
+    if len(raw) < 2:
+        return ""
+    rows = _filter_appointments_for_reschedule_overview(raw)
+    if len(rows) < 2:
+        rows = raw
+    max_lines = 10
+    lines = [_format_appointment_row_for_reschedule_hint(i + 1, rows[i]) for i in range(min(len(rows), max_lines))]
+    if len(rows) > max_lines:
+        lines.append(f"... +{len(rows) - max_lines} more in system")
+    body = "\n".join(f"  - {ln}" for ln in lines)
+    return (
+        "\n**🔁 MULTIPLE APPOINTMENTS ON FILE (reschedule — do not guess):**\n"
+        f"This customer has **at least {len(rows)}** relevant appointment row(s). Reference lines:\n{body}\n"
+        "- If the latest user message does **not** clearly identify **which** appointment to move "
+        "(by date/time, service, branch, or appointment id), reply with **one** short question: "
+        "list the options as **1 / 2 / 3** (use the same facts) and ask them to pick. **Never** assume "
+        "«the next appointment» or pick arbitrarily.\n"
+        "- After they specify, call **`update_appointment_date`** with the matching **`appointment_id`** "
+        "(use **`check_next_appointment`** first if you still need to confirm the id).\n"
+    )
+
+
 CLINIC_PRICE_CONTEXT_KEYWORDS = [
     "laser",
     "ليزر",
@@ -1422,6 +1501,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         + (_file_raw if _file_raw else "(No file or customer not found)")
     )
 
+    reschedule_multi_hint = ""
+    if is_reschedule_intent and customer_phone_clean:
+        reschedule_multi_hint = await _build_multi_appointment_reschedule_hint(customer_phone_clean)
+
     routing_guardrail = ""
     if is_reschedule_intent:
         routing_guardrail = (
@@ -1432,6 +1515,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "- Do NOT call `get_clinic_hours` for this message.\n"
             "- Use appointment flow only: `check_next_appointment` then `update_appointment_date` when date/time is provided.\n"
         )
+        if reschedule_multi_hint:
+            routing_guardrail += reschedule_multi_hint
 
     # Enforce explicit json contract whenever response_format={"type":"json_object"} is used.
     # Some OpenAI endpoints reject requests if the messages omit the word "json".
