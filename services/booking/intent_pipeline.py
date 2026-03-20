@@ -10,8 +10,9 @@ tool result has success and booking_flow_state=booked (with api_response from th
 from __future__ import annotations
 
 import copy
-import json
 import datetime
+import json
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 import config
@@ -227,8 +228,14 @@ async def legacy_create_appointment_tool_output(
     date_str = str(fa.get("date") or "").strip()
     phone = str(fa.get("phone") or "").strip()
 
+    legacy_body_parts_env = os.getenv("LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     bps = fa.get("body_parts_with_sessions")
     body_ids: List[int] = []
+    non_one_session = False
     if isinstance(bps, list) and bps:
         for item in bps:
             if not isinstance(item, dict):
@@ -236,6 +243,12 @@ async def legacy_create_appointment_tool_output(
             pid = _coerce_int_id(item.get("body_part_id") or item.get("id"))
             if pid is not None and pid > 0:
                 body_ids.append(pid)
+            try:
+                sn = int(item.get("session_number", 1))
+            except (TypeError, ValueError):
+                sn = 1
+            if sn != 1:
+                non_one_session = True
     else:
         for x in fa.get("body_part_ids") or []:
             pid = _coerce_int_id(x)
@@ -283,8 +296,13 @@ async def legacy_create_appointment_tool_output(
     uc = fa.get("user_code")
     if uc:
         payload["user_code"] = uc
-    if isinstance(bps, list) and bps:
-        payload["body_parts_with_sessions"] = fa["body_parts_with_sessions"]
+    # PDF: top-level body_part_ids. Pass body_parts_with_sessions only when the API must
+    # preserve session_number (≠1) or when LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS is set.
+    if legacy_body_parts_env or non_one_session:
+        if isinstance(bps, list) and bps:
+            payload["body_parts_with_sessions"] = bps
+        elif body_ids:
+            payload["body_part_ids"] = body_ids
     elif body_ids:
         payload["body_part_ids"] = body_ids
 

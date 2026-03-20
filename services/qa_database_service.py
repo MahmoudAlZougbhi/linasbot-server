@@ -327,13 +327,23 @@ class QADatabaseService:
         text2_norm = self.normalize_text(text2)
         return SequenceMatcher(None, text1_norm, text2_norm).ratio()
     
-    async def find_match(self, question: str, language: str = "ar") -> Optional[dict]:
+    @staticmethod
+    def _usable_customer_phone(phone: Optional[str]) -> bool:
+        if phone is None:
+            return False
+        p = str(phone).replace("+", "").replace(" ", "").replace("-", "").strip()
+        return len(p) >= 7
+
+    async def find_match(
+        self, question: str, language: str = "ar", customer_phone: Optional[str] = None
+    ) -> Optional[dict]:
         """
         Find matching Q&A pair from database with similarity threshold
         
         Args:
             question: User's question
             language: Language of the question (default: "ar")
+            customer_phone: If set, passed to track_usage; otherwise usage tracking is skipped
         
         Returns:
             dict: Matched Q&A pair with score, or None if no match
@@ -379,12 +389,12 @@ class QADatabaseService:
             print(f"   Category: {best_match.get('category')}")
             print(f"   QA ID: {best_match.get('qa_id')}")
             
-            # Track usage
+            # Track usage (POST /qa/track-usage only when phone is present)
             await self.track_usage(
                 qa_id=best_match.get("qa_id"),
-                customer_phone=None,  # Will be provided by caller if available
+                customer_phone=customer_phone,
                 matched=True,
-                match_score=best_score
+                match_score=best_score,
             )
             
             return {
@@ -398,26 +408,26 @@ class QADatabaseService:
     
     async def track_usage(self, qa_id: int, customer_phone: str = None, matched: bool = True, match_score: float = 0) -> dict:
         """
-        Track Q&A usage in database
-        
-        Args:
-            qa_id: ID of the Q&A pair
-            customer_phone: Customer's phone number (optional)
-            matched: Whether the Q&A was matched (default: True)
-            match_score: Similarity score (default: 0)
-        
-        Returns:
-            dict: Response from API
+        Track Q&A usage in database (POST .../qa/track-usage).
+
+        If customer_phone is missing or not a plausible phone string, no HTTP request
+        is sent (avoids incomplete payloads when the backend requires phone).
         """
+        if not self._usable_customer_phone(customer_phone):
+            print(f"ℹ️ track_usage skipped for qa_id={qa_id}: customer_phone missing or too short")
+            return {
+                "success": True,
+                "skipped": True,
+                "message": "track_usage skipped: customer_phone required for this metric",
+            }
+
         data = {
             "qa_id": qa_id,
+            "customer_phone": str(customer_phone).replace("+", "").replace(" ", "").replace("-", "").strip(),
             "matched": matched,
-            "match_score": match_score
+            "match_score": match_score,
         }
-        
-        if customer_phone:
-            data["customer_phone"] = customer_phone
-        
+
         response = await self._make_api_request("POST", "/qa/track-usage", data=data)
         
         if response.get("success"):
@@ -468,18 +478,23 @@ qa_db_service = QADatabaseService()
 
 
 # Integration function for bot (replaces get_qa_response from qa_manager_service)
-async def get_qa_response(question: str, language: str = "ar") -> Optional[str]:
+async def get_qa_response(
+    question: str, language: str = "ar", customer_phone: Optional[str] = None
+) -> Optional[str]:
     """
     Get response from Q&A database if match found
     
     Args:
         question: User's question
         language: Language of the question (default: "ar")
+        customer_phone: When set, enables POST /qa/track-usage after a match
     
     Returns:
         str: Answer if match >= 70%, None otherwise
     """
-    match_result = await qa_db_service.find_match(question, language)
+    match_result = await qa_db_service.find_match(
+        question, language, customer_phone=customer_phone
+    )
     
     if match_result:
         qa_pair = match_result["qa_pair"]

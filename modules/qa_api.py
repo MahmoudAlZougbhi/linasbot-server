@@ -177,7 +177,8 @@ async def test_qa_match(test_data: dict):
         if not question:
             return {"success": False, "error": "Question is required"}
         
-        match_result = await qa_db_service.find_match(question, language)
+        customer_phone = test_data.get("customer_phone")
+        match_result = await qa_db_service.find_match(question, language, customer_phone=customer_phone)
         
         if match_result:
             qa_pair = match_result["qa_pair"]
@@ -225,7 +226,7 @@ async def get_qa_statistics():
 
 @app.post("/api/qa/track-usage")
 async def track_qa_usage(usage_data: dict):
-    """Track Q&A usage in database"""
+    """Track Q&A usage in database (customer_phone required for outbound tracking; else skipped)."""
     try:
         qa_id = usage_data.get("qa_id")
         customer_phone = usage_data.get("customer_phone")

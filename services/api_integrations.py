@@ -200,22 +200,40 @@ async def get_sessions_count_by_phone(phone: str = None, user_code: str = None, 
         log_report_event("api_call", "System", "N/A", {"api": "get_sessions_count_by_phone", "status": "failed", "error": response.get("message"), "phone": phone})
     return response
 
-async def move_client_branch(phone: str, from_branch_id: int, to_branch_id: int, new_date: str, user_code: str = None, response_confirm: str = "yes"):
-    """Moves a client's future appointments to a different branch."""
+async def move_client_branch(
+    phone: str,
+    from_branch_id: int,
+    to_branch_id: int,
+    new_date: str = None,
+    user_code: str = None,
+    response_confirm: str = "yes",
+):
+    """Moves a client's future appointments to a different branch.
+
+    `new_date` is optional: only included in the JSON payload when a non-empty
+    string is provided (aligns with Agent API docs where rescheduling to a
+    specific day may be optional for a pure branch move).
+    """
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: move_client_branch for phone={phone_clean} (original: {phone}), from={from_branch_id}, to={to_branch_id}, date={new_date}")
+    nd = (new_date or "").strip() if new_date is not None else ""
+    print(
+        f"API Call: move_client_branch for phone={phone_clean} (original: {phone}), "
+        f"from={from_branch_id}, to={to_branch_id}, new_date={'set' if nd else 'omitted'}"
+    )
     json_data = {
         "phone": phone_clean,
         "from_branch_id": from_branch_id,
         "to_branch_id": to_branch_id,
-        "new_date": new_date,
-        "response": response_confirm
+        "response": response_confirm,
     }
-    if user_code: json_data["user_code"] = user_code
+    if nd:
+        json_data["new_date"] = nd
+    if user_code:
+        json_data["user_code"] = user_code
     response = await _make_api_request("POST", "appointments/branch/move", json_data=json_data)
     if response.get("success"):
         log_report_event("api_call", "System", "N/A", {"api": "move_client_branch", "status": "success", "phone": phone, "details": response.get("data")})
@@ -418,12 +436,25 @@ async def get_customer_appointments(phone: str):
     
     return response
 
+def _clean_body_part_ids_for_api(raw: list) -> list:
+    out = []
+    for bid in raw or []:
+        try:
+            i = int(bid)
+            if i > 0:
+                out.append(i)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 async def create_appointment(phone: str, service_id: int, machine_id: int, branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
     """
-    Creates a new appointment record.
-    body_part_ids: list of body part IDs (e.g. [1, 2, 3])
-    body_parts_with_sessions: optional list of {body_part_id, session_number} for new bookings.
-      For first session, use session_number=1 for each body part. Example: [{body_part_id: 1, session_number: 1}, ...]
+    POST appointments/create — **PDF-primary contract**: top-level **body_part_ids** (int[]).
+
+    Set env **LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1** to send **body_parts**
+    `{body_part_id, session_number}` instead (or when any session_number != 1, body_parts
+    is used automatically so session metadata is not lost).
     """
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
@@ -440,18 +471,55 @@ async def create_appointment(phone: str, service_id: int, machine_id: int, branc
     }
     if user_code:
         json_data["user_code"] = user_code
-    # API expects structured body_parts with session_number for new bookings; bare body_part_ids often omit session 1.
-    if body_parts_with_sessions:
-        json_data["body_parts"] = body_parts_with_sessions
-    elif body_part_ids:
-        parts_payload = []
-        for bid in body_part_ids:
+
+    legacy_env = os.getenv("LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    ids_from_arg = _clean_body_part_ids_for_api(body_part_ids)
+
+    use_body_parts = False
+    if body_parts_with_sessions and isinstance(body_parts_with_sessions, list) and body_parts_with_sessions:
+        non_one_session = False
+        derived_from_sessions: list = []
+        for item in body_parts_with_sessions:
+            if not isinstance(item, dict):
+                continue
             try:
-                parts_payload.append({"body_part_id": int(bid), "session_number": 1})
+                pid = int(item.get("body_part_id") or item.get("id"))
             except (TypeError, ValueError):
                 continue
-        if parts_payload:
-            json_data["body_parts"] = parts_payload
+            if pid <= 0:
+                continue
+            derived_from_sessions.append(pid)
+            try:
+                sn = int(item.get("session_number", 1))
+            except (TypeError, ValueError):
+                sn = 1
+            if sn != 1:
+                non_one_session = True
+        if legacy_env or non_one_session:
+            json_data["body_parts"] = body_parts_with_sessions
+            use_body_parts = True
+        elif derived_from_sessions:
+            json_data["body_part_ids"] = derived_from_sessions
+        elif ids_from_arg:
+            json_data["body_part_ids"] = ids_from_arg
+    elif legacy_env and ids_from_arg:
+        json_data["body_parts"] = [
+            {"body_part_id": bid, "session_number": 1} for bid in ids_from_arg
+        ]
+        use_body_parts = True
+    elif ids_from_arg:
+        json_data["body_part_ids"] = ids_from_arg
+
+    if use_body_parts:
+        print(
+            "API Call: create_appointment using legacy body_parts shape "
+            "(LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS or session_number != 1)"
+        )
+
     response = await _make_api_request("POST", "appointments/create", json_data=json_data)
     if response.get("success"):
         log_report_event("api_call", "System", "N/A", {"api": "create_appointment", "status": "success", "phone": phone, "appointment": response.get("data")})
@@ -507,7 +575,25 @@ async def check_customer_gender(phone: str = None, user_code: str = None):
     return response
 
 async def create_customer(name: str, phone: str, gender: str, email: str = None, branch_id: int = None, date_of_birth: str = None):
-    """Creates a new customer record within the clinic's database."""
+    """Creates a new customer record within the clinic's database (POST customers/create).
+
+    `branch_id` is required by the Agent API; callers may omit it only to mean
+    `config.DEFAULT_BRANCH_ID`. If no valid branch can be resolved, the HTTP
+    request is not sent.
+    """
+    # Resolve branch: explicit arg wins, else clinic default from config
+    resolved_branch = branch_id if branch_id is not None else getattr(config, "DEFAULT_BRANCH_ID", None)
+    try:
+        resolved_branch_int = int(resolved_branch)
+    except (TypeError, ValueError):
+        resolved_branch_int = None
+    # Known clinic branches in bot reference (expand if API adds branches)
+    if resolved_branch_int not in (1, 2):
+        return {
+            "success": False,
+            "message": "branch_id is required for customers/create (use 1=Beirut, 2=Antelias or set config.DEFAULT_BRANCH_ID).",
+        }
+
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
     if phone_clean.startswith("961"):
@@ -528,16 +614,20 @@ async def create_customer(name: str, phone: str, gender: str, email: str = None,
     # Convert gender to API format: "male"/"female" -> "Male"/"Female"
     gender_api_format = gender.capitalize() if gender.lower() in ["male", "female"] else "Male"
 
-    print(f"API Call: create_customer for name={name}, phone={phone_clean} (original: {phone}), gender={gender_api_format}, branch_id={branch_id}")
+    print(
+        f"API Call: create_customer for name={name}, phone={phone_clean} (original: {phone}), "
+        f"gender={gender_api_format}, branch_id={resolved_branch_int}"
+    )
     json_data = {
         "name": name,
         "phone": phone_clean,
-        "gender": gender_api_format  # Gender must be 'Male' or 'Female' as per API
+        "gender": gender_api_format,  # Gender must be 'Male' or 'Female' as per API
+        "branch_id": resolved_branch_int,
     }
-    if email: json_data["email"] = email
-    # branch_id is required for create_customer
-    if branch_id: json_data["branch_id"] = branch_id 
-    if date_of_birth: json_data["date_of_birth"] = date_of_birth
+    if email:
+        json_data["email"] = email
+    if date_of_birth:
+        json_data["date_of_birth"] = date_of_birth
     response = await _make_api_request("POST", "customers/create", json_data=json_data)
     if response.get("success"):
         log_report_event("api_call", "System", "N/A", {"api": "create_customer", "status": "success", "phone": phone, "customer": response.get("data")})

@@ -823,8 +823,9 @@ def _merge_pricing_args_with_booking_state(
 
 def _finalize_create_appointment_payload_for_api(function_args: Dict[str, Any]) -> None:
     """
-    create_appointment must send body_parts with session_number=1 for each area (new booking / first session).
-    Reconciles GPT body_parts_with_sessions (may omit or wrong session) with body_part_ids.
+    Align tool args before legacy create: CRM POST uses top-level body_part_ids (PDF).
+    Keeps body_part_ids and body_parts_with_sessions consistent; preserves session_number
+    when the model supplied it (≠1 → legacy_create passes body_parts through to the API).
     """
     raw_bps = function_args.get("body_parts_with_sessions")
     ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
@@ -836,7 +837,9 @@ def _finalize_create_appointment_payload_for_api(function_args: Dict[str, Any]) 
             bid = _safe_int(x.get("body_part_id") or x.get("id"))
             if bid is None or bid <= 0:
                 continue
-            cleaned.append({"body_part_id": bid, "session_number": 1})
+            sn = _safe_int(x.get("session_number"))
+            sess_num = int(sn) if sn is not None and sn >= 1 else 1
+            cleaned.append({"body_part_id": bid, "session_number": sess_num})
         if cleaned:
             function_args["body_parts_with_sessions"] = cleaned
             function_args["body_part_ids"] = [c["body_part_id"] for c in cleaned]
@@ -3438,14 +3441,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if 'name' in function_args:
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
-
-                    # Every bookable service sends body_parts with session_number=1 for first session (API contract).
-                    if function_name == "create_appointment" and selected_body_part_ids:
-                        if not function_args.get("body_parts_with_sessions"):
-                            function_args["body_parts_with_sessions"] = [
-                                {"body_part_id": bp_id, "session_number": 1}
-                                for bp_id in selected_body_part_ids
-                            ]
 
                 if function_name == "update_appointment_date":
                     phone_for_pause_guard = normalize_phone_for_lookup(

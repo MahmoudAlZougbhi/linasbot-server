@@ -2360,7 +2360,7 @@ def get_openai_tools_schema():
                             "type": "array",
                             "items": {"type": "integer"},
                             "minItems": 1,
-                            "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Non-empty array of numeric body_part_id values from get_body_parts for the chosen service_id. Ask which area(s) before calling. For a brand-new customer or first session, the server sends session_number=1 per part to the API via body_parts—still you must pass the correct IDs here.",
+                            "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Non-empty array of numeric body_part_id values from get_body_parts for the chosen service_id. The CRM appointments/create call sends this as top-level **body_part_ids** (PDF). Ask which area(s) before calling.",
                         },
                         "body_parts_with_sessions": {
                             "type": "array",
@@ -2371,7 +2371,7 @@ def get_openai_tools_schema():
                                     "session_number": {"type": "integer", "description": "Use 1 for new/first-time bookings unless the API context says otherwise."},
                                 },
                             },
-                            "description": "Optional. If omitted, the server builds [{body_part_id, session_number: 1}, ...] from body_part_ids. Prefer passing body_part_ids only unless you have a specific session map.",
+                            "description": "Optional. Prefer body_part_ids only. If any session_number is not 1, the server may send legacy body_parts to preserve sessions. Env LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1 forces that shape for all creates.",
                         },
                     },
                     "required": ["phone", "service_id", "machine_id", "branch_id", "date", "body_part_ids"]
@@ -2522,18 +2522,18 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "move_client_branch",
-                "description": "Moves a client's future appointments to a different branch.",
+                "description": "Moves a client's future appointments to a different branch. new_date is optional: include only when the Agent API / ops require rescheduling moved rows to a specific day.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number."},
                         "from_branch_id": {"type": "integer", "description": "ID of the current branch."},
                         "to_branch_id": {"type": "integer", "description": "ID of the new branch."},
-                        "new_date": {"type": "string", "format": "date", "description": "New date for moved appointments (YYYY-MM-DD)."},
+                        "new_date": {"type": "string", "format": "date", "description": "Optional. YYYY-MM-DD when a new date must be sent with the move; omit for branch-only move if allowed by API."},
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
                         "response_confirm": {"type": "string", "description": "Confirmation of the move, default 'yes'."}
                     },
-                    "required": ["phone", "from_branch_id", "to_branch_id", "new_date"]
+                    "required": ["phone", "from_branch_id", "to_branch_id"]
                 }
             }
         },

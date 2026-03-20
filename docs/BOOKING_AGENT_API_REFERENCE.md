@@ -16,8 +16,22 @@ This document complements `AGENT_API_DOCUMENTATION.pdf` and matches the **strict
 | GET | `machines` | Resolve `machine_id` / names |
 | GET | `body-parts?service_id=` | Map body area → `body_part_id` |
 | GET | `customers/...` (by phone) | Ensure customer exists before create |
-| POST | `customers/create` (via `create_customer`) | New file when needed |
+| POST | `customers/create` (via `create_customer`) | New file when needed — **`branch_id` always sent** (callers may omit arg → `config.DEFAULT_BRANCH_ID`; invalid/missing resolved id → no HTTP call, structured error) |
 | POST | `appointments/create` | **Authoritative** booking creation |
+
+## POST `appointments/create` — payload shape (this bot)
+
+The Python client in `api_integrations.create_appointment` sends JSON with at least:
+
+- `phone`, `service_id`, `machine_id`, `branch_id`, `date` (strings/ints as today)
+- Optional `user_code`
+- **`body_part_ids`**: top-level array of integers (PDF contract). All selected areas from **`get_body_parts`** are included here for multi-area bookings.
+
+**Legacy fallback:** If `LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1` (env), or if callers pass `body_parts_with_sessions` with any **`session_number` ≠ 1**, the client sends **`body_parts`** instead so session metadata is preserved.
+
+## POST `appointments/branch/move`
+
+This bot’s `move_client_branch` sends `phone`, `from_branch_id`, `to_branch_id`, `response`, optional `user_code`, and includes **`new_date` only when** a non-empty date string is provided (omitted otherwise).
 
 ### Not exposed as a dedicated “slot search” call
 
