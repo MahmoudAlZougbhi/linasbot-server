@@ -129,6 +129,27 @@ def _extract_appointment_id_from_check_response(response: dict) -> Optional[int]
     return None
 
 
+def _extract_customer_appointments_list(response_payload: dict) -> list:
+    """Normalize get_customer_appointments API payload to a list of appointment dicts."""
+    if not isinstance(response_payload, dict):
+        return []
+    data = response_payload.get("data")
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if isinstance(data, dict):
+        if isinstance(data.get("appointments"), list):
+            return [item for item in data.get("appointments", []) if isinstance(item, dict)]
+        if isinstance(data.get("data"), list):
+            return [item for item in data.get("data", []) if isinstance(item, dict)]
+        appointment_payload = data.get("appointment")
+        if isinstance(appointment_payload, dict):
+            return [appointment_payload]
+        for key in ("appointment_id", "id", "appointmentId"):
+            if data.get(key) is not None:
+                return [data]
+    return []
+
+
 CLINIC_PRICE_CONTEXT_KEYWORDS = [
     "laser",
     "ليزر",
@@ -1614,22 +1635,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 return {}
 
             def extract_customer_appointments(response_payload: dict) -> list:
-                if not isinstance(response_payload, dict):
-                    return []
-                data = response_payload.get("data")
-                if isinstance(data, list):
-                    return [item for item in data if isinstance(item, dict)]
-                if isinstance(data, dict):
-                    if isinstance(data.get("appointments"), list):
-                        return [item for item in data.get("appointments", []) if isinstance(item, dict)]
-                    if isinstance(data.get("data"), list):
-                        return [item for item in data.get("data", []) if isinstance(item, dict)]
-                    appointment_payload = data.get("appointment")
-                    if isinstance(appointment_payload, dict):
-                        return [appointment_payload]
-                    if extract_appointment_id(data):
-                        return [data]
-                return []
+                return _extract_customer_appointments_list(response_payload)
 
             def detect_change_request_intent(user_text: str) -> bool:
                 text = str(user_text or "").strip().lower()
@@ -2280,8 +2286,35 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         tool_output = await function_to_call(**function_args)
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
 
-                        # Store check_next_appointment result for auto-chaining appointment_id
+                        # Enrich "next" with full customer list so the model can list every upcoming booking.
                         if function_name == "check_next_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
+                            phone_for_enrich = normalize_phone_for_lookup(
+                                function_args.get("phone")
+                                or customer_phone_clean
+                                or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                                or user_id
+                            )
+                            if phone_for_enrich:
+                                try:
+                                    list_resp = await api_integrations.get_customer_appointments(phone=phone_for_enrich)
+                                    if isinstance(list_resp, dict) and list_resp.get("success"):
+                                        all_apts = _extract_customer_appointments_list(list_resp)
+                                        if all_apts:
+                                            d = tool_output.get("data")
+                                            if isinstance(d, dict):
+                                                d["customer_appointments"] = all_apts
+                                            elif d is None:
+                                                tool_output["data"] = {"customer_appointments": all_apts}
+                                            else:
+                                                # Keep original data shape for appointment_id extraction; list is parallel.
+                                                tool_output["customer_appointments"] = all_apts
+                                            print(
+                                                f"DEBUG: check_next_appointment enriched with {len(all_apts)} customer_appointments"
+                                            )
+                                except Exception as enrich_e:
+                                    print(
+                                        f"WARNING: check_next_appointment enrich get_customer_appointments failed: {enrich_e}"
+                                    )
                             check_next_appointment_result = tool_output
                             print(f"DEBUG: Stored check_next_appointment result for auto-chaining")
 

@@ -2356,7 +2356,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "check_next_appointment",
-                "description": "Returns the next scheduled appointment for a client. Use this before deciding create_appointment vs update_appointment_date for any change request. If status is paused/postponed, update the existing appointment and do not create a new one.",
+                "description": "Returns the client's next appointment and (when available) a customer_appointments list with all of their appointment records from the system. Use next for reschedule chaining; when answering 'when is my appointment' or similar, summarize every relevant upcoming/active row in customer_appointments, not only the single next slot. If status is paused/postponed, update the existing appointment and do not create a new one.",
                 "parameters": {
                     "type": "object",
                     "properties": {

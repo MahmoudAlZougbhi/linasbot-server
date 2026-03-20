@@ -185,6 +185,7 @@ TOOL USAGE RULES
   you must call the real check_next_appointment tool.
 - Do not return a placeholder JSON action pretending a tool was called.
 - Use the customer phone from runtime context.
+- The tool response may include **customer_appointments**: a list of all this customer's appointments in the system. If it is present and non-empty, list **every** upcoming or active/relevant appointment the user should know about (date, time, service, branch, body area if present)—do **not** mention only the first or "next" one when they clearly have several.
 - When formatting the result, include:
   - appointment date
   - appointment time
