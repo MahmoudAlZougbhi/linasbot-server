@@ -7,6 +7,7 @@ from utils.datetime_utils import (
     align_datetime_to_day_reference,
     datetime_from_ai_date_components,
     detect_appointment_inquiry_intent,
+    detect_bulk_reschedule_all_intent,
     detect_day_reference,
     detect_relative_intent,
     detect_reschedule_intent,
@@ -219,3 +220,35 @@ def test_detect_appointment_inquiry_intent_positive(text):
 )
 def test_detect_appointment_inquiry_intent_negative(text):
     assert detect_appointment_inquiry_intent(text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "3mlon kelon",
+        "3mle hene kelon bokra 3al se3a 1",
+        "kelon bokra",
+        "bokra kelon",
+        "hene kelon",
+        "كلهم",
+        "عدّل كل المواعيد",
+        "move all to tomorrow",
+        "reschedule all",
+    ],
+)
+def test_detect_bulk_reschedule_all_intent_positive(text):
+    assert detect_bulk_reschedule_all_intent(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "   ",
+        "بدي أجل موعد وحيد بكرا",
+        "postpone one appointment",
+        "kelon",  # alone, no day / no Arabic all-of-them
+    ],
+)
+def test_detect_bulk_reschedule_all_intent_negative(text):
+    assert detect_bulk_reschedule_all_intent(text) is False

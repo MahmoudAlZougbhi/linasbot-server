@@ -158,6 +158,33 @@ def detect_appointment_inquiry_intent(text: str) -> bool:
     return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _APPOINTMENT_INQUIRY_INTENT_PATTERNS)
 
 
+# User wants every listed / paused row moved to the same new slot (Franco + Arabic).
+_BULK_RESCHEDULE_ALL_PATTERNS = [
+    r"\b3m(?:el|al|le)(?:on|eon|en)?\s+kelon\b",
+    r"\b3ml(?:on|eon|en)\s+kelon\b",
+    r"\b(?:7ot|hot)(?:le|li)?\s+hene\s+kelon\b",
+    r"\bhene\s+kelon\b",
+    r"\bkelon\b.*\b(bokra|bukra|bekra|tomorrow)\b",
+    r"\b(bokra|bukra)\b.*\bkelon\b",
+    r"\ball\s+of\s+them\b",
+    r"\bmove\s+all\b",
+    r"\breschedul(?:e|ing)?\s+all\b",
+]
+
+
+def detect_bulk_reschedule_all_intent(text: str) -> bool:
+    """True when the user asks to apply the same change to every appointment row (e.g. all paused → tomorrow)."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    if any(x in raw for x in ("كلهم", "كلون", "كل المواعيد", "كل مواعيدي")):
+        return True
+    return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _BULK_RESCHEDULE_ALL_PATTERNS)
+
+
 def detect_relative_intent(text: str) -> Optional[str]:
     """
     Detect explicit relative datetime intents from multilingual text.

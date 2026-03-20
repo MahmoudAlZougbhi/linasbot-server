@@ -20,6 +20,7 @@ from utils.datetime_utils import (
     align_datetime_to_day_reference,
     datetime_from_ai_date_components,
     detect_appointment_inquiry_intent,
+    detect_bulk_reschedule_all_intent,
     detect_reschedule_intent,
     format_clinic_calendar_anchor,
     now_in_bot_tz,
@@ -328,6 +329,45 @@ async def _build_live_crm_appointments_snapshot(phone_clean: str) -> str:
         f"{body}{more}"
         "- Also call `check_next_appointment` when rules require it; if tool JSON disagrees, prefer the **tool** result.\n"
     )
+
+
+async def _count_live_reschedule_row_total(phone_clean: str) -> int:
+    """How many CRM rows we surface for reschedule/listing (same filter as LIVE snapshot)."""
+    if not phone_clean or not str(phone_clean).strip():
+        return 0
+    try:
+        resp = await api_integrations.get_customer_appointments(phone=phone_clean)
+    except Exception:
+        return 0
+    if not isinstance(resp, dict) or not resp.get("success"):
+        return 0
+    raw = _extract_customer_appointments_list(resp)
+    if not raw:
+        return 0
+    rows = _filter_appointments_for_reschedule_overview(raw)
+    if not rows:
+        rows = raw[:50]
+    return len(rows)
+
+
+def _bot_reply_claims_bulk_all_appointments_updated(bot_reply: str) -> bool:
+    """Model implies every appointment row was updated (common hallucination after bulk user ask)."""
+    br = (bot_reply or "").strip()
+    if not br:
+        return False
+    if "تم تعديل كل" in br or "تمّ تعديل كل" in br:
+        return True
+    if "كل المواعيد" in br and any(x in br for x in ("تم تعديل", "تمّ تعديل", "صاروا", "صارت", "تم نقل", "نقلت")):
+        return True
+    if "كلهم" in br and any(x in br for x in ("تم تعديل", "تمّ تعديل", "صاروا", "صارت", "تم نقل", "نقلت", "صار")):
+        return True
+    if "السبعة" in br and ("تم تعديل" in br or "تمّ تعديل" in br):
+        return True
+    if "مواعيدك صاروا كلهم" in br or "موعداتك صاروا كلهم" in br:
+        return True
+    if "صاروا كلهم" in br or "كلهم صاروا" in br:
+        return True
+    return False
 
 
 def _user_message_is_acknowledgment_only(text: str) -> bool:
@@ -1510,10 +1550,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     is_reschedule_intent = detect_reschedule_intent(user_input)
     is_appointment_inquiry_intent = detect_appointment_inquiry_intent(user_input)
+    is_bulk_reschedule_all_intent = detect_bulk_reschedule_all_intent(user_input)
     if is_reschedule_intent:
         print("🔁 Intent routing lock: reschedule/postpone intent detected.")
     if is_appointment_inquiry_intent:
         print("📅 Intent routing: appointment status / listing inquiry detected.")
+    if is_bulk_reschedule_all_intent:
+        print("🔁 Intent routing: bulk reschedule ALL rows requested.")
 
     # NOTE: conversation_log.jsonl is NO LONGER USED
     # Q&A matching is now handled by qa_database_service.py (API-based)
@@ -1735,6 +1778,16 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "- Clearly separate **active/upcoming** vs **paused** using the **status** field from JSON — do not guess.\n"
         )
 
+    if is_bulk_reschedule_all_intent and customer_phone_clean:
+        routing_guardrail += (
+            "\n\n"
+            "**🔁 BULK RESCHEDULE — ALL LISTED ROWS (THIS MESSAGE):**\n"
+            "- The user asked to move **every** relevant appointment (often all paused lines) to the **same** new date/time (e.g. Franco «3mlon kelon», «kelon bokra», Arabic «كلهم»).\n"
+            "- You MUST call **`update_appointment_date` once per distinct `appointment_id`** from the **LIVE CRM APPOINTMENT SNAPSHOT** (several tool calls in **this** turn).\n"
+            "- **Forbidden:** Saying «تم تعديل كل المواعيد» / «صاروا كلهم» / «كلهم ببكرا» unless **each** of those tool calls returned **success** in this request.\n"
+            "- If you only updated one row, say so honestly and offer to continue with the remaining ids — never claim all seven (or «الكل») are done.\n"
+        )
+
     # Enforce explicit json contract whenever response_format={"type":"json_object"} is used.
     # Some OpenAI endpoints reject requests if the messages omit the word "json".
     json_output_contract = (
@@ -1866,6 +1919,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         parsed_response = {}
         latest_pricing_payload = None
         api_failure_reason = None  # Set when create_appointment or other API fails → triggers human handover
+        update_appointment_date_success_count = 0  # Successful API updates this turn (bulk guard)
 
         # When GPT asks for gender (unknown), send that reply and do NOT run tool calls.
         # Otherwise a second response after tools can replace it with booking flow (date/time/branch).
@@ -2754,6 +2808,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         
                         # 📊 ANALYTICS: Track appointment reschedule
                         elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and tool_output.get("success"):
+                            update_appointment_date_success_count += 1
                             from services.analytics_events import analytics
                             
                             # Get service from appointment data if available
@@ -2950,6 +3005,24 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 )
             ):
                 api_failure_reason = "booking_claimed_without_create_appointment_tool"
+
+        # «تم تعديل كل المواعيد» etc. without enough successful update_appointment_date calls (bulk user request).
+        if not api_failure_reason and _bot_reply_claims_bulk_all_appointments_updated(
+            parsed_response.get("bot_reply") or ""
+        ):
+            nrow = 0
+            if customer_phone_clean:
+                try:
+                    nrow = await _count_live_reschedule_row_total(customer_phone_clean)
+                except Exception as bulk_cnt_e:
+                    print(f"WARNING: bulk update row count failed: {bulk_cnt_e}")
+            if update_appointment_date_success_count == 0:
+                api_failure_reason = "bulk_update_claimed_without_successful_update_appointment_date"
+            elif nrow >= 2 and update_appointment_date_success_count < nrow:
+                api_failure_reason = (
+                    f"bulk_update_incomplete:crm_rows~{nrow}_but_only_"
+                    f"{update_appointment_date_success_count}_successful_updates"
+                )
 
         # Token usage: when tool calls exist, sum BOTH first and second API call usage (second_response alone misses first call's output)
         first_usage = getattr(response, "usage", None) if tool_calls else None
