@@ -2246,8 +2246,24 @@ def get_openai_tools_schema():
                         "service_id": {"type": "integer", "description": "Service ID: 1=Hair Men, 12=Hair Women, 2/11=CO2, 13=Tattoo, 4/5/14=Whitening. For female hair removal use 12, not 3."},
                         "machine_id": {"type": "integer", "description": "From get_machines. REQUIRED for API. For hair removal (1/12) the value must match the device the customer chose. For tattoo/CO2/whitening pass any valid id from list—the system assigns the correct device."},
                         "branch_id": {"type": "integer", "description": "Branch ID: 1=Beirut Manara, 2=Antelias. Default to 1 if not specified."},
+                        "calendar_day_intent": {
+                            "type": "string",
+                            "enum": ["today", "tomorrow"],
+                            "description": "REQUIRED when the user spoke in relative day terms (اليوم، el yom، lyom، بكرا، bokra، tomorrow، etc.): set 'today' or 'tomorrow' exactly as you understood their intent. The server uses this with the clinic clock to lock the calendar day even if the ISO date in 'date' is wrong. Omit only when the user gave an explicit calendar date (e.g. 21/03/2026 or 'next Saturday' resolved by you to a specific day).",
+                        },
+                        "date_components": {
+                            "type": "object",
+                            "description": "Optional but STRONGLY PREFERRED when the user used vague weekday phrases (الخميس الجاي، الجمعة الجاي، next Thursday…) or contradictory wording: after resolving to exactly ONE civil date using CALENDAR ANCHOR, pass year, month, day, hour (minute optional, default 0). Server builds API time from this first. If the user mentioned two different days, ask one clarification instead of guessing.",
+                            "properties": {
+                                "year": {"type": "integer", "description": "Gregorian year, e.g. 2026"},
+                                "month": {"type": "integer", "description": "1-12"},
+                                "day": {"type": "integer", "description": "1-31"},
+                                "hour": {"type": "integer", "description": "0-23 (24h; 13 = 1 PM)"},
+                                "minute": {"type": "integer", "description": "0-59; omit or 0 if not specified"},
+                            },
+                        },
                         # This is derived from the API Documentation PDF
-                        "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). This date and time MUST be converted from user's natural language (e.g., 'tomorrow', 'next Saturday', 'in 3 days') to an exact future date and time based on current time. The date must be in the future and not more than 365 days from today."},
+                        "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). Must match date_components when provided. Convert natural language using CURRENT DATE AND TIME / CALENDAR ANCHOR. For 'today'/'tomorrow' set calendar_day_intent. For next-Thursday-style phrases, prefer filling date_components."},
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
                         "body_part_ids": {"type": "array", "items": {"type": "integer"}, "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Body part IDs to treat. Ask which area(s) before calling. First session uses session_number 1 per body part (sent via body_parts in API)."}
                     },
@@ -2265,7 +2281,23 @@ def get_openai_tools_schema():
                     "properties": {
                         "appointment_id": {"type": "integer", "description": "The ID of the appointment to update (get this from check_next_appointment)."},
                         "phone": {"type": "string", "description": "Client's phone number (without country code), e.g., '71 123 456'."},
-                        "date": {"type": "string", "format": "date-time", "description": "New appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-11-15 16:00:00'). Convert natural language to exact date/time."},
+                        "calendar_day_intent": {
+                            "type": "string",
+                            "enum": ["today", "tomorrow"],
+                            "description": "When the user asked to move the appointment to 'today' or 'tomorrow' (اليوم، el yom، بكرا، etc.), set this so the server locks the correct day. Omit if they gave only an explicit calendar date.",
+                        },
+                        "date_components": {
+                            "type": "object",
+                            "description": "Same as create_appointment: optional structured year/month/day/hour/(minute) after you resolved the new slot; preferred for weekday-relative wording.",
+                            "properties": {
+                                "year": {"type": "integer"},
+                                "month": {"type": "integer"},
+                                "day": {"type": "integer"},
+                                "hour": {"type": "integer"},
+                                "minute": {"type": "integer"},
+                            },
+                        },
+                        "date": {"type": "string", "format": "date-time", "description": "New appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-11-15 16:00:00'). Must match date_components when provided. Convert natural language; if relative day, set calendar_day_intent too."},
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."}
                     },
                     "required": ["appointment_id", "phone", "date"]

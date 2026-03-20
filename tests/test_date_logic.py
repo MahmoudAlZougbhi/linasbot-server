@@ -5,9 +5,11 @@ import pytest
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
+    datetime_from_ai_date_components,
     detect_day_reference,
     detect_relative_intent,
     detect_reschedule_intent,
+    format_clinic_calendar_anchor,
     parse_datetime_flexible,
     resolve_relative_datetime,
     text_mentions_datetime,
@@ -89,6 +91,64 @@ def test_detect_relative_intent_core_phrases():
 )
 def test_detect_day_reference_prefers_latest_mention(text, expected):
     assert detect_day_reference(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("hotle mw3ad el yom", "today"),
+        ("hote mw3ad el yom se3a 1", "today"),
+        ("mw3ad el yom", "today"),
+        ("7al yom", "today"),
+        ("bokra ok el yom", "today"),
+    ],
+)
+def test_detect_day_reference_franco_el_yom(text, expected):
+    assert detect_day_reference(text) == expected
+
+
+def test_resolve_relative_franco_el_yom_today():
+    resolved = resolve_relative_datetime("hotle mw3ad el yom se3a 1", reference=REFERENCE_NOW)
+    assert resolved is not None
+    # 01:00 is before reference 10:00 → bumped to now + 30m same day
+    assert resolved.strftime("%Y-%m-%d %H:%M:%S") == "2026-02-27 10:30:00"
+
+
+def test_resolve_relative_bokra_tomorrow():
+    resolved = resolve_relative_datetime("bokra se3a 3", reference=REFERENCE_NOW)
+    assert resolved is not None
+    assert resolved.strftime("%Y-%m-%d %H:%M:%S") == "2026-02-28 03:00:00"
+
+
+def test_forced_day_ref_overrides_stale_bokra_in_buffer():
+    """Latest message says today; older 'bokra' in same buffer must not win."""
+    buf = "bokra " * 8 + "hotle mw3ad el yom se3a 2"
+    assert detect_day_reference(buf) == "today"
+    latest = "hotle mw3ad el yom se3a 2"
+    resolved = resolve_relative_datetime(
+        buf, reference=REFERENCE_NOW, forced_day_ref=detect_day_reference(latest)
+    )
+    assert resolved.date() == REFERENCE_NOW.date()
+    # 02:00 same day is before reference 10:00 → bump to 10:30
+    assert resolved.strftime("%H:%M:%S") == "10:30:00"
+
+
+def test_format_clinic_calendar_anchor_contains_isos():
+    s = format_clinic_calendar_anchor(REFERENCE_NOW)
+    assert "2026-02-27" in s and "2026-02-28" in s
+
+
+def test_datetime_from_ai_date_components_ok():
+    dt = datetime_from_ai_date_components({"year": 2026, "month": 3, "day": 21, "hour": 13, "minute": 0})
+    assert dt is not None
+    assert dt.tzinfo == BOT_FIXED_TZ
+    assert dt.strftime("%Y-%m-%d %H:%M:%S") == "2026-03-21 13:00:00"
+
+
+def test_datetime_from_ai_date_components_invalid():
+    assert datetime_from_ai_date_components(None) is None
+    assert datetime_from_ai_date_components({"year": 2026, "month": 2, "day": 31, "hour": 10}) is None
+    assert datetime_from_ai_date_components({"year": 2026, "month": 3, "day": 1}) is None
 
 
 def test_align_today_reference_when_candidate_is_tomorrow():

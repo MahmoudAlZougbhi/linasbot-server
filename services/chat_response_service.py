@@ -18,8 +18,10 @@ from services import api_integrations
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
+    datetime_from_ai_date_components,
     detect_day_reference,
     detect_reschedule_intent,
+    format_clinic_calendar_anchor,
     now_in_bot_tz,
     parse_datetime_flexible,
     resolve_relative_datetime,
@@ -1436,6 +1438,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"- **detected_language**: '{current_preferred_lang}'\n"
         f"- **Awaiting human handover confirmation**: {config.user_data_whatsapp.get(user_id, {}).get('awaiting_human_handover_confirmation', False)} - If True, user is replying to your transfer confirmation question. Interpret yes/no accordingly.\n"
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
+        f"**📅 CALENDAR ANCHOR (do not guess today/tomorrow; use this):** {format_clinic_calendar_anchor(current_local_time)}\n"
         f"{customer_file_summary}"
     )
 
@@ -1768,20 +1771,42 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 if "date" not in function_args:
                     return
 
-                original_date_str = str(function_args["date"]).strip()
-                if not original_date_str:
-                    return
-
+                original_date_str = str(function_args.get("date") or "").strip()
                 now = now_in_bot_tz()
-                dt_obj = resolve_relative_datetime(all_user_text, reference=now)
+                latest_u = (user_input or "").strip()
+                # Model-only hints (never forward to HTTP).
+                ai_day_raw = function_args.pop("calendar_day_intent", None)
+                dc_raw = function_args.pop("date_components", None)
+                forced_day_ref = None
+                if isinstance(ai_day_raw, str) and ai_day_raw.strip().lower() in ("today", "tomorrow"):
+                    forced_day_ref = ai_day_raw.strip().lower()
+                if forced_day_ref is None:
+                    forced_day_ref = detect_day_reference(latest_u) if latest_u else None
+
+                dt_obj = datetime_from_ai_date_components(dc_raw)
                 if dt_obj:
-                    print(f"DEBUG: Resolved relative datetime from user text ({function_name}): {all_user_text} -> {dt_obj}")
+                    print(f"DEBUG: Using date_components for {function_name}: {dc_raw} -> {dt_obj}")
+                elif not original_date_str:
+                    print(f"WARNING: No date string and invalid date_components for {function_name}. Skipping normalize.")
+                    return
                 else:
-                    dt_obj = parse_datetime_flexible(original_date_str)
-                    if not dt_obj:
-                        print(f"WARNING: Could not parse tool date '{original_date_str}' for {function_name}. Keeping original.")
-                        return
-                    dt_obj = align_datetime_to_day_reference(dt_obj, all_user_text, reference=now)
+                    dt_obj = resolve_relative_datetime(
+                        all_user_text, reference=now, forced_day_ref=forced_day_ref
+                    )
+                    if dt_obj:
+                        print(f"DEBUG: Resolved relative datetime from user text ({function_name}): {all_user_text} -> {dt_obj}")
+                    else:
+                        dt_obj = parse_datetime_flexible(original_date_str)
+                        if not dt_obj:
+                            print(f"WARNING: Could not parse tool date '{original_date_str}' for {function_name}. Keeping original.")
+                            return
+                        if forced_day_ref in ("today", "tomorrow"):
+                            align_text = forced_day_ref
+                        elif latest_u and detect_day_reference(latest_u):
+                            align_text = latest_u
+                        else:
+                            align_text = all_user_text
+                        dt_obj = align_datetime_to_day_reference(dt_obj, align_text, reference=now)
 
                 # If GPT provided a past year, keep intent but move to current year.
                 if dt_obj.year < now.year:
@@ -2611,7 +2636,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 try:
                     check_resp = await api_integrations.check_next_appointment(phone=phone_for_same_day)
                     apt_id = _extract_appointment_id_from_check_response(check_resp)
-                    target_dt = resolve_relative_datetime(user_input or "")
+                    _u_same = (user_input or "").strip()
+                    _fd_same = detect_day_reference(_u_same) if _u_same else None
+                    target_dt = resolve_relative_datetime(
+                        _u_same, reference=now_in_bot_tz(), forced_day_ref=_fd_same
+                    )
                     if apt_id and target_dt and target_dt.date() == now_in_bot_tz().date():
                         date_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")
                         update_resp = await api_integrations.update_appointment_date(
@@ -2818,7 +2847,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     now = now_in_bot_tz()
                     dt_obj = gpt_dt
                     if dt_obj is None:
-                        dt_obj = resolve_relative_datetime(all_user_text, reference=now)
+                        _ui_fb = (user_input or "").strip()
+                        _fd_fb = detect_day_reference(_ui_fb) if _ui_fb else None
+                        dt_obj = resolve_relative_datetime(
+                            all_user_text, reference=now, forced_day_ref=_fd_fb
+                        )
                     # Fallback: "bokra" alone may not match resolve_relative_datetime; use detect_day_reference
                     if dt_obj is None and detect_day_reference(all_user_text) == "tomorrow":
                         # Try to extract hour (se3a 9, 9am, etc.) or default to 9:00

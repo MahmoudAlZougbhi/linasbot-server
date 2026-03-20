@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import Optional
+from typing import Any, Optional
 
 
 BOT_FIXED_TZ = datetime.timezone(datetime.timedelta(hours=2), name="+0200")
@@ -70,6 +70,13 @@ _TODAY_PATTERNS = [
     r"\blyom\b",
     r"\belyom\b",
     r"\balyom\b",
+    # Franco often writes "the day" as two words: "el yom" / "l yom" — was missing and broke
+    # detect_day_reference vs stale "bokra" in the same concatenated user buffer.
+    r"\bel\s+yom\b",
+    r"\bl\s+yom\b",
+    r"\b7al\s+yom\b",
+    r"\bal\s+yom\b",
+    r"\b3al\s+yom\b",
 ]
 
 _TOMORROW_PATTERNS = [
@@ -243,11 +250,57 @@ def parse_datetime_flexible(date_value: str) -> Optional[datetime.datetime]:
     return None
 
 
-def resolve_relative_datetime(text: str, reference: Optional[datetime.datetime] = None) -> Optional[datetime.datetime]:
-    """Resolve supported relative phrases to a concrete +0200 datetime."""
+def datetime_from_ai_date_components(raw: Any) -> Optional[datetime.datetime]:
+    """
+    Build a single aware datetime in BOT_FIXED_TZ from structured fields the model sends
+    (year, month, day, hour, optional minute). Prefer this over a free-form `date` string when
+    the user said vague weekday phrases (الخميس الجاي، الجمعة الجاي…) so the model must pick
+    one concrete civil date.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    def _ci(v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    y = _ci(raw.get("year"))
+    m = _ci(raw.get("month"))
+    d = _ci(raw.get("day"))
+    h = _ci(raw.get("hour"))
+    mi = _ci(raw.get("minute"))
+    if mi is None:
+        mi = 0
+    if y is None or m is None or d is None or h is None:
+        return None
+    if not (1 <= m <= 12 and 1 <= d <= 31 and 0 <= h <= 23 and 0 <= mi <= 59):
+        return None
+    if y < 2000 or y > 2100:
+        return None
+    try:
+        return datetime.datetime(y, m, d, h, mi, 0, tzinfo=BOT_FIXED_TZ, microsecond=0)
+    except ValueError:
+        return None
+
+
+def resolve_relative_datetime(
+    text: str,
+    reference: Optional[datetime.datetime] = None,
+    forced_day_ref: Optional[str] = None,
+) -> Optional[datetime.datetime]:
+    """Resolve supported relative phrases to a concrete +0200 datetime.
+
+    forced_day_ref: when set to 'today' or 'tomorrow', overrides detect_day_reference(text).
+    Use the latest user message when it clearly says اليوم/el yom vs بكرا so stale keywords
+    earlier in the thread do not win.
+    """
     now = to_bot_tz(reference) if reference is not None else now_in_bot_tz()
     intent = detect_relative_intent(text)
-    day_ref = detect_day_reference(text)
+    day_ref = forced_day_ref if forced_day_ref in ("today", "tomorrow") else detect_day_reference(text)
 
     # Extract hour from text (se3a 9, 9am, 9:00, ساعة ٩, etc.)
     hour, minute = 9, 0
@@ -289,10 +342,34 @@ def resolve_relative_datetime(text: str, reference: Optional[datetime.datetime] 
             today_dt = (now + datetime.timedelta(minutes=30)).replace(second=0, microsecond=0)
         return today_dt
 
+    # "tomorrow" + time (bokra se3a 1, tomorrow at 3pm) — was missing; fell through and confused booking.
+    if day_ref == "tomorrow":
+        tomorrow_date = (now + datetime.timedelta(days=1)).date()
+        tomorrow_dt = datetime.datetime.combine(
+            tomorrow_date,
+            datetime.time(hour=hour, minute=minute),
+            tzinfo=BOT_FIXED_TZ,
+        )
+        return tomorrow_dt
+
     if not intent:
         return None
 
     return None
+
+
+def format_clinic_calendar_anchor(reference: Optional[datetime.datetime] = None) -> str:
+    """
+    Single unambiguous line for the AI: English weekday + ISO date for today and tomorrow in bot TZ (+02:00).
+    """
+    now = to_bot_tz(reference) if reference is not None else now_in_bot_tz()
+    tomorrow = now + datetime.timedelta(days=1)
+    return (
+        f'Today ({now.strftime("%A")}) = {now.strftime("%Y-%m-%d")}; '
+        f'Tomorrow ({tomorrow.strftime("%A")}) = {tomorrow.strftime("%Y-%m-%d")} '
+        f'(clinic clock, fixed UTC+02:00). For Franco: "el yom" / "lyom" / "اليوم" = Today; '
+        f'"bokra" / "بكرا" = Tomorrow.'
+    )
 
 
 def align_datetime_to_day_reference(
