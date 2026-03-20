@@ -1256,13 +1256,6 @@ def _is_placeholder_booking_customer_name(name: Optional[str]) -> bool:
     return False
 
 
-def _fallback_whatsapp_customer_display_name(phone_number: str) -> str:
-    """Latin-only placeholder for CRM when the user never gave a name (matches API expectations)."""
-    digits = re.sub(r"\D", "", str(phone_number or ""))
-    tail = digits[-4:] if len(digits) >= 4 else (digits or "0000")
-    return f"WhatsApp Client {tail}"
-
-
 def _extract_customer_name_from_conversation_for_booking(
     user_id: str,
     current_context_messages: Optional[List[dict]],
@@ -1418,6 +1411,8 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     GPT sometimes emits a first JSON blob with create_appointment-shaped fields then only calls
     get_machines (or similar). If the blob is complete and the user is not in a reschedule flow,
     run create_appointment here so we do not false-trigger booking_claimed_without_create_appointment_tool.
+    Does **not** create a fake CRM name: if the customer has no file yet, a **real** name must come from
+    the thread or auxiliary JSON (never auto-generated placeholders).
     Returns API response dict if a call was made; None if skipped.
     """
     if is_reschedule_intent:
@@ -1473,10 +1468,6 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
         )
 
     customer_gender_for_api = current_gender.capitalize() if current_gender in ("male", "female") else "Male"
-
-    if not customer_name and customer_gender_for_api in ("Male", "Female"):
-        customer_name = _fallback_whatsapp_customer_display_name(phone_number)
-        print(f"RECOVERY: using fallback CRM display name for new user: {customer_name}")
 
     customer_exists = False
     customer_check_response = await api_integrations.get_customer_by_phone(phone=phone_number)
