@@ -71,8 +71,14 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 1,
-          "parameters": ["customer_name"]
+          "parameters_count": 5,
+          "parameters": [
+            "customer_name",
+            "appointment_date",
+            "appointment_time",
+            "branch_name",
+            "service_name"
+          ]
         }
       }
     },
@@ -85,8 +91,15 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 2,
-          "parameters": ["customer_name", "phone_number"]
+          "parameters_count": 6,
+          "parameters": [
+            "customer_name",
+            "appointment_date",
+            "appointment_time",
+            "branch_name",
+            "service_name",
+            "phone_number"
+          ]
         }
       }
     },
@@ -99,8 +112,15 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 2,
-          "parameters": ["customer_name", "phone_number"]
+          "parameters_count": 6,
+          "parameters": [
+            "customer_name",
+            "appointment_date",
+            "appointment_time",
+            "branch_name",
+            "service_name",
+            "phone_number"
+          ]
         }
       }
     },
@@ -143,6 +163,7 @@
     "templates_are_text_only": "true = do not send image/text VARIABLES in the header. Pair with send_empty_header_component=true when Meta has a fixed header (0 variable slots): API sends {\"type\":\"header\",\"parameters\":[]}. If Monty says header required: enable send_empty_header_component. If it says 0 parameters only: do not add header_parameters or image links.",
     "send_empty_header_component": "When true with templates_are_text_only true, Monty gets an empty header component (0 params). Resolves flip-flop between 'Header required' and 'must contain exactly 0 parameters'.",
     "legacy_internal_ids": "twenty_day_followup -> config key one_month_followup (Meta template name must match templates[].name). missed_paused_appointment -> missed_this_month. whatsapp_lead_no_booking -> missed_yesterday.",
-    "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers."
+    "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers.",
+    "body_variable_counts": "one_month_followup uses 5 body vars (same slots as reminder_24h) because daily dispatcher and populate_one_month_followups pass those fields. missed_yesterday and missed_this_month use 6 (add phone_number) to match appointment_scheduler placeholders. If Meta still says invalid count, open WhatsApp Manager and count {{n}} in the approved Arabic body — then match parameters_count and parameters[] here."
   }
 }
