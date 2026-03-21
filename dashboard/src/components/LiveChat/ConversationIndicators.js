@@ -62,7 +62,7 @@ export const NewCustomerBadge = ({ isNew }) => {
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
-      title="عميل جديد - لا يوجد له ملف عندنا"
+      title="New customer — no CRM profile yet"
     >
       <SparklesIcon className="w-3 h-3 mr-1" />
       New

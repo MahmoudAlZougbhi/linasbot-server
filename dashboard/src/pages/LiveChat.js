@@ -1115,7 +1115,7 @@ const LiveChat = () => {
         duration_seconds: 245,
         sentiment: "positive",
         last_message: {
-          content: "متى يمكنني الحجز؟",
+          content: "When can I book?",
           is_user: true,
           timestamp: new Date().toISOString(),
         },
@@ -1191,42 +1191,42 @@ const LiveChat = () => {
         {
           timestamp: new Date(Date.now() - 300000).toISOString(),
           is_user: true,
-          content: "مرحبا، أريد معلومات عن إزالة الشعر بالليزر",
+          content: "Hello, I need information about laser hair removal",
           type: "text",
         },
         {
           timestamp: new Date(Date.now() - 280000).toISOString(),
           is_user: false,
           content:
-            "أهلاً وسهلاً! يسعدني مساع��تك. لدينا أحدث أجهزة الليزر لإزالة الشعر بفعالية وأمان.",
+            "Welcome! We use the latest laser systems for safe, effective hair removal.",
           type: "text",
           handled_by: "bot",
         },
         {
           timestamp: new Date(Date.now() - 250000).toISOString(),
           is_user: true,
-          content: "كم عدد الجلسات المطلوبة؟",
+          content: "How many sessions do I need?",
           type: "text",
         },
         {
           timestamp: new Date(Date.now() - 240000).toISOString(),
           is_user: false,
           content:
-            "عادة ما تحتاج إلى 6-8 جلسات للحصول على نتائج مثالية، مع فاصل 4-6 أسابيع بين كل جلسة.",
+            "Typically 6–8 sessions with 4–6 weeks between sessions for best results.",
           type: "text",
           handled_by: "bot",
         },
         {
           timestamp: new Date(Date.now() - 200000).toISOString(),
           is_user: true,
-          content: "والأسعار؟",
+          content: "What about pricing?",
           type: "text",
         },
         {
           timestamp: new Date(Date.now() - 180000).toISOString(),
           is_user: false,
           content:
-            "الأسعار تختلف حسب المنطقة المراد معالجتها. يمكنك زيارتنا للحصول على استشارة مجانية وعرض سعر مخصص.",
+            "Pricing depends on the area treated. Visit us for a free consult and a tailored quote.",
           type: "text",
           handled_by: "bot",
         },
@@ -2261,7 +2261,7 @@ const LiveChat = () => {
                   type="button"
                   onClick={async () => {
                     try {
-                      const r = await simulateWebhook("9613000000", "مرحبا");
+                      const r = await simulateWebhook("9613000000", "Hello");
                       if (r?.success) {
                         toast.success("Test message sent – check Live Chat in a few seconds");
                         setTimeout(async () => {
@@ -2799,9 +2799,9 @@ const LiveChat = () => {
                                 </div>
                               ) : (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-sm">صورة</span>
+                                  <span className="text-sm">Image</span>
                                   <span className="text-xs opacity-75">
-                                    (رابط غير متاح)
+                                    (Link unavailable)
                                   </span>
                                 </div>
                               )}
@@ -2840,7 +2840,7 @@ const LiveChat = () => {
                                   </div>
                                 ) : (
                                   <div className="flex items-center space-x-2">
-                                    <span className="text-sm">رسالة صوتية</span>
+                                    <span className="text-sm">Voice message</span>
                                     <span className="text-xs opacity-75">
                                       (URL not available)
                                     </span>

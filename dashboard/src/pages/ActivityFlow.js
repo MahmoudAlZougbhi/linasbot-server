@@ -66,7 +66,7 @@ const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd, e
           )}
           {tokens != null && (
             <span className={`text-xs font-normal normal-case ${isMaxTokens ? "bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded" : "text-slate-500"}`}>
-              {tokens.toLocaleString()} tokens {isMaxTokens && "↑ الأكثر"}
+              {tokens.toLocaleString()} tokens {isMaxTokens && "· max"}
             </span>
           )}
           {model && (
@@ -315,7 +315,7 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
             {(entry.source === "gpt" || entry.source === "dynamic_retrieval") && (entry.tokens != null || entry.prompt_tokens != null || entry.completion_tokens != null || entry.model) && (
               <div className="mt-4 pt-4 border-t border-slate-200">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">GPT usage – كل التوكينات</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">GPT usage — tokens</p>
                   {(entry.token_source || entry.prompt_tokens != null) && (
                     <span className={`text-xs px-2 py-0.5 rounded font-medium ${(entry.token_source || "backend") === "backend" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
                       {(entry.token_source || "backend") === "backend" ? "Backend (GPT API)" : (entry.token_source || "Backend (GPT API)")}

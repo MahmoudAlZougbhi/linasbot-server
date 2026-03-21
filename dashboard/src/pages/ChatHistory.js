@@ -841,9 +841,9 @@ const ChatHistory = () => {
                                     </div>
                                   ) : (
                                     <div className="flex items-center space-x-2">
-                                      <span className="text-sm">صورة</span>
+                                      <span className="text-sm">Image</span>
                                       <span className="text-xs opacity-75">
-                                        (رابط غير متاح)
+                                        (Link unavailable)
                                       </span>
                                     </div>
                                   )}
@@ -890,7 +890,7 @@ const ChatHistory = () => {
                                     ) : (
                                       <div className="flex items-center space-x-2">
                                         <span className="text-sm">
-                                          رسالة صوتية
+                                          Voice message
                                         </span>
                                         <span className="text-xs opacity-75">
                                           (URL not available)

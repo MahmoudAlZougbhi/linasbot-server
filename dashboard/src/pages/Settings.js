@@ -699,9 +699,8 @@ const Settings = () => {
               Clinic calendar — holidays & closures
             </h2>
             <p className="text-sm text-slate-600 mb-6 max-w-3xl leading-relaxed">
-              عطلات وأيام إغلاق لكل فرع (أو لكل الفروع). الذكاء الاصطناعي يقرأها في كل محادثة: إذا طلب الزبون موعدًا في يوم معطّل، لا يؤكد الحجز لذلك اليوم،
-              ويشرح بلطف ويستخدم تهنئة المناسبة (رأس السنة، الأعياد…). English: The AI gets this list in its system prompt — use{' '}
-              <strong>block booking</strong> when the branch is fully closed for that date range.
+              Holidays and closure days per branch (or all branches). The AI reads this in every chat: if the customer asks for an appointment on a blocked day, it will not confirm booking for that day,
+              explains politely, and can use the greeting you set. Use <strong>block booking</strong> when the branch is fully closed for that date range.
             </p>
 
             <div className="space-y-4">
@@ -723,7 +722,7 @@ const Settings = () => {
                           setBranchHolidays(next);
                         }}
                       >
-                        <option value="">All branches / كل الفروع</option>
+                        <option value="">All branches</option>
                         <option value="1">Branch 1 (Beirut — CRM id 1)</option>
                         <option value="2">Branch 2 (Antelias — CRM id 2)</option>
                       </select>
@@ -764,7 +763,7 @@ const Settings = () => {
                           setBranchHolidays(next);
                         }}
                       />
-                      Block booking / لا حجز
+                      Block booking
                     </label>
                     <button
                       type="button"
@@ -776,11 +775,11 @@ const Settings = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Label (AR)</label>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Label (Arabic)</label>
                       <input
                         className="input-field text-sm w-full"
                         dir="rtl"
-                        placeholder="مثال: عيد الأضحى"
+                        placeholder="e.g. Eid al-Adha (Arabic label)"
                         value={row.labelAr || ''}
                         onChange={(e) => {
                           const next = [...branchHolidays];
@@ -803,11 +802,11 @@ const Settings = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Greeting (AR) — تهنئة قصيرة</label>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Greeting (Arabic)</label>
                       <input
                         className="input-field text-sm w-full"
                         dir="rtl"
-                        placeholder="عيد مبارك وكل عام وأنتم بخير"
+                        placeholder="Short greeting shown to customers (Arabic)"
                         value={row.greetingAr || ''}
                         onChange={(e) => {
                           const next = [...branchHolidays];
@@ -835,7 +834,7 @@ const Settings = () => {
 
               <div className="flex flex-wrap gap-3">
                 <button type="button" onClick={addHolidayRow} className="btn-ghost text-sm px-4 py-2 border border-teal-200">
-                  + Add holiday / إضافة يوم
+                  + Add holiday
                 </button>
                 <button type="button" onClick={handleSaveClinicCalendar} className="btn-primary text-sm px-6 py-2">
                   <CheckCircleIcon className="w-4 h-4 inline mr-2" />

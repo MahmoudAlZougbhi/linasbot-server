@@ -549,7 +549,7 @@ export const useApi = () => {
     }
   }, []);
 
-  const simulateWebhook = useCallback(async (phone = "9613000000", text = "مرحبا") => {
+  const simulateWebhook = useCallback(async (phone = "9613000000", text = "Hello") => {
     try {
       const response = await api.post("/api/debug/simulate-webhook", { phone, text }, { timeout: 15000 });
       return response.data;

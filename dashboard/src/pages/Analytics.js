@@ -265,14 +265,14 @@ const Analytics = () => {
           icon={GlobeAltIcon}
           title="Total clients (all time)"
           value={(overview.lifetime_unique_users ?? 0).toLocaleString()}
-          subtitle={`Unique users ever recorded in analytics · إجمالي العملاء الفريدين (كل السجلات)`}
+          subtitle="Unique users ever recorded in analytics (all-time)"
           color="from-green-500 to-emerald-500"
         />
         <StatCard
           icon={ArrowPathIcon}
           title="Pause → Available"
           value={(pauseCleared.unique_users ?? 0).toLocaleString()}
-          subtitle={`${pauseCleared.total ?? 0} resumes in range · زبائن صار عندهم موعد من موقوف لمتاح (الفترة المختارة)`}
+          subtitle={`${pauseCleared.total ?? 0} resume events in selected range (Paused → Available)`}
           color="from-teal-500 to-cyan-500"
         />
         <StatCard
@@ -288,25 +288,25 @@ const Analytics = () => {
 
       {/* Pause → Available: who resumed (detail table) */}
       <ChartCard
-        title="موقوف → متاح — الزبائن"
-        subtitle="آخر الأحداث ضمن الفترة · التقييم = آخر تقييم نجوم مسجّل لنفس المستخدم في الفترة"
+        title="Paused → Available — customers"
+        subtitle="Recent events in range · Rating = latest star rating logged for that user in range"
         icon={ArrowPathIcon}
       >
         {(pauseCleared.recent || []).length === 0 ? (
           <p className="text-sm text-slate-500">
-            لا يوجد صفوف في هذه الفترة. No pause→available rows in this range.
+            No pause→available rows in this range.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-slate-600">
-                  <th className="px-3 py-2 font-medium">الوقت / When</th>
-                  <th className="px-3 py-2 font-medium">الهاتف</th>
+                  <th className="px-3 py-2 font-medium">When</th>
+                  <th className="px-3 py-2 font-medium">Phone</th>
                   <th className="px-3 py-2 font-medium">User</th>
                   <th className="px-3 py-2 font-medium">Appt</th>
-                  <th className="px-3 py-2 font-medium">الخدمة</th>
-                  <th className="px-3 py-2 font-medium">التقييم ★</th>
+                  <th className="px-3 py-2 font-medium">Service</th>
+                  <th className="px-3 py-2 font-medium">Rating ★</th>
                   <th className="px-3 py-2 font-medium">Chat</th>
                 </tr>
               </thead>
@@ -352,26 +352,25 @@ const Analytics = () => {
 
       {/* Smart reminder — no classified reply */}
       <ChartCard
-        title="تذكير الموعد (24h) — ما ردّوا على الرسالة"
-        subtitle={`تذكير أُرسل ولم يُسجَّل ردّ مصنّف (نعم / تأجيل / إلغاء / منرجع منحكي) بعده · ${smartReminders.no_reply_to_reminder?.count ?? 0} إرسال · ${smartReminders.no_reply_to_reminder?.unique_users ?? 0} زبون فريد`}
+        title="24h reminder — no classified reply"
+        subtitle={`Reminder sent but no classified reply yet (yes / postpone / cancel / talk later) · ${smartReminders.no_reply_to_reminder?.count ?? 0} sends · ${smartReminders.no_reply_to_reminder?.unique_users ?? 0} unique users`}
         icon={BellAlertIcon}
       >
         {(smartReminders.no_response_recent || []).length === 0 ? (
           <p className="text-sm text-slate-500">
-            لا يوجد صفوف في هذه الفترة أو لا توجد أحداث تذكير مسجّلة بعد. No reminder sends without a
-            classified reply in this range.
+            No reminder sends without a classified reply in this range (or no reminder events logged yet).
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-slate-600">
-                  <th className="px-3 py-2 font-medium">أُرسل / Sent</th>
-                  <th className="px-3 py-2 font-medium">موعد / Appt time</th>
-                  <th className="px-3 py-2 font-medium">الهاتف</th>
+                  <th className="px-3 py-2 font-medium">Sent</th>
+                  <th className="px-3 py-2 font-medium">Appt time</th>
+                  <th className="px-3 py-2 font-medium">Phone</th>
                   <th className="px-3 py-2 font-medium">User</th>
                   <th className="px-3 py-2 font-medium">Appt ID</th>
-                  <th className="px-3 py-2 font-medium">التقييم ★</th>
+                  <th className="px-3 py-2 font-medium">Rating ★</th>
                   <th className="px-3 py-2 font-medium">Chat</th>
                 </tr>
               </thead>
@@ -417,25 +416,25 @@ const Analytics = () => {
 
       {/* Smart reminder — classified replies */}
       <ChartCard
-        title="ردود على تذكير الموعد (تصنيف تلقائي)"
-        subtitle={`إجمالي الردود المصنّفة: ${smartReminders.replies_total ?? 0} · ${Object.entries(smartReminders.reply_intents || {}).map(([k, v]) => `${k}=${v}`).join(" · ") || "—"}`}
+        title="Reminder replies (auto-classified)"
+        subtitle={`Total classified replies: ${smartReminders.replies_total ?? 0} · ${Object.entries(smartReminders.reply_intents || {}).map(([k, v]) => `${k}=${v}`).join(" · ") || "—"}`}
         icon={ChatBubbleLeftRightIcon}
       >
         {(smartReminders.reminder_replies_recent || []).length === 0 ? (
           <p className="text-sm text-slate-500">
-            لا يوجد ردود مصنّفة في هذه الفترة. No classified reminder replies in this range.
+            No classified reminder replies in this range.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-slate-600">
-                  <th className="px-3 py-2 font-medium">الوقت</th>
-                  <th className="px-3 py-2 font-medium">النية / Intent</th>
-                  <th className="px-3 py-2 font-medium">الهاتف</th>
+                  <th className="px-3 py-2 font-medium">When</th>
+                  <th className="px-3 py-2 font-medium">Intent</th>
+                  <th className="px-3 py-2 font-medium">Phone</th>
                   <th className="px-3 py-2 font-medium">User</th>
                   <th className="px-3 py-2 font-medium">Appt</th>
-                  <th className="px-3 py-2 font-medium">التقييم ★</th>
+                  <th className="px-3 py-2 font-medium">Rating ★</th>
                   <th className="px-3 py-2 font-medium">Chat</th>
                 </tr>
               </thead>
@@ -449,19 +448,19 @@ const Analytics = () => {
                   } catch {
                     whenLabel = row.at || "—";
                   }
-                  const intentAr = {
-                    confirm: "تأكيد / Yes",
-                    postpone: "تأجيل / Postpone",
-                    cancel: "إلغاء / Cancel",
-                    defer: "منرجع منحكي / Later",
-                    other: "أخرى",
+                  const intentLabel = {
+                    confirm: "Confirm",
+                    postpone: "Postpone",
+                    cancel: "Cancel",
+                    defer: "Talk later",
+                    other: "Other",
                   };
                   const stars = row.last_session_rating_stars;
                   return (
                     <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{whenLabel}</td>
                       <td className="px-3 py-2 font-medium text-rose-700">
-                        {intentAr[row.intent] || row.intent || "—"}
+                        {intentLabel[row.intent] || row.intent || "—"}
                       </td>
                       <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
                       <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
@@ -488,25 +487,25 @@ const Analytics = () => {
 
       {/* CRM reschedule (update_appointment_date) */}
       <ChartCard
-        title="تأجيل موعد (النظام — أداة التعديل)"
-        subtitle={`آخر إعادة جدولة مسجّلة ضمن الفترة · إجمالي أحداث: ${appointmentReschedulesDetail.total ?? 0}`}
+        title="CRM reschedule (update appointment)"
+        subtitle={`Latest reschedules logged in range · Total events: ${appointmentReschedulesDetail.total ?? 0}`}
         icon={CalendarIcon}
       >
         {(appointmentReschedulesDetail.recent || []).length === 0 ? (
           <p className="text-sm text-slate-500">
-            لا يوجد صفوف في هذه الفترة. No CRM reschedule events in this range.
+            No CRM reschedule events in this range.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-slate-600">
-                  <th className="px-3 py-2 font-medium">الوقت</th>
-                  <th className="px-3 py-2 font-medium">الهاتف</th>
+                  <th className="px-3 py-2 font-medium">When</th>
+                  <th className="px-3 py-2 font-medium">Phone</th>
                   <th className="px-3 py-2 font-medium">User</th>
                   <th className="px-3 py-2 font-medium">Appt</th>
-                  <th className="px-3 py-2 font-medium">الخدمة</th>
-                  <th className="px-3 py-2 font-medium">التقييم ★</th>
+                  <th className="px-3 py-2 font-medium">Service</th>
+                  <th className="px-3 py-2 font-medium">Rating ★</th>
                   <th className="px-3 py-2 font-medium">Chat</th>
                 </tr>
               </thead>
@@ -824,7 +823,7 @@ const Analytics = () => {
                       <p className="font-semibold text-slate-900">{label}</p>
                       {peakHoursPeriodLabel ? (
                         <p className="text-xs text-slate-600 mt-1 leading-snug">
-                          <span className="font-medium text-slate-700">Period / الفترة: </span>
+                          <span className="font-medium text-slate-700">Period: </span>
                           {peakHoursPeriodLabel}
                         </p>
                       ) : null}
@@ -1114,7 +1113,7 @@ const Analytics = () => {
                       Human handover
                     </span>
                     <span className="text-[11px] text-violet-700">
-                      Unique users transferred to staff · مستخدمين انحوّلوا لموظف
+                      Unique users transferred to staff
                     </span>
                   </div>
                 </div>

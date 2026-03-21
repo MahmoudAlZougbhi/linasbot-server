@@ -71,9 +71,9 @@ const Testing = () => {
   const [imageUrl, setImageUrl] = useState(
     "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400"
   );
-  const [imageCaption, setImageCaption] = useState("هذا تاتو أريد إزالته");
+  const [imageCaption, setImageCaption] = useState("This is a tattoo I want removed");
   const [voiceText, setVoiceText] = useState(
-    "مرحبا، أريد أعرف أسعار إزالة الشعر بالليزر للوجه"
+    "Hello, I want to know laser hair removal prices for the face"
   );
   const [resultsView, setResultsView] = useState("chat");
   const [chatSessions, setChatSessions] = useState(
@@ -220,7 +220,7 @@ const Testing = () => {
   ];
 
   const sampleTexts = {
-    ar: "مرحبا، أريد معلومات عن إزالة الشعر بالليزر",
+    ar: "Hello, I need information about laser hair removal",
     en: "Hello, I need information about laser hair removal",
     fr: "Bonjour, j'ai besoin d'informations sur l'épilation au laser",
     franco: "Marhaba, bade ma3loumat 3an laser hair removal",
@@ -1811,8 +1811,8 @@ const APITestingPanel = () => {
         method: "POST",
         endpoint: "/agent/qa/create",
         body: {
-          question_ar: "سؤال تجريبي؟",
-          answer_ar: "جواب تجريبي",
+          question_ar: "Sample question (AR)?",
+          answer_ar: "Sample answer (AR)",
           category: "general",
         },
         requiresAuth: true,
@@ -1822,7 +1822,7 @@ const APITestingPanel = () => {
         name: "Update Q&A Entry",
         method: "POST",
         endpoint: "/agent/qa/update",
-        body: { qa_id: 101, answer_ar: "جواب محدث" },
+        body: { qa_id: 101, answer_ar: "Updated sample answer (AR)" },
         requiresAuth: true,
       },
       {
@@ -1856,7 +1856,7 @@ const APITestingPanel = () => {
         name: "Update Knowledge Base",
         method: "POST",
         endpoint: "/agent/content/knowledge-base/update",
-        body: { content_ar: "محتوى محدث", content_en: "Updated content" },
+        body: { content_ar: "Updated content (AR)", content_en: "Updated content" },
         requiresAuth: true,
       },
       {

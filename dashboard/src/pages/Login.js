@@ -272,7 +272,7 @@ const Login = () => {
             <p className="text-xs text-blue-800 font-medium mb-1">Default credentials:</p>
             <p className="text-xs text-blue-700">Email: admin@lina.com</p>
             <p className="text-xs text-blue-700">Password: admin123</p>
-            <p className="text-xs text-blue-600 mt-1">(تتولد تلقائياً عند أول تشغيل للـ backend)</p>
+            <p className="text-xs text-blue-600 mt-1">(Created automatically on first backend startup)</p>
           </motion.div>
         </motion.div>
 
