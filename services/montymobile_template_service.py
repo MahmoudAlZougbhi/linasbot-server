@@ -139,48 +139,51 @@ class MontyMobileTemplateService:
             language = 'ar'
         
         template_lang = template['languages'][language]
-        
-        # Build parameters array in correct order
-        param_values = []
-        if parameters:
-            for param_name in template_lang['parameters']:
-                value = parameters.get(param_name, "")
-                param_values.append({"type": "text", "text": str(value)})
-        
-        # Build payload according to MontyMobile API spec
-        # Try using wa_message_id if name doesn't work
-        template_identifier = template.get('wa_message_id') or template['name']
-        
+
+        # Body variables: must match Meta template exactly (count + order).
+        # Do not gate on `if parameters:` — {} is falsy and would skip the whole body (HTTP 500:
+        # "Number of body variables is invalid"). Use dict lookup with "" for missing keys.
+        param_specs = template_lang.get("parameters") or []
+        lookup = parameters if isinstance(parameters, dict) else {}
+        param_values = [
+            {"type": "text", "text": str(lookup.get(param_name, ""))}
+            for param_name in param_specs
+        ]
+
         payload = {
             "to": phone_number,
             "type": "template",
             "source": self.api_config['source'],
             "template": {
-                "name": template['name'],  # Use template name
-                "language": {
-                    "code": language
-                },
-                "components": []
+                "name": template['name'],
+                "language": {"code": language},
+                "components": [],
             },
-            "apiId": self.api_config['api_id']
+            "apiId": self.api_config["api_id"],
         }
-        
+
         print(f"   Template Name: {template['name']}")
         print(f"   Template WA ID: {template.get('wa_message_id', 'N/A')}")
-        
-        # Add header component (required by MontyMobile even if empty)
-        payload['template']['components'].append({
-            "type": "header",
-            "parameters": []
-        })
-        
-        # Add body parameters if any
-        if param_values:
-            payload['template']['components'].append({
-                "type": "body",
-                "parameters": param_values
-            })
-        
+
+        # Only send a header component when this template has header variables in config.
+        # An empty header block breaks WhatsApp validation for body-only utility templates.
+        header_param_names = template.get("header_parameters")
+        if isinstance(header_param_names, list) and header_param_names:
+            hdr_vals = [
+                {"type": "text", "text": str(lookup.get(hp, ""))}
+                for hp in header_param_names
+                if isinstance(hp, str)
+            ]
+            if hdr_vals:
+                payload["template"]["components"].append(
+                    {"type": "header", "parameters": hdr_vals}
+                )
+
+        if param_specs:
+            payload["template"]["components"].append(
+                {"type": "body", "parameters": param_values}
+            )
+
         return payload
     
     async def send_template_message(
