@@ -133,8 +133,51 @@ class MessagePreviewService:
             return dict(defaults)
         return {**defaults, **stored}
 
+    def _template_header_sidecar_path(self) -> str:
+        return os.path.join(os.path.dirname(self.app_settings_file), "template_header_image_url.txt")
+
+    def _read_template_header_sidecar(self) -> str:
+        path = self._template_header_sidecar_path()
+        if not os.path.isfile(path):
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = (line or "").strip()
+                    if line and not line.startswith("#"):
+                        return line
+        except Exception as ex:
+            print(f"⚠️ Could not read template_header_image_url.txt: {ex}")
+        return ""
+
+    def _write_template_header_sidecar(self, url: str) -> None:
+        path = self._template_header_sidecar_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            u = str(url or "").strip()
+            if not u:
+                if os.path.isfile(path):
+                    os.remove(path)
+                return
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(u + "\n")
+        except Exception as ex:
+            print(f"⚠️ Could not write template_header_image_url.txt: {ex}")
+
     def get_template_header_image_url(self) -> str:
-        """Public HTTPS image URL for WhatsApp template headers (any stored key)."""
+        """
+        Public HTTPS image URL for WhatsApp template headers.
+        Order: env → sidecar txt next to app_settings → merged smartMessaging keys → raw JSON case-insensitive.
+        """
+        for envk in ("MONTY_TEMPLATE_HEADER_IMAGE_URL", "WHATSAPP_TEMPLATE_HEADER_IMAGE_URL"):
+            v = os.getenv(envk, "").strip()
+            if v:
+                return v
+
+        sc = self._read_template_header_sidecar()
+        if sc:
+            return sc
+
         sm = self.get_settings() or {}
         for key in (
             "templateHeaderImageUrl",
@@ -147,6 +190,19 @@ class MessagePreviewService:
             s = str(raw).strip()
             if s:
                 return s
+
+        raw_root = self._load_app_settings()
+        rsm = raw_root.get("smartMessaging")
+        if isinstance(rsm, dict):
+            by_lower = {str(k).lower(): v for k, v in rsm.items()}
+            for cand in (
+                "templateheaderimageurl",
+                "template_header_image_url",
+                "header_image_url",
+            ):
+                val = by_lower.get(cand)
+                if val is not None and str(val).strip():
+                    return str(val).strip()
         return ""
 
     def update_settings(self, new_settings: Dict) -> Dict:
@@ -166,6 +222,9 @@ class MessagePreviewService:
             settings['smartMessaging'] = {}
         settings['smartMessaging'].update(patch)
         if self._save_app_settings(settings):
+            self._write_template_header_sidecar(
+                (settings.get("smartMessaging") or {}).get("templateHeaderImageUrl") or ""
+            )
             return {'success': True, 'settings': settings['smartMessaging']}
         return {'success': False, 'error': 'Failed to save settings'}
 

@@ -110,11 +110,10 @@ class MontyMobileTemplateService:
             or str(lookup.get("header_image") or lookup.get("image_url") or "").strip()
         )
         if not image_link:
-            image_link = os.getenv("MONTY_TEMPLATE_HEADER_IMAGE_URL", "").strip()
-        if not image_link:
             try:
                 from services.message_preview_service import message_preview_service
 
+                # Includes env MONTY_/WHATSAPP_*, sidecar template_header_image_url.txt, dashboard JSON
                 image_link = message_preview_service.get_template_header_image_url()
             except Exception as ex:
                 print(f"⚠️ Monty template header: could not read dashboard settings: {ex}")
@@ -330,10 +329,11 @@ class MontyMobileTemplateService:
                 return {
                     "success": False,
                     "error": (
-                        "WhatsApp template requires a HEADER (image). No header image URL is configured. "
-                        "Dashboard → Smart Messaging → set \"Template header image URL\" (HTTPS, publicly reachable) "
-                        "to the same image approved in Meta for these templates, then Save. "
-                        "Or set server env MONTY_TEMPLATE_HEADER_IMAGE_URL."
+                        "WhatsApp template requires a HEADER (image). No header image URL was found. "
+                        "Do one of: (1) Dashboard → Smart Messaging → \"Template header image URL\" → Save; "
+                        "(2) server env MONTY_TEMPLATE_HEADER_IMAGE_URL or WHATSAPP_TEMPLATE_HEADER_IMAGE_URL; "
+                        "(3) file settings/template_header_image_url.txt next to app_settings.json (one HTTPS URL per line); "
+                        "(4) config/montymobile_templates.json → api_config.default_header_component.image_link."
                     ),
                 }
 
