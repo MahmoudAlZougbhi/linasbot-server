@@ -64,6 +64,17 @@ def _compute_cost_from_usage(model: str, prompt_tokens: int, completion_tokens: 
     return {"input_cost_usd": round(input_cost, 6), "output_cost_usd": round(output_cost, 6), "cost_usd": round(input_cost + output_cost, 6)}
 
 
+def _clinic_holiday_calendar_block(user_id: str, current_local_time: datetime.datetime) -> str:
+    """Inject branch holiday / closure rules from dashboard Settings into the system prompt."""
+    try:
+        from services.clinic_holidays_service import build_clinic_holiday_block_for_prompt
+
+        return build_clinic_holiday_block_for_prompt(user_id, current_local_time)
+    except Exception as e:
+        print(f"WARNING: clinic holiday block: {e}")
+        return ""
+
+
 def _normalize_arabic_reply(text: str) -> str:
     """Replace Latin brand/assistant names with Arabic when reply is in Arabic (no mixing)."""
     if not text or not isinstance(text, str):
@@ -2759,6 +2770,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"- **Awaiting human handover confirmation**: {config.user_data_whatsapp.get(user_id, {}).get('awaiting_human_handover_confirmation', False)} - If True, user is replying to your transfer confirmation question. Interpret yes/no accordingly.\n"
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
         f"**📅 CALENDAR ANCHOR (do not guess today/tomorrow; use this):** {format_clinic_calendar_anchor(current_local_time)}\n"
+        f"{_clinic_holiday_calendar_block(user_id, current_local_time)}"
         f"{customer_file_summary}"
     )
 

@@ -27,6 +27,10 @@ class SettingsService:
             try:
                 with open(self.settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
+                if "clinic" not in settings or not isinstance(settings.get("clinic"), dict):
+                    settings["clinic"] = {"branchHolidays": []}
+                elif not isinstance(settings["clinic"].get("branchHolidays"), list):
+                    settings["clinic"]["branchHolidays"] = []
                 print(f"✅ Loaded settings from {self.settings_file}")
                 return settings
             except Exception as e:
@@ -56,7 +60,10 @@ class SettingsService:
             },
             "security": {
                 "sessionTimeout": 24
-            }
+            },
+            "clinic": {
+                "branchHolidays": []
+            },
         }
     
     def _save_settings(self, settings: Dict[str, Any]) -> bool:
@@ -76,7 +83,12 @@ class SettingsService:
     
     def get_all_settings(self) -> Dict[str, Any]:
         """Get all settings"""
-        return self.settings
+        out = dict(self.settings)
+        if "clinic" not in out or not isinstance(out.get("clinic"), dict):
+            out["clinic"] = {"branchHolidays": []}
+        elif not isinstance(out["clinic"].get("branchHolidays"), list):
+            out["clinic"]["branchHolidays"] = []
+        return out
     
     def get_setting(self, category: str, key: str, default=None) -> Any:
         """

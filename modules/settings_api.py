@@ -38,7 +38,7 @@ async def update_settings(category: str, updates: Dict[str, Any]):
     """
     try:
         # Validate category
-        valid_categories = ['general', 'notifications', 'security']
+        valid_categories = ['general', 'notifications', 'security', 'clinic']
         if category not in valid_categories:
             return {
                 "success": False,

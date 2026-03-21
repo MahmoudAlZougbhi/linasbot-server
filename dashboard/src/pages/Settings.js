@@ -13,6 +13,7 @@ import {
   EyeIcon,
   EyeSlashIcon,
   UsersIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,6 +43,8 @@ const Settings = () => {
     emailAlerts: true,
     humanTakeoverNotifyMobiles: '',
   });
+  /** Branch holidays / closures for AI (pause booking + greetings) — saved under settings.clinic */
+  const [branchHolidays, setBranchHolidays] = useState([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // Load settings from API on mount and when page is shown/refreshed
@@ -65,6 +68,8 @@ const Settings = () => {
             emailAlerts: notifications.emailAlerts ?? true,
             humanTakeoverNotifyMobiles: notifications.humanTakeoverNotifyMobiles ?? '',
           });
+          const clinic = s.clinic || {};
+          setBranchHolidays(Array.isArray(clinic.branchHolidays) ? clinic.branchHolidays : []);
         }
       } catch (e) {
         console.error('Error loading settings:', e);
@@ -84,6 +89,7 @@ const Settings = () => {
     { id: 'api', name: 'API Keys', icon: KeyIcon, color: 'from-green-500 to-emerald-500' },
     { id: 'languages', name: 'Languages', icon: GlobeAltIcon, color: 'from-purple-500 to-pink-500' },
     { id: 'notifications', name: 'Notifications', icon: BellIcon, color: 'from-orange-500 to-red-500' },
+    { id: 'clinic', name: 'Clinic calendar', icon: CalendarDaysIcon, color: 'from-teal-500 to-cyan-500' },
     // Users tab only visible to users with userManagement permission
     ...(canManageUsers ? [{ id: 'users', name: 'Users', icon: UsersIcon, color: 'from-indigo-500 to-violet-500' }] : []),
   ];
@@ -151,6 +157,57 @@ const Settings = () => {
       console.error('Error saving notification settings:', error);
       toast.error('Failed to save notification settings');
     }
+  };
+
+  const handleSaveClinicCalendar = async () => {
+    try {
+      const normalized = branchHolidays.map((row) => {
+        let bid = row.branchId;
+        if (bid === '' || bid === null || bid === undefined) bid = null;
+        else bid = parseInt(bid, 10);
+        const start = (row.startDate || '').trim();
+        const end = (row.endDate || '').trim() || start;
+        return {
+          branchId: Number.isNaN(bid) ? null : bid,
+          startDate: start,
+          endDate: end,
+          labelAr: (row.labelAr || '').trim(),
+          labelEn: (row.labelEn || '').trim(),
+          greetingAr: (row.greetingAr || '').trim(),
+          greetingEn: (row.greetingEn || '').trim(),
+          blockBooking: row.blockBooking !== false,
+        };
+      });
+      const response = await fetch('/api/settings/clinic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branchHolidays: normalized }),
+      });
+      if (response.ok) {
+        toast.success('Clinic calendar saved — AI will use these holidays.');
+      } else {
+        toast.error('Failed to save clinic calendar');
+      }
+    } catch (error) {
+      console.error('Error saving clinic calendar:', error);
+      toast.error('Failed to save clinic calendar');
+    }
+  };
+
+  const addHolidayRow = () => {
+    setBranchHolidays((prev) => [
+      ...prev,
+      {
+        branchId: '',
+        startDate: '',
+        endDate: '',
+        labelAr: '',
+        labelEn: '',
+        greetingAr: '',
+        greetingEn: '',
+        blockBooking: true,
+      },
+    ]);
   };
 
   const handleTestAPI = (apiName) => {
@@ -630,6 +687,160 @@ const Settings = () => {
                     <li>Language detection is automatic based on input</li>
                   </ul>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'clinic' && (
+          <div className="card">
+            <h2 className="text-xl font-bold text-slate-800 font-display mb-2 flex items-center">
+              <CalendarDaysIcon className="w-6 h-6 mr-2 text-teal-600" />
+              Clinic calendar — holidays & closures
+            </h2>
+            <p className="text-sm text-slate-600 mb-6 max-w-3xl leading-relaxed">
+              عطلات وأيام إغلاق لكل فرع (أو لكل الفروع). الذكاء الاصطناعي يقرأها في كل محادثة: إذا طلب الزبون موعدًا في يوم معطّل، لا يؤكد الحجز لذلك اليوم،
+              ويشرح بلطف ويستخدم تهنئة المناسبة (رأس السنة، الأعياد…). English: The AI gets this list in its system prompt — use{' '}
+              <strong>block booking</strong> when the branch is fully closed for that date range.
+            </p>
+
+            <div className="space-y-4">
+              {branchHolidays.length === 0 && (
+                <p className="text-sm text-slate-500 italic">No rows yet — add one for New Year, Eid, etc.</p>
+              )}
+              {branchHolidays.map((row, idx) => (
+                <div key={idx} className="glass rounded-xl p-4 border border-teal-100 space-y-3">
+                  <div className="flex flex-wrap gap-3 items-end">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Branch</label>
+                      <select
+                        className="input-field text-sm"
+                        value={row.branchId === null || row.branchId === undefined ? '' : String(row.branchId)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], branchId: v === '' ? '' : v };
+                          setBranchHolidays(next);
+                        }}
+                      >
+                        <option value="">All branches / كل الفروع</option>
+                        <option value="1">Branch 1 (Beirut — CRM id 1)</option>
+                        <option value="2">Branch 2 (Antelias — CRM id 2)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Start date</label>
+                      <input
+                        type="date"
+                        className="input-field text-sm"
+                        value={row.startDate || ''}
+                        onChange={(e) => {
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], startDate: e.target.value };
+                          setBranchHolidays(next);
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">End date (optional)</label>
+                      <input
+                        type="date"
+                        className="input-field text-sm"
+                        value={row.endDate || ''}
+                        onChange={(e) => {
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], endDate: e.target.value };
+                          setBranchHolidays(next);
+                        }}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={row.blockBooking !== false}
+                        onChange={(e) => {
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], blockBooking: e.target.checked };
+                          setBranchHolidays(next);
+                        }}
+                      />
+                      Block booking / لا حجز
+                    </label>
+                    <button
+                      type="button"
+                      className="text-sm text-red-600 hover:underline ml-auto"
+                      onClick={() => setBranchHolidays((prev) => prev.filter((_, i) => i !== idx))}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Label (AR)</label>
+                      <input
+                        className="input-field text-sm w-full"
+                        dir="rtl"
+                        placeholder="مثال: عيد الأضحى"
+                        value={row.labelAr || ''}
+                        onChange={(e) => {
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], labelAr: e.target.value };
+                          setBranchHolidays(next);
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Label (EN)</label>
+                      <input
+                        className="input-field text-sm w-full"
+                        placeholder="e.g. Eid al-Adha"
+                        value={row.labelEn || ''}
+                        onChange={(e) => {
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], labelEn: e.target.value };
+                          setBranchHolidays(next);
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Greeting (AR) — تهنئة قصيرة</label>
+                      <input
+                        className="input-field text-sm w-full"
+                        dir="rtl"
+                        placeholder="عيد مبارك وكل عام وأنتم بخير"
+                        value={row.greetingAr || ''}
+                        onChange={(e) => {
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], greetingAr: e.target.value };
+                          setBranchHolidays(next);
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Greeting (EN)</label>
+                      <input
+                        className="input-field text-sm w-full"
+                        placeholder="Eid Mubarak!"
+                        value={row.greetingEn || ''}
+                        onChange={(e) => {
+                          const next = [...branchHolidays];
+                          next[idx] = { ...next[idx], greetingEn: e.target.value };
+                          setBranchHolidays(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={addHolidayRow} className="btn-ghost text-sm px-4 py-2 border border-teal-200">
+                  + Add holiday / إضافة يوم
+                </button>
+                <button type="button" onClick={handleSaveClinicCalendar} className="btn-primary text-sm px-6 py-2">
+                  <CheckCircleIcon className="w-4 h-4 inline mr-2" />
+                  Save clinic calendar
+                </button>
               </div>
             </div>
           </div>
