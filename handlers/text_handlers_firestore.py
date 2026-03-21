@@ -21,6 +21,7 @@ from utils.utils import (
     get_conversation_history_from_firestore,
     get_conversation_last_ai_response_at,
     get_last_bot_message_from_conversation,
+    get_last_bot_message_for_gpt_context,
     get_canonical_user_id_and_phone,
 )
 from services.gender_recognition_service import get_gender_from_gpt
@@ -41,7 +42,8 @@ __all__ = [
     'save_for_training_conversation_log', 'get_system_instruction',
     'save_conversation_message_to_firestore', 'update_dashboard_metric_in_firestore',
     'set_human_takeover_status', 'get_firestore_db', 'get_conversation_history_from_firestore',
-    'get_conversation_last_ai_response_at', 'get_last_bot_message_from_conversation', 'get_canonical_user_id_and_phone',
+    'get_conversation_last_ai_response_at', 'get_last_bot_message_from_conversation',
+    'get_last_bot_message_for_gpt_context', 'get_canonical_user_id_and_phone',
     'get_gender_from_gpt', 'get_bot_chat_response', 'log_report_event',
     'check_customer_gender', 'get_customer_by_phone', 'create_customer',
     'sentiment_service', 'get_qa_response', 'local_qa_service', 'user_persistence',

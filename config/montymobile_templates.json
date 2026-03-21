@@ -129,12 +129,16 @@
     "source": "96178974402",
     "api_id": "9db12f0d-3c27-4d9c-b9fd-0227aebfd81d",
     "tenant": "98df9ffe-fa84-41ee-9293-33614722d952",
-    "api_key": "f5a24c81de876f85f0d6e80e04228deab8f21f5c36e7456579614d2f8d6e5ba0"
+    "api_key": "f5a24c81de876f85f0d6e80e04228deab8f21f5c36e7456579614d2f8d6e5ba0",
+    "default_header_component": {
+      "image_link": ""
+    }
   },
   "notes": {
     "status": "All templates are APPROVED by WhatsApp",
     "languages_available": ["ar"],
     "languages_missing": ["en", "fr"],
-    "next_steps": ["Add English and French versions", "Test all templates"]
+    "next_steps": ["Add English and French versions", "Test all templates"],
+    "template_image_header": "If Meta templates include an IMAGE header, set api_config.default_header_component.image_link (public HTTPS URL) or env MONTY_TEMPLATE_HEADER_IMAGE_URL. Per-template: {\"header\":{\"format\":\"image\",\"image_link\":\"https://...\"}}. Body-only templates: {\"header\":{\"format\":\"none\"}}."
   }
 }

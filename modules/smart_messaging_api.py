@@ -430,7 +430,32 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 "template_language": language,
                 "language_source": language_source,
             }
-        
+
+        if isinstance(result, dict) and result.get("success"):
+            try:
+                from utils.utils import save_conversation_message_to_firestore
+
+                _summary = (
+                    f"Template «{template_id}» (test send, lang {language}). "
+                    f"Parameters: {test_parameters}"
+                )
+                await save_conversation_message_to_firestore(
+                    user_id=phone_number,
+                    role="ai",
+                    text=_summary,
+                    conversation_id=None,
+                    user_name="Customer",
+                    phone_number=phone_number,
+                    metadata={
+                        "source": "smart_message",
+                        "type": template_id,
+                        "monty_message_id": result.get("message_id"),
+                        "template_language": language,
+                    },
+                )
+            except Exception as _fs_err:
+                print(f"⚠️ Test template: could not log to Firestore: {_fs_err}")
+
         return result
         
     except Exception as e:

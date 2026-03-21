@@ -1367,7 +1367,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 alternate_user_id=canonical_user_id,
             )
             last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
-            last_bot_msg = await get_last_bot_message_from_conversation(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
+            last_bot_msg = await get_last_bot_message_for_gpt_context(
+                user_id, current_conversation_id, canonical_user_id
+            )
 
             if last_bot_msg and query_to_send_to_gpt:
                 try:

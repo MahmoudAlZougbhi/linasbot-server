@@ -6,7 +6,7 @@ import uuid
 import datetime
 import logging
 import asyncio
-from typing import Any
+from typing import Any, Optional
 from difflib import SequenceMatcher
 
 import config
@@ -530,6 +530,98 @@ async def _propagate_takeover_state_to_sibling_conversation_docs(
         _invalidate_live_chat_cache()
 
 
+async def _resolve_latest_conversation_id(conversations_collection_for_user) -> Optional[str]:
+    """
+    Prefer the conversation with the newest last_updated. Uses an ordered query when possible;
+    if that fails (missing index, etc.), falls back to a full collection scan.
+    """
+    try:
+        query = conversations_collection_for_user.order_by(
+            "last_updated", direction=firestore.Query.DESCENDING
+        ).limit(1)
+        docs = await asyncio.to_thread(lambda: list(query.stream()))
+        if docs:
+            return docs[0].id
+    except Exception as q_err:
+        print(f"⚠️ Could not query conversations by last_updated, scanning: {q_err}")
+
+    try:
+        docs = await asyncio.to_thread(lambda: list(conversations_collection_for_user.stream()))
+    except Exception as e2:
+        print(f"⚠️ Conversation collection stream failed: {e2}")
+        return None
+
+    if not docs:
+        return None
+
+    best_id = None
+    best_ts = None
+    for d in docs:
+        data = d.to_dict() or {}
+        raw = data.get("last_updated") or data.get("last_message_at") or data.get("timestamp")
+        ts = parse_timestamp_utc(raw, fallback=None) if raw is not None else None
+        if ts is None:
+            continue
+        if best_ts is None or ts > best_ts:
+            best_ts = ts
+            best_id = d.id
+
+    if best_id:
+        return best_id
+
+    return max(
+        docs,
+        key=lambda d: len((d.to_dict() or {}).get("messages") or []),
+    ).id
+
+
+async def _latest_smart_ai_across_conversations(
+    canonical_user_id: str, within_hours: float = 72
+) -> Optional[dict]:
+    """Newest ai message with metadata.source == smart_message across all threads for this user."""
+    db = get_firestore_db()
+    if not db or not canonical_user_id:
+        return None
+    app_id = "linas-ai-bot-backend"
+    coll = (
+        db.collection("artifacts")
+        .document(app_id)
+        .collection("users")
+        .document(canonical_user_id)
+        .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+    )
+    cutoff = utc_now() - datetime.timedelta(hours=within_hours)
+    best = None
+    best_ts = None
+    try:
+        docs = await asyncio.to_thread(lambda: list(coll.stream()))
+    except Exception as e:
+        print(f"⚠️ _latest_smart_ai_across_conversations: {e}")
+        return None
+
+    for doc in docs:
+        data = doc.to_dict() or {}
+        for msg in data.get("messages") or []:
+            if msg.get("role") != "ai":
+                continue
+            meta = msg.get("metadata") or {}
+            if meta.get("source") != "smart_message":
+                continue
+            ts = parse_timestamp_utc(msg.get("timestamp"), fallback=None)
+            if ts is None:
+                ts = utc_now()
+            if ts < cutoff:
+                continue
+            if best_ts is None or ts > best_ts:
+                best_ts = ts
+                best = {
+                    "text": msg.get("text", ""),
+                    "metadata": meta,
+                    "timestamp": msg.get("timestamp"),
+                }
+    return best
+
+
 async def save_conversation_message_to_firestore(user_id: str, role: str, text: str, conversation_id: str = None, user_name: str = None, phone_number: str = None, metadata: dict = None):
     """
     Saves a message (user or bot) to Firestore.
@@ -896,18 +988,18 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             else:
                 # Conversation not found - create new one
                 message_data = _build_message_data()
-                is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
 
                 _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
                     "user_id": canonical_user_id,
                     "customer_info": customer_info,
                     "messages": [message_data],
                     "timestamp": utc_now(),
-                    "status": "archived" if is_smart_source else "active",
+                    # Smart outbound must stay visible as an active bot thread in Live Chat (not "closed"/archived).
+                    "status": "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
                     "last_updated": utc_now(),
-                    "conversation_state": "archived" if is_smart_source else "bot_active",
+                    "conversation_state": "bot_active",
                     "last_message_text": message_data.get("text", ""),
                     "last_message_at": message_data.get("timestamp") or utc_now(),
                     "unread_count": 0 if role != "user" else 1,
@@ -936,17 +1028,11 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 except Exception:
                     pass
 
-            # 2) Query Firestore for latest conversation
+            # 2) Query Firestore for latest conversation (with scan fallback if order_by fails)
             if not resolved_conversation_id:
-                try:
-                    query = conversations_collection_for_user.order_by(
-                        "last_updated", direction=firestore.Query.DESCENDING
-                    ).limit(1)
-                    docs = await asyncio.to_thread(lambda: list(query.stream()))
-                    if docs:
-                        resolved_conversation_id = docs[0].id
-                except Exception as q_err:
-                    print(f"⚠️ Could not query existing conversations: {q_err}")
+                resolved_conversation_id = await _resolve_latest_conversation_id(
+                    conversations_collection_for_user
+                )
 
             message_data = _build_message_data()
             is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
@@ -1100,11 +1186,11 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     "customer_info": customer_info,
                     "messages": [message_data],
                     "timestamp": utc_now(),
-                    "status": "archived" if is_smart_source else "active",
+                    "status": "active",
                     "sentiment": "neutral",
                     "human_takeover_active": False,
                     "last_updated": utc_now(),
-                    "conversation_state": "archived" if is_smart_source else "bot_active",
+                    "conversation_state": "bot_active",
                     "last_message_text": message_data.get("text", ""),
                     "last_message_at": message_data.get("timestamp") or utc_now(),
                     "unread_count": 0 if role != "user" else 1,
@@ -1917,11 +2003,54 @@ async def get_last_bot_message_from_conversation(user_id: str, conversation_id: 
             for msg in reversed(messages):
                 role = msg.get("role", "")
                 if role in ("ai", "operator"):
-                    return {"text": msg.get("text", ""), "metadata": msg.get("metadata", {})}
+                    return {
+                        "text": msg.get("text", ""),
+                        "metadata": msg.get("metadata", {}),
+                        "timestamp": msg.get("timestamp"),
+                    }
             return None
         except Exception as e:
             print(f"⚠️ get_last_bot_message_from_conversation failed for {uid}: {e}")
     return None
+
+
+async def get_last_bot_message_for_gpt_context(
+    user_id: str,
+    conversation_id: Optional[str],
+    alternate_user_id: str = None,
+    within_hours: float = 72,
+) -> Optional[dict]:
+    """
+    Last outbound message for GPT operational context. If the smart message was saved on another
+    Firestore thread (identity/query mismatch), still surface it when it is newer than the current
+    thread's last bot message. When conversation_id is missing, still returns a recent smart_message
+    if any (e.g. new inbound right after restart before conv is resolved).
+    """
+    canonical = (alternate_user_id or "").strip() or user_id
+    smart = await _latest_smart_ai_across_conversations(canonical, within_hours=within_hours)
+    if not conversation_id:
+        return smart
+    cur = await get_last_bot_message_from_conversation(
+        user_id, conversation_id, alternate_user_id
+    )
+
+    def _ts(m: Optional[dict]):
+        if not m:
+            return None
+        return parse_timestamp_utc(m.get("timestamp"), fallback=None)
+
+    if smart and not cur:
+        return smart
+    if cur and not smart:
+        return cur
+    if not cur and not smart:
+        return None
+    st, ct = _ts(smart), _ts(cur)
+    if st and ct:
+        return smart if st > ct else cur
+    if st and not ct:
+        return smart
+    return cur
 
 
 async def save_user_name_to_firestore(user_id: str, name: str):

@@ -7,7 +7,7 @@ Handles sending WhatsApp template messages via MontyMobile API
 import httpx
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from services.smart_messaging_catalog import normalize_template_id
 
@@ -85,7 +85,73 @@ class MontyMobileTemplateService:
             "whatsapp_lead_no_booking": "missed_yesterday",
         }
         return self.templates.get(legacy_fallbacks.get(canonical, canonical))
-    
+
+    def _resolve_template_header_components(
+        self, template: Dict[str, Any], template_lang: Dict[str, Any], lookup: Dict[str, str]
+    ) -> List[Dict[str, Any]]:
+        """
+        WhatsApp / Monty require a header component when the approved template has a HEADER
+        (image, video, document, or variable text). Our JSON used to omit headers unless
+        `header_parameters` was set — Meta templates with an image header then fail with:
+        "Header component is required but missing in request".
+        """
+        out: List[Dict[str, Any]] = []
+        header_cfg = template.get("header")
+        if not isinstance(header_cfg, dict):
+            header_cfg = {}
+
+        fmt = str(header_cfg.get("format") or header_cfg.get("type") or "").strip().lower()
+        if fmt in ("none", "skip", "no", "false"):
+            return out
+
+        # 1) Explicit image header (per template or global default / env)
+        image_link = (
+            (header_cfg.get("image_link") or header_cfg.get("link") or "").strip()
+            or str(lookup.get("header_image") or lookup.get("image_url") or "").strip()
+        )
+        if not image_link:
+            image_link = os.getenv("MONTY_TEMPLATE_HEADER_IMAGE_URL", "").strip()
+        if not image_link:
+            default_h = (self.api_config or {}).get("default_header_component") or {}
+            if isinstance(default_h, dict):
+                image_link = str(
+                    default_h.get("image_link") or default_h.get("link") or ""
+                ).strip()
+
+        # IMAGE header: empty format + URL means "use default branded header for this template"
+        if fmt in ("", "image", "img", "picture"):
+            if image_link:
+                out.append(
+                    {
+                        "type": "header",
+                        "parameters": [
+                            {"type": "image", "image": {"link": image_link}}
+                        ],
+                    }
+                )
+                return out
+            if fmt in ("image", "img", "picture"):
+                print(
+                    f"⚠️ Template '{template.get('name')}' expects IMAGE header but no URL — set "
+                    f"template.header.image_link, MONTY_TEMPLATE_HEADER_IMAGE_URL, or "
+                    f"api_config.default_header_component.link"
+                )
+
+        # 2) Variable TEXT header (legacy list on template or per-language)
+        header_param_names = template.get("header_parameters")
+        if not isinstance(header_param_names, list):
+            header_param_names = template_lang.get("header_parameters") or []
+        if isinstance(header_param_names, list) and header_param_names:
+            hdr_vals = [
+                {"type": "text", "text": str(lookup.get(hp, ""))}
+                for hp in header_param_names
+                if isinstance(hp, str)
+            ]
+            if hdr_vals:
+                out.append({"type": "header", "parameters": hdr_vals})
+
+        return out
+
     def build_template_payload(
         self,
         template_id: str,
@@ -165,19 +231,10 @@ class MontyMobileTemplateService:
         print(f"   Template Name: {template['name']}")
         print(f"   Template WA ID: {template.get('wa_message_id', 'N/A')}")
 
-        # Only send a header component when this template has header variables in config.
-        # An empty header block breaks WhatsApp validation for body-only utility templates.
-        header_param_names = template.get("header_parameters")
-        if isinstance(header_param_names, list) and header_param_names:
-            hdr_vals = [
-                {"type": "text", "text": str(lookup.get(hp, ""))}
-                for hp in header_param_names
-                if isinstance(hp, str)
-            ]
-            if hdr_vals:
-                payload["template"]["components"].append(
-                    {"type": "header", "parameters": hdr_vals}
-                )
+        header_components = self._resolve_template_header_components(
+            template, template_lang, lookup
+        )
+        payload["template"]["components"].extend(header_components)
 
         if param_specs:
             payload["template"]["components"].append(
