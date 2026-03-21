@@ -118,9 +118,17 @@ class MontyMobileTemplateService:
     ) -> List[Dict[str, Any]]:
         """
         Build optional WhatsApp template header components. Skipped entirely when
-        api_config.templates_are_text_only is True (body-only / text-only templates).
+        api_config.templates_are_text_only is True (body-only / text-only templates),
+        unless api_config.send_empty_header_component is True — then we send
+        {"type": "header", "parameters": []} for Meta templates with a fixed header
+        and zero variable slots (Monty: "Header required" vs "0 parameters" mismatch).
         """
+        api_cfg = self.api_config or {}
+        send_empty = bool(api_cfg.get("send_empty_header_component", False))
+
         if self.templates_are_text_only():
+            if send_empty:
+                return [{"type": "header", "parameters": []}]
             return []
 
         out: List[Dict[str, Any]] = []
@@ -189,6 +197,8 @@ class MontyMobileTemplateService:
             if hdr_vals:
                 out.append({"type": "header", "parameters": hdr_vals})
 
+        if not out and send_empty:
+            return [{"type": "header", "parameters": []}]
         return out
 
     def _build_body_component_parameters(
@@ -311,7 +321,8 @@ class MontyMobileTemplateService:
         print(
             f"   Resolution: {self._describe_template_resolution(template_id, canonical_template_id)}; "
             f"config_key={self._resolve_template_config_key(canonical_template_id)!r}; "
-            f"text_only_mode={self.templates_are_text_only()}"
+            f"text_only_mode={self.templates_are_text_only()}; "
+            f"send_empty_header_component={bool((self.api_config or {}).get('send_empty_header_component', False))}"
         )
 
         header_components = self._resolve_template_header_components(
