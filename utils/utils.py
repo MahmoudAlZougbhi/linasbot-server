@@ -2645,6 +2645,41 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
+                "name": "sync_appointment_agreed_price",
+                "description": (
+                    "When you and the customer have **explicitly agreed** on a **final total price** for a specific appointment already in CRM "
+                    "(new booking just created, existing row, or after any change)—call this so the backend can align the system price. "
+                    "The server reads the current CRM total (or uses `system_total_known` if you pass it from the last booking response), "
+                    "and if the CRM price is **higher** than the agreed amount, it POSTs `appointments/discount/add` with the difference. "
+                    "Do not invent numbers: only use after the user clearly confirmed the price. "
+                    "If agreed price is higher than CRM, the tool will not increase CRM price—explain honestly."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "appointment_id": {
+                            "type": "integer",
+                            "description": "CRM appointment id (from booking/create response, check_next_appointment, or get_appointment_details).",
+                        },
+                        "agreed_price": {
+                            "type": "number",
+                            "description": "Final total price you and the customer agreed on (same currency as CRM).",
+                        },
+                        "system_total_known": {
+                            "type": "number",
+                            "description": (
+                                "Optional. Pass the CRM total from the **last** create/booking tool response if you have it, "
+                                "to avoid an extra lookup. Omit to fetch current price from get_appointment_details."
+                            ),
+                        },
+                    },
+                    "required": ["appointment_id", "agreed_price"],
+                },
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "pause_appointment",
                 "description": "FORBIDDEN as a way to «postpone» or reschedule: never call this to move an appointment to another day or to «تأجيل». It only sets status Paused with NO new datetime. Use ONLY when the customer explicitly asks to hold/suspend without picking a new date yet. If they want a new day (including lifting a paused slot onto a new date), use update_appointment_date—not another pause. If they have both paused and Available appointments, confirm which row first; do not pause the active one to «help».",
                 "parameters": {

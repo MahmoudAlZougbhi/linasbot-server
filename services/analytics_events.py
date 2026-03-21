@@ -876,6 +876,22 @@ class AnalyticsEvents:
                 "count": count,
                 "percentage": percentage
             })
+
+        # Bookings per service (appointment events with status "booked" only)
+        booked_by_service: Dict[str, int] = {}
+        for svc, status_map in stats["appointments"]["by_service"].items():
+            n = int(status_map.get("booked", 0))
+            if n:
+                booked_by_service[str(svc)] = n
+        total_booked_service_events = sum(booked_by_service.values())
+        most_booked_list = []
+        for service, count in sorted(booked_by_service.items(), key=lambda x: x[1], reverse=True):
+            pct = round((count / total_booked_service_events) * 100, 1) if total_booked_service_events > 0 else 0
+            most_booked_list.append({
+                "name": service,
+                "count": count,
+                "percentage": pct
+            })
         
         # Calculate averages
         avg_response_time = 0
@@ -909,7 +925,9 @@ class AnalyticsEvents:
             booked_details.append({
                 "user_id": user_id,
                 "user_id_masked": self._mask_user_id(user_id),
-                "services": sorted(discussed | booked)
+                "services": sorted(discussed | booked),
+                "discussed_services": sorted(discussed),
+                "booked_services": sorted(booked),
             })
 
         not_booked_details = []
@@ -927,7 +945,9 @@ class AnalyticsEvents:
             asked_not_booked_details.append({
                 "user_id": user_id,
                 "user_id_masked": self._mask_user_id(user_id),
-                "services": discussed
+                "services": discussed,
+                "discussed_services": discussed,
+                "booked_services": [],
             })
 
         # Services discussed today
@@ -970,6 +990,7 @@ class AnalyticsEvents:
             "sentiment_distribution": dict(stats["sentiment"]),
             "services": {
                 "most_requested": service_list[:10],
+                "most_booked": most_booked_list[:10],
                 "discussed_today": services_discussed_today
             },
             "appointments": {

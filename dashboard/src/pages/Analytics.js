@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ChartBarIcon,
@@ -112,17 +113,22 @@ const Analytics = () => {
     </motion.div>
   );
 
-  const ChartCard = ({ title, icon: Icon, children }) => (
+  const ChartCard = ({ title, icon: Icon, children, subtitle }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100"
     >
-      <div className="flex items-center space-x-3 mb-6">
-        <div className="p-2 rounded-lg bg-gradient-to-br from-primary-500 to-secondary-500">
+      <div className="flex items-start space-x-3 mb-6">
+        <div className="p-2 rounded-lg bg-gradient-to-br from-primary-500 to-secondary-500 shrink-0">
           <Icon className="w-5 h-5 text-white" />
         </div>
-        <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+        <div className="min-w-0">
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          {subtitle ? (
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">{subtitle}</p>
+          ) : null}
+        </div>
       </div>
       {children}
     </motion.div>
@@ -153,6 +159,45 @@ const Analytics = () => {
   const conversions = analyticsData?.conversions || {};
   const newClients = analyticsData?.new_clients || {};
   const servicesDiscussedToday = analyticsData?.services_discussed_today || {};
+  const bookedCount = newClients.booked_count ?? 0;
+  const notBookedCount = newClients.not_booked_count ?? 0;
+  const askedNotBookedCount =
+    conversions.new_clients_asked_not_booked ?? newClients.asked_not_booked_count ?? 0;
+  /** New clients with no booking who never got a logged "service_request" event (keyword match). */
+  const newClientsNoInquiryCount = Math.max(0, notBookedCount - askedNotBookedCount);
+
+  const timeRangeMeta = analyticsData?.time_range || {};
+  const peakHoursPeriodLabel = (() => {
+    const s = timeRangeMeta.start_date;
+    const e = timeRangeMeta.end_date;
+    if (!s || !e) return null;
+    try {
+      const ds = new Date(s);
+      const de = new Date(e);
+      const o = { day: "numeric", month: "short", year: "numeric" };
+      return `${ds.toLocaleDateString("en-GB", o)} – ${de.toLocaleDateString("en-GB", o)}`;
+    } catch {
+      return null;
+    }
+  })();
+  /** Full 24h series, chronological (fixes shuffled X axis from object key order). */
+  const peakHourlyData = (() => {
+    const h = hourly || {};
+    const rows = [];
+    for (let i = 0; i < 24; i++) {
+      const key = `${String(i).padStart(2, "0")}:00`;
+      rows.push({ hour: key, messages: Number(h[key] ?? 0) });
+    }
+    return rows;
+  })();
+
+  const sentimentRows = [
+    { name: "Positive", value: sentiment.positive || 0, color: COLORS.success },
+    { name: "Neutral", value: sentiment.neutral || 0, color: COLORS.warning },
+    { name: "Negative", value: sentiment.negative || 0, color: COLORS.danger },
+  ];
+  const sentimentTotal = sentimentRows.reduce((sum, r) => sum + r.value, 0);
+  const sentimentPieData = sentimentRows.filter((r) => r.value > 0);
 
   return (
     <div className="space-y-8 pb-8">
@@ -247,8 +292,8 @@ const Analytics = () => {
           <StatCard
             icon={UsersIcon}
             title="Asked But Did Not Book"
-            value={conversions.new_clients_asked_not_booked ?? newClients.asked_not_booked_count ?? 0}
-            subtitle="New clients who inquired but didn't book"
+            value={askedNotBookedCount}
+            subtitle="New clients with a logged service inquiry (keyword match) who didn’t book"
             color="from-amber-500 to-orange-500"
           />
           <StatCard
@@ -262,7 +307,7 @@ const Analytics = () => {
             icon={ChartBarIcon}
             title="Total New Clients"
             value={newClients.total_new_clients ?? 0}
-            subtitle={`${newClients.booked_count ?? 0} booked · ${newClients.not_booked_count ?? 0} not booked`}
+            subtitle={`${bookedCount} booked · ${notBookedCount} not booked · ${askedNotBookedCount} inquired (no booking) · ${newClientsNoInquiryCount} no service inquiry logged`}
             color="from-blue-500 to-cyan-500"
           />
         </div>
@@ -291,44 +336,136 @@ const Analytics = () => {
         {/* Who Booked vs Who Did Not (New Clients Only) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ChartCard title="Who Booked (New Clients)" icon={CalendarIcon}>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 max-h-80 overflow-y-auto">
               {(newClients.booked_details || []).length === 0 ? (
                 <p className="text-sm text-slate-500">No new client bookings in this period.</p>
               ) : (
-                (newClients.booked_details || []).map((item, index) => (
+                (newClients.booked_details || []).map((item, index) => {
+                  const searchQ =
+                    item.live_chat_search ||
+                    String(item.phone_display || item.user_id || "").replace(/\D/g, "") ||
+                    String(item.user_id || "");
+                  const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
+                  const rawName =
+                    item.customer_name && String(item.customer_name).trim()
+                      ? String(item.customer_name).trim()
+                      : "";
+                  const nameLine = rawName || "Name not on file";
+                  return (
                   <div
                     key={index}
-                    className="p-3 bg-green-50 rounded-lg border border-green-100"
+                    className="p-3 bg-green-50 rounded-lg border border-green-100 space-y-2"
                   >
-                    <p className="text-xs font-mono text-slate-600 mb-1">
-                      {item.user_id_masked ?? `...${String(item.user_id || "").slice(-4)}`}
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{nameLine}</p>
+                        <p className="text-xs text-slate-500">
+                          {rawName ? "Name on file" : "No name in CRM / profile yet"}
+                        </p>
+                      </div>
+                      <Link
+                        to={chatTo}
+                        className="shrink-0 inline-flex items-center rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white shadow hover:bg-emerald-700"
+                      >
+                        Open chat
+                      </Link>
+                    </div>
+                    <p className="text-sm font-mono text-slate-700 break-all">
+                      {item.phone_display ?? item.user_id ?? "—"}
                     </p>
-                    <p className="text-xs text-green-700">
-                      Services: {(item.services || []).join(", ").replace(/_/g, " ") || "—"}
-                    </p>
+                    {(item.discussed_services || []).length > 0 && (
+                      <p className="text-xs text-slate-600">
+                        <span className="font-medium text-slate-700">Discussed: </span>
+                        {(item.discussed_services || []).join(", ").replace(/_/g, " ")}
+                      </p>
+                    )}
+                    {(item.booked_services || []).length > 0 && (
+                      <p className="text-xs text-green-800 font-medium">
+                        Booked: {(item.booked_services || []).join(", ").replace(/_/g, " ")}
+                      </p>
+                    )}
+                    {(!(item.discussed_services || []).length && !(item.booked_services || []).length) && (
+                      <p className="text-xs text-green-700">
+                        Services: {(item.services || []).join(", ").replace(/_/g, " ") || "—"}
+                      </p>
+                    )}
+                    {(item.services_pricing || []).length > 0 && (
+                      <ul className="text-xs text-slate-600 border-t border-green-100/80 pt-2 space-y-1">
+                        {(item.services_pricing || []).map((sp, i) => (
+                          <li key={i}>
+                            <span className="text-slate-700 capitalize">
+                              {String(sp.service || "").replace(/_/g, " ")}
+                            </span>
+                            <span className="text-slate-500"> — </span>
+                            <span className="italic">{sp.price_hint}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </ChartCard>
           <ChartCard title="Who Asked But Did Not Book (New Clients)" icon={UsersIcon}>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 max-h-80 overflow-y-auto">
               {(newClients.asked_not_booked_details || []).length === 0 ? (
                 <p className="text-sm text-slate-500">No new clients in this category.</p>
               ) : (
-                (newClients.asked_not_booked_details || []).map((item, index) => (
+                (newClients.asked_not_booked_details || []).map((item, index) => {
+                  const searchQ =
+                    item.live_chat_search ||
+                    String(item.phone_display || item.user_id || "").replace(/\D/g, "") ||
+                    String(item.user_id || "");
+                  const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
+                  const rawName =
+                    item.customer_name && String(item.customer_name).trim()
+                      ? String(item.customer_name).trim()
+                      : "";
+                  const nameLine = rawName || "Name not on file";
+                  return (
                   <div
                     key={index}
-                    className="p-3 bg-amber-50 rounded-lg border border-amber-100"
+                    className="p-3 bg-amber-50 rounded-lg border border-amber-100 space-y-2"
                   >
-                    <p className="text-xs font-mono text-slate-600 mb-1">
-                      {item.user_id_masked ?? `...${String(item.user_id || "").slice(-4)}`}
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{nameLine}</p>
+                        <p className="text-xs text-slate-500">
+                          {rawName ? "Name on file" : "No name in CRM / profile yet"}
+                        </p>
+                      </div>
+                      <Link
+                        to={chatTo}
+                        className="shrink-0 inline-flex items-center rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-medium text-white shadow hover:bg-amber-700"
+                      >
+                        Open chat
+                      </Link>
+                    </div>
+                    <p className="text-sm font-mono text-slate-700 break-all">
+                      {item.phone_display ?? item.user_id ?? "—"}
                     </p>
-                    <p className="text-xs text-amber-700">
-                      Services: {(item.services || []).join(", ").replace(/_/g, " ") || "—"}
+                    <p className="text-xs text-amber-800">
+                      <span className="font-medium">Inquired about: </span>
+                      {(item.discussed_services || item.services || []).join(", ").replace(/_/g, " ") || "—"}
                     </p>
+                    {(item.services_pricing || []).length > 0 && (
+                      <ul className="text-xs text-slate-600 border-t border-amber-100/80 pt-2 space-y-1">
+                        {(item.services_pricing || []).map((sp, i) => (
+                          <li key={i}>
+                            <span className="text-slate-700 capitalize">
+                              {String(sp.service || "").replace(/_/g, " ")}
+                            </span>
+                            <span className="text-slate-500"> — </span>
+                            <span className="italic">{sp.price_hint}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </ChartCard>
@@ -378,22 +515,56 @@ const Analytics = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Peak Hours Analysis" icon={ClockIcon}>
+        <ChartCard
+          title="Peak Hours Analysis"
+          icon={ClockIcon}
+          subtitle={
+            peakHoursPeriodLabel
+              ? `Local hour (00:00–23:00) · totals include every day in: ${peakHoursPeriodLabel}`
+              : `Local hour (00:00–23:00) · totals include every day in the selected range`
+          }
+        >
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={Object.entries(hourly).map(([hour, count]) => ({
-                hour,
-                messages: count,
-              }))}
-            >
+            <BarChart data={peakHourlyData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="hour" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
+              <XAxis
+                dataKey="hour"
+                tick={{ fontSize: 10 }}
+                angle={-40}
+                textAnchor="end"
+                height={56}
+                interval={0}
+              />
+              <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const v = payload[0]?.value;
+                  return (
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md text-sm max-w-xs">
+                      <p className="font-semibold text-slate-900">{label}</p>
+                      {peakHoursPeriodLabel ? (
+                        <p className="text-xs text-slate-600 mt-1 leading-snug">
+                          <span className="font-medium text-slate-700">Period / الفترة: </span>
+                          {peakHoursPeriodLabel}
+                        </p>
+                      ) : null}
+                      <p className="text-xs text-slate-500 mt-1">
+                        Count includes all days in this range (not one calendar day).
+                      </p>
+                      <p className="text-slate-800 mt-2">
+                        messages:{" "}
+                        <span className="font-semibold tabular-nums">{v}</span>
+                      </p>
+                    </div>
+                  );
+                }}
+              />
               <Bar
                 dataKey="messages"
                 fill={COLORS.info}
                 radius={[8, 8, 0, 0]}
+                maxBarSize={28}
               />
             </BarChart>
           </ResponsiveContainer>
@@ -506,30 +677,72 @@ const Analytics = () => {
         </ChartCard>
 
         <ChartCard title="Customer Sentiment" icon={FaceSmileIcon}>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: "Positive", value: sentiment.positive || 0 },
-                  { name: "Neutral", value: sentiment.neutral || 0 },
-                  { name: "Negative", value: sentiment.negative || 0 },
-                ]}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-                outerRadius={80}
-                dataKey="value"
-              >
-                <Cell fill={COLORS.success} />
-                <Cell fill={COLORS.warning} />
-                <Cell fill={COLORS.danger} />
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {sentimentTotal === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-10">
+              No sentiment labels in this period.
+            </p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <Pie
+                    data={sentimentPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={72}
+                    paddingAngle={sentimentPieData.length > 1 ? 1 : 0}
+                    dataKey="value"
+                    nameKey="name"
+                    stroke="none"
+                    isAnimationActive={true}
+                  >
+                    {sentimentPieData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value) => [
+                      `${Number(value).toLocaleString()} messages`,
+                      "Count",
+                    ]}
+                    labelFormatter={(label) => String(label)}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-4">
+                {sentimentRows.map((row) => (
+                  <div
+                    key={row.name}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="h-3 w-3 shrink-0 rounded-full"
+                        style={{ backgroundColor: row.color }}
+                        aria-hidden
+                      />
+                      <span className="truncate font-medium text-slate-800">
+                        {row.name}
+                      </span>
+                    </div>
+                    <div className="shrink-0 text-right tabular-nums">
+                      <span className="font-semibold text-slate-900">
+                        {row.value.toLocaleString()}
+                      </span>
+                      <span className="ml-2 text-slate-500">
+                        (
+                        {sentimentTotal > 0
+                          ? ((row.value / sentimentTotal) * 100).toFixed(1)
+                          : "0.0"}
+                        %)
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </ChartCard>
       </div>
 
@@ -537,32 +750,70 @@ const Analytics = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="Most Requested Services" icon={SparklesIcon}>
           <div className="space-y-3">
-            {services.most_requested?.slice(0, 5).map((service, index) => (
-              <div key={index} className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-slate-700">
-                    {service.name}
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-slate-500">
-                      {service.count} requests
+            {(services.most_requested || []).length === 0 ? (
+              <p className="text-sm text-slate-500">No service requests in this period.</p>
+            ) : (
+              services.most_requested.slice(0, 5).map((service, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-sm font-medium text-slate-700 lowercase">
+                      {service.name}
                     </span>
-                    <span className="text-sm font-bold text-primary-600">
-                      {service.percentage}%
-                    </span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-sm text-slate-500">
+                        {service.count} requests
+                      </span>
+                      <span className="text-sm font-bold text-primary-600">
+                        {service.percentage}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, service.percentage)}%` }}
+                    />
                   </div>
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${service.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </ChartCard>
 
+        <ChartCard title="Most Booked Services" icon={SparklesIcon}>
+          <div className="space-y-3">
+            {(services.most_booked || []).length === 0 ? (
+              <p className="text-sm text-slate-500">No completed bookings in this period.</p>
+            ) : (
+              services.most_booked.slice(0, 5).map((service, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-sm font-medium text-slate-700 lowercase">
+                      {service.name}
+                    </span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-sm text-slate-500">
+                        {service.count} bookings
+                      </span>
+                      <span className="text-sm font-bold text-primary-600">
+                        {service.percentage}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, service.percentage)}%` }}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
         <ChartCard title="Appointment Status" icon={CalendarIcon}>
           <div className="space-y-4">
             <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">

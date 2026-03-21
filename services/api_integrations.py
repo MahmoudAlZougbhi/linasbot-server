@@ -1,6 +1,8 @@
 import datetime
 import json
 import os
+from typing import Any, Optional
+
 import httpx
 # No more telegram.Update or ContextTypes here
 # from telegram import Update
@@ -590,6 +592,184 @@ async def create_appointment(phone: str, service_id: int, machine_id: int, branc
     else:
         log_report_event("api_call", "System", "N/A", {"api": "create_appointment", "status": "failed", "error": response.get("message"), "phone": phone})
     return response
+
+def _safe_float_amount(v) -> Optional[float]:
+    try:
+        if v is None or v == "":
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def extract_appointment_total_from_api_payload(payload: Any) -> Optional[float]:
+    """
+    Best-effort total from get_appointment_details / create_appointment response shapes.
+    """
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get("data")
+    apt: dict = {}
+    if isinstance(data, dict):
+        if isinstance(data.get("appointment"), dict):
+            apt = data["appointment"]
+        else:
+            apt = data
+    else:
+        apt = payload
+    if not isinstance(apt, dict):
+        return None
+    for key in ("total", "total_price", "final_price", "price", "amount"):
+        x = _safe_float_amount(apt.get(key))
+        if x is not None:
+            return x
+    pr = apt.get("pricing")
+    if isinstance(pr, dict):
+        for key in ("total", "total_price", "final_price", "price", "amount"):
+            x = _safe_float_amount(pr.get(key))
+            if x is not None:
+                return x
+    return None
+
+
+async def add_appointment_discount(appointment_id: int, discount_amount: float):
+    """
+    POST appointments/discount/add — applies a discount so CRM total can match an agreed price.
+
+    Body: appointment_id, discount_amount (per Agent API contract).
+    """
+    try:
+        aid = int(appointment_id)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "invalid_appointment_id"}
+    try:
+        damount = float(discount_amount)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "invalid_discount_amount"}
+    if damount <= 0:
+        return {"success": False, "message": "discount_amount_must_be_positive"}
+    json_data = {
+        "appointment_id": aid,
+        "discount_amount": round(damount, 4),
+    }
+    print(f"API Call: add_appointment_discount for appointment_id={aid}, discount_amount={json_data['discount_amount']}")
+    response = await _make_api_request("POST", "appointments/discount/add", json_data=json_data)
+    if response.get("success"):
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "add_appointment_discount", "status": "success", "appointment_id": aid},
+        )
+    else:
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "add_appointment_discount",
+                "status": "failed",
+                "error": response.get("message"),
+                "appointment_id": aid,
+            },
+        )
+    return response
+
+
+async def sync_appointment_agreed_price(
+    appointment_id: int,
+    agreed_price: float,
+    system_total_known: Optional[float] = None,
+):
+    """
+    Compare CRM appointment total to the price the assistant agreed with the customer.
+    If CRM total is higher, calls add_appointment_discount with (crm_total - agreed_price).
+
+    Pass system_total_known when the total was just returned from booking/create and you want to avoid an extra GET.
+    """
+    try:
+        aid = int(appointment_id)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "invalid_appointment_id", "error_type": "bad_request"}
+    try:
+        agreed = float(agreed_price)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "invalid_agreed_price", "error_type": "bad_request"}
+
+    system_total = None
+    if system_total_known is not None:
+        try:
+            system_total = float(system_total_known)
+        except (TypeError, ValueError):
+            system_total = None
+
+    if system_total is None:
+        det = await get_appointment_details(aid)
+        if not det.get("success"):
+            return {
+                "success": False,
+                "message": det.get("message") or "get_appointment_details_failed",
+                "error_type": "lookup_failed",
+                "api_response": det,
+            }
+        system_total = extract_appointment_total_from_api_payload(det)
+
+    if system_total is None:
+        return {
+            "success": False,
+            "message": "could_not_read_system_price_for_appointment",
+            "error_type": "missing_price",
+            "appointment_id": aid,
+        }
+
+    eps = 0.02
+    if abs(system_total - agreed) <= eps:
+        return {
+            "success": True,
+            "skipped": True,
+            "message": "crm_total_already_matches_agreed_price",
+            "appointment_id": aid,
+            "crm_total": system_total,
+            "agreed_price": agreed,
+        }
+
+    if agreed > system_total + eps:
+        return {
+            "success": False,
+            "message": "agreed_price_exceeds_crm_total_api_does_not_increase_price",
+            "error_type": "agreed_above_system",
+            "appointment_id": aid,
+            "crm_total": system_total,
+            "agreed_price": agreed,
+        }
+
+    discount_amount = system_total - agreed
+    if discount_amount <= eps:
+        return {
+            "success": True,
+            "skipped": True,
+            "message": "no_discount_needed",
+            "appointment_id": aid,
+            "crm_total": system_total,
+            "agreed_price": agreed,
+        }
+
+    disc_resp = await add_appointment_discount(aid, discount_amount)
+    merged = {
+        "success": bool(disc_resp.get("success")),
+        "appointment_id": aid,
+        "crm_total_before": system_total,
+        "agreed_price": agreed,
+        "discount_amount_applied": round(discount_amount, 4),
+        "discount_api_response": disc_resp,
+    }
+    if not disc_resp.get("success"):
+        merged["message"] = disc_resp.get("message") or "discount_api_failed"
+        merged["error_type"] = "discount_api_failed"
+    else:
+        merged["message"] = "discount_applied_to_match_agreed_price"
+    return merged
+
 
 async def update_appointment_date(appointment_id: int, phone: str, date: str, user_code: str = None):
     """Updates the date/time of an existing appointment."""
