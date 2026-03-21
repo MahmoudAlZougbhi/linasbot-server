@@ -124,8 +124,8 @@
     }
   },
   "api_config": {
-    "base_url": "https://omni-apis.montymobile.com",
-    "endpoint": "/notification/api/v2/WhatsappApi/send-whatsapp",
+    "base_url": "https://whatsapp-notification.montymobile.com",
+    "endpoint": "/api/v2/WhatsappApi/send-whatsapp",
     "source": "96178974402",
     "api_id": "9db12f0d-3c27-4d9c-b9fd-0227aebfd81d",
     "tenant": "98df9ffe-fa84-41ee-9293-33614722d952",

@@ -15,6 +15,10 @@ from services.smart_messaging_catalog import normalize_template_id
 class MontyMobileTemplateService:
     """Service for sending WhatsApp template messages via MontyMobile"""
     
+    # Legacy omni-apis + /notification/... paths now return nginx 404; same stack as montymobile_adapter.
+    _DEFAULT_TEMPLATE_BASE = "https://whatsapp-notification.montymobile.com"
+    _DEFAULT_TEMPLATE_PATH = "/api/v2/WhatsappApi/send-whatsapp"
+
     def __init__(self):
         # Load template configuration
         config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'montymobile_templates.json')
@@ -35,7 +39,39 @@ class MontyMobileTemplateService:
             self.config = {}
             self.templates = {}
             self.api_config = {}
-    
+
+    def _resolve_send_url(self) -> str:
+        """
+        Full POST URL for template send. Migrates deprecated omni-apis /notification/... URLs
+        (nginx 404) to whatsapp-notification host used by MontyMobileAdapter.send-session.
+        """
+        cfg = self.api_config or {}
+        base = (cfg.get("base_url") or "").strip().rstrip("/")
+        endpoint = (cfg.get("endpoint") or "").strip()
+        if endpoint and not endpoint.startswith("/"):
+            endpoint = "/" + endpoint
+        url = f"{base}{endpoint}" if base and endpoint else ""
+
+        legacy = (
+            "omni-apis.montymobile.com" in url
+            or "/notification/api/v2/" in url
+        )
+        if legacy or not url:
+            base = (
+                os.getenv("MONTYMOBILE_BASE_URL") or self._DEFAULT_TEMPLATE_BASE
+            ).strip().rstrip("/")
+            path = (
+                os.getenv("MONTYMOBILE_TEMPLATE_PATH") or self._DEFAULT_TEMPLATE_PATH
+            ).strip()
+            if path and not path.startswith("/"):
+                path = "/" + path
+            url = f"{base}{path}"
+            print(
+                f"📌 Monty template send URL (notification stack): {url} "
+                f"(legacy omni-apis /notification path is deprecated)"
+            )
+        return url
+
     def get_template_info(self, template_id: str) -> Optional[Dict]:
         """Get template information by ID"""
         canonical = normalize_template_id(template_id)
@@ -182,8 +218,8 @@ class MontyMobileTemplateService:
                 "Content-Type": "application/json"
             }
             
-            # Send request
-            url = self.api_config['base_url'] + self.api_config['endpoint']
+            # Send request (URL may override legacy montymobile_templates.json omni-apis paths)
+            url = self._resolve_send_url()
             
             print(f"📤 Sending template '{template_id}' to {phone_number} (lang: {language})")
             print(f"   URL: {url}")
