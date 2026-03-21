@@ -4227,6 +4227,24 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 messages_count=0
                             )
                             print(f"📊 Analytics: Appointment rescheduled - {service_name}")
+                            ra = tool_output.get("resume_appointment") or {}
+                            if ra.get("attempted") and ra.get("success"):
+                                try:
+                                    aid = function_args.get("appointment_id")
+                                    phone_arg = (
+                                        function_args.get("phone")
+                                        or customer_phone_clean
+                                        or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                                        or ""
+                                    )
+                                    analytics.log_appointment_pause_cleared(
+                                        user_id=user_id,
+                                        appointment_id=aid,
+                                        phone=str(phone_arg).strip() if phone_arg else None,
+                                        service=service_name,
+                                    )
+                                except Exception as pr_e:
+                                    print(f"WARNING: analytics pause_cleared: {pr_e}")
                         elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)

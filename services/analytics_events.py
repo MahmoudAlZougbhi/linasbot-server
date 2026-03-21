@@ -7,6 +7,7 @@ Each event is one line in a JSONL file
 
 import json
 import os
+import re
 import datetime
 import math
 from typing import Dict, Any, List, Optional
@@ -173,6 +174,30 @@ class AnalyticsEvents:
             "reason": reason
         })
 
+    def log_appointment_pause_cleared(
+        self,
+        user_id: str,
+        appointment_id: Any = None,
+        phone: str = None,
+        service: str = None,
+    ):
+        """
+        CRM cleared Paused → Available after update_appointment_date + successful resume API.
+        """
+        aid = None
+        if appointment_id is not None:
+            try:
+                aid = int(appointment_id)
+            except (TypeError, ValueError):
+                aid = None
+        self._append_event({
+            "type": "appointment_pause_cleared",
+            "user_id": user_id,
+            "appointment_id": aid,
+            "phone": (str(phone).strip() if phone else None),
+            "service": service,
+        })
+
     def log_session_rating(self, user_id: str, stars: int, conversation_id: str = None):
         """
         Post-conversation star rating (1–5), e.g. after successful booking.
@@ -217,6 +242,26 @@ class AnalyticsEvents:
             "category": category
         })
     
+    def _latest_session_rating_by_user(self, events: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Most recent session_rating stars per user_id within the given event list."""
+        latest_ts: Dict[str, datetime.datetime] = {}
+        latest_stars: Dict[str, int] = {}
+        for event in events:
+            if event.get("type") != "session_rating":
+                continue
+            uid = self._normalize_user_id(event.get("user_id"))
+            if not uid:
+                continue
+            dt = self._parse_timestamp(event.get("timestamp"))
+            if not dt:
+                continue
+            stars = max(1, min(5, self._safe_int(event.get("stars"))))
+            prev = latest_ts.get(uid)
+            if prev is None or dt >= prev:
+                latest_ts[uid] = dt
+                latest_stars[uid] = stars
+        return latest_stars
+
     def _safe_int(self, value: Any) -> int:
         """Parse integer safely from event payloads."""
         try:
@@ -241,6 +286,15 @@ class AnalyticsEvents:
         if len(user) <= 4:
             return user
         return f"...{user[-4:]}"
+
+    def _mask_phone_tail(self, phone: Optional[str]) -> str:
+        """Last 4 digits only for display."""
+        if not phone:
+            return ""
+        d = re.sub(r"\D", "", str(phone))
+        if len(d) < 4:
+            return "****"
+        return "***" + d[-4:]
     
     def _build_conversation_type_metrics(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -635,6 +689,13 @@ class AnalyticsEvents:
                     "sum_stars": 0,
                     "rated_users": set(),
                 },
+                "pause_cleared": {
+                    "total": 0,
+                    "unique_users": set(),
+                    "events": [],
+                    "by_service_counts": defaultdict(int),
+                    "by_service_unique_users": defaultdict(set),
+                },
                 "escalations": {
                     "total": 0,
                     "by_type": defaultdict(int),
@@ -827,6 +888,24 @@ class AnalyticsEvents:
                     sr["sum_stars"] += stars
                     if user_id:
                         sr["rated_users"].add(user_id)
+
+                elif event_type == "appointment_pause_cleared":
+                    pc = stats["pause_cleared"]
+                    pc["total"] += 1
+                    if user_id:
+                        pc["unique_users"].add(user_id)
+                    svc_key = str(event.get("service") or "unknown").strip() or "unknown"
+                    pc["by_service_counts"][svc_key] += 1
+                    if user_id:
+                        pc["by_service_unique_users"][svc_key].add(user_id)
+                    aid = event.get("appointment_id")
+                    pc["events"].append({
+                        "user_id": user_id,
+                        "appointment_id": aid,
+                        "phone": event.get("phone"),
+                        "service": event.get("service"),
+                        "at": event.get("timestamp"),
+                    })
                 
                 elif event_type == "escalation":
                     stats["escalations"]["total"] += 1
@@ -845,6 +924,17 @@ class AnalyticsEvents:
 
             # Convert sets to counts
             stats["overview"]["unique_users"] = len(stats["overview"]["unique_users"])
+            # All-time distinct users who ever appear in analytics (not limited to selected days).
+            stats["lifetime_unique_users"] = len(first_seen_by_user)
+            stats["latest_session_rating_by_user"] = self._latest_session_rating_by_user(events)
+            pc_events = stats["pause_cleared"]["events"]
+
+            def _pause_at(row: Dict[str, Any]) -> datetime.datetime:
+                t = self._parse_timestamp(row.get("at"))
+                return t if t else datetime.datetime.min
+
+            pc_events.sort(key=_pause_at, reverse=True)
+            stats["pause_cleared"]["events"] = pc_events[:80]
             
             # Build final response
             response = self._format_analytics_response(stats, days)
@@ -887,6 +977,7 @@ class AnalyticsEvents:
         inquiries = stats["conversions"]["inquiries"]
         total_users = stats["overview"]["unique_users"]
         new_users = stats["overview"]["new_users"]
+        lifetime_unique_users = stats.get("lifetime_unique_users", 0)
 
         avg_messages_per_day = round((total_messages / days), 1) if days > 0 else 0
         avg_messages_per_conversation = round((total_messages / total_conversations), 1) if total_conversations > 0 else 0
@@ -1019,6 +1110,36 @@ class AnalyticsEvents:
                 "mentions": mentions,
                 "unique_clients": len(services_today_metrics["users_by_service"].get(service, set()))
             })
+
+        latest_sr = stats.get("latest_session_rating_by_user") or {}
+        pc_stats = stats.get("pause_cleared") or {}
+        pc_unique = pc_stats.get("unique_users") or set()
+        bs_counts = dict(pc_stats.get("by_service_counts") or {})
+        bs_u = pc_stats.get("by_service_unique_users") or {}
+        pause_by_service = []
+        for svc, appt_n in sorted(bs_counts.items(), key=lambda x: (-x[1], x[0])):
+            u_set = bs_u.get(svc)
+            n_cust = len(u_set) if isinstance(u_set, set) else 0
+            pause_by_service.append({
+                "service": svc,
+                "appointments": appt_n,
+                "unique_customers": n_cust,
+            })
+        pause_cleared_recent = []
+        for row in pc_stats.get("events", []) or []:
+            uid = row.get("user_id")
+            phone_raw = row.get("phone") or ""
+            digits = re.sub(r"\D", "", str(phone_raw))
+            search_q = digits if digits else re.sub(r"\D", "", str(uid or ""))
+            pause_cleared_recent.append({
+                "user_id_masked": self._mask_user_id(uid),
+                "phone_masked": self._mask_phone_tail(str(phone_raw)) if phone_raw else "",
+                "appointment_id": row.get("appointment_id"),
+                "service": row.get("service"),
+                "at": row.get("at"),
+                "live_chat_search": search_q or str(uid or ""),
+                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+            })
         
         return {
             "success": True,
@@ -1028,6 +1149,7 @@ class AnalyticsEvents:
                 "total_users": total_users,
                 "new_users": new_users,
                 "returning_users": max(total_users - new_users, 0),
+                "lifetime_unique_users": lifetime_unique_users,
                 "avg_messages_per_day": avg_messages_per_day,
                 "avg_messages_per_conversation": avg_messages_per_conversation
             },
@@ -1085,6 +1207,12 @@ class AnalyticsEvents:
                 "average_stars": sr_avg,
                 "by_star": sr_by_star,
                 "percentages": sr_pct,
+            },
+            "pause_cleared_resumes": {
+                "total": pc_stats.get("total", 0),
+                "unique_users": len(pc_unique) if isinstance(pc_unique, set) else int(pc_unique or 0),
+                "by_service": pause_by_service,
+                "recent": pause_cleared_recent,
             },
             "escalations": {
                 "total_escalations": stats["escalations"]["total"],
