@@ -230,13 +230,34 @@ class MontyMobileTemplateService:
                             "response_text": response.text
                         }
                 else:
-                    error_text = response.text[:500]
-                    print(f"❌ HTTP Error {response.status_code}: {error_text}")
-                    
+                    raw = response.text or ""
+                    error_text = raw[:2000]
+                    print(f"❌ HTTP Error {response.status_code}: {error_text[:500]}")
+                    monty_message = None
+                    try:
+                        err_body = response.json()
+                        if isinstance(err_body, dict):
+                            monty_message = (
+                                err_body.get("message")
+                                or err_body.get("error")
+                                or err_body.get("title")
+                                or err_body.get("detail")
+                            )
+                            if isinstance(monty_message, list):
+                                monty_message = monty_message[0] if monty_message else None
+                    except Exception:
+                        pass
+                    if not monty_message and raw.strip():
+                        monty_message = raw.strip()[:500]
+
                     return {
                         "success": False,
-                        "error": f"HTTP {response.status_code}",
-                        "response_text": error_text
+                        "error": (
+                            f"MontyMobile/WhatsApp API HTTP {response.status_code} "
+                            f"(dashboard route OK — provider rejected the request)"
+                        ),
+                        "monty_message": (str(monty_message)[:800] if monty_message else None),
+                        "response_text": error_text,
                     }
                     
         except httpx.TimeoutException:

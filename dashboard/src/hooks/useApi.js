@@ -13,10 +13,10 @@ const api = axios.create({
   },
 });
 
-// Request interceptor
+// Request interceptor — refresh base URL each call (fixes stale baseURL if env/hostname logic changes)
 api.interceptors.request.use(
   (config) => {
-    // Add loading state or auth tokens here if needed
+    config.baseURL = getApiBaseUrl();
     return config;
   },
   (error) => {

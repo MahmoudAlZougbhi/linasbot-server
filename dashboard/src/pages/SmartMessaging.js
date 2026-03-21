@@ -372,7 +372,13 @@ const SmartMessaging = () => {
           `Sent — user language: ${result.user_language} (${src}) → WhatsApp template language: ${result.template_language}`
         );
       } else {
-        toast.error(result.error || "Failed to send test");
+        const parts = [
+          result.error || "Failed to send test",
+          result.monty_message,
+        ].filter(Boolean);
+        let msg = parts.join(" — ");
+        if (msg.length > 320) msg = `${msg.slice(0, 317)}…`;
+        toast.error(msg);
       }
     } catch (e) {
       console.error(e);
