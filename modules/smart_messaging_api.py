@@ -1164,6 +1164,14 @@ async def preview_missed_paused_campaign(
     """Preview recipients for Missed Paused Appointment campaign (BOC paused appointments in date range)."""
     try:
         result = await missed_paused_campaign_service.preview(request_data or {})
+        if result.get("success") and isinstance(result.get("recipients"), list):
+            slim = []
+            for r in result["recipients"]:
+                if isinstance(r, dict):
+                    slim.append({k: v for k, v in r.items() if k != "raw"})
+                else:
+                    slim.append(r)
+            result = {**result, "recipients": slim}
         return result
     except Exception as e:
         print(f"Error previewing missed paused campaign: {e}")

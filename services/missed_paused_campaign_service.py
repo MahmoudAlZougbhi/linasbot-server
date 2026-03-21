@@ -41,6 +41,84 @@ def _normalize_phone(phone: Any) -> str:
     return str(phone).replace("+", "").replace(" ", "").replace("-", "")
 
 
+def _as_placeholder_str(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    s = str(value).strip()
+    if not s or s.lower() in ("none", "null"):
+        return default
+    return s
+
+
+def _format_body_areas(row: Dict[str, Any]) -> str:
+    raw = row.get("body_parts") or row.get("body_areas") or row.get("areas")
+    if not raw:
+        return ""
+    if isinstance(raw, str):
+        return raw.strip()
+    if not isinstance(raw, list):
+        return _as_placeholder_str(raw)
+    parts: List[str] = []
+    for item in raw:
+        if isinstance(item, dict):
+            label = (
+                item.get("name")
+                or item.get("body_part")
+                or item.get("body_part_name")
+                or item.get("area")
+                or item.get("body_part_id")
+            )
+            parts.append(_as_placeholder_str(label))
+        else:
+            parts.append(_as_placeholder_str(item))
+    return ", ".join(p for p in parts if p)
+
+
+def _paused_campaign_placeholders(recipient: Dict[str, Any], clinic_contact_phone: str) -> Dict[str, str]:
+    """All template placeholders for missed_paused_appointment (from recipient + raw BOC row)."""
+    row: Dict[str, Any] = recipient.get("raw") if isinstance(recipient.get("raw"), dict) else {}
+    customer = row.get("customer") if isinstance(row.get("customer"), dict) else {}
+
+    cust_phone = _as_placeholder_str(recipient.get("phone")) or _as_placeholder_str(customer.get("phone"))
+
+    apt_id = recipient.get("appointment_id")
+    if apt_id is None:
+        apt_id = row.get("appointment_id") or row.get("id") or row.get("appointmentId")
+
+    machine = _as_placeholder_str(recipient.get("machine_name")) or _as_placeholder_str(row.get("machine"))
+
+    return {
+        # Core (existing)
+        "customer_name": _as_placeholder_str(recipient.get("customer_name")) or "عميلنا العزيز",
+        "appointment_date": _as_placeholder_str(recipient.get("appointment_date")),
+        "appointment_time": _as_placeholder_str(recipient.get("appointment_time")),
+        "branch_name": _as_placeholder_str(recipient.get("branch_name")) or "الفرع الرئيسي",
+        "service_name": _as_placeholder_str(recipient.get("service_name")) or "جلسة ليزر",
+        "phone_number": clinic_contact_phone,
+        "next_appointment_date": "",
+        # Customer / contact
+        "customer_phone": cust_phone,
+        "customer_phone_digits": _normalize_phone(cust_phone),
+        "customer_id": _as_placeholder_str(recipient.get("customer_id")) or _as_placeholder_str(customer.get("id")),
+        "user_code": _as_placeholder_str(recipient.get("user_code")) or _as_placeholder_str(customer.get("user_code")),
+        "customer_email": _as_placeholder_str(customer.get("email")),
+        # Appointment row
+        "appointment_id": _as_placeholder_str(apt_id),
+        "machine_name": machine or "",
+        "machine_id": _as_placeholder_str(row.get("machine_id")),
+        "service_id": _as_placeholder_str(row.get("service_id")),
+        "branch_id": _as_placeholder_str(row.get("branch_id")),
+        "appointment_status": _as_placeholder_str(row.get("status")) or _as_placeholder_str(row.get("appointment_status")),
+        "appointment_notes": _as_placeholder_str(row.get("notes")) or _as_placeholder_str(row.get("note")),
+        "price": _as_placeholder_str(row.get("price")) or _as_placeholder_str(row.get("amount")) or _as_placeholder_str(row.get("total")),
+        "currency": _as_placeholder_str(row.get("currency")),
+        "body_areas": _format_body_areas(row),
+        "appointment_date_raw": _as_placeholder_str(recipient.get("date_raw")) or _as_placeholder_str(row.get("date")),
+        "session_number": _as_placeholder_str(row.get("session_number")) or _as_placeholder_str(row.get("session")),
+        "duration_minutes": _as_placeholder_str(row.get("duration")) or _as_placeholder_str(row.get("duration_minutes")),
+    }
+
+
 class MissedPausedCampaignService:
     """Build, preview, and execute paused-appointment campaigns."""
 
@@ -128,17 +206,25 @@ class MissedPausedCampaignService:
         if apt_dt is None:
             return None
 
+        apt_id = row.get("appointment_id") or row.get("id") or row.get("appointmentId")
+
         return {
             "customer_id": customer.get("id") or _normalize_phone(phone),
             "customer_name": customer.get("name", "عميلنا العزيز"),
             "phone": str(phone),
             "service_name": row.get("service", "جلسة ليزر"),
-            "appointment_id": row.get("appointment_id"),
+            "appointment_id": apt_id,
             "appointment_date": apt_dt.strftime("%Y-%m-%d"),
             "appointment_time": apt_dt.strftime("%H:%M"),
             "branch_name": row.get("branch", "الفرع الرئيسي"),
             "machine_name": row.get("machine"),
             "user_code": customer.get("user_code"),
+            "date_raw": date_raw,
+            "service_id": row.get("service_id"),
+            "branch_id": row.get("branch_id"),
+            "machine_id": row.get("machine_id"),
+            "appointment_status": row.get("status") or row.get("appointment_status"),
+            "body_areas_preview": _format_body_areas(row),
             "paused_only": True,
             "raw": row,
         }
@@ -189,6 +275,14 @@ class MissedPausedCampaignService:
             "success": True,
             "template_id": self.TEMPLATE_ID,
             "paused_only": True,
+            "placeholders_help": (
+                "Optional placeholders: {customer_name} {customer_phone} {customer_phone_digits} "
+                "{appointment_date} {appointment_time} {appointment_date_raw} {appointment_id} "
+                "{service_name} {service_id} {branch_name} {branch_id} {machine_name} {machine_id} "
+                "{user_code} {customer_id} {customer_email} {appointment_status} {appointment_notes} "
+                "{price} {currency} {body_areas} {session_number} {duration_minutes} "
+                "{phone_number} (clinic) {next_appointment_date}"
+            ),
             "filters": {
                 **filters,
                 "service_ids": normalized_service_ids,
@@ -255,15 +349,7 @@ class MissedPausedCampaignService:
                 fallback_language=fallback_lang,
             )
 
-            placeholders = {
-                "customer_name": recipient.get("customer_name", "عميلنا العزيز"),
-                "appointment_date": recipient.get("appointment_date"),
-                "appointment_time": recipient.get("appointment_time"),
-                "branch_name": recipient.get("branch_name", "الفرع الرئيسي"),
-                "service_name": recipient.get("service_name", "جلسة ليزر"),
-                "phone_number": contact_phone,
-                "next_appointment_date": "",
-            }
+            placeholders = _paused_campaign_placeholders(recipient, contact_phone)
             metadata = {
                 "campaign_id": campaign_id,
                 "customer_id": recipient.get("customer_id"),

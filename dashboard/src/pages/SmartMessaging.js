@@ -101,6 +101,7 @@ const SmartMessaging = () => {
   const [pausedSendLoading, setPausedSendLoading] = useState(false);
   const [pausedRecipients, setPausedRecipients] = useState([]);
   const [pausedCampaignError, setPausedCampaignError] = useState(null);
+  const [pausedPlaceholdersHelp, setPausedPlaceholdersHelp] = useState(null);
 
   // Manual WhatsApp leads: chatted in Firestore, no BOC customer file, no appointments (whatsapp_lead_no_booking)
   const [leadFromDate, setLeadFromDate] = useState(() => {
@@ -158,6 +159,7 @@ const SmartMessaging = () => {
     }
     setPausedPreviewLoading(true);
     setPausedCampaignError(null);
+    setPausedPlaceholdersHelp(null);
     try {
       const body = {
         from_date: pausedFromDate,
@@ -172,9 +174,11 @@ const SmartMessaging = () => {
       const data = await res.json();
       if (data.success) {
         setPausedRecipients(data.recipients || []);
+        setPausedPlaceholdersHelp(data.placeholders_help || null);
         toast.success(`Found ${data.count ?? (data.recipients || []).length} recipient(s)`);
       } else {
         setPausedRecipients([]);
+        setPausedPlaceholdersHelp(null);
         const msg = data.error || "Preview failed";
         setPausedCampaignError(msg);
         toast.error(msg);
@@ -182,6 +186,7 @@ const SmartMessaging = () => {
     } catch (e) {
       console.error(e);
       setPausedRecipients([]);
+      setPausedPlaceholdersHelp(null);
       toast.error("Preview failed");
     } finally {
       setPausedPreviewLoading(false);
@@ -2589,6 +2594,15 @@ const SmartMessaging = () => {
               </div>
             )}
 
+            {pausedPlaceholdersHelp && (
+              <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <span className="font-semibold text-slate-700">Template placeholders</span> (use in{" "}
+                <span className="font-medium">Message Templates</span> →{" "}
+                <span className="font-medium">missed_paused_appointment</span>):{" "}
+                <span className="font-mono whitespace-pre-wrap break-all">{pausedPlaceholdersHelp}</span>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -2622,12 +2636,14 @@ const SmartMessaging = () => {
                     <th className="text-left py-2 px-3 font-semibold text-slate-700">Appointment</th>
                     <th className="text-left py-2 px-3 font-semibold text-slate-700">Service</th>
                     <th className="text-left py-2 px-3 font-semibold text-slate-700">Branch</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Appt ID</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Machine</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pausedRecipients.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                      <td colSpan={7} className="py-8 text-center text-slate-500">
                         No recipients loaded. Set dates (and optional services) and click Preview list.
                       </td>
                     </tr>
@@ -2641,6 +2657,8 @@ const SmartMessaging = () => {
                         </td>
                         <td className="py-2 px-3">{r.service_name}</td>
                         <td className="py-2 px-3">{r.branch_name}</td>
+                        <td className="py-2 px-3 font-mono text-xs">{r.appointment_id ?? "—"}</td>
+                        <td className="py-2 px-3">{r.machine_name ?? "—"}</td>
                       </tr>
                     ))
                   )}
