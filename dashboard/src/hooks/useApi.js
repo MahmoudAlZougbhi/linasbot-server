@@ -495,6 +495,40 @@ export const useApi = () => {
     }
   }, []);
 
+  const getSmartMessagingTemplates = useCallback(async () => {
+    try {
+      const response = await api.get("/api/smart-messaging/templates", { timeout: 20000 });
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+        return { success: false, templates: {}, error: "Backend offline" };
+      }
+      return { success: false, templates: {}, error: error.message };
+    }
+  }, []);
+
+  const getChatsByTemplateSendLog = useCallback(async (templateId, dateFrom = "", dateTo = "") => {
+    try {
+      const params = new URLSearchParams();
+      params.append("template_id", String(templateId || "").trim());
+      if (dateFrom) params.append("date_from", dateFrom);
+      if (dateTo) params.append("date_to", dateTo);
+      const response = await api.get(`/api/live-chat/chats-by-template-send-log?${params.toString()}`, {
+        timeout: 90000,
+      });
+      return response.data;
+    } catch (error) {
+      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+        return {
+          success: false,
+          chats: [],
+          error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline",
+        };
+      }
+      throw error;
+    }
+  }, []);
+
   const getLiveConversations = useCallback(async (search = "") => {
     try {
       const params = new URLSearchParams();
@@ -1418,6 +1452,8 @@ export const useApi = () => {
     testWebhookSimulation,
     // Live Chat functions
     getUnifiedChats,
+    getSmartMessagingTemplates,
+    getChatsByTemplateSendLog,
     getLiveConversations,
     getWaitingQueue,
     getLiveChatStatus,

@@ -128,6 +128,30 @@ async def get_unified_chats(
     return await _run_endpoint(_handler, fallback=fallback)
 
 
+@app.get("/api/live-chat/chats-by-template-send-log")
+async def get_chats_by_template_send_log(
+    template_id: str = Query(..., description="Smart Messaging template id"),
+    date_from: str = Query(default="", description="Optional YYYY-MM-DD (UTC) start of sent_at range"),
+    date_to: str = Query(default="", description="Optional YYYY-MM-DD (UTC) end of sent_at range"),
+    scan_limit: int = Query(default=0, ge=0, le=20000),
+):
+    """
+    List live_chat_index conversations for customers who have a message_logs row
+    for this template (successful sends). Scans newest index rows first (see scan_limit / env).
+    """
+
+    async def _handler():
+        lim = int(scan_limit) if scan_limit else None
+        return await live_chat_service.get_chats_by_template_send_log(
+            template_id=template_id,
+            date_from=date_from.strip() or None,
+            date_to=date_to.strip() or None,
+            scan_limit=lim,
+        )
+
+    return await _run_endpoint(_handler, fallback={"success": False, "chats": [], "error": "request_failed"})
+
+
 @app.get("/api/live-chat/active-conversations")
 async def get_active_conversations(search: str = Query(default="", description="Search by client name or phone")):
     """Get active conversations with optional client search."""

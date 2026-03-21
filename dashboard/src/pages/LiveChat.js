@@ -73,6 +73,13 @@ const LiveChat = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [botDateFrom, setBotDateFrom] = useState("");
   const [botDateTo, setBotDateTo] = useState("");
+  /** Smart Messaging send log → show only chats for customers who received this template in the date range */
+  const [templateSendFilterId, setTemplateSendFilterId] = useState("");
+  const [templateSendFilterActive, setTemplateSendFilterActive] = useState(false);
+  const [templateSendFilterChats, setTemplateSendFilterChats] = useState([]);
+  const [templateSendFilterMeta, setTemplateSendFilterMeta] = useState(null);
+  const [templateSendFilterLoading, setTemplateSendFilterLoading] = useState(false);
+  const [messagingTemplates, setMessagingTemplates] = useState({});
   const waitingSearchTerm = debouncedSearch.trim().toLowerCase();
   const normalizeUserIdentity = React.useCallback(
     (value) => String(value || "").trim().replace(/^\+/, ""),
@@ -317,6 +324,27 @@ const LiveChat = () => {
     });
   }, [activeConversations, normalizeUserIdentity]);
 
+  const templateSendFilterViewActive =
+    templateSendFilterActive && Boolean(templateSendFilterId);
+
+  const botConversationsForList = React.useMemo(() => {
+    if (!templateSendFilterViewActive) return botConversations;
+    return (templateSendFilterChats || [])
+      .map((c) => normalizeIncomingConversation(c))
+      .filter(Boolean);
+  }, [
+    templateSendFilterViewActive,
+    templateSendFilterChats,
+    botConversations,
+    normalizeIncomingConversation,
+  ]);
+
+  const templateSendFilterLabel = React.useMemo(() => {
+    if (!templateSendFilterId) return "";
+    const t = messagingTemplates[templateSendFilterId];
+    return t?.name ? String(t.name) : templateSendFilterId;
+  }, [templateSendFilterId, messagingTemplates]);
+
   const getConversationLastTs = React.useCallback((conv) => {
     const ts = conv?.last_activity || conv?.last_message?.timestamp;
     return ts ? new Date(ts).getTime() : 0;
@@ -325,6 +353,9 @@ const LiveChat = () => {
   const isBotDateFilterActive = Boolean(botDateFrom || botDateTo);
 
   const filteredBotConversations = React.useMemo(() => {
+    if (templateSendFilterViewActive) {
+      return botConversationsForList;
+    }
     if (!isBotDateFilterActive) return botConversations;
     const start = botDateFrom ? new Date(`${botDateFrom}T00:00:00`) : null;
     const end = botDateTo ? new Date(`${botDateTo}T23:59:59.999`) : null;
@@ -335,7 +366,15 @@ const LiveChat = () => {
       if (end && lastTs > end.getTime()) return false;
       return true;
     });
-  }, [botConversations, botDateFrom, botDateTo, isBotDateFilterActive, getConversationLastTs]);
+  }, [
+    templateSendFilterViewActive,
+    botConversationsForList,
+    botConversations,
+    botDateFrom,
+    botDateTo,
+    isBotDateFilterActive,
+    getConversationLastTs,
+  ]);
 
   const formatConversationListDate = React.useCallback((conv) => {
     const lastTs = getConversationLastTs(conv);
@@ -541,6 +580,8 @@ const LiveChat = () => {
 
   const {
     getUnifiedChats,
+    getSmartMessagingTemplates,
+    getChatsByTemplateSendLog,
     getLiveConversations,
     getWaitingQueue,
     getLiveChatStatus,
@@ -553,6 +594,69 @@ const LiveChat = () => {
     updateOperatorStatus,
     submitFeedback,
   } = useApi();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await getSmartMessagingTemplates();
+      if (cancelled || !r?.success || !r.templates) return;
+      setMessagingTemplates(r.templates);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getSmartMessagingTemplates]);
+
+  const applyTemplateSendFilter = React.useCallback(async () => {
+    if (!templateSendFilterId) {
+      toast.error("Choose a template");
+      return;
+    }
+    setTemplateSendFilterLoading(true);
+    try {
+      const r = await getChatsByTemplateSendLog(
+        templateSendFilterId,
+        botDateFrom,
+        botDateTo
+      );
+      if (!r?.success) {
+        toast.error(r?.error || "Filter failed");
+        return;
+      }
+      setTemplateSendFilterChats(Array.isArray(r.chats) ? r.chats : []);
+      setTemplateSendFilterMeta({
+        log_entries_matched: r.log_entries_matched,
+        distinct_recipients: r.distinct_recipients,
+        matched_chats: r.matched_chats,
+        index_scanned: r.index_scanned,
+      });
+      setTemplateSendFilterActive(true);
+      setHasMoreChats(false);
+      setNextCursor(null);
+      const n = r.matched_chats ?? 0;
+      toast.success(
+        n > 0
+          ? `${n} conversation(s) matched (send log + chat index)`
+          : "No conversations matched in the index scan — try wider dates or Rebuild index"
+      );
+    } catch (e) {
+      toast.error(e?.message || "Filter failed");
+    } finally {
+      setTemplateSendFilterLoading(false);
+    }
+  }, [
+    templateSendFilterId,
+    botDateFrom,
+    botDateTo,
+    getChatsByTemplateSendLog,
+  ]);
+
+  const clearTemplateSendFilter = React.useCallback(() => {
+    setTemplateSendFilterActive(false);
+    setTemplateSendFilterChats([]);
+    setTemplateSendFilterMeta(null);
+    setTemplateSendFilterId("");
+  }, []);
 
   useEffect(() => {
     updateOperatorStatus("operator_001", operatorStatus).catch(() => {
@@ -1243,6 +1347,7 @@ const LiveChat = () => {
 
   // ✅ Load more chats (cursor-based pagination – backend uses cursor, not page offset)
   const loadMoreChats = React.useCallback(async () => {
+    if (templateSendFilterActive && templateSendFilterId) return;
     if (loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
     if (Date.now() < loadMoreCooldownUntilRef.current) return;
     if (!nextCursor) return; // Backend uses cursor-based pagination; need cursor for next page
@@ -1303,11 +1408,22 @@ const LiveChat = () => {
       loadMoreInProgressRef.current = false;
       setLoadingMoreChats(false);
     }
-  }, [loadingMoreChats, hasMoreChats, nextCursor, getUnifiedChats, debouncedSearch, CHAT_LIST_PAGE_SIZE, normalizeIncomingConversation]);
+  }, [
+    loadingMoreChats,
+    hasMoreChats,
+    nextCursor,
+    getUnifiedChats,
+    debouncedSearch,
+    CHAT_LIST_PAGE_SIZE,
+    normalizeIncomingConversation,
+    templateSendFilterActive,
+    templateSendFilterId,
+  ]);
 
   const handleBotListScroll = React.useCallback(
     (event) => {
       const el = event.currentTarget;
+      if (templateSendFilterActive && templateSendFilterId) return;
       if (!el || loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
       if (botListScrollThrottleRef.current || Date.now() < loadMoreCooldownUntilRef.current) return;
       if (!nextCursor) return;
@@ -1321,11 +1437,19 @@ const LiveChat = () => {
         }, 800);
       }
     },
-    [loadingMoreChats, hasMoreChats, nextCursor, loadMoreChats]
+    [
+      loadingMoreChats,
+      hasMoreChats,
+      nextCursor,
+      loadMoreChats,
+      templateSendFilterActive,
+      templateSendFilterId,
+    ]
   );
 
   // Intersection Observer: load more when sentinel comes into view (avoid filteredBotConversations.length in deps to prevent loop)
   useEffect(() => {
+    if (templateSendFilterActive && templateSendFilterId) return;
     const sentinel = botLoadMoreSentinelRef.current;
     const scrollRoot = botListRef.current;
     if (!sentinel || !scrollRoot || !hasMoreChats || loadingMoreChats) return;
@@ -1340,7 +1464,13 @@ const LiveChat = () => {
     );
     obs.observe(sentinel);
     return () => obs.disconnect();
-  }, [hasMoreChats, loadingMoreChats, loadMoreChats]);
+  }, [
+    hasMoreChats,
+    loadingMoreChats,
+    loadMoreChats,
+    templateSendFilterActive,
+    templateSendFilterId,
+  ]);
 
   // Auto-load extra pages to reduce missing conversations on first load
   useEffect(() => {
@@ -2162,7 +2292,13 @@ const LiveChat = () => {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-slate-800 flex items-center">
                   <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                  With bot ({filteredBotConversations.length})
+                  {templateSendFilterViewActive ? (
+                    <>
+                      Template: {templateSendFilterLabel} ({filteredBotConversations.length})
+                    </>
+                  ) : (
+                    <>With bot ({filteredBotConversations.length})</>
+                  )}
                 </h3>
                 <span className="text-xs text-slate-500 flex items-center space-x-1">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
@@ -2205,6 +2341,54 @@ const LiveChat = () => {
                   className="whatsapp-input w-full px-3 py-1.5 text-xs"
                   title="To date"
                 />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {templateSendFilterViewActive
+                  ? "Dates filter when the template was logged as sent (UTC day). Clear template filter to use dates for last activity only."
+                  : "Dates filter conversations by last activity. For template send log, pick template below and Apply."}
+              </p>
+              <div className="mt-2 space-y-1">
+                <label className="text-[11px] font-medium text-slate-600">Filter by sent template (Smart Messaging log)</label>
+                <select
+                  value={templateSendFilterId}
+                  onChange={(e) => setTemplateSendFilterId(e.target.value)}
+                  className="whatsapp-input w-full px-3 py-1.5 text-xs"
+                  disabled={templateSendFilterLoading}
+                >
+                  <option value="">— Select template —</option>
+                  {Object.keys(messagingTemplates)
+                    .sort()
+                    .map((tid) => (
+                      <option key={tid} value={tid}>
+                        {(messagingTemplates[tid]?.name || tid).slice(0, 80)}
+                      </option>
+                    ))}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={templateSendFilterLoading}
+                    onClick={() => applyTemplateSendFilter()}
+                    className="text-xs px-2 py-1 rounded border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-800 disabled:opacity-50"
+                  >
+                    {templateSendFilterLoading ? "Loading…" : "Apply template filter"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={templateSendFilterLoading}
+                    onClick={() => clearTemplateSendFilter()}
+                    className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
+                  >
+                    Clear template filter
+                  </button>
+                </div>
+                {templateSendFilterMeta && templateSendFilterViewActive && (
+                  <p className="text-[11px] text-slate-500">
+                    Log rows: {templateSendFilterMeta.log_entries_matched ?? "—"} · Distinct phones:{" "}
+                    {templateSendFilterMeta.distinct_recipients ?? "—"} · Chats shown:{" "}
+                    {templateSendFilterMeta.matched_chats ?? "—"} (scanned {templateSendFilterMeta.index_scanned ?? "—"} index rows)
+                  </p>
+                )}
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <button
@@ -2282,9 +2466,9 @@ const LiveChat = () => {
                 >
                   Test flow
                 </button>
-                {isBotDateFilterActive && (
+                {isBotDateFilterActive && !templateSendFilterViewActive && (
                   <span className="text-[11px] text-slate-500">
-                    Showing selected range
+                    Showing selected range (last activity)
                   </span>
                 )}
               </div>
@@ -2358,6 +2542,12 @@ const LiveChat = () => {
                                 {formatConversationListDate(conv)}
                               </span>
                             </div>
+                            {conv.template_send_logged_at && (
+                              <p className="text-[10px] text-violet-600 mt-1">
+                                Sent (logged):{" "}
+                                {new Date(conv.template_send_logged_at).toLocaleString()}
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2412,6 +2602,12 @@ const LiveChat = () => {
                                 {formatConversationListDate(conv)}
                               </span>
                             </div>
+                            {conv.template_send_logged_at && (
+                              <p className="text-[10px] text-violet-600 mt-1">
+                                Sent (logged):{" "}
+                                {new Date(conv.template_send_logged_at).toLocaleString()}
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2419,7 +2615,7 @@ const LiveChat = () => {
                   )}
                 </>
               )}
-              {hasMoreChats && (
+              {hasMoreChats && !templateSendFilterViewActive && (
                 <div className="mt-2">
                   <div ref={botLoadMoreSentinelRef} className="h-2 min-h-[8px]" aria-hidden="true" />
                   <button
@@ -2468,7 +2664,13 @@ const LiveChat = () => {
                     <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                       <h3 className="font-bold text-slate-800 flex items-center">
                         <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2 text-primary-600" />
-                        With bot ({filteredBotConversations.length})
+                        {templateSendFilterViewActive ? (
+                          <>
+                            Template: {templateSendFilterLabel} ({filteredBotConversations.length})
+                          </>
+                        ) : (
+                          <>With bot ({filteredBotConversations.length})</>
+                        )}
                       </h3>
                       <button
                         onClick={() => setBotPanelOpen(false)}
@@ -2492,7 +2694,7 @@ const LiveChat = () => {
                           className="whatsapp-input w-full pl-9 pr-4"
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div className="grid grid-cols-2 gap-2 mb-2">
                         <input
                           type="date"
                           value={botDateFrom}
@@ -2507,6 +2709,38 @@ const LiveChat = () => {
                           className="whatsapp-input w-full px-3 py-1.5 text-xs"
                           title="To date"
                         />
+                      </div>
+                      <select
+                        value={templateSendFilterId}
+                        onChange={(e) => setTemplateSendFilterId(e.target.value)}
+                        className="whatsapp-input w-full px-2 py-1.5 text-xs mb-2"
+                        disabled={templateSendFilterLoading}
+                      >
+                        <option value="">Template filter…</option>
+                        {Object.keys(messagingTemplates)
+                          .sort()
+                          .map((tid) => (
+                            <option key={tid} value={tid}>
+                              {(messagingTemplates[tid]?.name || tid).slice(0, 60)}
+                            </option>
+                          ))}
+                      </select>
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          disabled={templateSendFilterLoading}
+                          onClick={() => applyTemplateSendFilter()}
+                          className="text-xs px-2 py-1 rounded border border-violet-200 bg-violet-50 text-violet-800 flex-1 disabled:opacity-50"
+                        >
+                          Apply
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => clearTemplateSendFilter()}
+                          className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600"
+                        >
+                          Clear
+                        </button>
                       </div>
                       <div className="space-y-2">
                         {liveBotConversations.length > 0 && (

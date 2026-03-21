@@ -6,11 +6,12 @@ import json
 import os
 import threading
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from services.smart_messaging_catalog import normalize_template_id
+from utils.phone_utils import phone_match_key
 
 
 class MessageLogsService:
@@ -177,6 +178,79 @@ class MessageLogsService:
             logs = self._load_list(self.campaign_logs_file)
         logs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return logs[:limit]
+
+    def _parse_sent_at_utc(self, raw: Optional[str]) -> Optional[datetime]:
+        if not raw or not isinstance(raw, str):
+            return None
+        try:
+            s = raw.strip().replace("Z", "+00:00")
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            return None
+
+    def recipient_phone_keys_for_template(
+        self,
+        template_id: str,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Tuple[Set[str], Dict[str, str], int]:
+        """
+        Collect distinct recipient phone keys from message_logs for a template,
+        optionally limited to sent_at calendar days (UTC) in [date_from, date_to].
+        Returns (key_set, latest_sent_at_by_key_iso, matching_log_rows).
+        """
+        canonical = normalize_template_id(template_id)
+        if not canonical:
+            return set(), {}, 0
+
+        df: Optional[date] = None
+        dt_end: Optional[date] = None
+        if date_from:
+            try:
+                df = date.fromisoformat(str(date_from).strip()[:10])
+            except Exception:
+                df = None
+        if date_to:
+            try:
+                dt_end = date.fromisoformat(str(date_to).strip()[:10])
+            except Exception:
+                dt_end = None
+
+        with self._lock:
+            logs = self._load_list(self.message_logs_file)
+
+        keys: Set[str] = set()
+        latest: Dict[str, str] = {}
+        matched = 0
+
+        for entry in logs:
+            if normalize_template_id(entry.get("template_type", "")) != canonical:
+                continue
+            sent = self._parse_sent_at_utc(entry.get("sent_at"))
+            if sent:
+                d = sent.date()
+                if df is not None and d < df:
+                    continue
+                if dt_end is not None and d > dt_end:
+                    continue
+            elif df is not None or dt_end is not None:
+                # No parseable date — skip when a date filter is active
+                continue
+
+            key = phone_match_key(entry.get("customer_id"))
+            if not key:
+                continue
+            matched += 1
+            keys.add(key)
+            iso = entry.get("sent_at") or ""
+            prev = latest.get(key)
+            if not prev or (iso and iso > prev):
+                latest[key] = iso
+
+        return keys, latest, matched
 
 
 message_logs_service = MessageLogsService()

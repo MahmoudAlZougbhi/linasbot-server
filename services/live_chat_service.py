@@ -23,7 +23,7 @@ from services.live_chat_contracts import (
     utc_now,
 )
 from utils.utils import get_firestore_db, set_human_takeover_status, get_canonical_user_id_and_phone
-from utils.phone_utils import normalize_phone, is_phone_like_user_id
+from utils.phone_utils import normalize_phone, is_phone_like_user_id, phone_match_key
 from services.media_service import build_whatsapp_audio_delivery_url
 
 
@@ -1566,6 +1566,185 @@ class LiveChatService:
                 search,
                 source="index_error",
             )
+
+    def _identity_keys_for_index_chat(
+        self, user_id: Any, phone_full: str, phone_clean: str
+    ) -> set:
+        keys = set()
+        for part in (user_id, phone_full, phone_clean):
+            k = phone_match_key(part)
+            if k:
+                keys.add(k)
+        return keys
+
+    async def get_chats_by_template_send_log(
+        self,
+        template_id: str,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        scan_limit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Match live_chat_index rows to Smart Messaging message_logs (successful template sends).
+        Scans up to scan_limit index docs (newest first). Date filter applies to log sent_at (UTC day).
+        """
+        from services.message_logs_service import message_logs_service
+        from services.smart_messaging_catalog import normalize_template_id
+
+        tid = normalize_template_id((template_id or "").strip())
+        if not tid:
+            return {
+                "success": False,
+                "error": "template_id is required",
+                "chats": [],
+                "log_entries_matched": 0,
+                "distinct_recipients": 0,
+                "matched_chats": 0,
+                "index_scanned": 0,
+            }
+
+        max_scan = scan_limit
+        if max_scan is None or int(max_scan) <= 0:
+            max_scan = _env_int("LIVE_CHAT_TEMPLATE_FILTER_SCAN_LIMIT", 4000)
+        max_scan = max(100, min(int(max_scan), 20000))
+
+        df = (date_from or "").strip() or None
+        dt = (date_to or "").strip() or None
+
+        recipient_keys, latest_sent, log_rows = message_logs_service.recipient_phone_keys_for_template(
+            tid, date_from=df, date_to=dt
+        )
+
+        if not recipient_keys:
+            return {
+                "success": True,
+                "chats": [],
+                "template_id": tid,
+                "log_entries_matched": log_rows,
+                "distinct_recipients": 0,
+                "matched_chats": 0,
+                "index_scanned": 0,
+                "date_from": df or "",
+                "date_to": dt or "",
+                "message": "No send log entries for this template in the selected date range.",
+            }
+
+        db = get_firestore_db()
+        if not db:
+            return {
+                "success": False,
+                "error": "firestore_unavailable",
+                "chats": [],
+                "template_id": tid,
+                "log_entries_matched": log_rows,
+                "distinct_recipients": len(recipient_keys),
+                "matched_chats": 0,
+                "index_scanned": 0,
+            }
+
+        index_coll = self._index_collection(db)
+
+        def _stream():
+            return list(
+                index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
+                .order_by("conversation_id")
+                .limit(max_scan)
+                .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS, retry=None)
+            )
+
+        try:
+            docs = await self._run_blocking_with_timeout(
+                _stream,
+                self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+            )
+        except Exception as e:
+            print(f"❌ get_chats_by_template_send_log stream error: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "chats": [],
+                "template_id": tid,
+                "log_entries_matched": log_rows,
+                "distinct_recipients": len(recipient_keys),
+                "matched_chats": 0,
+                "index_scanned": 0,
+            }
+
+        matched: List[Dict[str, Any]] = []
+        for doc in docs or []:
+            data = doc.to_dict() or {}
+            state = self._normalize_conversation_state(data)
+            customer_info = data.get("customer_info") or {}
+            user_id = data.get("user_id")
+            user_name = (
+                data.get("user_name")
+                or customer_info.get("name")
+                or config.user_names.get(user_id)
+                or "Unknown Customer"
+            )
+            phone_full = data.get("user_phone") or customer_info.get("phone_full") or ""
+            phone_clean = data.get("phone_clean") or customer_info.get("phone_clean") or ""
+
+            id_keys = self._identity_keys_for_index_chat(user_id, phone_full, phone_clean)
+            overlap = id_keys & recipient_keys
+            if not overlap:
+                continue
+
+            matched_key = sorted(overlap)[0]
+            sent_hint = latest_sent.get(matched_key) or ""
+
+            last_at = data.get("last_message_at") or data.get("last_updated")
+            if isinstance(last_at, str):
+                try:
+                    last_at = self._parse_timestamp(last_at)
+                except Exception:
+                    last_at = utc_now()
+
+            chat_entry = {
+                "conversation_id": doc.id,
+                "user_id": user_id,
+                "user_name": user_name,
+                "phone_number": phone_full,
+                "phone_clean": phone_clean,
+                "last_message_text": data.get("last_message_text", ""),
+                "last_message_at": last_at.isoformat()
+                if hasattr(last_at, "isoformat")
+                else str(last_at),
+                "conversation_state": state,
+                "operator_id": data.get("operator_id"),
+                "human_takeover_active": data.get("human_takeover_active"),
+                "post_release_escalation_suppressed_until": data.get(
+                    "post_release_escalation_suppressed_until"
+                ),
+                "unread_count": data.get("unread_count", 0),
+                "language": data.get("language")
+                or customer_info.get("language")
+                or config.user_data_whatsapp.get(user_id, {}).get(
+                    "user_preferred_lang", "ar"
+                ),
+                "sentiment": data.get("sentiment", "neutral"),
+                "message_count": data.get("message_count", 0),
+                "is_new_customer": data.get("is_new_customer", False),
+                "template_send_logged_at": sent_hint,
+            }
+            matched.append(self._to_frontend_chat_format(chat_entry))
+
+        matched.sort(
+            key=lambda c: (c.get("last_message_at", ""), c.get("conversation_id", "")),
+            reverse=True,
+        )
+
+        return {
+            "success": True,
+            "chats": matched,
+            "template_id": tid,
+            "log_entries_matched": log_rows,
+            "distinct_recipients": len(recipient_keys),
+            "matched_chats": len(matched),
+            "index_scanned": len(docs or []),
+            "date_from": df or "",
+            "date_to": dt or "",
+        }
 
     async def _compute_index_counters(self) -> Dict[str, int]:
         """Compute dashboard counters directly from live_chat_index (best-effort, capped for performance)."""

@@ -51,6 +51,32 @@ def normalize_phone(raw_phone: Optional[str]) -> str:
     return "+" + digits
 
 
+def phone_match_key(raw: Optional[str]) -> str:
+    """
+    Digits-only identity for comparing message-log customer_id to live_chat_index phones.
+    Uses the same Lebanon E.164 rules as normalize_phone (e.g. 96131234567).
+    """
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if not s or s.lower() in ("unknown", "none", "null"):
+        return ""
+    e164 = normalize_phone(s)
+    if not e164:
+        digits = re.sub(r"\D", "", s)
+        if not digits:
+            return ""
+        if digits.startswith("0") and len(digits) > 1:
+            digits = digits[1:]
+        if not digits.startswith("961") and len(digits) <= 10:
+            e164 = normalize_phone("961" + digits.lstrip("0"))
+        else:
+            e164 = normalize_phone("+" + digits)
+    if not e164:
+        return re.sub(r"\D", "", s)
+    return re.sub(r"\D", "", e164)
+
+
 def is_phone_like_user_id(user_id: Optional[str]) -> bool:
     """True if user_id looks like a phone (Meta/360 wa_id) rather than a room_id."""
     if not user_id:
