@@ -11,6 +11,13 @@ from typing import Any, Dict, List, Optional
 
 from services.smart_messaging_catalog import normalize_template_id
 
+# Internal IDs that map to a different key under config/templates (and thus a different Meta `name`).
+_LEGACY_TEMPLATE_CONFIG_KEYS: Dict[str, str] = {
+    "twenty_day_followup": "one_month_followup",
+    "missed_paused_appointment": "missed_this_month",
+    "whatsapp_lead_no_booking": "missed_yesterday",
+}
+
 
 class MontyMobileTemplateService:
     """Service for sending WhatsApp template messages via MontyMobile"""
@@ -79,22 +86,43 @@ class MontyMobileTemplateService:
         if template:
             return template
 
-        legacy_fallbacks = {
-            "twenty_day_followup": "one_month_followup",
-            "missed_paused_appointment": "missed_this_month",
-            "whatsapp_lead_no_booking": "missed_yesterday",
-        }
-        return self.templates.get(legacy_fallbacks.get(canonical, canonical))
+        alt = _LEGACY_TEMPLATE_CONFIG_KEYS.get(canonical, canonical)
+        return self.templates.get(alt)
+
+    def templates_are_text_only(self) -> bool:
+        """
+        When True: never attach header components and never use dashboard/env/default image URLs
+        for Monty template sends. Set in config/montymobile_templates.json api_config.
+        """
+        return bool((self.api_config or {}).get("templates_are_text_only", False))
+
+    def _resolve_template_config_key(self, canonical_id: str) -> str:
+        """JSON object key under templates{} used for this logical id (after normalize_template_id)."""
+        if canonical_id in self.templates:
+            return canonical_id
+        return _LEGACY_TEMPLATE_CONFIG_KEYS.get(canonical_id, canonical_id)
+
+    def _describe_template_resolution(self, requested_id: str, canonical_id: str) -> str:
+        norm = normalize_template_id(requested_id)
+        if norm != requested_id:
+            return f"alias {requested_id!r} -> {norm!r}"
+        if canonical_id in self.templates:
+            return "direct"
+        mapped = _LEGACY_TEMPLATE_CONFIG_KEYS.get(canonical_id)
+        if mapped and mapped in self.templates:
+            return f"legacy_map {canonical_id!r} -> config key {mapped!r} (Meta name={self.templates[mapped].get('name')!r})"
+        return "unknown"
 
     def _resolve_template_header_components(
         self, template: Dict[str, Any], template_lang: Dict[str, Any], lookup: Dict[str, str]
     ) -> List[Dict[str, Any]]:
         """
-        WhatsApp / Monty require a header component when the approved template has a HEADER
-        (image, video, document, or variable text). Our JSON used to omit headers unless
-        `header_parameters` was set — Meta templates with an image header then fail with:
-        "Header component is required but missing in request".
+        Build optional WhatsApp template header components. Skipped entirely when
+        api_config.templates_are_text_only is True (body-only / text-only templates).
         """
+        if self.templates_are_text_only():
+            return []
+
         out: List[Dict[str, Any]] = []
         header_cfg = template.get("header")
         if not isinstance(header_cfg, dict):
@@ -276,6 +304,11 @@ class MontyMobileTemplateService:
 
         print(f"   Template Name: {template['name']}")
         print(f"   Template WA ID: {template.get('wa_message_id', 'N/A')}")
+        print(
+            f"   Resolution: {self._describe_template_resolution(template_id, canonical_template_id)}; "
+            f"config_key={self._resolve_template_config_key(canonical_template_id)!r}; "
+            f"text_only_mode={self.templates_are_text_only()}"
+        )
 
         header_components = self._resolve_template_header_components(
             template, template_lang, lookup
@@ -288,6 +321,23 @@ class MontyMobileTemplateService:
             )
 
         return payload
+
+    def _log_outbound_template_payload(
+        self, requested_template_id: str, canonical_id: str, payload: Dict[str, Any]
+    ) -> None:
+        t = payload.get("template") or {}
+        name = t.get("name")
+        lang = (t.get("language") or {}).get("code")
+        comps = t.get("components") or []
+        has_header = any(str(c.get("type", "")).lower() == "header" for c in comps)
+        print(
+            "[Monty template outbound] "
+            f"requested_template_id={requested_template_id!r} normalized_id={canonical_id!r} "
+            f"payload_template_name={name!r} language={lang!r} "
+            f"has_header_component={has_header} "
+            f"resolution={self._describe_template_resolution(requested_template_id, canonical_id)} "
+            f"components={json.dumps(comps, ensure_ascii=False)}"
+        )
     
     async def send_template_message(
         self,
@@ -318,7 +368,7 @@ class MontyMobileTemplateService:
                 }
 
             tpl_meta = self.get_template_info(normalize_template_id(template_id))
-            # When false: do not block sends if no image header — use for body-only templates in Meta.
+            # When templates_are_text_only: never require or validate image headers.
             assume_hdr = bool((self.api_config or {}).get("assume_whatsapp_image_header", False))
             hcfg = (tpl_meta or {}).get("header") if tpl_meta else {}
             header_opt_out = (
@@ -327,7 +377,13 @@ class MontyMobileTemplateService:
             )
             comps = (payload.get("template") or {}).get("components") or []
             has_header = any(str(c.get("type", "")).lower() == "header" for c in comps)
-            if assume_hdr and tpl_meta and not header_opt_out and not has_header:
+            if (
+                not self.templates_are_text_only()
+                and assume_hdr
+                and tpl_meta
+                and not header_opt_out
+                and not has_header
+            ):
                 try:
                     from services.message_preview_service import message_preview_service
 
@@ -350,6 +406,9 @@ class MontyMobileTemplateService:
                     ),
                 }
 
+            canon = normalize_template_id(template_id)
+            self._log_outbound_template_payload(template_id, canon, payload)
+
             # Prepare headers
             headers = {
                 "Tenant": self.api_config['tenant'],
@@ -365,7 +424,6 @@ class MontyMobileTemplateService:
             print(f"   Tenant: {self.api_config['tenant']}")
             print(f"   API ID: {self.api_config['api_id']}")
             print(f"   API Key: {self.api_config['api_key'][:20]}...")
-            print(f"   Payload: {json.dumps(payload, ensure_ascii=False)[:200]}...")
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, headers=headers, json=payload)

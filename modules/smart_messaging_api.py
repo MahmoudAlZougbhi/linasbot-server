@@ -433,23 +433,26 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             f"(user_lang={user_language} source={language_source} monty_lang={language})"
         )
 
-        from services.message_preview_service import message_preview_service
+        if not montymobile_template_service.templates_are_text_only():
+            from services.message_preview_service import message_preview_service
 
-        _hdr_req = (
-            request_data.get("header_image_url")
-            or request_data.get("template_header_image_url")
-            or request_data.get("templateHeaderImageUrl")
-            or ""
-        )
-        _hdr_req = str(_hdr_req).strip()
-        _hdr_saved = message_preview_service.get_template_header_image_url()
-        _hdr_eff = _hdr_req or _hdr_saved
-        if _hdr_eff:
-            test_parameters = {**test_parameters, "header_image": _hdr_eff}
-        print(
-            f"📋 Template header image: {'OK (' + str(len(_hdr_eff)) + ' chars)' if _hdr_eff else 'MISSING'} "
-            f"(request={'yes' if _hdr_req else 'no'}, saved={'yes' if _hdr_saved else 'no'})"
-        )
+            _hdr_req = (
+                request_data.get("header_image_url")
+                or request_data.get("template_header_image_url")
+                or request_data.get("templateHeaderImageUrl")
+                or ""
+            )
+            _hdr_req = str(_hdr_req).strip()
+            _hdr_saved = message_preview_service.get_template_header_image_url()
+            _hdr_eff = _hdr_req or _hdr_saved
+            if _hdr_eff:
+                test_parameters = {**test_parameters, "header_image": _hdr_eff}
+            print(
+                f"📋 Template header image: {'OK (' + str(len(_hdr_eff)) + ' chars)' if _hdr_eff else 'MISSING'} "
+                f"(request={'yes' if _hdr_req else 'no'}, saved={'yes' if _hdr_saved else 'no'})"
+            )
+        else:
+            print("📋 Template send: templates_are_text_only — skipping header_image injection for test send")
 
         # Send template message
         result = await montymobile_template_service.send_template_message(
