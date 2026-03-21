@@ -384,13 +384,26 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 "error": f"Template '{template_id}' not found"
             }
         
-        # Get the parameters this template expects (fallback to ar if variant missing)
+        # Body variable names + count (must match montymobile_template_service / Meta {{1}}..{{n}})
         langs = template_info.get("languages") or {}
-        template_params = (langs.get(language) or {}).get("parameters", [])
-        if not template_params and language != "ar":
-            template_params = (langs.get("ar") or {}).get("parameters", [])
-        
-        # Build test parameters - only include what the template needs
+        template_lang = langs.get(language) or {}
+        if not template_lang and language != "ar":
+            template_lang = langs.get("ar") or {}
+        raw_specs = template_lang.get("body_parameters")
+        if not isinstance(raw_specs, list) or not raw_specs:
+            raw_specs = template_lang.get("parameters") or []
+        template_param_names = [x for x in raw_specs if isinstance(x, str)]
+
+        raw_count = template_lang.get("parameters_count")
+        try:
+            n_body = (
+                max(0, int(raw_count))
+                if raw_count is not None
+                else len(template_param_names)
+            )
+        except (TypeError, ValueError):
+            n_body = len(template_param_names)
+
         all_test_values = {
             "customer_name": "Test Customer",
             "appointment_date": "2025-12-25",
@@ -398,16 +411,21 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             "branch_name": "Lina's Laser Center",
             "service_name": "Laser Hair Removal",
             "phone_number": "+961 1 234 567",
-            "next_appointment_date": "2026-01-15"
+            "next_appointment_date": "2026-01-15",
         }
-        
-        # Only include parameters that this template needs
+
         test_parameters = {
             param: all_test_values.get(param, f"test_{param}")
-            for param in template_params
+            for param in template_param_names
         }
+        # Monty requires exactly `n_body` body parameters; pad with positional keys if JSON names are short
+        for i in range(len(template_param_names), n_body):
+            test_parameters[str(i + 1)] = f"test_slot_{i + 1}"
         
-        print(f"📋 Template '{template_id}' expects parameters: {template_params}")
+        print(
+            f"📋 Template '{template_id}' body slots: count={n_body} "
+            f"named={template_param_names!r}"
+        )
         print(f"📋 Sending parameters: {test_parameters}")
         
         print(

@@ -152,6 +152,50 @@ class MontyMobileTemplateService:
 
         return out
 
+    def _build_body_component_parameters(
+        self, template_lang: Dict[str, Any], lookup: Dict[str, Any]
+    ) -> List[Dict[str, str]]:
+        """
+        Build WhatsApp body `parameters` array. Meta matches by position; the array length must
+        equal the template's body variable count. Prefer `parameters_count` from config when set
+        so we still send the right number of slots if `parameters` names are missing/outdated.
+        """
+        raw_specs = template_lang.get("body_parameters")
+        if not isinstance(raw_specs, list) or not raw_specs:
+            raw_specs = template_lang.get("parameters") or []
+        param_specs: List[str] = [x for x in raw_specs if isinstance(x, str)]
+
+        raw_count = template_lang.get("parameters_count")
+        if raw_count is not None:
+            try:
+                n_body = max(0, int(raw_count))
+            except (TypeError, ValueError):
+                n_body = len(param_specs)
+        else:
+            n_body = len(param_specs)
+
+        if len(param_specs) > n_body > 0:
+            _log = f"template_lang body specs len={len(param_specs)} > parameters_count={n_body}; trimming"
+            print(f"⚠️ Monty template body: {_log}")
+            param_specs = param_specs[:n_body]
+        elif n_body > len(param_specs):
+            print(
+                f"⚠️ Monty template body: parameters_count={n_body} but only {len(param_specs)} "
+                f"named slot(s) in JSON — padding with positional keys \"1\"..\"{n_body}\" / empty strings"
+            )
+
+        texts: List[str] = []
+        for i in range(n_body):
+            if i < len(param_specs):
+                key = param_specs[i]
+                val = lookup.get(key, "")
+            else:
+                pos = str(i + 1)
+                val = lookup.get(pos, lookup.get(f"body_{pos}", ""))
+            texts.append(str(val if val is not None else ""))
+
+        return [{"type": "text", "text": t} for t in texts]
+
     def build_template_payload(
         self,
         template_id: str,
@@ -206,15 +250,10 @@ class MontyMobileTemplateService:
         
         template_lang = template['languages'][language]
 
-        # Body variables: must match Meta template exactly (count + order).
-        # Do not gate on `if parameters:` — {} is falsy and would skip the whole body (HTTP 500:
-        # "Number of body variables is invalid"). Use dict lookup with "" for missing keys.
-        param_specs = template_lang.get("parameters") or []
+        # Body variables: count must match Meta {{1}}..{{n}} exactly (Monty HTTP 500:
+        # "Number of body variables is invalid" if count is wrong or body component missing).
         lookup = parameters if isinstance(parameters, dict) else {}
-        param_values = [
-            {"type": "text", "text": str(lookup.get(param_name, ""))}
-            for param_name in param_specs
-        ]
+        param_values = self._build_body_component_parameters(template_lang, lookup)
 
         payload = {
             "to": phone_number,
@@ -236,7 +275,7 @@ class MontyMobileTemplateService:
         )
         payload["template"]["components"].extend(header_components)
 
-        if param_specs:
+        if param_values:
             payload["template"]["components"].append(
                 {"type": "body", "parameters": param_values}
             )
