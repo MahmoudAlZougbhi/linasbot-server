@@ -4232,11 +4232,20 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             service_name = service_map.get(service_id, "unknown_service") if service_id else "unknown_service"
                             
                             # Log appointment reschedule
+                            _aid_rs = function_args.get("appointment_id")
+                            _ph_rs = (
+                                function_args.get("phone")
+                                or customer_phone_clean
+                                or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                                or ""
+                            )
                             analytics.log_appointment(
                                 user_id=user_id,
                                 service=service_name,
                                 status="rescheduled",
-                                messages_count=0
+                                messages_count=0,
+                                phone=str(_ph_rs).strip() if _ph_rs else None,
+                                appointment_id=_aid_rs,
                             )
                             print(f"📊 Analytics: Appointment rescheduled - {service_name}")
                             ra = tool_output.get("resume_appointment") or {}

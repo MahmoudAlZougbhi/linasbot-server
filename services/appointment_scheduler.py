@@ -134,6 +134,12 @@ async def populate_scheduled_messages_from_appointments():
                 service_name = apt_details.get('service', 'جلسة ليزر') if apt_details else 'جلسة ليزر'
                 service_id = apt_details.get('service_id') if apt_details else None
                 branch_name = apt_details.get('branch', 'الفرع الرئيسي') if apt_details else 'الفرع الرئيسي'
+                appointment_id = (
+                    apt.get("appointment_id")
+                    or apt.get("id")
+                    or (apt_details.get("appointment_id") if apt_details else None)
+                    or (apt_details.get("id") if apt_details else None)
+                )
 
                 if not customer_phone or not apt_datetime_str:
                     if idx < 3:  # Log first 3 failures for debugging
@@ -167,7 +173,8 @@ async def populate_scheduled_messages_from_appointments():
                     'language': user_persistence.get_user_language(customer_phone),
                     'service': service_name,
                     'service_id': service_id,
-                    'branch': branch_name
+                    'branch': branch_name,
+                    'appointment_id': appointment_id,
                 }
 
                 # Call schedule_appointment_reminders - populates scheduled_messages dict

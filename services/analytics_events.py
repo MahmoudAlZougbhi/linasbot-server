@@ -143,7 +143,15 @@ class AnalyticsEvents:
             "service": service
         })
     
-    def log_appointment(self, user_id: str, service: str, status: str, messages_count: int = 0):
+    def log_appointment(
+        self,
+        user_id: str,
+        service: str,
+        status: str,
+        messages_count: int = 0,
+        phone: str = None,
+        appointment_id: Any = None,
+    ):
         """
         Log appointment event
         
@@ -151,12 +159,75 @@ class AnalyticsEvents:
             status: "requested" | "booked" | "confirmed" | "rescheduled" | "cancelled"
             messages_count: Number of messages in conversation (for conversion tracking)
         """
-        self._append_event({
+        aid = None
+        if appointment_id is not None:
+            try:
+                aid = int(appointment_id)
+            except (TypeError, ValueError):
+                aid = None
+        payload: Dict[str, Any] = {
             "type": "appointment",
             "user_id": user_id,
             "service": service,
             "status": status,
-            "messages_count": messages_count
+            "messages_count": messages_count,
+        }
+        if phone:
+            payload["phone"] = str(phone).strip()
+        if aid is not None:
+            payload["appointment_id"] = aid
+        self._append_event(payload)
+
+    def log_smart_reminder_sent(
+        self,
+        user_id: str,
+        template_id: str,
+        message_id: str = None,
+        appointment_id: Any = None,
+        phone: str = None,
+        appointment_at: str = None,
+    ):
+        """Log when a smart template (e.g. reminder_24h) is actually sent to the customer."""
+        aid = None
+        if appointment_id is not None:
+            try:
+                aid = int(appointment_id)
+            except (TypeError, ValueError):
+                aid = None
+        self._append_event({
+            "type": "smart_reminder_sent",
+            "user_id": user_id,
+            "template_id": (template_id or "reminder_24h"),
+            "message_id": message_id,
+            "appointment_id": aid,
+            "phone": (str(phone).strip() if phone else None),
+            "appointment_at": appointment_at,
+        })
+
+    def log_smart_reminder_reply(
+        self,
+        user_id: str,
+        intent: str,
+        source_message_id: str = None,
+        appointment_id: Any = None,
+        phone: str = None,
+    ):
+        """
+        Log a classified reply to a smart reminder (confirm / postpone / cancel / defer).
+        """
+        aid = None
+        if appointment_id is not None:
+            try:
+                aid = int(appointment_id)
+            except (TypeError, ValueError):
+                aid = None
+        self._append_event({
+            "type": "smart_reminder_reply",
+            "user_id": user_id,
+            "intent": str(intent or "").strip().lower()[:32],
+            "source_message_id": source_message_id,
+            "appointment_id": aid,
+            "phone": (str(phone).strip() if phone else None),
         })
     
     def log_feedback(self, user_id: str, feedback_type: str, reason: str = None):
@@ -696,6 +767,11 @@ class AnalyticsEvents:
                     "by_service_counts": defaultdict(int),
                     "by_service_unique_users": defaultdict(set),
                 },
+                "smart_reminders": {
+                    "sent": [],
+                    "replies": [],
+                },
+                "appointment_reschedules": [],
                 "escalations": {
                     "total": 0,
                     "by_type": defaultdict(int),
@@ -862,6 +938,13 @@ class AnalyticsEvents:
                         stats["appointments"]["confirmed"] += 1
                     elif status == "rescheduled":
                         stats["appointments"]["rescheduled"] += 1
+                        stats["appointment_reschedules"].append({
+                            "user_id": user_id,
+                            "service": service,
+                            "at": event.get("timestamp"),
+                            "phone": event.get("phone"),
+                            "appointment_id": event.get("appointment_id"),
+                        })
                     elif status == "cancelled":
                         stats["appointments"]["cancelled"] += 1
                     
@@ -906,6 +989,29 @@ class AnalyticsEvents:
                         "service": event.get("service"),
                         "at": event.get("timestamp"),
                     })
+
+                elif event_type == "smart_reminder_sent":
+                    sm = stats["smart_reminders"]
+                    sm["sent"].append({
+                        "user_id": user_id,
+                        "message_id": event.get("message_id"),
+                        "template_id": event.get("template_id") or "reminder_24h",
+                        "appointment_id": event.get("appointment_id"),
+                        "phone": event.get("phone"),
+                        "appointment_at": event.get("appointment_at"),
+                        "at": event.get("timestamp"),
+                    })
+
+                elif event_type == "smart_reminder_reply":
+                    sm = stats["smart_reminders"]
+                    sm["replies"].append({
+                        "user_id": user_id,
+                        "intent": event.get("intent"),
+                        "source_message_id": event.get("source_message_id"),
+                        "appointment_id": event.get("appointment_id"),
+                        "phone": event.get("phone"),
+                        "at": event.get("timestamp"),
+                    })
                 
                 elif event_type == "escalation":
                     stats["escalations"]["total"] += 1
@@ -935,6 +1041,22 @@ class AnalyticsEvents:
 
             pc_events.sort(key=_pause_at, reverse=True)
             stats["pause_cleared"]["events"] = pc_events[:80]
+
+            sm = stats.get("smart_reminders") or {"sent": [], "replies": []}
+
+            def _row_at(row: Dict[str, Any]) -> datetime.datetime:
+                t = self._parse_timestamp(row.get("at"))
+                return t if t else datetime.datetime.min
+
+            sm["sent"].sort(key=_row_at, reverse=True)
+            sm["sent"] = sm["sent"][:120]
+            sm["replies"].sort(key=_row_at, reverse=True)
+            sm["replies"] = sm["replies"][:120]
+            stats["smart_reminders"] = sm
+
+            ar_list = stats.get("appointment_reschedules") or []
+            ar_list.sort(key=lambda row: _row_at(row), reverse=True)
+            stats["appointment_reschedules"] = ar_list[:80]
             
             # Build final response
             response = self._format_analytics_response(stats, days)
@@ -1140,6 +1262,117 @@ class AnalyticsEvents:
                 "live_chat_search": search_q or str(uid or ""),
                 "last_session_rating_stars": latest_sr.get(uid) if uid else None,
             })
+
+        sm_stats = stats.get("smart_reminders") or {}
+        sent_rows = list(sm_stats.get("sent") or [])
+        reply_rows = list(sm_stats.get("replies") or [])
+
+        def _live_chat_q(uid, phone_raw):
+            phone_raw = phone_raw or ""
+            digits = re.sub(r"\D", "", str(phone_raw))
+            if digits:
+                return digits
+            return re.sub(r"\D", "", str(uid or "")) or str(uid or "")
+
+        def _sent_has_reply(sent: Dict[str, Any]) -> bool:
+            mid = sent.get("message_id")
+            if mid:
+                mids = {
+                    str(r.get("source_message_id"))
+                    for r in reply_rows
+                    if r.get("source_message_id")
+                }
+                if str(mid) in mids:
+                    return True
+            uid = self._normalize_user_id(sent.get("user_id"))
+            if not uid:
+                return False
+            st = self._parse_timestamp(sent.get("at"))
+            said = sent.get("appointment_id")
+            for r in reply_rows:
+                if self._normalize_user_id(r.get("user_id")) != uid:
+                    continue
+                rt = self._parse_timestamp(r.get("at"))
+                if not rt or not st or rt <= st:
+                    continue
+                rid = r.get("appointment_id")
+                if said is not None and rid is not None:
+                    try:
+                        if int(said) == int(rid):
+                            return True
+                    except (TypeError, ValueError):
+                        pass
+                elif said is None and rid is None:
+                    return True
+            return False
+
+        no_reply_count = 0
+        no_reply_users = set()
+        for s in sent_rows:
+            if _sent_has_reply(s):
+                continue
+            uid = self._normalize_user_id(s.get("user_id"))
+            no_reply_count += 1
+            if uid:
+                no_reply_users.add(uid)
+
+        no_response_recent = []
+        for s in sent_rows:
+            if _sent_has_reply(s):
+                continue
+            uid = self._normalize_user_id(s.get("user_id"))
+            if not uid:
+                continue
+            pr = s.get("phone") or ""
+            q = _live_chat_q(uid, pr)
+            no_response_recent.append({
+                "user_id_masked": self._mask_user_id(uid),
+                "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
+                "appointment_id": s.get("appointment_id"),
+                "appointment_at": s.get("appointment_at"),
+                "sent_at": s.get("at"),
+                "live_chat_search": q or str(uid),
+                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+            })
+        no_response_recent = no_response_recent[:60]
+
+        reminder_reply_recent = []
+        intent_counts: Dict[str, int] = defaultdict(int)
+        for r in reply_rows:
+            intent = (r.get("intent") or "other").lower()
+            intent_counts[intent] += 1
+            uid = self._normalize_user_id(r.get("user_id"))
+            if not uid:
+                continue
+            pr = r.get("phone") or ""
+            q = _live_chat_q(uid, pr)
+            reminder_reply_recent.append({
+                "intent": intent,
+                "user_id_masked": self._mask_user_id(uid),
+                "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
+                "appointment_id": r.get("appointment_id"),
+                "at": r.get("at"),
+                "live_chat_search": q or str(uid),
+                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+            })
+        reminder_reply_recent = reminder_reply_recent[:60]
+
+        reschedule_recent = []
+        for row in stats.get("appointment_reschedules") or []:
+            uid = self._normalize_user_id(row.get("user_id"))
+            if not uid:
+                continue
+            pr = row.get("phone") or ""
+            q = _live_chat_q(uid, pr)
+            reschedule_recent.append({
+                "user_id_masked": self._mask_user_id(uid),
+                "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
+                "appointment_id": row.get("appointment_id"),
+                "service": row.get("service"),
+                "at": row.get("at"),
+                "live_chat_search": q or str(uid),
+                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+            })
         
         return {
             "success": True,
@@ -1213,6 +1446,21 @@ class AnalyticsEvents:
                 "unique_users": len(pc_unique) if isinstance(pc_unique, set) else int(pc_unique or 0),
                 "by_service": pause_by_service,
                 "recent": pause_cleared_recent,
+            },
+            "smart_reminders": {
+                "sent_total": len(sent_rows),
+                "replies_total": len(reply_rows),
+                "no_reply_to_reminder": {
+                    "count": no_reply_count,
+                    "unique_users": len(no_reply_users),
+                },
+                "reply_intents": dict(intent_counts),
+                "no_response_recent": no_response_recent,
+                "reminder_replies_recent": reminder_reply_recent,
+            },
+            "appointment_reschedules_detail": {
+                "total": stats["appointments"]["rescheduled"],
+                "recent": reschedule_recent,
             },
             "escalations": {
                 "total_escalations": stats["escalations"]["total"],

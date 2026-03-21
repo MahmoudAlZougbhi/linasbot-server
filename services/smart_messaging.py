@@ -706,6 +706,37 @@ Des questions? Nous sommes là! 💬
             self._persist_sent_messages()
             print(f"   📋 Marked {message_id} as would_send (dry-run)")
 
+    def _log_reminder_sent_analytics(self, message_id: str, msg_data: Dict[str, Any]) -> None:
+        """Append analytics event when reminder_24h is actually sent."""
+        if not msg_data:
+            return
+        canonical_type = normalize_template_id(msg_data.get("message_type", ""))
+        if canonical_type != "reminder_24h":
+            return
+        metadata = msg_data.get("metadata", {}) if isinstance(msg_data.get("metadata"), dict) else {}
+        ph = msg_data.get("placeholders") or {}
+        aid = metadata.get("appointment_id") or ph.get("appointment_id")
+        phone = msg_data.get("customer_phone")
+        d = ph.get("appointment_date")
+        t = ph.get("appointment_time")
+        ap_at = f"{d} {t}" if d and t else (str(d) if d else None)
+        uid = str(phone or "").strip()
+        if not uid:
+            return
+        try:
+            from services.analytics_events import analytics
+
+            analytics.log_smart_reminder_sent(
+                user_id=uid,
+                template_id=canonical_type,
+                message_id=message_id,
+                appointment_id=aid,
+                phone=phone,
+                appointment_at=ap_at,
+            )
+        except Exception as e:
+            print(f"⚠️ log_smart_reminder_sent analytics: {e}")
+
     def mark_message_sent(self, message_id: str):
         """Mark a single message as successfully sent (called after WhatsApp confirms)."""
         if message_id in self.scheduled_messages:
@@ -760,6 +791,7 @@ Des questions? Nous sommes là! 💬
             except Exception as log_exc:
                 print(f"⚠️ Failed to write message log for {message_id}: {log_exc}")
 
+            self._log_reminder_sent_analytics(message_id, msg_data)
             self._persist_sent_messages()
 
     def mark_message_failed(self, message_id: str, error: str = ""):
@@ -796,6 +828,9 @@ Des questions? Nous sommes là! 💬
             "service_name": service_name,
             "phone_number": "01234567"  # Support phone
         }
+        raw_aid = customer_data.get("appointment_id")
+        if raw_aid is not None:
+            placeholders["appointment_id"] = raw_aid
 
         messages_scheduled = 0
         now = datetime.now()
@@ -803,6 +838,10 @@ Des questions? Nous sommes là! 💬
         print(f"\n📋 Scheduling reminders for {customer_name} ({customer_phone})")
         print(f"   Appointment: {appointment_date}")
         print(f"   Current time: {now}")
+
+        reminder_meta = None
+        if raw_aid is not None:
+            reminder_meta = {"appointment_id": raw_aid}
 
         # Schedule 24h reminder
         reminder_24h_time = appointment_date - timedelta(hours=24)
@@ -814,7 +853,8 @@ Des questions? Nous sommes là! 💬
                 placeholders,
                 language,
                 service_id=service_id,
-                service_name=service_name
+                service_name=service_name,
+                metadata=reminder_meta,
             )
             if result:
                 messages_scheduled += 1
@@ -972,6 +1012,7 @@ Des questions? Nous sommes là! 💬
                         )
                 except Exception as log_exc:
                     print(f"⚠️ Failed to write message log while syncing {message_id}: {log_exc}")
+                self._log_reminder_sent_analytics(message_id, msg_data)
                 print(f"   [SYNC] Marked {message_id} as sent in scheduled_messages dict")
 
         if updated == 0:

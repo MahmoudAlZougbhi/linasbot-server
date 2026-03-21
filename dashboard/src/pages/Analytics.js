@@ -18,6 +18,7 @@ import {
   PhotoIcon,
   HandRaisedIcon,
   ArrowPathIcon,
+  BellAlertIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -160,6 +161,8 @@ const Analytics = () => {
   const satisfaction = analyticsData?.satisfaction || {};
   const sessionRatings = analyticsData?.session_ratings || {};
   const pauseCleared = analyticsData?.pause_cleared_resumes || {};
+  const smartReminders = analyticsData?.smart_reminders || {};
+  const appointmentReschedulesDetail = analyticsData?.appointment_reschedules_detail || {};
   const escalations = analyticsData?.escalations || {};
   const performance = analyticsData?.performance || {};
   const tokens = analyticsData?.token_usage || {};
@@ -309,6 +312,206 @@ const Analytics = () => {
               </thead>
               <tbody>
                 {(pauseCleared.recent || []).map((row, idx) => {
+                  const searchQ = row.live_chat_search || "";
+                  const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
+                  let whenLabel = "—";
+                  try {
+                    if (row.at) whenLabel = new Date(row.at).toLocaleString();
+                  } catch {
+                    whenLabel = row.at || "—";
+                  }
+                  const stars = row.last_session_rating_stars;
+                  return (
+                    <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
+                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{whenLabel}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{row.appointment_id ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-700 capitalize">
+                        {(row.service || "—").replace(/_/g, " ")}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-amber-700">
+                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          to={chatTo}
+                          className="inline-flex items-center rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white shadow hover:bg-emerald-700"
+                        >
+                          Chat
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </ChartCard>
+
+      {/* Smart reminder — no classified reply */}
+      <ChartCard
+        title="تذكير الموعد (24h) — ما ردّوا على الرسالة"
+        subtitle={`تذكير أُرسل ولم يُسجَّل ردّ مصنّف (نعم / تأجيل / إلغاء / منرجع منحكي) بعده · ${smartReminders.no_reply_to_reminder?.count ?? 0} إرسال · ${smartReminders.no_reply_to_reminder?.unique_users ?? 0} زبون فريد`}
+        icon={BellAlertIcon}
+      >
+        {(smartReminders.no_response_recent || []).length === 0 ? (
+          <p className="text-sm text-slate-500">
+            لا يوجد صفوف في هذه الفترة أو لا توجد أحداث تذكير مسجّلة بعد. No reminder sends without a
+            classified reply in this range.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left text-slate-600">
+                  <th className="px-3 py-2 font-medium">أُرسل / Sent</th>
+                  <th className="px-3 py-2 font-medium">موعد / Appt time</th>
+                  <th className="px-3 py-2 font-medium">الهاتف</th>
+                  <th className="px-3 py-2 font-medium">User</th>
+                  <th className="px-3 py-2 font-medium">Appt ID</th>
+                  <th className="px-3 py-2 font-medium">التقييم ★</th>
+                  <th className="px-3 py-2 font-medium">Chat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(smartReminders.no_response_recent || []).map((row, idx) => {
+                  const searchQ = row.live_chat_search || "";
+                  const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
+                  let sentLabel = "—";
+                  try {
+                    if (row.sent_at) sentLabel = new Date(row.sent_at).toLocaleString();
+                  } catch {
+                    sentLabel = row.sent_at || "—";
+                  }
+                  let apptWhen = "—";
+                  if (row.appointment_at) apptWhen = String(row.appointment_at);
+                  const stars = row.last_session_rating_stars;
+                  return (
+                    <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
+                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{sentLabel}</td>
+                      <td className="px-3 py-2 text-slate-600">{apptWhen}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{row.appointment_id ?? "—"}</td>
+                      <td className="px-3 py-2 font-medium text-amber-700">
+                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          to={chatTo}
+                          className="inline-flex items-center rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white shadow hover:bg-emerald-700"
+                        >
+                          Chat
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </ChartCard>
+
+      {/* Smart reminder — classified replies */}
+      <ChartCard
+        title="ردود على تذكير الموعد (تصنيف تلقائي)"
+        subtitle={`إجمالي الردود المصنّفة: ${smartReminders.replies_total ?? 0} · ${Object.entries(smartReminders.reply_intents || {}).map(([k, v]) => `${k}=${v}`).join(" · ") || "—"}`}
+        icon={ChatBubbleLeftRightIcon}
+      >
+        {(smartReminders.reminder_replies_recent || []).length === 0 ? (
+          <p className="text-sm text-slate-500">
+            لا يوجد ردود مصنّفة في هذه الفترة. No classified reminder replies in this range.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left text-slate-600">
+                  <th className="px-3 py-2 font-medium">الوقت</th>
+                  <th className="px-3 py-2 font-medium">النية / Intent</th>
+                  <th className="px-3 py-2 font-medium">الهاتف</th>
+                  <th className="px-3 py-2 font-medium">User</th>
+                  <th className="px-3 py-2 font-medium">Appt</th>
+                  <th className="px-3 py-2 font-medium">التقييم ★</th>
+                  <th className="px-3 py-2 font-medium">Chat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(smartReminders.reminder_replies_recent || []).map((row, idx) => {
+                  const searchQ = row.live_chat_search || "";
+                  const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
+                  let whenLabel = "—";
+                  try {
+                    if (row.at) whenLabel = new Date(row.at).toLocaleString();
+                  } catch {
+                    whenLabel = row.at || "—";
+                  }
+                  const intentAr = {
+                    confirm: "تأكيد / Yes",
+                    postpone: "تأجيل / Postpone",
+                    cancel: "إلغاء / Cancel",
+                    defer: "منرجع منحكي / Later",
+                    other: "أخرى",
+                  };
+                  const stars = row.last_session_rating_stars;
+                  return (
+                    <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
+                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{whenLabel}</td>
+                      <td className="px-3 py-2 font-medium text-rose-700">
+                        {intentAr[row.intent] || row.intent || "—"}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{row.appointment_id ?? "—"}</td>
+                      <td className="px-3 py-2 font-medium text-amber-700">
+                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          to={chatTo}
+                          className="inline-flex items-center rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white shadow hover:bg-emerald-700"
+                        >
+                          Chat
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </ChartCard>
+
+      {/* CRM reschedule (update_appointment_date) */}
+      <ChartCard
+        title="تأجيل موعد (النظام — أداة التعديل)"
+        subtitle={`آخر إعادة جدولة مسجّلة ضمن الفترة · إجمالي أحداث: ${appointmentReschedulesDetail.total ?? 0}`}
+        icon={CalendarIcon}
+      >
+        {(appointmentReschedulesDetail.recent || []).length === 0 ? (
+          <p className="text-sm text-slate-500">
+            لا يوجد صفوف في هذه الفترة. No CRM reschedule events in this range.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left text-slate-600">
+                  <th className="px-3 py-2 font-medium">الوقت</th>
+                  <th className="px-3 py-2 font-medium">الهاتف</th>
+                  <th className="px-3 py-2 font-medium">User</th>
+                  <th className="px-3 py-2 font-medium">Appt</th>
+                  <th className="px-3 py-2 font-medium">الخدمة</th>
+                  <th className="px-3 py-2 font-medium">التقييم ★</th>
+                  <th className="px-3 py-2 font-medium">Chat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(appointmentReschedulesDetail.recent || []).map((row, idx) => {
                   const searchQ = row.live_chat_search || "";
                   const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
                   let whenLabel = "—";

@@ -1369,6 +1369,26 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
             last_bot_msg = await get_last_bot_message_from_conversation(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
 
+            if last_bot_msg and query_to_send_to_gpt:
+                try:
+                    _meta = last_bot_msg.get("metadata") or {}
+                    if _meta.get("source") == "smart_message" and _meta.get("type") == "reminder_24h":
+                        from utils.reminder_analytics import classify_reminder_reply_intent
+                        from services.analytics_events import analytics
+
+                        _rint = classify_reminder_reply_intent(query_to_send_to_gpt)
+                        if _rint:
+                            _pn = user_data.get("phone_number")
+                            analytics.log_smart_reminder_reply(
+                                user_id=user_id,
+                                intent=_rint,
+                                source_message_id=_meta.get("message_id"),
+                                appointment_id=_meta.get("appointment_id"),
+                                phone=str(_pn).strip() if _pn else None,
+                            )
+                except Exception as _ra:
+                    print(f"[_process_and_respond] reminder reply analytics: {_ra}")
+
             # ALWAYS run selector: pass query + context_messages so selector understands what the conversation is about (e.g. user "eh" / "beirut" after we asked branch).
             from services.dynamic_retrieval_service import (
                 retrieve_and_merge,

@@ -244,6 +244,11 @@ async def startup_event():
                                             smart_messaging.mark_messages_sent_by_phone(phone, template_id)
                                             print(f"   Sent message {message_id} to {phone}")
 
+                                            _sched = smart_messaging.scheduled_messages.get(message_id) or {}
+                                            _meta = _sched.get("metadata") if isinstance(_sched.get("metadata"), dict) else {}
+                                            _ph = _sched.get("placeholders") or {}
+                                            _apt_id = _meta.get("appointment_id") or _ph.get("appointment_id")
+
                                             # Save to conversation history for continuous context
                                             await save_conversation_message_to_firestore(
                                                 user_id=phone,
@@ -255,7 +260,8 @@ async def startup_event():
                                                 metadata={
                                                     "source": "smart_message",
                                                     "type": template_id,
-                                                    "message_id": message_id
+                                                    "message_id": message_id,
+                                                    **({"appointment_id": _apt_id} if _apt_id is not None else {}),
                                                 }
                                             )
                                             print(f"   💾 Saved smart message to conversation history for {phone}")
@@ -317,6 +323,11 @@ async def startup_event():
                             smart_messaging.mark_message_sent(message_id)
                             print(f"   ✅ Sent successfully")
 
+                            _sched = smart_messaging.scheduled_messages.get(message_id) or {}
+                            _meta = _sched.get("metadata") if isinstance(_sched.get("metadata"), dict) else {}
+                            _ph = _sched.get("placeholders") or {}
+                            _apt_id = _meta.get("appointment_id") or _ph.get("appointment_id")
+
                             # Save to conversation history for continuous context
                             await save_conversation_message_to_firestore(
                                 user_id=phone,
@@ -328,7 +339,8 @@ async def startup_event():
                                 metadata={
                                     "source": "smart_message",
                                     "type": msg_type,
-                                    "message_id": message_id
+                                    "message_id": message_id,
+                                    **({"appointment_id": _apt_id} if _apt_id is not None else {}),
                                 }
                             )
                             print(f"   💾 Saved to conversation history")
