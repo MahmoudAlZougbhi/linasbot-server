@@ -53,14 +53,50 @@ class MessagePreviewService:
             print(f"Error saving preview queue: {e}")
             return False
 
-    def _load_app_settings(self) -> Dict:
-        """Load app settings"""
+    def _merge_legacy_app_settings(self, primary: Dict) -> Dict:
+        """
+        If smartMessaging was saved under legacy project data/app_settings.json (before
+        LINASBOT_DATA_ROOT migration), merge missing fields so Monty header URL is found.
+        """
+        if not isinstance(primary, dict):
+            primary = {}
         try:
-            with open(self.app_settings_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            legacy_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "data", "app_settings.json"
+            )
+            if not os.path.isfile(legacy_path):
+                return primary
+            with open(legacy_path, "r", encoding="utf-8") as f:
+                legacy_root = json.load(f) or {}
+            leg_sm = legacy_root.get("smartMessaging")
+            if not isinstance(leg_sm, dict):
+                return primary
+            pri_sm = primary.get("smartMessaging")
+            if not isinstance(pri_sm, dict):
+                primary["smartMessaging"] = dict(leg_sm)
+                return primary
+            for k, v in leg_sm.items():
+                cur = pri_sm.get(k)
+                if cur is None or (isinstance(cur, str) and not cur.strip()):
+                    if v is not None and (not isinstance(v, str) or v.strip()):
+                        pri_sm[k] = v
+        except Exception as ex:
+            print(f"⚠️ Legacy app_settings merge skipped: {ex}")
+        return primary
+
+    def _load_app_settings(self) -> Dict:
+        """Load app settings (persistent root + optional legacy merge)."""
+        primary: Dict = {}
+        try:
+            if os.path.isfile(self.app_settings_file):
+                with open(self.app_settings_file, "r", encoding="utf-8") as f:
+                    primary = json.load(f) or {}
         except Exception as e:
             print(f"Error loading app settings: {e}")
-            return {}
+            primary = {}
+        if not isinstance(primary, dict):
+            primary = {}
+        return self._merge_legacy_app_settings(primary)
 
     def _save_app_settings(self, settings: Dict) -> bool:
         """Save app settings"""
@@ -97,12 +133,38 @@ class MessagePreviewService:
             return dict(defaults)
         return {**defaults, **stored}
 
+    def get_template_header_image_url(self) -> str:
+        """Public HTTPS image URL for WhatsApp template headers (any stored key)."""
+        sm = self.get_settings() or {}
+        for key in (
+            "templateHeaderImageUrl",
+            "template_header_image_url",
+            "header_image_url",
+        ):
+            raw = sm.get(key)
+            if raw is None:
+                continue
+            s = str(raw).strip()
+            if s:
+                return s
+        return ""
+
     def update_settings(self, new_settings: Dict) -> Dict:
         """Update smart messaging settings"""
+        if not isinstance(new_settings, dict):
+            new_settings = {}
+        patch = dict(new_settings)
+        hdr = (
+            patch.pop("templateHeaderImageUrl", None)
+            or patch.pop("template_header_image_url", None)
+            or patch.pop("header_image_url", None)
+        )
+        if hdr is not None:
+            patch["templateHeaderImageUrl"] = str(hdr).strip()
         settings = self._load_app_settings()
         if 'smartMessaging' not in settings:
             settings['smartMessaging'] = {}
-        settings['smartMessaging'].update(new_settings)
+        settings['smartMessaging'].update(patch)
         if self._save_app_settings(settings):
             return {'success': True, 'settings': settings['smartMessaging']}
         return {'success': False, 'error': 'Failed to save settings'}

@@ -433,12 +433,23 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             f"(user_lang={user_language} source={language_source} monty_lang={language})"
         )
 
-        _hdr = (
-            (request_data.get("header_image_url") or request_data.get("template_header_image_url") or "")
-            .strip()
+        from services.message_preview_service import message_preview_service
+
+        _hdr_req = (
+            request_data.get("header_image_url")
+            or request_data.get("template_header_image_url")
+            or request_data.get("templateHeaderImageUrl")
+            or ""
         )
-        if _hdr:
-            test_parameters = {**test_parameters, "header_image": _hdr}
+        _hdr_req = str(_hdr_req).strip()
+        _hdr_saved = message_preview_service.get_template_header_image_url()
+        _hdr_eff = _hdr_req or _hdr_saved
+        if _hdr_eff:
+            test_parameters = {**test_parameters, "header_image": _hdr_eff}
+        print(
+            f"📋 Template header image: {'OK (' + str(len(_hdr_eff)) + ' chars)' if _hdr_eff else 'MISSING'} "
+            f"(request={'yes' if _hdr_req else 'no'}, saved={'yes' if _hdr_saved else 'no'})"
+        )
 
         # Send template message
         result = await montymobile_template_service.send_template_message(
@@ -1128,12 +1139,12 @@ async def get_smart_messaging_settings():
 
 
 @app.post("/api/smart-messaging/settings")
-async def update_smart_messaging_settings(settings: Dict[str, Any]):
-    """Update smart messaging settings"""
+async def update_smart_messaging_settings(body: Dict[str, Any] = Body(...)):
+    """Update smart messaging settings (JSON body merged into smartMessaging)."""
     try:
         from services.message_preview_service import message_preview_service
 
-        result = message_preview_service.update_settings(settings)
+        result = message_preview_service.update_settings(body)
         return result
     except Exception as e:
         print(f"Error updating smart messaging settings: {e}")
