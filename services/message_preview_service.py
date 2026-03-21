@@ -164,10 +164,29 @@ class MessagePreviewService:
         except Exception as ex:
             print(f"⚠️ Could not write template_header_image_url.txt: {ex}")
 
+    def _default_header_url_from_montymobile_templates_file(self) -> str:
+        """api_config.default_header_component.image_link in config/montymobile_templates.json."""
+        try:
+            path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "config",
+                "montymobile_templates.json",
+            )
+            if not os.path.isfile(path):
+                return ""
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+            dc = (data.get("api_config") or {}).get("default_header_component") or {}
+            if isinstance(dc, dict):
+                return str(dc.get("image_link") or dc.get("link") or "").strip()
+        except Exception as ex:
+            print(f"⚠️ montymobile_templates.json default header: {ex}")
+        return ""
+
     def get_template_header_image_url(self) -> str:
         """
         Public HTTPS image URL for WhatsApp template headers.
-        Order: env → sidecar txt next to app_settings → merged smartMessaging keys → raw JSON case-insensitive.
+        Order: env → sidecar → dashboard JSON → montymobile_templates.json default → raw smartMessaging case-insensitive.
         """
         for envk in ("MONTY_TEMPLATE_HEADER_IMAGE_URL", "WHATSAPP_TEMPLATE_HEADER_IMAGE_URL"):
             v = os.getenv(envk, "").strip()
@@ -190,6 +209,10 @@ class MessagePreviewService:
             s = str(raw).strip()
             if s:
                 return s
+
+        cfg_url = self._default_header_url_from_montymobile_templates_file()
+        if cfg_url:
+            return cfg_url
 
         raw_root = self._load_app_settings()
         rsm = raw_root.get("smartMessaging")

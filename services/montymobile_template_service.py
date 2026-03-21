@@ -117,12 +117,6 @@ class MontyMobileTemplateService:
                 image_link = message_preview_service.get_template_header_image_url()
             except Exception as ex:
                 print(f"⚠️ Monty template header: could not read dashboard settings: {ex}")
-        if not image_link:
-            default_h = (self.api_config or {}).get("default_header_component") or {}
-            if isinstance(default_h, dict):
-                image_link = str(
-                    default_h.get("image_link") or default_h.get("link") or ""
-                ).strip()
 
         # IMAGE header: empty format + URL means "use default branded header for this template"
         if fmt in ("", "image", "img", "picture"):
@@ -326,6 +320,17 @@ class MontyMobileTemplateService:
             comps = (payload.get("template") or {}).get("components") or []
             has_header = any(str(c.get("type", "")).lower() == "header" for c in comps)
             if assume_hdr and tpl_meta and not header_opt_out and not has_header:
+                try:
+                    from services.message_preview_service import message_preview_service
+
+                    _probe = message_preview_service.get_template_header_image_url()
+                    print(
+                        "⚠️ Monty template: header component missing after build; "
+                        f"get_template_header_image_url() len={len(_probe)} "
+                        f"(app_settings_file={getattr(message_preview_service, 'app_settings_file', '?')})"
+                    )
+                except Exception as _pe:
+                    print(f"⚠️ Monty header diagnostic: {_pe}")
                 return {
                     "success": False,
                     "error": (
