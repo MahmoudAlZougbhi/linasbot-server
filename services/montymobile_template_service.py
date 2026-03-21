@@ -304,19 +304,25 @@ class MontyMobileTemplateService:
         lookup = parameters if isinstance(parameters, dict) else {}
         param_values = self._build_body_component_parameters(template_lang, lookup)
 
+        # WhatsApp Manager template name may differ from config key / templates[].name
+        # (e.g. Meta approves "twenty_day_followup" while JSON key is one_month_followup).
+        outbound_name = str(
+            template.get("meta_template_name") or template.get("whatsapp_template_name") or template["name"]
+        ).strip()
+
         payload = {
             "to": phone_number,
             "type": "template",
             "source": self.api_config['source'],
             "template": {
-                "name": template['name'],
+                "name": outbound_name,
                 "language": {"code": language},
                 "components": [],
             },
             "apiId": self.api_config["api_id"],
         }
 
-        print(f"   Template Name: {template['name']}")
+        print(f"   Template Name (outbound): {outbound_name} (config name={template.get('name')!r})")
         print(f"   Template WA ID: {template.get('wa_message_id', 'N/A')}")
         print(
             f"   Resolution: {self._describe_template_resolution(template_id, canonical_template_id)}; "
