@@ -17,7 +17,7 @@ import {
   MicrophoneIcon,
   PhotoIcon,
   HandRaisedIcon,
-  CheckCircleIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -170,8 +170,6 @@ const Analytics = () => {
   const notBookedCount = newClients.not_booked_count ?? 0;
   const askedNotBookedCount =
     conversions.new_clients_asked_not_booked ?? newClients.asked_not_booked_count ?? 0;
-  /** New clients with no booking who never got a logged "service_request" event (keyword match). */
-  const newClientsNoInquiryCount = Math.max(0, notBookedCount - askedNotBookedCount);
 
   const timeRangeMeta = analyticsData?.time_range || {};
   const peakHoursPeriodLabel = (() => {
@@ -245,7 +243,7 @@ const Analytics = () => {
       </motion.div>
 
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         <StatCard
           icon={ChatBubbleLeftRightIcon}
           title="Total Messages"
@@ -268,6 +266,13 @@ const Analytics = () => {
           color="from-green-500 to-emerald-500"
         />
         <StatCard
+          icon={ArrowPathIcon}
+          title="Pause → Available"
+          value={(pauseCleared.unique_users ?? 0).toLocaleString()}
+          subtitle={`${pauseCleared.total ?? 0} resumes in range · زبائن صار عندهم موعد من موقوف لمتاح (الفترة المختارة)`}
+          color="from-teal-500 to-cyan-500"
+        />
+        <StatCard
           icon={CurrencyDollarIcon}
           title="AI Cost"
           value={`$${tokens.total_cost_usd?.toFixed(2) || "0.00"}`}
@@ -278,60 +283,27 @@ const Analytics = () => {
         />
       </div>
 
-      {/* Paused → Available: successful CRM resume after reschedule */}
+      {/* Pause → Available: who resumed (detail table) */}
       <ChartCard
-        title="مواعيد طلعت من موقوف → متاح"
-        subtitle={`${pauseCleared.unique_users ?? 0} زبون فريد · ${pauseCleared.total ?? 0} موعد رجع Available · Unique customers · resume successes in range`}
-        icon={CheckCircleIcon}
+        title="موقوف → متاح — الزبائن"
+        subtitle="آخر الأحداث ضمن الفترة · التقييم = آخر تقييم نجوم مسجّل لنفس المستخدم في الفترة"
+        icon={ArrowPathIcon}
       >
-        <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-          يظهر فقط لما الـ API يرجّع نجاح لـ <code className="text-slate-600 bg-slate-100 px-1 rounded">resume_appointment</code> بعد{" "}
-          <code className="text-slate-600 bg-slate-100 px-1 rounded">update_appointment_date</code>. الجدول التالي يفصل حسب <strong>نوع الخدمة</strong> (كل سطر = خدمة رجعت من pause لـ available).
-        </p>
-        {(pauseCleared.by_service || []).length > 0 && (
-          <div className="mb-6">
-            <h4 className="text-sm font-semibold text-slate-800 mb-3">
-              حسب الخدمة · By service
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {(pauseCleared.by_service || []).map((row, i) => (
-                <div
-                  key={`${row.service}-${i}`}
-                  className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm"
-                >
-                  <p className="text-sm font-medium text-slate-900 capitalize">
-                    {(row.service || "—").replace(/_/g, " ")}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                    <span className="text-slate-700">
-                      <span className="font-bold text-emerald-700">{row.appointments ?? 0}</span>{" "}
-                      <span className="text-slate-500">مواعيد / appts</span>
-                    </span>
-                    <span className="text-slate-700">
-                      <span className="font-bold text-teal-700">{row.unique_customers ?? 0}</span>{" "}
-                      <span className="text-slate-500">زبائن / customers</span>
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {(pauseCleared.total ?? 0) === 0 ? (
-          <p className="text-sm text-slate-500">No pause→available events in this period.</p>
-        ) : (pauseCleared.recent || []).length === 0 ? (
-          <p className="text-sm text-slate-500">Summary above; no recent rows to list (older data).</p>
+        {(pauseCleared.recent || []).length === 0 ? (
+          <p className="text-sm text-slate-500">
+            لا يوجد صفوف في هذه الفترة. No pause→available rows in this range.
+          </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-slate-600">
-                  <th className="px-3 py-2 font-medium">When</th>
-                  <th className="px-3 py-2 font-medium">Phone</th>
+                  <th className="px-3 py-2 font-medium">الوقت / When</th>
+                  <th className="px-3 py-2 font-medium">الهاتف</th>
                   <th className="px-3 py-2 font-medium">User</th>
-                  <th className="px-3 py-2 font-medium">Appt ID</th>
-                  <th className="px-3 py-2 font-medium">Service</th>
-                  <th className="px-3 py-2 font-medium">Rating</th>
+                  <th className="px-3 py-2 font-medium">Appt</th>
+                  <th className="px-3 py-2 font-medium">الخدمة</th>
+                  <th className="px-3 py-2 font-medium">التقييم ★</th>
                   <th className="px-3 py-2 font-medium">Chat</th>
                 </tr>
               </thead>
@@ -356,7 +328,7 @@ const Analytics = () => {
                         {(row.service || "—").replace(/_/g, " ")}
                       </td>
                       <td className="px-3 py-2 font-medium text-amber-700">
-                        {stars != null && stars !== "" ? `${stars} / 5 ★` : "—"}
+                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
                       </td>
                       <td className="px-3 py-2">
                         <Link
@@ -415,21 +387,6 @@ const Analytics = () => {
             color="from-blue-500 to-cyan-500"
           />
         </div>
-        {(newClients.total_new_clients ?? 0) > 0 && (
-          <p className="text-sm text-slate-600 max-w-4xl leading-relaxed border border-slate-100 bg-slate-50/80 rounded-xl px-4 py-3">
-            <span className="font-semibold text-slate-800">Why “not booked” can be larger than “inquired · no booking”:</span>{" "}
-            <span className="text-slate-700">
-              “Not booked” counts every new client who did not complete a booking (
-              {notBookedCount}). The middle card only counts those where our logs recorded a{" "}
-              <em>service keyword / inquiry</em> ({askedNotBookedCount}). The difference (
-              {newClientsNoInquiryCount}) are new clients who never triggered that logged inquiry — so they are “not booked” but not in the middle card.
-            </span>
-            <br />
-            <span className="text-slate-600 mt-2 block" dir="rtl">
-              <strong>بالعربي:</strong> الرقم {notBookedCount} = كل العملاء الجدد بدون حجز. الرقم {askedNotBookedCount} = منهم فقط اللي انسجل عندهم استفسار خدمة (كلمات مفتاحية). الفرق {newClientsNoInquiryCount} = عملاء جدد ما انسجل عندهم هالاستفسار، لذلك يظهرون ضمن «لم يحجز» فقط وليس في بطاقة الوسط.
-            </span>
-          </p>
-        )}
 
         {/* Services Discussed Today */}
         {servicesDiscussedToday.by_service?.length > 0 && (
