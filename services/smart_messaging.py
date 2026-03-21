@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from services.message_logs_service import message_logs_service
-from services.smart_messaging_catalog import normalize_template_id
+from services.smart_messaging_catalog import TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS, normalize_template_id
 from storage.persistent_storage import (
     SENT_SMART_MESSAGES_FILE,
     MESSAGE_TEMPLATES_FILE,
@@ -504,6 +504,7 @@ Des questions? Nous sommes là! 💬
         legacy_fallbacks = {
             "twenty_day_followup": "one_month_followup",
             "missed_paused_appointment": "missed_this_month",
+            "whatsapp_lead_no_booking": "missed_yesterday",
         }
         fallback = legacy_fallbacks.get(canonical)
         if fallback and fallback in self.message_templates:
@@ -867,8 +868,8 @@ Des questions? Nous sommes là! 💬
         # NOTE: same_day_checkin/no_show_followup are deprecated.
         # NOTE: post_session_feedback is handled by fixed-time daily jobs.
 
-        # Schedule 20-day follow-up (legacy one_month_followup replacement)
-        followup_time = appointment_date + timedelta(days=20)
+        # Schedule 17-day follow-up (template id twenty_day_followup; legacy one_month_followup)
+        followup_time = appointment_date + timedelta(days=TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS)
         result = self.schedule_message(
             customer_phone,
             "twenty_day_followup",
@@ -884,10 +885,8 @@ Des questions? Nous sommes là! 💬
         else:
             print(f"   ❌ twenty_day_followup FAILED (returned None)")
 
-        # NOTE: attended_yesterday is NOT scheduled here anymore
-        # It's only scheduled in Phase 2 of populate_scheduled_messages_from_appointments()
-        # which fetches DONE appointments from yesterday via the API
-        # This ensures we only send thank-you messages to customers who actually attended
+        # NOTE: attended_yesterday thank-you is scheduled by daily_template_dispatcher
+        # (yesterday + Done), not per-appointment here.
 
         print(f"   📊 Total scheduled: {messages_scheduled}\n")
 
@@ -1034,7 +1033,11 @@ Des questions? Nous sommes là! 💬
         - KEEP messages sent today (so user can see what was sent)
         - Persist sent messages before clearing so history is not lost
         """
-        preserved_types = {"twenty_day_followup", "missed_paused_appointment"}
+        preserved_types = {
+            "twenty_day_followup",
+            "missed_paused_appointment",
+            "whatsapp_lead_no_booking",
+        }
         today = datetime.now().date()
 
         # Persist sent messages first so they survive the cleanup
@@ -1097,9 +1100,10 @@ Des questions? Nous sommes là! 💬
 message_type_names = {
     "reminder_24h": "24-Hour Appointment Reminder",
     "post_session_feedback": "Post-Session Feedback",
-    "twenty_day_followup": "20-Day Follow-up",
+    "twenty_day_followup": "17-Day Follow-up",
     "missed_yesterday": "Missed Yesterday Follow-up",
     "missed_paused_appointment": "Missed Paused Appointment Campaign",
+    "whatsapp_lead_no_booking": "WhatsApp Lead (No CRM) Campaign",
     "attended_yesterday": "Thank You - Attended Yesterday"
 }
 

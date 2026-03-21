@@ -12,9 +12,12 @@ from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
 
+from fastapi import Body
+
 from modules.core import app
 from utils.utils import save_conversation_message_to_firestore
 from services.message_logs_service import message_logs_service
+from services.chatted_no_crm_lead_campaign_service import chatted_no_crm_lead_campaign_service
 from services.missed_paused_campaign_service import missed_paused_campaign_service
 from services.smart_messaging_catalog import (
     CAMPAIGN_TEMPLATE_IDS,
@@ -296,16 +299,56 @@ async def delete_message_template(template_id: str):
         }
 
 
+def _monty_whatsapp_language_code(saved_lang: str) -> str:
+    """Map persisted user language to MontyMobile template language code."""
+    s = (saved_lang or "ar").strip().lower()
+    if s == "franco":
+        return "ar"
+    if s in ("ar", "en", "fr"):
+        return s
+    return "ar"
+
+
+@app.get("/api/smart-messaging/user-language")
+async def smart_messaging_resolve_user_language(phone: str):
+    """Resolve saved user language from phone (runtime memory / same keys as the bot)."""
+    try:
+        from services.user_persistence_service import user_persistence
+        from utils.phone_utils import normalize_phone
+
+        raw = (phone or "").strip()
+        if not raw:
+            return {"success": False, "error": "phone query parameter is required"}
+
+        user_lang, source = user_persistence.resolve_language_for_phone(raw)
+        return {
+            "success": True,
+            "language": user_lang,
+            "language_source": source,
+            "template_language": _monty_whatsapp_language_code(user_lang),
+            "normalized_phone": normalize_phone(raw),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/smart-messaging/send-test-template")
 async def send_test_template_message(request_data: Dict[str, Any]):
     """Send a test message using MontyMobile template"""
     try:
         from services.montymobile_template_service import montymobile_template_service
-        
+        from services.user_persistence_service import user_persistence
+
         template_id = normalize_template_id(request_data.get('template_id', '').strip())
         phone_number = request_data.get('phone_number', '').strip()
-        language = request_data.get('language', 'ar')
-        
+        explicit = request_data.get("language")
+        if isinstance(explicit, str):
+            explicit = explicit.strip().lower()
+        else:
+            explicit = None
+        if explicit in (None, "", "auto"):
+            explicit = None
+
         # Validate inputs
         if not template_id:
             return {
@@ -318,6 +361,19 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 "success": False,
                 "error": "Phone number is required"
             }
+
+        if explicit:
+            if explicit not in ("ar", "en", "fr", "franco"):
+                return {
+                    "success": False,
+                    "error": "Invalid language; use ar, en, fr, franco, or omit for auto (saved per user)",
+                }
+            user_language = explicit
+            language_source = "manual"
+        else:
+            user_language, language_source = user_persistence.resolve_language_for_phone(phone_number)
+
+        language = _monty_whatsapp_language_code(user_language)
         
         # Get template info to know which parameters it needs
         template_info = montymobile_template_service.get_template_info(template_id)
@@ -328,8 +384,11 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 "error": f"Template '{template_id}' not found"
             }
         
-        # Get the parameters this template expects
-        template_params = template_info['languages'].get(language, {}).get('parameters', [])
+        # Get the parameters this template expects (fallback to ar if variant missing)
+        langs = template_info.get("languages") or {}
+        template_params = (langs.get(language) or {}).get("parameters", [])
+        if not template_params and language != "ar":
+            template_params = (langs.get("ar") or {}).get("parameters", [])
         
         # Build test parameters - only include what the template needs
         all_test_values = {
@@ -351,7 +410,10 @@ async def send_test_template_message(request_data: Dict[str, Any]):
         print(f"📋 Template '{template_id}' expects parameters: {template_params}")
         print(f"📋 Sending parameters: {test_parameters}")
         
-        print(f"📤 Sending test template '{template_id}' to {phone_number}")
+        print(
+            f"📤 Sending test template '{template_id}' to {phone_number} "
+            f"(user_lang={user_language} source={language_source} monty_lang={language})"
+        )
         
         # Send template message
         result = await montymobile_template_service.send_template_message(
@@ -360,6 +422,14 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             language=language,
             parameters=test_parameters
         )
+
+        if isinstance(result, dict):
+            result = {
+                **result,
+                "user_language": user_language,
+                "template_language": language,
+                "language_source": language_source,
+            }
         
         return result
         
@@ -667,13 +737,15 @@ def _apply_count_date_filter(msg_type: str, send_date_str, apt_date, send_at, no
         return True
     if msg_type == "post_session_feedback":
         return (send_date_str or "") == today_str or not send_date_str
+    if msg_type == "attended_yesterday":
+        return (send_date_str or "") == today_str or not send_date_str
     if msg_type == "missed_yesterday":
         return apt_date == yesterday_str or send_date_str == yesterday_str
     if msg_type == "twenty_day_followup":
         if send_date_str:
             return start_of_month_str <= send_date_str < start_of_next_month_str
         return False
-    if msg_type == "missed_paused_appointment":
+    if msg_type in ("missed_paused_appointment", "whatsapp_lead_no_booking"):
         return True
     return True
 
@@ -690,8 +762,9 @@ async def get_message_counts():
         data = await get_all_counts_and_customers()
         counts = data.get("counts", {})
         # Ensure no negative and all keys present
-        for key in ("reminder_24h", "post_session_feedback", "twenty_day_followup",
-                    "missed_yesterday", "missed_paused_appointment"):
+        for key in ("reminder_24h", "post_session_feedback", "attended_yesterday",
+                    "twenty_day_followup", "missed_yesterday", "missed_paused_appointment",
+                    "whatsapp_lead_no_booking"):
             if key not in counts:
                 counts[key] = 0
             counts[key] = max(0, int(counts[key]))
@@ -708,9 +781,11 @@ async def get_message_counts():
         counts = {
             "reminder_24h": 0,
             "post_session_feedback": 0,
+            "attended_yesterday": 0,
             "twenty_day_followup": 0,
             "missed_yesterday": 0,
             "missed_paused_appointment": 0,
+            "whatsapp_lead_no_booking": 0,
         }
         return {
             "success": True,
@@ -730,7 +805,7 @@ async def get_customers_by_category(category: str):
         from services.smart_messaging_customers_service import get_customers_by_category as fetch_customers
 
         canonical = normalize_template_id(category) if category else ""
-        if not canonical or canonical == "missed_paused_appointment":
+        if not canonical or canonical in ("missed_paused_appointment", "whatsapp_lead_no_booking"):
             return {
                 "success": True,
                 "category": canonical or category,
@@ -782,9 +857,11 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
         message_type_names = {
             "reminder_24h": "24-Hour Appointment Reminder",
             "post_session_feedback": "Post-Session Feedback",
-            "twenty_day_followup": "20-Day Follow-up",
+            "attended_yesterday": "Thank You - Attended Yesterday",
+            "twenty_day_followup": "17-Day Follow-up",
             "missed_yesterday": "Missed Yesterday Follow-up",
             "missed_paused_appointment": "Missed Paused Appointment Campaign",
+            "whatsapp_lead_no_booking": "WhatsApp Lead (No CRM) Campaign",
         }
 
         # Get messages from in-memory scheduled_messages dict
@@ -1081,10 +1158,12 @@ async def update_template_schedule(template_id: str, request_data: Dict[str, Any
 # ==========================================
 
 @app.post("/api/smart-messaging/campaigns/missed-paused/preview")
-async def preview_missed_paused_campaign(filters: Dict[str, Any]):
-    """Preview recipients for Missed Paused Appointment campaign."""
+async def preview_missed_paused_campaign(
+    request_data: Dict[str, Any] = Body(default_factory=dict),
+):
+    """Preview recipients for Missed Paused Appointment campaign (BOC paused appointments in date range)."""
     try:
-        result = await missed_paused_campaign_service.preview(filters or {})
+        result = await missed_paused_campaign_service.preview(request_data or {})
         return result
     except Exception as e:
         print(f"Error previewing missed paused campaign: {e}")
@@ -1110,6 +1189,45 @@ async def send_missed_paused_campaign(request_data: Dict[str, Any]):
         return result
     except Exception as e:
         print(f"Error sending missed paused campaign: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/preview")
+async def preview_whatsapp_leads_no_crm_campaign(
+    request_data: Dict[str, Any] = Body(default_factory=dict),
+):
+    """Preview: Firestore-chatted users with no BOC customer file and no appointments (optional chat text service filter)."""
+    try:
+        result = await chatted_no_crm_lead_campaign_service.preview(request_data or {})
+        return result
+    except Exception as e:
+        print(f"Error previewing whatsapp leads no-crm campaign: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/send")
+async def send_whatsapp_leads_no_crm_campaign(
+    request_data: Dict[str, Any] = Body(default_factory=dict),
+):
+    """Send or schedule WhatsApp lead (no CRM / no booking) campaign — manual only."""
+    try:
+        filters = request_data.get("filters", {}) if isinstance(request_data, dict) else {}
+        send_mode = request_data.get("send_mode", "send_now")
+        schedule_time = request_data.get("schedule_time")
+        language = request_data.get("language", "ar")
+        result = await chatted_no_crm_lead_campaign_service.send_or_schedule(
+            filters=filters,
+            send_mode=send_mode,
+            schedule_time=schedule_time,
+            language=language,
+        )
+        return result
+    except Exception as e:
+        print(f"Error sending whatsapp leads no-crm campaign: {e}")
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}

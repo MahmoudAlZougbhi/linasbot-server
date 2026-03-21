@@ -28,8 +28,8 @@
     "fr": "😔 Vous Nous Avez Manqué\n\nCher(e) {customer_name},\nNous avons remarqué votre absence aujourd'hui.\n\nNous espérons que tout va bien!\n\nPour reprogrammer:\n📱 Appelez: {phone_number}\n💬 Ou répondez \"Nouveau rendez-vous\"\n\nPrenez soin de vous 🌸"
   },
   "one_month_followup": {
-    "name": "1-Month Follow-up",
-    "description": "Sent 30 days after last session",
+    "name": "17-Day Follow-up",
+    "description": "Sent 17 days after last session",
     "ar": "🌟 كيف حالك؟\n\n{customer_name} العزيز/ة،\nمضى شهر على آخر جلسة لك!\n\nكيف النتائج؟ \nنود أن نطمئن عليك ونذكرك:\n\n✨ قد تحتاج لجلسة متابعة\n✨ ل��ينا عروض خاصة هذا الشهر\n✨ استشارة مجانية متاحة\n\nللحجز: أرسل \"حجز\"\nرعايتك أولويتنا 💜",
     "en": "🌟 How Are You?\n\nDear {customer_name},\nIt's been a month since your last session!\n\nHow are the results?\nWe'd like to check on you and remind you:\n\n✨ You might need a follow-up session\n✨ We have special offers this month\n✨ Free consultation available\n\nTo book: Reply \"Book\"\nYour care is our priority 💜",
     "fr": "🌟 Comment Allez-Vous?\n\nCher(e) {customer_name},\nCela fait un mois depuis votre dernière séance!\n\nComment sont les résultats?\nNous aimerions prendre de vos nouvelles:\n\n✨ Vous pourriez avoir besoin d'un suivi\n✨ Offres spéciales ce mois\n✨ Consultation gratuite disponible\n\nPour réserver: Répondez \"Réserver\"\nVotre bien-être est notre priorité 💜"
@@ -54,6 +54,13 @@
     "ar": "💜 شكراً لزيارتك!\n\n{customer_name} العزيز/ة،\nشكراً لحضورك بالأمس! 🌟\n\nنأمل أن تكون راضياً عن الخدمة.\n\nنصائح مهمة بعد الجلسة:\n✅ تجنب التعرض للشمس لمدة 48 ساعة\n✅ استخدم ��اقي الشمس SPF 50+\n✅ رطب البشرة جيداً\n✅ تجنب الماء الساخن لمدة 24 ساعة\n\nموعدك القادم: {next_appointment_date}\n\nأي استفسار؟ نحن هنا! 💬\n{phone_number}",
     "en": "💜 Thank You for Your Visit!\n\nDear {customer_name},\nThank you for coming yesterday! 🌟\n\nWe hope you're satisfied with the service.\n\nImportant post-session tips:\n✅ Avoid sun exposure for 48 hours\n✅ Use SPF 50+ sunscreen\n✅ Keep skin well moisturized\n✅ Avoid hot water for 24 hours\n\nYour next appointment: {next_appointment_date}\n\nAny questions? We're here! 💬\n{phone_number}",
     "fr": "💜 Merci de Votre Visite!\n\nCher(e) {customer_name},\nMerci d'être venu(e) hier! 🌟\n\nNous espérons que vous êtes satisfait(e).\n\nConseils importants après la séance:\n✅ Évitez le soleil pendant 48 heures\n✅ Utilisez SPF 50+ crème solaire\n✅ Hydratez bien la peau\n✅ Évitez l'eau chaude pendant 24 heures\n\nVotre prochain rendez-vous: {next_appointment_date}\n\nDes questions? Nous sommes là! 💬\n{phone_number}"
+  },
+  "whatsapp_lead_no_booking": {
+    "name": "WhatsApp Lead (No CRM)",
+    "description": "Manual campaign: chatted on WhatsApp, no BOC file, no appointments",
+    "ar": "💬 مرحباً {customer_name}\n\nشكراً لتواصلك مع مركز لينا ليزر!\n\nلم نجد بعد ملفاً أو موعداً مسجّلاً باسمك في نظام الحجز. إذا كنت مهتمّاً بالحجز أو الاستفسار، نحن جاهزون لمساعدتك.\n\n📱 للتواصل: {phone_number}\n💬 يمكنك الرد على هذه الرسالة في أي وقت.\n\nنتطلع لخدمتك 💜",
+    "en": "💬 Hi {customer_name}\n\nThanks for chatting with Lina's Laser Center!\n\nWe don't yet see a client file or appointment on file for you. If you'd like to book or ask anything, we're happy to help.\n\n📱 Contact: {phone_number}\n💬 You can reply to this message anytime.\n\nWe're here for you 💜",
+    "fr": "💬 Bonjour {customer_name}\n\nMerci d'avoir écrit au Centre Laser Lina!\n\nNous ne voyons pas encore de dossier ni de rendez-vous enregistré. Pour réserver ou poser une question, nous sommes à votre disposition.\n\n📱 Contact: {phone_number}\n💬 Vous pouvez répondre à tout moment.\n\nAu plaisir de vous accueillir 💜"
   },
   "test": {
     "name": "test",

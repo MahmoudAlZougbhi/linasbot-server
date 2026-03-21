@@ -19,7 +19,16 @@ import {
   PlusIcon,
   TrashIcon,
   ArrowPathRoundedSquareIcon,
+  HeartIcon,
+  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
+
+const localISODate = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 import toast from "react-hot-toast";
 
 const SmartMessaging = () => {
@@ -74,6 +83,41 @@ const SmartMessaging = () => {
   const [savingViewEdit, setSavingViewEdit] = useState(false);
   const [collectingCounts, setCollectingCounts] = useState(false);
 
+  // Send test template (phone + template; language from saved user prefs unless overridden)
+  const [testPhone, setTestPhone] = useState("");
+  const [testTemplateId, setTestTemplateId] = useState("");
+  const [testLangMode, setTestLangMode] = useState("auto");
+  const [testSendLoading, setTestSendLoading] = useState(false);
+  const [testLangPreview, setTestLangPreview] = useState(null);
+
+  // Manual BOC "paused appointments" campaign (missed_paused_appointment template)
+  const [pausedFromDate, setPausedFromDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return localISODate(d);
+  });
+  const [pausedToDate, setPausedToDate] = useState(() => localISODate(new Date()));
+  const [pausedServiceIds, setPausedServiceIds] = useState([]);
+  const [pausedCampaignLang, setPausedCampaignLang] = useState("ar");
+  const [pausedPreviewLoading, setPausedPreviewLoading] = useState(false);
+  const [pausedSendLoading, setPausedSendLoading] = useState(false);
+  const [pausedRecipients, setPausedRecipients] = useState([]);
+  const [pausedCampaignError, setPausedCampaignError] = useState(null);
+
+  // Manual WhatsApp leads: chatted in Firestore, no BOC customer file, no appointments (whatsapp_lead_no_booking)
+  const [leadFromDate, setLeadFromDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return localISODate(d);
+  });
+  const [leadToDate, setLeadToDate] = useState(() => localISODate(new Date()));
+  const [leadServiceIds, setLeadServiceIds] = useState([]);
+  const [leadCampaignLang, setLeadCampaignLang] = useState("ar");
+  const [leadPreviewLoading, setLeadPreviewLoading] = useState(false);
+  const [leadSendLoading, setLeadSendLoading] = useState(false);
+  const [leadRecipients, setLeadRecipients] = useState([]);
+  const [leadCampaignError, setLeadCampaignError] = useState(null);
+
   // Fetch real data from API
   useEffect(() => {
     fetchSmartMessagingData();
@@ -82,6 +126,248 @@ const SmartMessaging = () => {
     fetchServiceMappings();
     fetchTemplateSchedules();
   }, []);
+
+  useEffect(() => {
+    const ids = Object.keys(messageTemplates || {}).sort();
+    if (ids.length === 0) return;
+    setTestTemplateId((prev) => (prev && messageTemplates[prev] ? prev : ids[0]));
+  }, [messageTemplates]);
+
+  const fetchTestLangPreview = async () => {
+    const p = testPhone.trim();
+    if (!p) {
+      setTestLangPreview(null);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/smart-messaging/user-language?phone=${encodeURIComponent(p)}`
+      );
+      const data = await res.json();
+      if (data.success) {
+        setTestLangPreview(data);
+      } else {
+        setTestLangPreview(null);
+      }
+    } catch {
+      setTestLangPreview(null);
+    }
+  };
+
+  const handlePausedPreview = async () => {
+    if (!pausedFromDate || !pausedToDate) {
+      toast.error("Choose from and to dates");
+      return;
+    }
+    setPausedPreviewLoading(true);
+    setPausedCampaignError(null);
+    try {
+      const body = {
+        from_date: pausedFromDate,
+        to_date: pausedToDate,
+        service_ids: pausedServiceIds.length ? pausedServiceIds : [],
+      };
+      const res = await fetch("/api/smart-messaging/campaigns/missed-paused/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPausedRecipients(data.recipients || []);
+        toast.success(`Found ${data.count ?? (data.recipients || []).length} recipient(s)`);
+      } else {
+        setPausedRecipients([]);
+        const msg = data.error || "Preview failed";
+        setPausedCampaignError(msg);
+        toast.error(msg);
+      }
+    } catch (e) {
+      console.error(e);
+      setPausedRecipients([]);
+      toast.error("Preview failed");
+    } finally {
+      setPausedPreviewLoading(false);
+    }
+  };
+
+  const handlePausedSend = async () => {
+    if (!pausedFromDate || !pausedToDate) {
+      toast.error("Choose from and to dates");
+      return;
+    }
+    if (!pausedRecipients.length) {
+      toast.error("Load recipients with Preview first");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Send the Missed Paused Appointment message to ${pausedRecipients.length} phone number(s) now?`
+      )
+    ) {
+      return;
+    }
+    setPausedSendLoading(true);
+    try {
+      const res = await fetch("/api/smart-messaging/campaigns/missed-paused/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filters: {
+            from_date: pausedFromDate,
+            to_date: pausedToDate,
+            service_ids: pausedServiceIds.length ? pausedServiceIds : [],
+          },
+          send_mode: "send_now",
+          language: pausedCampaignLang,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(
+          `Sent: ${data.sent_count ?? 0}, failed: ${data.failed_count ?? 0}${
+            data.campaign_id ? ` (campaign ${data.campaign_id})` : ""
+          }`
+        );
+        setPausedRecipients([]);
+      } else {
+        toast.error(data.error || "Send failed");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Send failed");
+    } finally {
+      setPausedSendLoading(false);
+    }
+  };
+
+  const handleLeadPreview = async () => {
+    if (!leadFromDate || !leadToDate) {
+      toast.error("Choose from and to dates");
+      return;
+    }
+    setLeadPreviewLoading(true);
+    setLeadCampaignError(null);
+    try {
+      const body = {
+        from_date: leadFromDate,
+        to_date: leadToDate,
+        service_ids: leadServiceIds.length ? leadServiceIds : [],
+      };
+      const res = await fetch("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLeadRecipients(data.recipients || []);
+        toast.success(`Found ${data.count ?? (data.recipients || []).length} recipient(s)`);
+      } else {
+        setLeadRecipients([]);
+        const msg = data.error || "Preview failed";
+        setLeadCampaignError(msg);
+        toast.error(msg);
+      }
+    } catch (e) {
+      console.error(e);
+      setLeadRecipients([]);
+      toast.error("Preview failed");
+    } finally {
+      setLeadPreviewLoading(false);
+    }
+  };
+
+  const handleLeadSend = async () => {
+    if (!leadFromDate || !leadToDate) {
+      toast.error("Choose from and to dates");
+      return;
+    }
+    if (!leadRecipients.length) {
+      toast.error("Load recipients with Preview first");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Send the WhatsApp lead (no CRM) message to ${leadRecipients.length} phone number(s) now?`
+      )
+    ) {
+      return;
+    }
+    setLeadSendLoading(true);
+    try {
+      const res = await fetch("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filters: {
+            from_date: leadFromDate,
+            to_date: leadToDate,
+            service_ids: leadServiceIds.length ? leadServiceIds : [],
+          },
+          send_mode: "send_now",
+          language: leadCampaignLang,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(
+          `Sent: ${data.sent_count ?? 0}, failed: ${data.failed_count ?? 0}${
+            data.campaign_id ? ` (campaign ${data.campaign_id})` : ""
+          }`
+        );
+        setLeadRecipients([]);
+      } else {
+        toast.error(data.error || "Send failed");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Send failed");
+    } finally {
+      setLeadSendLoading(false);
+    }
+  };
+
+  const handleSendTestTemplate = async () => {
+    if (!testPhone.trim() || !testTemplateId) {
+      toast.error("Enter phone number and select a template");
+      return;
+    }
+    setTestSendLoading(true);
+    try {
+      const payload = {
+        phone_number: testPhone.trim(),
+        template_id: testTemplateId,
+      };
+      if (testLangMode !== "auto") {
+        payload.language = testLangMode;
+      }
+      const res = await fetch("/api/smart-messaging/send-test-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (result.success) {
+        const src =
+          result.language_source === "manual"
+            ? "manual"
+            : result.language_source === "saved"
+              ? "saved for this number"
+              : "default (no saved language)";
+        toast.success(
+          `Sent — user language: ${result.user_language} (${src}) → WhatsApp template language: ${result.template_language}`
+        );
+      } else {
+        toast.error(result.error || "Failed to send test");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to send test");
+    } finally {
+      setTestSendLoading(false);
+    }
+  };
 
   // Fetch smart messaging settings (global toggle, preview mode)
   const fetchSmartMessagingSettings = async () => {
@@ -323,14 +609,21 @@ const SmartMessaging = () => {
 
     setSavingTemplateSchedule(templateId);
     try {
+      const payload = {
+        enabled: !!schedule.enabled,
+        sendTime: schedule.sendTime || "15:00",
+        timezone: schedule.timezone || "Asia/Beirut",
+      };
+      if (templateId === "post_session_feedback" && schedule.delayHours != null) {
+        const n = Number(schedule.delayHours);
+        if (!Number.isNaN(n)) {
+          payload.delayHours = n;
+        }
+      }
       const response = await fetch(`/api/smart-messaging/template-schedules/${templateId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          enabled: !!schedule.enabled,
-          sendTime: schedule.sendTime || "15:00",
-          timezone: schedule.timezone || "Asia/Beirut",
-        }),
+        body: JSON.stringify(payload),
       });
       const result = await response.json();
       if (result.success) {
@@ -833,11 +1126,14 @@ const SmartMessaging = () => {
         // Show messages scheduled for today only
         if (!sendDateStr) return true;
         return sendDateStr === todayStr;
+      case "attended_yesterday":
+        if (!sendDateStr) return true;
+        return sendDateStr === todayStr;
       case "missed_yesterday":
         // Show yesterday's missed appointments
         return appointmentDate === yesterdayStr || sendDateStr === yesterdayStr;
       case "twenty_day_followup":
-        // Show 20-day followups scheduled within current month
+        // Show 17-day followups scheduled within current month
         return sendDateStr >= startOfMonthStr && sendDateStr < startOfNextMonthStr;
       default:
         return true;
@@ -968,6 +1264,7 @@ const SmartMessaging = () => {
     all: Math.max(0, Object.values(messageCounts).reduce((sum, count) => sum + (Number(count) || 0), 0)),
     reminder_24h: Math.max(0, Number(messageCounts.reminder_24h) || 0),
     post_session_feedback: Math.max(0, Number(messageCounts.post_session_feedback) || 0),
+    attended_yesterday: Math.max(0, Number(messageCounts.attended_yesterday) || 0),
     twenty_day_followup: Math.max(0, Number(messageCounts.twenty_day_followup) || 0),
     missed_yesterday: Math.max(0, Number(messageCounts.missed_yesterday) || 0),
   };
@@ -984,8 +1281,13 @@ const SmartMessaging = () => {
         color: "bg-green-100 text-green-700",
         icon: CheckCircleIcon,
       },
+      attended_yesterday: {
+        name: "Thank You",
+        color: "bg-rose-100 text-rose-700",
+        icon: HeartIcon,
+      },
       twenty_day_followup: {
-        name: "20-Day",
+        name: "17-Day",
         color: "bg-indigo-100 text-indigo-700",
         icon: SparklesIcon,
       },
@@ -1007,6 +1309,7 @@ const SmartMessaging = () => {
     const icons = {
       reminder_24h: ClockIcon,
       post_session_feedback: CheckCircleIcon,
+      attended_yesterday: HeartIcon,
       twenty_day_followup: SparklesIcon,
       missed_yesterday: ExclamationTriangleIcon,
     };
@@ -1018,6 +1321,7 @@ const SmartMessaging = () => {
     const colors = {
       reminder_24h: "from-blue-500 to-cyan-500",
       post_session_feedback: "from-green-500 to-emerald-500",
+      attended_yesterday: "from-rose-500 to-pink-600",
       twenty_day_followup: "from-indigo-500 to-purple-500",
       missed_yesterday: "from-orange-400 to-orange-600",
     };
@@ -1089,6 +1393,107 @@ const SmartMessaging = () => {
               </span>
             </div>
           )}
+        </div>
+      </motion.div>
+
+      {/* Test send: real WhatsApp template to one number, language from user prefs unless overridden */}
+      <motion.div
+        id="smart-messaging-send-test"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card border-2 border-indigo-100 bg-gradient-to-br from-white to-indigo-50/40 shadow-md scroll-mt-24"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <PaperAirplaneIcon className="w-6 h-6 text-indigo-600" />
+              Send test template
+            </h2>
+            <p className="text-sm text-slate-600 mt-1 max-w-2xl">
+              Enter a WhatsApp number, pick a template, then send. Language follows the user&apos;s saved
+              preference for that number (same as the bot). Override only if you need to force ar / en / fr.
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Phone number</label>
+            <input
+              type="text"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+              onBlur={fetchTestLangPreview}
+              placeholder="+961..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+            />
+            {testLangPreview?.success && testLangMode === "auto" && (
+              <p className="text-xs text-slate-600 mt-1">
+                Saved language:{" "}
+                <span className="font-semibold text-slate-800">{testLangPreview.language}</span>
+                {testLangPreview.language_source === "default" && (
+                  <span className="text-amber-700"> (no record — default ar)</span>
+                )}
+                {testLangPreview.normalized_phone ? (
+                  <span className="block text-slate-500 mt-0.5">
+                    Normalized: {testLangPreview.normalized_phone}
+                  </span>
+                ) : null}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Template</label>
+            <select
+              value={testTemplateId}
+              onChange={(e) => setTestTemplateId(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              {Object.keys(messageTemplates || {})
+                .sort()
+                .map((id) => (
+                  <option key={id} value={id}>
+                    {(messageTemplates[id] && messageTemplates[id].name) || id}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Language</label>
+            <select
+              value={testLangMode}
+              onChange={(e) => {
+                setTestLangMode(e.target.value);
+                if (e.target.value !== "auto") setTestLangPreview(null);
+              }}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="auto">Auto (from user / number)</option>
+              <option value="ar">Arabic (ar)</option>
+              <option value="en">English (en)</option>
+              <option value="fr">French (fr)</option>
+              <option value="franco">Franco → template ar</option>
+            </select>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={handleSendTestTemplate}
+              disabled={testSendLoading || !testPhone.trim() || !testTemplateId}
+              className="w-full px-4 py-2.5 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {testSendLoading ? (
+                <>
+                  <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <PaperAirplaneIcon className="w-5 h-5" />
+                  Send test
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </motion.div>
 
@@ -1203,6 +1608,26 @@ const SmartMessaging = () => {
         >
           Service Mappings
         </button>
+        <button
+          onClick={() => setActiveTab("pausedCampaign")}
+          className={`flex-1 py-2 px-2 sm:px-4 rounded-md font-medium transition-all text-sm sm:text-base ${
+            activeTab === "pausedCampaign"
+              ? "bg-white text-primary-600 shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
+          }`}
+        >
+          Paused (BOC)
+        </button>
+        <button
+          onClick={() => setActiveTab("leadNoCrmCampaign")}
+          className={`flex-1 py-2 px-2 sm:px-4 rounded-md font-medium transition-all text-sm sm:text-base ${
+            activeTab === "leadNoCrmCampaign"
+              ? "bg-white text-primary-600 shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
+          }`}
+        >
+          WhatsApp leads
+        </button>
       </div>
 
       {/* Content */}
@@ -1251,7 +1676,7 @@ const SmartMessaging = () => {
               <p className="text-xs font-semibold text-slate-700 mb-3">
                 FILTER BY MESSAGE TYPE:
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
                 {/* All Button */}
                 <button
                   onClick={() => handleCategorySelect("all")}
@@ -1309,7 +1734,26 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* 20-Day Follow-up */}
+                {/* Thank You / Attended Yesterday */}
+                <button
+                  onClick={() => handleCategorySelect("attended_yesterday")}
+                  className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
+                    selectedMessageType === "attended_yesterday"
+                      ? "ring-2 ring-offset-2 ring-rose-500 shadow-lg"
+                      : "hover:shadow"
+                  } ${
+                    selectedMessageType === "attended_yesterday"
+                      ? "bg-gradient-to-br from-rose-500 to-pink-600 text-white"
+                      : "bg-rose-100 text-rose-700 border border-rose-300"
+                  }`}
+                >
+                  <div className="font-bold text-sm">Thank You</div>
+                  <div className="text-xs font-semibold mt-1">
+                    {messageTypesCounts.attended_yesterday}
+                  </div>
+                </button>
+
+                {/* 17-Day Follow-up */}
                 <button
                   onClick={() => handleCategorySelect("twenty_day_followup")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
@@ -1322,7 +1766,7 @@ const SmartMessaging = () => {
                       : "bg-indigo-100 text-indigo-700 border border-indigo-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">20-Day</div>
+                  <div className="font-bold text-sm">17-Day</div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.twenty_day_followup}
                   </div>
@@ -1659,6 +2103,23 @@ const SmartMessaging = () => {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
           >
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/80 px-4 py-3 text-sm text-slate-700">
+              <span className="font-semibold text-slate-800">Post-Session Feedback</span> (green card): same{" "}
+              <span className="font-medium">calendar day</span> as the appointment, sent{" "}
+              <span className="font-medium">N hours after the slot</span> (set below on that card).{" "}
+              <span className="font-semibold text-slate-800">Thank you</span> is{" "}
+              <span className="font-medium">Attended Yesterday</span>: everyone who was{" "}
+              <span className="font-medium">Done yesterday</span> gets one send at your{" "}
+              <span className="font-medium">daily send time</span>. Star buttons need a WhatsApp template with
+              quick replies approved in Meta.{" "}
+              <a
+                href="#smart-messaging-send-test"
+                className="text-indigo-700 font-semibold underline underline-offset-2 hover:text-indigo-900"
+              >
+                Send test template
+              </a>{" "}
+              — top of this page (scroll up).
+            </div>
             {/* Header with Create Button */}
             <div className="flex items-center justify-between">
               <div>
@@ -1677,18 +2138,25 @@ const SmartMessaging = () => {
             {/* Template Status Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {Object.entries(messageTemplates)
-                .filter(([templateId]) => templateId !== "missed_paused_appointment")
+                .filter(
+                  ([templateId]) =>
+                    templateId !== "missed_paused_appointment" &&
+                    templateId !== "whatsapp_lead_no_booking"
+                )
                 .map(([templateId, templateData]) => {
                   const Icon = getTemplateIcon(templateId);
                   const color = getTemplateColor(templateId);
-                  const scheduleConfig = templateSchedules[templateId] || {
+                  const scheduleConfig = {
                     enabled: true,
                     sendTime: "15:00",
                     timezone: "Asia/Beirut",
+                    delayHours: 3,
+                    ...(templateSchedules[templateId] || {}),
                   };
                   const isDailyTemplate = [
                     "reminder_24h",
                     "post_session_feedback",
+                    "attended_yesterday",
                     "missed_yesterday",
                     "twenty_day_followup",
                   ].includes(templateId);
@@ -1697,6 +2165,7 @@ const SmartMessaging = () => {
                   const defaultTemplates = [
                     "reminder_24h",
                     "post_session_feedback",
+                    "attended_yesterday",
                     "twenty_day_followup",
                     "missed_yesterday",
                   ];
@@ -1757,7 +2226,13 @@ const SmartMessaging = () => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-semibold text-slate-800">
-                                {isActive ? "✅ Daily Job Enabled" : "⏸️ Daily Job Disabled"}
+                                {templateId === "post_session_feedback"
+                                  ? isActive
+                                    ? "✅ Feedback job enabled"
+                                    : "⏸️ Feedback job disabled"
+                                  : isActive
+                                    ? "✅ Daily Job Enabled"
+                                    : "⏸️ Daily Job Disabled"}
                               </p>
                               <p className="text-xs text-slate-600">Timezone: {scheduleConfig.timezone || "Asia/Beirut"}</p>
                             </div>
@@ -1778,30 +2253,75 @@ const SmartMessaging = () => {
                               />
                             </button>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">Send Time</label>
-                              <input
-                                type="time"
-                                value={scheduleConfig.sendTime || "15:00"}
-                                onChange={(e) =>
-                                  handleTemplateScheduleChange(templateId, "sendTime", e.target.value)
-                                }
-                                className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
-                              />
+                          {templateId === "post_session_feedback" ? (
+                            <>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-xs text-slate-600 mb-1">
+                                    Hours after appointment
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0.5"
+                                    max="72"
+                                    step="0.5"
+                                    value={scheduleConfig.delayHours ?? 3}
+                                    onChange={(e) =>
+                                      handleTemplateScheduleChange(
+                                        templateId,
+                                        "delayHours",
+                                        parseFloat(e.target.value) || 3
+                                      )
+                                    }
+                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-slate-600 mb-1">Timezone</label>
+                                  <input
+                                    type="text"
+                                    value={scheduleConfig.timezone || "Asia/Beirut"}
+                                    onChange={(e) =>
+                                      handleTemplateScheduleChange(templateId, "timezone", e.target.value)
+                                    }
+                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-500 leading-relaxed">
+                                Sends <span className="font-medium text-slate-700">same day</span> once the
+                                delay has passed after the appointment slot. The scheduler checks every few
+                                minutes (not the &quot;Send time&quot; field). For star buttons on WhatsApp,
+                                your Meta template must include quick-reply buttons — the bot sends the
+                                approved template payload.
+                              </p>
+                            </>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs text-slate-600 mb-1">Send Time</label>
+                                <input
+                                  type="time"
+                                  value={scheduleConfig.sendTime || "15:00"}
+                                  onChange={(e) =>
+                                    handleTemplateScheduleChange(templateId, "sendTime", e.target.value)
+                                  }
+                                  className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-slate-600 mb-1">Timezone</label>
+                                <input
+                                  type="text"
+                                  value={scheduleConfig.timezone || "Asia/Beirut"}
+                                  onChange={(e) =>
+                                    handleTemplateScheduleChange(templateId, "timezone", e.target.value)
+                                  }
+                                  className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">Timezone</label>
-                              <input
-                                type="text"
-                                value={scheduleConfig.timezone || "Asia/Beirut"}
-                                onChange={(e) =>
-                                  handleTemplateScheduleChange(templateId, "timezone", e.target.value)
-                                }
-                                className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
-                              />
-                            </div>
-                          </div>
+                          )}
                           <button
                             onClick={() => handleSaveTemplateSchedule(templateId)}
                             disabled={savingTemplateSchedule === templateId}
@@ -1960,6 +2480,374 @@ const SmartMessaging = () => {
                   <span className="text-sm text-slate-600">Disabled - Messages will not be sent</span>
                 </div>
               </div>
+              <p className="text-xs text-slate-500 mt-3">
+                <span className="font-medium">Missed Paused Appointment</span> and{" "}
+                <span className="font-medium">WhatsApp leads (no CRM)</span> bulk sends are{" "}
+                <span className="font-medium">manual only</span> — use{" "}
+                <span className="font-medium">Paused (BOC)</span> or{" "}
+                <span className="font-medium">WhatsApp leads</span>.
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === "pausedCampaign" && (
+          <motion.div
+            key="pausedCampaign"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="card space-y-6"
+          >
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <CalendarDaysIcon className="w-7 h-7 text-violet-600" />
+                Missed Paused Appointment (BOC)
+              </h3>
+              <p className="text-sm text-slate-600 mt-1 max-w-3xl">
+                Load customers whose appointments were <span className="font-medium">paused</span> in BOC between
+                two dates, optionally filter by service, then send the{" "}
+                <span className="font-medium">missed_paused_appointment</span> template when{" "}
+                <span className="font-medium">you</span> click Send. Nothing is sent automatically from this
+                screen.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">From date</label>
+                <input
+                  type="date"
+                  value={pausedFromDate}
+                  onChange={(e) => setPausedFromDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">To date</label>
+                <input
+                  type="date"
+                  value={pausedToDate}
+                  onChange={(e) => setPausedToDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Message language</label>
+                <select
+                  value={pausedCampaignLang}
+                  onChange={(e) => setPausedCampaignLang(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="ar">Arabic</option>
+                  <option value="en">English</option>
+                  <option value="fr">French</option>
+                </select>
+              </div>
+              <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={handlePausedPreview}
+                  disabled={pausedPreviewLoading}
+                  className="flex-1 px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 disabled:bg-slate-400"
+                >
+                  {pausedPreviewLoading ? "Loading…" : "Preview list"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">
+                Services (empty = all services)
+              </label>
+              {availableServices.length === 0 ? (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  No services in mappings yet. Add services under Service Mappings, or leave filters empty to
+                  query all services via the API.
+                </p>
+              ) : (
+                <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={pausedServiceIds.length === 0}
+                      onChange={() => setPausedServiceIds([])}
+                    />
+                    <span className="font-medium text-slate-800">All services</span>
+                  </label>
+                  <div className="border-t border-slate-200 pt-2 space-y-1">
+                    {availableServices.map((s) => (
+                      <label
+                        key={s.service_id}
+                        className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white/80 rounded px-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pausedServiceIds.includes(s.service_id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setPausedServiceIds((prev) =>
+                                [...new Set([...prev, s.service_id])].sort((a, b) => a - b)
+                              );
+                            } else {
+                              setPausedServiceIds((prev) => prev.filter((id) => id !== s.service_id));
+                            }
+                          }}
+                        />
+                        <span>{s.service_name}</span>
+                        <span className="text-slate-400 text-xs">#{s.service_id}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {pausedCampaignError && (
+              <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {pausedCampaignError}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handlePausedSend}
+                disabled={pausedSendLoading || pausedRecipients.length === 0}
+                className="px-6 py-2.5 rounded-lg bg-violet-600 text-white font-semibold hover:bg-violet-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {pausedSendLoading ? (
+                  <>
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <PaperAirplaneIcon className="w-5 h-5" />
+                    Send to {pausedRecipients.length || "…"} recipient(s)
+                  </>
+                )}
+              </button>
+              <span className="text-sm text-slate-500">
+                Run <span className="font-medium">Preview list</span> first to load phones from BOC.
+              </span>
+            </div>
+
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Customer</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Phone</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Appointment</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Service</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Branch</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pausedRecipients.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                        No recipients loaded. Set dates (and optional services) and click Preview list.
+                      </td>
+                    </tr>
+                  ) : (
+                    pausedRecipients.map((r, idx) => (
+                      <tr key={`${r.phone}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                        <td className="py-2 px-3">{r.customer_name}</td>
+                        <td className="py-2 px-3 font-mono text-xs">{r.phone}</td>
+                        <td className="py-2 px-3">
+                          {r.appointment_date} {r.appointment_time}
+                        </td>
+                        <td className="py-2 px-3">{r.service_name}</td>
+                        <td className="py-2 px-3">{r.branch_name}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === "leadNoCrmCampaign" && (
+          <motion.div
+            key="leadNoCrmCampaign"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="card space-y-6"
+          >
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <InboxIcon className="w-7 h-7 text-teal-600" />
+                WhatsApp leads — no CRM file / no booking
+              </h3>
+              <p className="text-sm text-slate-600 mt-1 max-w-3xl">
+                Lists numbers that <span className="font-medium">messaged the bot</span> (Firestore) in the
+                date range, with <span className="font-medium">no customer record</span> in BOC and{" "}
+                <span className="font-medium">no appointments</span>. Optional services: keeps users whose
+                recent chat text <span className="font-medium">mentions</span> one of the selected service
+                names (from Service Mappings). Sends template{" "}
+                <span className="font-medium">whatsapp_lead_no_booking</span> only when you click Send — not
+                automatic.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">From date</label>
+                <input
+                  type="date"
+                  value={leadFromDate}
+                  onChange={(e) => setLeadFromDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">To date</label>
+                <input
+                  type="date"
+                  value={leadToDate}
+                  onChange={(e) => setLeadToDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Message language</label>
+                <select
+                  value={leadCampaignLang}
+                  onChange={(e) => setLeadCampaignLang(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="ar">Arabic</option>
+                  <option value="en">English</option>
+                  <option value="fr">French</option>
+                </select>
+              </div>
+              <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleLeadPreview}
+                  disabled={leadPreviewLoading}
+                  className="flex-1 px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 disabled:bg-slate-400"
+                >
+                  {leadPreviewLoading ? "Loading…" : "Preview list"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">
+                Services (empty = all; if set, chat history must mention the service name)
+              </label>
+              {availableServices.length === 0 ? (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  No services in mappings yet. Leave empty to include all qualifying leads, or add services
+                  under Service Mappings to filter by mentioned service names in chat.
+                </p>
+              ) : (
+                <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={leadServiceIds.length === 0}
+                      onChange={() => setLeadServiceIds([])}
+                    />
+                    <span className="font-medium text-slate-800">All (no service text filter)</span>
+                  </label>
+                  <div className="border-t border-slate-200 pt-2 space-y-1">
+                    {availableServices.map((s) => (
+                      <label
+                        key={s.service_id}
+                        className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white/80 rounded px-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={leadServiceIds.includes(s.service_id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setLeadServiceIds((prev) =>
+                                [...new Set([...prev, s.service_id])].sort((a, b) => a - b)
+                              );
+                            } else {
+                              setLeadServiceIds((prev) => prev.filter((id) => id !== s.service_id));
+                            }
+                          }}
+                        />
+                        <span>{s.service_name}</span>
+                        <span className="text-slate-400 text-xs">#{s.service_id}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {leadCampaignError && (
+              <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {leadCampaignError}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleLeadSend}
+                disabled={leadSendLoading || leadRecipients.length === 0}
+                className="px-6 py-2.5 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {leadSendLoading ? (
+                  <>
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <PaperAirplaneIcon className="w-5 h-5" />
+                    Send to {leadRecipients.length || "…"} recipient(s)
+                  </>
+                )}
+              </button>
+              <span className="text-sm text-slate-500">
+                Run <span className="font-medium">Preview list</span> first (checks BOC + Firestore).
+              </span>
+            </div>
+
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Name</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Phone</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Last chat</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Messages</th>
+                    <th className="text-left py-2 px-3 font-semibold text-slate-700">Preview</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leadRecipients.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                        No recipients loaded. Set dates (and optional service filters) and click Preview
+                        list.
+                      </td>
+                    </tr>
+                  ) : (
+                    leadRecipients.map((r, idx) => (
+                      <tr key={`${r.phone}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                        <td className="py-2 px-3">{r.customer_name}</td>
+                        <td className="py-2 px-3 font-mono text-xs">{r.phone}</td>
+                        <td className="py-2 px-3">{r.last_chat_date || "—"}</td>
+                        <td className="py-2 px-3">{r.message_count ?? "—"}</td>
+                        <td className="py-2 px-3 max-w-xs truncate" title={r.last_message_preview}>
+                          {r.last_message_preview || "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </motion.div>
         )}

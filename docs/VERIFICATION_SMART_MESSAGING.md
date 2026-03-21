@@ -9,7 +9,7 @@ All customer selection comes from external/calendar APIs only (single source of 
 | **Reminders (Daily)** | Appointments for **tomorrow**, status **Available** | `send_appointment_reminders(date=tomorrow, status=Available)` |
 | **Post-session Feedback** | Appointments that happened **yesterday**, status **Done**; send at end-of-day | `send_appointment_reminders(date=yesterday, status=Done)` |
 | **Missed Yesterday** | **appointment_date = yesterday**, **status = Available** (NOT Done). Customers who had an appointment yesterday but it was not completed. | `send_appointment_reminders(date=yesterday, status=Available)` |
-| **20-day Follow-up** | **appointment_date = today − 20 days**, **status = Done**. Include all such customers; **do not** exclude those with future appointments. | `send_appointment_reminders(date=target_day, status=Done)` |
+| **17-day Follow-up** | **appointment_date = today − 17 days**, **status = Done**. Include all such customers; **do not** exclude those with future appointments. | `send_appointment_reminders(date=target_day, status=Done)` |
 | **Thank You** | **Removed.** No template, no scheduling, no sending, no logging. | — |
 
 All date logic uses **Asia/Beirut** timezone.
@@ -21,7 +21,7 @@ All date logic uses **Asia/Beirut** timezone.
 ### 1. Counts and lists (dashboard)
 
 1. Open **Smart Messaging** → **Sent Messages** tab.
-2. **Counts:** Category buttons (24h Reminder, Feedback, 20-Day, Missed Yesterday) show counts from the API. Counts must be **≥ 0** and never negative.
+2. **Counts:** Category buttons (24h Reminder, Feedback, 17-Day, Missed Yesterday) show counts from the API. Counts must be **≥ 0** and never negative.
 3. Click **Refresh Counts**; counts reload from the same source as the customer lists.
 4. **Lists:** Click a category (e.g. **24h Reminder**). The table must show: Status | Customer | Reason | Type | Date & Time | Details | Actions.
 5. **Consistency:** For each category, `count` must equal the number of rows in the list. If count > 0, the list must not be empty; if the list is empty, count must be 0.
@@ -34,8 +34,8 @@ All date logic uses **Asia/Beirut** timezone.
 
 ### 3. 20-day Follow-up
 
-- In the external system, have appointments with **date = today − 20 days** and **status = Done** (include customers even if they have future appointments).
-- Open dashboard → **20-Day**. Count and list must include all such customers (no exclusion for future bookings).
+- In the external system, have appointments with **date = today − 17 days** and **status = Done** (include customers even if they have future appointments).
+- Open dashboard → **17-Day**. Count and list must include all such customers (no exclusion for future bookings).
 - Run the dispatcher at the configured time; those customers should receive the 20-day message.
 
 ### 4. Thank You removed
@@ -61,7 +61,7 @@ All date logic uses **Asia/Beirut** timezone.
 | Reminders | 3 appointments **tomorrow**, status **Available** | Count = 3, list has 3 rows |
 | Feedback | 2 appointments **yesterday**, status **Done** | Count = 2, list has 2 rows |
 | Missed Yesterday | 2 appointments **yesterday**, status **Available** (not Done) | Count = 2, list has 2 rows |
-| 20-day | 4 appointments **today − 20 days**, status **Done** (may have future appointments) | Count = 4, list has 4 rows |
+| 17-day | 4 appointments **today − 17 days**, status **Done** (may have future appointments) | Count = 4, list has 4 rows |
 | Thank You | — | No category, no counts, no sending |
 
 ---

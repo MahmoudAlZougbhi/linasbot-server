@@ -13,7 +13,11 @@ import config
 from services.api_integrations import get_customer_appointments, send_appointment_reminders
 from services.message_logs_service import message_logs_service
 from services.smart_messaging import smart_messaging
-from services.smart_messaging_catalog import DAILY_TEMPLATE_IDS, normalize_template_id
+from services.smart_messaging_catalog import (
+    DAILY_TEMPLATE_IDS,
+    TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS,
+    normalize_template_id,
+)
 from services.template_schedule_service import template_schedule_service
 from services.user_persistence_service import user_persistence
 
@@ -287,9 +291,139 @@ class DailyTemplateDispatcher:
             "reference_date": reference_date,
         }
 
+    async def run_post_session_feedback_delayed(
+        self, local_now: datetime, schedule_cfg: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Post-session feedback: same calendar day as the appointment, N hours after slot time.
+        Checked on every dispatcher tick (not once daily at sendTime).
+        """
+        try:
+            delay_h = float(schedule_cfg.get("delayHours", 3))
+        except (TypeError, ValueError):
+            delay_h = 3.0
+        delay_h = max(0.5, min(72.0, delay_h))
+
+        today_date = local_now.date()
+        today_str = today_date.strftime("%Y-%m-%d")
+        yesterday_str = (today_date - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        merged: List[Dict[str, Any]] = []
+        seen_keys: set = set()
+        for day_str in (today_str, yesterday_str):
+            part = await send_appointment_reminders(date=day_str, status="Done")
+            for apt in _extract_appointments(part):
+                apt_details = apt.get("appointment_details", {}) if isinstance(apt.get("appointment_details"), dict) else {}
+                aid = apt_details.get("id") or apt.get("appointment_id")
+                ph = apt.get("phone")
+                key = (str(aid or ""), str(ph or ""))
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                merged.append(apt)
+        appointments = merged
+
+        scheduled_count = 0
+        skipped_duplicates = 0
+        skipped_invalid = 0
+        skipped_not_due = 0
+
+        template_id = "post_session_feedback"
+        canonical_template = normalize_template_id(template_id)
+
+        for apt in appointments:
+            customer_phone = apt.get("phone")
+            customer_name = apt.get("name", "عميلنا العزيز")
+            customer_id = apt.get("user_id") or apt.get("customer_id")
+            apt_details = apt.get("appointment_details", {}) if isinstance(apt.get("appointment_details"), dict) else {}
+            apt_datetime_str = apt_details.get("date")
+            apt_datetime = _parse_api_datetime(apt_datetime_str)
+            service_name = apt_details.get("service", "جلسة ليزر")
+            service_id = apt_details.get("service_id")
+            branch_name = apt_details.get("branch", "الفرع الرئيسي")
+            appointment_id = apt_details.get("id") or apt.get("appointment_id")
+
+            if not customer_phone or not apt_datetime:
+                skipped_invalid += 1
+                continue
+
+            status_raw = str(apt.get("status", "")).strip().lower()
+            if status_raw and status_raw not in ("done", "completed"):
+                skipped_invalid += 1
+                continue
+
+            if local_now.tzinfo is not None:
+                if apt_datetime.tzinfo is None:
+                    apt_dt = apt_datetime.replace(tzinfo=local_now.tzinfo)
+                else:
+                    apt_dt = apt_datetime.astimezone(local_now.tzinfo)
+            else:
+                apt_dt = apt_datetime.replace(tzinfo=None) if apt_datetime.tzinfo else apt_datetime
+
+            # Allow appointment on today or yesterday (late slot + delay can cross midnight)
+            if apt_dt.date() < today_date - timedelta(days=1):
+                skipped_invalid += 1
+                continue
+
+            eligible_at = apt_dt + timedelta(hours=delay_h)
+            if local_now < eligible_at:
+                skipped_not_due += 1
+                continue
+
+            reference_date = apt_dt.strftime("%Y-%m-%d")
+
+            if message_logs_service.was_message_sent(
+                customer_id=customer_id or customer_phone,
+                template_type=canonical_template,
+                reference_date=reference_date,
+                appointment_id=appointment_id,
+            ):
+                skipped_duplicates += 1
+                continue
+
+            if self._has_existing_message(
+                customer_phone=customer_phone,
+                template_id=canonical_template,
+                reference_date=reference_date,
+                appointment_id=appointment_id,
+            ):
+                skipped_duplicates += 1
+                continue
+
+            placeholders = self._build_placeholders(
+                customer_name=customer_name,
+                apt_datetime=apt_dt,
+                branch_name=branch_name,
+                service_name=service_name,
+            )
+            language = user_persistence.get_user_language(customer_phone)
+            if self._enqueue_message(
+                customer_phone=customer_phone,
+                template_id=canonical_template,
+                placeholders=placeholders,
+                language=language,
+                service_id=service_id,
+                service_name=service_name,
+                customer_id=customer_id,
+                appointment_id=appointment_id,
+                reference_date=reference_date,
+            ):
+                scheduled_count += 1
+
+        return {
+            "template_id": canonical_template,
+            "scheduled_count": scheduled_count,
+            "total_candidates": len(appointments),
+            "skipped_duplicates": skipped_duplicates,
+            "skipped_invalid": skipped_invalid,
+            "skipped_not_due": skipped_not_due,
+            "reference_date": today_str,
+            "delay_hours": delay_h,
+        }
+
     async def _has_last_done_session_on(self, phone: str, target_day: date) -> bool:
         """
-        Ensure 20-day follow-up is based on the customer's latest done session.
+        Ensure 17-day follow-up is based on the customer's latest done session.
         """
         appointments_result = await get_customer_appointments(phone)
         if not appointments_result.get("success"):
@@ -322,7 +456,7 @@ class DailyTemplateDispatcher:
         return latest_done.date() == target_day
 
     async def _run_twenty_day_followup(self, run_day: date) -> Dict[str, Any]:
-        target_day = run_day - timedelta(days=20)
+        target_day = run_day - timedelta(days=TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS)
         target_str = target_day.strftime("%Y-%m-%d")
         result = await send_appointment_reminders(date=target_str, status="Done")
         appointments = _extract_appointments(result)
@@ -418,7 +552,15 @@ class DailyTemplateDispatcher:
             )
 
         if template_id == "post_session_feedback":
-            # Feedback for appointments that happened YESTERDAY (status DONE), sent at end-of-day today
+            cfg = template_schedule_service.get_schedule("post_session_feedback")
+            tz = str(cfg.get("timezone", "Asia/Beirut"))
+            return await self.run_post_session_feedback_delayed(
+                self._now_in_timezone(tz),
+                cfg,
+            )
+
+        if template_id == "attended_yesterday":
+            # Thank-you: same cohort as feedback (yesterday + Done), separate template and log idempotency
             target_day = run_day - timedelta(days=1)
             return await self._schedule_from_reminders(
                 template_id=template_id,
@@ -469,6 +611,9 @@ class DailyTemplateDispatcher:
         with self._lock:
             for template_id in DAILY_TEMPLATE_IDS:
                 templates_checked += 1
+                if template_id == "post_session_feedback":
+                    # Feedback uses delay-after-appointment; handled after this loop every tick.
+                    continue
                 schedule = schedules.get(template_id, {})
                 if not schedule.get("enabled", True):
                     continue
@@ -513,20 +658,33 @@ class DailyTemplateDispatcher:
                 "result": result,
             })
 
+        post_session_feedback_result = None
+        if self._is_smart_messaging_enabled():
+            fb_cfg = schedules.get("post_session_feedback", {})
+            if fb_cfg.get("enabled", True):
+                tz_fb = str(fb_cfg.get("timezone", "Asia/Beirut"))
+                post_session_feedback_result = await self.run_post_session_feedback_delayed(
+                    self._now_in_timezone(tz_fb),
+                    fb_cfg,
+                )
+
         if jobs_run:
             with self._lock:
                 for job in jobs_run:
                     self.last_runs[job["template_id"]] = job["run_date"]
                 self._save_state()
 
+        fb_scheduled = (post_session_feedback_result or {}).get("scheduled_count", 0)
         print(
-            f"[daily_template_dispatcher] tick cadence={cadence_minutes}m checked={templates_checked} due={len(due_jobs)} ran={len(jobs_run)}"
+            f"[daily_template_dispatcher] tick cadence={cadence_minutes}m checked={templates_checked} "
+            f"due={len(due_jobs)} ran={len(jobs_run)} feedback_scheduled={fb_scheduled}"
         )
 
         return {
             "success": True,
             "jobs_run": jobs_run,
             "run_count": len(jobs_run),
+            "post_session_feedback": post_session_feedback_result,
         }
 
 

@@ -46,6 +46,7 @@ class MontyMobileTemplateService:
         legacy_fallbacks = {
             "twenty_day_followup": "one_month_followup",
             "missed_paused_appointment": "missed_this_month",
+            "whatsapp_lead_no_booking": "missed_yesterday",
         }
         return self.templates.get(legacy_fallbacks.get(canonical, canonical))
     

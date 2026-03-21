@@ -102,6 +102,13 @@ class TemplateScheduleService:
                 raise ValueError(f"Invalid timezone: {tz_name}")
             sanitized["timezone"] = tz_name
 
+        if "delayHours" in payload:
+            try:
+                h = float(payload.get("delayHours"))
+            except (TypeError, ValueError):
+                raise ValueError("delayHours must be a number")
+            sanitized["delayHours"] = max(0.5, min(72.0, h))
+
         return sanitized
 
     def get_all_schedules(self) -> Dict[str, Dict[str, Any]]:

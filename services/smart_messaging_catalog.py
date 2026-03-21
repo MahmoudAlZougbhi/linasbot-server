@@ -5,16 +5,20 @@ Smart Messaging template catalog and scheduling defaults.
 from copy import deepcopy
 from typing import Dict, Optional
 
+# Product: "1-month style" follow-up is sent 17 days after the attended session (template id stays twenty_day_followup).
+TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS = 17
 
 DAILY_TEMPLATE_IDS = (
     "reminder_24h",
     "post_session_feedback",
+    "attended_yesterday",
     "missed_yesterday",
     "twenty_day_followup",
 )
 
 CAMPAIGN_TEMPLATE_IDS = (
     "missed_paused_appointment",
+    "whatsapp_lead_no_booking",
 )
 
 SUPPORTED_TEMPLATE_IDS = DAILY_TEMPLATE_IDS + CAMPAIGN_TEMPLATE_IDS
@@ -36,19 +40,27 @@ TEMPLATE_METADATA: Dict[str, Dict[str, str]] = {
     },
     "post_session_feedback": {
         "name": "Post-Session Feedback",
-        "description": "Daily fixed-time feedback request for attended today sessions.",
+        "description": "Sent same calendar day N hours after each completed (Done) appointment; not a single daily blast. Star buttons need a WhatsApp template with quick-reply buttons approved in Meta.",
+    },
+    "attended_yesterday": {
+        "name": "Attended Yesterday",
+        "description": "Thank you message the day after a completed (Done) appointment.",
     },
     "missed_yesterday": {
         "name": "Missed Yesterday",
         "description": "Daily fixed-time follow-up for yesterday missed appointments (date=yesterday, status=Available).",
     },
     "twenty_day_followup": {
-        "name": "20-Day Follow-up",
-        "description": "Daily fixed-time follow-up sent 20 days after last attended session.",
+        "name": "17-Day Follow-up",
+        "description": "Daily fixed-time follow-up sent 17 days after last attended session.",
     },
     "missed_paused_appointment": {
         "name": "Missed Paused Appointment",
         "description": "Manual campaign template for paused appointments.",
+    },
+    "whatsapp_lead_no_booking": {
+        "name": "WhatsApp Lead (No CRM / No Booking)",
+        "description": "Manual campaign for users who chatted on WhatsApp but have no BOC customer file and no appointments.",
     },
 }
 
@@ -61,6 +73,12 @@ DEFAULT_TEMPLATE_SCHEDULES: Dict[str, Dict[str, object]] = {
     "post_session_feedback": {
         "enabled": True,
         "sendTime": "20:00",
+        "timezone": "Asia/Beirut",
+        "delayHours": 3,
+    },
+    "attended_yesterday": {
+        "enabled": True,
+        "sendTime": "11:00",
         "timezone": "Asia/Beirut",
     },
     "missed_yesterday": {

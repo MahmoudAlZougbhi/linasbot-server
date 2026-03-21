@@ -7,7 +7,10 @@ Prevents bot from forgetting user preferences
 
 import config
 import datetime
+from typing import List, Tuple
+
 from services.api_integrations import get_customer_by_phone, create_customer
+from utils.phone_utils import normalize_phone
 from utils.utils import get_user_state_from_firestore, get_firestore_db
 
 class UserPersistenceService:
@@ -166,6 +169,41 @@ class UserPersistenceService:
         # Cache it
         self._language_cache[user_id] = lang
         return lang
+
+    def _phone_language_lookup_keys(self, raw_phone: str) -> List[str]:
+        """Candidate WhatsApp user_id keys used in config.user_data_whatsapp / cache."""
+        p = (raw_phone or "").strip()
+        if not p:
+            return []
+        keys = [p]
+        e164 = normalize_phone(p)
+        if e164:
+            keys.append(e164)
+            keys.append(e164.lstrip("+"))
+        digits = "".join(c for c in p if c.isdigit())
+        if digits and digits not in keys:
+            keys.append(digits)
+        seen = set()
+        out = []
+        for k in keys:
+            if k and k not in seen:
+                seen.add(k)
+                out.append(k)
+        return out
+
+    def resolve_language_for_phone(self, raw_phone: str) -> Tuple[str, str]:
+        """
+        Find saved preferred language for a phone number (same keys the bot uses).
+        Returns (language, source) where source is 'saved' or 'default'.
+        """
+        for uid in self._phone_language_lookup_keys(raw_phone):
+            if uid in self._language_cache:
+                return self._language_cache[uid], "saved"
+            user_data = config.user_data_whatsapp.get(uid, {})
+            lang = user_data.get("user_preferred_lang")
+            if lang:
+                return lang, "saved"
+        return "ar", "default"
     
     def save_user_language(self, user_id: str, language: str) -> None:
         """
