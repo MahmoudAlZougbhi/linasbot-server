@@ -10,6 +10,7 @@ import {
   ArrowTrendingUpIcon,
   GlobeAltIcon,
   SparklesIcon,
+  StarIcon,
   CalendarIcon,
   FaceSmileIcon,
   ExclamationTriangleIcon,
@@ -157,6 +158,7 @@ const Analytics = () => {
   const services = analyticsData?.services || {};
   const appointments = analyticsData?.appointments || {};
   const satisfaction = analyticsData?.satisfaction || {};
+  const sessionRatings = analyticsData?.session_ratings || {};
   const escalations = analyticsData?.escalations || {};
   const performance = analyticsData?.performance || {};
   const tokens = analyticsData?.token_usage || {};
@@ -845,6 +847,35 @@ const Analytics = () => {
                 </span>
               </div>
             </div>
+            <div className="p-4 bg-violet-50 rounded-xl border border-violet-200">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <HandRaisedIcon className="w-6 h-6 text-violet-600 shrink-0" />
+                  <div>
+                    <span className="text-sm font-medium text-violet-900 block">
+                      Human handover
+                    </span>
+                    <span className="text-[11px] text-violet-700">
+                      Unique users transferred to staff · مستخدمين انحوّلوا لموظف
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-2xl font-bold text-violet-700 block">
+                    {escalations.human_handover_unique_users ?? 0}
+                  </span>
+                  <span className="text-[11px] text-violet-600">
+                    {escalations.human_handover || 0} events
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              Percentages below are share of all appointment events in range (
+              {appointments.appointment_events_total ?? "—"} total: requested + booked +
+              confirmed + rescheduled + cancelled). Not “% of booked only” — avoids {'>'}100%
+              when reschedules ≠ bookings.
+            </p>
             <div className="grid grid-cols-3 gap-3">
               <div className="p-3 bg-green-50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-green-600">
@@ -878,8 +909,8 @@ const Analytics = () => {
         </ChartCard>
       </div>
 
-      {/* Satisfaction & Escalations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Satisfaction, session ratings & Escalations */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ChartCard title="User Satisfaction" icon={FaceSmileIcon}>
           <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
             <div className="flex items-center justify-between mb-2">
@@ -919,6 +950,59 @@ const Analytics = () => {
           </div>
         </ChartCard>
 
+        <ChartCard
+          title="Session ratings"
+          subtitle="Post-booking feedback (1–5 stars), like Google reviews distribution"
+          icon={StarIcon}
+        >
+          <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl border border-amber-200">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="text-sm font-medium text-amber-900 block">
+                  Average
+                </span>
+                <span className="text-xs text-amber-800">
+                  {sessionRatings.total_ratings || 0} ratings ·{" "}
+                  {sessionRatings.unique_raters ?? 0} users
+                </span>
+              </div>
+              <span className="text-3xl font-bold text-amber-700">
+                {sessionRatings.average_stars != null
+                  ? Number(sessionRatings.average_stars).toFixed(2)
+                  : "—"}{" "}
+                <span className="text-lg">/ 5</span>
+              </span>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {[5, 4, 3, 2, 1].map((star) => {
+              const byStar = sessionRatings.by_star || {};
+              const count = Number(byStar[String(star)] ?? byStar[star] ?? 0);
+              const pct = Number(
+                sessionRatings.percentages?.[String(star)] ??
+                  sessionRatings.percentages?.[star] ??
+                  0
+              );
+              return (
+                <div key={star} className="flex items-center gap-3">
+                  <span className="w-8 text-sm font-medium text-slate-700 shrink-0">
+                    {star}★
+                  </span>
+                  <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-amber-400 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, pct)}%` }}
+                    />
+                  </div>
+                  <span className="w-14 text-right text-sm text-slate-600 shrink-0">
+                    {count}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </ChartCard>
+
         <ChartCard title="Escalations & Issues" icon={ExclamationTriangleIcon}>
           <div className="space-y-4">
             <div className="p-4 bg-red-50 rounded-xl border border-red-200">
@@ -935,13 +1019,21 @@ const Analytics = () => {
               <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
                 <div className="flex items-center space-x-2">
                   <HandRaisedIcon className="w-5 h-5 text-orange-600" />
-                  <span className="text-sm font-medium text-orange-800">
-                    Human Handover
-                  </span>
+                  <div>
+                    <span className="text-sm font-medium text-orange-800 block">
+                      Human handover
+                    </span>
+                    <span className="text-[10px] text-orange-700">
+                      {escalations.human_handover || 0} events
+                    </span>
+                  </div>
                 </div>
-                <span className="text-lg font-bold text-orange-600">
-                  {escalations.human_handover || 0}
-                </span>
+                <div className="text-right">
+                  <span className="text-lg font-bold text-orange-600 block">
+                    {escalations.human_handover_unique_users ?? 0}
+                  </span>
+                  <span className="text-[10px] text-orange-700">unique users</span>
+                </div>
               </div>
               <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                 <div className="flex items-center space-x-2">

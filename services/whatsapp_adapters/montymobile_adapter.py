@@ -492,6 +492,18 @@ class MontyMobileAdapter(WhatsAppAdapter):
                 content = {"video_id": message.get("video", {}).get("id", "")}
             elif message_type == "document":
                 content = {"document_id": message.get("document", {}).get("id", "")}
+            elif message_type == "interactive":
+                inter = message.get("interactive") or {}
+                if inter.get("type") == "button_reply":
+                    br = inter.get("button_reply") or {}
+                    synthetic = str(br.get("id") or br.get("title") or "").strip()
+                elif inter.get("type") == "list_reply":
+                    lr = inter.get("list_reply") or {}
+                    synthetic = str(lr.get("id") or lr.get("title") or "").strip()
+                else:
+                    synthetic = ""
+                content = {"text": synthetic}
+                message_type = "text"
             else:
                 content = {"raw": message}
             

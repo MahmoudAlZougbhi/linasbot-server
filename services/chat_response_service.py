@@ -4029,6 +4029,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 status="booked",
                                 messages_count=len(current_context_messages or []),
                             )
+                            try:
+                                from services.session_rating_service import (
+                                    schedule_session_rating_prompt_after_booking,
+                                )
+
+                                asyncio.create_task(schedule_session_rating_prompt_after_booking(user_id))
+                            except Exception as sr_e:
+                                print(f"WARNING: session rating schedule (submit_booking_intent): {sr_e}")
                         except Exception as an_sb:
                             print(f"WARNING: analytics (submit_booking_intent): {an_sb}")
                 elif hasattr(api_integrations, function_name) and callable(getattr(api_integrations, function_name)):
@@ -4171,6 +4179,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 messages_count=len(current_context_messages)
                             )
                             print(f"📊 Analytics: Appointment booked - {service_name}")
+                            try:
+                                from services.session_rating_service import (
+                                    schedule_session_rating_prompt_after_booking,
+                                )
+
+                                asyncio.create_task(schedule_session_rating_prompt_after_booking(user_id))
+                            except Exception as sr_e:
+                                print(f"WARNING: session rating schedule (create_appointment): {sr_e}")
                             if tool_output.get("booking_flow_state") == "booked":
                                 recovered_create_appointment_ok = True
                         elif function_name == "create_appointment" and isinstance(tool_output, dict) and not tool_output.get("success"):
@@ -4410,6 +4426,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             status="booked",
                             messages_count=len(current_context_messages or []),
                         )
+                        try:
+                            from services.session_rating_service import (
+                                schedule_session_rating_prompt_after_booking,
+                            )
+
+                            asyncio.create_task(schedule_session_rating_prompt_after_booking(user_id))
+                        except Exception as sr_e:
+                            print(f"WARNING: session rating schedule (recovered booking): {sr_e}")
                     except Exception as an_e:
                         print(f"WARNING: analytics (recovered create_appointment): {an_e}")
                 else:

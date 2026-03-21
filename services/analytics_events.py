@@ -172,6 +172,26 @@ class AnalyticsEvents:
             "feedback_type": feedback_type,
             "reason": reason
         })
+
+    def log_session_rating(self, user_id: str, stars: int, conversation_id: str = None):
+        """
+        Post-conversation star rating (1–5), e.g. after successful booking.
+
+        Args:
+            stars: 1–5
+            conversation_id: Optional WhatsApp conversation id for dedupe context
+        """
+        try:
+            s = int(stars)
+        except (TypeError, ValueError):
+            s = 0
+        s = max(1, min(5, s))
+        self._append_event({
+            "type": "session_rating",
+            "user_id": user_id,
+            "stars": s,
+            "conversation_id": conversation_id,
+        })
     
     def log_escalation(self, user_id: str, escalation_type: str, reason: str = None):
         """
@@ -609,9 +629,16 @@ class AnalyticsEvents:
                     "dislikes": 0,
                     "reasons": defaultdict(int)
                 },
+                "session_ratings": {
+                    "by_star": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
+                    "total": 0,
+                    "sum_stars": 0,
+                    "rated_users": set(),
+                },
                 "escalations": {
                     "total": 0,
-                    "by_type": defaultdict(int)
+                    "by_type": defaultdict(int),
+                    "human_handover_users": set(),
                 },
                 "ai_performance": {
                     "total_response_time": 0,
@@ -791,12 +818,23 @@ class AnalyticsEvents:
                         reason = event.get("reason", feedback_type)
                         if reason:
                             stats["feedback"]["reasons"][reason] += 1
+
+                elif event_type == "session_rating":
+                    stars = max(1, min(5, self._safe_int(event.get("stars"))))
+                    sr = stats["session_ratings"]
+                    sr["by_star"][stars] = sr["by_star"].get(stars, 0) + 1
+                    sr["total"] += 1
+                    sr["sum_stars"] += stars
+                    if user_id:
+                        sr["rated_users"].add(user_id)
                 
                 elif event_type == "escalation":
                     stats["escalations"]["total"] += 1
                     escalation_type = event.get("escalation_type")
                     if escalation_type:
                         stats["escalations"]["by_type"][escalation_type] += 1
+                    if escalation_type == "human_handover" and user_id:
+                        stats["escalations"]["human_handover_users"].add(user_id)
             
             # Normalize counters and fallback values.
             stats["conversions"]["inquiries"] = len(stats["conversions"]["inquiry_users"])
@@ -827,7 +865,25 @@ class AnalyticsEvents:
         total_messages = stats["overview"]["total_messages"]
         total_conversations = stats["overview"]["total_conversations"]
         total_booked = stats["appointments"]["booked"]
+        # Denominator for status shares: all appointment lifecycle events (not "of booked only" —
+        # reschedules can exceed bookings in a period and would break % vs booked).
+        appt_events_total = (
+            stats["appointments"]["requested"]
+            + stats["appointments"]["booked"]
+            + stats["appointments"]["confirmed"]
+            + stats["appointments"]["rescheduled"]
+            + stats["appointments"]["cancelled"]
+        )
         total_feedback = stats["feedback"]["total"]
+        sr = stats["session_ratings"]
+        sr_total = sr["total"]
+        sr_by_star = {str(k): int(sr["by_star"].get(k, 0)) for k in (1, 2, 3, 4, 5)}
+        sr_avg = round(sr["sum_stars"] / sr_total, 2) if sr_total > 0 else 0
+        sr_unique = len(sr["rated_users"])
+        sr_pct = {
+            str(k): round((sr["by_star"].get(k, 0) / sr_total) * 100, 1) if sr_total > 0 else 0
+            for k in (1, 2, 3, 4, 5)
+        }
         inquiries = stats["conversions"]["inquiries"]
         total_users = stats["overview"]["unique_users"]
         new_users = stats["overview"]["new_users"]
@@ -999,9 +1055,22 @@ class AnalyticsEvents:
                 "confirmed": stats["appointments"]["confirmed"],
                 "rescheduled": stats["appointments"]["rescheduled"],
                 "cancelled": stats["appointments"]["cancelled"],
-                "confirmation_rate": round((stats["appointments"]["confirmed"] / total_booked) * 100, 1) if total_booked > 0 else 0,
-                "reschedule_rate": round((stats["appointments"]["rescheduled"] / total_booked) * 100, 1) if total_booked > 0 else 0,
-                "cancellation_rate": round((stats["appointments"]["cancelled"] / total_booked) * 100, 1) if total_booked > 0 else 0
+                "appointment_events_total": appt_events_total,
+                "confirmation_rate": round(
+                    (stats["appointments"]["confirmed"] / appt_events_total) * 100, 1
+                )
+                if appt_events_total > 0
+                else 0,
+                "reschedule_rate": round(
+                    (stats["appointments"]["rescheduled"] / appt_events_total) * 100, 1
+                )
+                if appt_events_total > 0
+                else 0,
+                "cancellation_rate": round(
+                    (stats["appointments"]["cancelled"] / appt_events_total) * 100, 1
+                )
+                if appt_events_total > 0
+                else 0,
             },
             "satisfaction": {
                 "total_feedback": total_feedback,
@@ -1010,9 +1079,17 @@ class AnalyticsEvents:
                 "satisfaction_rate": round((stats["feedback"]["likes"] / total_feedback) * 100, 1) if total_feedback > 0 else 0,
                 "dislike_reasons": dict(stats["feedback"]["reasons"])
             },
+            "session_ratings": {
+                "total_ratings": sr_total,
+                "unique_raters": sr_unique,
+                "average_stars": sr_avg,
+                "by_star": sr_by_star,
+                "percentages": sr_pct,
+            },
             "escalations": {
                 "total_escalations": stats["escalations"]["total"],
                 "human_handover": stats["escalations"]["by_type"].get("human_handover", 0),
+                "human_handover_unique_users": len(stats["escalations"]["human_handover_users"]),
                 "complaints": stats["escalations"]["by_type"].get("complaint", 0),
                 "technical_issues": stats["escalations"]["by_type"].get("technical_issue", 0)
             },

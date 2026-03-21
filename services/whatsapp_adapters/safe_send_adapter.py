@@ -114,3 +114,11 @@ class SafeSendAdapter(WhatsAppAdapter):
                 to_number, template_name, language_code, parameters, **kwargs
             )
         return {"success": False, "error": "Adapter does not support send_template_message"}
+
+    async def send_button_message(self, to_number: str, text: str, buttons: list) -> Dict[str, Any]:
+        if _should_dry_run(to_number):
+            _log_dry_run(to_number, "button_message", {"text": text[:400], "buttons": buttons})
+            return {"success": True, "dry_run": True}
+        if hasattr(self._real, "send_button_message"):
+            return await self._real.send_button_message(to_number, text, buttons)
+        return await self.send_text_message(to_number, text)
