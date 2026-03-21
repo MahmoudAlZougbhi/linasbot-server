@@ -6,6 +6,8 @@
       "record_guid": "16af183a-94e4-497f-ae58-502b0072293a",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -26,6 +28,8 @@
       "record_guid": "8303c94f-d0fb-402a-a4fd-ee02f57a940e",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -40,6 +44,8 @@
       "record_guid": "0beddf53-db9a-4cdb-9b6e-e5b1483c833f",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -54,6 +60,8 @@
       "record_guid": "205286b6-358e-4048-b089-fb1ea9d845cf",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -68,6 +76,8 @@
       "record_guid": "0caf3b58-4a2b-4e6d-b55c-0af2341b2699",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -82,6 +92,8 @@
       "record_guid": "48eba3ff-0a16-47eb-bf07-2b92f43510e7",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -96,6 +108,8 @@
       "record_guid": "b3fcf502-f9ee-46c3-b3b5-3a80dae3c8c7",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -110,6 +124,8 @@
       "record_guid": "ffcf90db-1c7a-4414-bbaa-491992063c57",
       "category": "UTILITY",
       "status": "APPROVED",
+      "header": { "format": "text" },
+      "header_parameters": ["header_text"],
       "languages": {
         "ar": {
           "language_code": "ar",
@@ -130,7 +146,7 @@
     "api_id": "9db12f0d-3c27-4d9c-b9fd-0227aebfd81d",
     "tenant": "98df9ffe-fa84-41ee-9293-33614722d952",
     "api_key": "f5a24c81de876f85f0d6e80e04228deab8f21f5c36e7456579614d2f8d6e5ba0",
-    "templates_are_text_only": true,
+    "templates_are_text_only": false,
     "assume_whatsapp_image_header": false,
     "allow_global_template_header_image_url": false
   },
@@ -139,7 +155,7 @@
     "languages_available": ["ar"],
     "languages_missing": ["en", "fr"],
     "next_steps": ["Add English and French versions", "Test all templates"],
-    "templates_are_text_only": "true = body-only templates (no HEADER in API payload; no image URL needed). Use for text-only WhatsApp templates. If Monty returns 'Header component is required', the template name/language in JSON does not match Meta, OR Meta approved a template that actually has an image header — fix Manager/Meta or switch to image-header mode (false + default_header_component).",
+    "templates_are_text_only": "false = build HEADER from JSON (image or text). Text headers: set template.header.format=text and header_parameters (e.g. [\"header_text\"]); if header_text is omitted in the send lookup, the server fills it with templates[].name. true = omit all header components (only for Meta body-only templates).",
     "legacy_internal_ids": "twenty_day_followup -> config key one_month_followup (Meta template name must match templates[].name). missed_paused_appointment -> missed_this_month. whatsapp_lead_no_booking -> missed_yesterday.",
     "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers."
   }

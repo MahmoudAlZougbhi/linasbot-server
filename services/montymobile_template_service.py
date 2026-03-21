@@ -177,11 +177,15 @@ class MontyMobileTemplateService:
         if not isinstance(header_param_names, list):
             header_param_names = template_lang.get("header_parameters") or []
         if isinstance(header_param_names, list) and header_param_names:
-            hdr_vals = [
-                {"type": "text", "text": str(lookup.get(hp, ""))}
-                for hp in header_param_names
-                if isinstance(hp, str)
-            ]
+            tpl_name = str(template.get("name") or "").strip()
+            hdr_vals = []
+            for hp in header_param_names:
+                if not isinstance(hp, str):
+                    continue
+                raw = lookup.get(hp)
+                if raw is None or (isinstance(raw, str) and not raw.strip()):
+                    raw = tpl_name
+                hdr_vals.append({"type": "text", "text": str(raw)})
             if hdr_vals:
                 out.append({"type": "header", "parameters": hdr_vals})
 
