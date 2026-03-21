@@ -89,6 +89,8 @@ const SmartMessaging = () => {
   const [testLangMode, setTestLangMode] = useState("auto");
   const [testSendLoading, setTestSendLoading] = useState(false);
   const [testLangPreview, setTestLangPreview] = useState(null);
+  const [templateHeaderImageUrl, setTemplateHeaderImageUrl] = useState("");
+  const [savingHeaderUrl, setSavingHeaderUrl] = useState(false);
 
   // Manual BOC "paused appointments" campaign (missed_paused_appointment template)
   const [pausedFromDate, setPausedFromDate] = useState(() => {
@@ -343,6 +345,10 @@ const SmartMessaging = () => {
       if (testLangMode !== "auto") {
         payload.language = testLangMode;
       }
+      const headerUrl = templateHeaderImageUrl.trim();
+      if (headerUrl) {
+        payload.header_image_url = headerUrl;
+      }
       const res = await fetch(apiUrl("/api/smart-messaging/send-test-template"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -388,6 +394,31 @@ const SmartMessaging = () => {
     }
   };
 
+  const handleSaveTemplateHeaderImage = async () => {
+    setSavingHeaderUrl(true);
+    try {
+      const res = await fetch(apiUrl("/api/smart-messaging/settings"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateHeaderImageUrl: templateHeaderImageUrl.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Template header image URL saved");
+        if (data.settings?.templateHeaderImageUrl != null) {
+          setTemplateHeaderImageUrl(data.settings.templateHeaderImageUrl);
+        }
+      } else {
+        toast.error(data.error || "Save failed");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Save failed");
+    } finally {
+      setSavingHeaderUrl(false);
+    }
+  };
+
   // Fetch smart messaging settings (global toggle, preview mode)
   const fetchSmartMessagingSettings = async () => {
     try {
@@ -396,6 +427,7 @@ const SmartMessaging = () => {
       if (result.success) {
         setSmartMessagingEnabled(result.settings?.enabled ?? true);
         setPreviewBeforeSend(result.settings?.previewBeforeSend ?? true);
+        setTemplateHeaderImageUrl(result.settings?.templateHeaderImageUrl ?? "");
       }
     } catch (error) {
       console.error("Error fetching smart messaging settings:", error);
@@ -1506,6 +1538,33 @@ const SmartMessaging = () => {
                   Send test
                 </>
               )}
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 pt-4 border-t border-indigo-100">
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Template header image URL (required if Meta templates use an image header)
+          </label>
+          <p className="text-xs text-slate-500 mb-2 max-w-3xl">
+            Same public HTTPS image as in WhatsApp Manager for your template header. Saving applies to test
+            sends and production template sends. Alternatively set server env{" "}
+            <code className="text-slate-700 bg-slate-100 px-1 rounded">MONTY_TEMPLATE_HEADER_IMAGE_URL</code>.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 max-w-4xl">
+            <input
+              type="url"
+              value={templateHeaderImageUrl}
+              onChange={(e) => setTemplateHeaderImageUrl(e.target.value)}
+              placeholder="https://example.com/your-approved-header.png"
+              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              type="button"
+              onClick={handleSaveTemplateHeaderImage}
+              disabled={savingHeaderUrl}
+              className="px-4 py-2 rounded-lg font-medium text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 whitespace-nowrap"
+            >
+              {savingHeaderUrl ? "Saving…" : "Save URL"}
             </button>
           </div>
         </div>

@@ -112,6 +112,14 @@ class MontyMobileTemplateService:
         if not image_link:
             image_link = os.getenv("MONTY_TEMPLATE_HEADER_IMAGE_URL", "").strip()
         if not image_link:
+            try:
+                from services.message_preview_service import message_preview_service
+
+                sm = message_preview_service.get_settings() or {}
+                image_link = str(sm.get("templateHeaderImageUrl") or "").strip()
+            except Exception:
+                pass
+        if not image_link:
             default_h = (self.api_config or {}).get("default_header_component") or {}
             if isinstance(default_h, dict):
                 image_link = str(
@@ -309,7 +317,27 @@ class MontyMobileTemplateService:
                     "success": False,
                     "error": f"Template '{template_id}' not found or invalid"
                 }
-            
+
+            tpl_meta = self.get_template_info(normalize_template_id(template_id))
+            assume_hdr = bool((self.api_config or {}).get("assume_whatsapp_image_header", True))
+            hcfg = (tpl_meta or {}).get("header") if tpl_meta else {}
+            header_opt_out = (
+                isinstance(hcfg, dict)
+                and str(hcfg.get("format", "")).strip().lower() == "none"
+            )
+            comps = (payload.get("template") or {}).get("components") or []
+            has_header = any(str(c.get("type", "")).lower() == "header" for c in comps)
+            if assume_hdr and tpl_meta and not header_opt_out and not has_header:
+                return {
+                    "success": False,
+                    "error": (
+                        "WhatsApp template requires a HEADER (image). No header image URL is configured. "
+                        "Dashboard → Smart Messaging → set \"Template header image URL\" (HTTPS, publicly reachable) "
+                        "to the same image approved in Meta for these templates, then Save. "
+                        "Or set server env MONTY_TEMPLATE_HEADER_IMAGE_URL."
+                    ),
+                }
+
             # Prepare headers
             headers = {
                 "Tenant": self.api_config['tenant'],

@@ -432,7 +432,14 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             f"📤 Sending test template '{template_id}' to {phone_number} "
             f"(user_lang={user_language} source={language_source} monty_lang={language})"
         )
-        
+
+        _hdr = (
+            (request_data.get("header_image_url") or request_data.get("template_header_image_url") or "")
+            .strip()
+        )
+        if _hdr:
+            test_parameters = {**test_parameters, "header_image": _hdr}
+
         # Send template message
         result = await montymobile_template_service.send_template_message(
             template_id=template_id,

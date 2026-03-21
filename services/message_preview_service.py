@@ -83,13 +83,19 @@ class MessagePreviewService:
             return {}
 
     def get_settings(self) -> Dict:
-        """Get smart messaging settings"""
+        """Get smart messaging settings (merged with defaults for new keys)."""
         settings = self._load_app_settings()
-        return settings.get('smartMessaging', {
+        defaults = {
             'enabled': True,
             'previewBeforeSend': True,
-            'autoApproveAfterMinutes': 0
-        })
+            'autoApproveAfterMinutes': 0,
+            # Public HTTPS URL for WhatsApp template IMAGE headers (Monty/Meta require this component).
+            'templateHeaderImageUrl': '',
+        }
+        stored = settings.get('smartMessaging')
+        if not isinstance(stored, dict):
+            return dict(defaults)
+        return {**defaults, **stored}
 
     def update_settings(self, new_settings: Dict) -> Dict:
         """Update smart messaging settings"""
