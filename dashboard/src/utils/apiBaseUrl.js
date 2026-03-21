@@ -1,15 +1,49 @@
 /**
+ * True if REACT_APP_API_URL points at loopback (browser would call the visitor's machine, not your server).
+ * Production builds must not bake http://localhost:8003 — nginx proxies /api on the real domain.
+ */
+function isApiBaseLoopbackOnly(url) {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const normalized = url.includes("://") ? url : `http://${url}`;
+    const u = new URL(normalized);
+    const h = (u.hostname || "").toLowerCase();
+    return (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h === "[::1]" ||
+      h === "0.0.0.0"
+    );
+  } catch {
+    return /\blocalhost\b|127\.0\.0\.1/i.test(url);
+  }
+}
+
+/**
  * Base URL for API calls (no trailing slash).
  * - REACT_APP_API_URL when set (e.g. CDN frontend + API on another host).
- * - Else in the browser we pick a safe default so Smart Messaging `fetch(apiUrl(...))` does not 404:
- *   - Port 3000/3001: same-origin `""` so `/api` goes through `setupProxy.js` (npm start).
- *   - Port 8003/8080 on localhost: same-origin `""` (FastAPI or similar serves SPA + API).
- *   - Any other localhost port (e.g. `serve -s build` on 5000): `http://localhost:8003` because
- *     there is no dev proxy and relative `/api` would hit the static server and return 404.
- * - Else (production / LAN hostname): same-origin `""` (expect nginx or same host to proxy `/api/`).
+ * - If the site is opened on a real domain (e.g. linasaibot.com) but the build baked
+ *   REACT_APP_API_URL=http://localhost:8003 (common docker-compose default), we ignore that
+ *   env and use same-origin `/api/` so nginx can proxy — fixes Smart Messaging "Send test" HTTP 404.
+ * - Else in the browser we pick a safe default:
+ *   - Port 3000/3001: same-origin `""` (setupProxy / npm start).
+ *   - Port 8003/8080 on localhost: same-origin `""`.
+ *   - Other localhost ports: `http://localhost:8003` (static preview without proxy).
+ * - Production / LAN hostname: same-origin `""` (nginx proxies `/api/`).
  */
 export const getApiBaseUrl = () => {
-  const env = (process.env.REACT_APP_API_URL || "").trim().replace(/\/$/, "");
+  let env = (process.env.REACT_APP_API_URL || "").trim().replace(/\/$/, "");
+  if (typeof window !== "undefined" && env) {
+    const host = window.location.hostname;
+    const onPublicSite =
+      host &&
+      host !== "localhost" &&
+      host !== "127.0.0.1" &&
+      host !== "[::1]";
+    if (onPublicSite && isApiBaseLoopbackOnly(env)) {
+      env = "";
+    }
+  }
   if (env) return env;
   if (typeof window === "undefined") return "";
 

@@ -55,9 +55,11 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile.prod
+      # Leave empty so the browser uses same-origin /api/ (nginx → backend). Never default to
+      # localhost here — that gets baked into JS and breaks https://linasaibot.com (calls user's PC).
       args:
-        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8003}
-        REACT_APP_WS_URL: ${REACT_APP_WS_URL:-ws://localhost:8003}
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-}
+        REACT_APP_WS_URL: ${REACT_APP_WS_URL:-}
     container_name: linas_dashboard_prod
     depends_on:
       - backend
