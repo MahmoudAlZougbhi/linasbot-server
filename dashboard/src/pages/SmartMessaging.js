@@ -12,7 +12,6 @@ import {
   EyeIcon,
   XMarkIcon,
   CheckIcon,
-  UserIcon,
   Squares2X2Icon,
   InboxIcon,
   PencilIcon,
@@ -22,6 +21,7 @@ import {
   HeartIcon,
   CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
+import toast from "react-hot-toast";
 
 const localISODate = (d) => {
   const y = d.getFullYear();
@@ -29,7 +29,6 @@ const localISODate = (d) => {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
-import toast from "react-hot-toast";
 
 const SmartMessaging = () => {
   const [activeTab, setActiveTab] = useState("sent");
