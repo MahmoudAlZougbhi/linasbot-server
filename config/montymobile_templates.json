@@ -71,14 +71,8 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 5,
-          "parameters": [
-            "customer_name",
-            "appointment_date",
-            "appointment_time",
-            "branch_name",
-            "service_name"
-          ]
+          "parameters_count": 1,
+          "parameters": ["customer_name"]
         }
       }
     },
@@ -153,6 +147,6 @@
     "meta_template_name": "Optional: meta_template_name or whatsapp_template_name overrides outbound template name. If Monty body count errors, ensure this matches the exact template name in Manager (wrong name = wrong schema).",
     "omit_empty_header_component": "Per template: when true with templates_are_text_only, do NOT send {\"header\", parameters:[]} even if api_config.send_empty_header_component is true. Use for pure body-only Meta templates; if Monty says header required, set false or remove key.",
     "why_three_templates_failed_before": "They diverged from working templates: extra omit_empty_header_component (no empty header while reminder uses global send_empty_header), meta_template_name (different Meta schema), or wrong body slot counts. Aligned: one_month_followup = same body shape as reminder_24h (5 vars); missed_* = same as no_show_followup (2 vars). Extra placeholder keys from schedulers are ignored for Monty body.",
-    "body_variable_counts": "one_month_followup mirrors reminder_24h. missed_yesterday and missed_this_month mirror no_show_followup. If Meta approved different counts/names, set meta_template_name and edit parameters[] to match Manager exactly."
+    "body_variable_counts": "one_month_followup has 1 body var (customer_name). missed_yesterday and missed_this_month mirror no_show_followup (2 vars). If Meta approved different counts/names, set meta_template_name and edit parameters[] to match Manager exactly."
   }
 }
