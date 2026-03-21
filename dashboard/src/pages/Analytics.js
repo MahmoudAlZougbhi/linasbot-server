@@ -16,6 +16,7 @@ import {
   MicrophoneIcon,
   PhotoIcon,
   HandRaisedIcon,
+  ArrowUturnLeftIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -81,6 +82,9 @@ const Analytics = () => {
   };
 
   const CHART_COLORS = ["#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b"];
+
+  /** Full token count with commas — avoids "3947.0K" misread as 3947 tokens. */
+  const formatTokensFull = (n) => (Number(n) || 0).toLocaleString("en-US");
 
   const StatCard = ({ icon: Icon, title, value, subtitle, color }) => (
     <motion.div
@@ -254,18 +258,18 @@ const Analytics = () => {
           color="from-purple-500 to-pink-500"
         />
         <StatCard
-          icon={CalendarIcon}
-          title="Conversations"
-          value={overview.total_conversations?.toLocaleString() || "0"}
-          subtitle={`${overview.avg_messages_per_conversation || 0} msgs/conv`}
+          icon={ArrowUturnLeftIcon}
+          title="Returning / old clients"
+          value={(overview.returning_users ?? 0).toLocaleString()}
+          subtitle={`Active in period, first seen before this range · عملاء رجعوا / قدامى ضمن النطاق`}
           color="from-green-500 to-emerald-500"
         />
         <StatCard
           icon={CurrencyDollarIcon}
           title="AI Cost"
-          value={`${tokens.total_cost_usd?.toFixed(2) || "0.00"}`}
-          subtitle={`${(tokens.total_tokens / 1000).toFixed(1) || 0}K tokens ${
-            tokens.source === "openai_api" ? "✓ Real" : "≈ Est."
+          value={`$${tokens.total_cost_usd?.toFixed(2) || "0.00"}`}
+          subtitle={`${formatTokensFull(tokens.total_tokens)} tokens · ${
+            tokens.source === "openai_api" ? "✓ Real (OpenAI billing)" : "≈ Est. (from message logs)"
           }`}
           color="from-orange-500 to-red-500"
         />
@@ -291,9 +295,9 @@ const Analytics = () => {
           />
           <StatCard
             icon={UsersIcon}
-            title="Asked But Did Not Book"
+            title="Inquired (logged) · No booking"
             value={askedNotBookedCount}
-            subtitle="New clients with a logged service inquiry (keyword match) who didn’t book"
+            subtitle="Keyword/service inquiry logged in analytics, but no booking"
             color="from-amber-500 to-orange-500"
           />
           <StatCard
@@ -307,10 +311,25 @@ const Analytics = () => {
             icon={ChartBarIcon}
             title="Total New Clients"
             value={newClients.total_new_clients ?? 0}
-            subtitle={`${bookedCount} booked · ${notBookedCount} not booked · ${askedNotBookedCount} inquired (no booking) · ${newClientsNoInquiryCount} no service inquiry logged`}
+            subtitle={`${bookedCount} booked · ${notBookedCount} not booked`}
             color="from-blue-500 to-cyan-500"
           />
         </div>
+        {(newClients.total_new_clients ?? 0) > 0 && (
+          <p className="text-sm text-slate-600 max-w-4xl leading-relaxed border border-slate-100 bg-slate-50/80 rounded-xl px-4 py-3">
+            <span className="font-semibold text-slate-800">Why “not booked” can be larger than “inquired · no booking”:</span>{" "}
+            <span className="text-slate-700">
+              “Not booked” counts every new client who did not complete a booking (
+              {notBookedCount}). The middle card only counts those where our logs recorded a{" "}
+              <em>service keyword / inquiry</em> ({askedNotBookedCount}). The difference (
+              {newClientsNoInquiryCount}) are new clients who never triggered that logged inquiry — so they are “not booked” but not in the middle card.
+            </span>
+            <br />
+            <span className="text-slate-600 mt-2 block" dir="rtl">
+              <strong>بالعربي:</strong> الرقم {notBookedCount} = كل العملاء الجدد بدون حجز. الرقم {askedNotBookedCount} = منهم فقط اللي انسجل عندهم استفسار خدمة (كلمات مفتاحية). الفرق {newClientsNoInquiryCount} = عملاء جدد ما انسجل عندهم هالاستفسار، لذلك يظهرون ضمن «لم يحجز» فقط وليس في بطاقة الوسط.
+            </span>
+          </p>
+        )}
 
         {/* Services Discussed Today */}
         {servicesDiscussedToday.by_service?.length > 0 && (
