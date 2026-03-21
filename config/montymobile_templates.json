@@ -64,7 +64,7 @@
     },
     "one_month_followup": {
       "name": "one_month_followup",
-      "meta_template_name": "twenty_day_followup",
+      "omit_empty_header_component": true,
       "wa_message_id": "842363998553484",
       "record_guid": "0caf3b58-4a2b-4e6d-b55c-0af2341b2699",
       "category": "UTILITY",
@@ -79,6 +79,7 @@
     },
     "missed_yesterday": {
       "name": "missed_yesterday",
+      "omit_empty_header_component": true,
       "wa_message_id": "1436541924468894",
       "record_guid": "48eba3ff-0a16-47eb-bf07-2b92f43510e7",
       "category": "UTILITY",
@@ -93,6 +94,7 @@
     },
     "missed_this_month": {
       "name": "missed_this_month",
+      "omit_empty_header_component": true,
       "wa_message_id": "1090366319768263",
       "record_guid": "b3fcf502-f9ee-46c3-b3b5-3a80dae3c8c7",
       "category": "UTILITY",
@@ -145,7 +147,8 @@
     "send_empty_header_component": "When true with templates_are_text_only true, Monty gets an empty header component (0 params). Resolves flip-flop between 'Header required' and 'must contain exactly 0 parameters'.",
     "legacy_internal_ids": "twenty_day_followup -> config key one_month_followup (Meta template name must match templates[].name). missed_paused_appointment -> missed_this_month. whatsapp_lead_no_booking -> missed_yesterday.",
     "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers.",
-    "meta_template_name": "Optional per template: exact WhatsApp Manager template name if it differs from \"name\" (e.g. twenty_day_followup vs one_month_followup; missed_paused_appointment vs missed_this_month). Outbound API uses meta_template_name || name.",
-    "body_variable_counts": "Body {{n}} count must match Meta exactly. Internal copy uses 1 var for 17-day follow-up and 2 (name+phone) for missed templates — same as no_show_followup. If Monty still rejects, fix parameters_count to match Manager or adjust meta_template_name."
+    "meta_template_name": "Optional: meta_template_name or whatsapp_template_name overrides outbound template name. If Monty body count errors, ensure this matches the exact template name in Manager (wrong name = wrong schema).",
+    "omit_empty_header_component": "Per template: when true with templates_are_text_only, do NOT send {\"header\", parameters:[]} even if api_config.send_empty_header_component is true. Use for pure body-only Meta templates; if Monty says header required, set false or remove key.",
+    "body_variable_counts": "Body {{n}} count must match Meta. These three templates use 1 or 2 vars like internal copy. If still invalid, the approved name in Meta may differ — set meta_template_name to that exact name."
   }
 }

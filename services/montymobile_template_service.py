@@ -127,6 +127,10 @@ class MontyMobileTemplateService:
         send_empty = bool(api_cfg.get("send_empty_header_component", False))
 
         if self.templates_are_text_only():
+            # Per-template: Meta has no HEADER section at all — do not send even an empty header.
+            # (Global send_empty_header_component would add {"type":"header","parameters":[]}.)
+            if template.get("omit_empty_header_component") is True:
+                return []
             if send_empty:
                 return [{"type": "header", "parameters": []}]
             return []
@@ -328,7 +332,8 @@ class MontyMobileTemplateService:
             f"   Resolution: {self._describe_template_resolution(template_id, canonical_template_id)}; "
             f"config_key={self._resolve_template_config_key(canonical_template_id)!r}; "
             f"text_only_mode={self.templates_are_text_only()}; "
-            f"send_empty_header_component={bool((self.api_config or {}).get('send_empty_header_component', False))}"
+            f"send_empty_header_component={bool((self.api_config or {}).get('send_empty_header_component', False))}; "
+            f"omit_empty_header_component={template.get('omit_empty_header_component')!r}"
         )
 
         header_components = self._resolve_template_header_components(
