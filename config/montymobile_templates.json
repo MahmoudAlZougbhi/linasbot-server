@@ -131,7 +131,7 @@
     "tenant": "98df9ffe-fa84-41ee-9293-33614722d952",
     "api_key": "f5a24c81de876f85f0d6e80e04228deab8f21f5c36e7456579614d2f8d6e5ba0",
     "assume_whatsapp_image_header": false,
-    "allow_global_template_header_image_url": false,
+    "allow_global_template_header_image_url": true,
     "default_header_component": {
       "image_link": ""
     }
@@ -141,7 +141,7 @@
     "languages_available": ["ar"],
     "languages_missing": ["en", "fr"],
     "next_steps": ["Add English and French versions", "Test all templates"],
-    "template_image_header": "Body-only templates (no dynamic image): keep assume_whatsapp_image_header false and allow_global_template_header_image_url false (default in repo). If Meta still returns 'header required', the approved template in WhatsApp Manager includes a header — create a new template version without it or set assume_whatsapp_image_header true + configure image URL.",
-    "dashboard_header_url": "If you use an image header in Meta, set assume_whatsapp_image_header true, allow_global_template_header_image_url true, then Dashboard URL or env MONTY_TEMPLATE_HEADER_IMAGE_URL."
+    "template_image_header": "If Monty returns 'Header component is required', Meta approved this template WITH a header. Send a header: set Smart Messaging template header image URL (dashboard), env MONTY_TEMPLATE_HEADER_IMAGE_URL, api_config.default_header_component.image_link, or per-template header.image_link. For true body-only templates in Meta, set \"header\": {\"format\": \"none\"} on that template entry and allow_global_template_header_image_url can stay true (opt-out skips header).",
+    "dashboard_header_url": "allow_global_template_header_image_url true (default) uses dashboard / env / sidecar. Set assume_whatsapp_image_header true to fail fast with a clear error when no URL is configured."
   }
 }

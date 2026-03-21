@@ -104,13 +104,17 @@ class MontyMobileTemplateService:
         if fmt in ("none", "skip", "no", "false"):
             return out
 
-        # 1) Explicit image header (per template or global default / env)
+        # 1) Explicit image header (per template or per-send lookup)
         image_link = (
             (header_cfg.get("image_link") or header_cfg.get("link") or "").strip()
             or str(lookup.get("header_image") or lookup.get("image_url") or "").strip()
         )
-        # When false (default for body-only flows): do not pull image URL from env / dashboard /
-        # montymobile_templates.json — only per-template header.image_link or per-send lookup.
+        # Same-file default (always honored): not the same as "global" dashboard/env chain.
+        dc = (self.api_config or {}).get("default_header_component") or {}
+        if not image_link and isinstance(dc, dict):
+            image_link = str(dc.get("image_link") or dc.get("link") or "").strip()
+        # When false: do not pull from env / dashboard / sidecar — only template, lookup, and
+        # default_header_component above. When true: also message_preview_service chain.
         allow_global = bool((self.api_config or {}).get("allow_global_template_header_image_url", True))
         if not image_link and allow_global:
             try:
