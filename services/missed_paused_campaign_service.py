@@ -10,7 +10,9 @@ import config
 from services.api_integrations import get_paused_appointments_between_dates
 from services.message_logs_service import message_logs_service
 from services.smart_messaging import smart_messaging
+from services.user_persistence_service import user_persistence
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from utils.phone_utils import normalize_phone
 
 
 def _parse_api_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -237,11 +239,21 @@ class MissedPausedCampaignService:
 
         adapter = WhatsAppFactory.get_adapter() if send_mode != "schedule" else None
         contact_phone = config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX"
+        fallback_lang = (language or "ar").strip().lower()
+        if fallback_lang not in ("ar", "en", "fr"):
+            fallback_lang = "ar"
 
         for recipient in recipients:
             phone = recipient.get("phone")
             if not phone:
                 continue
+
+            uid_guess = (normalize_phone(phone) or "").strip() or str(phone).strip()
+            resolved_lang = await user_persistence.resolve_language_for_campaign_recipient(
+                phone,
+                firestore_user_id=uid_guess,
+                fallback_language=fallback_lang,
+            )
 
             placeholders = {
                 "customer_name": recipient.get("customer_name", "عميلنا العزيز"),
@@ -266,7 +278,7 @@ class MissedPausedCampaignService:
                     message_type=self.TEMPLATE_ID,
                     send_at=schedule_dt,
                     placeholders=placeholders,
-                    language=language,
+                    language=resolved_lang,
                     service_id=None,
                     service_name=recipient.get("service_name"),
                     metadata=metadata,
@@ -282,7 +294,7 @@ class MissedPausedCampaignService:
 
             content = smart_messaging.get_message_content(
                 message_type=self.TEMPLATE_ID,
-                language=language,
+                language=resolved_lang,
                 placeholders=placeholders,
             )
             if not content:

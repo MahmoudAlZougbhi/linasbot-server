@@ -5,9 +5,10 @@ Ensures gender and language preferences are saved and retrieved from Firestore
 Prevents bot from forgetting user preferences
 """
 
+import asyncio
 import config
 import datetime
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from services.api_integrations import get_customer_by_phone, create_customer
 from utils.phone_utils import normalize_phone
@@ -204,6 +205,97 @@ class UserPersistenceService:
             if lang:
                 return lang, "saved"
         return "ar", "default"
+
+    @staticmethod
+    def normalize_template_language_code(lang: Optional[str]) -> str:
+        """Map persisted / detected codes to smart_messaging template keys (ar, en, fr)."""
+        s = (lang or "ar").strip().lower()
+        if s == "franco":
+            return "ar"
+        if s in ("en", "fr", "ar"):
+            return s
+        return "ar"
+
+    async def _language_from_firestore_latest_conversation(self, user_id: str) -> Optional[str]:
+        """Read language from the most recently updated conversation doc for this user."""
+        if not user_id:
+            return None
+        db = get_firestore_db()
+        if not db:
+            return None
+        from google.cloud import firestore
+
+        app_id = "linas-ai-bot-backend"
+        conv_col = (
+            db.collection("artifacts")
+            .document(app_id)
+            .collection("users")
+            .document(user_id)
+            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+        )
+        try:
+            docs = await asyncio.to_thread(
+                lambda: list(
+                    conv_col.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(5).get()
+                )
+            )
+        except Exception as e:
+            print(f"⚠️ language lookup order_by failed for {user_id}: {e}")
+            docs = await asyncio.to_thread(lambda: list(conv_col.limit(40).stream()))
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            lang = data.get("language") or (data.get("customer_info") or {}).get("language")
+            if lang and str(lang).strip():
+                return str(lang).strip()
+        return None
+
+    async def enrich_language_from_firestore_if_needed(
+        self,
+        raw_phone: str,
+        extra_firestore_user_ids: Optional[List[str]] = None,
+    ) -> Tuple[str, str]:
+        """
+        Resolve (language, source) with in-memory preference first, then Firestore conversation docs.
+        source is 'saved' or 'default'.
+        """
+        lang, src = self.resolve_language_for_phone(raw_phone)
+        if src == "saved" and lang:
+            return self.normalize_template_language_code(lang), "saved"
+
+        candidates: List[str] = []
+        for x in extra_firestore_user_ids or []:
+            xs = str(x).strip() if x else ""
+            if xs and xs not in candidates:
+                candidates.append(xs)
+        for k in self._phone_language_lookup_keys(raw_phone):
+            if k and k not in candidates:
+                candidates.append(k)
+
+        seen = set()
+        for uid in candidates:
+            if not uid or uid in seen:
+                continue
+            seen.add(uid)
+            lang_fs = await self._language_from_firestore_latest_conversation(uid)
+            if lang_fs:
+                return self.normalize_template_language_code(lang_fs), "saved"
+
+        return self.normalize_template_language_code(lang), "default"
+
+    async def resolve_language_for_campaign_recipient(
+        self,
+        raw_phone: str,
+        *,
+        firestore_user_id: Optional[str] = None,
+        fallback_language: str = "ar",
+    ) -> str:
+        """Language for manual campaign text; uses fallback_language when nothing is stored."""
+        extra = [firestore_user_id] if firestore_user_id else None
+        lang, src = await self.enrich_language_from_firestore_if_needed(raw_phone, extra)
+        if src == "default":
+            return self.normalize_template_language_code(fallback_language)
+        return lang
     
     def save_user_language(self, user_id: str, language: str) -> None:
         """

@@ -15,7 +15,9 @@ from services.live_chat_service import live_chat_service
 from services.message_logs_service import message_logs_service
 from services.service_template_mapping_service import service_template_mapping_service
 from services.smart_messaging import smart_messaging
+from services.user_persistence_service import user_persistence
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from utils.phone_utils import normalize_phone
 
 
 def _normalize_phone_key(phone: Any) -> str:
@@ -240,11 +242,22 @@ class ChattedNoCrmLeadCampaignService:
 
         adapter = WhatsAppFactory.get_adapter() if send_mode != "schedule" else None
         contact_phone = config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX"
+        fallback_lang = (language or "ar").strip().lower()
+        if fallback_lang not in ("ar", "en", "fr"):
+            fallback_lang = "ar"
 
         for recipient in recipients:
             phone = recipient.get("phone")
             if not phone:
                 continue
+
+            uid = recipient.get("user_id")
+            uid_fs = (str(uid).strip() if uid else "") or ((normalize_phone(phone) or "").strip() or str(phone).strip())
+            resolved_lang = await user_persistence.resolve_language_for_campaign_recipient(
+                phone,
+                firestore_user_id=uid_fs,
+                fallback_language=fallback_lang,
+            )
 
             placeholders = {
                 "customer_name": recipient.get("customer_name", "عميلنا العزيز"),
@@ -269,7 +282,7 @@ class ChattedNoCrmLeadCampaignService:
                     message_type=self.TEMPLATE_ID,
                     send_at=schedule_dt,
                     placeholders=placeholders,
-                    language=language,
+                    language=resolved_lang,
                     service_id=None,
                     service_name=None,
                     metadata=metadata,
@@ -282,7 +295,7 @@ class ChattedNoCrmLeadCampaignService:
 
             content = smart_messaging.get_message_content(
                 message_type=self.TEMPLATE_ID,
-                language=language,
+                language=resolved_lang,
                 placeholders=placeholders,
             )
             if not content:

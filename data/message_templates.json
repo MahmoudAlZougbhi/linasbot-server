@@ -41,6 +41,13 @@
     "en": "💙 Hope You're Well\n\nDear {customer_name},\nWe noticed you couldn't make it yesterday.\n\nWe hope everything is okay! 🌸\n\nWould you like to reschedule?\n📱 Call us: {phone_number}\n💬 Or reply \"New appointment\"\n\nWe're always here for you 💜",
     "fr": "💙 Nous Espérons Que Vous Allez Bien\n\nCher(e) {customer_name},\nNous avons remarqué votre absence hier.\n\nNous espérons que tout va bien! 🌸\n\nSouhaitez-vous reprogrammer?\n📱 Appelez-nous: {phone_number}\n💬 Ou répondez \"Nouveau rendez-vous\"\n\nNous sommes toujours là pour vous 💜"
   },
+  "missed_paused_appointment": {
+    "name": "Missed Paused Appointment (BOC manual)",
+    "description": "Manual Paused (BOC) campaign — edit AR/EN/FR here; send uses each user's saved language",
+    "ar": "🌸 مرحباً {customer_name}\n\nنذكرك بموعدك المؤجل في مركز لينا ليزر:\n\n💆 الخدمة: {service_name}\n📅 التاريخ: {appointment_date}\n⏰ الوقت: {appointment_time}\n📍 الفرع: {branch_name}\n\nللحجز أو الاستفسار:\n📱 {phone_number}\n💬 يمكنك الرد على هذه الرسالة في أي وقت.\n\nنتطلع لخدمتك 💜",
+    "en": "🌸 Hi {customer_name}\n\nWe're following up on your paused appointment at Lina's Laser Center:\n\n💆 Service: {service_name}\n📅 Date: {appointment_date}\n⏰ Time: {appointment_time}\n📍 Branch: {branch_name}\n\nTo book or ask anything:\n📱 {phone_number}\n💬 You can reply to this message anytime.\n\nWe're here for you 💜",
+    "fr": "🌸 Bonjour {customer_name}\n\nSuite à votre rendez-vous en pause au Centre Laser Lina:\n\n💆 Service: {service_name}\n📅 Date: {appointment_date}\n⏰ Heure: {appointment_time}\n📍 Branche: {branch_name}\n\nPour réserver ou une question:\n📱 {phone_number}\n💬 Vous pouvez répondre à tout moment.\n\nAu plaisir de vous accueillir 💜"
+  },
   "missed_this_month": {
     "name": "Missed This Month",
     "description": "Sent on 1st of month for customers who missed appointments",
@@ -57,7 +64,7 @@
   },
   "whatsapp_lead_no_booking": {
     "name": "WhatsApp Lead (No CRM)",
-    "description": "Manual campaign: chatted on WhatsApp, no BOC file, no appointments",
+    "description": "Manual WhatsApp leads campaign — edit AR/EN/FR here; send uses each user's saved language",
     "ar": "💬 مرحباً {customer_name}\n\nشكراً لتواصلك مع مركز لينا ليزر!\n\nلم نجد بعد ملفاً أو موعداً مسجّلاً باسمك في نظام الحجز. إذا كنت مهتمّاً بالحجز أو الاستفسار، نحن جاهزون لمساعدتك.\n\n📱 للتواصل: {phone_number}\n💬 يمكنك الرد على هذه الرسالة في أي وقت.\n\nنتطلع لخدمتك 💜",
     "en": "💬 Hi {customer_name}\n\nThanks for chatting with Lina's Laser Center!\n\nWe don't yet see a client file or appointment on file for you. If you'd like to book or ask anything, we're happy to help.\n\n📱 Contact: {phone_number}\n💬 You can reply to this message anytime.\n\nWe're here for you 💜",
     "fr": "💬 Bonjour {customer_name}\n\nMerci d'avoir écrit au Centre Laser Lina!\n\nNous ne voyons pas encore de dossier ni de rendez-vous enregistré. Pour réserver ou poser une question, nous sommes à votre disposition.\n\n📱 Contact: {phone_number}\n💬 Vous pouvez répondre à tout moment.\n\nAu plaisir de vous accueillir 💜"

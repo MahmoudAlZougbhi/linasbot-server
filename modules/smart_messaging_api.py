@@ -320,7 +320,7 @@ async def smart_messaging_resolve_user_language(phone: str):
         if not raw:
             return {"success": False, "error": "phone query parameter is required"}
 
-        user_lang, source = user_persistence.resolve_language_for_phone(raw)
+        user_lang, source = await user_persistence.enrich_language_from_firestore_if_needed(raw)
         return {
             "success": True,
             "language": user_lang,
@@ -1174,11 +1174,12 @@ async def preview_missed_paused_campaign(
 
 @app.post("/api/smart-messaging/campaigns/missed-paused/send")
 async def send_missed_paused_campaign(request_data: Dict[str, Any]):
-    """Send now or schedule a Missed Paused Appointment campaign."""
+    """Send now or schedule a Missed Paused Appointment campaign (per-recipient language from saved prefs / Firestore)."""
     try:
         filters = request_data.get("filters", {}) if isinstance(request_data, dict) else {}
         send_mode = request_data.get("send_mode", "send_now")
         schedule_time = request_data.get("schedule_time")
+        # Fallback when no saved language is found for a recipient (default ar).
         language = request_data.get("language", "ar")
         result = await missed_paused_campaign_service.send_or_schedule(
             filters=filters,
@@ -1213,7 +1214,7 @@ async def preview_whatsapp_leads_no_crm_campaign(
 async def send_whatsapp_leads_no_crm_campaign(
     request_data: Dict[str, Any] = Body(default_factory=dict),
 ):
-    """Send or schedule WhatsApp lead (no CRM / no booking) campaign — manual only."""
+    """Send or schedule WhatsApp lead campaign — manual only; per-recipient language from saved prefs / Firestore."""
     try:
         filters = request_data.get("filters", {}) if isinstance(request_data, dict) else {}
         send_mode = request_data.get("send_mode", "send_now")

@@ -97,7 +97,6 @@ const SmartMessaging = () => {
   });
   const [pausedToDate, setPausedToDate] = useState(() => localISODate(new Date()));
   const [pausedServiceIds, setPausedServiceIds] = useState([]);
-  const [pausedCampaignLang, setPausedCampaignLang] = useState("ar");
   const [pausedPreviewLoading, setPausedPreviewLoading] = useState(false);
   const [pausedSendLoading, setPausedSendLoading] = useState(false);
   const [pausedRecipients, setPausedRecipients] = useState([]);
@@ -111,7 +110,6 @@ const SmartMessaging = () => {
   });
   const [leadToDate, setLeadToDate] = useState(() => localISODate(new Date()));
   const [leadServiceIds, setLeadServiceIds] = useState([]);
-  const [leadCampaignLang, setLeadCampaignLang] = useState("ar");
   const [leadPreviewLoading, setLeadPreviewLoading] = useState(false);
   const [leadSendLoading, setLeadSendLoading] = useState(false);
   const [leadRecipients, setLeadRecipients] = useState([]);
@@ -218,7 +216,6 @@ const SmartMessaging = () => {
             service_ids: pausedServiceIds.length ? pausedServiceIds : [],
           },
           send_mode: "send_now",
-          language: pausedCampaignLang,
         }),
       });
       const data = await res.json();
@@ -305,7 +302,6 @@ const SmartMessaging = () => {
             service_ids: leadServiceIds.length ? leadServiceIds : [],
           },
           send_mode: "send_now",
-          language: leadCampaignLang,
         }),
       });
       const data = await res.json();
@@ -2136,13 +2132,7 @@ const SmartMessaging = () => {
 
             {/* Template Status Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {Object.entries(messageTemplates)
-                .filter(
-                  ([templateId]) =>
-                    templateId !== "missed_paused_appointment" &&
-                    templateId !== "whatsapp_lead_no_booking"
-                )
-                .map(([templateId, templateData]) => {
+              {Object.entries(messageTemplates).map(([templateId, templateData]) => {
                   const Icon = getTemplateIcon(templateId);
                   const color = getTemplateColor(templateId);
                   const scheduleConfig = {
@@ -2508,11 +2498,14 @@ const SmartMessaging = () => {
                 two dates, optionally filter by service, then send the{" "}
                 <span className="font-medium">missed_paused_appointment</span> template when{" "}
                 <span className="font-medium">you</span> click Send. Nothing is sent automatically from this
-                screen.
+                screen. Edit Arabic / English / French text under{" "}
+                <span className="font-medium">Message Templates</span> on this page. Each user receives the
+                version in their <span className="font-medium">saved language</span> (from chat); if unknown,
+                Arabic is used.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">From date</label>
                 <input
@@ -2530,18 +2523,6 @@ const SmartMessaging = () => {
                   onChange={(e) => setPausedToDate(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Message language</label>
-                <select
-                  value={pausedCampaignLang}
-                  onChange={(e) => setPausedCampaignLang(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="ar">Arabic</option>
-                  <option value="en">English</option>
-                  <option value="fr">French</option>
-                </select>
               </div>
               <div className="flex items-end gap-2">
                 <button
@@ -2687,13 +2668,14 @@ const SmartMessaging = () => {
                 date range, with <span className="font-medium">no customer record</span> in BOC and{" "}
                 <span className="font-medium">no appointments</span>. Optional services: keeps users whose
                 recent chat text <span className="font-medium">mentions</span> one of the selected service
-                names (from Service Mappings). Sends template{" "}
+                names (from Service Mappings).                 Sends template{" "}
                 <span className="font-medium">whatsapp_lead_no_booking</span> only when you click Send — not
-                automatic.
+                automatic. Edit AR / EN / FR under <span className="font-medium">Message Templates</span>. Each
+                user gets their <span className="font-medium">saved language</span>; if unknown, Arabic.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">From date</label>
                 <input
@@ -2711,18 +2693,6 @@ const SmartMessaging = () => {
                   onChange={(e) => setLeadToDate(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Message language</label>
-                <select
-                  value={leadCampaignLang}
-                  onChange={(e) => setLeadCampaignLang(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="ar">Arabic</option>
-                  <option value="en">English</option>
-                  <option value="fr">French</option>
-                </select>
               </div>
               <div className="flex items-end gap-2">
                 <button
