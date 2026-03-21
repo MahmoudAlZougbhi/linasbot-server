@@ -64,8 +64,6 @@
     },
     "one_month_followup": {
       "name": "one_month_followup",
-      "meta_template_name": "twenty_day_followup",
-      "omit_empty_header_component": true,
       "wa_message_id": "842363998553484",
       "record_guid": "0caf3b58-4a2b-4e6d-b55c-0af2341b2699",
       "category": "UTILITY",
@@ -86,7 +84,6 @@
     },
     "missed_yesterday": {
       "name": "missed_yesterday",
-      "omit_empty_header_component": true,
       "wa_message_id": "1436541924468894",
       "record_guid": "48eba3ff-0a16-47eb-bf07-2b92f43510e7",
       "category": "UTILITY",
@@ -94,21 +91,13 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 6,
-          "parameters": [
-            "customer_name",
-            "appointment_date",
-            "appointment_time",
-            "branch_name",
-            "service_name",
-            "phone_number"
-          ]
+          "parameters_count": 2,
+          "parameters": ["customer_name", "phone_number"]
         }
       }
     },
     "missed_this_month": {
       "name": "missed_this_month",
-      "omit_empty_header_component": true,
       "wa_message_id": "1090366319768263",
       "record_guid": "b3fcf502-f9ee-46c3-b3b5-3a80dae3c8c7",
       "category": "UTILITY",
@@ -116,15 +105,8 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 6,
-          "parameters": [
-            "customer_name",
-            "appointment_date",
-            "appointment_time",
-            "branch_name",
-            "service_name",
-            "phone_number"
-          ]
+          "parameters_count": 2,
+          "parameters": ["customer_name", "phone_number"]
         }
       }
     },
@@ -170,6 +152,7 @@
     "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers.",
     "meta_template_name": "Optional: meta_template_name or whatsapp_template_name overrides outbound template name. If Monty body count errors, ensure this matches the exact template name in Manager (wrong name = wrong schema).",
     "omit_empty_header_component": "Per template: when true with templates_are_text_only, do NOT send {\"header\", parameters:[]} even if api_config.send_empty_header_component is true. Use for pure body-only Meta templates; if Monty says header required, set false or remove key.",
-    "body_variable_counts": "one_month_followup: 5 body vars (same as reminder_24h) + meta_template_name twenty_day_followup — matches daily dispatcher placeholders and common Meta name for 17-day campaign. missed_yesterday/missed_this_month: 6 vars matching appointment_scheduler. If Meta templates differ, count {{n}} in Manager and edit parameters_count/parameters; if Meta name is not twenty_day_followup, change meta_template_name or remove it."
+    "why_three_templates_failed_before": "They diverged from working templates: extra omit_empty_header_component (no empty header while reminder uses global send_empty_header), meta_template_name (different Meta schema), or wrong body slot counts. Aligned: one_month_followup = same body shape as reminder_24h (5 vars); missed_* = same as no_show_followup (2 vars). Extra placeholder keys from schedulers are ignored for Monty body.",
+    "body_variable_counts": "one_month_followup mirrors reminder_24h. missed_yesterday and missed_this_month mirror no_show_followup. If Meta approved different counts/names, set meta_template_name and edit parameters[] to match Manager exactly."
   }
 }
