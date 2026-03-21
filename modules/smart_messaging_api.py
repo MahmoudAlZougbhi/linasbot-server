@@ -1138,6 +1138,21 @@ async def get_smart_messaging_settings():
         return {"success": False, "error": str(e)}
 
 
+@app.get("/api/smart-messaging/template-header-status")
+async def smart_messaging_template_header_status():
+    """
+    Debug why template sends say "no header image URL": shows which sources are set on this server.
+    Open in browser or curl while logged into the dashboard API.
+    """
+    try:
+        from services.message_preview_service import message_preview_service
+
+        diag = message_preview_service.diagnose_template_header_image_sources()
+        return {"success": True, **diag}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/smart-messaging/settings")
 async def update_smart_messaging_settings(body: Dict[str, Any] = Body(...)):
     """Update smart messaging settings (JSON body merged into smartMessaging)."""

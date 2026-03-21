@@ -15,6 +15,7 @@ from storage.persistent_storage import (
     APP_SETTINGS_FILE,
     MESSAGE_TEMPLATES_FILE,
     ensure_dirs,
+    get_data_root,
 )
 
 
@@ -164,14 +165,20 @@ class MessagePreviewService:
         except Exception as ex:
             print(f"⚠️ Could not write template_header_image_url.txt: {ex}")
 
+    def _montymobile_templates_config_path(self) -> str:
+        envp = os.getenv("MONTYMOBILE_TEMPLATES_CONFIG_PATH", "").strip()
+        if envp:
+            return envp
+        return os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "config",
+            "montymobile_templates.json",
+        )
+
     def _default_header_url_from_montymobile_templates_file(self) -> str:
         """api_config.default_header_component.image_link in config/montymobile_templates.json."""
         try:
-            path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "config",
-                "montymobile_templates.json",
-            )
+            path = self._montymobile_templates_config_path()
             if not os.path.isfile(path):
                 return ""
             with open(path, "r", encoding="utf-8") as f:
@@ -182,6 +189,43 @@ class MessagePreviewService:
         except Exception as ex:
             print(f"⚠️ montymobile_templates.json default header: {ex}")
         return ""
+
+    def diagnose_template_header_image_sources(self) -> Dict[str, Any]:
+        """
+        Why "no header URL" — shows which sources exist on THIS server (no secrets: URL only prefix/length).
+        """
+        resolved = self.get_template_header_image_url()
+        sidecar = self._template_header_sidecar_path()
+        mpath = self._montymobile_templates_config_path()
+        sm = self.get_settings() or {}
+        dash = str(sm.get("templateHeaderImageUrl") or "").strip()
+        return {
+            "problem_summary": (
+                "WhatsApp approved your template with an IMAGE header. Monty needs a public HTTPS link to that "
+                "image in every API request. This server builds that link from env, sidecar file, dashboard save, "
+                "or montymobile_templates.json — if all are empty, you see the error."
+            ),
+            "has_resolved_url": bool(resolved),
+            "resolved_url_length": len(resolved),
+            "resolved_url_prefix": (resolved[:32] + "…") if len(resolved) > 32 else resolved,
+            "env_MONTY_TEMPLATE_HEADER_IMAGE_URL_set": bool(
+                os.getenv("MONTY_TEMPLATE_HEADER_IMAGE_URL", "").strip()
+            ),
+            "env_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL_set": bool(
+                os.getenv("WHATSAPP_TEMPLATE_HEADER_IMAGE_URL", "").strip()
+            ),
+            "sidecar_path": sidecar,
+            "sidecar_file_exists": os.path.isfile(sidecar),
+            "app_settings_path": self.app_settings_file,
+            "app_settings_exists": os.path.isfile(self.app_settings_file),
+            "dashboard_templateHeaderImageUrl_nonempty": bool(dash),
+            "montymobile_templates_config_path": mpath,
+            "montymobile_templates_config_exists": os.path.isfile(mpath),
+            "montymobile_default_header_link_nonempty": bool(
+                self._default_header_url_from_montymobile_templates_file()
+            ),
+            "linasbot_data_root": str(get_data_root()),
+        }
 
     def get_template_header_image_url(self) -> str:
         """
