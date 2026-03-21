@@ -454,6 +454,40 @@ def _build_single_laser_area_question(current_gender: str, user_name: str) -> st
     return f"أكيد {respectful_address}، ممكن تخبرني شو المنطقة اللي بدك {verb} ليزر شعر عليها؟"
 
 
+def _is_plausible_extracted_customer_name(name: str, user_message: str) -> bool:
+    """
+    Reject GPT "detected_name" values that are really the user's message, booking text,
+    or other non-name content (prevents wrong names in CRM / Activity Flow).
+    """
+    if not name or not isinstance(name, str):
+        return False
+    n = name.strip()
+    msg = (user_message or "").strip()
+    if len(n) < 2 or len(n) > 45:
+        return False
+    if any(ch.isdigit() for ch in n):
+        return False
+    words = n.split()
+    if len(words) > 4:
+        return False
+    # Model echoed the entire user message as "name"
+    if msg and n.lower() == msg.lower():
+        return False
+    if msg and len(msg) > 12:
+        if n.lower() in msg.lower() and len(n) / max(len(msg), 1) > 0.72:
+            return False
+    nl = n.lower()
+    for kw in (
+        "se3a", "ساعة", "saat", "hour", "book", "حجز", "appointment", "موعد",
+        "hotle", "hotel", "فندق", "coffee", "قهوة", "table", "room", "laser",
+        "ليزر", "tattoo", "price", "سعر", "دكتور", "dr.", "clinic", "عيادة",
+        "today", "tomorrow", "غدا", "بكرا",
+    ):
+        if kw in nl:
+            return False
+    return True
+
+
 def _is_out_of_clinic_scope_query(text: str) -> bool:
     probe = str(text or "").strip()
     if len(probe) < 3:
@@ -1690,7 +1724,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     if detected_name_from_gpt and isinstance(detected_name_from_gpt, str):
         name_clean = detected_name_from_gpt.strip()
         name_pattern = r"^[A-Za-z\u00C0-\u00FF\u0600-\u06FF\s\-\']+$"
-        if 2 <= len(name_clean) <= 50 and re.match(name_pattern, name_clean, re.UNICODE):
+        if (
+            2 <= len(name_clean) <= 50
+            and re.match(name_pattern, name_clean, re.UNICODE)
+            and _is_plausible_extracted_customer_name(name_clean, user_input_to_process)
+        ):
             config.user_names[user_id] = name_clean
             user_data["collected_name"] = name_clean
             user_data["name_source"] = "ai_extracted"
@@ -1707,6 +1745,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             log_report_event("name_saved", name_clean, current_gender, {"method": "AI Extraction", "whatsapp_id": user_id})
             print(f"✅ Saved name '{name_clean}' from AI for user {user_id}")
             user_name = name_clean
+        elif 2 <= len(name_clean) <= 50 and re.match(name_pattern, name_clean, re.UNICODE):
+            print(
+                f"⚠️ Rejected AI extracted name (not plausible vs message): "
+                f"'{name_clean[:80]}' | message_len={len(user_input_to_process or '')}"
+            )
 
     if detected_gender_from_gpt and config.user_gender.get(user_id) != detected_gender_from_gpt:
         config.user_gender[user_id] = detected_gender_from_gpt

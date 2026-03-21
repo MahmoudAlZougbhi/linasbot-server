@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowPathIcon,
@@ -109,6 +109,19 @@ const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd, e
 };
 
 const FlowCard = ({ entry, isExpanded, onToggle }) => {
+  const cardRef = useRef(null);
+  useEffect(() => {
+    if (!isExpanded) return;
+    const t = setTimeout(() => {
+      cardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+        inline: "nearest",
+      });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [isExpanded]);
+
   const meta = SOURCE_LABELS[entry.source] || { label: entry.source, color: "bg-slate-100 text-slate-700", icon: "?" };
   const msgTypeMeta = MESSAGE_TYPE_LABELS[entry.message_type] || MESSAGE_TYPE_LABELS.text;
   const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
@@ -123,6 +136,7 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
   const hasAiDetails = isGptFlow && (entry.ai_query_summary || entry.ai_raw_response || entry.tool_calls?.length);
 
   return (
+    <div ref={cardRef} className="scroll-mt-24">
     <motion.div
       layout
       initial={{ opacity: 0, y: 8 }}
@@ -204,8 +218,8 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
             </p>
 
             {entry.flow_steps?.length > 0 ? (
-              <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden pr-1 -mr-1">
-                <div className="grid gap-4">
+              <div className="overflow-x-auto overflow-y-visible touch-pan-x">
+                <div className="grid gap-4 min-w-0">
                   {(() => {
                     const maxT = Math.max(0, ...(entry.flow_steps || []).map((s) => (s.tokens != null ? s.tokens : 0)));
                     return (entry.flow_steps || []).map((s) => (
@@ -322,6 +336,7 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
         </motion.div>
       )}
     </motion.div>
+    </div>
   );
 };
 
@@ -419,7 +434,11 @@ const ActivityFlow = () => {
 
       <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Interaction flow</p>
-        <div className="flex items-center gap-4 flex-wrap">
+        <div
+          className="overflow-x-auto overflow-y-hidden pb-2 -mx-1 px-1 touch-pan-x overscroll-x-contain [scrollbar-width:thin]"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="flex items-center gap-4 flex-nowrap min-w-max">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
               <UserIcon className="w-4 h-4 text-blue-600" />
@@ -453,6 +472,7 @@ const ActivityFlow = () => {
               <UserIcon className="w-4 h-4 text-blue-600" />
             </div>
             <span className="text-sm font-medium text-slate-700">User</span>
+          </div>
           </div>
         </div>
         <p className="text-xs text-slate-500">
