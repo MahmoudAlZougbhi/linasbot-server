@@ -109,11 +109,14 @@ class MontyMobileTemplateService:
             (header_cfg.get("image_link") or header_cfg.get("link") or "").strip()
             or str(lookup.get("header_image") or lookup.get("image_url") or "").strip()
         )
-        if not image_link:
+        # When false (default for body-only flows): do not pull image URL from env / dashboard /
+        # montymobile_templates.json — only per-template header.image_link or per-send lookup.
+        allow_global = bool((self.api_config or {}).get("allow_global_template_header_image_url", True))
+        if not image_link and allow_global:
             try:
                 from services.message_preview_service import message_preview_service
 
-                # Includes env MONTY_/WHATSAPP_*, sidecar template_header_image_url.txt, dashboard JSON
+                # Includes env MONTY_/WHATSAPP_*, sidecar, dashboard JSON, default_header_component file
                 image_link = message_preview_service.get_template_header_image_url()
             except Exception as ex:
                 print(f"⚠️ Monty template header: could not read dashboard settings: {ex}")
@@ -311,7 +314,8 @@ class MontyMobileTemplateService:
                 }
 
             tpl_meta = self.get_template_info(normalize_template_id(template_id))
-            assume_hdr = bool((self.api_config or {}).get("assume_whatsapp_image_header", True))
+            # When false: do not block sends if no image header — use for body-only templates in Meta.
+            assume_hdr = bool((self.api_config or {}).get("assume_whatsapp_image_header", False))
             hcfg = (tpl_meta or {}).get("header") if tpl_meta else {}
             header_opt_out = (
                 isinstance(hcfg, dict)
