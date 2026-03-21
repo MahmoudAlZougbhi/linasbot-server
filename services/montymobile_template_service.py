@@ -341,10 +341,11 @@ class MontyMobileTemplateService:
         )
         payload["template"]["components"].extend(header_components)
 
-        if param_values:
-            payload["template"]["components"].append(
-                {"type": "body", "parameters": param_values}
-            )
+        # Always add body component (Meta requires it for templates with body).
+        # Use empty parameters[] when template has 0 body variables.
+        payload["template"]["components"].append(
+            {"type": "body", "parameters": param_values}
+        )
 
         return payload
 
