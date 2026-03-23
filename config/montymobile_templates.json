@@ -64,6 +64,7 @@
     },
     "one_month_followup": {
       "name": "one_month_followup",
+      "meta_template_name": "17_day_follow_up",
       "wa_message_id": "842363998553484",
       "record_guid": "0caf3b58-4a2b-4e6d-b55c-0af2341b2699",
       "category": "UTILITY",
@@ -71,13 +72,18 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 1,
-          "parameters": ["customer_name"]
+          "parameters_count": 3,
+          "parameters": [
+            "customer_name",
+            "branch_name",
+            "service_name"
+          ]
         }
       }
     },
     "missed_yesterday": {
       "name": "missed_yesterday",
+      "meta_template_name": "missed_yesterday_appointment",
       "wa_message_id": "1436541924468894",
       "record_guid": "48eba3ff-0a16-47eb-bf07-2b92f43510e7",
       "category": "UTILITY",
@@ -101,6 +107,20 @@
           "language_code": "ar",
           "parameters_count": 1,
           "parameters": ["customer_name"]
+        }
+      }
+    },
+    "whatsapp_lead_no_booking": {
+      "name": "whatsapp_lead_no_booking",
+      "wa_message_id": "",
+      "record_guid": "",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 0,
+          "parameters": []
         }
       }
     },
@@ -142,11 +162,12 @@
     "next_steps": ["Add English and French versions", "Test all templates"],
     "templates_are_text_only": "true = do not send image/text VARIABLES in the header. Pair with send_empty_header_component=true when Meta has a fixed header (0 variable slots): API sends {\"type\":\"header\",\"parameters\":[]}. If Monty says header required: enable send_empty_header_component. If it says 0 parameters only: do not add header_parameters or image links.",
     "send_empty_header_component": "When true with templates_are_text_only true, Monty gets an empty header component (0 params). Resolves flip-flop between 'Header required' and 'must contain exactly 0 parameters'.",
-    "legacy_internal_ids": "twenty_day_followup -> config key one_month_followup (Meta template name must match templates[].name). missed_paused_appointment -> missed_this_month. whatsapp_lead_no_booking -> missed_yesterday.",
+    "legacy_internal_ids": "twenty_day_followup -> config key one_month_followup; outbound Meta name 17_day_follow_up via meta_template_name. missed_paused_appointment -> missed_this_month. whatsapp_lead_no_booking: own template (0 body vars).",
     "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers.",
     "meta_template_name": "Optional: meta_template_name or whatsapp_template_name overrides outbound template name. If Monty body count errors, ensure this matches the exact template name in Manager (wrong name = wrong schema).",
     "omit_empty_header_component": "Per template: when true with templates_are_text_only, do NOT send {\"header\", parameters:[]} even if api_config.send_empty_header_component is true. Use for pure body-only Meta templates; if Monty says header required, set false or remove key.",
-    "why_three_templates_failed_before": "Monty HTTP 500 when body parameter count != Meta {{1}}..{{n}}. one_month_followup, missed_yesterday, missed_this_month: Meta body uses a single {{1}} for customer name (e.g. before العزيز/ة). Backend sends one text parameter from placeholders.customer_name.",
-    "body_variable_counts": "one_month_followup, missed_yesterday, missed_this_month: 1 body variable (customer_name). Reminder_24h stays 5. Match parameters_count to WhatsApp Manager for each template."
+    "why_three_templates_failed_before": "Monty HTTP 500 when body parameter count != Meta {{1}}..{{n}}. As of Meta refresh: 17_day_follow_up = 3 vars (name, branch, service); missed_yesterday_appointment + missed_this_month = 1 var (name); whatsapp_lead_no_booking = 0 vars.",
+    "body_variable_counts": "17_day_follow_up (one_month_followup / twenty_day_followup): customer_name, branch_name, service_name. missed_yesterday_appointment: customer_name. missed_this_month: customer_name. whatsapp_lead_no_booking: 0. Set meta_template_name when Meta name != internal name.",
+    "monty_ids": "After creating new templates in Monty, paste wa_message_id and record_guid from their dashboard into each template block if your integration requires them."
   }
 }

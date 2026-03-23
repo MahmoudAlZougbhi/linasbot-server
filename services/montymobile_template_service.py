@@ -15,7 +15,7 @@ from services.smart_messaging_catalog import normalize_template_id
 _LEGACY_TEMPLATE_CONFIG_KEYS: Dict[str, str] = {
     "twenty_day_followup": "one_month_followup",
     "missed_paused_appointment": "missed_this_month",
-    "whatsapp_lead_no_booking": "missed_yesterday",
+    # whatsapp_lead_no_booking has its own Meta template (0 body vars); see templates.whatsapp_lead_no_booking
 }
 
 
