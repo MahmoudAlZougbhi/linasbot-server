@@ -71,8 +71,8 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 0,
-          "parameters": []
+          "parameters_count": 1,
+          "parameters": ["customer_name"]
         }
       }
     },
@@ -85,8 +85,8 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 2,
-          "parameters": ["customer_name", "phone_number"]
+          "parameters_count": 1,
+          "parameters": ["customer_name"]
         }
       }
     },
@@ -99,8 +99,8 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 2,
-          "parameters": ["customer_name", "phone_number"]
+          "parameters_count": 1,
+          "parameters": ["customer_name"]
         }
       }
     },
@@ -146,7 +146,7 @@
     "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers.",
     "meta_template_name": "Optional: meta_template_name or whatsapp_template_name overrides outbound template name. If Monty body count errors, ensure this matches the exact template name in Manager (wrong name = wrong schema).",
     "omit_empty_header_component": "Per template: when true with templates_are_text_only, do NOT send {\"header\", parameters:[]} even if api_config.send_empty_header_component is true. Use for pure body-only Meta templates; if Monty says header required, set false or remove key.",
-    "why_three_templates_failed_before": "They diverged from working templates: extra omit_empty_header_component (no empty header while reminder uses global send_empty_header), meta_template_name (different Meta schema), or wrong body slot counts. Aligned: one_month_followup = same body shape as reminder_24h (5 vars); missed_* = same as no_show_followup (2 vars). Extra placeholder keys from schedulers are ignored for Monty body.",
-    "body_variable_counts": "one_month_followup: 0 (Meta static body). If personalization needed, set 1 and parameters: [\"customer_name\"]. missed_* mirror no_show_followup (2 vars). Match Manager {{1}}..{{n}} exactly."
+    "why_three_templates_failed_before": "Monty HTTP 500 when body parameter count != Meta {{1}}..{{n}}. one_month_followup, missed_yesterday, missed_this_month: Meta body uses a single {{1}} for customer name (e.g. before العزيز/ة). Backend sends one text parameter from placeholders.customer_name.",
+    "body_variable_counts": "one_month_followup, missed_yesterday, missed_this_month: 1 body variable (customer_name). Reminder_24h stays 5. Match parameters_count to WhatsApp Manager for each template."
   }
 }
