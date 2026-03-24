@@ -450,7 +450,8 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                     user_lang = user_data.get('user_preferred_lang', 'ar')
 
                     if operator_id:
-                        # User has an operator — send handover notification once
+                        # User has an operator — never stay silent.
+                        # Send assignment notice once, then send a short reminder on each user turn.
                         print(f"[handle_message] INFO: User {user_id} has operator. AI will not respond.")
                         if not user_data.get('notified_human_takeover'):
                             operator_name = conv_data.get('operator_name')
@@ -472,6 +473,25 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
                                 metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_notice"},
                             )
                             user_data['notified_human_takeover'] = True
+                        else:
+                            operator_name = conv_data.get('operator_name')
+                            if not operator_name:
+                                if operator_id and '@' in str(operator_id):
+                                    operator_name = str(operator_id).split('@')[0].replace('.', ' ').replace('_', ' ').title()
+                                else:
+                                    operator_name = operator_id
+                            assigned_followup_messages = {
+                                "ar": f"📞 فريقنا متابع محادثتك مع {operator_name}. شوي وبيرد عليك، شكراً لصبرك 🙏",
+                                "en": f"📞 Our team is following up with {operator_name}. They will reply shortly, thanks for your patience 🙏",
+                                "fr": f"📞 Notre équipe suit votre conversation avec {operator_name}. Réponse sous peu, merci pour votre patience 🙏"
+                            }
+                            followup_msg = assigned_followup_messages.get(user_lang, assigned_followup_messages['ar'])
+                            await send_message_func(user_id, followup_msg)
+                            await save_conversation_message_to_firestore(
+                                user_id, "ai", followup_msg, current_conversation_id,
+                                user_name, user_data.get('phone_number'),
+                                metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_followup"},
+                            )
                     else:
                         # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
                         print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply.")
