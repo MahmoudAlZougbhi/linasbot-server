@@ -2579,13 +2579,13 @@ def get_openai_tools_schema():
             "function": {
                 "name": "get_body_parts",
                 "description": (
-                    "Returns the official CRM list of bookable body areas (id + name) for a service. "
+                    "Returns the official CRM list of bookable body areas (id + name) for a service, optionally filtered by machine. "
                     "REQUIRED before submit_booking_intent whenever the user names one or more areas (Arabic/English/franco) "
                     "or you need numeric body_part_ids. Always pass the same service_id you are booking "
                     "(1 = laser hair removal men, 12 = women, 13 = tattoo, etc.). "
+                    "When a machine is required/selected for this booking, pass machine_id too so the API can return the exact body-part list for that service+machine. "
                     "Match each user-mentioned area to rows in this response and pass every matching id in submit_booking_intent.body_part_ids "
-                    "(multiple areas = multiple ids). The list is per service_id, not per machine—but machine_id in the booking must still "
-                    "match the device the user chose (from get_machines). Do not guess ids from memory or pricing text; use this tool. "
+                    "(multiple areas = multiple ids). Do not guess ids from memory or pricing text; use this tool. "
                     "If this tool returns success=false, read hint_for_model if present: do NOT ask the user for 'CRM/system' area names when "
                     "they already described the body location; use submit_booking_intent.body_part with their wording instead when possible."
                 ),
@@ -2598,6 +2598,10 @@ def get_openai_tools_schema():
                                 "Same service as the booking conversation, e.g. 1 or 12 for laser hair removal "
                                 "(use 1 for male / شاب، 12 for female / صبية). Required for correct area ids."
                             ),
+                        },
+                        "machine_id": {
+                            "type": "integer",
+                            "description": "Optional but recommended when machine is known/required for the booking; filters body parts by service+machine."
                         },
                     },
                     "required": ["service_id"],

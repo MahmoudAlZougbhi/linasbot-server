@@ -115,12 +115,14 @@ def _body_part_endpoint_candidates() -> list:
     return out
 
 
-async def get_body_parts(service_id: int = None):
-    """Returns list of body parts (id, name) for pricing/booking. Optional service_id filter."""
+async def get_body_parts(service_id: int = None, machine_id: int = None):
+    """Returns list of body parts (id, name) for pricing/booking. Optional service_id/machine_id filters."""
     print("API Call: get_body_parts")
     params = {}
     if service_id is not None:
         params["service_id"] = service_id
+    if machine_id is not None:
+        params["machine_id"] = machine_id
     q = params if params else None
     last: dict = {"success": False, "message": "get_body_parts: no endpoint tried"}
     for ep in _body_part_endpoint_candidates():
@@ -131,7 +133,14 @@ async def get_body_parts(service_id: int = None):
                 "api_call",
                 "System",
                 "N/A",
-                {"api": "get_body_parts", "path": ep, "status": "success", "count": len(response.get("data") or [])},
+                {
+                    "api": "get_body_parts",
+                    "path": ep,
+                    "status": "success",
+                    "count": len(response.get("data") or []),
+                    "service_id": service_id,
+                    "machine_id": machine_id,
+                },
             )
             return response
         msg = str(response.get("message") or "").lower()
@@ -139,9 +148,32 @@ async def get_body_parts(service_id: int = None):
         if sc == 404 or "not found" in msg:
             print(f"API Call: get_body_parts retry — {ep} failed, trying next path")
             continue
-        log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "path": ep, "status": "failed", "error": response.get("message")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_body_parts",
+                "path": ep,
+                "status": "failed",
+                "error": response.get("message"),
+                "service_id": service_id,
+                "machine_id": machine_id,
+            },
+        )
         return response
-    log_report_event("api_call", "System", "N/A", {"api": "get_body_parts", "status": "failed", "error": last.get("message")})
+    log_report_event(
+        "api_call",
+        "System",
+        "N/A",
+        {
+            "api": "get_body_parts",
+            "status": "failed",
+            "error": last.get("message"),
+            "service_id": service_id,
+            "machine_id": machine_id,
+        },
+    )
     return last
 
 async def get_clinic_hours():
@@ -514,13 +546,14 @@ def _clean_body_part_ids_for_api(raw: list) -> list:
     return out
 
 
-async def create_appointment(phone: str, service_id: int, machine_id: int, branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
+async def create_appointment(phone: str, service_id: int, machine_id: Optional[int], branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
     """
     POST appointments/create — **PDF-primary contract**: top-level **body_part_ids** (int[]).
 
-    Set env **LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1** to send **body_parts**
-    `{body_part_id, session_number}` instead (or when any session_number != 1, body_parts
-    is used automatically so session metadata is not lost).
+    Set env **LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1** or
+    **LINASLASER_FORCE_BODY_PARTS_WITH_SESSIONS=1** to send **body_parts**
+    `{body_part_id, session_number}`. Also auto-uses body_parts when any session_number != 1
+    so session metadata is not lost.
     """
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
@@ -531,14 +564,20 @@ async def create_appointment(phone: str, service_id: int, machine_id: int, branc
     json_data = {
         "phone": phone_clean,
         "service_id": service_id,
-        "machine_id": machine_id,
         "branch_id": branch_id,
         "date": date
     }
+    if machine_id is not None:
+        json_data["machine_id"] = machine_id
     if user_code:
         json_data["user_code"] = user_code
 
     legacy_env = os.getenv("LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    force_sessions_env = os.getenv("LINASLASER_FORCE_BODY_PARTS_WITH_SESSIONS", "").lower() in (
         "1",
         "true",
         "yes",
@@ -565,7 +604,7 @@ async def create_appointment(phone: str, service_id: int, machine_id: int, branc
                 sn = 1
             if sn != 1:
                 non_one_session = True
-        if legacy_env or non_one_session:
+        if force_sessions_env or legacy_env or non_one_session:
             json_data["body_parts"] = body_parts_with_sessions
             use_body_parts = True
         elif derived_from_sessions:

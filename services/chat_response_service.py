@@ -1562,6 +1562,7 @@ async def _try_infer_body_part_ids_from_conversation(
     service_id: int,
     user_input: str,
     context_messages: Optional[List[dict]],
+    machine_id: Optional[int] = None,
 ) -> Optional[List[int]]:
     """When GPT omitted valid IDs but the user already named an area (e.g. underarm / ta7t el bat)."""
     if _safe_int(service_id) not in LASER_HAIR_REMOVAL_SERVICE_IDS:
@@ -1592,7 +1593,9 @@ async def _try_infer_body_part_ids_from_conversation(
     )
     if underarm_franco or underarm_ar or underarm_en:
         for hint in ("underarm", "إبط", "ابط", "armpit"):
-            resolved = await _resolve_body_part_ids_from_area_hint(hint, service_id)
+            resolved = await _resolve_body_part_ids_from_area_hint(
+                hint, service_id, machine_id
+            )
             if resolved:
                 return resolved
     return None
@@ -2124,7 +2127,7 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
 
 
 async def _coerce_body_part_ids_from_gpt_booking_args(
-    booking_args: dict, service_id: int
+    booking_args: dict, service_id: int, machine_id: Optional[int] = None
 ) -> Optional[List[int]]:
     """
     GPT sometimes emits body_part_ids as a list of objects, e.g.
@@ -2156,7 +2159,9 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
             if not area and isinstance(_raw_id, str) and _raw_id.strip() and not str(_raw_id).strip().isdigit():
                 area = str(_raw_id).strip()
             if area:
-                resolved = await _resolve_body_part_ids_from_area_hint(str(area), service_id)
+                resolved = await _resolve_body_part_ids_from_area_hint(
+                    str(area), service_id, machine_id
+                )
                 if resolved:
                     out.extend(resolved)
     normalized = _normalize_body_part_ids(out)
@@ -2262,7 +2267,9 @@ def _datetime_from_gpt_booking_args(booking_args: dict) -> Optional[datetime.dat
     return to_bot_tz(parsed)
 
 
-async def _resolve_body_part_ids_from_area_hint(area_hint: str, service_id: int) -> Optional[List[int]]:
+async def _resolve_body_part_ids_from_area_hint(
+    area_hint: str, service_id: int, machine_id: Optional[int] = None
+) -> Optional[List[int]]:
     """Resolve body_part_ids when only a human-readable area (e.g. back) is known."""
     if not area_hint or not str(area_hint).strip():
         return None
@@ -2274,7 +2281,9 @@ async def _resolve_body_part_ids_from_area_hint(area_hint: str, service_id: int)
     needle_terms = ("back", "ظهر", "ضهر", "dahr", "dahre", "عمود فقري")
     hand_terms = ("hand", "hands", "eideh", "eide", "يد", "اليد", "معصم", "wrist", "forearm", "arm")
     try:
-        bp_resp = await api_integrations.get_body_parts(service_id=service_id)
+        bp_resp = await api_integrations.get_body_parts(
+            service_id=service_id, machine_id=machine_id
+        )
         if not bp_resp.get("success") or not isinstance(bp_resp.get("data"), list):
             return None
         underarm_hint = (
@@ -3608,7 +3617,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         else _safe_int(config.DEFAULT_SERVICE_ID)
                     )
                     coerced_bp = await _coerce_body_part_ids_from_gpt_booking_args(
-                        function_args, sid_for_coerce if sid_for_coerce is not None else 1
+                        function_args,
+                        sid_for_coerce if sid_for_coerce is not None else 1,
+                        _safe_int(function_args.get("machine_id")),
                     )
                     if coerced_bp:
                         function_args["body_part_ids"] = coerced_bp
@@ -3638,7 +3649,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         _remember_booking_selection(user_id, function_args)
                     elif selected_service_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
                         inferred_bp = await _try_infer_body_part_ids_from_conversation(
-                            selected_service_id, user_input, current_context_messages
+                            selected_service_id,
+                            user_input,
+                            current_context_messages,
+                            _safe_int(function_args.get("machine_id")),
                         )
                         if inferred_bp:
                             function_args["body_part_ids"] = inferred_bp

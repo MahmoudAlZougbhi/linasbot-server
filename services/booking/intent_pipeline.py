@@ -13,7 +13,7 @@ import copy
 import datetime
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import config
 from services import api_integrations
@@ -23,6 +23,7 @@ from services.booking.constants import (
     DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS,
     HAIR_REMOVAL_MACHINE_IDS,
     LASER_HAIR_REMOVAL_SERVICE_IDS,
+    MACHINE_OPTIONAL_SERVICE_IDS,
     TATTOO_SERVICE_ID,
 )
 from services.booking.resolver import (
@@ -122,6 +123,36 @@ def _coerce_int_id(value: Any) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _services_without_machine_from_env() -> Set[int]:
+    """
+    Optional override for services that should allow booking without machine_id.
+    Env example: LINASLASER_SERVICES_WITHOUT_MACHINE_IDS="20,21"
+    """
+    raw = (os.getenv("LINASLASER_SERVICES_WITHOUT_MACHINE_IDS") or "").strip()
+    if not raw:
+        return set()
+    out: Set[int] = set()
+    for tok in raw.split(","):
+        try:
+            i = int(tok.strip())
+            if i > 0:
+                out.add(i)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _service_requires_machine(service_id: Optional[int]) -> bool:
+    """
+    Default policy: machine is required unless service is explicitly allowlisted.
+    """
+    if service_id is None:
+        return True
+    if service_id in MACHINE_OPTIONAL_SERVICE_IDS:
+        return False
+    return service_id not in _services_without_machine_from_env()
 
 
 def _crm_rejection_validation_error(
@@ -233,6 +264,11 @@ async def legacy_create_appointment_tool_output(
         "true",
         "yes",
     )
+    force_sessions_env = os.getenv("LINASLASER_FORCE_BODY_PARTS_WITH_SESSIONS", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     bps = fa.get("body_parts_with_sessions")
     body_ids: List[int] = []
     non_one_session = False
@@ -265,13 +301,14 @@ async def legacy_create_appointment_tool_output(
     }
 
     missing: List[str] = []
+    machine_required_legacy = _service_requires_machine(sid)
     if not phone:
         missing.append("phone")
     if sid is None:
         missing.append("service_id")
     if bid is None:
         missing.append("branch_id")
-    if mid is None:
+    if machine_required_legacy and mid is None:
         missing.append("machine_id")
     if not date_str:
         missing.append("date")
@@ -289,16 +326,17 @@ async def legacy_create_appointment_tool_output(
     payload: Dict[str, Any] = {
         "phone": phone,
         "service_id": int(sid),
-        "machine_id": int(mid),
         "branch_id": int(bid),
         "date": date_str,
     }
+    if mid is not None:
+        payload["machine_id"] = int(mid)
     uc = fa.get("user_code")
     if uc:
         payload["user_code"] = uc
     # PDF: top-level body_part_ids. Pass body_parts_with_sessions only when the API must
     # preserve session_number (≠1) or when LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS is set.
-    if legacy_body_parts_env or non_one_session:
+    if force_sessions_env or legacy_body_parts_env or non_one_session:
         if isinstance(bps, list) and bps:
             payload["body_parts_with_sessions"] = bps
         elif body_ids:
@@ -423,7 +461,8 @@ async def handle_submit_booking_intent(
 
     mach_id: Optional[int] = None
     mach_miss: Optional[str] = None
-    if svc_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
+    machine_required = _service_requires_machine(svc_id)
+    if machine_required and svc_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
         mach_id, mach_miss = resolve_machine_id(
             intent.get("machine_name"),
             intent.get("machine_id"),
@@ -431,7 +470,7 @@ async def handle_submit_booking_intent(
         )
         if mach_miss:
             missing.append(mach_miss)
-    elif svc_id == TATTOO_SERVICE_ID:
+    elif machine_required and svc_id == TATTOO_SERVICE_ID:
         mach_id, _ = resolve_machine_id(
             intent.get("machine_name"),
             intent.get("machine_id"),
@@ -442,7 +481,7 @@ async def handle_submit_booking_intent(
         if mach_id is None:
             missing.append("machine")
             mach_miss = "machine"
-    else:
+    elif machine_required:
         mach_id = resolve_machine_id(
             intent.get("machine_name"),
             intent.get("machine_id"),
@@ -453,6 +492,13 @@ async def handle_submit_booking_intent(
         if mach_id is None:
             missing.append("machine")
             mach_miss = "machine"
+    else:
+        # Service explicitly allows booking without machine; keep machine if provided.
+        mach_id = resolve_machine_id(
+            intent.get("machine_name"),
+            intent.get("machine_id"),
+            machines,
+        )[0]
 
     if svc_id == TATTOO_SERVICE_ID and not str(intent.get("body_part") or "").strip():
         um = (raw_msg or "").lower()
@@ -478,11 +524,11 @@ async def handle_submit_booking_intent(
         explicit = intent.get("body_part_ids")
         if isinstance(explicit, list) and explicit:
             body_ids, bp_miss = await resolve_body_part_ids(
-                svc_id, intent.get("body_part"), explicit
+                svc_id, intent.get("body_part"), explicit, mach_id
             )
         else:
             body_ids, bp_miss = await resolve_body_part_ids(
-                svc_id, intent.get("body_part"), None
+                svc_id, intent.get("body_part"), None, mach_id
             )
         if bp_miss:
             missing.append(bp_miss)
@@ -518,6 +564,7 @@ async def handle_submit_booking_intent(
         "service_id": svc_id,
         "branch_id": br_id,
         "machine_id": mach_id,
+        "machine_required": machine_required,
         "body_part_ids": body_ids,
         "timezone": BOOKING_TIMEZONE_LABEL,
     }
@@ -553,7 +600,7 @@ async def handle_submit_booking_intent(
         )
         return err
 
-    assert svc_id is not None and br_id is not None and mach_id is not None and dt_local is not None
+    assert svc_id is not None and br_id is not None and dt_local is not None
 
     if svc_id in DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS and not body_ids:
         err = validation_error_response(
@@ -646,11 +693,16 @@ async def handle_submit_booking_intent(
     payload = {
         "phone": phone_clean,
         "service_id": svc_id,
-        "machine_id": mach_id,
         "branch_id": br_id,
         "date": api_date,
         "body_part_ids": body_ids,
+        # Keep per-area session metadata explicit for BOC integration.
+        "body_parts_with_sessions": [
+            {"body_part_id": bp_id, "session_number": 1} for bp_id in body_ids
+        ],
     }
+    if mach_id is not None:
+        payload["machine_id"] = mach_id
     return await finalize_crm_booking_tool_output(
         user_id=user_id,
         raw_user_message=raw_msg,

@@ -223,6 +223,7 @@ async def resolve_body_part_ids(
     service_id: int,
     body_part_label: Optional[str],
     explicit_ids: Optional[List[Any]],
+    machine_id: Optional[int] = None,
 ) -> Tuple[List[int], Optional[str]]:
     raw_ids = explicit_ids or []
     out: List[int] = []
@@ -235,7 +236,7 @@ async def resolve_body_part_ids(
     label = (body_part_label or "").strip()
     if not label:
         return [], "body_part"
-    r = await api_integrations.get_body_parts(service_id=service_id)
+    r = await api_integrations.get_body_parts(service_id=service_id, machine_id=machine_id)
     rows = _norm_api_list(r.get("data")) if r.get("success") else []
     if service_id == TATTOO_SERVICE_ID and label and (not r.get("success") or not rows):
         env_id = _tattoo_body_part_id_from_env_synonyms(label)

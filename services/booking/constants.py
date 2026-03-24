@@ -21,6 +21,12 @@ LASER_HAIR_REMOVAL_SERVICE_IDS: FrozenSet[int] = frozenset({HAIR_MEN, HAIR_WOMEN
 # Machines that are hair-removal class in current CRM mapping (not Pico/tattoo).
 HAIR_REMOVAL_MACHINE_IDS: FrozenSet[int] = frozenset({9, 10, 13, 15})
 
+# Services that can be booked without selecting a machine.
+# As requested: tattoo removal + CO2 laser + whitening.
+MACHINE_OPTIONAL_SERVICE_IDS: FrozenSet[int] = frozenset(
+    set(CO2_SERVICE_IDS) | set(WHITENING_SERVICE_IDS) | {TATTOO_SERVICE_ID}
+)
+
 DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS: FrozenSet[int] = frozenset({1, 2, 4, 5, 11, 12, 13, 14})
 
 BOOKING_TIMEZONE_LABEL = "Asia/Beirut"
