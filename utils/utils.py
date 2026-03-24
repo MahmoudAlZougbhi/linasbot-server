@@ -2553,6 +2553,48 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
+                "name": "update_paused_appointment",
+                "description": (
+                    "Advanced paused-appointment edit. Use when the user wants to modify a paused row details beyond date only "
+                    "(body parts, session_number per part, machine, and/or explicit status to Available). "
+                    "Pass appointment_id selected by the user. This executes one CRM update payload for that paused row."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "appointment_id": {"type": "integer", "description": "Paused appointment id to edit."},
+                        "phone": {"type": "string", "description": "Client phone (local format accepted)."},
+                        "date": {"type": "string", "format": "date-time", "description": "Optional new datetime YYYY-MM-DD HH:MM:SS."},
+                        "machine_id": {"type": "integer", "description": "Optional machine id (service-dependent)."},
+                        "body_part_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Optional replacement body-part ids list."
+                        },
+                        "body_parts_with_sessions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "body_part_id": {"type": "integer"},
+                                    "session_number": {"type": "integer", "description": ">=1"}
+                                }
+                            },
+                            "description": "Optional per-body-part sessions. Preferred when session numbers matter."
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Optional target status (e.g. Available). If omitted, server may default to Available for paused edits."
+                        },
+                        "user_code": {"type": "string", "description": "Optional user_code."}
+                    },
+                    "required": ["appointment_id", "phone"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_branches",
                 "description": "Retrieves a list of all branches associated with the clinic.",
                 "parameters": {"type": "object", "properties": {}}

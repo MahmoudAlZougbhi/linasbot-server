@@ -846,6 +846,122 @@ async def update_appointment_date(appointment_id: int, phone: str, date: str, us
         log_report_event("api_call", "System", "N/A", {"api": "update_appointment_date", "status": "failed", "error": response.get("message"), "phone": phone, "appointment_id": appointment_id})
     return response
 
+
+async def update_paused_appointment(
+    appointment_id: int,
+    phone: str,
+    date: str = None,
+    machine_id: int = None,
+    body_part_ids: list = None,
+    body_parts_with_sessions: list = None,
+    status: str = None,
+    user_code: str = None,
+):
+    """
+    Updates paused appointment details (date, machine, body parts, sessions, status).
+    Intended for paused-row editing workflows where the AI prepares a full JSON patch.
+    """
+    phone_clean = _phone_clean_for_appointment_api(phone)
+    path = (os.getenv("LINASLASER_UPDATE_PAUSED_APPOINTMENT_PATH") or "appointments/update").strip().lstrip("/")
+    print(
+        "API Call: update_paused_appointment "
+        f"appointment_id={appointment_id}, phone={phone_clean}, path={path}"
+    )
+
+    json_data: dict = {
+        "appointment_id": int(appointment_id),
+        "phone": phone_clean,
+    }
+    if date is not None and str(date).strip():
+        json_data["date"] = str(date).strip()
+    if machine_id is not None:
+        try:
+            json_data["machine_id"] = int(machine_id)
+        except (TypeError, ValueError):
+            pass
+    clean_ids = _clean_body_part_ids_for_api(body_part_ids or [])
+    if clean_ids:
+        json_data["body_part_ids"] = clean_ids
+    if isinstance(body_parts_with_sessions, list) and body_parts_with_sessions:
+        cleaned_sessions = []
+        for item in body_parts_with_sessions:
+            if not isinstance(item, dict):
+                continue
+            try:
+                pid = int(item.get("body_part_id") or item.get("id"))
+            except (TypeError, ValueError):
+                continue
+            if pid <= 0:
+                continue
+            try:
+                sn = int(item.get("session_number", 1))
+            except (TypeError, ValueError):
+                sn = 1
+            if sn <= 0:
+                sn = 1
+            cleaned_sessions.append({"body_part_id": pid, "session_number": sn})
+        if cleaned_sessions:
+            json_data["body_parts"] = cleaned_sessions
+
+    status_raw = (status or "").strip()
+    default_set_available = os.getenv(
+        "LINASLASER_UPDATE_PAUSED_DEFAULT_STATUS_AVAILABLE", "true"
+    ).lower() in ("1", "true", "yes")
+    if status_raw:
+        json_data["status"] = status_raw
+    elif default_set_available:
+        json_data["status"] = "Available"
+    if user_code:
+        json_data["user_code"] = user_code
+
+    response = await _make_api_request("POST", path, json_data=json_data)
+    if response.get("success"):
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "update_paused_appointment",
+                "status": "success",
+                "appointment_id": appointment_id,
+                "path": path,
+            },
+        )
+        # Safety fallback: if target status is Available, also try resume endpoint.
+        target_available = str(json_data.get("status") or "").strip().lower() in (
+            "available",
+            "active",
+            "resume",
+            "resumed",
+        )
+        if target_available:
+            resume_resp = await resume_appointment(phone, appointment_id)
+            response = dict(response)
+            if resume_resp.get("skipped"):
+                response["resume_appointment"] = {"attempted": False, "skipped": True}
+            else:
+                response["resume_appointment"] = {
+                    "attempted": True,
+                    "success": bool(resume_resp.get("success")),
+                    "skipped": False,
+                    "message": resume_resp.get("message"),
+                    "path": resume_resp.get("path"),
+                }
+    else:
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "update_paused_appointment",
+                "status": "failed",
+                "error": response.get("message"),
+                "appointment_id": appointment_id,
+                "path": path,
+            },
+        )
+    return response
+
 async def check_customer_gender(phone: str = None, user_code: str = None):
     """Returns the gender of a customer based on the provided identifier."""
     # Clean phone number to match API expected format (without + prefix and country code)

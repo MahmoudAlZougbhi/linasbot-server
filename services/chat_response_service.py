@@ -3736,7 +3736,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
 
-                if function_name == "update_appointment_date":
+                if function_name in ("update_appointment_date", "update_paused_appointment"):
                     phone_for_pause_guard = normalize_phone_for_lookup(
                         function_args.get("phone")
                         or customer_phone_clean
@@ -3851,38 +3851,43 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if phone_for_pause_guard and not function_args.get("phone"):
                         function_args["phone"] = phone_for_pause_guard
 
-                    if not normalize_tool_date(
-                        function_name,
-                        function_args,
-                        user_input_for_date=user_input,
-                        context_messages_for_date=current_context_messages,
-                    ):
-                        err_content = json.dumps(
-                            {
-                                "success": False,
-                                "message": "Reschedule date validation failed; structured date/date_components required from AI.",
-                            }
-                        )
-                        tool_round_trips.append(
-                            {
-                                "ai_requested": function_name,
-                                "args": json.dumps(function_args)[:300],
-                                "bot_returned": err_content[:600],
-                            }
-                        )
-                        messages.append(
-                            {
-                                "tool_call_id": tool_call.id,
-                                "role": "tool",
-                                "name": function_name,
-                                "content": err_content,
-                            }
-                        )
-                        continue
+                    requires_date = (
+                        function_name == "update_appointment_date"
+                        or (function_name == "update_paused_appointment" and "date" in function_args)
+                    )
+                    if requires_date:
+                        if not normalize_tool_date(
+                            function_name,
+                            function_args,
+                            user_input_for_date=user_input,
+                            context_messages_for_date=current_context_messages,
+                        ):
+                            err_content = json.dumps(
+                                {
+                                    "success": False,
+                                    "message": "Reschedule date validation failed; structured date/date_components required from AI.",
+                                }
+                            )
+                            tool_round_trips.append(
+                                {
+                                    "ai_requested": function_name,
+                                    "args": json.dumps(function_args)[:300],
+                                    "bot_returned": err_content[:600],
+                                }
+                            )
+                            messages.append(
+                                {
+                                    "tool_call_id": tool_call.id,
+                                    "role": "tool",
+                                    "name": function_name,
+                                    "content": err_content,
+                                }
+                            )
+                            continue
 
                 # --- Auto-chain appointment_id from check_next when GPT omitted it ---
                 # If GPT already set appointment_id (e.g. user picked from a multi-appointment list), do not overwrite.
-                if function_name == "update_appointment_date" and check_next_appointment_result and not forced_update_appointment_id:
+                if function_name in ("update_appointment_date", "update_paused_appointment") and check_next_appointment_result and not forced_update_appointment_id:
                     actual_appointment_id = extract_appointment_id(extract_check_next_appointment(check_next_appointment_result))
                     if actual_appointment_id:
                         gpt_raw = function_args.get("appointment_id")
@@ -3901,7 +3906,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"DEBUG: appointment_id already correct: {actual_appointment_id}")
 
                 # Reject day/time that violate clinic rules (service + gender + branch + device) before CRM.
-                if function_name in ("create_appointment", "update_appointment_date"):
+                if function_name in ("create_appointment", "update_appointment_date", "update_paused_appointment"):
                     date_s = function_args.get("date")
                     dt_local = None
                     if isinstance(date_s, str) and date_s.strip():
@@ -4227,7 +4232,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"create_appointment tool: API failed (no user-text retry): {err_msg}")
                         
                         # 📊 ANALYTICS: Track appointment reschedule
-                        elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and tool_output.get("success"):
+                        elif function_name in ("update_appointment_date", "update_paused_appointment") and isinstance(tool_output, dict) and tool_output.get("success"):
                             update_appointment_date_success_count += 1
                             from services.analytics_events import analytics
                             
@@ -4280,7 +4285,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     )
                                 except Exception as pr_e:
                                     print(f"WARNING: analytics pause_cleared: {pr_e}")
-                        elif function_name == "update_appointment_date" and isinstance(tool_output, dict) and not tool_output.get("success"):
+                        elif function_name in ("update_appointment_date", "update_paused_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
                             api_failure_reason = f"update_appointment_date_tool_failed: {err_msg}"
@@ -4386,7 +4391,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
         tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
         _brl_flow = (parsed_response.get("bot_reply") or "").strip().lower()
-        had_update_tool = bool(tool_calls) and "update_appointment_date" in tool_names
+        had_update_tool = bool(tool_calls) and (
+            "update_appointment_date" in tool_names
+            or "update_paused_appointment" in tool_names
+        )
 
         _leaked_rec = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")
         _rec_has_date = bool(_leaked_rec.get("date") or _leaked_rec.get("date_components"))
