@@ -875,10 +875,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         break
 
                 if conv_data and conv_data.get("human_takeover_active", False):
-                    operator_assigned = bool(conv_data.get("operator_id"))
-                    if operator_assigned:
-                        print(f"[_process_and_respond] INFO: Operator assigned for {user_id}; AI remains silent.")
-                        return
+                    # During takeover (assigned or waiting), never leave the user without a reply.
                     should_send_waiting = True
                 elif conv_data and not conv_data.get("human_takeover_active", False):
                     # Firestore says takeover ended; release stale local flag and continue normal AI flow.
