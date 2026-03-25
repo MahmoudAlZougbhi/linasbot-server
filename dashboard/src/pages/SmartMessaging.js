@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MagnifyingGlassIcon,
@@ -20,6 +21,7 @@ import {
   ArrowPathRoundedSquareIcon,
   HeartIcon,
   CalendarDaysIcon,
+  StarIcon,
 } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import { apiUrl } from "../utils/apiBaseUrl";
@@ -92,7 +94,11 @@ const SmartMessaging = () => {
   const [templateHeaderImageUrl, setTemplateHeaderImageUrl] = useState("");
   const [savingHeaderUrl, setSavingHeaderUrl] = useState(false);
 
-  // Manual BOC "paused appointments" campaign (missed_paused_appointment template)
+  const [sessionStarRatings, setSessionStarRatings] = useState([]);
+  const [sessionStarRatingsLoading, setSessionStarRatingsLoading] = useState(false);
+  const [sessionRatingsTick, setSessionRatingsTick] = useState(0);
+
+  // Manual BOC paused appointments — Missed This Month (internal key missed_paused_appointment; Meta: sent_for_pause)
   const [pausedFromDate, setPausedFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -127,6 +133,34 @@ const SmartMessaging = () => {
     fetchServiceMappings();
     fetchTemplateSchedules();
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "sessionRatings") return;
+    let cancelled = false;
+    const run = async () => {
+      setSessionStarRatingsLoading(true);
+      try {
+        const res = await fetch(
+          apiUrl("/api/smart-messaging/post-session-feedback-ratings?limit=400")
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.success) {
+          setSessionStarRatings(Array.isArray(data.ratings) ? data.ratings : []);
+        } else {
+          toast.error(data.error || "Failed to load star ratings");
+        }
+      } catch {
+        if (!cancelled) toast.error("Failed to load star ratings");
+      } finally {
+        if (!cancelled) setSessionStarRatingsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, sessionRatingsTick]);
 
   useEffect(() => {
     const ids = Object.keys(messageTemplates || {}).sort();
@@ -207,7 +241,7 @@ const SmartMessaging = () => {
     }
     if (
       !window.confirm(
-        `Send the Missed Paused Appointment message to ${pausedRecipients.length} phone number(s) now?`
+        `Send Missed This Month (Meta: sent_for_pause) to ${pausedRecipients.length} phone number(s) now?`
       )
     ) {
       return;
@@ -375,10 +409,25 @@ const SmartMessaging = () => {
               ? "saved for this number"
               : "default (no saved language)";
         let successMsg = `Sent — user language: ${result.user_language} (${src}) → WhatsApp template language: ${result.template_language}`;
+        if (result.vary_test_payload_applied) {
+          successMsg +=
+            "\nتمت إضافة علامة وقت صغيرة على أحد الحقول حتى واتساب يقبل تكرار التجربة (ميتا أحياناً يحجب نفس النص 100%). عطّلها من الـ API بـ vary_test_payload: false إذا بدك نص مطابق حرفياً.";
+        }
+        if (result.placeholder_source) {
+          successMsg += `\nData: ${result.placeholder_source}`;
+        }
+        if (Array.isArray(result.placeholder_warnings) && result.placeholder_warnings.length) {
+          successMsg += `\n${result.placeholder_warnings.join(" ")}`;
+        }
         if (result.test_template_note) {
           successMsg += `\n\n${result.test_template_note}`;
         }
-        toast.success(successMsg, { duration: result.test_template_note ? 10000 : 4000 });
+        toast.success(successMsg, {
+          duration:
+            result.test_template_note || (result.placeholder_warnings && result.placeholder_warnings.length)
+              ? 10000
+              : 5000,
+        });
       } else {
         const parts = [
           result.error || "Failed to send test",
@@ -1189,7 +1238,7 @@ const SmartMessaging = () => {
         // Show yesterday's missed appointments
         return appointmentDate === yesterdayStr || sendDateStr === yesterdayStr;
       case "twenty_day_followup":
-        // Show 17-day followups scheduled within current month
+        // One Month Follow Up: show sends scheduled within current month
         return sendDateStr >= startOfMonthStr && sendDateStr < startOfNextMonthStr;
       default:
         return true;
@@ -1333,7 +1382,7 @@ const SmartMessaging = () => {
         icon: ClockIcon,
       },
       post_session_feedback: {
-        name: "Feedback",
+        name: "Post Session Feedback",
         color: "bg-green-100 text-green-700",
         icon: CheckCircleIcon,
       },
@@ -1343,7 +1392,7 @@ const SmartMessaging = () => {
         icon: HeartIcon,
       },
       twenty_day_followup: {
-        name: "17-Day",
+        name: "One Month Follow Up",
         color: "bg-indigo-100 text-indigo-700",
         icon: SparklesIcon,
       },
@@ -1466,8 +1515,9 @@ const SmartMessaging = () => {
               Send test template
             </h2>
             <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-              Enter a WhatsApp number, pick a template, then send. Language follows the user&apos;s saved
-              preference for that number (same as the bot). Override only if you need to force ar / en / fr.
+              Enter a WhatsApp number that exists in CRM with a real booking. Test sends fill name, date, time,
+              branch, and service from the live API (next appointment / customer list) — same idea as production,
+              not dummy text. Language follows the user&apos;s saved preference unless you override ar / en / fr.
             </p>
           </div>
         </div>
@@ -1660,10 +1710,10 @@ const SmartMessaging = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg">
+      <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg">
         <button
           onClick={() => setActiveTab("sent")}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+          className={`flex-1 min-w-[120px] py-2 px-4 rounded-md font-medium transition-all ${
             activeTab === "sent"
               ? "bg-white text-primary-600 shadow-sm"
               : "text-slate-600 hover:text-slate-800"
@@ -1673,7 +1723,7 @@ const SmartMessaging = () => {
         </button>
         <button
           onClick={() => setActiveTab("templates")}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+          className={`flex-1 min-w-[120px] py-2 px-4 rounded-md font-medium transition-all ${
             activeTab === "templates"
               ? "bg-white text-primary-600 shadow-sm"
               : "text-slate-600 hover:text-slate-800"
@@ -1683,13 +1733,23 @@ const SmartMessaging = () => {
         </button>
         <button
           onClick={() => setActiveTab("mappings")}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+          className={`flex-1 min-w-[140px] py-2 px-4 rounded-md font-medium transition-all ${
             activeTab === "mappings"
               ? "bg-white text-primary-600 shadow-sm"
               : "text-slate-600 hover:text-slate-800"
           }`}
         >
           Service Mappings
+        </button>
+        <button
+          onClick={() => setActiveTab("sessionRatings")}
+          className={`flex-1 min-w-[140px] py-2 px-2 sm:px-4 rounded-md font-medium transition-all text-sm sm:text-base ${
+            activeTab === "sessionRatings"
+              ? "bg-white text-primary-600 shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
+          }`}
+        >
+          Session star ratings
         </button>
         <button
           onClick={() => setActiveTab("pausedCampaign")}
@@ -1699,7 +1759,7 @@ const SmartMessaging = () => {
               : "text-slate-600 hover:text-slate-800"
           }`}
         >
-          Paused (BOC)
+          Missed This Month
         </button>
         <button
           onClick={() => setActiveTab("leadNoCrmCampaign")}
@@ -1811,7 +1871,7 @@ const SmartMessaging = () => {
                       : "bg-green-100 text-green-700 border border-green-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">Feedback</div>
+                  <div className="font-bold text-sm leading-tight">Post Session<br />Feedback</div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.post_session_feedback}
                   </div>
@@ -1836,7 +1896,7 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* 17-Day Follow-up */}
+                {/* One Month Follow Up */}
                 <button
                   onClick={() => handleCategorySelect("twenty_day_followup")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
@@ -1849,7 +1909,11 @@ const SmartMessaging = () => {
                       : "bg-indigo-100 text-indigo-700 border border-indigo-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">17-Day</div>
+                  <div className="font-bold text-sm leading-tight">
+                    One Month
+                    <br />
+                    Follow Up
+                  </div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.twenty_day_followup}
                   </div>
@@ -2187,14 +2251,14 @@ const SmartMessaging = () => {
             className="space-y-6"
           >
             <div className="rounded-lg border border-indigo-200 bg-indigo-50/80 px-4 py-3 text-sm text-slate-700">
-              <span className="font-semibold text-slate-800">Post-Session Feedback</span> (green card): same{" "}
+              <span className="font-semibold text-slate-800">Post Session Feedback</span> (green card): same{" "}
               <span className="font-medium">calendar day</span> as the appointment, sent{" "}
-              <span className="font-medium">N hours after the slot</span> (set below on that card).{" "}
-              <span className="font-semibold text-slate-800">Thank you</span> is{" "}
-              <span className="font-medium">Attended Yesterday</span>: everyone who was{" "}
-              <span className="font-medium">Done yesterday</span> gets one send at your{" "}
-              <span className="font-medium">daily send time</span>. Star buttons need a WhatsApp template with
-              quick replies approved in Meta.{" "}
+              <span className="font-medium">N hours after the slot</span> (set below on that card). Customers can
+              reply <span className="font-medium">1–5</span> stars — see the{" "}
+              <span className="font-medium">Session star ratings</span> tab.{" "}
+              <span className="font-semibold text-slate-800">Attended Yesterday</span> is a different template:{" "}
+              <span className="font-medium">next-day thank-you</span> (not the star survey). Quick replies for stars
+              must be approved on the Meta template.{" "}
               <a
                 href="#smart-messaging-send-test"
                 className="text-indigo-700 font-semibold underline underline-offset-2 hover:text-indigo-900"
@@ -2305,8 +2369,8 @@ const SmartMessaging = () => {
                               <p className="font-semibold text-slate-800">
                                 {templateId === "post_session_feedback"
                                   ? isActive
-                                    ? "✅ Feedback job enabled"
-                                    : "⏸️ Feedback job disabled"
+                                    ? "✅ Post Session Feedback job enabled"
+                                    : "⏸️ Post Session Feedback job disabled"
                                   : isActive
                                     ? "✅ Daily Job Enabled"
                                     : "⏸️ Daily Job Disabled"}
@@ -2558,10 +2622,10 @@ const SmartMessaging = () => {
                 </div>
               </div>
               <p className="text-xs text-slate-500 mt-3">
-                <span className="font-medium">Missed Paused Appointment</span> and{" "}
+                <span className="font-medium">Missed This Month</span> and{" "}
                 <span className="font-medium">WhatsApp leads (no CRM)</span> bulk sends are{" "}
                 <span className="font-medium">manual only</span> — use{" "}
-                <span className="font-medium">Paused (BOC)</span> or{" "}
+                <span className="font-medium">Missed This Month</span> or{" "}
                 <span className="font-medium">WhatsApp leads</span>.
               </p>
             </div>
@@ -2579,17 +2643,18 @@ const SmartMessaging = () => {
             <div>
               <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                 <CalendarDaysIcon className="w-7 h-7 text-violet-600" />
-                Missed Paused Appointment (BOC)
+                Missed This Month (paused BOC)
               </h3>
               <p className="text-sm text-slate-600 mt-1 max-w-3xl">
                 Load customers whose appointments were <span className="font-medium">paused</span> in BOC between
-                two dates, optionally filter by service, then send the{" "}
-                <span className="font-medium">missed_paused_appointment</span> template when{" "}
-                <span className="font-medium">you</span> click Send. Nothing is sent automatically from this
-                screen. Edit Arabic / English / French text under{" "}
-                <span className="font-medium">Message Templates</span> on this page. Each user receives the
-                version in their <span className="font-medium">saved language</span> (from chat); if unknown,
-                Arabic is used.
+                two dates, optionally filter by service, then send when{" "}
+                <span className="font-medium">you</span> click Send. WhatsApp uses the Meta-approved template{" "}
+                <span className="font-mono text-xs bg-slate-100 px-1 rounded">sent_for_pause</span> (one body
+                variable: customer name). Internal template key:{" "}
+                <span className="font-mono text-xs bg-slate-100 px-1 rounded">missed_paused_appointment</span>.
+                Nothing is sent automatically from this screen. Edit Arabic / English / French under{" "}
+                <span className="font-medium">Message Templates</span> → <span className="font-medium">Missed This Month</span>.
+                Each user gets their <span className="font-medium">saved language</span> (from chat); if unknown, Arabic.
               </p>
             </div>
 
@@ -2679,9 +2744,10 @@ const SmartMessaging = () => {
 
             {pausedPlaceholdersHelp && (
               <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                <span className="font-semibold text-slate-700">Template placeholders</span> (use in{" "}
-                <span className="font-medium">Message Templates</span> →{" "}
-                <span className="font-medium">missed_paused_appointment</span>):{" "}
+                <span className="font-semibold text-slate-700">Template placeholders</span> (Message Templates →{" "}
+                <span className="font-medium">Missed This Month</span>, key{" "}
+                <span className="font-mono">missed_paused_appointment</span>; Meta{" "}
+                <span className="font-mono">sent_for_pause</span> sends <span className="font-medium">customer_name</span> only):{" "}
                 <span className="font-mono whitespace-pre-wrap break-all">{pausedPlaceholdersHelp}</span>
               </div>
             )}
@@ -2915,6 +2981,117 @@ const SmartMessaging = () => {
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === "sessionRatings" && (
+          <motion.div
+            key="sessionRatings"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="card space-y-4"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <StarIcon className="w-7 h-7 text-amber-500" />
+                  Post Session Feedback — star replies
+                </h3>
+                <p className="text-sm text-slate-600 mt-1 max-w-3xl">
+                  After the <span className="font-medium">Post Session Feedback</span> WhatsApp template is sent,
+                  customers can reply with <span className="font-medium">1–5</span> (or a quick-reply button title
+                  that starts with a digit). Replies are logged here.{" "}
+                  <span className="font-medium">Attended Yesterday</span> is a separate next-day thank-you template
+                  (no stars). Use <span className="font-medium">Open chat</span> to jump to Live Chat with that
+                  number pre-searched.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionRatingsTick((t) => t + 1)}
+                disabled={sessionStarRatingsLoading}
+                className="shrink-0 px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 disabled:bg-slate-400"
+              >
+                {sessionStarRatingsLoading ? "Loading…" : "Refresh"}
+              </button>
+            </div>
+
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                  <tr>
+                    <th className="py-2 px-3">When</th>
+                    <th className="py-2 px-3">Phone / user</th>
+                    <th className="py-2 px-3">Stars</th>
+                    <th className="py-2 px-3">Reply</th>
+                    <th className="py-2 px-3">Appointment</th>
+                    <th className="py-2 px-3">Conversation</th>
+                    <th className="py-2 px-3">Chat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessionStarRatingsLoading && sessionStarRatings.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-500">
+                        Loading…
+                      </td>
+                    </tr>
+                  ) : sessionStarRatings.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-500">
+                        No star ratings logged yet. They appear when users reply 1–5 after Post Session Feedback is
+                        delivered.
+                      </td>
+                    </tr>
+                  ) : (
+                    sessionStarRatings.map((row, idx) => {
+                      const uid = String(row.user_id || "").trim();
+                      const digits = uid.replace(/\D/g, "");
+                      const searchQ = digits || uid;
+                      return (
+                        <tr
+                          key={`${row.timestamp || ""}-${uid}-${idx}`}
+                          className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
+                        >
+                          <td className="py-2 px-3 whitespace-nowrap text-slate-700">
+                            {row.timestamp
+                              ? new Date(row.timestamp).toLocaleString()
+                              : "—"}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-xs text-slate-800">{uid || "—"}</td>
+                          <td className="py-2 px-3">
+                            <span className="text-amber-600 font-semibold" title={`${row.stars} / 5`}>
+                              {"⭐".repeat(Math.min(5, Math.max(1, Number(row.stars) || 0)))}
+                            </span>
+                            <span className="text-slate-500 ml-1">({row.stars ?? "—"}/5)</span>
+                          </td>
+                          <td className="py-2 px-3 max-w-[200px] truncate text-slate-600" title={row.raw_reply}>
+                            {row.raw_reply || "—"}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-xs">{row.appointment_id ?? "—"}</td>
+                          <td className="py-2 px-3 font-mono text-xs max-w-[140px] truncate" title={row.conversation_id}>
+                            {row.conversation_id || "—"}
+                          </td>
+                          <td className="py-2 px-3">
+                            {searchQ ? (
+                              <Link
+                                to={`/live-chat?search=${encodeURIComponent(searchQ)}`}
+                                className="text-primary-600 font-medium hover:underline"
+                              >
+                                Open chat
+                              </Link>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

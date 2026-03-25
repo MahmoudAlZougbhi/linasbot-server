@@ -863,6 +863,21 @@ Des questions? Nous sommes là! 💬
         except Exception as log_exc:
             print(f"⚠️ Failed to write message log for {message_id}: {log_exc}")
 
+        if canonical_type == "post_session_feedback":
+            try:
+                from services.post_session_feedback_rating_service import (
+                    mark_awaiting_post_session_feedback_after_send,
+                )
+
+                mark_awaiting_post_session_feedback_after_send(
+                    phone=msg_data.get("customer_phone"),
+                    appointment_id=appointment_id,
+                    reference_date=str(reference_date) if reference_date is not None else None,
+                    smart_message_id=message_id,
+                )
+            except Exception as psf_e:
+                print(f"⚠️ post_session_feedback awaiting flag: {psf_e}")
+
         self._log_reminder_sent_analytics(message_id, msg_data)
         self._persist_sent_messages()
 
@@ -940,7 +955,7 @@ Des questions? Nous sommes là! 💬
         # NOTE: same_day_checkin/no_show_followup are deprecated.
         # NOTE: post_session_feedback is handled by fixed-time daily jobs.
 
-        # Schedule 17-day follow-up (template id twenty_day_followup; legacy one_month_followup)
+        # Schedule One Month Follow Up (twenty_day_followup → one_month_followup; Meta: sent_17_days_after_last_session_new)
         followup_time = appointment_date + timedelta(days=TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS)
         result = self.schedule_message(
             customer_phone,
@@ -1221,12 +1236,12 @@ async def deliver_scheduled_smart_whatsapp(
 # Mapping of message types to friendly names
 message_type_names = {
     "reminder_24h": "24-Hour Appointment Reminder",
-    "post_session_feedback": "Post-Session Feedback",
-    "twenty_day_followup": "17-Day Follow-up",
+    "post_session_feedback": "Post Session Feedback",
+    "twenty_day_followup": "One Month Follow Up",
     "missed_yesterday": "Missed Yesterday Follow-up",
-    "missed_paused_appointment": "Missed Paused Appointment Campaign",
+    "missed_paused_appointment": "Missed This Month",
     "whatsapp_lead_no_booking": "WhatsApp Lead (No CRM) Campaign",
-    "attended_yesterday": "Thank You - Attended Yesterday"
+    "attended_yesterday": "Attended Yesterday (thank you, next day)",
 }
 
 

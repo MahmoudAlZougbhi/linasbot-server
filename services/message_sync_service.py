@@ -260,7 +260,7 @@ class MessageSyncService:
                 
                 message_ids.append(msg_id)
             
-            # 3. Post-Session Feedback (2 hours after)
+            # 3. Post Session Feedback (2 hours after)
             send_at = apt_datetime + timedelta(hours=2)
             if send_at > current_time:  # Only if in future
                 msg_id = f"msg_{apt_id}_post_session_feedback"
@@ -288,7 +288,7 @@ class MessageSyncService:
                 
                 message_ids.append(msg_id)
             
-            # 4. One-Month Follow-up (17 days after)
+            # 4. One Month Follow Up (17 days after; Meta sent_17_days_after_last_session_new)
             send_at = apt_datetime + timedelta(days=17)
             msg_id = f"msg_{apt_id}_one_month_followup"
 

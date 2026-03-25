@@ -1,5 +1,5 @@
 """
-Campaign service for "Missed Paused Appointment".
+Campaign service for Missed This Month (BOC paused appointments; WhatsApp Meta: sent_for_pause).
 """
 
 import asyncio

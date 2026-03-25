@@ -92,7 +92,7 @@ class ScheduledMessagesCollector:
     Message types collected:
     1. 24-Hour Reminder: Appointments 24+ hours in future (send 24h before)
     2. Same-Day Check-in: Appointments tomorrow (send tomorrow at 7 AM)
-    3. Post-Session Feedback: Appointments ended <2 hours ago (send 2h after)
+    3. Post Session Feedback: Appointments ended <2 hours ago (send 2h after)
     4. No-Show Follow-up: Missed appointments <1 hour passed (send 1h after)
     5. 1-Month Follow-up: Attended appointments 30+ days passed (send 30d after)
     6. Missed Yesterday: Missed appointments 24-48 hours passed
@@ -263,7 +263,7 @@ class ScheduledMessagesCollector:
                     "last_updated": current_time.isoformat()
                 })
         
-        # 3. Post-Session Feedback
+        # 3. Post Session Feedback
         # Collects: Appointments ended but <2 hours ago (if status is "Done")
         # Send time: 2 hours after appointment
         if apt_status.lower() == 'done':
@@ -275,7 +275,7 @@ class ScheduledMessagesCollector:
                         "customer_name": customer_name,
                         "customer_phone": customer_phone,
                         "message_type": "post_session_feedback",
-                        "reason": "Post-Session Feedback Request",
+                        "reason": "Post Session Feedback Request",
                         "send_datetime": send_datetime.isoformat(),
                         "status": "pending",
                         "error": None,

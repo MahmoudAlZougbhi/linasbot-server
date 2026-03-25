@@ -342,7 +342,7 @@ class MontyMobileTemplateService:
         param_values = self._build_body_component_parameters(template_lang, lookup)
 
         # WhatsApp Manager template name may differ from config key / templates[].name
-        # (e.g. Meta approves "twenty_day_followup" while JSON key is one_month_followup).
+        # (e.g. Meta approves sent_17_days_after_last_session_new while JSON key is one_month_followup).
         outbound_name = str(
             template.get("meta_template_name") or template.get("whatsapp_template_name") or template["name"]
         ).strip()

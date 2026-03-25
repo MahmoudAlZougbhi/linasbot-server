@@ -217,7 +217,7 @@ async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
         apt_date = apt_dt.strftime("%Y-%m-%d")
         apt_time = apt_dt.strftime("%H:%M")
         row = _apt_to_customer_row(
-            apt, "post_session_feedback", "Post-Session Feedback",
+            apt, "post_session_feedback", "Post Session Feedback",
             apt_date=apt_date, apt_time=apt_time, action_state="pending",
         )
         if row.get("phone"):
@@ -292,7 +292,7 @@ async def get_missed_yesterday_customers() -> List[Dict[str, Any]]:
 
 async def get_twenty_day_followup_customers() -> List[Dict[str, Any]]:
     """
-    17-day Follow-up: appointment_date = TODAY - 17 days, status = Done.
+    One Month Follow Up (Meta: sent_17_days_after_last_session_new, 3 vars): appointment_date = TODAY - 17 days, status = Done.
     Include all such customers; do NOT exclude those with future appointments.
     """
     now = _now_beirut()
@@ -315,7 +315,7 @@ async def get_twenty_day_followup_customers() -> List[Dict[str, Any]]:
             continue
         seen_phones.add(phone)
         row = _apt_to_customer_row(
-            apt, "twenty_day_followup", "17-Day Follow-up",
+            apt, "twenty_day_followup", "One Month Follow Up",
             apt_date=target_day, apt_time="", action_state="pending",
         )
         row["phone"] = phone

@@ -405,30 +405,74 @@ async def send_test_template_message(request_data: Dict[str, Any]):
         except (TypeError, ValueError):
             n_body = len(template_param_names)
 
-        # Unique body values per request so WhatsApp/Monty do not treat back-to-back
-        # template tests as duplicate utility messages (same user + same params).
-        # Vary *every* common slot — not only customer_name/time. Templates like
-        # no_show_followup (name + phone) or attended_yesterday (name + date + phone)
-        # were still identical on the non-name fields and only the first test delivered.
-        _test_nonce = uuid.uuid4().hex[:8]
-        all_test_values = {
-            "customer_name": f"Test ({_test_nonce})",
-            "appointment_date": f"2025-12-25 · {_test_nonce}",
-            "appointment_time": f"02:00 PM · {_test_nonce}",
-            "branch_name": f"Lina's Laser · {_test_nonce}",
-            "service_name": f"Laser session · {_test_nonce}",
-            # Body text slot (not E.164 validation); keeps support-line style readable.
-            "phone_number": f"+961 1 234 567 · t{_test_nonce}",
-            "next_appointment_date": f"2026-01-15 · {_test_nonce}",
-        }
+        from services.smart_messaging_test_context import (
+            resolve_real_test_template_placeholders,
+            validate_test_placeholders_for_template,
+        )
+
+        vals, ph_meta = await resolve_real_test_template_placeholders(phone_number)
+        _test_correlation_id = uuid.uuid4().hex[:10]
 
         test_parameters = {
-            param: all_test_values.get(param, f"test_{param}_{_test_nonce}")
+            param: str(vals.get(param) or "").strip()
             for param in template_param_names
         }
-        # Monty requires exactly `n_body` body parameters; pad with positional keys if JSON names are short
+        _fill_order = [
+            "customer_name",
+            "appointment_date",
+            "appointment_time",
+            "branch_name",
+            "service_name",
+            "phone_number",
+            "next_appointment_date",
+        ]
+        _fill_list = [str(vals[k] or "").strip() for k in _fill_order if str(vals.get(k) or "").strip()]
+        _fi = 0
         for i in range(len(template_param_names), n_body):
-            test_parameters[str(i + 1)] = f"slot{i + 1}-{_test_nonce}"
+            if _fill_list:
+                test_parameters[str(i + 1)] = _fill_list[_fi % len(_fill_list)]
+                _fi += 1
+            else:
+                test_parameters[str(i + 1)] = ""
+
+        _ph_err = validate_test_placeholders_for_template(
+            template_param_names, n_body, test_parameters, ph_meta
+        )
+        if _ph_err:
+            return {
+                "success": False,
+                "error": _ph_err,
+                "placeholder_meta": ph_meta,
+                "test_correlation_id": _test_correlation_id,
+            }
+
+        # Monty often accepts the HTTP request while **WhatsApp (Meta)** may not deliver a second
+        # template if the rendered body matches a very recent send to the same user (utility dedupe).
+        # A tiny per-click suffix keeps CRM-based values accurate but avoids byte-identical repeats.
+        # Send JSON `"vary_test_payload": false` to disable (strict pixel-perfect preview vs CRM only).
+        _vary_raw = request_data.get("vary_test_payload", True)
+        if isinstance(_vary_raw, str):
+            _vary = _vary_raw.strip().lower() not in ("0", "false", "no", "off")
+        else:
+            _vary = bool(_vary_raw)
+        _vary_applied = False
+        if _vary and n_body > 0:
+            _stamp = datetime.utcnow().strftime("%H%M%S")
+            _token = f" test#{_stamp}"
+            _tweaked = False
+            for _k in ("service_name", "customer_name", "branch_name", "appointment_time"):
+                if str(test_parameters.get(_k) or "").strip():
+                    test_parameters[_k] = str(test_parameters[_k]).rstrip() + _token
+                    _tweaked = True
+                    break
+            if not _tweaked:
+                for _i in range(n_body, 0, -1):
+                    _sk = str(_i)
+                    if str(test_parameters.get(_sk) or "").strip():
+                        test_parameters[_sk] = str(test_parameters[_sk]).rstrip() + _token
+                        _tweaked = True
+                        break
+            _vary_applied = _tweaked
         
         print(
             f"📋 Template '{template_id}' body slots: count={n_body} "
@@ -476,7 +520,10 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 "user_language": user_language,
                 "template_language": language,
                 "language_source": language_source,
-                "test_send_nonce": _test_nonce,
+                "test_correlation_id": _test_correlation_id,
+                "placeholder_source": ph_meta.get("source"),
+                "placeholder_warnings": ph_meta.get("warnings") or [],
+                "vary_test_payload_applied": _vary_applied,
             }
             if n_body == 0:
                 result["test_template_note"] = (
@@ -486,6 +533,20 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 )
 
         if isinstance(result, dict) and result.get("success"):
+            if template_id == "post_session_feedback":
+                try:
+                    from services.post_session_feedback_rating_service import (
+                        mark_awaiting_post_session_feedback_after_send,
+                    )
+
+                    mark_awaiting_post_session_feedback_after_send(
+                        phone_number,
+                        appointment_id=None,
+                        reference_date=None,
+                        smart_message_id=f"test:{_test_correlation_id}",
+                    )
+                except Exception as _psf_mark_e:
+                    print(f"⚠️ Test template: post_session_feedback awaiting flag: {_psf_mark_e}")
             mid = result.get("message_id")
             if mid and str(mid).strip() and str(mid).strip().lower() != "unknown":
                 try:
@@ -524,7 +585,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                         role="ai",
                         text=_display_text,
                         conversation_id=None,
-                        user_name="Customer",
+                        user_name=vals.get("customer_name") or "Customer",
                         phone_number=phone_number,
                         metadata={
                             "source": "smart_message",
@@ -533,7 +594,8 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                             "template_language": language,
                             "recipient_to_monty": result.get("recipient_to_monty"),
                             "test_send": True,
-                            "test_send_nonce": _test_nonce,
+                            "test_correlation_id": _test_correlation_id,
+                            "placeholder_source": ph_meta.get("source"),
                         },
                     )
                 except Exception as _fs_err:
@@ -969,11 +1031,11 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
         # Mapping of message types to friendly names and reasons
         message_type_names = {
             "reminder_24h": "24-Hour Appointment Reminder",
-            "post_session_feedback": "Post-Session Feedback",
-            "attended_yesterday": "Thank You - Attended Yesterday",
-            "twenty_day_followup": "17-Day Follow-up",
+            "post_session_feedback": "Post Session Feedback",
+            "attended_yesterday": "Attended Yesterday (thank you, next day)",
+            "twenty_day_followup": "One Month Follow Up",
             "missed_yesterday": "Missed Yesterday Follow-up",
-            "missed_paused_appointment": "Missed Paused Appointment Campaign",
+            "missed_paused_appointment": "Missed This Month",
             "whatsapp_lead_no_booking": "WhatsApp Lead (No CRM) Campaign",
         }
 
@@ -1241,6 +1303,15 @@ async def toggle_smart_messaging(request_data: Dict[str, Any]):
 # TEMPLATE SCHEDULE SETTINGS
 # ==========================================
 
+@app.get("/api/smart-messaging/post-session-feedback-ratings")
+async def get_post_session_feedback_ratings_api(limit: int = 200):
+    """Logged 1–5 star replies after Post Session Feedback template (analytics JSONL)."""
+    from services.analytics_events import analytics
+
+    rows = analytics.get_post_session_feedback_ratings(limit)
+    return {"success": True, "ratings": rows}
+
+
 @app.get("/api/smart-messaging/template-schedules")
 async def get_template_schedules():
     """Get per-template daily schedule settings."""
@@ -1289,7 +1360,7 @@ async def update_template_schedule(template_id: str, request_data: Dict[str, Any
 async def preview_missed_paused_campaign(
     request_data: Dict[str, Any] = Body(default_factory=dict),
 ):
-    """Preview recipients for Missed Paused Appointment campaign (BOC paused appointments in date range)."""
+    """Preview recipients for Missed This Month campaign (BOC paused appointments; Meta template sent_for_pause)."""
     try:
         result = await missed_paused_campaign_service.preview(request_data or {})
         if result.get("success") and isinstance(result.get("recipients"), list):
@@ -1310,7 +1381,7 @@ async def preview_missed_paused_campaign(
 
 @app.post("/api/smart-messaging/campaigns/missed-paused/send")
 async def send_missed_paused_campaign(request_data: Dict[str, Any]):
-    """Send now or schedule a Missed Paused Appointment campaign (per-recipient language from saved prefs / Firestore)."""
+    """Send Missed This Month (paused BOC) campaign; WhatsApp uses Meta template sent_for_pause (per-recipient language)."""
     try:
         filters = request_data.get("filters", {}) if isinstance(request_data, dict) else {}
         send_mode = request_data.get("send_mode", "send_now")

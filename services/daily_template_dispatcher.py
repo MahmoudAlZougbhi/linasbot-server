@@ -423,7 +423,7 @@ class DailyTemplateDispatcher:
 
     async def _has_last_done_session_on(self, phone: str, target_day: date) -> bool:
         """
-        Ensure 17-day follow-up is based on the customer's latest done session.
+        Ensure One Month Follow Up (17-day rule) is based on the customer's latest done session.
         """
         appointments_result = await get_customer_appointments(phone)
         if not appointments_result.get("success"):

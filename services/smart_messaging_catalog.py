@@ -5,7 +5,7 @@ Smart Messaging template catalog and scheduling defaults.
 from copy import deepcopy
 from typing import Dict, Optional
 
-# Product: "1-month style" follow-up is sent 17 days after the attended session (template id stays twenty_day_followup).
+# Product: "One Month Follow Up" is sent 17 days after the attended session (internal id twenty_day_followup; Meta: sent_17_days_after_last_session_new, 3 body variables).
 TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS = 17
 
 DAILY_TEMPLATE_IDS = (
@@ -39,24 +39,24 @@ TEMPLATE_METADATA: Dict[str, Dict[str, str]] = {
         "description": "Daily fixed-time reminder for tomorrow appointments.",
     },
     "post_session_feedback": {
-        "name": "Post-Session Feedback",
-        "description": "Sent same calendar day N hours after each completed (Done) appointment; not a single daily blast. Star buttons need a WhatsApp template with quick-reply buttons approved in Meta.",
+        "name": "Post Session Feedback",
+        "description": "Same calendar day, N hours after a completed (Done) visit — asks for 1–5 stars (Meta: thank_you_message_sent_after_session). Replies are logged in Smart Messaging → Session star ratings. Not the same flow as Attended Yesterday (next-day thank-you, no stars).",
     },
     "attended_yesterday": {
         "name": "Attended Yesterday",
-        "description": "Thank you message the day after a completed (Done) appointment.",
+        "description": "Next-day thank-you after a completed (Done) appointment. Separate from Post Session Feedback (same-day star rating).",
     },
     "missed_yesterday": {
         "name": "Missed Yesterday",
         "description": "Daily fixed-time follow-up for yesterday missed appointments (date=yesterday, status=Available).",
     },
     "twenty_day_followup": {
-        "name": "17-Day Follow-up",
-        "description": "Daily fixed-time follow-up sent 17 days after last attended session.",
+        "name": "One Month Follow Up",
+        "description": "Daily fixed-time follow-up sent 17 days after last attended session. WhatsApp Meta template: sent_17_days_after_last_session_new — 3 body variables: customer_name, branch_name, service_name.",
     },
     "missed_paused_appointment": {
-        "name": "Missed Paused Appointment",
-        "description": "Manual campaign template for paused appointments.",
+        "name": "Missed This Month",
+        "description": "Manual BOC campaign for paused appointments. Outbound WhatsApp uses Meta template sent_for_pause (1 body variable: customer_name). Internal template key: missed_paused_appointment.",
     },
     "whatsapp_lead_no_booking": {
         "name": "WhatsApp Lead (No CRM / No Booking)",

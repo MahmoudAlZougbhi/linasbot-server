@@ -288,6 +288,59 @@ class AnalyticsEvents:
             "stars": s,
             "conversation_id": conversation_id,
         })
+
+    def log_post_session_feedback_rating(
+        self,
+        user_id: str,
+        stars: int,
+        conversation_id: str = None,
+        appointment_id: Any = None,
+        reference_date: str = None,
+        raw_reply: str = None,
+        smart_message_id: str = None,
+    ):
+        """Star rating (1–5) after Post Session Feedback WhatsApp template (smart messaging)."""
+        try:
+            s = int(stars)
+        except (TypeError, ValueError):
+            s = 0
+        s = max(1, min(5, s))
+        self._append_event({
+            "type": "post_session_feedback_rating",
+            "user_id": user_id,
+            "stars": s,
+            "conversation_id": conversation_id,
+            "appointment_id": appointment_id,
+            "reference_date": reference_date,
+            "raw_reply": (raw_reply or "")[:500] if raw_reply else None,
+            "smart_message_id": smart_message_id,
+        })
+
+    def get_post_session_feedback_ratings(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Recent post_session_feedback_rating events (newest first)."""
+        try:
+            lim = max(1, min(2000, int(limit)))
+        except (TypeError, ValueError):
+            lim = 200
+        if not os.path.exists(self.events_file):
+            return []
+        rows: List[Dict[str, Any]] = []
+        try:
+            with open(self.events_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if obj.get("type") == "post_session_feedback_rating":
+                        rows.append(obj)
+        except OSError:
+            return []
+        rows.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
+        return rows[:lim]
     
     def log_escalation(self, user_id: str, escalation_type: str, reason: str = None):
         """

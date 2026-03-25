@@ -546,6 +546,14 @@ async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
         else:
             user_input_text = str(content)
         
+        if config.user_data_whatsapp.get(user_id, {}).get("awaiting_post_session_feedback_rating"):
+            from services.post_session_feedback_rating_service import (
+                try_handle_post_session_feedback_reply,
+            )
+
+            if await try_handle_post_session_feedback_reply(user_id, user_input_text, adapter):
+                return
+
         if config.user_data_whatsapp.get(user_id, {}).get("awaiting_session_rating"):
             from services.session_rating_service import try_handle_session_rating_reply
 
