@@ -98,6 +98,7 @@
     },
     "missed_this_month": {
       "name": "missed_this_month",
+      "meta_template_name": "missed_this_month_pause",
       "wa_message_id": "1090366319768263",
       "record_guid": "b3fcf502-f9ee-46c3-b3b5-3a80dae3c8c7",
       "category": "UTILITY",
