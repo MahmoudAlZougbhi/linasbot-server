@@ -39,7 +39,11 @@ class SmartMessagingService:
     - No-show follow-ups
     - 1-month follow-ups
     """
-    
+
+    # If a message stays in status "sending" longer than this (crash, timeout, killed worker),
+    # reset to "scheduled" so the monitor can retry. Otherwise it never sends again.
+    STUCK_SENDING_MAX_AGE_SECONDS = 600.0
+
     SENT_MESSAGES_FILE = str(SENT_SMART_MESSAGES_FILE)
 
     def __init__(self):
@@ -657,6 +661,32 @@ Des questions? Nous sommes là! 💬
             message = message.replace(placeholder, str(value))
         
         return message
+
+    def _release_stuck_sending_messages(self, now: datetime) -> int:
+        """
+        Re-queue messages left in 'sending' after a worker crash or unhandled error.
+        Without this, due messages are invisible to process_scheduled_messages forever.
+        """
+        released = 0
+        max_age = float(self.STUCK_SENDING_MAX_AGE_SECONDS)
+        for mid, msg in list(self.scheduled_messages.items()):
+            if msg.get("status") != "sending":
+                continue
+            started = msg.get("sending_started_at")
+            if isinstance(started, datetime):
+                if (now - started).total_seconds() < max_age:
+                    continue
+            msg["status"] = "scheduled"
+            msg.pop("sending_started_at", None)
+            msg["last_error"] = "stuck_sending_recovered"
+            msg["last_attempt"] = now
+            released += 1
+            print(
+                f"   [RECOVER] {mid}: was stuck in 'sending' — reset to scheduled for retry"
+            )
+        if released:
+            self._persist_sent_messages()
+        return released
     
     async def process_scheduled_messages(self) -> List[Dict]:
         """
@@ -671,6 +701,10 @@ Des questions? Nous sommes là! 💬
             return []
 
         current_time = datetime.now()
+        stuck = self._release_stuck_sending_messages(current_time)
+        if stuck:
+            print(f"   Recovered {stuck} smart message(s) stuck in 'sending' state")
+
         messages_to_send = []
 
         for message_id, message_data in list(self.scheduled_messages.items()):
@@ -699,7 +733,9 @@ Des questions? Nous sommes là! 💬
                     # Mark as 'sending' to prevent duplicate processing,
                     # but do NOT mark 'sent' yet — caller does that after
                     # confirming the WhatsApp send succeeded.
-                    self.scheduled_messages[message_id]["status"] = "sending"
+                    row = self.scheduled_messages[message_id]
+                    row["status"] = "sending"
+                    row["sending_started_at"] = current_time
                 else:
                     mt = message_data.get("message_type")
                     print(
@@ -715,6 +751,7 @@ Des questions? Nous sommes là! 💬
     def mark_message_dry_run(self, message_id: str):
         """Mark message as dry-run (would send) – used when ENABLE_SENDING=false or local sandbox."""
         if message_id in self.scheduled_messages:
+            self.scheduled_messages[message_id].pop("sending_started_at", None)
             self.scheduled_messages[message_id]["status"] = "would_send"
             self.scheduled_messages[message_id]["sent_at"] = datetime.now()
             msg_data = self.scheduled_messages[message_id]
@@ -768,6 +805,7 @@ Des questions? Nous sommes là! 💬
     def mark_message_sent(self, message_id: str):
         """Mark a single message as successfully sent (called after WhatsApp confirms)."""
         if message_id in self.scheduled_messages:
+            self.scheduled_messages[message_id].pop("sending_started_at", None)
             self.scheduled_messages[message_id]["status"] = "sent"
             self.scheduled_messages[message_id]["sent_at"] = datetime.now()
 
@@ -826,6 +864,7 @@ Des questions? Nous sommes là! 💬
         """Revert a message back to 'scheduled' so it can be retried next cycle."""
         if message_id in self.scheduled_messages:
             msg = self.scheduled_messages[message_id]
+            msg.pop("sending_started_at", None)
             msg["status"] = "scheduled"
             msg["last_error"] = error
             msg["last_attempt"] = datetime.now()

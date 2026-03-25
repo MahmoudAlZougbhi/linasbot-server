@@ -475,15 +475,39 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             if mid and str(mid).strip() and str(mid).strip().lower() != "unknown":
                 try:
                     from utils.utils import save_conversation_message_to_firestore
+                    from services.smart_messaging import smart_messaging
+                    from services.message_preview_service import message_preview_service
 
-                    _summary = (
-                        f"Template «{template_id}» (test send, lang {language}). "
-                        f"Parameters: {test_parameters}"
+                    # Live Chat should show the same body the customer sees (placeholders filled),
+                    # matching scheduled sends that persist `content` / rendered template text.
+                    _ph_display = {
+                        k: v
+                        for k, v in test_parameters.items()
+                        if isinstance(k, str)
+                        and not str(k).isdigit()
+                        and k != "header_image"
+                    }
+                    _display_text = smart_messaging.get_message_content(
+                        template_id, language, _ph_display
                     )
+                    if not _display_text:
+                        _display_text = message_preview_service.render_message_preview(
+                            template_id, language, _ph_display
+                        )
+                    if (
+                        not _display_text
+                        or not str(_display_text).strip()
+                        or str(_display_text).startswith("[")
+                    ):
+                        _display_text = (
+                            f"Template «{template_id}» (test send, lang {language}). "
+                            f"Parameters: {test_parameters}"
+                        )
+
                     await save_conversation_message_to_firestore(
                         user_id=phone_number,
                         role="ai",
-                        text=_summary,
+                        text=_display_text,
                         conversation_id=None,
                         user_name="Customer",
                         phone_number=phone_number,
@@ -493,6 +517,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                             "monty_message_id": mid,
                             "template_language": language,
                             "recipient_to_monty": result.get("recipient_to_monty"),
+                            "test_send": True,
                         },
                     )
                 except Exception as _fs_err:
