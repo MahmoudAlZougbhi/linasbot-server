@@ -98,7 +98,7 @@ const SmartMessaging = () => {
   const [sessionStarRatingsLoading, setSessionStarRatingsLoading] = useState(false);
   const [sessionRatingsTick, setSessionRatingsTick] = useState(0);
 
-  // Manual BOC paused appointments — Missed This Month (internal key missed_paused_appointment; Meta: sent_for_pause)
+  // Manual BOC "paused appointments" campaign (missed_paused_appointment template)
   const [pausedFromDate, setPausedFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -241,7 +241,7 @@ const SmartMessaging = () => {
     }
     if (
       !window.confirm(
-        `Send Missed This Month (Meta: sent_for_pause) to ${pausedRecipients.length} phone number(s) now?`
+        `Send the Missed Paused Appointment message to ${pausedRecipients.length} phone number(s) now?`
       )
     ) {
       return;
@@ -1238,7 +1238,7 @@ const SmartMessaging = () => {
         // Show yesterday's missed appointments
         return appointmentDate === yesterdayStr || sendDateStr === yesterdayStr;
       case "twenty_day_followup":
-        // One Month Follow Up: show sends scheduled within current month
+        // Show 17-day followups scheduled within current month
         return sendDateStr >= startOfMonthStr && sendDateStr < startOfNextMonthStr;
       default:
         return true;
@@ -1382,7 +1382,7 @@ const SmartMessaging = () => {
         icon: ClockIcon,
       },
       post_session_feedback: {
-        name: "Post Session Feedback",
+        name: "Feedback",
         color: "bg-green-100 text-green-700",
         icon: CheckCircleIcon,
       },
@@ -1392,7 +1392,7 @@ const SmartMessaging = () => {
         icon: HeartIcon,
       },
       twenty_day_followup: {
-        name: "One Month Follow Up",
+        name: "17-Day",
         color: "bg-indigo-100 text-indigo-700",
         icon: SparklesIcon,
       },
@@ -1749,7 +1749,7 @@ const SmartMessaging = () => {
               : "text-slate-600 hover:text-slate-800"
           }`}
         >
-          Session star ratings
+          Star ratings
         </button>
         <button
           onClick={() => setActiveTab("pausedCampaign")}
@@ -1759,7 +1759,7 @@ const SmartMessaging = () => {
               : "text-slate-600 hover:text-slate-800"
           }`}
         >
-          Missed This Month
+          Paused (BOC)
         </button>
         <button
           onClick={() => setActiveTab("leadNoCrmCampaign")}
@@ -1858,7 +1858,7 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* Post Session Feedback */}
+                {/* Feedback (post_session_feedback) */}
                 <button
                   onClick={() => handleCategorySelect("post_session_feedback")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
@@ -1871,7 +1871,7 @@ const SmartMessaging = () => {
                       : "bg-green-100 text-green-700 border border-green-300"
                   }`}
                 >
-                  <div className="font-bold text-sm leading-tight">Post Session<br />Feedback</div>
+                  <div className="font-bold text-sm">Feedback</div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.post_session_feedback}
                   </div>
@@ -1896,7 +1896,7 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* One Month Follow Up */}
+                {/* 17-Day Follow-up */}
                 <button
                   onClick={() => handleCategorySelect("twenty_day_followup")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
@@ -1909,11 +1909,7 @@ const SmartMessaging = () => {
                       : "bg-indigo-100 text-indigo-700 border border-indigo-300"
                   }`}
                 >
-                  <div className="font-bold text-sm leading-tight">
-                    One Month
-                    <br />
-                    Follow Up
-                  </div>
+                  <div className="font-bold text-sm">17-Day</div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.twenty_day_followup}
                   </div>
@@ -2251,14 +2247,15 @@ const SmartMessaging = () => {
             className="space-y-6"
           >
             <div className="rounded-lg border border-indigo-200 bg-indigo-50/80 px-4 py-3 text-sm text-slate-700">
-              <span className="font-semibold text-slate-800">Post Session Feedback</span> (green card): same{" "}
+              <span className="font-semibold text-slate-800">Feedback</span> (green card in Sent Messages): same{" "}
               <span className="font-medium">calendar day</span> as the appointment, sent{" "}
-              <span className="font-medium">N hours after the slot</span> (set below on that card). Customers can
-              reply <span className="font-medium">1–5</span> stars — see the{" "}
-              <span className="font-medium">Session star ratings</span> tab.{" "}
-              <span className="font-semibold text-slate-800">Attended Yesterday</span> is a different template:{" "}
-              <span className="font-medium">next-day thank-you</span> (not the star survey). Quick replies for stars
-              must be approved on the Meta template.{" "}
+              <span className="font-medium">N hours after the slot</span> (set below on that card).{" "}
+              <span className="font-semibold text-slate-800">Thank you</span> is{" "}
+              <span className="font-medium">Attended Yesterday</span>: everyone who was{" "}
+              <span className="font-medium">Done yesterday</span> gets one send at your{" "}
+              <span className="font-medium">daily send time</span>. Star replies (1–5) are listed under the{" "}
+              <span className="font-medium">Star ratings</span> tab. Star buttons need a WhatsApp template with
+              quick replies approved in Meta.{" "}
               <a
                 href="#smart-messaging-send-test"
                 className="text-indigo-700 font-semibold underline underline-offset-2 hover:text-indigo-900"
@@ -2369,8 +2366,8 @@ const SmartMessaging = () => {
                               <p className="font-semibold text-slate-800">
                                 {templateId === "post_session_feedback"
                                   ? isActive
-                                    ? "✅ Post Session Feedback job enabled"
-                                    : "⏸️ Post Session Feedback job disabled"
+                                    ? "✅ Feedback job enabled"
+                                    : "⏸️ Feedback job disabled"
                                   : isActive
                                     ? "✅ Daily Job Enabled"
                                     : "⏸️ Daily Job Disabled"}
@@ -2622,10 +2619,10 @@ const SmartMessaging = () => {
                 </div>
               </div>
               <p className="text-xs text-slate-500 mt-3">
-                <span className="font-medium">Missed This Month</span> and{" "}
+                <span className="font-medium">Missed Paused Appointment</span> and{" "}
                 <span className="font-medium">WhatsApp leads (no CRM)</span> bulk sends are{" "}
                 <span className="font-medium">manual only</span> — use{" "}
-                <span className="font-medium">Missed This Month</span> or{" "}
+                <span className="font-medium">Paused (BOC)</span> or{" "}
                 <span className="font-medium">WhatsApp leads</span>.
               </p>
             </div>
@@ -2643,18 +2640,17 @@ const SmartMessaging = () => {
             <div>
               <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                 <CalendarDaysIcon className="w-7 h-7 text-violet-600" />
-                Missed This Month (paused BOC)
+                Missed Paused Appointment (BOC)
               </h3>
               <p className="text-sm text-slate-600 mt-1 max-w-3xl">
                 Load customers whose appointments were <span className="font-medium">paused</span> in BOC between
-                two dates, optionally filter by service, then send when{" "}
-                <span className="font-medium">you</span> click Send. WhatsApp uses the Meta-approved template{" "}
-                <span className="font-mono text-xs bg-slate-100 px-1 rounded">sent_for_pause</span> (one body
-                variable: customer name). Internal template key:{" "}
-                <span className="font-mono text-xs bg-slate-100 px-1 rounded">missed_paused_appointment</span>.
-                Nothing is sent automatically from this screen. Edit Arabic / English / French under{" "}
-                <span className="font-medium">Message Templates</span> → <span className="font-medium">Missed This Month</span>.
-                Each user gets their <span className="font-medium">saved language</span> (from chat); if unknown, Arabic.
+                two dates, optionally filter by service, then send the{" "}
+                <span className="font-medium">missed_paused_appointment</span> template when{" "}
+                <span className="font-medium">you</span> click Send. Nothing is sent automatically from this
+                screen. Edit Arabic / English / French text under{" "}
+                <span className="font-medium">Message Templates</span> on this page. Each user receives the
+                version in their <span className="font-medium">saved language</span> (from chat); if unknown,
+                Arabic is used.
               </p>
             </div>
 
@@ -2744,10 +2740,9 @@ const SmartMessaging = () => {
 
             {pausedPlaceholdersHelp && (
               <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                <span className="font-semibold text-slate-700">Template placeholders</span> (Message Templates →{" "}
-                <span className="font-medium">Missed This Month</span>, key{" "}
-                <span className="font-mono">missed_paused_appointment</span>; Meta{" "}
-                <span className="font-mono">sent_for_pause</span> sends <span className="font-medium">customer_name</span> only):{" "}
+                <span className="font-semibold text-slate-700">Template placeholders</span> (use in{" "}
+                <span className="font-medium">Message Templates</span> →{" "}
+                <span className="font-medium">missed_paused_appointment</span>):{" "}
                 <span className="font-mono whitespace-pre-wrap break-all">{pausedPlaceholdersHelp}</span>
               </div>
             )}
@@ -3000,15 +2995,14 @@ const SmartMessaging = () => {
               <div>
                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                   <StarIcon className="w-7 h-7 text-amber-500" />
-                  Post Session Feedback — star replies
+                  Feedback — star replies
                 </h3>
                 <p className="text-sm text-slate-600 mt-1 max-w-3xl">
-                  After the <span className="font-medium">Post Session Feedback</span> WhatsApp template is sent,
-                  customers can reply with <span className="font-medium">1–5</span> (or a quick-reply button title
+                  After the <span className="font-medium">Feedback</span> smart template is sent (same day after the
+                  session), customers can reply with <span className="font-medium">1–5</span> (or a quick-reply title
                   that starts with a digit). Replies are logged here.{" "}
-                  <span className="font-medium">Attended Yesterday</span> is a separate next-day thank-you template
-                  (no stars). Use <span className="font-medium">Open chat</span> to jump to Live Chat with that
-                  number pre-searched.
+                  <span className="font-medium">Thank you / Attended Yesterday</span> is a separate next-day message.
+                  Use <span className="font-medium">Open chat</span> to open Live Chat with that number searched.
                 </p>
               </div>
               <button
@@ -3044,7 +3038,7 @@ const SmartMessaging = () => {
                   ) : sessionStarRatings.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-slate-500">
-                        No star ratings logged yet. They appear when users reply 1–5 after Post Session Feedback is
+                        No star ratings logged yet. They appear when users reply 1–5 after the Feedback template is
                         delivered.
                       </td>
                     </tr>
