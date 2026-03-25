@@ -272,8 +272,13 @@ def validate_test_placeholders_for_template(
         if _empty(test_parameters.get(param)):
             return f"Missing real value for template variable «{param}» from CRM — cannot send an accurate test."
 
+    # Body slots {{1}}..{{n}}: when Monty/Meta exposes named parameters, those map to slots
+    # 1..len(names) — smart_messaging_api only adds numeric keys for *extra* slots past the names.
+    # Do not require test_parameters["1"] if slot 1 is already covered by template_param_names[0].
     for i in range(n_body):
         k = str(i + 1)
+        if template_param_names and i < len(template_param_names):
+            continue
         if _empty(test_parameters.get(k)):
             return f"Missing real value for body slot {k} — CRM data incomplete for this template."
 
