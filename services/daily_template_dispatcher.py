@@ -328,7 +328,7 @@ class DailyTemplateDispatcher:
         skipped_invalid = 0
         skipped_not_due = 0
 
-        template_id = "post_session_feedback"
+        template_id = "thank_you_message_sent_after_session"
         canonical_template = normalize_template_id(template_id)
 
         for apt in appointments:
@@ -495,7 +495,7 @@ class DailyTemplateDispatcher:
 
             if message_logs_service.was_message_sent(
                 customer_id=customer_id or customer_phone,
-                template_type="twenty_day_followup",
+                template_type="sent_17_days_after_last_session_new",
                 reference_date=target_str,
                 appointment_id=appointment_id,
             ):
@@ -504,7 +504,7 @@ class DailyTemplateDispatcher:
 
             if self._has_existing_message(
                 customer_phone=customer_phone,
-                template_id="twenty_day_followup",
+                template_id="sent_17_days_after_last_session_new",
                 reference_date=target_str,
                 appointment_id=appointment_id,
             ):
@@ -520,7 +520,7 @@ class DailyTemplateDispatcher:
             language = user_persistence.get_user_language(customer_phone)
             if self._enqueue_message(
                 customer_phone=customer_phone,
-                template_id="twenty_day_followup",
+                template_id="sent_17_days_after_last_session_new",
                 placeholders=placeholders,
                 language=language,
                 service_id=service_id,
@@ -532,7 +532,7 @@ class DailyTemplateDispatcher:
                 scheduled_count += 1
 
         return {
-            "template_id": "twenty_day_followup",
+            "template_id": "sent_17_days_after_last_session_new",
             "scheduled_count": scheduled_count,
             "total_candidates": len(latest_by_phone),
             "skipped_duplicates": skipped_duplicates,
@@ -551,16 +551,16 @@ class DailyTemplateDispatcher:
                 reference_date=target_day.strftime("%Y-%m-%d"),
             )
 
-        if template_id == "post_session_feedback":
-            cfg = template_schedule_service.get_schedule("post_session_feedback")
+        if template_id == "thank_you_message_sent_after_session":
+            cfg = template_schedule_service.get_schedule("thank_you_message_sent_after_session")
             tz = str(cfg.get("timezone", "Asia/Beirut"))
             return await self.run_post_session_feedback_delayed(
                 self._now_in_timezone(tz),
                 cfg,
             )
 
-        if template_id == "attended_yesterday":
-            # Thank-you: same cohort as feedback (yesterday + Done), separate template and log idempotency
+        if template_id == "session_feedback":
+            # Next-day Meta session_feedback: yesterday + Done; idempotency via message logs
             target_day = run_day - timedelta(days=1)
             return await self._schedule_from_reminders(
                 template_id=template_id,
@@ -579,7 +579,7 @@ class DailyTemplateDispatcher:
                 reference_date=target_day.strftime("%Y-%m-%d"),
             )
 
-        if template_id == "twenty_day_followup":
+        if template_id == "sent_17_days_after_last_session_new":
             return await self._run_twenty_day_followup(run_day)
 
         return {
@@ -611,7 +611,7 @@ class DailyTemplateDispatcher:
         with self._lock:
             for template_id in DAILY_TEMPLATE_IDS:
                 templates_checked += 1
-                if template_id == "post_session_feedback":
+                if template_id == "thank_you_message_sent_after_session":
                     # Feedback uses delay-after-appointment; handled after this loop every tick.
                     continue
                 schedule = schedules.get(template_id, {})
@@ -658,12 +658,12 @@ class DailyTemplateDispatcher:
                 "result": result,
             })
 
-        post_session_feedback_result = None
+        thank_you_after_session_result = None
         if self._is_smart_messaging_enabled():
-            fb_cfg = schedules.get("post_session_feedback", {})
+            fb_cfg = schedules.get("thank_you_message_sent_after_session", {})
             if fb_cfg.get("enabled", True):
                 tz_fb = str(fb_cfg.get("timezone", "Asia/Beirut"))
-                post_session_feedback_result = await self.run_post_session_feedback_delayed(
+                thank_you_after_session_result = await self.run_post_session_feedback_delayed(
                     self._now_in_timezone(tz_fb),
                     fb_cfg,
                 )
@@ -674,7 +674,7 @@ class DailyTemplateDispatcher:
                     self.last_runs[job["template_id"]] = job["run_date"]
                 self._save_state()
 
-        fb_scheduled = (post_session_feedback_result or {}).get("scheduled_count", 0)
+        fb_scheduled = (thank_you_after_session_result or {}).get("scheduled_count", 0)
         print(
             f"[daily_template_dispatcher] tick cadence={cadence_minutes}m checked={templates_checked} "
             f"due={len(due_jobs)} ran={len(jobs_run)} feedback_scheduled={fb_scheduled}"
@@ -684,7 +684,7 @@ class DailyTemplateDispatcher:
             "success": True,
             "jobs_run": jobs_run,
             "run_count": len(jobs_run),
-            "post_session_feedback": post_session_feedback_result,
+            "thank_you_message_sent_after_session": thank_you_after_session_result,
         }
 
 

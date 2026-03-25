@@ -20,23 +20,8 @@
         }
       }
     },
-    "same_day_checkin": {
-      "name": "same_day_checkin",
-      "wa_message_id": "1397546108382697",
-      "record_guid": "8303c94f-d0fb-402a-a4fd-ee02f57a940e",
-      "category": "UTILITY",
-      "status": "APPROVED",
-      "languages": {
-        "ar": {
-          "language_code": "ar",
-          "parameters_count": 2,
-          "parameters": ["customer_name", "appointment_time"]
-        }
-      }
-    },
-    "post_session_feedback": {
-      "name": "post_session_feedback",
-      "meta_template_name": "thank_you_message_sent_after_session",
+    "thank_you_message_sent_after_session": {
+      "name": "thank_you_message_sent_after_session",
       "wa_message_id": "885927340658052",
       "record_guid": "0beddf53-db9a-4cdb-9b6e-e5b1483c833f",
       "category": "UTILITY",
@@ -49,23 +34,8 @@
         }
       }
     },
-    "no_show_followup": {
-      "name": "no_show_followup",
-      "wa_message_id": "1396511885155373",
-      "record_guid": "205286b6-358e-4048-b089-fb1ea9d845cf",
-      "category": "UTILITY",
-      "status": "APPROVED",
-      "languages": {
-        "ar": {
-          "language_code": "ar",
-          "parameters_count": 2,
-          "parameters": ["customer_name", "phone_number"]
-        }
-      }
-    },
-    "one_month_followup": {
-      "name": "one_month_followup",
-      "meta_template_name": "sent_17_days_after_last_session_new",
+    "sent_17_days_after_last_session_new": {
+      "name": "sent_17_days_after_last_session_new",
       "wa_message_id": "842363998553484",
       "record_guid": "0caf3b58-4a2b-4e6d-b55c-0af2341b2699",
       "category": "UTILITY",
@@ -97,9 +67,8 @@
         }
       }
     },
-    "missed_this_month": {
-      "name": "missed_this_month",
-      "meta_template_name": "sent_for_pause",
+    "sent_for_pause": {
+      "name": "sent_for_pause",
       "wa_message_id": "1090366319768263",
       "record_guid": "b3fcf502-f9ee-46c3-b3b5-3a80dae3c8c7",
       "category": "UTILITY",
@@ -126,8 +95,8 @@
         }
       }
     },
-    "attended_yesterday": {
-      "name": "attended_yesterday",
+    "session_feedback": {
+      "name": "session_feedback",
       "wa_message_id": "1578679806821017",
       "record_guid": "ffcf90db-1c7a-4414-bbaa-491992063c57",
       "category": "UTILITY",
@@ -135,12 +104,8 @@
       "languages": {
         "ar": {
           "language_code": "ar",
-          "parameters_count": 3,
-          "parameters": [
-            "customer_name",
-            "next_appointment_date",
-            "phone_number"
-          ]
+          "parameters_count": 1,
+          "parameters": ["customer_name"]
         }
       }
     }
@@ -164,12 +129,12 @@
     "next_steps": ["Add English and French versions", "Test all templates"],
     "templates_are_text_only": "true = do not send image/text VARIABLES in the header. Pair with send_empty_header_component=true when Meta has a fixed header (0 variable slots): API sends {\"type\":\"header\",\"parameters\":[]}. If Monty says header required: enable send_empty_header_component. If it says 0 parameters only: do not add header_parameters or image links.",
     "send_empty_header_component": "When true with templates_are_text_only true, Monty gets an empty header component (0 params). Resolves flip-flop between 'Header required' and 'must contain exactly 0 parameters'.",
-    "legacy_internal_ids": "missed_yesterday (internal id unchanged) -> outbound Meta name sent_day_after_missed_appointment (1 body var: customer_name). twenty_day_followup -> config key one_month_followup; outbound Meta sent_17_days_after_last_session_new (3 vars). post_session_feedback -> thank_you_message_sent_after_session (1 var). missed_paused_appointment -> missed_this_month -> sent_for_pause (1 var). whatsapp_lead_no_booking: 0 vars.",
+    "legacy_internal_ids": "thank_you_message_sent_after_session: Meta name = config key; legacy post_session_feedback. sent_17_days_after_last_session_new: legacy twenty_day_followup, one_month_followup. sent_for_pause (legacy missed_paused_appointment, missed_this_month). session_feedback (legacy attended_yesterday). missed_yesterday -> sent_day_after_missed_appointment. whatsapp_lead_no_booking: 0 vars.",
     "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers.",
     "meta_template_name": "Optional: meta_template_name or whatsapp_template_name overrides outbound template name. If Monty body count errors, ensure this matches the exact template name in Manager (wrong name = wrong schema).",
     "omit_empty_header_component": "Per template: when true with templates_are_text_only, do NOT send {\"header\", parameters:[]} even if api_config.send_empty_header_component is true. Use for pure body-only Meta templates; if Monty says header required, set false or remove key.",
-    "why_three_templates_failed_before": "Monty HTTP 500 when body parameter count != Meta {{1}}..{{n}}. sent_17_days_after_last_session_new (one_month_followup / twenty_day_followup) = 3 vars. sent_day_after_missed_appointment (missed_yesterday) = 1 var (customer_name). sent_for_pause (missed_this_month / missed_paused_appointment) = 1 var (customer_name). whatsapp_lead_no_booking = 0 vars.",
-    "body_variable_counts": "thank_you_message_sent_after_session (post_session_feedback): customer_name only. sent_17_days_after_last_session_new (one_month_followup / twenty_day_followup): customer_name, branch_name, service_name. sent_day_after_missed_appointment (missed_yesterday): customer_name only. sent_for_pause (missed_this_month / missed_paused_appointment): customer_name only. whatsapp_lead_no_booking: 0. Set meta_template_name when Meta name != internal name.",
+    "why_three_templates_failed_before": "Monty HTTP 500 when body parameter count != Meta {{1}}..{{n}}. session_feedback = 1 var. sent_17_days_after_last_session_new = 3 vars. sent_day_after_missed_appointment = 1 var. sent_for_pause = 1 var. whatsapp_lead_no_booking = 0 vars.",
+    "body_variable_counts": "thank_you_message_sent_after_session: customer_name only. session_feedback: customer_name only. sent_17_days_after_last_session_new: customer_name, branch_name, service_name. sent_day_after_missed_appointment (missed_yesterday): customer_name only. sent_for_pause: customer_name only. whatsapp_lead_no_booking: 0. Set meta_template_name when Meta name != internal name.",
     "monty_ids": "After creating new templates in Monty, paste wa_message_id and record_guid from their dashboard into each template block if your integration requires them."
   }
 }

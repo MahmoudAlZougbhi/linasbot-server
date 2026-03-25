@@ -58,6 +58,19 @@ class TemplateScheduleService:
     def _ensure_schedules(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         smart = settings.setdefault("smartMessaging", {})
         schedules = smart.setdefault("templateSchedules", {})
+        # Legacy key attended_yesterday -> session_feedback (Meta template name)
+        legacy_ay = schedules.pop("attended_yesterday", None)
+        if isinstance(legacy_ay, dict) and "session_feedback" not in schedules:
+            schedules["session_feedback"] = dict(legacy_ay)
+        legacy_17 = schedules.pop("twenty_day_followup", None)
+        if isinstance(legacy_17, dict) and "sent_17_days_after_last_session_new" not in schedules:
+            schedules["sent_17_days_after_last_session_new"] = dict(legacy_17)
+        legacy_om = schedules.pop("one_month_followup", None)
+        if isinstance(legacy_om, dict) and "sent_17_days_after_last_session_new" not in schedules:
+            schedules["sent_17_days_after_last_session_new"] = dict(legacy_om)
+        legacy_ty = schedules.pop("post_session_feedback", None)
+        if isinstance(legacy_ty, dict) and "thank_you_message_sent_after_session" not in schedules:
+            schedules["thank_you_message_sent_after_session"] = dict(legacy_ty)
 
         for template_id in DAILY_TEMPLATE_IDS:
             existing = schedules.get(template_id)

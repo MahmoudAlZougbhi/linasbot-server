@@ -533,7 +533,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 )
 
         if isinstance(result, dict) and result.get("success"):
-            if template_id == "post_session_feedback":
+            if template_id == "thank_you_message_sent_after_session":
                 try:
                     from services.post_session_feedback_rating_service import (
                         mark_awaiting_post_session_feedback_after_send,
@@ -546,7 +546,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                         smart_message_id=f"test:{_test_correlation_id}",
                     )
                 except Exception as _psf_mark_e:
-                    print(f"⚠️ Test template: post_session_feedback awaiting flag: {_psf_mark_e}")
+                    print(f"⚠️ Test template: thank_you_message_sent_after_session awaiting flag: {_psf_mark_e}")
             mid = result.get("message_id")
             if mid and str(mid).strip() and str(mid).strip().lower() != "unknown":
                 try:
@@ -910,17 +910,17 @@ def _apply_count_date_filter(msg_type: str, send_date_str, apt_date, send_at, no
         if send_at:
             return past_24h <= send_at <= next_24h
         return True
-    if msg_type == "post_session_feedback":
+    if msg_type == "thank_you_message_sent_after_session":
         return (send_date_str or "") == today_str or not send_date_str
-    if msg_type == "attended_yesterday":
+    if msg_type == "session_feedback":
         return (send_date_str or "") == today_str or not send_date_str
     if msg_type == "missed_yesterday":
         return apt_date == yesterday_str or send_date_str == yesterday_str
-    if msg_type == "twenty_day_followup":
+    if msg_type == "sent_17_days_after_last_session_new":
         if send_date_str:
             return start_of_month_str <= send_date_str < start_of_next_month_str
         return False
-    if msg_type in ("missed_paused_appointment", "whatsapp_lead_no_booking"):
+    if msg_type in ("sent_for_pause", "whatsapp_lead_no_booking"):
         return True
     return True
 
@@ -937,8 +937,8 @@ async def get_message_counts():
         data = await get_all_counts_and_customers()
         counts = data.get("counts", {})
         # Ensure no negative and all keys present
-        for key in ("reminder_24h", "post_session_feedback", "attended_yesterday",
-                    "twenty_day_followup", "missed_yesterday", "missed_paused_appointment",
+        for key in ("reminder_24h", "thank_you_message_sent_after_session", "session_feedback",
+                    "sent_17_days_after_last_session_new", "missed_yesterday", "sent_for_pause",
                     "whatsapp_lead_no_booking"):
             if key not in counts:
                 counts[key] = 0
@@ -955,11 +955,11 @@ async def get_message_counts():
         traceback.print_exc()
         counts = {
             "reminder_24h": 0,
-            "post_session_feedback": 0,
-            "attended_yesterday": 0,
-            "twenty_day_followup": 0,
+            "thank_you_message_sent_after_session": 0,
+            "session_feedback": 0,
+            "sent_17_days_after_last_session_new": 0,
             "missed_yesterday": 0,
-            "missed_paused_appointment": 0,
+            "sent_for_pause": 0,
             "whatsapp_lead_no_booking": 0,
         }
         return {
@@ -980,7 +980,7 @@ async def get_customers_by_category(category: str):
         from services.smart_messaging_customers_service import get_customers_by_category as fetch_customers
 
         canonical = normalize_template_id(category) if category else ""
-        if not canonical or canonical in ("missed_paused_appointment", "whatsapp_lead_no_booking"):
+        if not canonical or canonical in ("sent_for_pause", "whatsapp_lead_no_booking"):
             return {
                 "success": True,
                 "category": canonical or category,
@@ -1016,7 +1016,7 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
 
     Args:
         status: "sent", "scheduled", or "all"
-        message_type: Filter by specific message type (e.g., "twenty_day_followup")
+        message_type: Filter by specific message type (e.g., "sent_17_days_after_last_session_new")
 
     Returns:
         List of scheduled/sent messages with customer info and content preview
@@ -1031,11 +1031,11 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
         # Mapping of message types to friendly names and reasons
         message_type_names = {
             "reminder_24h": "24-Hour Appointment Reminder",
-            "post_session_feedback": "Post Session Feedback",
-            "attended_yesterday": "Attended Yesterday (thank you, next day)",
-            "twenty_day_followup": "One Month Follow Up",
+            "thank_you_message_sent_after_session": "thank_you_message_sent_after_session",
+            "session_feedback": "session_feedback",
+            "sent_17_days_after_last_session_new": "sent_17_days_after_last_session_new",
             "missed_yesterday": "Missed Yesterday Follow-up",
-            "missed_paused_appointment": "Missed This Month",
+            "sent_for_pause": "sent_for_pause",
             "whatsapp_lead_no_booking": "WhatsApp Lead (No CRM) Campaign",
         }
 

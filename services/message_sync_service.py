@@ -228,42 +228,10 @@ class MessageSyncService:
                 
                 message_ids.append(msg_id)
             
-            # 2. Same-Day Check-in
-            tomorrow = (current_time + timedelta(days=1)).date()
-            if apt_datetime.date() == tomorrow:
-                send_at = current_time.replace(hour=9, minute=0, second=0, microsecond=0)
-                if send_at < current_time:
-                    send_at += timedelta(days=1)
-                
-                msg_id = f"msg_{apt_id}_same_day_checkin"
-                
-                self.queue.add_message({
-                    'message_id': msg_id,
-                    'appointment_id': apt_id,
-                    'appointment_fingerprint': self.queue.generate_fingerprint(appointment),
-                    'customer_phone': customer_phone,
-                    'customer_name': customer_name,
-                    'message_type': 'same_day_checkin',
-                    'template_id': 'same_day_checkin',
-                    'language': 'ar',
-                    'parameters': parameters,
-                    'send_at': send_at.isoformat(),
-                    'status': 'scheduled',
-                    'created_at': current_time.isoformat(),
-                    'updated_at': current_time.isoformat(),
-                    'sent_at': None,
-                    'error': None,
-                    'retry_count': 0,
-                    'appointment_datetime': apt_datetime.isoformat(),
-                    'appointment_status': appointment.get('status', 'Available')
-                })
-                
-                message_ids.append(msg_id)
-            
-            # 3. Post Session Feedback (2 hours after)
+            # 2. Post Session Feedback (2 hours after)
             send_at = apt_datetime + timedelta(hours=2)
             if send_at > current_time:  # Only if in future
-                msg_id = f"msg_{apt_id}_post_session_feedback"
+                msg_id = f"msg_{apt_id}_thank_you_message_sent_after_session"
                 
                 self.queue.add_message({
                     'message_id': msg_id,
@@ -271,8 +239,8 @@ class MessageSyncService:
                     'appointment_fingerprint': self.queue.generate_fingerprint(appointment),
                     'customer_phone': customer_phone,
                     'customer_name': customer_name,
-                    'message_type': 'post_session_feedback',
-                    'template_id': 'post_session_feedback',
+                    'message_type': 'thank_you_message_sent_after_session',
+                    'template_id': 'thank_you_message_sent_after_session',
                     'language': 'ar',
                     'parameters': parameters,
                     'send_at': send_at.isoformat(),
@@ -288,9 +256,9 @@ class MessageSyncService:
                 
                 message_ids.append(msg_id)
             
-            # 4. One Month Follow Up (17 days after; Meta sent_17_days_after_last_session_new)
+            # 3. One Month Follow Up (17 days after; Meta sent_17_days_after_last_session_new)
             send_at = apt_datetime + timedelta(days=17)
-            msg_id = f"msg_{apt_id}_one_month_followup"
+            msg_id = f"msg_{apt_id}_sent_17_days_after_last_session_new"
 
             self.queue.add_message({
                 'message_id': msg_id,
@@ -298,8 +266,8 @@ class MessageSyncService:
                 'appointment_fingerprint': self.queue.generate_fingerprint(appointment),
                 'customer_phone': customer_phone,
                 'customer_name': customer_name,
-                'message_type': 'one_month_followup',
-                'template_id': 'one_month_followup',
+                'message_type': 'sent_17_days_after_last_session_new',
+                'template_id': 'sent_17_days_after_last_session_new',
                 'language': 'ar',
                 'parameters': parameters,
                 'send_at': send_at.isoformat(),
@@ -315,10 +283,10 @@ class MessageSyncService:
 
             message_ids.append(msg_id)
 
-            # 5. Attended Yesterday / Thank You (24 hours after appointment)
+            # 4. Next day — Meta template session_feedback
             send_at = apt_datetime + timedelta(hours=24)
             if send_at > current_time:  # Only if in future
-                msg_id = f"msg_{apt_id}_attended_yesterday"
+                msg_id = f"msg_{apt_id}_session_feedback"
 
                 self.queue.add_message({
                     'message_id': msg_id,
@@ -326,8 +294,8 @@ class MessageSyncService:
                     'appointment_fingerprint': self.queue.generate_fingerprint(appointment),
                     'customer_phone': customer_phone,
                     'customer_name': customer_name,
-                    'message_type': 'attended_yesterday',
-                    'template_id': 'attended_yesterday',
+                    'message_type': 'session_feedback',
+                    'template_id': 'session_feedback',
                     'language': 'ar',
                     'parameters': parameters,
                     'send_at': send_at.isoformat(),

@@ -167,7 +167,7 @@ async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
     """
     now = _now_beirut()
     schedules = template_schedule_service.get_all_schedules()
-    cfg = schedules.get("post_session_feedback", {})
+    cfg = schedules.get("thank_you_message_sent_after_session", {})
     try:
         delay_h = float(cfg.get("delayHours", 3))
     except (TypeError, ValueError):
@@ -217,7 +217,7 @@ async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
         apt_date = apt_dt.strftime("%Y-%m-%d")
         apt_time = apt_dt.strftime("%H:%M")
         row = _apt_to_customer_row(
-            apt, "post_session_feedback", "Post Session Feedback",
+            apt, "thank_you_message_sent_after_session", "thank_you_message_sent_after_session",
             apt_date=apt_date, apt_time=apt_time, action_state="pending",
         )
         if row.get("phone"):
@@ -226,9 +226,9 @@ async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
     return rows
 
 
-async def get_attended_yesterday_customers() -> List[Dict[str, Any]]:
+async def get_session_feedback_customers() -> List[Dict[str, Any]]:
     """
-    Thank you (Attended Yesterday): appointments YESTERDAY, status = DONE.
+    Meta template session_feedback (1 var: customer_name): appointments YESTERDAY, status = DONE.
     Sent once per day at the configured schedule time (not delay-based).
     """
     now = _now_beirut()
@@ -248,7 +248,7 @@ async def get_attended_yesterday_customers() -> List[Dict[str, Any]]:
         apt_date = apt_dt.strftime("%Y-%m-%d") if apt_dt else yesterday
         apt_time = apt_dt.strftime("%H:%M") if apt_dt else ""
         row = _apt_to_customer_row(
-            apt, "attended_yesterday", "Thank You - Attended Yesterday",
+            apt, "session_feedback", "session_feedback",
             apt_date=apt_date, apt_time=apt_time, action_state="pending",
         )
         if row.get("phone"):
@@ -315,7 +315,7 @@ async def get_twenty_day_followup_customers() -> List[Dict[str, Any]]:
             continue
         seen_phones.add(phone)
         row = _apt_to_customer_row(
-            apt, "twenty_day_followup", "One Month Follow Up",
+            apt, "sent_17_days_after_last_session_new", "sent_17_days_after_last_session_new",
             apt_date=target_day, apt_time="", action_state="pending",
         )
         row["phone"] = phone
@@ -326,17 +326,17 @@ async def get_twenty_day_followup_customers() -> List[Dict[str, Any]]:
 
 _CATEGORY_FETCHERS = {
     "reminder_24h": get_reminder_24h_customers,
-    "post_session_feedback": get_post_session_feedback_customers,
-    "attended_yesterday": get_attended_yesterday_customers,
+    "thank_you_message_sent_after_session": get_post_session_feedback_customers,
+    "session_feedback": get_session_feedback_customers,
     "missed_yesterday": get_missed_yesterday_customers,
-    "twenty_day_followup": get_twenty_day_followup_customers,
+    "sent_17_days_after_last_session_new": get_twenty_day_followup_customers,
 }
 
 
 async def get_customers_by_category(category: str) -> List[Dict[str, Any]]:
     """
     Returns list of customers for a given category (source of truth from APIs).
-    category: reminder_24h | post_session_feedback | attended_yesterday | missed_yesterday | twenty_day_followup
+    category: reminder_24h | thank_you_message_sent_after_session | session_feedback | missed_yesterday | sent_17_days_after_last_session_new
     """
     canonical = normalize_template_id(category)
     fetcher = _CATEGORY_FETCHERS.get(canonical)
@@ -358,7 +358,7 @@ async def get_all_counts_and_customers() -> Dict[str, Any]:
         customers = customers or []
         counts[cat] = max(0, len(customers))
         customers_by_category[cat] = customers
-    counts["missed_paused_appointment"] = 0
+    counts["sent_for_pause"] = 0
     counts["whatsapp_lead_no_booking"] = 0
     return {
         "counts": counts,

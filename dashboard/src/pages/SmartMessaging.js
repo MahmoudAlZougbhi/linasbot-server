@@ -98,7 +98,7 @@ const SmartMessaging = () => {
   const [sessionStarRatingsLoading, setSessionStarRatingsLoading] = useState(false);
   const [sessionRatingsTick, setSessionRatingsTick] = useState(0);
 
-  // Manual BOC "paused appointments" campaign (missed_paused_appointment template)
+  // Manual BOC "paused appointments" campaign (Meta / internal id: sent_for_pause)
   const [pausedFromDate, setPausedFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -716,7 +716,7 @@ const SmartMessaging = () => {
         sendTime: schedule.sendTime || "15:00",
         timezone: schedule.timezone || "Asia/Beirut",
       };
-      if (templateId === "post_session_feedback" && schedule.delayHours != null) {
+      if (templateId === "thank_you_message_sent_after_session" && schedule.delayHours != null) {
         const n = Number(schedule.delayHours);
         if (!Number.isNaN(n)) {
           payload.delayHours = n;
@@ -1227,17 +1227,17 @@ const SmartMessaging = () => {
         const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         return sendTime >= past24h && sendTime <= next24h;
-      case "post_session_feedback":
+      case "thank_you_message_sent_after_session":
         // Show messages scheduled for today only
         if (!sendDateStr) return true;
         return sendDateStr === todayStr;
-      case "attended_yesterday":
+      case "session_feedback":
         if (!sendDateStr) return true;
         return sendDateStr === todayStr;
       case "missed_yesterday":
         // Show yesterday's missed appointments
         return appointmentDate === yesterdayStr || sendDateStr === yesterdayStr;
-      case "twenty_day_followup":
+      case "sent_17_days_after_last_session_new":
         // Show 17-day followups scheduled within current month
         return sendDateStr >= startOfMonthStr && sendDateStr < startOfNextMonthStr;
       default:
@@ -1368,9 +1368,9 @@ const SmartMessaging = () => {
   const messageTypesCounts = {
     all: Math.max(0, Object.values(messageCounts).reduce((sum, count) => sum + (Number(count) || 0), 0)),
     reminder_24h: Math.max(0, Number(messageCounts.reminder_24h) || 0),
-    post_session_feedback: Math.max(0, Number(messageCounts.post_session_feedback) || 0),
-    attended_yesterday: Math.max(0, Number(messageCounts.attended_yesterday) || 0),
-    twenty_day_followup: Math.max(0, Number(messageCounts.twenty_day_followup) || 0),
+    thank_you_message_sent_after_session: Math.max(0, Number(messageCounts.thank_you_message_sent_after_session) || 0),
+    session_feedback: Math.max(0, Number(messageCounts.session_feedback) || 0),
+    sent_17_days_after_last_session_new: Math.max(0, Number(messageCounts.sent_17_days_after_last_session_new) || 0),
     missed_yesterday: Math.max(0, Number(messageCounts.missed_yesterday) || 0),
   };
 
@@ -1381,18 +1381,18 @@ const SmartMessaging = () => {
         color: "bg-blue-100 text-blue-700",
         icon: ClockIcon,
       },
-      post_session_feedback: {
-        name: "Feedback",
+      thank_you_message_sent_after_session: {
+        name: "thank_you_message_sent_after_session",
         color: "bg-green-100 text-green-700",
         icon: CheckCircleIcon,
       },
-      attended_yesterday: {
-        name: "Thank You",
+      session_feedback: {
+        name: "session_feedback",
         color: "bg-rose-100 text-rose-700",
         icon: HeartIcon,
       },
-      twenty_day_followup: {
-        name: "17-Day",
+      sent_17_days_after_last_session_new: {
+        name: "sent_17_days_after_last_session_new",
         color: "bg-indigo-100 text-indigo-700",
         icon: SparklesIcon,
       },
@@ -1413,9 +1413,9 @@ const SmartMessaging = () => {
   const getTemplateIcon = (templateId) => {
     const icons = {
       reminder_24h: ClockIcon,
-      post_session_feedback: CheckCircleIcon,
-      attended_yesterday: HeartIcon,
-      twenty_day_followup: SparklesIcon,
+      thank_you_message_sent_after_session: CheckCircleIcon,
+      session_feedback: HeartIcon,
+      sent_17_days_after_last_session_new: SparklesIcon,
       missed_yesterday: ExclamationTriangleIcon,
     };
     // Return default icon for custom templates
@@ -1425,9 +1425,9 @@ const SmartMessaging = () => {
   const getTemplateColor = (templateId) => {
     const colors = {
       reminder_24h: "from-blue-500 to-cyan-500",
-      post_session_feedback: "from-green-500 to-emerald-500",
-      attended_yesterday: "from-rose-500 to-pink-600",
-      twenty_day_followup: "from-indigo-500 to-purple-500",
+      thank_you_message_sent_after_session: "from-green-500 to-emerald-500",
+      session_feedback: "from-rose-500 to-pink-600",
+      sent_17_days_after_last_session_new: "from-indigo-500 to-purple-500",
       missed_yesterday: "from-orange-400 to-orange-600",
     };
     // Return a purple gradient for custom templates
@@ -1858,60 +1858,66 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* Feedback (post_session_feedback) */}
+                {/* Same-day stars (Meta: thank_you_message_sent_after_session) */}
                 <button
-                  onClick={() => handleCategorySelect("post_session_feedback")}
+                  onClick={() => handleCategorySelect("thank_you_message_sent_after_session")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "post_session_feedback"
+                    selectedMessageType === "thank_you_message_sent_after_session"
                       ? "ring-2 ring-offset-2 ring-green-500 shadow-lg"
                       : "hover:shadow"
                   } ${
-                    selectedMessageType === "post_session_feedback"
+                    selectedMessageType === "thank_you_message_sent_after_session"
                       ? "bg-gradient-to-br from-green-500 to-green-600 text-white"
                       : "bg-green-100 text-green-700 border border-green-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">Feedback</div>
+                  <div className="font-mono text-[10px] sm:text-xs font-bold leading-tight break-all px-0.5">
+                    thank_you_message_sent_after_session
+                  </div>
                   <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.post_session_feedback}
+                    {messageTypesCounts.thank_you_message_sent_after_session}
                   </div>
                 </button>
 
-                {/* Thank You / Attended Yesterday */}
+                {/* Meta template name = internal id: session_feedback */}
                 <button
-                  onClick={() => handleCategorySelect("attended_yesterday")}
+                  onClick={() => handleCategorySelect("session_feedback")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "attended_yesterday"
+                    selectedMessageType === "session_feedback"
                       ? "ring-2 ring-offset-2 ring-rose-500 shadow-lg"
                       : "hover:shadow"
                   } ${
-                    selectedMessageType === "attended_yesterday"
+                    selectedMessageType === "session_feedback"
                       ? "bg-gradient-to-br from-rose-500 to-pink-600 text-white"
                       : "bg-rose-100 text-rose-700 border border-rose-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">Thank You</div>
+                  <div className="font-mono text-xs font-bold leading-tight break-all px-0.5">
+                    session_feedback
+                  </div>
                   <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.attended_yesterday}
+                    {messageTypesCounts.session_feedback}
                   </div>
                 </button>
 
-                {/* 17-Day Follow-up */}
+                {/* 17-day follow-up (Meta: sent_17_days_after_last_session_new) */}
                 <button
-                  onClick={() => handleCategorySelect("twenty_day_followup")}
+                  onClick={() => handleCategorySelect("sent_17_days_after_last_session_new")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                    selectedMessageType === "twenty_day_followup"
+                    selectedMessageType === "sent_17_days_after_last_session_new"
                       ? "ring-2 ring-offset-2 ring-indigo-500 shadow-lg"
                       : "hover:shadow"
                   } ${
-                    selectedMessageType === "twenty_day_followup"
+                    selectedMessageType === "sent_17_days_after_last_session_new"
                       ? "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white"
                       : "bg-indigo-100 text-indigo-700 border border-indigo-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">17-Day</div>
+                  <div className="font-mono text-xs font-bold leading-tight break-all px-0.5">
+                    sent_17_days_after_last_session_new
+                  </div>
                   <div className="text-xs font-semibold mt-1">
-                    {messageTypesCounts.twenty_day_followup}
+                    {messageTypesCounts.sent_17_days_after_last_session_new}
                   </div>
                 </button>
 
@@ -2250,8 +2256,7 @@ const SmartMessaging = () => {
               <span className="font-semibold text-slate-800">Feedback</span> (green card in Sent Messages): same{" "}
               <span className="font-medium">calendar day</span> as the appointment, sent{" "}
               <span className="font-medium">N hours after the slot</span> (set below on that card).{" "}
-              <span className="font-semibold text-slate-800">Thank you</span> is{" "}
-              <span className="font-medium">Attended Yesterday</span>: everyone who was{" "}
+              <span className="font-semibold text-slate-800">Session Feedback</span> (next day): everyone who was{" "}
               <span className="font-medium">Done yesterday</span> gets one send at your{" "}
               <span className="font-medium">daily send time</span>. Star replies (1–5) are listed under the{" "}
               <span className="font-medium">Star ratings</span> tab. Star buttons need a WhatsApp template with
@@ -2293,18 +2298,18 @@ const SmartMessaging = () => {
                   };
                   const isDailyTemplate = [
                     "reminder_24h",
-                    "post_session_feedback",
-                    "attended_yesterday",
+                    "thank_you_message_sent_after_session",
+                    "session_feedback",
                     "missed_yesterday",
-                    "twenty_day_followup",
+                    "sent_17_days_after_last_session_new",
                   ].includes(templateId);
                   const isActive = isDailyTemplate ? scheduleConfig.enabled !== false : true;
                   // Check if this is a custom template (not one of the default ones)
                   const defaultTemplates = [
                     "reminder_24h",
-                    "post_session_feedback",
-                    "attended_yesterday",
-                    "twenty_day_followup",
+                    "thank_you_message_sent_after_session",
+                    "session_feedback",
+                    "sent_17_days_after_last_session_new",
                     "missed_yesterday",
                   ];
                   const isCustomTemplate = !defaultTemplates.includes(templateId);
@@ -2364,7 +2369,7 @@ const SmartMessaging = () => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-semibold text-slate-800">
-                                {templateId === "post_session_feedback"
+                                {templateId === "thank_you_message_sent_after_session"
                                   ? isActive
                                     ? "✅ Feedback job enabled"
                                     : "⏸️ Feedback job disabled"
@@ -2391,7 +2396,7 @@ const SmartMessaging = () => {
                               />
                             </button>
                           </div>
-                          {templateId === "post_session_feedback" ? (
+                          {templateId === "thank_you_message_sent_after_session" ? (
                             <>
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
@@ -2645,7 +2650,7 @@ const SmartMessaging = () => {
               <p className="text-sm text-slate-600 mt-1 max-w-3xl">
                 Load customers whose appointments were <span className="font-medium">paused</span> in BOC between
                 two dates, optionally filter by service, then send the{" "}
-                <span className="font-medium">missed_paused_appointment</span> template when{" "}
+                <span className="font-mono text-xs font-medium">sent_for_pause</span> template when{" "}
                 <span className="font-medium">you</span> click Send. Nothing is sent automatically from this
                 screen. Edit Arabic / English / French text under{" "}
                 <span className="font-medium">Message Templates</span> on this page. Each user receives the
@@ -2742,7 +2747,7 @@ const SmartMessaging = () => {
               <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                 <span className="font-semibold text-slate-700">Template placeholders</span> (use in{" "}
                 <span className="font-medium">Message Templates</span> →{" "}
-                <span className="font-medium">missed_paused_appointment</span>):{" "}
+                <span className="font-mono text-xs font-medium">sent_for_pause</span>):{" "}
                 <span className="font-mono whitespace-pre-wrap break-all">{pausedPlaceholdersHelp}</span>
               </div>
             )}
@@ -3001,7 +3006,7 @@ const SmartMessaging = () => {
                   After the <span className="font-medium">Feedback</span> smart template is sent (same day after the
                   session), customers can reply with <span className="font-medium">1–5</span> (or a quick-reply title
                   that starts with a digit). Replies are logged here.{" "}
-                  <span className="font-medium">Thank you / Attended Yesterday</span> is a separate next-day message.
+                  Next-day Meta template <span className="font-mono text-xs font-medium">session_feedback</span> is separate from same-day Feedback.
                   Use <span className="font-medium">Open chat</span> to open Live Chat with that number searched.
                 </p>
               </div>

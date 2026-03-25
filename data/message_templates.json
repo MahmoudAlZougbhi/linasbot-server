@@ -6,33 +6,12 @@
     "en": "🔔 Appointment Reminder\n\nHi {customer_name}!\nThis is a reminder of your appointment tomorrow at Lina's Laser Center:\n\n📅 Date: {appointment_date}\n⏰ Time: {appointment_time}\n📍 Branch: {branch_name}\n💆 Service: {service_name}\n\nTo confirm: Reply \"Yes\"\nTo reschedule: Reply \"Postpone\"\nTo cancel: Reply \"Cancel\"\n\nLooking forward to seeing you! 💜",
     "fr": "🔔 Rappel de Rendez-vous\n\nBonjour {customer_name}!\nCeci est un rappel de votre rendez-vous demain au Centre Laser Lina:\n\n📅 Date: {appointment_date}\n⏰ Heure: {appointment_time}\n📍 Branche: {branch_name}\n💆 Service: {service_name}\n\nPour confirmer: Répondez \"Oui\"\nPour reporter: Répondez \"Reporter\"\nPour annuler: Répondez \"Annuler\"\n\nAu plaisir de vous voir! 💜"
   },
-  "same_day_checkin": {
-    "name": "Same Day Check-in",
-    "description": "Sent morning of appointment",
-    "ar": "🌟 يوم موعدك!\n\nصباح الخير {customer_name}!\nموعدك اليوم الساعة {appointment_time}.\n\nنصائح مهمة:\n✅ احضر قبل الموعد بـ 10 دقائق\n✅ تجنب الكافيين قبل الجلسة\n✅ ارتدي ملابس مريحة\n\nهل تحتاج لأي مساعدة؟ نحن هنا! 😊",
-    "en": "🌟 It's Your Appointment Day!\n\nGood morning {customer_name}!\nYour appointment is today at {appointment_time}.\n\nImportant tips:\n✅ Arrive 10 minutes early\n✅ Avoid caffeine before session\n✅ Wear comfortable clothes\n\nNeed any help? We're here! 😊",
-    "fr": "🌟 C'est le Jour de Votre Rendez-vous!\n\nBonjour {customer_name}!\nVotre rendez-vous est aujourd'hui à {appointment_time}.\n\nConseils importants:\n✅ Arrivez 10 minutes en avance\n✅ Évitez la caféine avant la séance\n✅ Portez des vêtements confortables\n\nBesoin d'aide? Nous sommes là! 😊"
-  },
-  "post_session_feedback": {
-    "name": "Post Session Feedback",
-    "description": "Same-day star rating (1–5); Meta: thank_you_message_sent_after_session; 1 variable: customer_name. View replies: Smart Messaging → Session star ratings. Different template than Attended Yesterday.",
+  "thank_you_message_sent_after_session": {
+    "name": "thank_you_message_sent_after_session",
+    "description": "Same-day star rating (1–5). Meta template thank_you_message_sent_after_session (1 variable: customer_name). Star replies: Smart Messaging → Star ratings. Not session_feedback (next day). Legacy id: post_session_feedback.",
     "ar": "💜 شكراً لزيارتك!\n\n{customer_name} العزيز/ة،\nنأمل أن تكون راضياً عن جلستك اليوم.\n\nكيف كانت تجربتك؟\n⭐⭐⭐⭐⭐ ممتازة\n⭐⭐⭐⭐ جيدة جداً\n⭐⭐⭐ جيدة\n⭐⭐ مقبولة\n⭐ تحتاج تحسين\n\nأرسل رقم النجوم لتقييمك!\nملاحظاتك تهمنا 🙏",
     "en": "💜 Thank You for Your Visit!\n\nDear {customer_name},\nWe hope you're satisfied with today's session.\n\nHow was your experience?\n⭐⭐⭐⭐⭐ Excellent\n⭐⭐⭐⭐ Very Good\n⭐⭐⭐ Good\n⭐⭐ Fair\n⭐ Needs Improvement\n\nSend the number of stars for your rating!\nYour feedback matters 🙏",
     "fr": "💜 Merci de Votre Visite!\n\nCher(e) {customer_name},\nNous espérons que vous êtes satisfait de votre séance.\n\nComment était votre expérience?\n⭐⭐⭐⭐⭐ Excellente\n⭐⭐⭐⭐ Très Bien\n⭐⭐⭐ Bien\n⭐⭐ Passable\n⭐ À Améliorer\n\nEnvoyez le nombre d'étoiles!\nVos commentaires comptent 🙏"
-  },
-  "no_show_followup": {
-    "name": "No-Show Follow-up",
-    "description": "Sent after missed appointment (same day)",
-    "ar": "😔 افتقدناك اليوم\n\n{customer_name} العزيز/ة،\nلاحظنا أنك لم تحضر موعدك اليوم.\n\nنتمنى أن يكون كل شيء على ما يرام!\n\nلإعادة جدولة موعدك:\n📱 اتصل: {phone_number}\n💬 أو أرسل \"موعد جديد\"\n\nدمت بخير 🌸",
-    "en": "😔 We Missed You Today\n\nDear {customer_name},\nWe noticed you missed your appointment today.\n\nWe hope everything is okay!\n\nTo reschedule:\n📱 Call: {phone_number}\n💬 Or reply \"New appointment\"\n\nTake care 🌸",
-    "fr": "😔 Vous Nous Avez Manqué\n\nCher(e) {customer_name},\nNous avons remarqué votre absence aujourd'hui.\n\nNous espérons que tout va bien!\n\nPour reprogrammer:\n📱 Appelez: {phone_number}\n💬 Ou répondez \"Nouveau rendez-vous\"\n\nPrenez soin de vous 🌸"
-  },
-  "one_month_followup": {
-    "name": "One Month Follow Up",
-    "description": "Sent 17 days after last session. WhatsApp Meta: sent_17_days_after_last_session_new. Body variables (3): customer_name, branch_name, service_name.",
-    "ar": "🌟 كيف حالك؟\n\n{customer_name} العزيز/ة،\nمضى شهر على آخر جلسة لك!\n\nكيف النتائج؟ \nنود أن نطمئن عليك ونذكرك:\n\n✨ قد تحتاج لجلسة متابعة\n✨ ل��ينا عروض خاصة هذا الشهر\n✨ استشارة مجانية متاحة\n\nللحجز: أرسل \"حجز\"\nرعايتك أولويتنا 💜",
-    "en": "🌟 How Are You?\n\nDear {customer_name},\nIt's been a month since your last session!\n\nHow are the results?\nWe'd like to check on you and remind you:\n\n✨ You might need a follow-up session\n✨ We have special offers this month\n✨ Free consultation available\n\nTo book: Reply \"Book\"\nYour care is our priority 💜",
-    "fr": "🌟 Comment Allez-Vous?\n\nCher(e) {customer_name},\nCela fait un mois depuis votre dernière séance!\n\nComment sont les résultats?\nNous aimerions prendre de vos nouvelles:\n\n✨ Vous pourriez avoir besoin d'un suivi\n✨ Offres spéciales ce mois\n✨ Consultation gratuite disponible\n\nPour réserver: Répondez \"Réserver\"\nVotre bien-être est notre priorité 💜"
   },
   "missed_yesterday": {
     "name": "Missed Yesterday",
@@ -41,26 +20,12 @@
     "en": "💙 Hope You're Well\n\nDear {customer_name},\nWe noticed you couldn't make it yesterday.\n\nWe hope everything is okay! 🌸\n\nWould you like to reschedule?\n📱 Call us: {phone_number}\n💬 Or reply \"New appointment\"\n\nWe're always here for you 💜",
     "fr": "💙 Nous Espérons Que Vous Allez Bien\n\nCher(e) {customer_name},\nNous avons remarqué votre absence hier.\n\nNous espérons que tout va bien! 🌸\n\nSouhaitez-vous reprogrammer?\n📱 Appelez-nous: {phone_number}\n💬 Ou répondez \"Nouveau rendez-vous\"\n\nNous sommes toujours là pour vous 💜"
   },
-  "missed_paused_appointment": {
-    "name": "Missed This Month",
-    "description": "Paused BOC manual campaign. WhatsApp (Meta): sent_for_pause — 1 approved body variable: customer_name. Extra placeholders below are for in-app copy only unless your Meta template is extended.",
+  "sent_for_pause": {
+    "name": "sent_for_pause",
+    "description": "Paused BOC manual campaign + end-of-month scheduler. Meta template sent_for_pause (1 body variable: customer_name). Extra placeholders are in-app preview only unless Meta extended.",
     "ar": "🌸 مرحباً {customer_name}\n\nنذكرك بموعدك المؤجل في مركز لينا ليزر:\n\n💆 الخدمة: {service_name}\n📅 التاريخ: {appointment_date}\n⏰ الوقت: {appointment_time}\n📍 الفرع: {branch_name}\n\nللحجز أو الاستفسار:\n📱 {phone_number}\n💬 يمكنك الرد على هذه الرسالة في أي وقت.\n\nنتطلع لخدمتك 💜",
     "en": "🌸 Hi {customer_name}\n\nWe're following up on your paused appointment at Lina's Laser Center:\n\n💆 Service: {service_name}\n📅 Date: {appointment_date}\n⏰ Time: {appointment_time}\n📍 Branch: {branch_name}\n\nTo book or ask anything:\n📱 {phone_number}\n💬 You can reply to this message anytime.\n\nWe're here for you 💜",
     "fr": "🌸 Bonjour {customer_name}\n\nSuite à votre rendez-vous en pause au Centre Laser Lina:\n\n💆 Service: {service_name}\n📅 Date: {appointment_date}\n⏰ Heure: {appointment_time}\n📍 Branche: {branch_name}\n\nPour réserver ou une question:\n📱 {phone_number}\n💬 Vous pouvez répondre à tout moment.\n\nAu plaisir de vous accueillir 💜"
-  },
-  "missed_this_month": {
-    "name": "Missed This Month",
-    "description": "WhatsApp Meta: sent_for_pause (1 body variable: customer_name).",
-    "ar": "🌺 نفتقدك في مركز لينا ليزر\n\n{customer_name} العزيز/ة،\nلم نراك هذا الشهر ونفتقد وجودك معنا!\n\nنود أن نطمئن عليك ونذكرك:\n✨ جلساتك المنتظمة مهمة للحصول على أفضل النتائج\n✨ لدينا مواعيد متاحة هذا الأسبوع\n✨ فريقنا جاهز لخدمتك\n\nللحجز: أرسل \"حجز\"\nأو ا��صل: {phone_number}\n\nنتطلع لرؤيتك قريباً 💜",
-    "en": "🌺 We Miss You at Lina's Laser\n\nDear {customer_name},\nWe haven't seen you this month and we miss you!\n\nWe'd like to remind you:\n✨ Regular sessions are important for best results\n✨ We have appointments available this week\n✨ Our team is ready to serve you\n\nTo book: Reply \"Book\"\nOr call: {phone_number}\n\nLooking forward to seeing you soon 💜",
-    "fr": "🌺 Vous Nous Manquez Chez Lina's Laser\n\nCher(e) {customer_name},\nNous ne vous avons pas vu ce mois-ci!\n\nNous aimerions vous rappeler:\n✨ Les séances régulières sont importantes\n✨ Nous avons des disponibilités cette semaine\n✨ Notre équipe est prête à vous servir\n\nPour réserver: Répondez \"Réserver\"\nOu appelez: {phone_number}\n\nAu plaisir de vous revoir bientôt 💜"
-  },
-  "attended_yesterday": {
-    "name": "Attended Yesterday",
-    "description": "Thank-you the day after a Done visit (tips + next appointment). Not the Post Session Feedback star-rating template.",
-    "ar": "💜 شكراً لزيارتك!\n\n{customer_name} العزيز/ة،\nشكراً لحضورك بالأمس! 🌟\n\nنأمل أن تكون راضياً عن الخدمة.\n\nنصائح مهمة بعد الجلسة:\n✅ تجنب التعرض للشمس لمدة 48 ساعة\n✅ استخدم ��اقي الشمس SPF 50+\n✅ رطب البشرة جيداً\n✅ تجنب الماء الساخن لمدة 24 ساعة\n\nموعدك القادم: {next_appointment_date}\n\nأي استفسار؟ نحن هنا! 💬\n{phone_number}",
-    "en": "💜 Thank You for Your Visit!\n\nDear {customer_name},\nThank you for coming yesterday! 🌟\n\nWe hope you're satisfied with the service.\n\nImportant post-session tips:\n✅ Avoid sun exposure for 48 hours\n✅ Use SPF 50+ sunscreen\n✅ Keep skin well moisturized\n✅ Avoid hot water for 24 hours\n\nYour next appointment: {next_appointment_date}\n\nAny questions? We're here! 💬\n{phone_number}",
-    "fr": "💜 Merci de Votre Visite!\n\nCher(e) {customer_name},\nMerci d'être venu(e) hier! 🌟\n\nNous espérons que vous êtes satisfait(e).\n\nConseils importants après la séance:\n✅ Évitez le soleil pendant 48 heures\n✅ Utilisez SPF 50+ crème solaire\n✅ Hydratez bien la peau\n✅ Évitez l'eau chaude pendant 24 heures\n\nVotre prochain rendez-vous: {next_appointment_date}\n\nDes questions? Nous sommes là! 💬\n{phone_number}"
   },
   "whatsapp_lead_no_booking": {
     "name": "WhatsApp Lead (No CRM)",
@@ -77,5 +42,19 @@
     "fr": "",
     "isCustom": true,
     "createdAt": "2026-01-26T15:46:53.883504"
+  },
+  "session_feedback": {
+    "name": "session_feedback",
+    "description": "Next day after Done visit. Meta template session_feedback (1 variable: customer_name). Buttons for rating on Meta.",
+    "ar": "مرحباً {customer_name} 🌸\nشكراً لزيارتك لنا.\nيسعدنا جداً أن نعرف رأيك بجلسك الأخيرة، لأن تقييمك يساعدنا على تحسين تجربتك دائماً.\nاضغطي على الزر بالأسفل لتقييم تجربتك معنا.",
+    "en": "Hi {customer_name} 🌸\nThank you for visiting us.\nWe'd love to hear about your last session—your feedback helps us keep improving your experience.\nTap the button below to rate your visit with us.",
+    "fr": "Bonjour {customer_name} 🌸\nMerci pour votre visite.\nNous serions ravis d'avoir votre avis sur votre dernière séance — votre retour nous aide à améliorer votre expérience.\nAppuyez sur le bouton ci-dessous pour évaluer votre visite."
+  },
+  "sent_17_days_after_last_session_new": {
+    "name": "sent_17_days_after_last_session_new",
+    "description": "Sent 17 days after last Done session. Meta template sent_17_days_after_last_session_new (3 variables: customer_name, branch_name, service_name).",
+    "ar": "🌟 كيف حالك؟\n\n{customer_name} العزيز/ة،\nمضى شهر على آخر جلسة لك!\n\nكيف النتائج؟ \nنود أن نطمئن عليك ونذكرك:\n\n✨ قد تحتاج لجلسة متابعة\n✨ ل��ينا عروض خاصة هذا الشهر\n✨ استشارة مجانية متاحة\n\nللحجز: أرسل \"حجز\"\nرعايتك أولويتنا 💜",
+    "en": "🌟 How Are You?\n\nDear {customer_name},\nIt's been a month since your last session!\n\nHow are the results?\nWe'd like to check on you and remind you:\n\n✨ You might need a follow-up session\n✨ We have special offers this month\n✨ Free consultation available\n\nTo book: Reply \"Book\"\nYour care is our priority 💜",
+    "fr": "🌟 Comment Allez-Vous?\n\nCher(e) {customer_name},\nCela fait un mois depuis votre dernière séance!\n\nComment sont les résultats?\nNous aimerions prendre de vos nouvelles:\n\n✨ Vous pourriez avoir besoin d'un suivi\n✨ Offres spéciales ce mois\n✨ Consultation gratuite disponible\n\nPour réserver: Répondez \"Réserver\"\nVotre bien-être est notre priorité 💜"
   }
 }

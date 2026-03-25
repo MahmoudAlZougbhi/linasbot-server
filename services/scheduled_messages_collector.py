@@ -91,13 +91,11 @@ class ScheduledMessagesCollector:
     
     Message types collected:
     1. 24-Hour Reminder: Appointments 24+ hours in future (send 24h before)
-    2. Same-Day Check-in: Appointments tomorrow (send tomorrow at 7 AM)
-    3. Post Session Feedback: Appointments ended <2 hours ago (send 2h after)
-    4. No-Show Follow-up: Missed appointments <1 hour passed (send 1h after)
-    5. 1-Month Follow-up: Attended appointments 30+ days passed (send 30d after)
-    6. Missed Yesterday: Missed appointments 24-48 hours passed
-    7. Missed This Month: Missed appointments 30+ days passed
-    8. Attended Yesterday: Attended appointments 24h passed (not missed)
+    2. Post Session Feedback: Appointments ended <2 hours ago (send 2h after)
+    3. 1-Month Follow-up: Attended appointments 30+ days passed (send 30d after)
+    4. Missed Yesterday: Missed appointments 24-48 hours passed
+    5. Missed This Month: Missed appointments 30+ days passed
+    6. session_feedback (Meta): next-day Done — handled by daily dispatcher, not collector
     """
     
     def __init__(self):
@@ -238,32 +236,7 @@ class ScheduledMessagesCollector:
                     "last_updated": current_time.isoformat()
                 })
         
-        # 2. Same-Day Check-in
-        # Collects: Appointments tomorrow (if status is "Available")
-        # Send time: Tomorrow at 7 AM
-        if apt_status.lower() == 'available':
-            tomorrow = (current_time + timedelta(days=1)).date()
-            apt_date = apt_datetime.date()
-            if apt_date == tomorrow:
-                send_datetime = current_time.replace(hour=7, minute=0, second=0, microsecond=0)
-                if send_datetime < current_time:  # If already past 7 AM today
-                    send_datetime += timedelta(days=1)
-                messages.append({
-                    "appointment_id": apt_id,
-                    "customer_name": customer_name,
-                    "customer_phone": customer_phone,
-                    "message_type": "same_day_checkin",
-                    "reason": "Same-Day Check-in Reminder",
-                    "send_datetime": send_datetime.isoformat(),
-                    "status": "pending",
-                    "error": None,
-                    "appointment_datetime": apt_datetime.isoformat(),
-                    "appointment_status": apt_status,
-                    "created_at": current_time.isoformat(),
-                    "last_updated": current_time.isoformat()
-                })
-        
-        # 3. Post Session Feedback
+        # 2. Post Session Feedback
         # Collects: Appointments ended but <2 hours ago (if status is "Done")
         # Send time: 2 hours after appointment
         if apt_status.lower() == 'done':
@@ -274,7 +247,7 @@ class ScheduledMessagesCollector:
                         "appointment_id": apt_id,
                         "customer_name": customer_name,
                         "customer_phone": customer_phone,
-                        "message_type": "post_session_feedback",
+                        "message_type": "thank_you_message_sent_after_session",
                         "reason": "Post Session Feedback Request",
                         "send_datetime": send_datetime.isoformat(),
                         "status": "pending",
@@ -285,29 +258,7 @@ class ScheduledMessagesCollector:
                         "last_updated": current_time.isoformat()
                     })
         
-        # 4. No-Show Follow-up
-        # Collects: Missed appointments <1 hour passed (if status is "Missed")
-        # Send time: 1 hour after appointment
-        if apt_status.lower() == 'missed':
-            if 0 < time_since_apt.total_seconds() < 3600:  # Less than 1 hour passed
-                send_datetime = apt_datetime + timedelta(hours=1)
-                if send_datetime > current_time:  # Only if send time is in future
-                    messages.append({
-                        "appointment_id": apt_id,
-                        "customer_name": customer_name,
-                        "customer_phone": customer_phone,
-                        "message_type": "no_show_followup",
-                        "reason": "No-Show Follow-up",
-                        "send_datetime": send_datetime.isoformat(),
-                        "status": "pending",
-                        "error": None,
-                        "appointment_datetime": apt_datetime.isoformat(),
-                        "appointment_status": apt_status,
-                        "created_at": current_time.isoformat(),
-                        "last_updated": current_time.isoformat()
-                    })
-        
-        # 5. 1-Month Follow-up
+        # 3. 1-Month Follow-up
         # Collects: Attended appointments 17+ days passed (if status is "Done")
         # Send time: 17 days after appointment
         if apt_status.lower() == 'done':
@@ -319,7 +270,7 @@ class ScheduledMessagesCollector:
                             "appointment_id": apt_id,
                             "customer_name": customer_name,
                             "customer_phone": customer_phone,
-                            "message_type": "one_month_followup",
+                            "message_type": "sent_17_days_after_last_session_new",
                             "reason": "One-Month Follow-up",
                             "send_datetime": send_datetime.isoformat(),
                             "status": "pending",
@@ -330,7 +281,7 @@ class ScheduledMessagesCollector:
                             "last_updated": current_time.isoformat()
                         })
         
-        # 6. Attended Yesterday / Thank You: REMOVED from collector.
+        # 4. session_feedback: REMOVED from collector (daily dispatcher).
         # Thank-you is sent only by daily_template_dispatcher at configured time (rule-based:
         # yesterday's DONE appointments). This prevents duplicate thank-you sends.
 

@@ -75,7 +75,7 @@ def _format_body_areas(row: Dict[str, Any]) -> str:
 
 
 def _paused_campaign_placeholders(recipient: Dict[str, Any], clinic_contact_phone: str) -> Dict[str, str]:
-    """All template placeholders for missed_paused_appointment (from recipient + raw BOC row)."""
+    """All template placeholders for sent_for_pause / paused BOC campaign (recipient + raw BOC row)."""
     row: Dict[str, Any] = recipient.get("raw") if isinstance(recipient.get("raw"), dict) else {}
     customer = row.get("customer") if isinstance(row.get("customer"), dict) else {}
 
@@ -122,7 +122,7 @@ def _paused_campaign_placeholders(recipient: Dict[str, Any], clinic_contact_phon
 class MissedPausedCampaignService:
     """Build, preview, and execute paused-appointment campaigns."""
 
-    TEMPLATE_ID = "missed_paused_appointment"
+    TEMPLATE_ID = "sent_for_pause"
 
     async def _fetch_paused_rows(
         self,

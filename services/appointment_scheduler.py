@@ -255,7 +255,7 @@ async def populate_scheduled_messages_from_appointments():
 
                     result = smart_messaging.schedule_message(
                         customer_phone,
-                        "post_session_feedback",
+                        "thank_you_message_sent_after_session",
                         feedback_time,
                         placeholders,
                         user_persistence.get_user_language(customer_phone),
@@ -311,166 +311,13 @@ async def populate_scheduled_messages_from_appointments():
 
 
 async def populate_no_show_messages_from_missed_appointments():
-    """
-    Fetch appointments from TODAY with status "Available" (not attended)
-    and populate smart_messaging dict with no-show follow-up messages.
-
-    Uses /appointments/reminders?status=Available&date=today
-    Schedules messages for exactly 2 hours after appointment time.
-    Skips if 2-hour window has passed (those get caught by missed-yesterday next day).
-    """
-    try:
-        today = datetime.now()
-        today_str = today.strftime('%Y-%m-%d')
-
-        print(f"\n{'='*80}")
-        print(f"🔍 NO-SHOW: Fetching appointments with status=Available")
-        print(f"   API call: /appointments/reminders?status=Available&date={today_str}")
-        print(f"{'='*80}")
-
-        # Call reminders API with status=Available for today
-        result = await send_appointment_reminders(date=today_str, status='Available')
-
-        all_available = []
-        if result.get('success'):
-            response_data = result.get('data', {})
-            if isinstance(response_data, dict):
-                all_available = response_data.get('appointments', [])
-            elif isinstance(response_data, list):
-                all_available = response_data
-
-        if not all_available:
-            print(f"   ℹ️ No appointments with status=Available found for today")
-            return {
-                "success": True,
-                "message": "No missed appointments found for today",
-                "date": today_str,
-                "total_missed": 0,
-                "total_messages": 0,
-                "no_show_messages_count": 0
-            }
-
-        print(f"   ✅ Found {len(all_available)} appointments with status=Available")
-
-        now = datetime.now()
-        total_messages = 0
-
-        # Track skip reasons
-        skipped_missing_data = 0
-        skipped_parse_error = 0
-        skipped_future = 0
-        skipped_grace_period = 0
-        skipped_window_passed = 0
-        skipped_schedule_failed = 0
-
-        for apt in all_available:
-            try:
-                # API response structure from /appointments/reminders:
-                customer_phone = apt.get('phone')
-                customer_name = apt.get('name', 'عميلنا العزيز')
-                apt_details = apt.get('appointment_details', {})
-                apt_datetime_str = apt_details.get('date')
-                service_name = apt_details.get('service', 'جلسة ليزر')
-                branch_name = apt_details.get('branch', 'الفرع الرئيسي')
-
-                if not customer_phone or not apt_datetime_str:
-                    skipped_missing_data += 1
-                    continue
-
-                apt_datetime = parse_appointment_date(apt_datetime_str)
-                if not apt_datetime:
-                    skipped_parse_error += 1
-                    continue
-
-                grace_period_end = apt_datetime + timedelta(hours=1)  # 1hr grace period
-                no_show_time = apt_datetime + timedelta(hours=2)  # Send 2hrs after appointment
-
-                # Skip future appointments (haven't happened yet)
-                if apt_datetime > now:
-                    skipped_future += 1
-                    continue
-
-                # Skip if 1-hour grace period hasn't passed (not confirmed no-show)
-                if grace_period_end > now:
-                    skipped_grace_period += 1
-                    continue
-
-                # Schedule for 2 hours after appointment, or now if that time passed
-                send_at = no_show_time if no_show_time > now else now
-
-                message_id = smart_messaging.schedule_message(
-                    customer_phone,
-                    "no_show_followup",
-                    send_at,
-                    {
-                        "customer_name": customer_name,
-                        "appointment_date": apt_datetime.strftime("%Y-%m-%d"),
-                        "appointment_time": apt_datetime.strftime("%H:%M"),
-                        "branch_name": branch_name,
-                        "service_name": service_name,
-                        "phone_number": "01234567"
-                    },
-                    user_persistence.get_user_language(customer_phone),
-                    service_id=None,
-                    service_name=service_name,
-                    metadata={"source": "appointment_scheduler"},
-                )
-
-                if message_id:
-                    total_messages += 1
-                else:
-                    skipped_schedule_failed += 1
-
-            except Exception as e:
-                logger.debug(f"⚠️ Error processing available appointment: {e}")
-                continue
-
-        total_skipped = skipped_missing_data + skipped_parse_error + skipped_future + skipped_grace_period + skipped_window_passed + skipped_schedule_failed
-
-        print(f"\n{'='*80}")
-        print(f"✅ NO-SHOW MESSAGES POPULATION COMPLETE")
-        print(f"   📅 Date: {today_str} (current time: {now.strftime('%H:%M')})")
-        print(f"   - Appointments with status=Available: {len(all_available)}")
-        print(f"   - Messages scheduled: {total_messages}")
-        if total_skipped > 0:
-            print(f"   ─────────────────────────────────")
-            print(f"   📋 Skip reasons ({total_skipped} total):")
-            if skipped_future > 0:
-                print(f"      - Future appointment: {skipped_future}")
-            if skipped_grace_period > 0:
-                print(f"      - Grace period not over: {skipped_grace_period}")
-            if skipped_window_passed > 0:
-                print(f"      - 2hr window passed: {skipped_window_passed}")
-            if skipped_missing_data > 0:
-                print(f"      - Missing phone/date: {skipped_missing_data}")
-            if skipped_parse_error > 0:
-                print(f"      - Date parse error: {skipped_parse_error}")
-            if skipped_schedule_failed > 0:
-                print(f"      - Schedule failed: {skipped_schedule_failed}")
-        print(f"{'='*80}\n")
-
-        return {
-            "success": True,
-            "message": f"✅ Populated no-show follow-up messages",
-            "date": today_str,
-            "total_available": len(all_available),
-            "total_messages": total_messages,
-            "skipped": {
-                "future": skipped_future,
-                "grace_period": skipped_grace_period,
-                "window_passed": skipped_window_passed,
-                "missing_data": skipped_missing_data,
-                "parse_error": skipped_parse_error,
-                "schedule_failed": skipped_schedule_failed
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error in no-show population: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }
+    """Removed: no_show_followup template is no longer used."""
+    return {
+        "success": True,
+        "message": "no_show_followup removed from product",
+        "total_messages": 0,
+        "no_show_messages_count": 0,
+    }
 
 
 async def populate_missed_yesterday_messages():
@@ -752,7 +599,7 @@ async def populate_one_month_followups():
 
                 message_id = smart_messaging.schedule_message(
                     apt_data['phone'],
-                    "one_month_followup",
+                    "sent_17_days_after_last_session_new",
                     followup_time,
                     placeholders,
                     user_persistence.get_user_language(apt_data['phone']),
@@ -978,7 +825,7 @@ async def populate_missed_month_messages():
 
                 message_id = smart_messaging.schedule_message(
                     customer_phone,
-                    "missed_this_month",
+                    "sent_for_pause",
                     send_time,
                     placeholders,
                     user_persistence.get_user_language(customer_phone),

@@ -15,8 +15,12 @@ from utils.phone_utils import normalize_phone
 
 # Internal IDs that map to a different key under config/templates (and thus a different Meta `name`).
 _LEGACY_TEMPLATE_CONFIG_KEYS: Dict[str, str] = {
-    "twenty_day_followup": "one_month_followup",
-    "missed_paused_appointment": "missed_this_month",
+    "post_session_feedback": "thank_you_message_sent_after_session",
+    "twenty_day_followup": "sent_17_days_after_last_session_new",
+    "one_month_followup": "sent_17_days_after_last_session_new",
+    "missed_paused_appointment": "sent_for_pause",
+    "missed_this_month": "sent_for_pause",
+    "attended_yesterday": "session_feedback",
     # whatsapp_lead_no_booking has its own Meta template (0 body vars); see templates.whatsapp_lead_no_booking
 }
 
@@ -342,7 +346,7 @@ class MontyMobileTemplateService:
         param_values = self._build_body_component_parameters(template_lang, lookup)
 
         # WhatsApp Manager template name may differ from config key / templates[].name
-        # (e.g. Meta approves sent_17_days_after_last_session_new while JSON key is one_month_followup).
+        # (e.g. legacy internal ids map to JSON key sent_17_days_after_last_session_new).
         outbound_name = str(
             template.get("meta_template_name") or template.get("whatsapp_template_name") or template["name"]
         ).strip()

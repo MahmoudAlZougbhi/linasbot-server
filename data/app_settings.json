@@ -34,7 +34,7 @@
         "sendTime": "15:00",
         "timezone": "Asia/Beirut"
       },
-      "post_session_feedback": {
+      "thank_you_message_sent_after_session": {
         "enabled": true,
         "sendTime": "20:00",
         "timezone": "Asia/Beirut"
@@ -44,12 +44,12 @@
         "sendTime": "10:00",
         "timezone": "Asia/Beirut"
       },
-      "attended_yesterday": {
+      "session_feedback": {
         "enabled": true,
         "sendTime": "21:00",
         "timezone": "Asia/Beirut"
       },
-      "twenty_day_followup": {
+      "sent_17_days_after_last_session_new": {
         "enabled": true,
         "sendTime": "14:00",
         "timezone": "Asia/Beirut"

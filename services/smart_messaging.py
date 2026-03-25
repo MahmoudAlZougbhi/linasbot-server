@@ -114,9 +114,6 @@ class SmartMessagingService:
                 templates = {}
                 for template_id, template_data in templates_data.items():
                     canonical_id = normalize_template_id(template_id)
-                    if canonical_id in {"same_day_checkin", "no_show_followup"}:
-                        # Deprecated templates stay editable in file, but are not loaded into runtime.
-                        continue
 
                     current = templates.get(canonical_id, {})
                     normalized = {
@@ -190,45 +187,7 @@ Pour annuler: Répondez "Annuler"
 Au plaisir de vous voir! 💜"""
             },
             
-            "same_day_checkin": {
-                "ar": """🌟 يوم موعدك!
-
-صباح الخير {{customer_name}}!
-موعدك اليوم الساعة {{appointment_time}}.
-
-ن��ائح مهمة:
-✅ احضر قبل الموعد بـ 10 دقائق
-✅ تجنب الكافيين قبل الجلسة
-✅ ارتدي ملابس مريحة
-
-هل تحتاج لأي مساعدة؟ نحن هنا! 😊""",
-
-                "en": """🌟 It's Your Appointment Day!
-
-Good morning {{customer_name}}!
-Your appointment is today at {{appointment_time}}.
-
-Important tips:
-✅ Arrive 10 minutes early
-✅ Avoid caffeine before session
-✅ Wear comfortable clothes
-
-Need any help? We're here! 😊""",
-
-                "fr": """🌟 C'est le Jour de Votre Rendez-vous!
-
-Bonjour {{customer_name}}!
-Votre rendez-vous est aujourd'hui à {{appointment_time}}.
-
-Conseils importants:
-✅ Arrivez 10 minutes en avance
-✅ Évitez la caféine avant la séance
-✅ Portez des vêtements confortables
-
-Besoin d'aide? Nous sommes là! 😊"""
-            },
-            
-            "post_session_feedback": {
+            "thank_you_message_sent_after_session": {
                 "ar": """💜 شكراً لزيارتك!
 
 {{customer_name}} العزيز/ة،
@@ -274,49 +233,8 @@ Comment était votre expérience?
 Envoyez le nombre d'étoiles!
 Vos commentaires comptent 🙏"""
             },
-            
-            "no_show_followup": {
-                "ar": """😔 افتقدناك اليوم
 
-{{customer_name}} العزيز/ة،
-لاحظنا أنك لم تحضر موعدك اليوم.
-
-نتمنى أن يكون كل شيء على ما يرام!
-
-لإعادة جدولة موعدك:
-📱 اتصل: {{phone_number}}
-💬 أو أرسل "موعد جديد"
-
-دمت بخير 🌸""",
-
-                "en": """😔 We Missed You Today
-
-Dear {{customer_name}},
-We noticed you missed your appointment today.
-
-We hope everything is okay!
-
-To reschedule:
-📱 Call: {{phone_number}}
-💬 Or reply "New appointment"
-
-Take care 🌸""",
-
-                "fr": """😔 Vous Nous Avez Manqué
-
-Cher(e) {{customer_name}},
-Nous avons remarqué votre absence aujourd'hui.
-
-Nous espérons que tout va bien!
-
-Pour reprogrammer:
-📱 Appelez: {{phone_number}}
-💬 Ou répondez "Nouveau rendez-vous"
-
-Prenez soin de vous 🌸"""
-            },
-            
-            "one_month_followup": {
+            "sent_17_days_after_last_session_new": {
                 "ar": """🌟 كيف حالك؟
 
 {{customer_name}} العزيز/ة،
@@ -404,107 +322,68 @@ Souhaitez-vous reprogrammer?
 Nous sommes toujours là pour vous 💜"""
             },
             
-            "missed_this_month": {
-                "ar": """🌺 نفتقدك في مركز لينا ليزر
+            "sent_for_pause": {
+                "ar": """🌸 مرحباً {{customer_name}}
 
-{{customer_name}} العزيز/ة،
-لم نراك هذا الشهر ونفتقد وجودك معنا!
+نذكرك بموعدك المؤجل في مركز لينا ليزر:
 
-نود أن نطمئن عليك ونذكرك:
-✨ جلساتك المنتظمة مهمة للحصول على أفضل النتائج
-✨ لدينا مواعيد متاحة هذا الأسبوع
-✨ فريقنا جاهز لخدمتك
+💆 الخدمة: {{service_name}}
+📅 التاريخ: {{appointment_date}}
+⏰ الوقت: {{appointment_time}}
+📍 الفرع: {{branch_name}}
 
-للحجز: أرسل "حجز"
-أو اتصل: {{phone_number}}
+للحجز أو الاستفسار:
+📱 {{phone_number}}
+💬 يمكنك الرد على هذه الرسالة في أي وقت.
 
-نتطلع لرؤيتك قريباً 💜""",
+نتطلع لخدمتك 💜""",
 
-                "en": """🌺 We Miss You at Lina's Laser
+                "en": """🌸 Hi {{customer_name}}
 
-Dear {{customer_name}},
-We haven't seen you this month and we miss you!
+We're following up on your paused appointment at Lina's Laser Center:
 
-We'd like to remind you:
-✨ Regular sessions are important for best results
-✨ We have appointments available this week
-✨ Our team is ready to serve you
+💆 Service: {{service_name}}
+📅 Date: {{appointment_date}}
+⏰ Time: {{appointment_time}}
+📍 Branch: {{branch_name}}
 
-To book: Reply "Book"
-Or call: {{phone_number}}
+To book or ask anything:
+📱 {{phone_number}}
+💬 You can reply to this message anytime.
 
-Looking forward to seeing you soon 💜""",
+We're here for you 💜""",
 
-                "fr": """🌺 Vous Nous Manquez Chez Lina's Laser
+                "fr": """🌸 Bonjour {{customer_name}}
 
-Cher(e) {{customer_name}},
-Nous ne vous avons pas vu ce mois-ci!
+Suite à votre rendez-vous en pause au Centre Laser Lina:
 
-Nous aimerions vous rappeler:
-✨ Les séances régulières sont importantes
-✨ Nous avons des disponibilités cette semaine
-✨ Notre équipe est prête à vous servir
+💆 Service: {{service_name}}
+📅 Date: {{appointment_date}}
+⏰ Heure: {{appointment_time}}
+📍 Branche: {{branch_name}}
 
-Pour réserver: Répondez "Réserver"
-Ou appelez: {{phone_number}}
+Pour réserver ou une question:
+📱 {{phone_number}}
+💬 Vous pouvez répondre à tout moment.
 
-Au plaisir de vous revoir bientôt 💜"""
+Au plaisir de vous accueillir 💜"""
             },
             
-            "attended_yesterday": {
-                "ar": """💜 شكراً لزيارتك!
+            "session_feedback": {
+                "ar": """مرحباً {{customer_name}} 🌸
+شكراً لزيارتك لنا.
+يسعدنا جداً أن نعرف رأيك بجلسك الأخيرة، لأن تقييمك يساعدنا على تحسين تجربتك دائماً.
+اضغطي على الزر بالأسفل لتقييم تجربتك معنا.""",
 
-{{customer_name}} العزيز/ة،
-شكراً لحضورك بالأمس! 🌟
+                "en": """Hi {{customer_name}} 🌸
+Thank you for visiting us.
+We'd love to hear about your last session—your feedback helps us keep improving your experience.
+Tap the button below to rate your visit with us.""",
 
-نأمل أن تكون راضياً عن الخدمة.
-
-نصائح مهمة بعد الجلسة:
-✅ تجنب التعرض للشمس لمدة 48 ساعة
-✅ استخدم واقي الشمس SPF 50+
-✅ رطب البشرة جيداً
-✅ تجنب الماء الساخن لمدة 24 ساعة
-
-موعدك القادم: {{next_appointment_date}}
-
-أي استفسار؟ نحن هنا! 💬
-{{phone_number}}""",
-
-                "en": """💜 Thank You for Your Visit!
-
-Dear {{customer_name}},
-Thank you for coming yesterday! 🌟
-
-We hope you're satisfied with the service.
-
-Important post-session tips:
-✅ Avoid sun exposure for 48 hours
-✅ Use SPF 50+ sunscreen
-✅ Keep skin well moisturized
-✅ Avoid hot water for 24 hours
-
-Your next appointment: {{next_appointment_date}}
-
-Any questions? We're here! 💬
-{{phone_number}}""",
-
-                "fr": """💜 Merci de Votre Visite!
-
-Cher(e) {{customer_name}},
-Merci d'être venu(e) hier! 🌟
-
-Nous espérons que vous êtes satisfait(e).
-
-Conseils importants après la séance:
-✅ Évitez le soleil pendant 48 heures
-✅ Utilisez SPF 50+ crème solaire
-✅ Hydratez bien la peau
-✅ Évitez l'eau chaude pendant 24 heures
-
-Votre prochain rendez-vous: {{next_appointment_date}}
-
-Des questions? Nous sommes là! 💬
-{{phone_number}}"""
+                "fr": """Bonjour {{customer_name}} 🌸
+Merci pour votre visite.
+Nous serions ravis d'avoir votre avis sur votre dernière séance — votre retour nous aide à améliorer votre expérience.
+Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             }
         }
 
@@ -517,8 +396,6 @@ Des questions? Nous sommes là! 💬
             return canonical
 
         legacy_fallbacks = {
-            "twenty_day_followup": "one_month_followup",
-            "missed_paused_appointment": "missed_this_month",
             "whatsapp_lead_no_booking": "missed_yesterday",
         }
         fallback = legacy_fallbacks.get(canonical)
@@ -863,7 +740,7 @@ Des questions? Nous sommes là! 💬
         except Exception as log_exc:
             print(f"⚠️ Failed to write message log for {message_id}: {log_exc}")
 
-        if canonical_type == "post_session_feedback":
+        if canonical_type == "thank_you_message_sent_after_session":
             try:
                 from services.post_session_feedback_rating_service import (
                     mark_awaiting_post_session_feedback_after_send,
@@ -876,7 +753,7 @@ Des questions? Nous sommes là! 💬
                     smart_message_id=message_id,
                 )
             except Exception as psf_e:
-                print(f"⚠️ post_session_feedback awaiting flag: {psf_e}")
+                print(f"⚠️ thank_you_message_sent_after_session awaiting flag: {psf_e}")
 
         self._log_reminder_sent_analytics(message_id, msg_data)
         self._persist_sent_messages()
@@ -952,14 +829,13 @@ Des questions? Nous sommes là! 💬
         else:
             print(f"   ⏭️ reminder_24h SKIPPED (time {reminder_24h_time} is in the past)")
 
-        # NOTE: same_day_checkin/no_show_followup are deprecated.
-        # NOTE: post_session_feedback is handled by fixed-time daily jobs.
+        # NOTE: thank_you_message_sent_after_session is handled by fixed-time daily jobs.
 
-        # Schedule One Month Follow Up (twenty_day_followup → one_month_followup; Meta: sent_17_days_after_last_session_new)
+        # 17-day follow-up (Meta template sent_17_days_after_last_session_new)
         followup_time = appointment_date + timedelta(days=TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS)
         result = self.schedule_message(
             customer_phone,
-            "twenty_day_followup",
+            "sent_17_days_after_last_session_new",
             followup_time,
             placeholders,
             language,
@@ -969,39 +845,17 @@ Des questions? Nous sommes là! 💬
         )
         if result:
             messages_scheduled += 1
-            print(f"   ✅ twenty_day_followup scheduled for {followup_time}")
+            print(f"   ✅ sent_17_days_after_last_session_new scheduled for {followup_time}")
         else:
-            print(f"   ❌ twenty_day_followup FAILED (returned None)")
+            print(f"   ❌ sent_17_days_after_last_session_new FAILED (returned None)")
 
-        # NOTE: attended_yesterday thank-you is scheduled by daily_template_dispatcher
+        # NOTE: session_feedback (next day) is scheduled by daily_template_dispatcher
         # (yesterday + Done), not per-appointment here.
 
         print(f"   📊 Total scheduled: {messages_scheduled}\n")
 
         return messages_scheduled
-    
-    def handle_no_show(self, customer_data: Dict):
-        """Handle no-show scenario"""
-        
-        customer_phone = customer_data.get("phone")
-        customer_name = customer_data.get("name", "عميلنا العزيز")
-        language = customer_data.get("language", "ar")
-        
-        placeholders = {
-            "customer_name": customer_name,
-            "phone_number": "01234567"  # Support phone
-        }
-        
-        # Send no-show follow-up immediately
-        self.schedule_message(
-            customer_phone,
-            "no_show_followup",
-            datetime.now(),
-            placeholders,
-            language,
-            metadata={"source": "appointment_scheduler"},
-        )
-    
+
     def get_scheduled_messages_summary(self) -> Dict:
         """Get summary of scheduled messages"""
         
@@ -1117,14 +971,14 @@ Des questions? Nous sommes là! 💬
 
         Rules:
         - Remove all messages where send_at date < today for MOST categories
-        - KEEP all twenty_day_followup and missed_paused_appointment messages (they show
+        - KEEP all sent_17_days_after_last_session_new and sent_for_pause messages (they show
           cumulative data for the entire month)
         - KEEP messages sent today (so user can see what was sent)
         - Persist sent messages before clearing so history is not lost
         """
         preserved_types = {
-            "twenty_day_followup",
-            "missed_paused_appointment",
+            "sent_17_days_after_last_session_new",
+            "sent_for_pause",
             "whatsapp_lead_no_booking",
         }
         today = datetime.now().date()
@@ -1137,7 +991,7 @@ Des questions? Nous sommes là! 💬
         new_scheduled = {}
 
         for message_id, msg_data in self.scheduled_messages.items():
-            msg_type = msg_data.get("message_type", "")
+            msg_type = normalize_template_id(msg_data.get("message_type", ""))
 
             # Always keep long-horizon follow-up and campaign messages
             if msg_type in preserved_types:
@@ -1236,12 +1090,12 @@ async def deliver_scheduled_smart_whatsapp(
 # Mapping of message types to friendly names
 message_type_names = {
     "reminder_24h": "24-Hour Appointment Reminder",
-    "post_session_feedback": "Post Session Feedback",
-    "twenty_day_followup": "One Month Follow Up",
+    "thank_you_message_sent_after_session": "thank_you_message_sent_after_session",
+    "sent_17_days_after_last_session_new": "sent_17_days_after_last_session_new",
     "missed_yesterday": "Missed Yesterday Follow-up",
-    "missed_paused_appointment": "Missed This Month",
+    "sent_for_pause": "sent_for_pause",
     "whatsapp_lead_no_booking": "WhatsApp Lead (No CRM) Campaign",
-    "attended_yesterday": "Attended Yesterday (thank you, next day)",
+    "session_feedback": "session_feedback",
 }
 
 
@@ -1255,7 +1109,7 @@ async def get_sent_smart_messages_from_firestore(
     Query Firestore for sent smart messages by scanning conversations.
 
     Args:
-        message_type: Filter by message type (e.g., "twenty_day_followup")
+        message_type: Filter by message type (e.g., "sent_17_days_after_last_session_new")
         start_date: Filter messages sent after this date
         end_date: Filter messages sent before this date
         limit: Maximum number of messages to return

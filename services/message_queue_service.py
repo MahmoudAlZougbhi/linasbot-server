@@ -78,13 +78,11 @@ class MessageQueueService:
         if not self.template_status:
             self.template_status = {
                 'reminder_24h': {'active': True, 'updated_at': datetime.now().isoformat()},
-                'same_day_checkin': {'active': True, 'updated_at': datetime.now().isoformat()},
-                'post_session_feedback': {'active': True, 'updated_at': datetime.now().isoformat()},
-                'no_show_followup': {'active': True, 'updated_at': datetime.now().isoformat()},
-                'one_month_followup': {'active': True, 'updated_at': datetime.now().isoformat()},
+                'thank_you_message_sent_after_session': {'active': True, 'updated_at': datetime.now().isoformat()},
+                'sent_17_days_after_last_session_new': {'active': True, 'updated_at': datetime.now().isoformat()},
                 'missed_yesterday': {'active': True, 'updated_at': datetime.now().isoformat()},
-                'missed_this_month': {'active': True, 'updated_at': datetime.now().isoformat()},
-                'attended_yesterday': {'active': True, 'updated_at': datetime.now().isoformat()}
+                'sent_for_pause': {'active': True, 'updated_at': datetime.now().isoformat()},
+                'session_feedback': {'active': True, 'updated_at': datetime.now().isoformat()}
             }
             self._save_json(self.template_status_file, self.template_status)
         

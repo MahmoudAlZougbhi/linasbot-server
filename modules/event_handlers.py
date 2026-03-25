@@ -16,7 +16,6 @@ from services.api_integrations import send_appointment_reminders, get_missed_app
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from services.appointment_scheduler import (
     populate_scheduled_messages_from_appointments,
-    populate_no_show_messages_from_missed_appointments,
     populate_one_month_followups,
     populate_missed_month_messages,
     populate_missed_yesterday_messages
@@ -53,7 +52,6 @@ async def startup_event():
         from services.smart_messaging import smart_messaging, deliver_scheduled_smart_whatsapp
         from services.appointment_scheduler import (
             populate_scheduled_messages_from_appointments,
-            populate_no_show_messages_from_missed_appointments,
             populate_one_month_followups,
             populate_missed_month_messages,
             populate_missed_yesterday_messages
@@ -92,29 +90,6 @@ async def startup_event():
                 import traceback
                 traceback.print_exc()
         
-        # Job 0A2: Populate NO-SHOW follow-up messages from missed appointments endpoint
-        async def populate_no_show_messages_job():
-            """Fetch missed appointments from backend and populate no-show messages"""
-            try:
-                print("🚨 POPULATING NO-SHOW FOLLOW-UP MESSAGES FROM MISSED APPOINTMENTS")
-                print("=" * 80)
-                result = await populate_no_show_messages_from_missed_appointments()
-                if result.get('success'):
-                    print(f"✅ {result.get('message')}")
-                    print(f"   📊 Statistics:")
-                    print(f"   - Missed appointments found: {result.get('total_missed', 0)}")
-                    print(f"   - Processed: {result.get('processed_missed', 0)}")
-                    print(f"   - Failed: {result.get('failed_missed', 0)}")
-                    print(f"   - No-show messages created: {result.get('total_messages', 0)}")
-                    print(f"   - Total in dict: {result.get('scheduled_messages_count', 0)}")
-                else:
-                    print(f"⚠️ Failed to populate no-show messages: {result.get('message')}")
-                print("=" * 80)
-            except Exception as e:
-                print(f"❌ Error populating no-show messages: {e}")
-                import traceback
-                traceback.print_exc()
-
         # Job 0A3: Populate 1-MONTH FOLLOW-UP messages (from last month's appointments)
         async def populate_one_month_job():
             """Fetch last month's appointments and populate 1-month follow-up messages"""
@@ -569,7 +544,7 @@ async def startup_event():
                             }
                             
                             message_content = smart_messaging.get_message_content(
-                                'missed_this_month',
+                                'sent_for_pause',
                                 language,
                                 placeholders
                             )
@@ -579,7 +554,7 @@ async def startup_event():
                                 result = await deliver_scheduled_smart_whatsapp(
                                     adapter,
                                     phone=customer_phone,
-                                    template_id="missed_this_month",
+                                    template_id="sent_for_pause",
                                     language=language,
                                     placeholders=placeholders,
                                     rendered_text=message_content,
@@ -589,7 +564,7 @@ async def startup_event():
                                 elif result.get('success'):
                                     print(f"✅ Sent missed this month message to {customer_phone}")
 
-                                    smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_this_month")
+                                    smart_messaging.mark_messages_sent_by_phone(customer_phone, "sent_for_pause")
 
                                     await save_conversation_message_to_firestore(
                                         user_id=customer_phone,
@@ -600,7 +575,7 @@ async def startup_event():
                                         phone_number=customer_phone,
                                         metadata={
                                             "source": "smart_message",
-                                            "type": "missed_this_month"
+                                            "type": "sent_for_pause"
                                         }
                                     )
                                     print(f"💾 Saved missed this month message to conversation history")
@@ -609,7 +584,7 @@ async def startup_event():
                                         "scheduled_message_sent",
                                         customer_phone,
                                         "N/A",
-                                        {"type": "missed_this_month", "customer_name": customer_name}
+                                        {"type": "sent_for_pause", "customer_name": customer_name}
                                     )
                                 else:
                                     print(

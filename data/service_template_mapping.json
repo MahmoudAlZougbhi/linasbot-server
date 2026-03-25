@@ -3,13 +3,11 @@
   "last_updated": "2026-01-16T18:01:18.484209",
   "default_mapping": {
     "reminder_24h": true,
-    "same_day_checkin": true,
-    "post_session_feedback": true,
-    "no_show_followup": true,
-    "one_month_followup": true,
+    "thank_you_message_sent_after_session": true,
+    "sent_17_days_after_last_session_new": true,
     "missed_yesterday": true,
-    "missed_this_month": true,
-    "attended_yesterday": true
+    "sent_for_pause": true,
+    "session_feedback": true
   },
   "service_mappings": {
     "1": {
@@ -17,13 +15,11 @@
       "service_name": "Laser Hair Removal Men",
       "templates": {
         "reminder_24h": true,
-        "same_day_checkin": true,
-        "post_session_feedback": true,
-        "no_show_followup": true,
-        "one_month_followup": true,
+        "thank_you_message_sent_after_session": true,
+        "sent_17_days_after_last_session_new": true,
         "missed_yesterday": true,
-        "missed_this_month": true,
-        "attended_yesterday": true
+        "sent_for_pause": true,
+        "session_feedback": true
       }
     },
     "2": {
@@ -31,13 +27,11 @@
       "service_name": "CO2 Laser",
       "templates": {
         "reminder_24h": true,
-        "same_day_checkin": true,
-        "post_session_feedback": true,
-        "no_show_followup": true,
-        "one_month_followup": true,
+        "thank_you_message_sent_after_session": true,
+        "sent_17_days_after_last_session_new": true,
         "missed_yesterday": true,
-        "missed_this_month": true,
-        "attended_yesterday": true
+        "sent_for_pause": true,
+        "session_feedback": true
       }
     },
     "3": {
@@ -45,13 +39,11 @@
       "service_name": "Laser Hair Removal Women",
       "templates": {
         "reminder_24h": true,
-        "same_day_checkin": true,
-        "post_session_feedback": true,
-        "no_show_followup": true,
-        "one_month_followup": true,
+        "thank_you_message_sent_after_session": true,
+        "sent_17_days_after_last_session_new": true,
         "missed_yesterday": true,
-        "missed_this_month": true,
-        "attended_yesterday": true
+        "sent_for_pause": true,
+        "session_feedback": true
       }
     },
     "4": {
@@ -59,13 +51,11 @@
       "service_name": "Laser Tattoo Removal",
       "templates": {
         "reminder_24h": true,
-        "same_day_checkin": true,
-        "post_session_feedback": true,
-        "no_show_followup": true,
-        "one_month_followup": true,
+        "thank_you_message_sent_after_session": true,
+        "sent_17_days_after_last_session_new": true,
         "missed_yesterday": true,
-        "missed_this_month": true,
-        "attended_yesterday": true
+        "sent_for_pause": true,
+        "session_feedback": true
       }
     },
     "5": {
@@ -73,13 +63,11 @@
       "service_name": "Whitinig",
       "templates": {
         "reminder_24h": true,
-        "same_day_checkin": true,
-        "post_session_feedback": true,
-        "no_show_followup": true,
-        "one_month_followup": true,
+        "thank_you_message_sent_after_session": true,
+        "sent_17_days_after_last_session_new": true,
         "missed_yesterday": true,
-        "missed_this_month": true,
-        "attended_yesterday": true
+        "sent_for_pause": true,
+        "session_feedback": true
       }
     }
   }
