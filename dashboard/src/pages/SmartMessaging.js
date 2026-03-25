@@ -374,9 +374,11 @@ const SmartMessaging = () => {
             : result.language_source === "saved"
               ? "saved for this number"
               : "default (no saved language)";
-        toast.success(
-          `Sent — user language: ${result.user_language} (${src}) → WhatsApp template language: ${result.template_language}`
-        );
+        let successMsg = `Sent — user language: ${result.user_language} (${src}) → WhatsApp template language: ${result.template_language}`;
+        if (result.test_template_note) {
+          successMsg += `\n\n${result.test_template_note}`;
+        }
+        toast.success(successMsg, { duration: result.test_template_note ? 10000 : 4000 });
       } else {
         const parts = [
           result.error || "Failed to send test",

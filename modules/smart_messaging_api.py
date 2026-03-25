@@ -407,15 +407,19 @@ async def send_test_template_message(request_data: Dict[str, Any]):
 
         # Unique body values per request so WhatsApp/Monty do not treat back-to-back
         # template tests as duplicate utility messages (same user + same params).
+        # Vary *every* common slot — not only customer_name/time. Templates like
+        # no_show_followup (name + phone) or attended_yesterday (name + date + phone)
+        # were still identical on the non-name fields and only the first test delivered.
         _test_nonce = uuid.uuid4().hex[:8]
         all_test_values = {
             "customer_name": f"Test ({_test_nonce})",
-            "appointment_date": "2025-12-25",
+            "appointment_date": f"2025-12-25 · {_test_nonce}",
             "appointment_time": f"02:00 PM · {_test_nonce}",
-            "branch_name": "Lina's Laser Center",
-            "service_name": "Laser Hair Removal",
-            "phone_number": "+961 1 234 567",
-            "next_appointment_date": "2026-01-15",
+            "branch_name": f"Lina's Laser · {_test_nonce}",
+            "service_name": f"Laser session · {_test_nonce}",
+            # Body text slot (not E.164 validation); keeps support-line style readable.
+            "phone_number": f"+961 1 234 567 · t{_test_nonce}",
+            "next_appointment_date": f"2026-01-15 · {_test_nonce}",
         }
 
         test_parameters = {
@@ -472,7 +476,14 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 "user_language": user_language,
                 "template_language": language,
                 "language_source": language_source,
+                "test_send_nonce": _test_nonce,
             }
+            if n_body == 0:
+                result["test_template_note"] = (
+                    "This template has no body variables in Meta — every test send is identical. "
+                    "WhatsApp often delivers only one per recipient per window; use another number "
+                    "or wait before retesting."
+                )
 
         if isinstance(result, dict) and result.get("success"):
             mid = result.get("message_id")
