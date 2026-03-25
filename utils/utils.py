@@ -971,6 +971,12 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     doc_ref,
                     update_payload,
                 )
+                if (
+                    is_smart_source
+                    and role == "ai"
+                    and update_payload.get("human_takeover_active") is False
+                ):
+                    _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 _invalidate_live_chat_cache()
                 await _ensure_live_chat_index_after_save(
                     canonical_user_id, conversation_id, doc_data, update_payload
@@ -1171,6 +1177,12 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     doc_ref,
                     update_payload,
                 )
+                if (
+                    is_smart_source
+                    and role == "ai"
+                    and update_payload.get("human_takeover_active") is False
+                ):
+                    _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = resolved_conversation_id

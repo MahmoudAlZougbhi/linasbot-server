@@ -418,95 +418,123 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
             print(f"⚠️ Failed to update sentiment in Firebase: {e}")
 
     # Check Firestore for human takeover status (use canonical path + alternate fallback)
-    if db and user_data.get('current_conversation_id'):
-        try:
-            app_id_for_firestore = "linas-ai-bot-backend"
-            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-            users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-            conv_doc_ref, doc_snap, _ = await _resolve_conversation_doc_ref(
-                users_coll,
-                user_data['current_conversation_id'],
-                canonical_user_id,
-            )
-            if doc_snap.exists:
-                conv_data = doc_snap.to_dict()
-                from utils.utils import sync_post_release_cooldown_from_conv_payload
-                sync_post_release_cooldown_from_conv_payload(user_data, conv_data)
-                was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
-                new_takeover = conv_data.get('human_takeover_active', False)
-                if new_takeover:
-                    config.user_in_human_takeover_mode[user_id] = True
-                else:
-                    from utils.utils import _clear_takeover_flags_for_user
-                    _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
-                if was_in_takeover and not new_takeover:
-                    user_data['just_returned_from_human_takeover'] = True
-                    from utils.utils import set_post_takeover_escalation_cooldown, is_post_takeover_escalation_cooldown
-                    if not is_post_takeover_escalation_cooldown(user_data):
-                        set_post_takeover_escalation_cooldown(user_data)
-                    print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")
-                if config.user_in_human_takeover_mode[user_id]:
-                    operator_id = conv_data.get('operator_id')
-                    user_lang = user_data.get('user_preferred_lang', 'ar')
+    if db:
+        conv_for_takeover_check = user_data.get("current_conversation_id")
+        if not conv_for_takeover_check:
+            try:
+                app_id_for_firestore = "linas-ai-bot-backend"
+                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+                users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+                from utils.utils import _resolve_latest_conversation_id
 
-                    if operator_id:
-                        # User has an operator — never stay silent.
-                        # Send assignment notice once, then send a short reminder on each user turn.
-                        print(f"[handle_message] INFO: User {user_id} has operator. AI will not respond.")
-                        if not user_data.get('notified_human_takeover'):
-                            operator_name = conv_data.get('operator_name')
-                            if not operator_name:
-                                if operator_id and '@' in str(operator_id):
-                                    operator_name = str(operator_id).split('@')[0].replace('.', ' ').replace('_', ' ').title()
-                                else:
-                                    operator_name = operator_id
-                            handover_messages = {
-                                "ar": f"📞 تم تحويل المحادثة إلى {operator_name}. سيقوم بالرد عليك قريباً.",
-                                "en": f"📞 The conversation has been transferred to {operator_name}. They will respond to you shortly.",
-                                "fr": f"📞 La conversation a été transférée à {operator_name}. Il vous répondra sous peu."
-                            }
-                            handover_msg = handover_messages.get(user_lang, handover_messages['ar'])
-                            await send_message_func(user_id, handover_msg)
-                            await save_conversation_message_to_firestore(
-                                user_id, "ai", handover_msg, current_conversation_id,
-                                user_name, user_data.get('phone_number'),
-                                metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_notice"},
-                            )
-                            user_data['notified_human_takeover'] = True
-                        else:
-                            operator_name = conv_data.get('operator_name')
-                            if not operator_name:
-                                if operator_id and '@' in str(operator_id):
-                                    operator_name = str(operator_id).split('@')[0].replace('.', ' ').replace('_', ' ').title()
-                                else:
-                                    operator_name = operator_id
-                            assigned_followup_messages = {
-                                "ar": f"📞 فريقنا متابع محادثتك مع {operator_name}. شوي وبيرد عليك، شكراً لصبرك 🙏",
-                                "en": f"📞 Our team is following up with {operator_name}. They will reply shortly, thanks for your patience 🙏",
-                                "fr": f"📞 Notre équipe suit votre conversation avec {operator_name}. Réponse sous peu, merci pour votre patience 🙏"
-                            }
-                            followup_msg = assigned_followup_messages.get(user_lang, assigned_followup_messages['ar'])
-                            await send_message_func(user_id, followup_msg)
-                            await save_conversation_message_to_firestore(
-                                user_id, "ai", followup_msg, current_conversation_id,
-                                user_name, user_data.get('phone_number'),
-                                metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_followup"},
-                            )
+                user_doc_ref = users_coll.document(canonical_user_id)
+                conversations_collection_for_user = user_doc_ref.collection(
+                    config.FIRESTORE_CONVERSATIONS_COLLECTION
+                )
+                conv_for_takeover_check = await _resolve_latest_conversation_id(
+                    conversations_collection_for_user
+                )
+                if conv_for_takeover_check:
+                    print(
+                        f"[handle_message] INFO: Takeover sync using latest conversation "
+                        f"{conv_for_takeover_check} (no current_conversation_id)"
+                    )
+            except Exception as e:
+                print(f"⚠️ Takeover sync: could not resolve conversation: {e}")
+                conv_for_takeover_check = None
+
+        if conv_for_takeover_check:
+            try:
+                app_id_for_firestore = "linas-ai-bot-backend"
+                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+                users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
+                conv_doc_ref, doc_snap, _ = await _resolve_conversation_doc_ref(
+                    users_coll,
+                    conv_for_takeover_check,
+                    canonical_user_id,
+                )
+                if doc_snap.exists:
+                    conv_data = doc_snap.to_dict()
+                    from utils.utils import sync_post_release_cooldown_from_conv_payload
+                    sync_post_release_cooldown_from_conv_payload(user_data, conv_data)
+                    was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
+                    new_takeover = conv_data.get('human_takeover_active', False)
+                    if new_takeover:
+                        config.user_in_human_takeover_mode[user_id] = True
                     else:
-                        # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
-                        print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply.")
-                        waiting_msg = get_dynamic_message("waiting_queue_message", user_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
-                        await send_message_func(user_id, waiting_msg)
-                        await save_conversation_message_to_firestore(
-                            user_id, "ai", waiting_msg, current_conversation_id,
-                            user_name, user_data.get('phone_number'),
-                            metadata={"handled_by": "ai", "source": "smart_message", "event": "waiting_queue_autoreply"},
-                        )
-                    return
-            else:
-                print(f"WARNING: Conversation {user_data['current_conversation_id']} not found in Firestore during takeover check.")
-        except Exception as e:
-            print(f"❌ ERROR checking human takeover status from Firestore for user {user_id}: {e}")
+                        from utils.utils import _clear_takeover_flags_for_user
+                        _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
+                    if was_in_takeover and not new_takeover:
+                        user_data['just_returned_from_human_takeover'] = True
+                        from utils.utils import set_post_takeover_escalation_cooldown, is_post_takeover_escalation_cooldown
+                        if not is_post_takeover_escalation_cooldown(user_data):
+                            set_post_takeover_escalation_cooldown(user_data)
+                        print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")
+                    if config.user_in_human_takeover_mode[user_id]:
+                        operator_id = conv_data.get('operator_id')
+                        user_lang = user_data.get('user_preferred_lang', 'ar')
+                        conv_id_for_save = user_data.get("current_conversation_id") or conv_for_takeover_check
+
+                        if operator_id:
+                            # User has an operator — never stay silent.
+                            # Send assignment notice once, then send a short reminder on each user turn.
+                            print(f"[handle_message] INFO: User {user_id} has operator. AI will not respond.")
+                            if not user_data.get('notified_human_takeover'):
+                                operator_name = conv_data.get('operator_name')
+                                if not operator_name:
+                                    if operator_id and '@' in str(operator_id):
+                                        operator_name = str(operator_id).split('@')[0].replace('.', ' ').replace('_', ' ').title()
+                                    else:
+                                        operator_name = operator_id
+                                handover_messages = {
+                                    "ar": f"📞 تم تحويل المحادثة إلى {operator_name}. سيقوم بالرد عليك قريباً.",
+                                    "en": f"📞 The conversation has been transferred to {operator_name}. They will respond to you shortly.",
+                                    "fr": f"📞 La conversation a été transférée à {operator_name}. Il vous répondra sous peu."
+                                }
+                                handover_msg = handover_messages.get(user_lang, handover_messages['ar'])
+                                await send_message_func(user_id, handover_msg)
+                                await save_conversation_message_to_firestore(
+                                    user_id, "ai", handover_msg, conv_id_for_save,
+                                    user_name, user_data.get('phone_number'),
+                                    metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_notice"},
+                                )
+                                user_data['notified_human_takeover'] = True
+                            else:
+                                operator_name = conv_data.get('operator_name')
+                                if not operator_name:
+                                    if operator_id and '@' in str(operator_id):
+                                        operator_name = str(operator_id).split('@')[0].replace('.', ' ').replace('_', ' ').title()
+                                    else:
+                                        operator_name = operator_id
+                                assigned_followup_messages = {
+                                    "ar": f"📞 فريقنا متابع محادثتك مع {operator_name}. شوي وبيرد عليك، شكراً لصبرك 🙏",
+                                    "en": f"📞 Our team is following up with {operator_name}. They will reply shortly, thanks for your patience 🙏",
+                                    "fr": f"📞 Notre équipe suit votre conversation avec {operator_name}. Réponse sous peu, merci pour votre patience 🙏"
+                                }
+                                followup_msg = assigned_followup_messages.get(user_lang, assigned_followup_messages['ar'])
+                                await send_message_func(user_id, followup_msg)
+                                await save_conversation_message_to_firestore(
+                                    user_id, "ai", followup_msg, conv_id_for_save,
+                                    user_name, user_data.get('phone_number'),
+                                    metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_followup"},
+                                )
+                        else:
+                            # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
+                            print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply.")
+                            waiting_msg = get_dynamic_message("waiting_queue_message", user_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+                            await send_message_func(user_id, waiting_msg)
+                            await save_conversation_message_to_firestore(
+                                user_id, "ai", waiting_msg, conv_id_for_save,
+                                user_name, user_data.get('phone_number'),
+                                metadata={"handled_by": "ai", "source": "smart_message", "event": "waiting_queue_autoreply"},
+                            )
+                        return
+                else:
+                    print(
+                        f"WARNING: Conversation {conv_for_takeover_check} not found in Firestore during takeover check."
+                    )
+            except Exception as e:
+                print(f"❌ ERROR checking human takeover status from Firestore for user {user_id}: {e}")
 
     ai_primary_mode = bool(getattr(config, "AI_PRIMARY_ORCHESTRATION", True))
 

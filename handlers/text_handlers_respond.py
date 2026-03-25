@@ -850,7 +850,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         takeover_still_active = True
         try:
             db = get_firestore_db()
-            if db and current_conversation_id:
+            if db:
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 users_coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("users")
                 candidate_user_ids = []
@@ -864,30 +864,58 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         if alt_candidate not in candidate_user_ids:
                             candidate_user_ids.append(alt_candidate)
 
-                conv_data = None
-                for candidate_user_id in candidate_user_ids:
-                    candidate_ref = users_coll.document(candidate_user_id).collection(
-                        config.FIRESTORE_CONVERSATIONS_COLLECTION
-                    ).document(current_conversation_id)
-                    candidate_snap = await asyncio.to_thread(candidate_ref.get)
-                    if candidate_snap.exists:
-                        conv_data = candidate_snap.to_dict() or {}
-                        break
+                conv_id_to_check = current_conversation_id
+                if not conv_id_to_check:
+                    from utils.utils import _resolve_latest_conversation_id
 
-                if conv_data and conv_data.get("human_takeover_active", False):
-                    # During takeover (assigned or waiting), never leave the user without a reply.
+                    user_doc_ref = users_coll.document(canonical_user_id)
+                    conversations_collection_for_user = user_doc_ref.collection(
+                        config.FIRESTORE_CONVERSATIONS_COLLECTION
+                    )
+                    conv_id_to_check = await _resolve_latest_conversation_id(conversations_collection_for_user)
+                    if conv_id_to_check:
+                        print(
+                            f"[_process_and_respond] INFO: Using latest conversation {conv_id_to_check} "
+                            f"for takeover sync (no current_conversation_id)"
+                        )
+
+                conv_data = None
+                if conv_id_to_check:
+                    for candidate_user_id in candidate_user_ids:
+                        candidate_ref = users_coll.document(candidate_user_id).collection(
+                            config.FIRESTORE_CONVERSATIONS_COLLECTION
+                        ).document(conv_id_to_check)
+                        candidate_snap = await asyncio.to_thread(candidate_ref.get)
+                        if candidate_snap.exists:
+                            conv_data = candidate_snap.to_dict() or {}
+                            break
+
+                if conv_data is None:
+                    takeover_still_active = False
+                    should_send_waiting = False
+                    from utils.utils import _clear_takeover_flags_for_user
+
+                    _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
+                    print(
+                        f"[_process_and_respond] INFO: No Firestore conversation for takeover check; "
+                        f"cleared stale takeover flag for {user_id}"
+                    )
+                elif conv_data.get("human_takeover_active", False):
                     should_send_waiting = True
-                elif conv_data and not conv_data.get("human_takeover_active", False):
-                    # Firestore says takeover ended; release stale local flag and continue normal AI flow.
+                else:
                     takeover_still_active = False
                     should_send_waiting = False
                     from utils.utils import _clear_takeover_flags_for_user, sync_post_release_cooldown_from_conv_payload
+
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                     sync_post_release_cooldown_from_conv_payload(user_data, conv_data)
-                    user_data['just_returned_from_human_takeover'] = True
+                    user_data["just_returned_from_human_takeover"] = True
                     if not is_post_takeover_escalation_cooldown(user_data):
                         set_post_takeover_escalation_cooldown(user_data)
-                    print(f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; resuming normal bot flow (just_returned).")
+                    print(
+                        f"[_process_and_respond] INFO: Firestore shows takeover inactive for {user_id}; "
+                        f"resuming normal bot flow (just_returned)."
+                    )
         except Exception as takeover_check_error:
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
 
