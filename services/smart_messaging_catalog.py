@@ -46,7 +46,7 @@ TEMPLATE_METADATA: Dict[str, Dict[str, str]] = {
     },
     "session_feedback": {
         "name": "session_feedback",
-        "description": "Next-day after Done visit. WhatsApp Meta template name: session_feedback (1 body variable: customer_name; rating buttons on Meta). Legacy internal id attended_yesterday maps here.",
+        "description": "Next-day after Done visit. Meta template name: session_feedback (same as internal id; use meta_template_name if Manager uses a different string). Marketing, English locale in this WABA — languages.en + force_whatsapp_language. Legacy: attended_yesterday.",
     },
     "missed_yesterday": {
         "name": "Missed Yesterday",
@@ -58,7 +58,7 @@ TEMPLATE_METADATA: Dict[str, Dict[str, str]] = {
     },
     "sent_for_pause": {
         "name": "sent_for_pause",
-        "description": "Paused BOC campaign + end-of-month scheduler. Meta template name: sent_for_pause (1 body variable: customer_name). Legacy ids: missed_paused_appointment, missed_this_month.",
+        "description": "Paused BOC campaign + end-of-month scheduler. Meta template name (outbound): sent_for_pause_ — 1 body variable: customer_name. Legacy ids: missed_paused_appointment, missed_this_month.",
     },
     "whatsapp_lead_no_booking": {
         "name": "WhatsApp Lead (No CRM / No Booking)",

@@ -455,9 +455,12 @@ const SmartMessaging = () => {
         return;
       }
       if (!res.ok) {
-        toast.error(
-          result?.detail || result?.error || `Send test failed (HTTP ${res.status})`
-        );
+        const errBase =
+          result?.detail || result?.error || `Send test failed (HTTP ${res.status})`;
+        const errExtra = [result?.monty_message, result?.outbound_template_name]
+          .filter(Boolean)
+          .join(" — ");
+        toast.error(errExtra ? `${errBase} — ${errExtra}` : errBase);
         return;
       }
       if (result.success) {
@@ -491,9 +494,12 @@ const SmartMessaging = () => {
         const parts = [
           result.error || "Failed to send test",
           result.monty_message,
+          result.outbound_template_name
+            ? `outbound name: ${result.outbound_template_name}`
+            : null,
         ].filter(Boolean);
         let msg = parts.join(" — ");
-        if (msg.length > 320) msg = `${msg.slice(0, 317)}…`;
+        if (msg.length > 380) msg = `${msg.slice(0, 377)}…`;
         toast.error(msg);
       }
     } catch (e) {

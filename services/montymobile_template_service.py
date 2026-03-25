@@ -108,6 +108,66 @@ class MontyMobileTemplateService:
             return canonical_id
         return _LEGACY_TEMPLATE_CONFIG_KEYS.get(canonical_id, canonical_id)
 
+    def resolve_whatsapp_language_for_template(
+        self,
+        template: Dict[str, Any],
+        requested: str,
+        template_id_for_log: str = "",
+    ) -> str:
+        """
+        Pick template.language.code for Meta/Monty. Respects force_whatsapp_language when set.
+        If the user's language is not approved for this template in montymobile_templates.json,
+        falls back to ar, then en, fr, then any available key (avoids KeyError / wrong code).
+        """
+        langs = template.get("languages") or {}
+        rid = (requested or "ar").strip().lower()
+        if rid == "franco":
+            rid = "ar"
+        tid = template_id_for_log or "?"
+
+        forced = str(template.get("force_whatsapp_language") or "").strip().lower()
+        if forced and forced in langs:
+            if rid != forced:
+                print(
+                    f"⚠️ [{tid}] force_whatsapp_language={forced!r} overrides requested={rid!r}"
+                )
+            return forced
+
+        if rid in langs:
+            return rid
+        for fb in ("ar", "en", "fr"):
+            if fb in langs:
+                print(
+                    f"⚠️ [{tid}] WhatsApp template language {rid!r} not in config; using {fb!r} "
+                    f"(add that language under languages{{}} or approve it in Meta)"
+                )
+                return fb
+        if langs:
+            first = next(iter(langs.keys()))
+            print(
+                f"⚠️ [{tid}] WhatsApp template language {rid!r} not in config; using {first!r}"
+            )
+            return str(first)
+        return rid
+
+    def _outbound_template_name(self, template: Dict[str, Any], canonical_id: str) -> str:
+        """
+        Name sent to Monty/Meta must match WhatsApp Manager exactly for this WABA.
+        Override per template: env MONTY_META_NAME_<CANONICAL> e.g. MONTY_META_NAME_SENT_FOR_PAUSE.
+        Or set meta_template_name / whatsapp_template_name on the template JSON block.
+        """
+        env_key = "MONTY_META_NAME_" + canonical_id.upper().replace("-", "_")
+        env_override = os.getenv(env_key, "").strip()
+        if env_override:
+            print(f"   Outbound template name from {env_key}={env_override!r}")
+            return env_override
+        return str(
+            template.get("meta_template_name")
+            or template.get("whatsapp_template_name")
+            or template.get("name")
+            or canonical_id
+        ).strip()
+
     def _describe_template_resolution(self, requested_id: str, canonical_id: str) -> str:
         norm = normalize_template_id(requested_id)
         if norm != requested_id:
@@ -333,12 +393,10 @@ class MontyMobileTemplateService:
                 language = 'ar'  # Default fallback
             print(f"   Using language: {language}")
         
-        # Check if language is available
-        if language not in template['languages']:
-            print(f"⚠️ Language '{language}' not available for template '{template_id}', using 'ar'")
-            language = 'ar'
-        
-        template_lang = template['languages'][language]
+        language = self.resolve_whatsapp_language_for_template(
+            template, language, template_id_for_log=canonical_template_id
+        )
+        template_lang = template["languages"][language]
 
         # Body variables: count must match Meta {{1}}..{{n}} exactly (Monty HTTP 500:
         # "Number of body variables is invalid" if count is wrong or body component missing).
@@ -347,9 +405,7 @@ class MontyMobileTemplateService:
 
         # WhatsApp Manager template name may differ from config key / templates[].name
         # (e.g. legacy internal ids map to JSON key sent_17_days_after_last_session_new).
-        outbound_name = str(
-            template.get("meta_template_name") or template.get("whatsapp_template_name") or template["name"]
-        ).strip()
+        outbound_name = self._outbound_template_name(template, canonical_template_id)
 
         payload = {
             "to": to_digits,
@@ -362,6 +418,21 @@ class MontyMobileTemplateService:
             },
             "apiId": self.api_config["api_id"],
         }
+
+        # Some Monty stacks resolve the channel template by dashboard IDs; if only `name` is sent
+        # and it drifts from Meta, you may get "Template Does Not Exist". Enable per-template.
+        if bool(template.get("include_monty_template_ids")):
+            wid = str(template.get("wa_message_id") or "").strip()
+            rg = str(template.get("record_guid") or "").strip()
+            if wid:
+                payload["waMessageId"] = wid
+            if rg:
+                payload["recordGuid"] = rg
+            if wid or rg:
+                print(
+                    f"   Monty template IDs on payload: waMessageId={wid!r} recordGuid={rg!r} "
+                    f"(include_monty_template_ids=true)"
+                )
 
         print(f"   Template Name (outbound): {outbound_name} (config name={template.get('name')!r})")
         print(f"   Template WA ID: {template.get('wa_message_id', 'N/A')}")
@@ -564,7 +635,8 @@ class MontyMobileTemplateService:
                             return {
                                 "success": False,
                                 "error": error_msg,
-                                "response": response_data
+                                "outbound_template_name": (payload.get("template") or {}).get("name"),
+                                "response": response_data,
                             }
                     except json.JSONDecodeError:
                         raw_txt = (response.text or "")[:2000]
@@ -602,6 +674,7 @@ class MontyMobileTemplateService:
                             f"(dashboard route OK — provider rejected the request)"
                         ),
                         "monty_message": (str(monty_message)[:800] if monty_message else None),
+                        "outbound_template_name": (payload.get("template") or {}).get("name"),
                         "response_text": error_text,
                     }
                     

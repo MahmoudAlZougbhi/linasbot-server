@@ -22,7 +22,7 @@
   },
   "sent_for_pause": {
     "name": "sent_for_pause",
-    "description": "Paused BOC manual campaign + end-of-month scheduler. Meta template sent_for_pause (1 body variable: customer_name). Extra placeholders are in-app preview only unless Meta extended.",
+    "description": "Paused BOC manual campaign + end-of-month scheduler. Meta template name sent_for_pause_ (1 body variable: customer_name). Extra placeholders are in-app preview only unless Meta extended.",
     "ar": "🌸 مرحباً {customer_name}\n\nنذكرك بموعدك المؤجل في مركز لينا ليزر:\n\n💆 الخدمة: {service_name}\n📅 التاريخ: {appointment_date}\n⏰ الوقت: {appointment_time}\n📍 الفرع: {branch_name}\n\nللحجز أو الاستفسار:\n📱 {phone_number}\n💬 يمكنك الرد على هذه الرسالة في أي وقت.\n\nنتطلع لخدمتك 💜",
     "en": "🌸 Hi {customer_name}\n\nWe're following up on your paused appointment at Lina's Laser Center:\n\n💆 Service: {service_name}\n📅 Date: {appointment_date}\n⏰ Time: {appointment_time}\n📍 Branch: {branch_name}\n\nTo book or ask anything:\n📱 {phone_number}\n💬 You can reply to this message anytime.\n\nWe're here for you 💜",
     "fr": "🌸 Bonjour {customer_name}\n\nSuite à votre rendez-vous en pause au Centre Laser Lina:\n\n💆 Service: {service_name}\n📅 Date: {appointment_date}\n⏰ Heure: {appointment_time}\n📍 Branche: {branch_name}\n\nPour réserver ou une question:\n📱 {phone_number}\n💬 Vous pouvez répondre à tout moment.\n\nAu plaisir de vous accueillir 💜"
@@ -45,7 +45,7 @@
   },
   "session_feedback": {
     "name": "session_feedback",
-    "description": "Next day after Done visit. Meta template session_feedback (1 variable: customer_name). Buttons for rating on Meta.",
+    "description": "Next day after Done visit. Meta template name session_feedback (1 variable: customer_name). Live send uses English locale; preview AR/EN/FR here for dashboard copy.",
     "ar": "مرحباً {customer_name} 🌸\nشكراً لزيارتك لنا.\nيسعدنا جداً أن نعرف رأيك بجلسك الأخيرة، لأن تقييمك يساعدنا على تحسين تجربتك دائماً.\nاضغطي على الزر بالأسفل لتقييم تجربتك معنا.",
     "en": "Hi {customer_name} 🌸\nThank you for visiting us.\nWe'd love to hear about your last session—your feedback helps us keep improving your experience.\nTap the button below to rate your visit with us.",
     "fr": "Bonjour {customer_name} 🌸\nMerci pour votre visite.\nNous serions ravis d'avoir votre avis sur votre dernière séance — votre retour nous aide à améliorer votre expérience.\nAppuyez sur le bouton ci-dessous pour évaluer votre visite."

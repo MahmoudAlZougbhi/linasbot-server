@@ -27,6 +27,32 @@ def _row_ok(row: dict) -> bool:
     return _apt_status_lower(row) not in _EXCLUDED
 
 
+def _is_blank_scalar(v: Any) -> bool:
+    if v is None:
+        return True
+    if isinstance(v, (dict, list)):
+        return False
+    return not str(v).strip()
+
+
+def _coalesce_appointment_row(row: dict) -> dict:
+    """
+    BOC often nests fields under appointment_details. Merge base + nested (nested overwrites),
+    then restore non-blank base values where nested overwrote with empty strings (common bug).
+    """
+    if not isinstance(row, dict):
+        return {}
+    nested = row.get("appointment_details")
+    base = {k: v for k, v in row.items() if k != "appointment_details"}
+    if not isinstance(nested, dict):
+        return base
+    merged = {**base, **nested}
+    for k, vb in base.items():
+        if _is_blank_scalar(merged.get(k)) and not _is_blank_scalar(vb):
+            merged[k] = vb
+    return merged
+
+
 def _extract_customer_appointments_list(response_payload: dict) -> List[dict]:
     if not isinstance(response_payload, dict):
         return []
@@ -77,17 +103,49 @@ def _customer_name_from_crm(data: Any) -> str:
 
 
 def _service_label(row: dict) -> str:
-    svc = row.get("service") or row.get("service_name")
+    if not isinstance(row, dict):
+        return ""
+    svc = (
+        row.get("service")
+        or row.get("service_name")
+        or row.get("service_title")
+        or row.get("treatment_name")
+    )
     if isinstance(svc, dict):
-        return str(svc.get("name") or svc.get("title") or "").strip()
-    return str(svc or "").strip()
+        s = str(svc.get("name") or svc.get("title") or "").strip()
+        if s:
+            return s
+    elif svc and str(svc).strip():
+        return str(svc).strip()
+    nested = row.get("appointment_details")
+    if isinstance(nested, dict):
+        inner = {k: v for k, v in nested.items() if k != "appointment_details"}
+        return _service_label(inner)
+    return ""
 
 
 def _branch_label(row: dict) -> str:
-    br = row.get("branch") or row.get("branch_name")
+    if not isinstance(row, dict):
+        return ""
+    br = (
+        row.get("branch")
+        or row.get("branch_name")
+        or row.get("branch_title")
+        or row.get("location")
+        or row.get("location_name")
+        or row.get("clinic_name")
+    )
     if isinstance(br, dict):
-        return str(br.get("name") or "").strip()
-    return str(br or "").strip()
+        s = str(br.get("name") or br.get("title") or "").strip()
+        if s:
+            return s
+    elif br and str(br).strip():
+        return str(br).strip()
+    nested = row.get("appointment_details")
+    if isinstance(nested, dict):
+        inner = {k: v for k, v in nested.items() if k != "appointment_details"}
+        return _branch_label(inner)
+    return ""
 
 
 def _date_part(row: dict) -> str:
@@ -203,21 +261,28 @@ async def resolve_real_test_template_placeholders(phone_raw: str) -> Tuple[Dict[
     if primary:
         meta["has_appointment"] = True
         meta["source"] = "crm_appointment"
+        row = _coalesce_appointment_row(primary)
         if not vals.get("customer_name"):
-            cn = str(primary.get("customer_name") or primary.get("name") or "").strip()
+            cn = str(
+                row.get("customer_name")
+                or row.get("name")
+                or primary.get("customer_name")
+                or primary.get("name")
+                or ""
+            ).strip()
             if cn:
                 vals["customer_name"] = cn
-        ap_date = _date_part(primary)
-        ap_time = _time_part(primary)
+        ap_date = _date_part(row)
+        ap_time = _time_part(row)
         if not ap_date or not ap_time:
-            d2, t2 = _split_datetime_field(primary)
+            d2, t2 = _split_datetime_field(row)
             ap_date = ap_date or d2
             ap_time = ap_time or t2
         vals["appointment_date"] = ap_date
         vals["appointment_time"] = ap_time
-        vals["branch_name"] = _branch_label(primary)
-        vals["service_name"] = _service_label(primary)
-        next_d = _date_part(secondary) if secondary else ""
+        vals["branch_name"] = _branch_label(row) or _branch_label(primary)
+        vals["service_name"] = _service_label(row) or _service_label(primary)
+        next_d = _date_part(_coalesce_appointment_row(secondary)) if secondary else ""
         vals["next_appointment_date"] = next_d or ap_date
     else:
         if meta["has_customer"]:
@@ -233,6 +298,19 @@ async def resolve_real_test_template_placeholders(phone_raw: str) -> Tuple[Dict[
     np = normalize_phone(phone_raw)
     meta["normalized_phone"] = np
     meta["recipient_display_phone"] = np or str(phone_raw).strip()
+
+    # Production-aligned defaults for test sends (reminder_24h, sent_17_days_after_last_session_new, …)
+    if meta.get("has_appointment"):
+        if not str(vals.get("branch_name") or "").strip():
+            vals["branch_name"] = "الفرع الرئيسي"
+            meta["warnings"].append(
+                "branch_name was empty in CRM — using default «الفرع الرئيسي» for test send."
+            )
+        if not str(vals.get("service_name") or "").strip():
+            vals["service_name"] = "جلسة ليزر"
+            meta["warnings"].append(
+                "service_name was empty in CRM — using default «جلسة ليزر» for test send."
+            )
 
     return vals, meta
 

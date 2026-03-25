@@ -386,10 +386,11 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             }
         
         # Body variable names + count (must match montymobile_template_service / Meta {{1}}..{{n}})
+        effective_lang = montymobile_template_service.resolve_whatsapp_language_for_template(
+            template_info, language, template_id_for_log=template_id
+        )
         langs = template_info.get("languages") or {}
-        template_lang = langs.get(language) or {}
-        if not template_lang and language != "ar":
-            template_lang = langs.get("ar") or {}
+        template_lang = langs.get(effective_lang) or {}
         raw_specs = template_lang.get("body_parameters")
         if not isinstance(raw_specs, list) or not raw_specs:
             raw_specs = template_lang.get("parameters") or []
@@ -434,6 +435,21 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 _fi += 1
             else:
                 test_parameters[str(i + 1)] = ""
+
+        # Same defaults as scheduled sends when CRM omits branch/service (test UI must not block).
+        _test_slot_defaults = {
+            "branch_name": "الفرع الرئيسي",
+            "service_name": "جلسة ليزر",
+        }
+        for _slot, _default in _test_slot_defaults.items():
+            if _slot in template_param_names and not str(test_parameters.get(_slot) or "").strip():
+                test_parameters[_slot] = _default
+                ph_meta.setdefault("warnings", [])
+                _w = (
+                    f"{_slot} was empty after CRM merge — filled with default for test send."
+                )
+                if _w not in ph_meta["warnings"]:
+                    ph_meta["warnings"].append(_w)
 
         _ph_err = validate_test_placeholders_for_template(
             template_param_names, n_body, test_parameters, ph_meta
@@ -510,7 +526,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
         result = await montymobile_template_service.send_template_message(
             template_id=template_id,
             phone_number=phone_number,
-            language=language,
+            language=effective_lang,
             parameters=test_parameters
         )
 
@@ -518,7 +534,8 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             result = {
                 **result,
                 "user_language": user_language,
-                "template_language": language,
+                "requested_template_language": language,
+                "template_language": effective_lang,
                 "language_source": language_source,
                 "test_correlation_id": _test_correlation_id,
                 "placeholder_source": ph_meta.get("source"),
@@ -564,11 +581,11 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                         and k != "header_image"
                     }
                     _display_text = smart_messaging.get_message_content(
-                        template_id, language, _ph_display
+                        template_id, effective_lang, _ph_display
                     )
                     if not _display_text:
                         _display_text = message_preview_service.render_message_preview(
-                            template_id, language, _ph_display
+                            template_id, effective_lang, _ph_display
                         )
                     if (
                         not _display_text
@@ -576,7 +593,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                         or str(_display_text).startswith("[")
                     ):
                         _display_text = (
-                            f"Template «{template_id}» (test send, lang {language}). "
+                            f"Template «{template_id}» (test send, lang {effective_lang}). "
                             f"Parameters: {test_parameters}"
                         )
 
@@ -591,7 +608,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                             "source": "smart_message",
                             "type": template_id,
                             "monty_message_id": mid,
-                            "template_language": language,
+                            "template_language": effective_lang,
                             "recipient_to_monty": result.get("recipient_to_monty"),
                             "test_send": True,
                             "test_correlation_id": _test_correlation_id,
