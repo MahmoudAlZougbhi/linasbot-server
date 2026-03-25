@@ -471,29 +471,37 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             }
 
         if isinstance(result, dict) and result.get("success"):
-            try:
-                from utils.utils import save_conversation_message_to_firestore
+            mid = result.get("message_id")
+            if mid and str(mid).strip() and str(mid).strip().lower() != "unknown":
+                try:
+                    from utils.utils import save_conversation_message_to_firestore
 
-                _summary = (
-                    f"Template «{template_id}» (test send, lang {language}). "
-                    f"Parameters: {test_parameters}"
+                    _summary = (
+                        f"Template «{template_id}» (test send, lang {language}). "
+                        f"Parameters: {test_parameters}"
+                    )
+                    await save_conversation_message_to_firestore(
+                        user_id=phone_number,
+                        role="ai",
+                        text=_summary,
+                        conversation_id=None,
+                        user_name="Customer",
+                        phone_number=phone_number,
+                        metadata={
+                            "source": "smart_message",
+                            "type": template_id,
+                            "monty_message_id": mid,
+                            "template_language": language,
+                            "recipient_to_monty": result.get("recipient_to_monty"),
+                        },
+                    )
+                except Exception as _fs_err:
+                    print(f"⚠️ Test template: could not log to Firestore: {_fs_err}")
+            else:
+                print(
+                    "⚠️ Test template: Monty reported success but no messageId — "
+                    "not logging to Live Chat (WhatsApp delivery unconfirmed)."
                 )
-                await save_conversation_message_to_firestore(
-                    user_id=phone_number,
-                    role="ai",
-                    text=_summary,
-                    conversation_id=None,
-                    user_name="Customer",
-                    phone_number=phone_number,
-                    metadata={
-                        "source": "smart_message",
-                        "type": template_id,
-                        "monty_message_id": result.get("message_id"),
-                        "template_language": language,
-                    },
-                )
-            except Exception as _fs_err:
-                print(f"⚠️ Test template: could not log to Firestore: {_fs_err}")
 
         return result
         

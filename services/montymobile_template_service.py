@@ -7,9 +7,11 @@ Handles sending WhatsApp template messages via MontyMobile API
 import httpx
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 from services.smart_messaging_catalog import normalize_template_id
+from utils.phone_utils import normalize_phone
 
 # Internal IDs that map to a different key under config/templates (and thus a different Meta `name`).
 _LEGACY_TEMPLATE_CONFIG_KEYS: Dict[str, str] = {
@@ -245,9 +247,34 @@ class MontyMobileTemplateService:
             else:
                 pos = str(i + 1)
                 val = lookup.get(pos, lookup.get(f"body_{pos}", ""))
-            texts.append(str(val if val is not None else ""))
+            texts.append(str(val if val is not None else "").strip())
 
         return [{"type": "text", "text": t} for t in texts]
+
+    def _normalize_recipient_for_monty_template(self, raw: Optional[str]) -> Optional[str]:
+        """
+        Monty send-whatsapp often requires a consistent MSISDN (digits, country code, no '+').
+        Raw dashboard input may include spaces, missing country code, or '+' — normalize so
+        delivery matches session sends and WhatsApp routing.
+        """
+        if raw is None:
+            return None
+        s = str(raw).strip()
+        if not s:
+            return None
+        e164 = normalize_phone(s)
+        if e164:
+            return e164.lstrip("+")
+        digits = re.sub(r"\D", "", s)
+        if digits.startswith("00"):
+            digits = digits[2:]
+        if digits.startswith("0") and len(digits) > 1:
+            digits = digits[1:]
+        if not digits.startswith("961") and len(digits) <= 10:
+            digits = "961" + digits.lstrip("0")
+        if len(digits) >= 10 and digits.startswith("961"):
+            return digits
+        return None
 
     def build_template_payload(
         self,
@@ -271,11 +298,17 @@ class MontyMobileTemplateService:
         # Debug: Print what we received
         print(f"🔍 DEBUG build_template_payload:")
         print(f"   template_id: {template_id} (type: {type(template_id)})")
-        print(f"   phone_number: {phone_number} (type: {type(phone_number)})")
+        print(f"   phone_number (raw): {phone_number} (type: {type(phone_number)})")
         print(f"   language: {language} (type: {type(language)})")
         print(f"   parameters: {parameters}")
         
         canonical_template_id = normalize_template_id(template_id)
+
+        to_digits = self._normalize_recipient_for_monty_template(phone_number)
+        if not to_digits:
+            print(f"❌ Invalid or unsupported phone for Monty template: {phone_number!r}")
+            return None
+        print(f"   phone_number (Monty 'to'): {to_digits!r}")
 
         if not self.templates or not self.api_config:
             print("❌ MontyMobile templates not loaded")
@@ -315,7 +348,7 @@ class MontyMobileTemplateService:
         ).strip()
 
         payload = {
-            "to": phone_number,
+            "to": to_digits,
             "type": "template",
             "source": self.api_config['source'],
             "template": {
@@ -386,12 +419,20 @@ class MontyMobileTemplateService:
             Response dict with success status and data
         """
         try:
+            if not self._normalize_recipient_for_monty_template(phone_number):
+                return {
+                    "success": False,
+                    "error": f"Invalid phone number for WhatsApp template (use Lebanon mobile, e.g. 9617XXXXXXX): {phone_number!r}",
+                }
             # Build payload
             payload = self.build_template_payload(template_id, phone_number, language, parameters)
             if not payload:
                 return {
                     "success": False,
-                    "error": f"Template '{template_id}' not found or invalid"
+                    "error": (
+                        f"Template '{template_id}' not found in Monty config, or payload build failed "
+                        f"(check language/body variables vs Meta template)"
+                    ),
                 }
 
             tpl_meta = self.get_template_info(normalize_template_id(template_id))
@@ -464,12 +505,18 @@ class MontyMobileTemplateService:
                         if response_data.get("success"):
                             message_id = response_data.get("data", {}).get("messageId", "unknown")
                             print(f"✅ Template sent successfully! Message ID: {message_id}")
-                            
+                            to_used = None
+                            try:
+                                if isinstance(payload, dict):
+                                    to_used = payload.get("to")
+                            except Exception:
+                                pass
                             return {
                                 "success": True,
                                 "message_id": message_id,
                                 "template_id": template_id,
                                 "phone_number": phone_number,
+                                "recipient_to_monty": to_used,
                                 "language": language,
                                 "response": response_data
                             }
@@ -483,11 +530,12 @@ class MontyMobileTemplateService:
                                 "response": response_data
                             }
                     except json.JSONDecodeError:
-                        print(f"⚠️ Could not parse response JSON")
+                        raw_txt = (response.text or "")[:2000]
+                        print(f"⚠️ Could not parse Monty template response JSON: {raw_txt[:500]}")
                         return {
-                            "success": True,  # Assume success if 200 OK
-                            "message_id": "unknown",
-                            "response_text": response.text
+                            "success": False,
+                            "error": "Monty returned HTTP 200 but non-JSON body; delivery not confirmed",
+                            "response_text": raw_txt,
                         }
                 else:
                     raw = response.text or ""
