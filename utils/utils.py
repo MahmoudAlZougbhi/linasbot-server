@@ -924,12 +924,21 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "operator_id": None,
                         })
                 # Canonical conversation_state for index
-                # When is_smart_source, preserve existing takeover state (don't overwrite waiting_human with bot_active)
+                # When is_smart_source: never leave users stuck in waiting queue without an operator —
+                # otherwise handle_message only sends "please wait" and the AI never replies to campaign replies.
                 if is_smart_source:
                     if firestore_post_release_waiting_blocked(doc_data):
                         update_payload.update({
                             "conversation_state": "bot_active",
                             "human_takeover_active": False,
+                            "status": "active",
+                            "operator_id": None,
+                        })
+                    elif doc_data.get("human_takeover_active") and not doc_data.get("operator_id"):
+                        update_payload.update({
+                            "conversation_state": "bot_active",
+                            "human_takeover_active": False,
+                            "human_takeover_requested": False,
                             "status": "active",
                             "operator_id": None,
                         })
@@ -1116,12 +1125,20 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "human_takeover_active": False,
                             "operator_id": None,
                         })
-                # When is_smart_source, preserve existing takeover state (don't overwrite waiting_human with bot_active)
+                # When is_smart_source: release waiting queue (no operator) so campaign replies are handled by AI
                 if is_smart_source:
                     if firestore_post_release_waiting_blocked(doc_data):
                         update_payload.update({
                             "conversation_state": "bot_active",
                             "human_takeover_active": False,
+                            "status": "active",
+                            "operator_id": None,
+                        })
+                    elif doc_data.get("human_takeover_active") and not doc_data.get("operator_id"):
+                        update_payload.update({
+                            "conversation_state": "bot_active",
+                            "human_takeover_active": False,
+                            "human_takeover_requested": False,
                             "status": "active",
                             "operator_id": None,
                         })
