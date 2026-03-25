@@ -26,6 +26,65 @@ import {
 import toast from "react-hot-toast";
 import { apiUrl } from "../utils/apiBaseUrl";
 
+/**
+ * Titles shown on template cards, test-template dropdown, and mappings table.
+ * Matches WhatsApp/Meta template names from config/montymobile_templates.json
+ * (missed_yesterday → outbound name sent_day_after_missed_appointment).
+ */
+const SYSTEM_TEMPLATE_LABELS = {
+  reminder_24h: {
+    title: "reminder_24h",
+    subtitle:
+      "24h before tomorrow's appointments. Body: customer_name, date, time, branch, service.",
+  },
+  thank_you_message_sent_after_session: {
+    title: "thank_you_message_sent_after_session",
+    subtitle:
+      "Same day after Done visit, N hours after slot. Body: customer_name. Star replies → Star ratings.",
+  },
+  session_feedback: {
+    title: "session_feedback",
+    subtitle: "Next day after Done visit. Body: customer_name. Meta rating buttons.",
+  },
+  missed_yesterday: {
+    title: "sent_day_after_missed_appointment",
+    subtitle: "Internal queue id: missed_yesterday. Day after missed appointment. Body: customer_name.",
+  },
+  sent_17_days_after_last_session_new: {
+    title: "sent_17_days_after_last_session_new",
+    subtitle: "17 days after last Done session. Body: customer_name, branch_name, service_name.",
+  },
+  sent_for_pause: {
+    title: "sent_for_pause",
+    subtitle: "Paused BOC / end-of-month campaign. Body: customer_name.",
+  },
+  whatsapp_lead_no_booking: {
+    title: "whatsapp_lead_no_booking",
+    subtitle: "Manual campaign: WhatsApp lead, no CRM booking. Body vars per Meta (often 0).",
+  },
+};
+
+function getSystemTemplateLabel(templateId) {
+  return SYSTEM_TEMPLATE_LABELS[templateId] || null;
+}
+
+function getTemplateCardDisplay(templateId, templateData) {
+  const sys = getSystemTemplateLabel(templateId);
+  if (sys) {
+    return { title: sys.title, description: sys.subtitle };
+  }
+  return {
+    title: templateData?.name || templateId,
+    description: templateData?.description || "",
+  };
+}
+
+function getTemplateSelectLabel(templateId, templateData) {
+  const sys = getSystemTemplateLabel(templateId);
+  if (sys) return sys.title;
+  return (templateData && templateData.name) || templateId;
+}
+
 const localISODate = (d) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -1377,7 +1436,7 @@ const SmartMessaging = () => {
   const getMessageTypeInfo = (type) => {
     const types = {
       reminder_24h: {
-        name: "24h Reminder",
+        name: "reminder_24h",
         color: "bg-blue-100 text-blue-700",
         icon: ClockIcon,
       },
@@ -1397,7 +1456,7 @@ const SmartMessaging = () => {
         icon: SparklesIcon,
       },
       missed_yesterday: {
-        name: "Missed Yesterday",
+        name: "sent_day_after_missed_appointment",
         color: "bg-orange-100 text-orange-700",
         icon: ExclamationTriangleIcon,
       },
@@ -1558,7 +1617,7 @@ const SmartMessaging = () => {
                 .sort()
                 .map((id) => (
                   <option key={id} value={id}>
-                    {(messageTemplates[id] && messageTemplates[id].name) || id}
+                    {getTemplateSelectLabel(id, messageTemplates[id])}
                   </option>
                 ))}
             </select>
@@ -1839,7 +1898,7 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* 24h Reminder */}
+                {/* Meta / internal: reminder_24h */}
                 <button
                   onClick={() => handleCategorySelect("reminder_24h")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
@@ -1852,7 +1911,9 @@ const SmartMessaging = () => {
                       : "bg-blue-100 text-blue-700 border border-blue-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">24h Reminder</div>
+                  <div className="font-mono text-xs font-bold leading-tight break-all px-0.5">
+                    reminder_24h
+                  </div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.reminder_24h}
                   </div>
@@ -1921,7 +1982,7 @@ const SmartMessaging = () => {
                   </div>
                 </button>
 
-                {/* Missed Yesterday */}
+                {/* Outbound Meta name; internal id missed_yesterday */}
                 <button
                   onClick={() => handleCategorySelect("missed_yesterday")}
                   className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
@@ -1934,7 +1995,9 @@ const SmartMessaging = () => {
                       : "bg-orange-100 text-orange-700 border border-orange-300"
                   }`}
                 >
-                  <div className="font-bold text-sm">Missed Yesterday</div>
+                  <div className="font-mono text-[10px] sm:text-xs font-bold leading-tight break-all px-0.5">
+                    sent_day_after_missed_appointment
+                  </div>
                   <div className="text-xs font-semibold mt-1">
                     {messageTypesCounts.missed_yesterday}
                   </div>
@@ -2287,6 +2350,7 @@ const SmartMessaging = () => {
             {/* Template Status Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {Object.entries(messageTemplates).map(([templateId, templateData]) => {
+                  const cardDisplay = getTemplateCardDisplay(templateId, templateData);
                   const Icon = getTemplateIcon(templateId);
                   const color = getTemplateColor(templateId);
                   const scheduleConfig = {
@@ -2326,17 +2390,21 @@ const SmartMessaging = () => {
                         >
                           <Icon className="w-6 h-6 text-white" />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2">
-                            <h3 className="font-bold text-slate-800">
-                              {templateData.name}
+                            <h3
+                              className={`font-bold text-slate-800 break-all ${
+                                getSystemTemplateLabel(templateId) ? "font-mono text-sm" : ""
+                              }`}
+                            >
+                              {cardDisplay.title}
                             </h3>
                             {isCustomTemplate && (
-                              <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">Custom</span>
+                              <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded shrink-0">Custom</span>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500">
-                            {templateData.description}
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {cardDisplay.description}
                           </p>
                         </div>
                       </div>
@@ -2558,10 +2626,12 @@ const SmartMessaging = () => {
                           className="text-center py-3 px-3 font-semibold text-slate-700 border-b border-slate-200 min-w-[100px]"
                         >
                           <div className="flex flex-col items-center">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-1 ${
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-1 max-w-[140px] text-center leading-tight ${
                               getMessageTypeInfo(template.id).color
                             }`}>
-                              {template.name || getMessageTypeInfo(template.id).name}
+                              <span className="font-mono break-all">
+                                {getTemplateSelectLabel(template.id, { name: template.name })}
+                              </span>
                             </span>
                           </div>
                         </th>

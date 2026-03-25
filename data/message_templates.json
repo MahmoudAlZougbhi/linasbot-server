@@ -1,7 +1,7 @@
 {
   "reminder_24h": {
-    "name": "24-Hour Reminder",
-    "description": "Sent 24 hours before appointment",
+    "name": "reminder_24h",
+    "description": "Meta template reminder_24h — 24h before tomorrow's appointment; body: customer_name, appointment_date, appointment_time, branch_name, service_name.",
     "ar": "🔔 تذكير بموعدك\n\nمرحباً {customer_name}! \nنذكرك بموعدك غداً في مركز لينا ليزر:\n\n📅 التاريخ: {appointment_date}\n⏰ الوقت: {appointment_time}\n📍 الفرع: {branch_name}\n💆 الخدمة: {service_name}\n\nللتأكيد: أرسل \"نعم\"\nلإعادة الجدولة: أرسل \"تأجيل\"\nللإلغاء: أرسل \"إلغاء\"\n\nنتطلع لرؤيتك! 💜",
     "en": "🔔 Appointment Reminder\n\nHi {customer_name}!\nThis is a reminder of your appointment tomorrow at Lina's Laser Center:\n\n📅 Date: {appointment_date}\n⏰ Time: {appointment_time}\n📍 Branch: {branch_name}\n💆 Service: {service_name}\n\nTo confirm: Reply \"Yes\"\nTo reschedule: Reply \"Postpone\"\nTo cancel: Reply \"Cancel\"\n\nLooking forward to seeing you! 💜",
     "fr": "🔔 Rappel de Rendez-vous\n\nBonjour {customer_name}!\nCeci est un rappel de votre rendez-vous demain au Centre Laser Lina:\n\n📅 Date: {appointment_date}\n⏰ Heure: {appointment_time}\n📍 Branche: {branch_name}\n💆 Service: {service_name}\n\nPour confirmer: Répondez \"Oui\"\nPour reporter: Répondez \"Reporter\"\nPour annuler: Répondez \"Annuler\"\n\nAu plaisir de vous voir! 💜"
@@ -14,8 +14,8 @@
     "fr": "💜 Merci de Votre Visite!\n\nCher(e) {customer_name},\nNous espérons que vous êtes satisfait de votre séance.\n\nComment était votre expérience?\n⭐⭐⭐⭐⭐ Excellente\n⭐⭐⭐⭐ Très Bien\n⭐⭐⭐ Bien\n⭐⭐ Passable\n⭐ À Améliorer\n\nEnvoyez le nombre d'étoiles!\nVos commentaires comptent 🙏"
   },
   "missed_yesterday": {
-    "name": "Missed Yesterday",
-    "description": "Sent day after missed appointment",
+    "name": "sent_day_after_missed_appointment",
+    "description": "WhatsApp outbound name sent_day_after_missed_appointment (internal queue id: missed_yesterday). Day after missed appointment; body: customer_name.",
     "ar": "💙 نتمنى أن تكون بخير\n\n{customer_name} العزيز/ة،\nلاحظنا أنك لم تتمكن من الحضور بالأمس.\n\nنأمل أن يكون كل شيء على ما يرام! 🌸\n\nهل ترغب في إعادة جدولة موعدك؟\n📱 اتص�� بنا: {phone_number}\n💬 أو أرسل \"موعد جديد\"\n\nنحن هنا لخدمتك دائماً 💜",
     "en": "💙 Hope You're Well\n\nDear {customer_name},\nWe noticed you couldn't make it yesterday.\n\nWe hope everything is okay! 🌸\n\nWould you like to reschedule?\n📱 Call us: {phone_number}\n💬 Or reply \"New appointment\"\n\nWe're always here for you 💜",
     "fr": "💙 Nous Espérons Que Vous Allez Bien\n\nCher(e) {customer_name},\nNous avons remarqué votre absence hier.\n\nNous espérons que tout va bien! 🌸\n\nSouhaitez-vous reprogrammer?\n📱 Appelez-nous: {phone_number}\n💬 Ou répondez \"Nouveau rendez-vous\"\n\nNous sommes toujours là pour vous 💜"
@@ -28,8 +28,8 @@
     "fr": "🌸 Bonjour {customer_name}\n\nSuite à votre rendez-vous en pause au Centre Laser Lina:\n\n💆 Service: {service_name}\n📅 Date: {appointment_date}\n⏰ Heure: {appointment_time}\n📍 Branche: {branch_name}\n\nPour réserver ou une question:\n📱 {phone_number}\n💬 Vous pouvez répondre à tout moment.\n\nAu plaisir de vous accueillir 💜"
   },
   "whatsapp_lead_no_booking": {
-    "name": "WhatsApp Lead (No CRM)",
-    "description": "Manual WhatsApp leads campaign — edit AR/EN/FR here; send uses each user's saved language",
+    "name": "whatsapp_lead_no_booking",
+    "description": "Manual campaign — edit AR/EN/FR here; send uses each user's saved language. Meta template whatsapp_lead_no_booking (often 0 body variables).",
     "ar": "💬 مرحباً {customer_name}\n\nشكراً لتواصلك مع مركز لينا ليزر!\n\nلم نجد بعد ملفاً أو موعداً مسجّلاً باسمك في نظام الحجز. إذا كنت مهتمّاً بالحجز أو الاستفسار، نحن جاهزون لمساعدتك.\n\n📱 للتواصل: {phone_number}\n💬 يمكنك الرد على هذه الرسالة في أي وقت.\n\nنتطلع لخدمتك 💜",
     "en": "💬 Hi {customer_name}\n\nThanks for chatting with Lina's Laser Center!\n\nWe don't yet see a client file or appointment on file for you. If you'd like to book or ask anything, we're happy to help.\n\n📱 Contact: {phone_number}\n💬 You can reply to this message anytime.\n\nWe're here for you 💜",
     "fr": "💬 Bonjour {customer_name}\n\nMerci d'avoir écrit au Centre Laser Lina!\n\nNous ne voyons pas encore de dossier ni de rendez-vous enregistré. Pour réserver ou poser une question, nous sommes à votre disposition.\n\n📱 Contact: {phone_number}\n💬 Vous pouvez répondre à tout moment.\n\nAu plaisir de vous accueillir 💜"
