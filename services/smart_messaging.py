@@ -804,61 +804,67 @@ Des questions? Nous sommes là! 💬
 
     def mark_message_sent(self, message_id: str):
         """Mark a single message as successfully sent (called after WhatsApp confirms)."""
-        if message_id in self.scheduled_messages:
-            self.scheduled_messages[message_id].pop("sending_started_at", None)
-            self.scheduled_messages[message_id]["status"] = "sent"
-            self.scheduled_messages[message_id]["sent_at"] = datetime.now()
-
-            msg_data = self.scheduled_messages[message_id]
-            metadata = msg_data.get("metadata", {}) if isinstance(msg_data.get("metadata"), dict) else {}
-            canonical_type = normalize_template_id(msg_data["message_type"])
-            content = self.get_message_content(
-                canonical_type,
-                msg_data["language"],
-                msg_data["placeholders"]
-            ) or ""
-            self.sent_messages_log.append({
-                "message_id": message_id,
-                "phone": msg_data["customer_phone"],
-                "type": canonical_type,
-                "sent_at": datetime.now(),
-                "content": content[:100] + "..."
-            })
-
-            reference_date = (
-                metadata.get("reference_date")
-                or msg_data.get("placeholders", {}).get("reference_date")
-                or msg_data.get("placeholders", {}).get("appointment_date")
+        if message_id not in self.scheduled_messages:
+            print(
+                f"⚠️ mark_message_sent: {message_id!r} not in scheduled_messages "
+                f"(server restart drops non-sent rows from disk) — queue state not updated"
             )
-            appointment_id = metadata.get("appointment_id") or msg_data.get("placeholders", {}).get("appointment_id")
-            customer_id = metadata.get("customer_id") or msg_data.get("customer_phone")
-            campaign_id = metadata.get("campaign_id")
+            return
 
-            try:
-                if not message_logs_service.was_message_sent(
+        self.scheduled_messages[message_id].pop("sending_started_at", None)
+        self.scheduled_messages[message_id]["status"] = "sent"
+        self.scheduled_messages[message_id]["sent_at"] = datetime.now()
+
+        msg_data = self.scheduled_messages[message_id]
+        metadata = msg_data.get("metadata", {}) if isinstance(msg_data.get("metadata"), dict) else {}
+        canonical_type = normalize_template_id(msg_data["message_type"])
+        content = self.get_message_content(
+            canonical_type,
+            msg_data["language"],
+            msg_data["placeholders"]
+        ) or ""
+        self.sent_messages_log.append({
+            "message_id": message_id,
+            "phone": msg_data["customer_phone"],
+            "type": canonical_type,
+            "sent_at": datetime.now(),
+            "content": content[:100] + "..."
+        })
+
+        reference_date = (
+            metadata.get("reference_date")
+            or msg_data.get("placeholders", {}).get("reference_date")
+            or msg_data.get("placeholders", {}).get("appointment_date")
+        )
+        appointment_id = metadata.get("appointment_id") or msg_data.get("placeholders", {}).get("appointment_id")
+        customer_id = metadata.get("customer_id") or msg_data.get("customer_phone")
+        campaign_id = metadata.get("campaign_id")
+
+        try:
+            if not message_logs_service.was_message_sent(
+                customer_id=customer_id,
+                template_type=canonical_type,
+                reference_date=reference_date,
+                appointment_id=appointment_id,
+                campaign_id=campaign_id,
+            ):
+                message_logs_service.log_message(
                     customer_id=customer_id,
                     template_type=canonical_type,
-                    reference_date=reference_date,
                     appointment_id=appointment_id,
                     campaign_id=campaign_id,
-                ):
-                    message_logs_service.log_message(
-                        customer_id=customer_id,
-                        template_type=canonical_type,
-                        appointment_id=appointment_id,
-                        campaign_id=campaign_id,
-                        reference_date=reference_date,
-                        extra={
-                            "phone": msg_data.get("customer_phone"),
-                            "service_name": msg_data.get("service_name"),
-                            "source": metadata.get("source", "scheduler"),
-                        },
-                    )
-            except Exception as log_exc:
-                print(f"⚠️ Failed to write message log for {message_id}: {log_exc}")
+                    reference_date=reference_date,
+                    extra={
+                        "phone": msg_data.get("customer_phone"),
+                        "service_name": msg_data.get("service_name"),
+                        "source": metadata.get("source", "scheduler"),
+                    },
+                )
+        except Exception as log_exc:
+            print(f"⚠️ Failed to write message log for {message_id}: {log_exc}")
 
-            self._log_reminder_sent_analytics(message_id, msg_data)
-            self._persist_sent_messages()
+        self._log_reminder_sent_analytics(message_id, msg_data)
+        self._persist_sent_messages()
 
     def mark_message_failed(self, message_id: str, error: str = ""):
         """Revert a message back to 'scheduled' so it can be retried next cycle."""

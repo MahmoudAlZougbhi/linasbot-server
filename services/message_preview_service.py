@@ -393,7 +393,7 @@ class MessagePreviewService:
         Get all messages pending approval
 
         Args:
-            status: Filter by status (pending_approval, approved, rejected, sent)
+            status: Filter by status (pending_approval, approved, rejected, sent, would_send)
             filters: Additional filters (service_id, template_id, date_range)
 
         Returns:
@@ -661,6 +661,22 @@ class MessagePreviewService:
 
         return {'success': False, 'error': f'Message {message_id} not found'}
 
+    def mark_would_send(self, message_id: str) -> Dict:
+        """
+        Mark an approved preview row as would_send (dry-run / no real WhatsApp).
+        Stops the scheduler from retrying the same approved row every tick when
+        the row is not present in smart_messaging.scheduled_messages (e.g. after restart).
+        """
+        self.preview_queue = self._load_preview_queue()
+        for i, msg in enumerate(self.preview_queue):
+            if msg.get("message_id") == message_id:
+                self.preview_queue[i]["status"] = "would_send"
+                self.preview_queue[i]["would_send_at"] = datetime.now().isoformat()
+                self.preview_queue[i]["updated_at"] = datetime.now().isoformat()
+                self._save_preview_queue()
+                return {"success": True}
+        return {"success": False, "error": f"Message {message_id} not found"}
+
     def get_queue_stats(self) -> Dict:
         """Get statistics about the preview queue"""
         self.preview_queue = self._load_preview_queue()
@@ -671,6 +687,7 @@ class MessagePreviewService:
             'approved': 0,
             'rejected': 0,
             'sent': 0,
+            'would_send': 0,
             'by_template': {},
             'by_service': {}
         }

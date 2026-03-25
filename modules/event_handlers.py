@@ -250,7 +250,17 @@ async def startup_event():
                                             rendered_text=content,
                                         )
 
-                                        if result.get('success'):
+                                        if result.get("dry_run"):
+                                            # Same shape as non-preview path: success=True + dry_run — not a real WhatsApp send.
+                                            print(
+                                                f"   📋 Dry-run for {message_id} (ENABLE_SENDING=false or local/sandbox "
+                                                f"— no WhatsApp). Not saving to Live Chat."
+                                            )
+                                            if message_id in smart_messaging.scheduled_messages:
+                                                smart_messaging.mark_message_dry_run(message_id)
+                                            else:
+                                                message_preview_service.mark_would_send(message_id)
+                                        elif result.get('success'):
                                             message_preview_service.mark_as_sent(message_id)
                                             # Only mark this row as sent. mark_messages_sent_by_phone would mark
                                             # every scheduled/pending message for the same phone + template as
