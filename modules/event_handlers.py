@@ -50,7 +50,7 @@ async def startup_event():
         print("=" * 60)
         
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from services.smart_messaging import smart_messaging
+        from services.smart_messaging import smart_messaging, deliver_scheduled_smart_whatsapp
         from services.appointment_scheduler import (
             populate_scheduled_messages_from_appointments,
             populate_no_show_messages_from_missed_appointments,
@@ -234,10 +234,17 @@ async def startup_event():
                                     customer_name = msg.get('customer_name', 'Customer')
 
                                     if phone and content:
-                                        # Send using WhatsApp adapter
+                                        # Send using WhatsApp adapter (template when configured — required outside 24h window)
                                         from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
                                         adapter = WhatsAppFactory.get_adapter()
-                                        result = await adapter.send_text_message(phone, content)
+                                        result = await deliver_scheduled_smart_whatsapp(
+                                            adapter,
+                                            phone=phone,
+                                            template_id=template_id,
+                                            language=msg.get("language") or "ar",
+                                            placeholders=msg.get("placeholders") or {},
+                                            rendered_text=content,
+                                        )
 
                                         if result.get('success'):
                                             message_preview_service.mark_as_sent(message_id)
@@ -311,8 +318,14 @@ async def startup_event():
                     print(f"   Content: {content[:100]}{'...' if len(content) > 100 else ''}")
 
                     try:
-                        # Actually send the message
-                        result = await adapter.send_text_message(phone, content)
+                        result = await deliver_scheduled_smart_whatsapp(
+                            adapter,
+                            phone=phone,
+                            template_id=msg_type,
+                            language=msg.get("language") or "ar",
+                            placeholders=msg.get("placeholders") or {},
+                            rendered_text=content,
+                        )
 
                         if result.get('dry_run'):
                             sent_count += 1
@@ -443,16 +456,21 @@ async def startup_event():
 
                             if message_content:
                                 adapter = WhatsAppFactory.get_adapter()
-                                result = await adapter.send_text_message(customer_phone, message_content)
+                                result = await deliver_scheduled_smart_whatsapp(
+                                    adapter,
+                                    phone=customer_phone,
+                                    template_id="missed_yesterday",
+                                    language=language,
+                                    placeholders=placeholders,
+                                    rendered_text=message_content,
+                                )
                                 if result.get('dry_run'):
                                     print(f"📋 [DRY-RUN] Would send missed yesterday to {customer_phone}")
-                                else:
+                                elif result.get('success'):
                                     print(f"✅ Sent missed yesterday message to {customer_phone}")
 
-                                    # Sync in-memory scheduled_messages dict
                                     smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_yesterday")
 
-                                    # Save to conversation history for continuous context
                                     await save_conversation_message_to_firestore(
                                         user_id=customer_phone,
                                         role="ai",
@@ -472,6 +490,11 @@ async def startup_event():
                                         customer_phone,
                                         "N/A",
                                         {"type": "missed_yesterday", "customer_name": customer_name}
+                                    )
+                                else:
+                                    print(
+                                        f"❌ Missed yesterday send failed for {customer_phone}: "
+                                        f"{result.get('error', 'unknown')}"
                                     )
                         except Exception as e:
                             print(f"❌ Error sending missed yesterday message: {e}")
@@ -536,16 +559,21 @@ async def startup_event():
                             
                             if message_content:
                                 adapter = WhatsAppFactory.get_adapter()
-                                result = await adapter.send_text_message(customer_phone, message_content)
+                                result = await deliver_scheduled_smart_whatsapp(
+                                    adapter,
+                                    phone=customer_phone,
+                                    template_id="missed_this_month",
+                                    language=language,
+                                    placeholders=placeholders,
+                                    rendered_text=message_content,
+                                )
                                 if result.get('dry_run'):
                                     print(f"📋 [DRY-RUN] Would send missed this month to {customer_phone}")
-                                else:
+                                elif result.get('success'):
                                     print(f"✅ Sent missed this month message to {customer_phone}")
 
-                                    # Sync in-memory scheduled_messages dict
                                     smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_this_month")
 
-                                    # Save to conversation history for continuous context
                                     await save_conversation_message_to_firestore(
                                         user_id=customer_phone,
                                         role="ai",
@@ -565,6 +593,11 @@ async def startup_event():
                                         customer_phone,
                                         "N/A",
                                         {"type": "missed_this_month", "customer_name": customer_name}
+                                    )
+                                else:
+                                    print(
+                                        f"❌ Missed this month send failed for {customer_phone}: "
+                                        f"{result.get('error', 'unknown')}"
                                     )
                         except Exception as e:
                             print(f"❌ Error sending missed this month message: {e}")

@@ -675,7 +675,9 @@ Des questions? Nous sommes là! 💬
                         "content": content,
                         "type": canonical_type,
                         "message_id": message_id,
-                        "customer_name": message_data.get("placeholders", {}).get("customer_name", "Customer")
+                        "customer_name": message_data.get("placeholders", {}).get("customer_name", "Customer"),
+                        "placeholders": dict(message_data.get("placeholders") or {}),
+                        "language": message_data.get("language") or "ar",
                     })
 
                     # Mark as 'sending' to prevent duplicate processing,
@@ -1094,6 +1096,49 @@ Des questions? Nous sommes là! 💬
                     cancelled.append(message_id)
         
         return cancelled
+
+
+async def deliver_scheduled_smart_whatsapp(
+    adapter: Any,
+    *,
+    phone: str,
+    template_id: str,
+    language: str,
+    placeholders: Optional[Dict[str, Any]],
+    rendered_text: str,
+) -> Dict[str, Any]:
+    """
+    Proactive smart messages must use WhatsApp-approved templates outside the 24h session window.
+    When the template exists in montymobile_templates.json, send via Monty template API;
+    otherwise fall back to session text (only works if the user messaged recently).
+    """
+    from services.montymobile_template_service import montymobile_template_service
+    from services.whatsapp_adapters.safe_send_adapter import _should_dry_run, _log_dry_run
+
+    if _should_dry_run(phone):
+        _log_dry_run(
+            phone,
+            "scheduled_smart",
+            {"template_id": template_id, "mode": "template_or_session"},
+        )
+        return {"success": True, "dry_run": True}
+
+    canonical = normalize_template_id(template_id)
+    tpl_meta = montymobile_template_service.get_template_info(canonical)
+    if tpl_meta:
+        params: Dict[str, str] = {}
+        for k, v in (placeholders or {}).items():
+            if v is None:
+                continue
+            params[str(k)] = str(v)
+        lang = (language or "ar").strip()[:8] or "ar"
+        return await montymobile_template_service.send_template_message(
+            template_id=canonical,
+            phone_number=phone,
+            language=lang,
+            parameters=params,
+        )
+    return await adapter.send_text_message(phone, rendered_text)
 
 
 # Mapping of message types to friendly names
