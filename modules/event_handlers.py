@@ -186,14 +186,14 @@ async def startup_event():
                 from storage.persistent_storage import APP_SETTINGS_FILE
                 settings_file = str(APP_SETTINGS_FILE)
                 smart_messaging_enabled = True
-                preview_mode_enabled = True
+                preview_mode_enabled = False
 
                 if os.path.exists(settings_file):
                     try:
                         with open(settings_file, 'r', encoding='utf-8') as f:
                             settings = json.load(f)
                         smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
-                        preview_mode_enabled = settings.get('smartMessaging', {}).get('previewBeforeSend', True)
+                        preview_mode_enabled = settings.get('smartMessaging', {}).get('previewBeforeSend', False)
                     except Exception as e:
                         print(f"Error reading settings: {e}")
 
@@ -285,10 +285,9 @@ async def startup_event():
                         print(f"Error checking preview queue: {preview_error}")
 
                     print("=" * 80)
-                    return
 
-                # Direct send mode (when preview is disabled)
-                print("SENDING Smart Messaging scheduled messages (preview disabled)")
+                # Always process due rows with status=scheduled (automation exempts preview; CRM-style queue)
+                print("SENDING due Smart Messaging (status=scheduled, preview-independent)")
                 print("=" * 80)
 
                 # Get messages that are ready to send

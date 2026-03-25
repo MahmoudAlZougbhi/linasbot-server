@@ -260,7 +260,8 @@ async def populate_scheduled_messages_from_appointments():
                         placeholders,
                         user_persistence.get_user_language(customer_phone),
                         service_id=None,
-                        service_name=service_name
+                        service_name=service_name,
+                        metadata={"source": "appointment_scheduler"},
                     )
 
                     if result:
@@ -411,7 +412,8 @@ async def populate_no_show_messages_from_missed_appointments():
                     },
                     user_persistence.get_user_language(customer_phone),
                     service_id=None,
-                    service_name=service_name
+                    service_name=service_name,
+                    metadata={"source": "appointment_scheduler"},
                 )
 
                 if message_id:
@@ -570,7 +572,8 @@ async def populate_missed_yesterday_messages():
                     },
                     user_persistence.get_user_language(customer_phone),
                     service_id=None,
-                    service_name=service_name
+                    service_name=service_name,
+                    metadata={"source": "appointment_scheduler"},
                 )
 
                 if message_id:
@@ -754,7 +757,8 @@ async def populate_one_month_followups():
                     placeholders,
                     user_persistence.get_user_language(apt_data['phone']),
                     service_id=apt_data['service_id'],
-                    service_name=apt_data['service_name']
+                    service_name=apt_data['service_name'],
+                    metadata={"source": "appointment_scheduler"},
                 )
 
                 if message_id:
@@ -979,7 +983,8 @@ async def populate_missed_month_messages():
                     placeholders,
                     user_persistence.get_user_language(customer_phone),
                     service_id=None,
-                    service_name=service_name
+                    service_name=service_name,
+                    metadata={"source": "appointment_scheduler"},
                 )
 
                 if message_id:

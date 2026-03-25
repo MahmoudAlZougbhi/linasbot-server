@@ -184,10 +184,10 @@ class MessageQueueService:
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
-                return settings.get('smartMessaging', {}).get('previewBeforeSend', True)
+                return settings.get('smartMessaging', {}).get('previewBeforeSend', False)
         except Exception as e:
             logger.error(f"Error checking preview mode status: {e}")
-        return True  # Default to preview mode enabled
+        return False
 
     def _is_template_enabled_for_service(self, service_id, template_id):
         """Check if template is enabled for a specific service"""

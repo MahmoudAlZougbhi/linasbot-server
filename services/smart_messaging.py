@@ -10,6 +10,17 @@ from pathlib import Path
 
 from services.message_logs_service import message_logs_service
 from services.smart_messaging_catalog import TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS, normalize_template_id
+
+# When previewBeforeSend is on, do not queue these for manual approval — they must stay "scheduled"
+# so the monitor job can send them via process_scheduled_messages + Monty templates.
+AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES = frozenset(
+    {
+        "daily_template_dispatcher",
+        "appointment_scheduler",
+        "missed_paused_campaign",
+        "chatted_no_crm_lead_campaign",
+    }
+)
 from storage.persistent_storage import (
     SENT_SMART_MESSAGES_FILE,
     MESSAGE_TEMPLATES_FILE,
@@ -533,6 +544,7 @@ Des questions? Nous sommes là! 💬
             print(f"Template {canonical_type} not enabled for service {service_id}, skipping")
             return None
 
+        meta = dict(metadata or {})
         self.scheduled_messages[message_id] = {
             "customer_phone": customer_phone,
             "message_type": canonical_type,
@@ -543,12 +555,16 @@ Des questions? Nous sommes là! 💬
             "service_name": service_name or "Unknown Service",
             "status": "scheduled",
             "created_at": datetime.now(),
-            "metadata": metadata or {},
+            "metadata": meta,
         }
 
-        # If preview mode is enabled, also add to preview queue
+        # Preview queue = manual approval. Automation must not get stuck here when preview is on.
         if self._is_preview_mode_enabled():
-            self._add_to_preview_queue(message_id)
+            src = (meta.get("source") or "").strip()
+            if meta.get("skip_preview") is True or src in AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES:
+                pass
+            else:
+                self._add_to_preview_queue(message_id)
 
         return message_id
 
@@ -571,10 +587,10 @@ Des questions? Nous sommes là! 💬
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
-                return settings.get('smartMessaging', {}).get('previewBeforeSend', True)
+                return settings.get('smartMessaging', {}).get('previewBeforeSend', False)
         except Exception as e:
             print(f"Error checking preview mode: {e}")
-        return True
+        return False
 
     def _is_template_enabled_for_service(self, service_id: int, template_id: str) -> bool:
         """Check if template is enabled for a specific service"""
@@ -842,9 +858,9 @@ Des questions? Nous sommes là! 💬
         print(f"   Appointment: {appointment_date}")
         print(f"   Current time: {now}")
 
-        reminder_meta = None
+        reminder_meta = {"source": "appointment_scheduler"}
         if raw_aid is not None:
-            reminder_meta = {"appointment_id": raw_aid}
+            reminder_meta = {**reminder_meta, "appointment_id": raw_aid}
 
         # Schedule 24h reminder
         reminder_24h_time = appointment_date - timedelta(hours=24)
@@ -879,7 +895,8 @@ Des questions? Nous sommes là! 💬
             placeholders,
             language,
             service_id=service_id,
-            service_name=service_name
+            service_name=service_name,
+            metadata={"source": "appointment_scheduler"},
         )
         if result:
             messages_scheduled += 1
@@ -912,7 +929,8 @@ Des questions? Nous sommes là! 💬
             "no_show_followup",
             datetime.now(),
             placeholders,
-            language
+            language,
+            metadata={"source": "appointment_scheduler"},
         )
     
     def get_scheduled_messages_summary(self) -> Dict:

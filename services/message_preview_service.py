@@ -124,7 +124,7 @@ class MessagePreviewService:
         settings = self._load_app_settings()
         defaults = {
             'enabled': True,
-            'previewBeforeSend': True,
+            'previewBeforeSend': False,
             'autoApproveAfterMinutes': 0,
             # Public HTTPS URL for WhatsApp template IMAGE headers (Monty/Meta require this component).
             'templateHeaderImageUrl': '',
@@ -302,7 +302,7 @@ class MessagePreviewService:
     def is_preview_mode_enabled(self) -> bool:
         """Check if preview mode is enabled"""
         settings = self.get_settings()
-        return settings.get('previewBeforeSend', True)
+        return settings.get('previewBeforeSend', False)
 
     def is_smart_messaging_enabled(self) -> bool:
         """Check if smart messaging is globally enabled"""
