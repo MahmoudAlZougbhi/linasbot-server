@@ -1138,6 +1138,11 @@ async def deliver_scheduled_smart_whatsapp(
             language=lang,
             parameters=params,
         )
+    print(
+        f"⚠️ deliver_scheduled_smart_whatsapp: no Monty template config for {canonical!r} — "
+        f"falling back to session TEXT (usually fails outside WhatsApp 24h window). "
+        f"Add template to config/montymobile_templates.json or fix template id alias."
+    )
     return await adapter.send_text_message(phone, rendered_text)
 
 

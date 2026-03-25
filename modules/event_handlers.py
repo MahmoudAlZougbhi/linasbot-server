@@ -199,7 +199,11 @@ async def startup_event():
 
                 # If smart messaging is disabled globally, skip processing
                 if not smart_messaging_enabled:
-                    print("Smart Messaging is DISABLED globally. Skipping message processing.")
+                    print(
+                        "Smart Messaging is DISABLED globally (app_settings smartMessaging.enabled=false). "
+                        "Skipping bot queue sends. Note: CRM/API may still send reminder_24h via "
+                        "send_appointment_reminders — other templates need this toggle ON."
+                    )
                     return
 
                 print(
