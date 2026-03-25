@@ -970,8 +970,14 @@ const SmartMessaging = () => {
   };
 
   const fetchSmartMessagingData = async () => {
+    // Only full-page spinner on first load; refetches after edits would hide the whole
+    // page (including "Send test template") and feel like sends "stopped working".
+    const showFullPageLoader =
+      !messageTemplates || Object.keys(messageTemplates).length === 0;
     try {
-      setLoading(true);
+      if (showFullPageLoader) {
+        setLoading(true);
+      }
 
       const fetchJsonSafely = async (path) => {
         try {
@@ -1025,7 +1031,9 @@ const SmartMessaging = () => {
       console.error("Error fetching smart messaging data:", error);
       toast.error("Failed to load smart messaging data");
     } finally {
-      setLoading(false);
+      if (showFullPageLoader) {
+        setLoading(false);
+      }
     }
   };
 

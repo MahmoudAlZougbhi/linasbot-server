@@ -6,6 +6,7 @@ Handles message templates endpoints for the dashboard
 import json
 import os
 import tempfile
+import uuid
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -404,10 +405,13 @@ async def send_test_template_message(request_data: Dict[str, Any]):
         except (TypeError, ValueError):
             n_body = len(template_param_names)
 
+        # Unique body values per request so WhatsApp/Monty do not treat back-to-back
+        # template tests as duplicate utility messages (same user + same params).
+        _test_nonce = uuid.uuid4().hex[:8]
         all_test_values = {
-            "customer_name": "Test Customer",
+            "customer_name": f"Test ({_test_nonce})",
             "appointment_date": "2025-12-25",
-            "appointment_time": "02:00 PM",
+            "appointment_time": f"02:00 PM · {_test_nonce}",
             "branch_name": "Lina's Laser Center",
             "service_name": "Laser Hair Removal",
             "phone_number": "+961 1 234 567",
@@ -415,12 +419,12 @@ async def send_test_template_message(request_data: Dict[str, Any]):
         }
 
         test_parameters = {
-            param: all_test_values.get(param, f"test_{param}")
+            param: all_test_values.get(param, f"test_{param}_{_test_nonce}")
             for param in template_param_names
         }
         # Monty requires exactly `n_body` body parameters; pad with positional keys if JSON names are short
         for i in range(len(template_param_names), n_body):
-            test_parameters[str(i + 1)] = f"test_slot_{i + 1}"
+            test_parameters[str(i + 1)] = f"slot{i + 1}-{_test_nonce}"
         
         print(
             f"📋 Template '{template_id}' body slots: count={n_body} "
@@ -518,6 +522,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                             "template_language": language,
                             "recipient_to_monty": result.get("recipient_to_monty"),
                             "test_send": True,
+                            "test_send_nonce": _test_nonce,
                         },
                     )
                 except Exception as _fs_err:
