@@ -22,6 +22,7 @@
     },
     "thank_you_message_sent_after_session": {
       "name": "thank_you_message_sent_after_session",
+      "omit_empty_header_component": true,
       "wa_message_id": "885927340658052",
       "record_guid": "0beddf53-db9a-4cdb-9b6e-e5b1483c833f",
       "category": "UTILITY",
@@ -36,6 +37,7 @@
     },
     "sent_17_days_after_last_session_new": {
       "name": "sent_17_days_after_last_session_new",
+      "omit_empty_header_component": true,
       "wa_message_id": "842363998553484",
       "record_guid": "0caf3b58-4a2b-4e6d-b55c-0af2341b2699",
       "category": "UTILITY",
@@ -54,6 +56,7 @@
     },
     "missed_yesterday": {
       "name": "missed_yesterday",
+      "omit_empty_header_component": true,
       "meta_template_name": "sent_day_after_missed_appointment",
       "wa_message_id": "1436541924468894",
       "record_guid": "48eba3ff-0a16-47eb-bf07-2b92f43510e7",
@@ -69,6 +72,7 @@
     },
     "sent_for_pause": {
       "name": "sent_for_pause",
+      "omit_empty_header_component": true,
       "wa_message_id": "1090366319768263",
       "record_guid": "b3fcf502-f9ee-46c3-b3b5-3a80dae3c8c7",
       "category": "UTILITY",
@@ -83,6 +87,7 @@
     },
     "whatsapp_lead_no_booking": {
       "name": "whatsapp_lead_no_booking",
+      "omit_empty_header_component": true,
       "wa_message_id": "",
       "record_guid": "",
       "category": "UTILITY",
@@ -97,6 +102,7 @@
     },
     "session_feedback": {
       "name": "session_feedback",
+      "omit_empty_header_component": true,
       "wa_message_id": "1578679806821017",
       "record_guid": "ffcf90db-1c7a-4414-bbaa-491992063c57",
       "category": "UTILITY",
@@ -127,8 +133,8 @@
     "languages_available": ["ar"],
     "languages_missing": ["en", "fr"],
     "next_steps": ["Add English and French versions", "Test all templates"],
-    "templates_are_text_only": "true = do not send image/text VARIABLES in the header. Pair with send_empty_header_component=true when Meta has a fixed header (0 variable slots): API sends {\"type\":\"header\",\"parameters\":[]}. If Monty says header required: enable send_empty_header_component. If it says 0 parameters only: do not add header_parameters or image links.",
-    "send_empty_header_component": "When true with templates_are_text_only true, Monty gets an empty header component (0 params). Resolves flip-flop between 'Header required' and 'must contain exactly 0 parameters'.",
+    "templates_are_text_only": "true = do not send image/text VARIABLES in the header. Pair body-only Meta templates with per-template omit_empty_header_component=true.",
+    "send_empty_header_component": "When true: send {\"type\":\"header\",\"parameters\":[]} for templates that do NOT set omit_empty_header_component (e.g. reminder_24h if Meta has fixed header / Monty requires it). Body-only templates in Meta must set omit_empty_header_component true or Monty returns Invalid HEADER.",
     "legacy_internal_ids": "thank_you_message_sent_after_session: Meta name = config key; legacy post_session_feedback. sent_17_days_after_last_session_new: legacy twenty_day_followup, one_month_followup. sent_for_pause (legacy missed_paused_appointment, missed_this_month). session_feedback (legacy attended_yesterday). missed_yesterday -> sent_day_after_missed_appointment. whatsapp_lead_no_booking: 0 vars.",
     "if_monty_still_says_header_required": "The template NAME or LANGUAGE in the outbound log likely does not match the text-only template in Meta (wrong namespace). Fix name in montymobile_templates.json or create a matching template in Manager; do not add fake headers.",
     "meta_template_name": "Optional: meta_template_name or whatsapp_template_name overrides outbound template name. If Monty body count errors, ensure this matches the exact template name in Manager (wrong name = wrong schema).",
