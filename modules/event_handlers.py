@@ -252,7 +252,11 @@ async def startup_event():
 
                                         if result.get('success'):
                                             message_preview_service.mark_as_sent(message_id)
-                                            smart_messaging.mark_messages_sent_by_phone(phone, template_id)
+                                            # Only mark this row as sent. mark_messages_sent_by_phone would mark
+                                            # every scheduled/pending message for the same phone + template as
+                                            # sent without delivering them — Live Chat / dashboard then looks
+                                            # "done" while WhatsApp only got the first one.
+                                            smart_messaging.mark_message_sent(message_id)
                                             print(f"   Sent message {message_id} to {phone}")
 
                                             _sched = smart_messaging.scheduled_messages.get(message_id) or {}
