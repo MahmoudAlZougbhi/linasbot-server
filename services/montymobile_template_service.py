@@ -501,9 +501,42 @@ class MontyMobileTemplateService:
                 if response.status_code == 200:
                     try:
                         response_data = response.json()
-                        
+
+                        def _extract_message_id(body: Dict[str, Any]) -> Optional[str]:
+                            if not isinstance(body, dict):
+                                return None
+                            data = body.get("data")
+                            if isinstance(data, dict):
+                                raw = data.get("messageId") or data.get("message_id")
+                                if raw is not None and str(raw).strip():
+                                    return str(raw).strip()
+                            raw = body.get("messageId") or body.get("message_id")
+                            if raw is not None and str(raw).strip():
+                                return str(raw).strip()
+                            return None
+
                         if response_data.get("success"):
-                            message_id = response_data.get("data", {}).get("messageId", "unknown")
+                            message_id = _extract_message_id(response_data)
+                            invalid = (
+                                not message_id
+                                or message_id.lower() == "unknown"
+                                or message_id.lower() in ("null", "none", "n/a")
+                            )
+                            if invalid:
+                                print(
+                                    "❌ Monty success=true but no usable messageId — "
+                                    "treating as failure (WhatsApp delivery not confirmed)"
+                                )
+                                return {
+                                    "success": False,
+                                    "error": (
+                                        "Monty reported success but returned no messageId — "
+                                        "check Monty dashboard / template name and API response body"
+                                    ),
+                                    "response": response_data,
+                                    "template_id": template_id,
+                                    "phone_number": phone_number,
+                                }
                             print(f"✅ Template sent successfully! Message ID: {message_id}")
                             to_used = None
                             try:

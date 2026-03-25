@@ -700,6 +700,15 @@ Des questions? Nous sommes là! 💬
                     # but do NOT mark 'sent' yet — caller does that after
                     # confirming the WhatsApp send succeeded.
                     self.scheduled_messages[message_id]["status"] = "sending"
+                else:
+                    mt = message_data.get("message_type")
+                    print(
+                        f"⚠️ Smart message {message_id}: no rendered content for template {mt!r} "
+                        f"(missing from message_templates.json or empty) — marking failed"
+                    )
+                    self.scheduled_messages[message_id]["status"] = "failed"
+                    self.scheduled_messages[message_id]["last_error"] = "missing_template_content"
+                    self.scheduled_messages[message_id]["last_attempt"] = datetime.now()
 
         return messages_to_send
 
