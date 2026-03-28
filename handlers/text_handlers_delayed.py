@@ -42,7 +42,10 @@ async def _delayed_process_messages(
             )
             config.user_last_bot_response_time[user_id] = datetime.datetime.now()
         else:
-            pass  # Queue was empty
+            print(
+                f"[_delayed_process_messages] WARN: pending message queue empty for {user_id!r} "
+                f"(no GPT turn). If another request cancelled a delayed task, messages may have been cleared."
+            )
 
     except asyncio.CancelledError:
         raise

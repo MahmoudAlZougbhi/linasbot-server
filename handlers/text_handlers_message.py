@@ -97,6 +97,7 @@ async def handle_message(
         skip_firestore_save: If True, skips saving to Firestore (used when called from voice_handlers after already saving)
         message_combine_delay: If set (e.g. 0.0), overrides config.MESSAGE_COMBINING_DELAY for this turn (dashboard tests).
     """
+    user_id = str(user_id).strip()
     config.user_names[user_id] = user_name
     
     # Ensure defaultdicts are initialized for this user

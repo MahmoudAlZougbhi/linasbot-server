@@ -1226,7 +1226,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             last_ai_response_at=last_ai_response_at,
         )
 
-    elif not gpt_response_data:
+    # Must be `if`, not `elif`: if the handover-confirmation GPT call above returns a falsy/empty
+    # payload, we still need the FAQ + main GPT path. `elif` would skip it and leave gpt_response_data empty.
+    if not gpt_response_data:
         # Only use raw input when not resuming; do NOT overwrite query pre-set from booking confirmation
         if not _resume_original_question and not query_pre_set_from_booking_confirmation:
             query_to_send_to_gpt = user_input_to_process
@@ -1290,6 +1292,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 qa_response,
                 current_preferred_lang,
             )
+            if not (qa_response or "").strip():
+                qa_response = (
+                    get_dynamic_message("generic_error_message", current_preferred_lang)
+                    or "عذراً، إجابة قاعدة الأسئلة كانت فارغة. جرّب إعادة صياغة السؤال."
+                )
+                print("[_process_and_respond] WARN: Q&A match had empty answer after policy → generic fallback")
 
             print(f"[_process_and_respond] ✅ Q&A MATCH FOUND!")
             if match_tier == "exact":
@@ -1505,6 +1513,19 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 user_image_base64=user_image_base64,
                 user_image_format=user_image_format,
             )
+
+    if not gpt_response_data:
+        print("[_process_and_respond] ERROR: gpt_response_data is empty — synthesizing fallback reply")
+        gpt_response_data = {
+            "action": "answer_question",
+            "bot_reply": (
+                get_dynamic_message("generic_error_message", current_preferred_lang)
+                or "عذراً، ما قدرت أكمل المعالجة. جرّب مرة ثانية أو تواصل معنا مباشرة."
+            ),
+            "detected_language": current_preferred_lang,
+            "current_gender_from_config": current_gender,
+            "_flow_meta": {"error": "empty_gpt_response_payload"},
+        }
 
     action = gpt_response_data.get("action")
     bot_reply_text = gpt_response_data.get("bot_reply")
