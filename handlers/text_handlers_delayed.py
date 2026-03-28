@@ -28,17 +28,28 @@ async def _delayed_process_messages(
         if delay > 0:
             await asyncio.sleep(delay)
 
+        combined_message = None
         if config.user_pending_messages[user_id]:
             combined_message = " ".join(config.user_pending_messages[user_id])
             config.user_pending_messages[user_id].clear()
+            user_data.pop("_dashboard_last_message_for_fallback", None)
+        elif user_data.get("_dashboard_test_simulation"):
+            fb = user_data.pop("_dashboard_last_message_for_fallback", None)
+            if fb and str(fb).strip():
+                combined_message = str(fb).strip()
+                print(
+                    f"[_delayed_process_messages] INFO: dashboard test fallback (pending queue was empty) "
+                    f"user={user_id!r} len={len(combined_message)}"
+                )
 
+        if combined_message:
             await _process_and_respond(
-                user_id, 
+                user_id,
                 user_name=config.user_names.get(user_id, "عميل"),
                 user_input_to_process=combined_message,
                 user_data=user_data,
                 send_message_func=send_message_func,
-                send_action_func=send_action_func
+                send_action_func=send_action_func,
             )
             config.user_last_bot_response_time[user_id] = datetime.datetime.now()
         else:

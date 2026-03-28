@@ -604,6 +604,10 @@ async def handle_message(
 
     # Message combining logic
     config.user_pending_messages[user_id].append(raw_msg)
+    # Dashboard /api/test-*: if a webhook-delayed task for this user was just cancelled, it may have
+    # left the pending deque empty; keep a copy so _delayed_process_messages can still run GPT.
+    if user_data.get("_dashboard_test_simulation"):
+        user_data["_dashboard_last_message_for_fallback"] = raw_msg
 
     # Cancel any previously scheduled processing task
     if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
