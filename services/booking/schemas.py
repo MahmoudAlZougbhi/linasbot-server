@@ -15,6 +15,7 @@ def empty_booking_intent_template() -> Dict[str, Any]:
         "service_id": None,
         "body_part": None,
         "body_part_ids": None,
+        "body_parts_with_sessions": None,
         "machine_name": None,
         "machine_id": None,
         "branch_name": None,

@@ -176,6 +176,44 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
     )
     return last
 
+
+async def get_service_data(service_id: int, machine_id: int = None):
+    """
+    GET service/data — price + body_parts options for a service (Appointment API doc).
+    Path override: LINASLASER_SERVICE_DATA_PATH (default service/data).
+    """
+    path = (os.getenv("LINASLASER_SERVICE_DATA_PATH") or "service/data").strip().lstrip("/")
+    params: dict = {"service_id": int(service_id)}
+    if machine_id is not None:
+        try:
+            params["machine_id"] = int(machine_id)
+        except (TypeError, ValueError):
+            pass
+    print(f"API Call: get_service_data path={path} params={params}")
+    response = await _make_api_request("GET", path, params=params)
+    if response.get("success"):
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_service_data", "status": "success", "path": path, "service_id": service_id},
+        )
+    else:
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_service_data",
+                "status": "failed",
+                "path": path,
+                "error": response.get("message"),
+                "service_id": service_id,
+            },
+        )
+    return response
+
+
 async def get_clinic_hours():
     """Returns the clinic's working hours for each day of the week."""
     print("API Call: get_clinic_hours")
@@ -546,14 +584,56 @@ def _clean_body_part_ids_for_api(raw: list) -> list:
     return out
 
 
+def _body_part_session_row(body_part_id: int, session_number: int = 1) -> dict:
+    """
+    Official Appointment API (BOC): body_parts[] uses **id** + session_number.
+    LINASLASER_BODY_PARTS_ITEM_ID_KEY: default `id`; use `body_part_id` for legacy stacks;
+    `both` sends id and body_part_id with the same value.
+    """
+    sn = int(session_number)
+    if sn < 1:
+        sn = 1
+    pid = int(body_part_id)
+    key = (os.getenv("LINASLASER_BODY_PARTS_ITEM_ID_KEY") or "id").strip().lower() or "id"
+    if key in ("both", "dual"):
+        return {"id": pid, "body_part_id": pid, "session_number": sn}
+    if key in ("body_part_id", "legacy", "old"):
+        return {"body_part_id": pid, "session_number": sn}
+    return {"id": pid, "session_number": sn}
+
+
+def _clean_body_parts_with_sessions_for_api(raw: Any) -> list:
+    """Normalize list items to BOC body_parts rows (default key **id** per API doc)."""
+    out = []
+    if not isinstance(raw, list) or not raw:
+        return out
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            pid = int(item.get("body_part_id") or item.get("id"))
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0:
+            continue
+        try:
+            sn = int(item.get("session_number", 1))
+        except (TypeError, ValueError):
+            sn = 1
+        out.append(_body_part_session_row(pid, sn))
+    return out
+
+
 async def create_appointment(phone: str, service_id: int, machine_id: Optional[int], branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
     """
-    POST appointments/create — **PDF-primary contract**: top-level **body_part_ids** (int[]).
+    POST appointments/create.
 
-    Set env **LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1** or
-    **LINASLASER_FORCE_BODY_PARTS_WITH_SESSIONS=1** to send **body_parts**
-    `{body_part_id, session_number}`. Also auto-uses body_parts when any session_number != 1
-    so session metadata is not lost.
+    Default: when **body_parts_with_sessions** is non-empty, sends **body_parts** (BOC team contract:
+    one row per area with session_number). Set **LINASLASER_APPOINTMENT_BODY_PART_IDS_ONLY=1** to
+    send only top-level **body_part_ids** when every session is 1 (legacy).
+
+    **LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS** / **LINASLASER_FORCE_BODY_PARTS_WITH_SESSIONS**
+    still force the body_parts shape when combined with ids-only logic for older deployments.
     """
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
@@ -582,47 +662,40 @@ async def create_appointment(phone: str, service_id: int, machine_id: Optional[i
         "true",
         "yes",
     )
+    ids_only = os.getenv("LINASLASER_APPOINTMENT_BODY_PART_IDS_ONLY", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     ids_from_arg = _clean_body_part_ids_for_api(body_part_ids)
+    cleaned_bps = _clean_body_parts_with_sessions_for_api(body_parts_with_sessions)
 
     use_body_parts = False
-    if body_parts_with_sessions and isinstance(body_parts_with_sessions, list) and body_parts_with_sessions:
-        non_one_session = False
-        derived_from_sessions: list = []
-        for item in body_parts_with_sessions:
-            if not isinstance(item, dict):
-                continue
-            try:
-                pid = int(item.get("body_part_id") or item.get("id"))
-            except (TypeError, ValueError):
-                continue
-            if pid <= 0:
-                continue
-            derived_from_sessions.append(pid)
-            try:
-                sn = int(item.get("session_number", 1))
-            except (TypeError, ValueError):
-                sn = 1
-            if sn != 1:
-                non_one_session = True
-        if force_sessions_env or legacy_env or non_one_session:
-            json_data["body_parts"] = body_parts_with_sessions
+    if cleaned_bps:
+        non_one = any(int(x.get("session_number", 1)) != 1 for x in cleaned_bps)
+        prefer_parts = (
+            not ids_only
+            or force_sessions_env
+            or legacy_env
+            or non_one
+        )
+        if prefer_parts:
+            json_data["body_parts"] = cleaned_bps
             use_body_parts = True
-        elif derived_from_sessions:
-            json_data["body_part_ids"] = derived_from_sessions
-        elif ids_from_arg:
-            json_data["body_part_ids"] = ids_from_arg
+        else:
+            json_data["body_part_ids"] = [
+                int(x.get("id") or x.get("body_part_id")) for x in cleaned_bps
+            ]
     elif legacy_env and ids_from_arg:
-        json_data["body_parts"] = [
-            {"body_part_id": bid, "session_number": 1} for bid in ids_from_arg
-        ]
+        json_data["body_parts"] = [_body_part_session_row(bid, 1) for bid in ids_from_arg]
         use_body_parts = True
     elif ids_from_arg:
         json_data["body_part_ids"] = ids_from_arg
 
     if use_body_parts:
         print(
-            "API Call: create_appointment using legacy body_parts shape "
-            "(LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS or session_number != 1)"
+            "API Call: create_appointment using body_parts "
+            "{id, session_number} (BOC doc; LINASLASER_BODY_PARTS_ITEM_ID_KEY overrides key)"
         )
 
     response = await _make_api_request("POST", "appointments/create", json_data=json_data)
@@ -847,6 +920,128 @@ async def update_appointment_date(appointment_id: int, phone: str, date: str, us
     return response
 
 
+async def edit_appointment(
+    appointment_id: int,
+    phone: str = None,
+    user_code: str = None,
+    service_id: int = None,
+    machine_id: int = None,
+    branch_id: int = None,
+    date: str = None,
+    body_part_ids: list = None,
+    body_parts_with_sessions: list = None,
+    session_number: int = None,
+    discount_percentage: float = None,
+    discount_amount: float = None,
+    total_cost_after_discount: float = None,
+    hidden: bool = None,
+    **kwargs,
+):
+    """
+    POST appointments/edit — full appointment update (BOC doc).
+    Either phone OR user_code required. Prefer body_parts OR root session_number, not both unnecessarily.
+    Path: LINASLASER_APPOINTMENTS_EDIT_PATH (default appointments/edit).
+    """
+    path = (os.getenv("LINASLASER_APPOINTMENTS_EDIT_PATH") or "appointments/edit").strip().lstrip("/")
+    ph = str(phone or "").strip()
+    uc = str(user_code or "").strip()
+    if not ph and not uc:
+        return {
+            "success": False,
+            "message": "edit_appointment requires phone or user_code (per API doc).",
+        }
+
+    json_data: dict = {"appointment_id": int(appointment_id)}
+    if ph:
+        json_data["phone"] = _phone_clean_for_appointment_api(ph)
+    if uc:
+        json_data["user_code"] = uc
+    if service_id is not None:
+        try:
+            json_data["service_id"] = int(service_id)
+        except (TypeError, ValueError):
+            pass
+    if machine_id is not None:
+        try:
+            json_data["machine_id"] = int(machine_id)
+        except (TypeError, ValueError):
+            pass
+    if branch_id is not None:
+        try:
+            json_data["branch_id"] = int(branch_id)
+        except (TypeError, ValueError):
+            pass
+    if date is not None and str(date).strip():
+        json_data["date"] = str(date).strip()
+
+    cleaned_bps = _clean_body_parts_with_sessions_for_api(body_parts_with_sessions)
+    if not cleaned_bps and body_part_ids:
+        sn0 = 1
+        if session_number is not None:
+            try:
+                sn0 = int(session_number)
+            except (TypeError, ValueError):
+                sn0 = 1
+            if sn0 < 1:
+                sn0 = 1
+        cleaned_bps = [_body_part_session_row(bid, sn0) for bid in _clean_body_part_ids_for_api(body_part_ids)]
+
+    if cleaned_bps:
+        json_data["body_parts"] = cleaned_bps
+    elif session_number is not None:
+        try:
+            sn = int(session_number)
+            if sn >= 1:
+                json_data["session_number"] = sn
+        except (TypeError, ValueError):
+            pass
+
+    if discount_percentage is not None:
+        try:
+            json_data["discount_percentage"] = float(discount_percentage)
+        except (TypeError, ValueError):
+            pass
+    if discount_amount is not None:
+        try:
+            json_data["discount_amount"] = float(discount_amount)
+        except (TypeError, ValueError):
+            pass
+    if total_cost_after_discount is not None:
+        try:
+            json_data["total_cost_after_discount"] = float(total_cost_after_discount)
+        except (TypeError, ValueError):
+            pass
+    if hidden is not None:
+        json_data["hidden"] = bool(hidden)
+
+    print(
+        f"API Call: edit_appointment path={path} appointment_id={appointment_id} "
+        f"keys={list(json_data.keys())}"
+    )
+    response = await _make_api_request("POST", path, json_data=json_data)
+    if response.get("success"):
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "edit_appointment", "status": "success", "appointment_id": appointment_id, "path": path},
+        )
+    else:
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "edit_appointment",
+                "status": "failed",
+                "error": response.get("message"),
+                "appointment_id": appointment_id,
+                "path": path,
+            },
+        )
+    return response
+
+
 async def update_paused_appointment(
     appointment_id: int,
     phone: str,
@@ -882,26 +1077,9 @@ async def update_paused_appointment(
     clean_ids = _clean_body_part_ids_for_api(body_part_ids or [])
     if clean_ids:
         json_data["body_part_ids"] = clean_ids
-    if isinstance(body_parts_with_sessions, list) and body_parts_with_sessions:
-        cleaned_sessions = []
-        for item in body_parts_with_sessions:
-            if not isinstance(item, dict):
-                continue
-            try:
-                pid = int(item.get("body_part_id") or item.get("id"))
-            except (TypeError, ValueError):
-                continue
-            if pid <= 0:
-                continue
-            try:
-                sn = int(item.get("session_number", 1))
-            except (TypeError, ValueError):
-                sn = 1
-            if sn <= 0:
-                sn = 1
-            cleaned_sessions.append({"body_part_id": pid, "session_number": sn})
-        if cleaned_sessions:
-            json_data["body_parts"] = cleaned_sessions
+    cleaned_sessions = _clean_body_parts_with_sessions_for_api(body_parts_with_sessions)
+    if cleaned_sessions:
+        json_data["body_parts"] = cleaned_sessions
 
     status_raw = (status or "").strip()
     default_set_available = os.getenv(

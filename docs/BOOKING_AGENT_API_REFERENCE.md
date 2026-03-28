@@ -24,6 +24,8 @@ For **laser tattoo removal (service 13)** only, if the list stays unavailable, y
 | GET | `customers/...` (by phone) | Ensure customer exists before create |
 | POST | `customers/create` (via `create_customer`) | New file when needed — **`branch_id` always sent** (callers may omit arg → `config.DEFAULT_BRANCH_ID`; invalid/missing resolved id → no HTTP call, structured error) |
 | POST | `appointments/create` | **Authoritative** booking creation |
+| GET | `service/data` | Price + `body_parts` options (`get_service_data`; path `LINASLASER_SERVICE_DATA_PATH`) |
+| POST | `appointments/edit` | Full appointment update — body_areas, sessions, machine, branch, discounts (`edit_appointment`; `LINASLASER_APPOINTMENTS_EDIT_PATH`) |
 
 ## Reschedule + clearing **Paused** status
 
@@ -42,9 +44,11 @@ The Python client in `api_integrations.create_appointment` sends JSON with at le
 
 - `phone`, `service_id`, `machine_id`, `branch_id`, `date` (strings/ints as today)
 - Optional `user_code`
-- **`body_part_ids`**: top-level array of integers (PDF contract). All selected areas from **`get_body_parts`** are included here for multi-area bookings.
+- **Body areas (official doc):** JSON uses **`body_parts[].id`** and **`session_number`** per row. This client builds rows from internal `{body_part_id|id, session_number}` and emits **`id`** by default (`LINASLASER_BODY_PARTS_ITEM_ID_KEY` = `body_part_id` or `both` for legacy). When **`body_parts_with_sessions`** is non-empty, **`body_parts`** is sent. `submit_booking_intent` merges model session hints with resolved **`body_part_ids`**.
 
-**Legacy fallback:** If `LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1` (env), or if callers pass `body_parts_with_sessions` with any **`session_number` ≠ 1**, the client sends **`body_parts`** instead so session metadata is preserved.
+**Legacy / ids-only:** set **`LINASLASER_APPOINTMENT_BODY_PART_IDS_ONLY=1`** to send only top-level **`body_part_ids`** when every session is **1** (older PDF-style contract).
+
+**Also forces `body_parts`:** **`LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1`** or **`LINASLASER_FORCE_BODY_PARTS_WITH_SESSIONS=1`** (and the legacy path still builds `body_parts` from ids when those envs are on).
 
 ## POST `appointments/branch/move`
 
@@ -80,7 +84,7 @@ Defined in `services/booking/constants.py` and `utils/appointment_slot_rules.py`
 
 ## Strict pipeline (`submit_booking_intent`)
 
-1. Model calls **`submit_booking_intent`** with extraction JSON (IDs optional).
+1. Model calls **`submit_booking_intent`** with extraction JSON (IDs optional). Optional **`body_parts_with_sessions`** (aligned with **`body_part_ids`**) carries per-area **`session_number`** when the user specifies follow-up sessions per zone.
 2. **`handle_submit_booking_intent`** (`services/booking/intent_pipeline.py`):
    - Merges gender from intent or session.
    - Loads **live** branches/services/machines from API.

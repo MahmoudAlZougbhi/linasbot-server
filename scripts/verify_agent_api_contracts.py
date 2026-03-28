@@ -140,7 +140,7 @@ async def main() -> int:
             "branch_id": branch_id,
             "date": future_date,
             "body_parts": [
-                {"body_part_id": body_part_ids[0], "session_number": 1},
+                {"id": body_part_ids[0], "session_number": 1},
             ],
         }
         payload_ids = {k: v for k, v in payload_parts.items() if k != "body_parts"}

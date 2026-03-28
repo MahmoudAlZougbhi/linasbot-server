@@ -3214,7 +3214,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 # Reschedule: user named a weekday then sent only appointment_id — model often keeps the old slot's day and changes hour only.
                 if (
-                    function_name == "update_appointment_date"
+                    function_name in ("update_appointment_date", "edit_appointment")
                     and user_input_for_date is not None
                     and context_messages_for_date is not None
                 ):
@@ -3736,7 +3736,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
 
-                if function_name in ("update_appointment_date", "update_paused_appointment"):
+                if function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment"):
                     phone_for_pause_guard = normalize_phone_for_lookup(
                         function_args.get("phone")
                         or customer_phone_clean
@@ -3854,6 +3854,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     requires_date = (
                         function_name == "update_appointment_date"
                         or (function_name == "update_paused_appointment" and "date" in function_args)
+                        or (function_name == "edit_appointment" and "date" in function_args)
                     )
                     if requires_date:
                         if not normalize_tool_date(
@@ -3887,7 +3888,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 # --- Auto-chain appointment_id from check_next when GPT omitted it ---
                 # If GPT already set appointment_id (e.g. user picked from a multi-appointment list), do not overwrite.
-                if function_name in ("update_appointment_date", "update_paused_appointment") and check_next_appointment_result and not forced_update_appointment_id:
+                if function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and check_next_appointment_result and not forced_update_appointment_id:
                     actual_appointment_id = extract_appointment_id(extract_check_next_appointment(check_next_appointment_result))
                     if actual_appointment_id:
                         gpt_raw = function_args.get("appointment_id")
@@ -3906,7 +3907,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"DEBUG: appointment_id already correct: {actual_appointment_id}")
 
                 # Reject day/time that violate clinic rules (service + gender + branch + device) before CRM.
-                if function_name in ("create_appointment", "update_appointment_date", "update_paused_appointment"):
+                if function_name in ("create_appointment", "update_appointment_date", "update_paused_appointment", "edit_appointment"):
                     date_s = function_args.get("date")
                     dt_local = None
                     if isinstance(date_s, str) and date_s.strip():
@@ -3918,6 +3919,17 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             sid = _safe_int(function_args.get("service_id"))
                             bid = _safe_int(function_args.get("branch_id"))
                             mid = _safe_int(function_args.get("machine_id"))
+                        elif function_name == "edit_appointment":
+                            aid = _safe_int(function_args.get("appointment_id"))
+                            row = find_appointment_row_in_check_next_payload(
+                                check_next_appointment_result, aid
+                            )
+                            if row is not None:
+                                sid, bid, mid = extract_appointment_booking_fields(row)
+                            else:
+                                sid = _safe_int(function_args.get("service_id"))
+                                bid = _safe_int(function_args.get("branch_id"))
+                                mid = _safe_int(function_args.get("machine_id"))
                         else:
                             aid = _safe_int(function_args.get("appointment_id"))
                             row = find_appointment_row_in_check_next_payload(
@@ -4232,7 +4244,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"create_appointment tool: API failed (no user-text retry): {err_msg}")
                         
                         # 📊 ANALYTICS: Track appointment reschedule
-                        elif function_name in ("update_appointment_date", "update_paused_appointment") and isinstance(tool_output, dict) and tool_output.get("success"):
+                        elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and tool_output.get("success"):
                             update_appointment_date_success_count += 1
                             from services.analytics_events import analytics
                             
@@ -4285,7 +4297,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     )
                                 except Exception as pr_e:
                                     print(f"WARNING: analytics pause_cleared: {pr_e}")
-                        elif function_name in ("update_appointment_date", "update_paused_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
+                        elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
                             api_failure_reason = f"update_appointment_date_tool_failed: {err_msg}"
@@ -4394,6 +4406,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         had_update_tool = bool(tool_calls) and (
             "update_appointment_date" in tool_names
             or "update_paused_appointment" in tool_names
+            or "edit_appointment" in tool_names
         )
 
         _leaked_rec = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")

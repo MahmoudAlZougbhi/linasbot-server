@@ -924,8 +924,8 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "operator_id": None,
                         })
                 # Canonical conversation_state for index
-                # When is_smart_source: never leave users stuck in waiting queue without an operator —
-                # otherwise handle_message only sends "please wait" and the AI never replies to campaign replies.
+                # When is_smart_source: never leave users stuck in human takeover (waiting OR stale operator) —
+                # otherwise handle_message only sends handoff/waiting lines and the AI never replies to template replies.
                 if is_smart_source:
                     if firestore_post_release_waiting_blocked(doc_data):
                         update_payload.update({
@@ -934,7 +934,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "status": "active",
                             "operator_id": None,
                         })
-                    elif doc_data.get("human_takeover_active") and not doc_data.get("operator_id"):
+                    elif doc_data.get("human_takeover_active"):
                         update_payload.update({
                             "conversation_state": "bot_active",
                             "human_takeover_active": False,
@@ -971,11 +971,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     doc_ref,
                     update_payload,
                 )
-                if (
-                    is_smart_source
-                    and role == "ai"
-                    and update_payload.get("human_takeover_active") is False
-                ):
+                if is_smart_source and role == "ai":
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 _invalidate_live_chat_cache()
                 await _ensure_live_chat_index_after_save(
@@ -1131,7 +1127,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "human_takeover_active": False,
                             "operator_id": None,
                         })
-                # When is_smart_source: release waiting queue (no operator) so campaign replies are handled by AI
+                # When is_smart_source: release human takeover (waiting or assigned) so template replies are handled by AI
                 if is_smart_source:
                     if firestore_post_release_waiting_blocked(doc_data):
                         update_payload.update({
@@ -1140,7 +1136,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                             "status": "active",
                             "operator_id": None,
                         })
-                    elif doc_data.get("human_takeover_active") and not doc_data.get("operator_id"):
+                    elif doc_data.get("human_takeover_active"):
                         update_payload.update({
                             "conversation_state": "bot_active",
                             "human_takeover_active": False,
@@ -1177,11 +1173,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     doc_ref,
                     update_payload,
                 )
-                if (
-                    is_smart_source
-                    and role == "ai"
-                    and update_payload.get("human_takeover_active") is False
-                ):
+                if is_smart_source and role == "ai":
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
@@ -2428,6 +2420,20 @@ def get_openai_tools_schema():
                             "items": {"type": "integer"},
                             "description": "Non-empty list of CRM ids: call get_body_parts(service_id=…) and map every user-mentioned area to ids (multiple areas = multiple ids).",
                         },
+                        "body_parts_with_sessions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "body_part_id": {"type": "integer"},
+                                    "session_number": {
+                                        "type": "integer",
+                                        "description": "Per-area session index (1=first visit for that area, 2+=follow-up). Omit entirely for normal first bookings; server defaults all to 1.",
+                                    },
+                                },
+                            },
+                            "description": "Optional. When session numbers differ per area, pass one row per id (same ids as body_part_ids). Server sends BOC body_parts as {id, session_number} per official API doc.",
+                        },
                         "machine_name": {"type": "string", "description": "Device name for hair removal (Neo/Quadro/Candela/Trio)."},
                         "machine_id": {"type": "integer", "description": "Only if verified from get_machines."},
                         "branch_name": {"type": "string", "description": "Beirut or Antelias."},
@@ -2518,7 +2524,7 @@ def get_openai_tools_schema():
                             "type": "array",
                             "items": {"type": "integer"},
                             "minItems": 1,
-                            "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Non-empty array of numeric body_part_id values from get_body_parts for the chosen service_id. The CRM appointments/create call sends this as top-level **body_part_ids** (PDF). Ask which area(s) before calling.",
+                            "description": "**REQUIRED for all services** (hair, tattoo, CO2, whitening, etc.). Non-empty array of numeric body_part_id values from get_body_parts for the chosen service_id.",
                         },
                         "body_parts_with_sessions": {
                             "type": "array",
@@ -2526,10 +2532,10 @@ def get_openai_tools_schema():
                                 "type": "object",
                                 "properties": {
                                     "body_part_id": {"type": "integer"},
-                                    "session_number": {"type": "integer", "description": "Use 1 for new/first-time bookings unless the API context says otherwise."},
+                                    "session_number": {"type": "integer", "description": "Use 1 for new/first-time bookings unless the user or CRM context says otherwise (2+ = follow-up session for that area)."},
                                 },
                             },
-                            "description": "Optional. Prefer body_part_ids only. If any session_number is not 1, the server may send legacy body_parts to preserve sessions. Env LINASLASER_CREATE_APPOINTMENT_LEGACY_BODY_PARTS=1 forces that shape for all creates.",
+                            "description": "Optional; session numbers per area. Default create sends body_parts [{id, session_number}]. LINASLASER_APPOINTMENT_BODY_PART_IDS_ONLY=1 forces body_part_ids only when all sessions are 1.",
                         },
                     },
                     "required": ["phone", "service_id", "machine_id", "branch_id", "date", "body_part_ids"]
@@ -2624,6 +2630,57 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
+                "name": "edit_appointment",
+                "description": (
+                    "FULL update of an existing appointment per BOC API (POST /appointments/edit): "
+                    "service, machine, branch, date, body_parts with per-area session_number, discounts. "
+                    "Use when the user changes several fields at once or replaces body areas/sessions. "
+                    "For **date-only** reschedule prefer update_appointment_date. "
+                    "Either phone OR user_code required. Do not send root session_number together with body_parts unless the API requires it."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "appointment_id": {"type": "integer", "description": "CRM appointment id to edit."},
+                        "phone": {"type": "string", "description": "Customer phone (local format); required if user_code omitted."},
+                        "user_code": {"type": "string", "description": "Customer code; required if phone omitted."},
+                        "service_id": {"type": "integer", "description": "Optional new service id."},
+                        "machine_id": {"type": "integer", "description": "Optional new machine id."},
+                        "branch_id": {"type": "integer", "description": "Optional new branch id."},
+                        "date": {"type": "string", "description": "Optional new datetime YYYY-MM-DD HH:MM:SS (must be future)."},
+                        "body_part_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Optional; if body_parts_with_sessions omitted, builds body_parts with same session_number.",
+                        },
+                        "body_parts_with_sessions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "body_part_id": {"type": "integer"},
+                                    "id": {"type": "integer", "description": "Same as body_part_id if you prefer."},
+                                    "session_number": {"type": "integer"},
+                                },
+                            },
+                            "description": "Replace appointment body areas; API uses body_parts[].id + session_number.",
+                        },
+                        "session_number": {
+                            "type": "integer",
+                            "description": "Use only when NOT sending body_parts; applies with body_part_ids fallback.",
+                        },
+                        "discount_percentage": {"type": "number"},
+                        "discount_amount": {"type": "number"},
+                        "total_cost_after_discount": {"type": "number"},
+                        "hidden": {"type": "boolean"},
+                    },
+                    "required": ["appointment_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_branches",
                 "description": "Retrieves a list of all branches associated with the clinic.",
                 "parameters": {"type": "object", "properties": {}}
@@ -2644,6 +2701,24 @@ def get_openai_tools_schema():
                 "description": "Lists machines in the clinic. Call when booking laser hair removal (service 1 or 12) to pick the device the customer agreed to (Neo, Quadro, Candela, Trio). For tattoo, CO2, or whitening you may still call once to get a valid machine_id for the API, but do not ask the customer to choose a device for those services.",
                 "parameters": {"type": "object", "properties": {}}
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_service_data",
+                "description": (
+                    "GET /service/data (Appointment API): returns pricing and body_parts options for a service_id, "
+                    "optional machine_id. Recommended before create to show price/options to the user (per BOC doc flow)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "service_id": {"type": "integer", "description": "Service to quote (same as booking)."},
+                        "machine_id": {"type": "integer", "description": "Optional filter when machine is known."},
+                    },
+                    "required": ["service_id"],
+                },
+            },
         },
         {
             "type": "function",

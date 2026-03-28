@@ -125,6 +125,38 @@ def _coerce_int_id(value: Any) -> Optional[int]:
         return None
 
 
+def _merge_body_parts_sessions_from_intent(
+    body_ids: List[int],
+    raw_bps: Any,
+) -> List[Dict[str, int]]:
+    """
+    Build BOC body_parts list: use model-provided session_number per body_part_id when valid;
+    fill missing ids with session_number=1. Order follows body_ids.
+    """
+    if not body_ids:
+        return []
+    allowed = {int(b) for b in body_ids}
+    by_id: Dict[int, int] = {}
+    if isinstance(raw_bps, list) and raw_bps:
+        for item in raw_bps:
+            if not isinstance(item, dict):
+                continue
+            pid = _coerce_int_id(item.get("body_part_id") or item.get("id"))
+            if pid is None or pid not in allowed:
+                continue
+            try:
+                sn = int(item.get("session_number", 1))
+            except (TypeError, ValueError):
+                sn = 1
+            if sn < 1:
+                sn = 1
+            by_id[pid] = sn
+    out: List[Dict[str, int]] = []
+    for bid in body_ids:
+        out.append({"body_part_id": int(bid), "session_number": int(by_id.get(bid, 1))})
+    return out
+
+
 def _services_without_machine_from_env() -> Set[int]:
     """
     Optional override for services that should allow booking without machine_id.
@@ -690,16 +722,16 @@ async def handle_submit_booking_intent(
         )
         return shell
 
+    payload_bps = _merge_body_parts_sessions_from_intent(
+        body_ids, intent.get("body_parts_with_sessions")
+    )
     payload = {
         "phone": phone_clean,
         "service_id": svc_id,
         "branch_id": br_id,
         "date": api_date,
         "body_part_ids": body_ids,
-        # Keep per-area session metadata explicit for BOC integration.
-        "body_parts_with_sessions": [
-            {"body_part_id": bp_id, "session_number": 1} for bp_id in body_ids
-        ],
+        "body_parts_with_sessions": payload_bps,
     }
     if mach_id is not None:
         payload["machine_id"] = mach_id
