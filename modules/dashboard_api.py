@@ -77,11 +77,19 @@ async def restore_user_state_from_firestore(user_id: str) -> str:
 
 async def dashboard_send_message_capture(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
     """Capture bot responses for dashboard display"""
-    if message_text:
-        if to_number not in dashboard_bot_responses:
-            dashboard_bot_responses[to_number] = []
-        dashboard_bot_responses[to_number].append(message_text)
-        print(f"Dashboard captured bot response for {to_number}: {message_text}")
+    line = None
+    if message_text and str(message_text).strip():
+        line = str(message_text).strip()
+    elif image_url:
+        line = "[Image reply — no text body; check provider / server logs]"
+    elif audio_url:
+        line = "[Voice/audio reply — no text body; check provider / server logs]"
+    if line:
+        for key in _whatsapp_id_variants(to_number):
+            if key not in dashboard_bot_responses:
+                dashboard_bot_responses[key] = []
+            dashboard_bot_responses[key].append(line)
+        print(f"Dashboard captured bot response for {to_number}: {line[:500]}")
     return True
 
 
@@ -113,6 +121,14 @@ def dashboard_captured_list_for_user(user_id: str) -> List[str]:
         if lst:
             return list(lst)
     return []
+
+
+def _dashboard_empty_capture_hint(user_id: str) -> str:
+    return (
+        "No response captured: the handler finished but no outbound text was recorded "
+        f"(user_id={user_id!r}). Common causes: empty AI reply, template/media-only send, or a bug. "
+        "Check the server terminal for DEBUG lines and any GPT/API errors."
+    )
 
 
 async def _await_dashboard_delayed_task(user_id: str) -> Optional[str]:
@@ -369,7 +385,7 @@ async def test_message(request: TestMessageRequest):
                     "Check server logs."
                 )
             else:
-                bot_response = "No response captured - check console for errors"
+                bot_response = _dashboard_empty_capture_hint(user_id)
 
             response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
 
@@ -470,7 +486,7 @@ async def test_image(request: TestImageRequest):
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
         else:
-            bot_response = "No response captured - check console for errors"
+            bot_response = _dashboard_empty_capture_hint(user_id)
         
         response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
         
@@ -621,7 +637,7 @@ async def test_voice(
             if captured_responses:
                 bot_response = "\n\n".join(captured_responses)
             else:
-                bot_response = "No response captured - check console for errors"
+                bot_response = _dashboard_empty_capture_hint(user_id)
 
             response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
 
@@ -717,7 +733,11 @@ async def test_voice_text(request: TestVoiceRequest):
                 await _await_dashboard_delayed_task(user_id)
 
             captured_responses = dashboard_captured_list_for_user(user_id)
-            bot_response = "\n\n".join(captured_responses) if captured_responses else "No response captured"
+            bot_response = (
+                "\n\n".join(captured_responses)
+                if captured_responses
+                else _dashboard_empty_capture_hint(user_id)
+            )
 
             response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
 
@@ -830,7 +850,7 @@ async def test_voice_upload(
             if captured_responses:
                 bot_response = "\n\n".join(captured_responses)
             else:
-                bot_response = "No response captured - check console for errors"
+                bot_response = _dashboard_empty_capture_hint(user_id)
 
             response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
 
@@ -963,7 +983,7 @@ async def test_image_upload(
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
         else:
-            bot_response = "No response captured - check console for errors"
+            bot_response = _dashboard_empty_capture_hint(user_id)
         
         response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
         

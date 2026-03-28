@@ -1811,6 +1811,39 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         config.user_greeting_stage[user_id] = 2
         await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name))
 
+    # Dashboard test capture skips falsy message_text; WhatsApp should not receive empty bodies.
+    _actions_requiring_bot_text = {
+        "initial_greet_and_ask_gender",
+        "ask_gender",
+        "confirm_gender",
+        "confirm_booking_details",
+        "human_handover_initial_ask",
+        "return_to_normal_chat",
+        "ask_for_details_for_booking",
+        "ask_for_service_type",
+        "ask_for_details",
+        "ask_for_tattoo_photo",
+        "ask_clarification",
+        "answer_question",
+        "normal_chat",
+        "unknown_query",
+        "provide_info",
+        "tool_call",
+        "check_customer_status",
+        "confirm_appointment_reschedule",
+        "rate_limit_exceeded",
+        "content_moderated",
+    }
+    if action in _actions_requiring_bot_text and not (bot_reply_text or "").strip():
+        bot_reply_text = (
+            get_dynamic_message("generic_error_message", current_preferred_lang)
+            or "عذراً، لم أتمكن من توليد رد الآن. حاول مرة أخرى."
+        )
+        print(
+            f"[_process_and_respond] WARN: Empty bot_reply for action={action} → generic fallback "
+            f"(flow_meta.error={flow_meta.get('error')!r})"
+        )
+
     # Track what we send for flow logging
     sent_reply = bot_reply_text
 
