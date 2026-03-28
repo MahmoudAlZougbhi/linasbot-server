@@ -840,8 +840,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # AI-PRIMARY: Bot passes message to AI as-is. AI extracts language, gender, name and returns them.
     # Bot saves what AI returns. No bot-side keyword/pattern extraction for name.
 
-    # Check if human takeover is active
-    if config.user_in_human_takeover_mode.get(user_id, False):
+    # Check if human takeover is active (dashboard /api/test-* sets _dashboard_test_simulation to bypass and reach GPT)
+    if not user_data.get("_dashboard_test_simulation") and config.user_in_human_takeover_mode.get(user_id, False):
         print(f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI fallback guard active.")
         # IMPORTANT: During assigned operator takeover, AI must stay silent.
         # We only stay silent when an operator is assigned.

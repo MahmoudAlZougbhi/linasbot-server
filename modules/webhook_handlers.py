@@ -33,6 +33,25 @@ from handlers.training_handlers import start_training_mode, exit_training_mode
 _webhook_dedup_cache = {}
 WEBHOOK_DEDUP_WINDOW_SECONDS = 60  # Consider duplicate if received within 60 seconds (Qiscus can send duplicates up to 15+ seconds apart)
 
+
+async def await_whatsapp_delayed_processing(user_id: str) -> None:
+    """
+    handle_message() schedules combine+GPT in a Task and returns immediately. process_parsed_message
+    is also run via ensure_future after the webhook returns 200 — if we do not await this task here,
+    the background chain can end before the reply is sent (users see no AI response on WhatsApp).
+    """
+    if user_id not in _delayed_processing_tasks:
+        return
+    task = _delayed_processing_tasks[user_id]
+    try:
+        await asyncio.shield(task)
+    except asyncio.CancelledError:
+        print(f"⚠️ [webhook] Delayed processing cancelled for user_id={user_id}")
+    except Exception as e:
+        print(f"❌ [webhook] Delayed processing failed for user_id={user_id}: {e}")
+    finally:
+        _delayed_processing_tasks.pop(user_id, None)
+
 # Debug: last webhook received/parsed (for /api/debug/webhook-status)
 _last_webhook_received_at = None
 _last_webhook_parsed_at = None
@@ -720,6 +739,7 @@ async def handle_message_whatsapp_with_adapter(user_id: str, user_input_text: st
         send_message_func=adapter_send_message,
         send_action_func=send_whatsapp_typing_indicator
     )
+    await await_whatsapp_delayed_processing(user_id)
 
 
 async def _extract_image_base64_and_format(image_url: str, headers: Optional[Dict[str, str]] = None) -> tuple:
@@ -1157,6 +1177,7 @@ async def handle_voice_message_whatsapp_with_adapter(user_id: str, audio_id: str
             send_action_func=send_whatsapp_typing_indicator,
             audio_url=audio_url  # ✅ NEW: Pass the URL so voice message has type="voice" + audio_url in Firebase
         )
+        await await_whatsapp_delayed_processing(user_id)
 
     except Exception as e:
         print(f"ERROR processing audio {audio_id} for user {user_id}: {e}")

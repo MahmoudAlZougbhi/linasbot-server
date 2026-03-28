@@ -45,7 +45,7 @@ async def _delayed_process_messages(
             pass  # Queue was empty
 
     except asyncio.CancelledError:
-        pass  # Task was cancelled
+        raise
     except Exception as e:
         print(f"[_delayed_process_messages] ERROR: An error occurred in delayed processing for user {user_id}: {e}")
         import traceback

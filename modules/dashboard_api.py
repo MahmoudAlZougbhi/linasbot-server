@@ -115,27 +115,38 @@ def dashboard_captured_list_for_user(user_id: str) -> List[str]:
     return []
 
 
-async def _await_dashboard_delayed_task(user_id: str) -> None:
+async def _await_dashboard_delayed_task(user_id: str) -> Optional[str]:
     """
     Wait for message-combining / GPT task. Uses asyncio.shield so client disconnect or
     upstream cancellation is less likely to cancel the bot mid-reply (empty capture).
+    Returns a short diagnostic string when the task did not complete normally (for API hints).
     """
     if user_id not in _delayed_processing_tasks:
         print(f"DEBUG: No delayed task found for user {user_id}")
-        return
+        return "no_delayed_task_scheduled"
     print(f"DEBUG: Waiting for delayed task for user {user_id} to complete...")
     task = _delayed_processing_tasks[user_id]
+    note: Optional[str] = None
     try:
         await asyncio.shield(task)
         print(f"DEBUG: Delayed task completed for user {user_id}")
     except asyncio.CancelledError:
         print(f"DEBUG: Delayed task await cancelled for user {user_id}")
-        raise
+        note = "await_cancelled"
     except Exception as e:
         print(f"DEBUG: Delayed task error: {e}")
+        note = str(e)
     finally:
         if user_id in _delayed_processing_tasks:
             del _delayed_processing_tasks[user_id]
+    if note is None and task.done():
+        if task.cancelled():
+            note = "delayed_task_cancelled"
+        else:
+            exc = task.exception()
+            if exc:
+                note = str(exc)
+    return note
 
 
 @app.get("/")
@@ -273,6 +284,9 @@ async def test_message(request: TestMessageRequest):
             # Ensure phone_number is set even for existing user_data
             config.user_data_whatsapp[user_id]['phone_number'] = request.phone
 
+        _dash_test_ud = config.user_data_whatsapp[user_id]
+        _dash_test_ud["_dashboard_test_simulation"] = True
+
         # ===== RESTORE USER STATE FROM FIRESTORE (handles server restart) =====
         restored_name = await restore_user_state_from_firestore(user_id)
         if restored_name:
@@ -322,59 +336,69 @@ async def test_message(request: TestMessageRequest):
                 # print(f"🧪 TESTING MODE DISABLED - Firebase saving re-enabled")
                 pass
 
-        print(f"DEBUG: Processing message '{request.message}' for user {user_id}")
-
-        handle_err: Optional[str] = None
         try:
-            await handle_message_dashboard(user_id, request.message, user_name)
-            print(f"DEBUG: Message processing completed for user {user_id}")
-        except Exception as e:
-            handle_err = str(e)
-            print(f"DEBUG: Error in handle_message_dashboard: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"DEBUG: Processing message '{request.message}' for user {user_id}")
 
-        await _await_dashboard_delayed_task(user_id)
+            handle_err: Optional[str] = None
+            delayed_diag: Optional[str] = None
+            try:
+                await handle_message_dashboard(user_id, request.message, user_name)
+                print(f"DEBUG: Message processing completed for user {user_id}")
+            except Exception as e:
+                handle_err = str(e)
+                print(f"DEBUG: Error in handle_message_dashboard: {e}")
+                import traceback
+                traceback.print_exc()
 
-        captured_responses = dashboard_captured_list_for_user(user_id)
-        print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
+            delayed_diag = await _await_dashboard_delayed_task(user_id)
 
-        if captured_responses:
-            bot_response = "\n\n".join(captured_responses)
-        elif handle_err:
-            bot_response = (
-                f"No response captured: message handler failed before AI ran ({handle_err}). "
-                "See server logs for the full traceback."
-            )
-        else:
-            bot_response = "No response captured - check console for errors"
+            captured_responses = dashboard_captured_list_for_user(user_id)
+            print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
 
-        response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
+            if captured_responses:
+                bot_response = "\n\n".join(captured_responses)
+            elif handle_err:
+                bot_response = (
+                    f"No response captured: message handler failed before AI ran ({handle_err}). "
+                    "See server logs for the full traceback."
+                )
+            elif delayed_diag:
+                bot_response = (
+                    f"No response captured: delayed processing note: {delayed_diag}. "
+                    "Check server logs."
+                )
+            else:
+                bot_response = "No response captured - check console for errors"
 
-        dashboard_stats["total_messages"] += 1
-        dashboard_stats["active_users"].add(user_id)
-        dashboard_stats["response_times"].append(response_time)
-        dashboard_stats["conversations"].append({
-            "user": user_name,
-            "message": request.message,
-            "bot_response": bot_response,
-            "timestamp": start_time.isoformat(),
-            "provider": request.provider
-        })
+            response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
 
-        return {
-            "success": True,
-            "message": "Test message processed",
-            "response_time_ms": response_time,
-            "bot_response": bot_response,
-            "handler_error": handle_err,
-            "provider_info": {
-                "provider": request.provider,
-                "user_id_used": user_id,
-                "adapter_type": type(adapter).__name__
+            dashboard_stats["total_messages"] += 1
+            dashboard_stats["active_users"].add(user_id)
+            dashboard_stats["response_times"].append(response_time)
+            dashboard_stats["conversations"].append({
+                "user": user_name,
+                "message": request.message,
+                "bot_response": bot_response,
+                "timestamp": start_time.isoformat(),
+                "provider": request.provider
+            })
+
+            return {
+                "success": True,
+                "message": "Test message processed",
+                "response_time_ms": response_time,
+                "bot_response": bot_response,
+                "handler_error": handle_err,
+                "delayed_task_note": delayed_diag,
+                "provider_info": {
+                    "provider": request.provider,
+                    "user_id_used": user_id,
+                    "adapter_type": type(adapter).__name__
+                }
             }
-        }
-        
+        finally:
+            _dash_test_ud.pop("_dashboard_test_simulation", None)
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -537,6 +561,9 @@ async def test_voice(
         if restored_name:
             user_name = restored_name
 
+        _dash_test_ud_voice = config.user_data_whatsapp[user_id]
+        _dash_test_ud_voice["_dashboard_test_simulation"] = True
+
         async def handle_voice_dashboard(user_whatsapp_id: str, voice_text: str, user_name: str):
             """Dashboard version for voice testing - simulates transcription"""
             if user_whatsapp_id not in config.user_data_whatsapp:
@@ -572,52 +599,55 @@ async def test_voice(
                 print(f"DEBUG: Error in handle_voice_dashboard: {e}")
                 import traceback
                 traceback.print_exc()
-        
-        print(f"DEBUG: Processing voice message (text: '{request.voice_text}') for user {user_id}")
-        
+
         try:
-            await handle_voice_dashboard(user_id, request.voice_text, user_name)
-            print(f"DEBUG: Voice message processing completed for user {user_id}")
-        except Exception as e:
-            print(f"DEBUG: Error in handle_voice_dashboard: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        await _await_dashboard_delayed_task(user_id)
+            print(f"DEBUG: Processing voice message (text: '{request.voice_text}') for user {user_id}")
 
-        captured_responses = dashboard_captured_list_for_user(user_id)
-        print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
+            try:
+                await handle_voice_dashboard(user_id, request.voice_text, user_name)
+                print(f"DEBUG: Voice message processing completed for user {user_id}")
+            except Exception as e:
+                print(f"DEBUG: Error in handle_voice_dashboard: {e}")
+                import traceback
+                traceback.print_exc()
 
-        if captured_responses:
-            bot_response = "\n\n".join(captured_responses)
-        else:
-            bot_response = "No response captured - check console for errors"
+            await _await_dashboard_delayed_task(user_id)
 
-        response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
+            captured_responses = dashboard_captured_list_for_user(user_id)
+            print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
 
-        dashboard_stats["total_messages"] += 1
-        dashboard_stats["active_users"].add(user_id)
-        dashboard_stats["response_times"].append(response_time)
-        dashboard_stats["conversations"].append({
-            "user": user_name,
-            "message": f"[Voice: {request.voice_text}]",
-            "bot_response": bot_response,
-            "timestamp": start_time.isoformat(),
-            "provider": request.provider
-        })
-        
-        return {
-            "success": True,
-            "message": "Test voice message processed",
-            "response_time_ms": response_time,
-            "bot_response": bot_response,
-            "provider_info": {
-                "provider": request.provider,
-                "user_id_used": user_id,
-                "adapter_type": type(adapter).__name__
+            if captured_responses:
+                bot_response = "\n\n".join(captured_responses)
+            else:
+                bot_response = "No response captured - check console for errors"
+
+            response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
+
+            dashboard_stats["total_messages"] += 1
+            dashboard_stats["active_users"].add(user_id)
+            dashboard_stats["response_times"].append(response_time)
+            dashboard_stats["conversations"].append({
+                "user": user_name,
+                "message": f"[Voice: {request.voice_text}]",
+                "bot_response": bot_response,
+                "timestamp": start_time.isoformat(),
+                "provider": request.provider
+            })
+
+            return {
+                "success": True,
+                "message": "Test voice message processed",
+                "response_time_ms": response_time,
+                "bot_response": bot_response,
+                "provider_info": {
+                    "provider": request.provider,
+                    "user_id_used": user_id,
+                    "adapter_type": type(adapter).__name__
+                }
             }
-        }
-        
+        finally:
+            _dash_test_ud_voice.pop("_dashboard_test_simulation", None)
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -663,40 +693,45 @@ async def test_voice_text(request: TestVoiceRequest):
         if restored_name:
             user_name = restored_name
 
-        async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
-            await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
-            return True
+        _dash_test_ud_vt = config.user_data_whatsapp[user_id]
+        _dash_test_ud_vt["_dashboard_test_simulation"] = True
+        try:
+            async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+                await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
+                return True
 
-        await handle_message(
-            user_id=user_id,
-            user_name=user_name,
-            user_input_text=request.voice_text,
-            user_data=config.user_data_whatsapp[user_id],
-            send_message_func=capture_send_message,
-            send_action_func=send_whatsapp_typing_indicator,
-            skip_firestore_save=True,
-            message_combine_delay=0.0,
-        )
+            await handle_message(
+                user_id=user_id,
+                user_name=user_name,
+                user_input_text=request.voice_text,
+                user_data=config.user_data_whatsapp[user_id],
+                send_message_func=capture_send_message,
+                send_action_func=send_whatsapp_typing_indicator,
+                skip_firestore_save=True,
+                message_combine_delay=0.0,
+            )
 
-        await _await_dashboard_delayed_task(user_id)
+            await _await_dashboard_delayed_task(user_id)
 
-        captured_responses = dashboard_captured_list_for_user(user_id)
-        bot_response = "\n\n".join(captured_responses) if captured_responses else "No response captured"
+            captured_responses = dashboard_captured_list_for_user(user_id)
+            bot_response = "\n\n".join(captured_responses) if captured_responses else "No response captured"
 
-        response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
+            response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
 
-        return {
-            "success": True,
-            "message": "Voice text processed",
-            "response_time_ms": response_time,
-            "bot_response": bot_response,
-            "transcription": request.voice_text,
-            "provider_info": {
-                "provider": request.provider,
-                "user_id_used": user_id,
-                "adapter_type": type(adapter).__name__
+            return {
+                "success": True,
+                "message": "Voice text processed",
+                "response_time_ms": response_time,
+                "bot_response": bot_response,
+                "transcription": request.voice_text,
+                "provider_info": {
+                    "provider": request.provider,
+                    "user_id_used": user_id,
+                    "adapter_type": type(adapter).__name__
+                }
             }
-        }
+        finally:
+            _dash_test_ud_vt.pop("_dashboard_test_simulation", None)
 
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -751,71 +786,76 @@ async def test_voice_upload(
         if restored_name:
             user_name = restored_name
 
-        # Read audio file into BytesIO
-        audio_bytes = await audio.read()
-        print(f"DEBUG: Read {len(audio_bytes)} bytes from uploaded audio")
-        audio_data_bytes = io.BytesIO(audio_bytes)
-        audio_data_bytes.seek(0)
-        
-        # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
-        # config.TESTING_MODE = True
-        # print(f"🧪 TESTING MODE ENABLED - Firebase saving disabled for user {user_id}")
-
-        async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
-            await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
-            return True
-
+        _dash_test_ud_vu = config.user_data_whatsapp[user_id]
+        _dash_test_ud_vu["_dashboard_test_simulation"] = True
         try:
-            # Process voice message (will transcribe and then handle as text)
-            await handle_voice_message(
-                user_id=user_id,
-                user_name=user_name,
-                audio_data_bytes=audio_data_bytes,
-                user_data=config.user_data_whatsapp[user_id],
-                send_message_func=capture_send_message,
-                send_action_func=send_whatsapp_typing_indicator,
-                audio_url=None  # No URL for test uploads
-            )
-        except Exception as e:
-            print(f"DEBUG: Error in test_voice_upload: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        await _await_dashboard_delayed_task(user_id)
+            # Read audio file into BytesIO
+            audio_bytes = await audio.read()
+            print(f"DEBUG: Read {len(audio_bytes)} bytes from uploaded audio")
+            audio_data_bytes = io.BytesIO(audio_bytes)
+            audio_data_bytes.seek(0)
 
-        captured_responses = dashboard_captured_list_for_user(user_id)
-        
-        if captured_responses:
-            bot_response = "\n\n".join(captured_responses)
-        else:
-            bot_response = "No response captured - check console for errors"
-        
-        response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
-        
-        dashboard_stats["total_messages"] += 1
-        dashboard_stats["active_users"].add(user_id)
-        dashboard_stats["response_times"].append(response_time)
-        dashboard_stats["conversations"].append({
-            "user": user_name,
-            "message": f"[Voice Upload: {audio.filename}]",
-            "bot_response": bot_response,
-            "timestamp": start_time.isoformat(),
-            "provider": provider
-        })
-        
-        return {
-            "success": True,
-            "message": "Test voice message processed",
-            "response_time_ms": response_time,
-            "bot_response": bot_response,
-            "transcription": "Voice transcribed and processed",
-            "provider_info": {
-                "provider": provider,
-                "user_id_used": user_id,
-                "adapter_type": type(adapter).__name__
+            # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
+            # config.TESTING_MODE = True
+            # print(f"🧪 TESTING MODE ENABLED - Firebase saving disabled for user {user_id}")
+
+            async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+                await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
+                return True
+
+            try:
+                # Process voice message (will transcribe and then handle as text)
+                await handle_voice_message(
+                    user_id=user_id,
+                    user_name=user_name,
+                    audio_data_bytes=audio_data_bytes,
+                    user_data=config.user_data_whatsapp[user_id],
+                    send_message_func=capture_send_message,
+                    send_action_func=send_whatsapp_typing_indicator,
+                    audio_url=None  # No URL for test uploads
+                )
+            except Exception as e:
+                print(f"DEBUG: Error in test_voice_upload: {e}")
+                import traceback
+                traceback.print_exc()
+
+            await _await_dashboard_delayed_task(user_id)
+
+            captured_responses = dashboard_captured_list_for_user(user_id)
+
+            if captured_responses:
+                bot_response = "\n\n".join(captured_responses)
+            else:
+                bot_response = "No response captured - check console for errors"
+
+            response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
+
+            dashboard_stats["total_messages"] += 1
+            dashboard_stats["active_users"].add(user_id)
+            dashboard_stats["response_times"].append(response_time)
+            dashboard_stats["conversations"].append({
+                "user": user_name,
+                "message": f"[Voice Upload: {audio.filename}]",
+                "bot_response": bot_response,
+                "timestamp": start_time.isoformat(),
+                "provider": provider
+            })
+
+            return {
+                "success": True,
+                "message": "Test voice message processed",
+                "response_time_ms": response_time,
+                "bot_response": bot_response,
+                "transcription": "Voice transcribed and processed",
+                "provider_info": {
+                    "provider": provider,
+                    "user_id_used": user_id,
+                    "adapter_type": type(adapter).__name__
+                }
             }
-        }
-        
+        finally:
+            _dash_test_ud_vu.pop("_dashboard_test_simulation", None)
+
     except Exception as e:
         print(f"ERROR in test_voice_upload: {e}")
         import traceback
