@@ -1,17 +1,32 @@
 # handlers/text_handlers_delayed.py
 # Handles delayed message processing (message combining)
 
+from typing import Optional
+
 from handlers.text_handlers_firestore import *
 from handlers.text_handlers_respond import _process_and_respond
 
 
-async def _delayed_process_messages(user_id: str, user_data: dict, send_message_func, send_action_func):
+async def _delayed_process_messages(
+    user_id: str,
+    user_data: dict,
+    send_message_func,
+    send_action_func,
+    combine_delay_seconds: Optional[float] = None,
+):
     """
     Delays processing to combine rapid messages from the same user.
+    combine_delay_seconds: if set (e.g. 0 for dashboard tests), overrides MESSAGE_COMBINING_DELAY.
     """
     try:
         await send_action_func(user_id)  # Send typing indicator
-        await asyncio.sleep(config.MESSAGE_COMBINING_DELAY)
+        delay = (
+            config.MESSAGE_COMBINING_DELAY
+            if combine_delay_seconds is None
+            else float(combine_delay_seconds)
+        )
+        if delay > 0:
+            await asyncio.sleep(delay)
 
         if config.user_pending_messages[user_id]:
             combined_message = " ".join(config.user_pending_messages[user_id])

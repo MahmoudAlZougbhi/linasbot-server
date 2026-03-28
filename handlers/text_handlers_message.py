@@ -2,6 +2,8 @@
 # Main message handler for WhatsApp text messages
 # Human handoff: AI detects intent (no keyword/regex - AI understands context)
 
+from typing import Optional
+
 from handlers.text_handlers_firestore import *
 from handlers.text_handlers_delayed import _delayed_process_messages
 from services.dynamic_messages_service import get_dynamic_message
@@ -77,13 +79,23 @@ def _get_session_greeting_message(user_lang: str = "ar") -> str:
         return "مرحباً! 😊 كيف فيني ساعدك اليوم؟"
 
 
-async def handle_message(user_id: str, user_name: str, user_input_text: str, user_data: dict, send_message_func, send_action_func, skip_firestore_save: bool = False):
+async def handle_message(
+    user_id: str,
+    user_name: str,
+    user_input_text: str,
+    user_data: dict,
+    send_message_func,
+    send_action_func,
+    skip_firestore_save: bool = False,
+    message_combine_delay: Optional[float] = None,
+):
     """
     Main message handler for WhatsApp text messages.
     Combines rapid messages and then processes them.
-    
+
     Args:
         skip_firestore_save: If True, skips saving to Firestore (used when called from voice_handlers after already saving)
+        message_combine_delay: If set (e.g. 0.0), overrides config.MESSAGE_COMBINING_DELAY for this turn (dashboard tests).
     """
     config.user_names[user_id] = user_name
     
@@ -592,5 +604,11 @@ async def handle_message(user_id: str, user_name: str, user_input_text: str, use
 
     # Schedule a new processing task
     _delayed_processing_tasks[user_id] = asyncio.create_task(
-        _delayed_process_messages(user_id, user_data, send_message_func, send_action_func)
+        _delayed_process_messages(
+            user_id,
+            user_data,
+            send_message_func,
+            send_action_func,
+            combine_delay_seconds=message_combine_delay,
+        )
     )

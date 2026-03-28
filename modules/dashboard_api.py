@@ -315,6 +315,7 @@ async def test_message(request: TestMessageRequest):
                     send_message_func=capture_send_message,
                     send_action_func=send_whatsapp_typing_indicator,
                     skip_firestore_save=True,
+                    message_combine_delay=0.0,
                 )
             finally:
                 # config.TESTING_MODE = False
@@ -564,7 +565,8 @@ async def test_voice(
                     user_data=config.user_data_whatsapp[user_whatsapp_id],
                     send_message_func=capture_send_message,
                     send_action_func=send_whatsapp_typing_indicator,
-                    skip_firestore_save=True  # Skip saving since it's a test
+                    skip_firestore_save=True,  # Skip saving since it's a test
+                    message_combine_delay=0.0,
                 )
             except Exception as e:
                 print(f"DEBUG: Error in handle_voice_dashboard: {e}")
@@ -672,7 +674,8 @@ async def test_voice_text(request: TestVoiceRequest):
             user_data=config.user_data_whatsapp[user_id],
             send_message_func=capture_send_message,
             send_action_func=send_whatsapp_typing_indicator,
-            skip_firestore_save=True
+            skip_firestore_save=True,
+            message_combine_delay=0.0,
         )
 
         await _await_dashboard_delayed_task(user_id)
