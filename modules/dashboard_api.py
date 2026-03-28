@@ -350,7 +350,8 @@ async def test_message(request: TestMessageRequest):
                 import traceback
                 traceback.print_exc()
 
-            delayed_diag = await _await_dashboard_delayed_task(user_id)
+            if user_id in _delayed_processing_tasks:
+                delayed_diag = await _await_dashboard_delayed_task(user_id)
 
             captured_responses = dashboard_captured_list_for_user(user_id)
             print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
@@ -611,7 +612,8 @@ async def test_voice(
                 import traceback
                 traceback.print_exc()
 
-            await _await_dashboard_delayed_task(user_id)
+            if user_id in _delayed_processing_tasks:
+                await _await_dashboard_delayed_task(user_id)
 
             captured_responses = dashboard_captured_list_for_user(user_id)
             print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
@@ -711,7 +713,8 @@ async def test_voice_text(request: TestVoiceRequest):
                 message_combine_delay=0.0,
             )
 
-            await _await_dashboard_delayed_task(user_id)
+            if user_id in _delayed_processing_tasks:
+                await _await_dashboard_delayed_task(user_id)
 
             captured_responses = dashboard_captured_list_for_user(user_id)
             bot_response = "\n\n".join(captured_responses) if captured_responses else "No response captured"
@@ -819,7 +822,8 @@ async def test_voice_upload(
                 import traceback
                 traceback.print_exc()
 
-            await _await_dashboard_delayed_task(user_id)
+            if user_id in _delayed_processing_tasks:
+                await _await_dashboard_delayed_task(user_id)
 
             captured_responses = dashboard_captured_list_for_user(user_id)
 

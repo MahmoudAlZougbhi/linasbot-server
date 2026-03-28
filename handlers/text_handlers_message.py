@@ -608,7 +608,22 @@ async def handle_message(
     if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
         _delayed_processing_tasks[user_id].cancel()
 
-    # Schedule a new processing task
+    # Dashboard /api/test-* sets _dashboard_test_simulation: run GPT path inline so the HTTP handler
+    # sees captured replies before returning (background create_task was still racing / missing awaits).
+    if user_data.get("_dashboard_test_simulation"):
+        print(f"[handle_message] Dashboard test simulation: inline delayed processing for {user_id}")
+        try:
+            await _delayed_process_messages(
+                user_id,
+                user_data,
+                send_message_func,
+                send_action_func,
+                combine_delay_seconds=message_combine_delay,
+            )
+        finally:
+            _delayed_processing_tasks.pop(user_id, None)
+        return
+
     _delayed_processing_tasks[user_id] = asyncio.create_task(
         _delayed_process_messages(
             user_id,
