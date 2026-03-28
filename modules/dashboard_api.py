@@ -4,13 +4,14 @@ Dashboard API module: Testing and simulation endpoints
 Provides endpoints for dashboard testing of the bot functionality.
 """
 
+import asyncio
 import datetime
 import base64
 import tempfile
 import os
 import io
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 from fastapi import File, UploadFile, Form, Request
 import httpx
@@ -82,6 +83,59 @@ async def dashboard_send_message_capture(to_number: str, message_text: str = Non
         dashboard_bot_responses[to_number].append(message_text)
         print(f"Dashboard captured bot response for {to_number}: {message_text}")
     return True
+
+
+def _whatsapp_id_variants(user_id: Optional[str]) -> List[str]:
+    """E.164-style IDs may appear with or without leading +; merge for capture lookup."""
+    if not user_id:
+        return []
+    u = str(user_id).strip()
+    out: List[str] = []
+    for cand in (u, u.lstrip("+")):
+        if cand and cand not in out:
+            out.append(cand)
+    digits = u.lstrip("+")
+    if digits.isdigit():
+        plus = f"+{digits}"
+        if plus not in out:
+            out.append(plus)
+    return out
+
+
+def dashboard_clear_captured_for_user(user_id: str) -> None:
+    for key in _whatsapp_id_variants(user_id):
+        dashboard_bot_responses.pop(key, None)
+
+
+def dashboard_captured_list_for_user(user_id: str) -> List[str]:
+    for key in _whatsapp_id_variants(user_id):
+        lst = dashboard_bot_responses.get(key)
+        if lst:
+            return list(lst)
+    return []
+
+
+async def _await_dashboard_delayed_task(user_id: str) -> None:
+    """
+    Wait for message-combining / GPT task. Uses asyncio.shield so client disconnect or
+    upstream cancellation is less likely to cancel the bot mid-reply (empty capture).
+    """
+    if user_id not in _delayed_processing_tasks:
+        print(f"DEBUG: No delayed task found for user {user_id}")
+        return
+    print(f"DEBUG: Waiting for delayed task for user {user_id} to complete...")
+    task = _delayed_processing_tasks[user_id]
+    try:
+        await asyncio.shield(task)
+        print(f"DEBUG: Delayed task completed for user {user_id}")
+    except asyncio.CancelledError:
+        print(f"DEBUG: Delayed task await cancelled for user {user_id}")
+        raise
+    except Exception as e:
+        print(f"DEBUG: Delayed task error: {e}")
+    finally:
+        if user_id in _delayed_processing_tasks:
+            del _delayed_processing_tasks[user_id]
 
 
 @app.get("/")
@@ -205,7 +259,7 @@ async def test_message(request: TestMessageRequest):
             
         user_name = f"Test User ({request.phone})"
         
-        dashboard_bot_responses.pop(user_id, None)
+        dashboard_clear_captured_for_user(user_id)
         
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
@@ -259,7 +313,8 @@ async def test_message(request: TestMessageRequest):
                     user_input_text=user_input_text,
                     user_data=config.user_data_whatsapp[user_whatsapp_id],
                     send_message_func=capture_send_message,
-                    send_action_func=send_whatsapp_typing_indicator
+                    send_action_func=send_whatsapp_typing_indicator,
+                    skip_firestore_save=True,
                 )
             finally:
                 # config.TESTING_MODE = False
@@ -267,41 +322,34 @@ async def test_message(request: TestMessageRequest):
                 pass
 
         print(f"DEBUG: Processing message '{request.message}' for user {user_id}")
-        
+
+        handle_err: Optional[str] = None
         try:
             await handle_message_dashboard(user_id, request.message, user_name)
             print(f"DEBUG: Message processing completed for user {user_id}")
         except Exception as e:
+            handle_err = str(e)
             print(f"DEBUG: Error in handle_message_dashboard: {e}")
             import traceback
             traceback.print_exc()
-        
-        # Wait for any delayed processing tasks to complete
-        import asyncio
-        if user_id in _delayed_processing_tasks:
-            print(f"DEBUG: Waiting for delayed task for user {user_id} to complete...")
-            try:
-                await _delayed_processing_tasks[user_id]
-                print(f"DEBUG: Delayed task completed for user {user_id}")
-            except Exception as e:
-                print(f"DEBUG: Delayed task error: {e}")
-            finally:
-                # Clean up the task
-                if user_id in _delayed_processing_tasks:
-                    del _delayed_processing_tasks[user_id]
-        else:
-            print(f"DEBUG: No delayed task found for user {user_id}")
-        
-        captured_responses = dashboard_bot_responses.get(user_id, [])
+
+        await _await_dashboard_delayed_task(user_id)
+
+        captured_responses = dashboard_captured_list_for_user(user_id)
         print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
-        
+
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
+        elif handle_err:
+            bot_response = (
+                f"No response captured: message handler failed before AI ran ({handle_err}). "
+                "See server logs for the full traceback."
+            )
         else:
             bot_response = "No response captured - check console for errors"
-        
+
         response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
-        
+
         dashboard_stats["total_messages"] += 1
         dashboard_stats["active_users"].add(user_id)
         dashboard_stats["response_times"].append(response_time)
@@ -312,12 +360,13 @@ async def test_message(request: TestMessageRequest):
             "timestamp": start_time.isoformat(),
             "provider": request.provider
         })
-        
+
         return {
             "success": True,
             "message": "Test message processed",
             "response_time_ms": response_time,
             "bot_response": bot_response,
+            "handler_error": handle_err,
             "provider_info": {
                 "provider": request.provider,
                 "user_id_used": user_id,
@@ -353,7 +402,7 @@ async def test_image(request: TestImageRequest):
             
         user_name = f"Test User ({request.phone})"
         
-        dashboard_bot_responses.pop(user_id, None)
+        dashboard_clear_captured_for_user(user_id)
         
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
@@ -390,7 +439,7 @@ async def test_image(request: TestImageRequest):
             # print(f"🧪 TESTING MODE DISABLED - Firebase saving re-enabled")
             pass
 
-        captured_responses = dashboard_bot_responses.get(user_id, [])
+        captured_responses = dashboard_captured_list_for_user(user_id)
         
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
@@ -468,7 +517,7 @@ async def test_voice(
             
         user_name = f"Test User ({request.phone})"
         
-        dashboard_bot_responses.pop(user_id, None)
+        dashboard_clear_captured_for_user(user_id)
         
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
@@ -532,31 +581,18 @@ async def test_voice(
             import traceback
             traceback.print_exc()
         
-        # Wait for any delayed processing tasks to complete (same as text messages)
-        import asyncio
-        if user_id in _delayed_processing_tasks:
-            print(f"DEBUG: Waiting for delayed task for user {user_id} to complete...")
-            try:
-                await _delayed_processing_tasks[user_id]
-                print(f"DEBUG: Delayed task completed for user {user_id}")
-            except Exception as e:
-                print(f"DEBUG: Delayed task error: {e}")
-            finally:
-                if user_id in _delayed_processing_tasks:
-                    del _delayed_processing_tasks[user_id]
-        else:
-            print(f"DEBUG: No delayed task found for user {user_id}")
-        
-        captured_responses = dashboard_bot_responses.get(user_id, [])
+        await _await_dashboard_delayed_task(user_id)
+
+        captured_responses = dashboard_captured_list_for_user(user_id)
         print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
-        
+
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
         else:
             bot_response = "No response captured - check console for errors"
-        
+
         response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
-        
+
         dashboard_stats["total_messages"] += 1
         dashboard_stats["active_users"].add(user_id)
         dashboard_stats["response_times"].append(response_time)
@@ -606,7 +642,7 @@ async def test_voice_text(request: TestVoiceRequest):
             user_id = request.phone
 
         user_name = f"Test User ({request.phone})"
-        dashboard_bot_responses.pop(user_id, None)
+        dashboard_clear_captured_for_user(user_id)
 
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
@@ -639,17 +675,9 @@ async def test_voice_text(request: TestVoiceRequest):
             skip_firestore_save=True
         )
 
-        # Wait for delayed tasks
-        if user_id in _delayed_processing_tasks:
-            try:
-                await _delayed_processing_tasks[user_id]
-            except Exception as e:
-                print(f"DEBUG: Delayed task error: {e}")
-            finally:
-                if user_id in _delayed_processing_tasks:
-                    del _delayed_processing_tasks[user_id]
+        await _await_dashboard_delayed_task(user_id)
 
-        captured_responses = dashboard_bot_responses.get(user_id, [])
+        captured_responses = dashboard_captured_list_for_user(user_id)
         bot_response = "\n\n".join(captured_responses) if captured_responses else "No response captured"
 
         response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
@@ -701,7 +729,7 @@ async def test_voice_upload(
             
         user_name = f"Test User ({phone})"
         
-        dashboard_bot_responses.pop(user_id, None)
+        dashboard_clear_captured_for_user(user_id)
 
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
@@ -750,22 +778,9 @@ async def test_voice_upload(
             import traceback
             traceback.print_exc()
         
-        # Wait for any delayed processing tasks to complete (voice -> text -> delayed processing)
-        import asyncio
-        if user_id in _delayed_processing_tasks:
-            print(f"DEBUG: Waiting for delayed task for user {user_id} to complete...")
-            try:
-                await _delayed_processing_tasks[user_id]
-                print(f"DEBUG: Delayed task completed for user {user_id}")
-            except Exception as e:
-                print(f"DEBUG: Delayed task error: {e}")
-            finally:
-                if user_id in _delayed_processing_tasks:
-                    del _delayed_processing_tasks[user_id]
-        else:
-            print(f"DEBUG: No delayed task found for user {user_id}")
-        
-        captured_responses = dashboard_bot_responses.get(user_id, [])
+        await _await_dashboard_delayed_task(user_id)
+
+        captured_responses = dashboard_captured_list_for_user(user_id)
         
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
@@ -835,7 +850,7 @@ async def test_image_upload(
             
         user_name = f"Test User ({phone})"
         
-        dashboard_bot_responses.pop(user_id, None)
+        dashboard_clear_captured_for_user(user_id)
 
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
@@ -896,7 +911,7 @@ async def test_image_upload(
             # print(f"🧪 TESTING MODE DISABLED - Firebase saving re-enabled")
             pass
 
-        captured_responses = dashboard_bot_responses.get(user_id, [])
+        captured_responses = dashboard_captured_list_for_user(user_id)
         
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
