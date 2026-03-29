@@ -1409,7 +1409,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     _meta = last_bot_msg.get("metadata") or {}
                     if _meta.get("source") == "smart_message" and _meta.get("type") == "reminder_24h":
                         from utils.reminder_analytics import classify_reminder_reply_intent
-                        from services.analytics_events import analytics
 
                         _rint = classify_reminder_reply_intent(query_to_send_to_gpt)
                         if _rint:
