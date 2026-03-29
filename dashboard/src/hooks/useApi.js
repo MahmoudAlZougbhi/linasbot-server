@@ -693,20 +693,27 @@ export const useApi = () => {
       userId,
       message,
       operatorId,
-      messageType = "text"
+      messageType = "text",
+      idempotencyKey = null
     ) => {
       try {
         setLoading(true);
+        const idem =
+          idempotencyKey ||
+          (typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `idem_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`);
         const response = await api.post("/api/live-chat/send-message", {
           conversation_id: conversationId,
           user_id: userId,
           message,
           operator_id: operatorId,
           message_type: messageType,
+          idempotency_key: idem,
         }, {
           timeout: 60000, // 60 seconds - Firestore + WhatsApp operations can be slow
         });
-        toast.success("Message sent!");
+        // Toast: callers (e.g. LiveChat) show context-specific success to avoid double toasts
         return response.data;
       } catch (error) {
         if (error.code === "ERR_NETWORK") {

@@ -189,6 +189,8 @@ class SendOperatorMessageRequest(BaseModel):
     message: str
     operator_id: str
     message_type: str = "text"  # "text", "voice", "image"
+    # Same key within TTL suppresses a second Firestore write + WhatsApp send (double-submit / retries).
+    idempotency_key: Optional[str] = None
 
 
 class OperatorStatusRequest(BaseModel):

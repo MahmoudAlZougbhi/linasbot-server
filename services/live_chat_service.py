@@ -12,6 +12,7 @@ import asyncio
 import json
 import os
 import re
+import time
 from typing import List, Dict, Optional, Any, Tuple, Union
 from collections import defaultdict
 from google.cloud import firestore
@@ -25,6 +26,26 @@ from services.live_chat_contracts import (
 from utils.utils import get_firestore_db, set_human_takeover_status, get_canonical_user_id_and_phone
 from utils.phone_utils import normalize_phone, is_phone_like_user_id, phone_match_key
 from services.media_service import build_whatsapp_audio_delivery_url
+
+# In-memory dedupe for POST /api/live-chat/send-message (per process). Multi-worker deploys still need one worker or shared store.
+_operator_send_idempotency_keys: Dict[str, float] = {}
+
+
+def _operator_send_idempotency_consume(key: Optional[str]) -> bool:
+    """Return False if this idempotency_key was seen recently (skip duplicate send)."""
+    if not key or not str(key).strip():
+        return True
+    k = str(key).strip()
+    ttl = _env_float("OPERATOR_SEND_IDEMPOTENCY_TTL_SECONDS", 120.0)
+    now = time.time()
+    expired = [x for x, ts in _operator_send_idempotency_keys.items() if now - ts > ttl]
+    for x in expired:
+        _operator_send_idempotency_keys.pop(x, None)
+    if k in _operator_send_idempotency_keys:
+        print(f"⚠️ Duplicate operator send suppressed (idempotency_key={k[:32]}...)")
+        return False
+    _operator_send_idempotency_keys[k] = now
+    return True
 
 
 def _env_int(name: str, default: int) -> int:
@@ -2652,7 +2673,14 @@ class LiveChatService:
             return {"success": False, "error": str(e)}
 
     async def send_operator_message(
-        self, conversation_id: str, user_id: str, message: str, operator_id: str, adapter, message_type: str = "text"
+        self,
+        conversation_id: str,
+        user_id: str,
+        message: str,
+        operator_id: str,
+        adapter,
+        message_type: str = "text",
+        idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Send message from operator to customer
         
@@ -2663,8 +2691,15 @@ class LiveChatService:
             operator_id: The operator's ID
             adapter: WhatsApp adapter instance
             message_type: Type of message - "text", "voice", or "image"
+            idempotency_key: Optional client key; duplicates within TTL are no-oped (no second WhatsApp delivery).
         """
         try:
+            if not _operator_send_idempotency_consume(idempotency_key):
+                return {
+                    "success": True,
+                    "message": "Already processed (duplicate request)",
+                    "deduplicated": True,
+                }
             from utils.utils import save_conversation_message_to_firestore, get_firestore_db
             from utils.utils import get_canonical_user_id_and_phone
             

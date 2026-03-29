@@ -274,6 +274,7 @@ async def send_operator_message(request: SendOperatorMessageRequest):
             operator_id=request.operator_id,
             message_type=request.message_type,
             adapter=adapter,
+            idempotency_key=request.idempotency_key,
         )
 
     return await _run_endpoint(_handler)

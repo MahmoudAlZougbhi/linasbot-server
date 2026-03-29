@@ -1929,12 +1929,19 @@ const LiveChat = () => {
       optimisticMessage
     );
 
+    const idempotencyKey =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `op_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
     try {
       const result = await sendOperatorMessage(
         selectedConversation.conversation.conversation_id,
         selectedConversation.conversation.user_id,
         messageToSend,
-        "operator_001"
+        "operator_001",
+        "text",
+        idempotencyKey
       );
 
       if (result.success) {
@@ -3242,9 +3249,12 @@ const LiveChat = () => {
                         type="text"
                         value={messageInput}
                         onChange={(e) => setMessageInput(e.target.value)}
-                        onKeyPress={(e) =>
-                          e.key === "Enter" && !isSending && handleSendMessage()
-                        }
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter" || e.shiftKey) return;
+                          e.preventDefault();
+                          if (isSending || sendingRef.current) return;
+                          handleSendMessage();
+                        }}
                         placeholder="Type your message..."
                         className="whatsapp-input flex-1"
                         disabled={isSending}

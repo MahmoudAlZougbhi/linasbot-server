@@ -32,6 +32,8 @@ export const useLiveChatMediaComposer = ({
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
   const imageInputRef = useRef(null);
+  const sendingVoiceRef = useRef(false);
+  const sendingImageRef = useRef(false);
 
   const clearRecordingInterval = () => {
     if (recordingIntervalRef.current) {
@@ -105,10 +107,16 @@ export const useLiveChatMediaComposer = ({
   };
 
   const sendVoiceMessage = async () => {
-    if (!recordedAudio || !selectedConversation || isSendingVoice) return;
+    if (!recordedAudio || !selectedConversation || isSendingVoice || sendingVoiceRef.current)
+      return;
 
+    sendingVoiceRef.current = true;
     setIsSendingVoice(true);
     const localRecordedAudio = recordedAudio;
+    const idempotencyKey =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `voice_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
     try {
       const base64Audio = await blobToBase64(recordedAudio.blob);
@@ -117,7 +125,8 @@ export const useLiveChatMediaComposer = ({
         selectedConversation.conversation.user_id,
         base64Audio,
         "operator_001",
-        "voice"
+        "voice",
+        idempotencyKey
       );
 
       if (!result.success) {
@@ -137,6 +146,7 @@ export const useLiveChatMediaComposer = ({
       toast.error("Error sending voice message");
     } finally {
       setIsSendingVoice(false);
+      sendingVoiceRef.current = false;
     }
   };
 
@@ -166,7 +176,13 @@ export const useLiveChatMediaComposer = ({
   };
 
   const sendImageMessage = async () => {
-    if (!selectedImage || !selectedConversation) return;
+    if (!selectedImage || !selectedConversation || sendingImageRef.current) return;
+
+    sendingImageRef.current = true;
+    const idempotencyKey =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `img_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
     try {
       const base64Image = String(selectedImage.preview || "").split(",")[1] || "";
@@ -175,7 +191,8 @@ export const useLiveChatMediaComposer = ({
         selectedConversation.conversation.user_id,
         base64Image,
         "operator_001",
-        "image"
+        "image",
+        idempotencyKey
       );
 
       if (!result.success) {
@@ -189,6 +206,8 @@ export const useLiveChatMediaComposer = ({
     } catch (error) {
       console.error("Error sending image:", error);
       toast.error("Error sending image");
+    } finally {
+      sendingImageRef.current = false;
     }
   };
 

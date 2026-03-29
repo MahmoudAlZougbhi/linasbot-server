@@ -268,7 +268,8 @@ async def send_operator_message(request: SendOperatorMessageRequest):
             message=request.message,
             operator_id=request.operator_id,
             adapter=adapter,
-            message_type=request.message_type  # NOW PASSING MESSAGE_TYPE
+            message_type=request.message_type,  # NOW PASSING MESSAGE_TYPE
+            idempotency_key=request.idempotency_key,
         )
         return result
     except Exception as e:
