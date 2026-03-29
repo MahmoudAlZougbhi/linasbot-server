@@ -99,6 +99,9 @@ async def _delayed_process_messages(
         print(f"[_delayed_process_messages] ERROR: An error occurred in delayed processing for user {user_id}: {e}")
         import traceback
         traceback.print_exc()
+        if user_data.get("_dashboard_test_simulation"):
+            _diag = f"{type(e).__name__}: {e}"
+            user_data["_dashboard_processing_error"] = _diag if len(_diag) <= 800 else _diag[:797] + "..."
         sent_error_outbound = False
         # When user is in waiting queue and an error occurs, send friendly waiting message instead of "No response captured"
         try:

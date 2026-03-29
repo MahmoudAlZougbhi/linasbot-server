@@ -372,8 +372,15 @@ async def test_message(request: TestMessageRequest):
             captured_responses = dashboard_captured_list_for_user(user_id)
             print(f"DEBUG: Captured responses for {user_id}: {captured_responses}")
 
+            _test_ud = config.user_data_whatsapp.get(user_id) or {}
+            processing_exception = _test_ud.pop("_dashboard_processing_error", None)
+
             if captured_responses:
                 bot_response = "\n\n".join(captured_responses)
+                if processing_exception:
+                    bot_response = (
+                        f"{bot_response}\n\n——\n[تشخيص السيرفر / Server diagnostic]\n{processing_exception}"
+                    )
             elif handle_err:
                 bot_response = (
                     f"No response captured: message handler failed before AI ran ({handle_err}). "
@@ -383,6 +390,11 @@ async def test_message(request: TestMessageRequest):
                 bot_response = (
                     f"No response captured: delayed processing note: {delayed_diag}. "
                     "Check server logs."
+                )
+            elif processing_exception:
+                bot_response = (
+                    "No bot text was captured; delayed processing raised an error.\n\n"
+                    f"[تشخيص السيرفر / Server diagnostic]\n{processing_exception}"
                 )
             else:
                 bot_response = _dashboard_empty_capture_hint(user_id)
@@ -407,6 +419,7 @@ async def test_message(request: TestMessageRequest):
                 "bot_response": bot_response,
                 "handler_error": handle_err,
                 "delayed_task_note": delayed_diag,
+                "processing_exception": processing_exception,
                 "provider_info": {
                     "provider": request.provider,
                     "user_id_used": user_id,
