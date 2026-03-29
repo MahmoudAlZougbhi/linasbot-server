@@ -608,6 +608,8 @@ async def handle_message(
     # left the pending deque empty; keep a copy so _delayed_process_messages can still run GPT.
     if user_data.get("_dashboard_test_simulation"):
         user_data["_dashboard_last_message_for_fallback"] = raw_msg
+        # Survives pending-queue races (e.g. cancelled delayed task cleared deque); cleared in delayed after GPT turn.
+        user_data["_dashboard_test_turn_sticky"] = raw_msg
 
     # Cancel any previously scheduled processing task
     if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():

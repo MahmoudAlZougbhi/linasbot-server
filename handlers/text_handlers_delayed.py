@@ -33,6 +33,7 @@ async def _delayed_process_messages(
             combined_message = " ".join(config.user_pending_messages[user_id])
             config.user_pending_messages[user_id].clear()
             user_data.pop("_dashboard_last_message_for_fallback", None)
+            user_data.pop("_dashboard_test_turn_sticky", None)
         elif user_data.get("_dashboard_test_simulation"):
             fb = user_data.pop("_dashboard_last_message_for_fallback", None)
             if fb and str(fb).strip():
@@ -42,21 +43,55 @@ async def _delayed_process_messages(
                     f"user={user_id!r} len={len(combined_message)}"
                 )
 
+        if not combined_message and user_data.get("_dashboard_test_simulation"):
+            sticky = user_data.pop("_dashboard_test_turn_sticky", None)
+            if sticky and str(sticky).strip():
+                combined_message = str(sticky).strip()
+                print(
+                    f"[_delayed_process_messages] INFO: dashboard sticky turn text recovered "
+                    f"user={user_id!r} len={len(combined_message)}"
+                )
+
         if combined_message:
-            await _process_and_respond(
-                user_id,
-                user_name=config.user_names.get(user_id, "عميل"),
-                user_input_to_process=combined_message,
-                user_data=user_data,
-                send_message_func=send_message_func,
-                send_action_func=send_action_func,
-            )
+            try:
+                await _process_and_respond(
+                    user_id,
+                    user_name=config.user_names.get(user_id, "عميل"),
+                    user_input_to_process=combined_message,
+                    user_data=user_data,
+                    send_message_func=send_message_func,
+                    send_action_func=send_action_func,
+                )
+            finally:
+                user_data.pop("_dashboard_test_turn_sticky", None)
             config.user_last_bot_response_time[user_id] = datetime.datetime.now()
         else:
             print(
                 f"[_delayed_process_messages] WARN: pending message queue empty for {user_id!r} "
                 f"(no GPT turn). If another request cancelled a delayed task, messages may have been cleared."
             )
+            if user_data.get("_dashboard_test_simulation"):
+                user_data.pop("_dashboard_test_turn_sticky", None)
+                try:
+                    user_lang = (user_data.get("user_preferred_lang") or "ar").lower()
+                    if user_lang == "en":
+                        empty_q_msg = (
+                            "No message text reached the processor (pending queue empty). "
+                            "Retry once; avoid concurrent tests for the same phone."
+                        )
+                    elif user_lang == "fr":
+                        empty_q_msg = (
+                            "Aucun texte n'a atteint le processeur (file d'attente vide). "
+                            "Réessayez ; évitez les tests simultanés pour le même numéro."
+                        )
+                    else:
+                        empty_q_msg = (
+                            "لم يُعالَج نص الرسالة (طابور الرسائل فاضي). "
+                            "جرّب مرة ثانية وتجنّب طلبين معًا لنفس الرقم."
+                        )
+                    await send_message_func(user_id, empty_q_msg)
+                except Exception as eq_err:
+                    print(f"[_delayed_process_messages] Dashboard empty-queue notify failed: {eq_err}")
 
     except asyncio.CancelledError:
         raise
@@ -64,6 +99,7 @@ async def _delayed_process_messages(
         print(f"[_delayed_process_messages] ERROR: An error occurred in delayed processing for user {user_id}: {e}")
         import traceback
         traceback.print_exc()
+        sent_error_outbound = False
         # When user is in waiting queue and an error occurs, send friendly waiting message instead of "No response captured"
         try:
             db = get_firestore_db()
@@ -101,5 +137,23 @@ async def _delayed_process_messages(
                             user_name, user_data.get('phone_number')
                         )
                         print(f"[_delayed_process_messages] Sent waiting message after error (user in queue)")
+                        sent_error_outbound = True
         except Exception as fallback_err:
             print(f"[_delayed_process_messages] Could not send waiting fallback: {fallback_err}")
+
+        if not sent_error_outbound and user_data.get("_dashboard_test_simulation"):
+            try:
+                from services.dynamic_messages_service import get_dynamic_message
+
+                user_lang = user_data.get("user_preferred_lang", "ar")
+                err_msg = (
+                    get_dynamic_message("generic_error_message", user_lang)
+                    or "عذراً، صار خطأ أثناء المعالجة. جرّب مرة ثانية أو راجع سجلات السيرفر."
+                )
+                await send_message_func(user_id, err_msg)
+                print(
+                    f"[_delayed_process_messages] Sent generic error for dashboard test after exception: {e!r}"
+                )
+            except Exception as dash_err:
+                print(f"[_delayed_process_messages] Dashboard test error fallback send failed: {dash_err}")
+        user_data.pop("_dashboard_test_turn_sticky", None)
