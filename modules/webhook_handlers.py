@@ -89,6 +89,45 @@ async def _webhook_firestore_try_acquire(message_id: str) -> bool:
         return True
 
 
+# Second line of defense: same worker can queue two process_parsed_message tasks for the same message_id
+# (e.g. webhook handler returns before Firestore create is visible). Serialize + skip duplicate in-process.
+_process_parsed_mid_locks: Dict[str, asyncio.Lock] = {}
+_process_parsed_mid_claims: Dict[str, float] = {}
+_PROCESS_PARSED_MID_TTL_SECONDS = 120.0
+
+
+async def _process_parsed_should_skip_duplicate(message_id: str) -> bool:
+    """Return True if this message_id is already being or was recently processed (skip)."""
+    mid = (message_id or "").strip()
+    if not mid:
+        return False
+    now = time.time()
+    expired = [
+        k
+        for k, ts in _process_parsed_mid_claims.items()
+        if now - ts > _PROCESS_PARSED_MID_TTL_SECONDS
+    ]
+    for k in expired:
+        _process_parsed_mid_claims.pop(k, None)
+        _process_parsed_mid_locks.pop(k, None)
+
+    lock = _process_parsed_mid_locks.setdefault(mid, asyncio.Lock())
+    async with lock:
+        if mid in _process_parsed_mid_claims:
+            print(f"⚠️ skip duplicate process_parsed_message (in-process): {mid[:56]}...")
+            return True
+        _process_parsed_mid_claims[mid] = now
+    return False
+
+
+def _process_parsed_release_claim_on_error(message_id: str) -> None:
+    mid = (message_id or "").strip()
+    if not mid:
+        return
+    _process_parsed_mid_claims.pop(mid, None)
+    _process_parsed_mid_locks.pop(mid, None)
+
+
 async def await_whatsapp_delayed_processing(user_id: str) -> None:
     """
     handle_message() schedules combine+GPT in a Task and returns immediately. process_parsed_message
@@ -409,6 +448,19 @@ def _count_images_in_single_message(message_type: str, content: Any) -> int:
 
 
 async def process_parsed_message(parsed_message: Dict[str, Any], adapter):
+    """Entry: dedupe same message_id in-process, then delegate."""
+    mid_for_dedupe = (parsed_message.get("message_id") or "").strip()
+    if mid_for_dedupe:
+        if await _process_parsed_should_skip_duplicate(mid_for_dedupe):
+            return
+    try:
+        await _process_parsed_message_impl(parsed_message, adapter)
+    except Exception:
+        _process_parsed_release_claim_on_error(mid_for_dedupe)
+        raise
+
+
+async def _process_parsed_message_impl(parsed_message: Dict[str, Any], adapter):
     """Process a parsed message regardless of provider. Uses normalized phone as canonical user_id to prevent duplicates."""
     from utils.phone_utils import normalize_phone, is_phone_like_user_id
     from utils.utils import get_canonical_user_id_and_phone, persist_room_to_phone_mapping
