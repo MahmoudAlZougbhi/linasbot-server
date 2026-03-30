@@ -2,10 +2,17 @@
 MontyMobile WhatsApp Adapter
 New Qiscus API endpoint using MontyMobile infrastructure
 """
+import hashlib
 import json
 import time
 from typing import Dict, Any, Optional
 from .base_adapter import WhatsAppAdapter
+
+
+def _synthetic_wa_message_id(message: Dict[str, Any]) -> str:
+    """Stable id when Meta/WhatsApp omits message.id (avoids collapsing all to 'montymobile_')."""
+    basis = json.dumps(message, sort_keys=True, default=str)
+    return "synth_" + hashlib.sha256(basis.encode("utf-8", errors="replace")).hexdigest()[:48]
 
 class MontyMobileAdapter(WhatsAppAdapter):
     """MontyMobile WhatsApp API adapter (New Qiscus endpoint)"""
@@ -447,7 +454,10 @@ class MontyMobileAdapter(WhatsAppAdapter):
                 return None
                 
             message = messages[0]
-            message_id = message.get("id", "")
+            message_id = (message.get("id") or "").strip()
+            if not message_id:
+                message_id = _synthetic_wa_message_id(message)
+                print(f"⚠️ Meta webhook missing message.id — using synthetic id {message_id[:24]}...")
             message_from = str(message.get("from", "")).strip()
             message_type = message.get("type", "text")
             timestamp = message.get("timestamp", str(int(__import__('time').time())))

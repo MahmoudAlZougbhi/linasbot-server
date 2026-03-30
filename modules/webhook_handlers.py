@@ -37,6 +37,12 @@ _webhook_dedup_cache = {}
 WEBHOOK_DEDUP_WINDOW_SECONDS = 60  # Consider duplicate if received within 60 seconds (Qiscus can send duplicates up to 15+ seconds apart)
 
 
+def _synthetic_inbound_id_from_wa_message(msg: dict) -> str:
+    """When WhatsApp message.id is missing, dedupe keys must not collapse to one value."""
+    basis = json.dumps(msg, sort_keys=True, default=str)
+    return "synth_" + hashlib.sha256(basis.encode("utf-8", errors="replace")).hexdigest()[:48]
+
+
 async def _webhook_firestore_try_acquire(message_id: str) -> bool:
     """
     Return True if we should process this inbound WhatsApp message_id.
@@ -263,6 +269,9 @@ def _parse_webhook_raw_dict(webhook_data: Dict[str, Any]) -> Optional[Dict[str, 
         if not messages or not isinstance(messages, list):
             return None
         msg = messages[0] if isinstance(messages[0], dict) else {}
+        _mid = (msg.get("id") or "").strip()
+        if not _mid:
+            _mid = _synthetic_inbound_id_from_wa_message(msg)
         msg_from = str(msg.get("from") or "").strip()
         if not msg_from:
             contacts = value.get("contacts") or []
@@ -289,7 +298,7 @@ def _parse_webhook_raw_dict(webhook_data: Dict[str, Any]) -> Optional[Dict[str, 
         return {
             "user_id": phone,
             "user_name": phone,
-            "message_id": f"raw_{msg.get('id', '')}",
+            "message_id": f"raw_{_mid}",
             "timestamp": msg.get("timestamp", ""),
             "type": msg_type,
             "content": content,
