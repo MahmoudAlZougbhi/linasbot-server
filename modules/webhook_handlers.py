@@ -7,6 +7,7 @@ Handles webhook reception, parsing, and routing messages to appropriate handlers
 import asyncio
 import hashlib
 import json
+import re
 import datetime
 import io
 import os
@@ -37,6 +38,61 @@ _webhook_dedup_cache = {}
 # Per-message_id lock so check+record is atomic (avoids two concurrent requests both passing memory dedupe when Firestore is down / fail-open).
 _webhook_memory_dedup_locks: Dict[str, asyncio.Lock] = {}
 WEBHOOK_DEDUP_WINDOW_SECONDS = 60  # Consider duplicate if received within 60 seconds (Qiscus can send duplicates up to 15+ seconds apart)
+
+# Some providers deliver the same user text twice with different message ids; message_id dedupe misses that.
+WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS = 5.0
+WEBHOOK_TEXT_BODYFP_MAX_CHARS = 4000
+_webhook_bodyfp_cache: Dict[str, float] = {}
+_webhook_bodyfp_locks: Dict[str, asyncio.Lock] = {}
+
+
+def _normalize_phone_for_bodyfp(phone: str) -> str:
+    d = re.sub(r"\D", "", (phone or "").strip())
+    if len(d) >= 10:
+        return d[-15:]
+    return d
+
+
+def _webhook_text_body_fingerprint(parsed_message: Dict[str, Any]) -> str:
+    """Stable key for short-window text dedupe (same sender + same body). Empty if not applicable."""
+    if (parsed_message.get("type") or "") != "text":
+        return ""
+    content = parsed_message.get("content")
+    if not isinstance(content, dict):
+        return ""
+    text = (content.get("text") or "").strip()
+    if not text:
+        return ""
+    text = text[:WEBHOOK_TEXT_BODYFP_MAX_CHARS]
+    phone = (
+        (parsed_message.get("phone_number") or parsed_message.get("user_id") or "")
+        .strip()
+    )
+    norm = _normalize_phone_for_bodyfp(phone)
+    if not norm:
+        return ""
+    basis = f"{norm}|{text}"
+    return "bodyfp_" + hashlib.sha256(basis.encode("utf-8", errors="replace")).hexdigest()[:48]
+
+
+async def _webhook_bodyfp_try_claim(fp: str, current_time: float) -> bool:
+    if not fp:
+        return True
+    expired = [
+        k
+        for k, ts in _webhook_bodyfp_cache.items()
+        if current_time - ts > WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS
+    ]
+    for k in expired:
+        _webhook_bodyfp_cache.pop(k, None)
+        _webhook_bodyfp_locks.pop(k, None)
+
+    lock = _webhook_bodyfp_locks.setdefault(fp, asyncio.Lock())
+    async with lock:
+        if fp in _webhook_bodyfp_cache:
+            return False
+        _webhook_bodyfp_cache[fp] = current_time
+        return True
 
 
 async def _webhook_memory_try_claim(message_id: str, current_time: float) -> bool:
@@ -281,6 +337,22 @@ async def receive_webhook(request: Request):
                         content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id},
                     )
                 print(f"✅ Webhook recorded in dedup cache: {message_id}")
+
+            body_fp = _webhook_text_body_fingerprint(parsed_message)
+            if body_fp:
+                if not await _webhook_bodyfp_try_claim(body_fp, current_time):
+                    print(
+                        f"⚠️ DUPLICATE WEBHOOK (same text+sender within {WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS}s): "
+                        f"body_fp={body_fp[:40]}..."
+                    )
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "status": "skipped",
+                            "reason": "duplicate_inbound_text_short_window",
+                            "body_fingerprint_prefix": body_fp[:24],
+                        },
+                    )
         
         if parsed_message:
             _last_webhook_parsed_at = time.time()

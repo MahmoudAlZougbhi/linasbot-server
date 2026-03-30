@@ -62,6 +62,46 @@ def test_webhook_memory_try_claim_first_wins():
     asyncio.run(_run())
 
 
+def test_text_body_fingerprint_same_for_duplicate_payload_shape():
+    from modules.webhook_handlers import _webhook_text_body_fingerprint
+
+    p = {
+        "type": "text",
+        "content": {"text": "  hello  "},
+        "phone_number": "+96171112222",
+        "user_id": "+96171112222",
+        "message_id": "a",
+    }
+    q = {**p, "message_id": "b"}
+    assert _webhook_text_body_fingerprint(p) == _webhook_text_body_fingerprint(q)
+    assert _webhook_text_body_fingerprint(p).startswith("bodyfp_")
+
+
+def test_text_body_fingerprint_empty_for_non_text():
+    from modules.webhook_handlers import _webhook_text_body_fingerprint
+
+    assert (
+        _webhook_text_body_fingerprint(
+            {"type": "image", "content": {"image_id": "x"}, "phone_number": "+1"}
+        )
+        == ""
+    )
+
+
+def test_webhook_bodyfp_try_claim_serializes():
+    from modules import webhook_handlers as wh
+
+    async def _run():
+        wh._webhook_bodyfp_cache.clear()
+        wh._webhook_bodyfp_locks.clear()
+        t = time.time()
+        fp = "bodyfp_test123"
+        assert await wh._webhook_bodyfp_try_claim(fp, t) is True
+        assert await wh._webhook_bodyfp_try_claim(fp, t + 0.01) is False
+
+    asyncio.run(_run())
+
+
 def test_webhook_memory_concurrent_only_one_claim():
     from modules import webhook_handlers as wh
 
