@@ -14,6 +14,18 @@ def _synthetic_wa_message_id(message: Dict[str, Any]) -> str:
     basis = json.dumps(message, sort_keys=True, default=str)
     return "synth_" + hashlib.sha256(basis.encode("utf-8", errors="replace")).hexdigest()[:48]
 
+
+def _stable_id_when_provider_omits_message_id(webhook_data: Dict[str, Any]) -> str:
+    """
+    Generic MontyMobile / simple-test parsers used time.time() when id was missing — every duplicate
+    webhook got a different message_id and bypassed Firestore + in-memory dedupe. Hash the payload
+    minus volatile keys so identical retries dedupe correctly.
+    """
+    drop = {"timestamp", "received_at", "ts", "time"}
+    pruned = {k: v for k, v in webhook_data.items() if k not in drop}
+    basis = json.dumps(pruned, sort_keys=True, default=str)
+    return "synth_" + hashlib.sha256(basis.encode("utf-8", errors="replace")).hexdigest()[:48]
+
 class MontyMobileAdapter(WhatsAppAdapter):
     """MontyMobile WhatsApp API adapter (New Qiscus endpoint)"""
     
@@ -545,7 +557,12 @@ class MontyMobileAdapter(WhatsAppAdapter):
 
             message = webhook_data.get("message", {})
             message_type = message.get("type", "text")
-            message_id = message.get("id", str(__import__('time').time()))
+            raw_mid = message.get("id")
+            if raw_mid is None or (isinstance(raw_mid, str) and not raw_mid.strip()):
+                message_id = _stable_id_when_provider_omits_message_id(webhook_data)
+                print(f"⚠️ MontyMobile generic format missing message.id — stable synthetic {message_id[:24]}...")
+            else:
+                message_id = str(raw_mid).strip()
 
             parsed_message = {
                 "user_id": phone_number,
@@ -568,7 +585,12 @@ class MontyMobileAdapter(WhatsAppAdapter):
         try:
             phone_number = webhook_data.get("from", "")
             message_type = webhook_data.get("type", "text")
-            message_id = webhook_data.get("messageId", str(__import__('time').time()))
+            raw_mid = webhook_data.get("messageId")
+            if raw_mid is None or (isinstance(raw_mid, str) and not str(raw_mid).strip()):
+                message_id = _stable_id_when_provider_omits_message_id(webhook_data)
+                print(f"⚠️ Simple webhook format missing messageId — stable synthetic {message_id[:24]}...")
+            else:
+                message_id = str(raw_mid).strip()
             timestamp = webhook_data.get("timestamp", int(__import__('time').time() * 1000))
 
             # Extract content based on type (must be dict with *_id for webhook handler)
