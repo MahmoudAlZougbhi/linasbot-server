@@ -5,12 +5,15 @@ Handles webhook reception, parsing, and routing messages to appropriate handlers
 """
 
 import asyncio
+import hashlib
 import json
 import datetime
 import io
 import os
 import time
 from typing import Dict, Any, Optional
+
+from google.cloud import firestore
 
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
@@ -32,6 +35,52 @@ from handlers.training_handlers import start_training_mode, exit_training_mode
 # Prevents processing the same webhook multiple times within a time window
 _webhook_dedup_cache = {}
 WEBHOOK_DEDUP_WINDOW_SECONDS = 60  # Consider duplicate if received within 60 seconds (Qiscus can send duplicates up to 15+ seconds apart)
+
+
+async def _webhook_firestore_try_acquire(message_id: str) -> bool:
+    """
+    Return True if we should process this inbound WhatsApp message_id.
+    Return False if another worker (or earlier request) already registered it (duplicate webhook).
+    """
+    mid = (message_id or "").strip()
+    if not mid:
+        return True
+    db = get_firestore_db()
+    if not db:
+        return True
+    doc_id = hashlib.sha256(mid.encode("utf-8")).hexdigest()
+    ref = (
+        db.collection("artifacts")
+        .document("linas-ai-bot-backend")
+        .collection("webhook_inbound_processed")
+        .document(doc_id)
+    )
+
+    def _create():
+        ref.create(
+            {
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "message_id_prefix": mid[:200],
+            }
+        )
+
+    def _is_dup(exc: BaseException) -> bool:
+        if type(exc).__name__ in ("AlreadyExists", "Conflict"):
+            return True
+        code = getattr(exc, "code", None)
+        if code in (409, "ALREADY_EXISTS"):
+            return True
+        s = str(exc).lower()
+        return "already exists" in s or "already_exists" in s
+
+    try:
+        await asyncio.to_thread(_create)
+        return True
+    except Exception as e:
+        if _is_dup(e):
+            return False
+        print(f"⚠️ Webhook Firestore dedupe create failed (using memory fallback): {e}")
+        return True
 
 
 async def await_whatsapp_delayed_processing(user_id: str) -> None:
@@ -137,23 +186,31 @@ async def receive_webhook(request: Request):
         if not parsed_message:
             parsed_message = _parse_webhook_raw_dict(webhook_data)
         
-        # Check for duplicate webhooks
+        # Check for duplicate webhooks (Firestore first = multi-worker safe, then in-memory)
         if parsed_message:
             message_id = parsed_message.get("message_id", "")
             current_time = time.time()
-            
+
+            if message_id:
+                if not await _webhook_firestore_try_acquire(message_id):
+                    print(f"⚠️ DUPLICATE WEBHOOK (Firestore): message_id={message_id[:64]}...")
+                    return JSONResponse(
+                        status_code=200,
+                        content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id},
+                    )
+
             # Clean up old entries (older than dedup window)
             expired_keys = [k for k, v in _webhook_dedup_cache.items() if current_time - v > WEBHOOK_DEDUP_WINDOW_SECONDS]
             for k in expired_keys:
                 del _webhook_dedup_cache[k]
-            
-            # Check if this message was recently processed
+
+            # Check if this message was recently processed (same process / Firestore unavailable)
             if message_id and message_id in _webhook_dedup_cache:
                 time_since_last = current_time - _webhook_dedup_cache[message_id]
                 print(f"⚠️ DUPLICATE WEBHOOK DETECTED: message_id={message_id} (received {time_since_last:.2f}s ago)")
                 print(f"Skipping duplicate processing to prevent duplicate image analysis")
                 return JSONResponse(status_code=200, content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id})
-            
+
             # Record this message as processed
             if message_id:
                 _webhook_dedup_cache[message_id] = current_time

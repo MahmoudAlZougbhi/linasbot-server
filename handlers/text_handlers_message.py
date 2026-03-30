@@ -519,23 +519,10 @@ async def handle_message(
                                     )
                                     user_data['notified_human_takeover'] = True
                                 else:
-                                    operator_name = conv_data.get('operator_name')
-                                    if not operator_name:
-                                        if operator_id and '@' in str(operator_id):
-                                            operator_name = str(operator_id).split('@')[0].replace('.', ' ').replace('_', ' ').title()
-                                        else:
-                                            operator_name = operator_id
-                                    assigned_followup_messages = {
-                                        "ar": f"📞 فريقنا متابع محادثتك مع {operator_name}. شوي وبيرد عليك، شكراً لصبرك 🙏",
-                                        "en": f"📞 Our team is following up with {operator_name}. They will reply shortly, thanks for your patience 🙏",
-                                        "fr": f"📞 Notre équipe suit votre conversation avec {operator_name}. Réponse sous peu, merci pour votre patience 🙏"
-                                    }
-                                    followup_msg = assigned_followup_messages.get(user_lang, assigned_followup_messages['ar'])
-                                    await send_message_func(user_id, followup_msg)
-                                    await save_conversation_message_to_firestore(
-                                        user_id, "ai", followup_msg, conv_id_for_save,
-                                        user_name, user_data.get('phone_number'),
-                                        metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_followup"},
+                                    # Operator is handling the chat — do not send a bot follow-up on every user turn
+                                    # (it duplicated the human reply and looked like "two messages").
+                                    print(
+                                        f"[handle_message] INFO: User {user_id} has operator; skipping per-turn bot follow-up."
                                     )
                             else:
                                 # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
