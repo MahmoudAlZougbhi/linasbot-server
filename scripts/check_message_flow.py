@@ -153,6 +153,60 @@ def check_webhook_post():
         _fail(f"خطأ في فحص الويب هوك: {e}")
 
 
+def check_duplicate_webhook_same_message_id():
+    """5b. POST مرتين بنفس wamid — يجب أن تُرفض الثانية (duplicate_webhook)."""
+    _step("5b", "ويب هوك مكرر (نفس message id مرتين)")
+    try:
+        import httpx
+        import time as time_mod
+
+        base = os.getenv("WEBHOOK_TEST_URL", "http://localhost:8003")
+        url = f"{base.rstrip('/')}/webhook"
+        mid = f"wamid.dedupe_{int(time_mod.time() * 1000)}"
+
+        def payload():
+            return {
+                "object": "whatsapp_business_account",
+                "entry": [{
+                    "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
+                    "changes": [{
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": {"display_phone_number": "96178974402", "phone_number_id": "123"},
+                            "contacts": [{"wa_id": "96178974402", "profile": {"name": "DedupeProbe"}}],
+                            "messages": [{
+                                "from": "96178974402",
+                                "id": mid,
+                                "timestamp": "1234567890",
+                                "type": "text",
+                                "text": {"body": "dedupe double post test"},
+                            }],
+                        },
+                    }],
+                }],
+            }
+
+        r1 = httpx.post(url, json=payload(), timeout=15)
+        r2 = httpx.post(url, json=payload(), timeout=15)
+        if r1.status_code != 200 or r2.status_code != 200:
+            _fail(f"HTTP غير متوقع: first={r1.status_code} second={r2.status_code}")
+            return
+        j2 = r2.json()
+        if j2.get("status") == "skipped" and "duplicate" in str(j2.get("reason", "")):
+            _ok("الطلب الثاني رُفض كمكرر (dedupe يعمل على السيرفر)")
+        elif j2.get("status") == "success":
+            _warn(
+                "الطلب الثاني عُولج كـ success — dedupe لم يمنع (Firestore غير متصل؟ أو workers مختلفة؟)"
+            )
+        else:
+            _warn(f"استجابة غير متوقعة للطلب الثاني: {j2}")
+    except httpx.ConnectError:
+        _warn("تخطّي 5b — السيرفر غير شغال")
+    except Exception as e:
+        _fail(f"خطأ في فحص التكرار: {e}")
+
+
 async def check_montymobile_send_async():
     """6. فحص إرسال MontyMobile (dry-run في local)"""
     _step(6, "فحص MontyMobile إرسال (محاكاة)")
@@ -240,6 +294,7 @@ def main():
     check_firestore()
     check_adapter_parse()
     check_webhook_post()
+    check_duplicate_webhook_same_message_id()
     asyncio.run(check_montymobile_send_async())
     asyncio.run(check_full_flow())
 

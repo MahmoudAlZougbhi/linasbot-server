@@ -34,7 +34,33 @@ from handlers.training_handlers import start_training_mode, exit_training_mode
 # Webhook deduplication cache: {message_id: timestamp}
 # Prevents processing the same webhook multiple times within a time window
 _webhook_dedup_cache = {}
+# Per-message_id lock so check+record is atomic (avoids two concurrent requests both passing memory dedupe when Firestore is down / fail-open).
+_webhook_memory_dedup_locks: Dict[str, asyncio.Lock] = {}
 WEBHOOK_DEDUP_WINDOW_SECONDS = 60  # Consider duplicate if received within 60 seconds (Qiscus can send duplicates up to 15+ seconds apart)
+
+
+async def _webhook_memory_try_claim(message_id: str, current_time: float) -> bool:
+    """
+    Return True if this request should proceed, False if duplicate within WEBHOOK_DEDUP_WINDOW_SECONDS.
+    Atomic per message_id for same-process concurrent webhooks.
+    """
+    mid = (message_id or "").strip()
+    if not mid:
+        return True
+
+    expired_keys = [
+        k for k, v in _webhook_dedup_cache.items() if current_time - v > WEBHOOK_DEDUP_WINDOW_SECONDS
+    ]
+    for k in expired_keys:
+        _webhook_dedup_cache.pop(k, None)
+        _webhook_memory_dedup_locks.pop(k, None)
+
+    lock = _webhook_memory_dedup_locks.setdefault(mid, asyncio.Lock())
+    async with lock:
+        if mid in _webhook_dedup_cache:
+            return False
+        _webhook_dedup_cache[mid] = current_time
+        return True
 
 
 def _synthetic_inbound_id_from_wa_message(msg: dict) -> str:
@@ -244,21 +270,16 @@ async def receive_webhook(request: Request):
                         content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id},
                     )
 
-            # Clean up old entries (older than dedup window)
-            expired_keys = [k for k, v in _webhook_dedup_cache.items() if current_time - v > WEBHOOK_DEDUP_WINDOW_SECONDS]
-            for k in expired_keys:
-                del _webhook_dedup_cache[k]
-
-            # Check if this message was recently processed (same process / Firestore unavailable)
-            if message_id and message_id in _webhook_dedup_cache:
-                time_since_last = current_time - _webhook_dedup_cache[message_id]
-                print(f"⚠️ DUPLICATE WEBHOOK DETECTED: message_id={message_id} (received {time_since_last:.2f}s ago)")
-                print(f"Skipping duplicate processing to prevent duplicate image analysis")
-                return JSONResponse(status_code=200, content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id})
-
-            # Record this message as processed
             if message_id:
-                _webhook_dedup_cache[message_id] = current_time
+                if not await _webhook_memory_try_claim(message_id, current_time):
+                    print(
+                        f"⚠️ DUPLICATE WEBHOOK DETECTED (memory): message_id={message_id} "
+                        f"(within {WEBHOOK_DEDUP_WINDOW_SECONDS}s window)"
+                    )
+                    return JSONResponse(
+                        status_code=200,
+                        content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id},
+                    )
                 print(f"✅ Webhook recorded in dedup cache: {message_id}")
         
         if parsed_message:
