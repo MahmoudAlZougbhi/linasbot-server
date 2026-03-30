@@ -9,6 +9,7 @@ Live Chat Service - Canonical conversation_state
 
 import datetime
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -27,25 +28,100 @@ from utils.utils import get_firestore_db, set_human_takeover_status, get_canonic
 from utils.phone_utils import normalize_phone, is_phone_like_user_id, phone_match_key
 from services.media_service import build_whatsapp_audio_delivery_url
 
-# In-memory dedupe for POST /api/live-chat/send-message (per process). Multi-worker deploys still need one worker or shared store.
+# In-memory fallback when Firestore idempotency is unavailable (single-process only).
 _operator_send_idempotency_keys: Dict[str, float] = {}
 
 
-def _operator_send_idempotency_consume(key: Optional[str]) -> bool:
-    """Return False if this idempotency_key was seen recently (skip duplicate send)."""
-    if not key or not str(key).strip():
+def _operator_send_idempotency_memory_consume(fingerprint: str) -> bool:
+    """Return False if this fingerprint was seen recently (skip duplicate send)."""
+    if not fingerprint or not str(fingerprint).strip():
         return True
-    k = str(key).strip()
+    k = str(fingerprint).strip()
     ttl = _env_float("OPERATOR_SEND_IDEMPOTENCY_TTL_SECONDS", 120.0)
     now = time.time()
     expired = [x for x, ts in _operator_send_idempotency_keys.items() if now - ts > ttl]
     for x in expired:
         _operator_send_idempotency_keys.pop(x, None)
     if k in _operator_send_idempotency_keys:
-        print(f"⚠️ Duplicate operator send suppressed (idempotency_key={k[:32]}...)")
+        print(f"⚠️ Duplicate operator send suppressed (memory idempotency, fp={k[:48]}...)")
         return False
     _operator_send_idempotency_keys[k] = now
     return True
+
+
+def _build_operator_idempotency_fingerprint(
+    idempotency_key: Optional[str],
+    conversation_id: str,
+    operator_id: str,
+    message_type: str,
+    message: str,
+) -> str:
+    """Stable string per logical send. Client UUID preferred; else hash+time bucket for double-submit without key."""
+    if idempotency_key and str(idempotency_key).strip():
+        return str(idempotency_key).strip()
+    bucket_sec = max(1.0, _env_float("OPERATOR_SEND_ANON_BUCKET_SECONDS", 3.0))
+    bucket = int(time.time() / bucket_sec)
+    body_hash = hashlib.sha256(
+        f"{conversation_id}\0{operator_id}\0{message_type}\0{message}".encode("utf-8", errors="replace")
+    ).hexdigest()
+    return f"anon:{body_hash}:{bucket}"
+
+
+def _operator_idempotency_doc_id(fingerprint: str) -> str:
+    return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+
+
+async def _try_acquire_operator_send_idempotency(db, app_id: str, fingerprint: str):
+    """
+    Returns (acquired: bool, lock_ref_or_none).
+    lock_ref is a Firestore DocumentReference when acquired via Firestore; caller must delete on failure.
+    """
+    doc_id = _operator_idempotency_doc_id(fingerprint)
+    if db is None:
+        ok = _operator_send_idempotency_memory_consume(fingerprint)
+        return ok, None
+
+    ref = (
+        db.collection("artifacts")
+        .document(app_id)
+        .collection("operator_outbound_idempotency")
+        .document(doc_id)
+    )
+
+    def _txn_acquire():
+        transaction = db.transaction()
+
+        @firestore.transactional
+        def _acquire(transaction, doc_ref):
+            snap = doc_ref.get(transaction=transaction)
+            if snap.exists:
+                return False
+            transaction.set(doc_ref, {"created_at": firestore.SERVER_TIMESTAMP})
+            return True
+
+        return _acquire(transaction, ref)
+
+    try:
+        acquired = await asyncio.to_thread(_txn_acquire)
+        if acquired is False:
+            print(
+                f"⚠️ Duplicate operator send suppressed (Firestore idempotency doc={doc_id[:16]}...)"
+            )
+            return False, None
+        return True, ref
+    except Exception as e:
+        print(f"⚠️ Firestore idempotency acquire failed, falling back to memory: {e}")
+        ok = _operator_send_idempotency_memory_consume(fingerprint)
+        return ok, None
+
+
+async def _release_operator_idempotency_lock(db, lock_ref) -> None:
+    if db is None or lock_ref is None:
+        return
+    try:
+        await asyncio.to_thread(lock_ref.delete)
+    except Exception as e:
+        print(f"⚠️ Could not release operator idempotency lock: {e}")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -2693,20 +2769,34 @@ class LiveChatService:
             message_type: Type of message - "text", "voice", or "image"
             idempotency_key: Optional client key; duplicates within TTL are no-oped (no second WhatsApp delivery).
         """
+        lock_ref = None
+        completed_ok = False
+        db = None
         try:
-            if not _operator_send_idempotency_consume(idempotency_key):
+            from utils.utils import save_conversation_message_to_firestore, get_firestore_db
+            from utils.utils import get_canonical_user_id_and_phone
+
+            fingerprint = _build_operator_idempotency_fingerprint(
+                idempotency_key,
+                conversation_id,
+                operator_id,
+                message_type,
+                message,
+            )
+            db = get_firestore_db()
+            acquired, lock_ref = await _try_acquire_operator_send_idempotency(
+                db, self.APP_ID, fingerprint
+            )
+            if not acquired:
                 return {
                     "success": True,
                     "message": "Already processed (duplicate request)",
                     "deduplicated": True,
                 }
-            from utils.utils import save_conversation_message_to_firestore, get_firestore_db
-            from utils.utils import get_canonical_user_id_and_phone
-            
+
             canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id)
             # For Qiscus, we need to fetch the phone_number from Firebase
             phone_number = None
-            db = get_firestore_db()
             if db:
                 try:
                     app_id = "linas-ai-bot-backend"
@@ -2809,6 +2899,7 @@ class LiveChatService:
 
                 print(f"✅ Voice message processed and sent for {user_id}")
 
+                completed_ok = True
                 return {
                     "success": True,
                     "message": "Voice message sent successfully",
@@ -2872,6 +2963,7 @@ class LiveChatService:
                 
                 print(f"✅ Image message processed and sent for {user_id}")
                 
+                completed_ok = True
                 return {"success": True, "message": "Image message sent successfully", "storage_url": storage_url}
                     
             else:  # Default to text
@@ -2886,18 +2978,17 @@ class LiveChatService:
                 )
                 print(f"✅ Saved operator message to Firestore")
 
-                # Send via WhatsApp in background - return immediately so UI feels fast
-                async def _send_whatsapp():
-                    try:
-                        result = await adapter.send_text_message(canonical_user_id, message)
-                        if result.get("success"):
-                            print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
-                        else:
-                            print(f"⚠️ WhatsApp send failed but message saved: {result.get('error')}")
-                    except Exception as send_error:
-                        print(f"⚠️ WhatsApp adapter error but message saved: {send_error}")
+                # Await WhatsApp send (single delivery; avoids duplicate background tasks)
+                try:
+                    result = await adapter.send_text_message(canonical_user_id, message)
+                    if result.get("success"):
+                        print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
+                    else:
+                        print(f"⚠️ WhatsApp send failed but message saved: {result.get('error')}")
+                except Exception as send_error:
+                    print(f"⚠️ WhatsApp adapter error but message saved: {send_error}")
 
-                asyncio.create_task(_send_whatsapp())
+                completed_ok = True
                 return {"success": True, "message": "Message sent successfully"}
             
         except Exception as e:
@@ -2905,6 +2996,9 @@ class LiveChatService:
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}
+        finally:
+            if lock_ref is not None and not completed_ok:
+                await _release_operator_idempotency_lock(db, lock_ref)
     
     async def update_operator_status(self, operator_id: str, status: str) -> Dict[str, Any]:
         """Update operator availability"""
