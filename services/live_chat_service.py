@@ -88,29 +88,40 @@ async def _try_acquire_operator_send_idempotency(db, app_id: str, fingerprint: s
         .document(doc_id)
     )
 
-    def _txn_acquire():
-        transaction = db.transaction()
+    def _create_lock():
+        # create() is atomic: second caller gets ALREADY_EXISTS — works across workers (unlike in-memory).
+        ref.create(
+            {
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "fp_prefix": fingerprint[:200],
+            }
+        )
 
-        @firestore.transactional
-        def _acquire(transaction, doc_ref):
-            snap = doc_ref.get(transaction=transaction)
-            if snap.exists:
-                return False
-            transaction.set(doc_ref, {"created_at": firestore.SERVER_TIMESTAMP})
+    def _is_already_exists(err: BaseException) -> bool:
+        name = type(err).__name__
+        if name in ("AlreadyExists", "Conflict", "Aborted"):
             return True
-
-        return _acquire(transaction, ref)
+        code = getattr(err, "code", None)
+        if code in (409, "ALREADY_EXISTS"):
+            return True
+        s = str(err).lower()
+        return (
+            "already exists" in s
+            or "already_exists" in s
+            or "document already exists" in s
+            or "409" in s
+        )
 
     try:
-        acquired = await asyncio.to_thread(_txn_acquire)
-        if acquired is False:
+        await asyncio.to_thread(_create_lock)
+        return True, ref
+    except Exception as e:
+        if _is_already_exists(e):
             print(
                 f"⚠️ Duplicate operator send suppressed (Firestore idempotency doc={doc_id[:16]}...)"
             )
             return False, None
-        return True, ref
-    except Exception as e:
-        print(f"⚠️ Firestore idempotency acquire failed, falling back to memory: {e}")
+        print(f"⚠️ Firestore idempotency create failed, falling back to memory: {e}")
         ok = _operator_send_idempotency_memory_consume(fingerprint)
         return ok, None
 

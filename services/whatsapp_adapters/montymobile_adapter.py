@@ -2,10 +2,25 @@
 MontyMobile WhatsApp Adapter
 New Qiscus API endpoint using MontyMobile infrastructure
 """
+import asyncio
+import hashlib
 import json
+import os
 import time
 from typing import Dict, Any, Optional
 from .base_adapter import WhatsAppAdapter
+
+_MONTY_FS_APP_ID = "linas-ai-bot-backend"
+
+
+def _monty_firestore_is_already_exists(exc: BaseException) -> bool:
+    if type(exc).__name__ in ("AlreadyExists", "Conflict"):
+        return True
+    code = getattr(exc, "code", None)
+    if code in (409, "ALREADY_EXISTS"):
+        return True
+    s = str(exc).lower()
+    return "already exists" in s or "already_exists" in s or "document already exists" in s
 
 class MontyMobileAdapter(WhatsAppAdapter):
     """MontyMobile WhatsApp API adapter (New Qiscus endpoint)"""
@@ -44,6 +59,53 @@ class MontyMobileAdapter(WhatsAppAdapter):
         print(f"   Tenant: {tenant_id}")
         print(f"   API ID: {api_id}")
         print(f"   Source: {source_number}")
+
+    async def _monty_outbound_text_dedupe_should_skip(
+        self, phone_number: str, message: str, dedupe_sec: float
+    ) -> bool:
+        """
+        If True, skip HTTP send-session (same recipient + same body within one time bucket).
+        Uses Firestore create() so duplicate paths / workers still dedupe. Fail-open on errors.
+        """
+        try:
+            from google.cloud import firestore
+            from utils.utils import get_firestore_db
+
+            db = get_firestore_db()
+            if not db:
+                return False
+            bucket = int(time.time() / max(float(dedupe_sec), 0.5))
+            body_fp = hashlib.sha256(
+                f"{phone_number}\0{message}".encode("utf-8", errors="replace")
+            ).hexdigest()
+            doc_id = hashlib.sha256(f"{body_fp}:{bucket}".encode("utf-8")).hexdigest()
+            ref = (
+                db.collection("artifacts")
+                .document(_MONTY_FS_APP_ID)
+                .collection("monty_outbound_text_dedupe")
+                .document(doc_id)
+            )
+
+            def _create():
+                ref.create(
+                    {
+                        "created_at": firestore.SERVER_TIMESTAMP,
+                        "phone_prefix": phone_number[:16],
+                        "bucket": bucket,
+                    }
+                )
+
+            try:
+                await asyncio.to_thread(_create)
+                return False
+            except Exception as e:
+                if _monty_firestore_is_already_exists(e):
+                    return True
+                print(f"⚠️ Monty outbound dedupe create unexpected: {e}")
+                return False
+        except Exception as e:
+            print(f"⚠️ Monty outbound dedupe failed (sending anyway): {e}")
+            return False
     
     async def send_text_message(self, to_number: str, message: str) -> Dict[str, Any]:
         """
@@ -58,6 +120,23 @@ class MontyMobileAdapter(WhatsAppAdapter):
         
         # Convert room_id to phone number if needed
         phone_number = self._get_phone_from_room_id(to_number)
+
+        try:
+            dedupe_sec = float(os.getenv("MONTY_OUTBOUND_TEXT_DEDUPE_SECONDS", "3"))
+        except ValueError:
+            dedupe_sec = 3.0
+        if dedupe_sec > 0 and message and str(message).strip() and phone_number:
+            if await self._monty_outbound_text_dedupe_should_skip(
+                phone_number, str(message), dedupe_sec
+            ):
+                print(
+                    f"⚠️ MONTY: skipped duplicate send-session (same to+body within ~{dedupe_sec}s bucket)"
+                )
+                return {
+                    "success": True,
+                    "deduplicated": True,
+                    "skipped_duplicate_outbound": True,
+                }
         
         # NEW PAYLOAD FORMAT - No apiId required
         payload = {
