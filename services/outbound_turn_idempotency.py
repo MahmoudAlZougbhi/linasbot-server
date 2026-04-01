@@ -13,7 +13,20 @@ from typing import List, Optional
 
 from google.cloud import firestore
 
-from utils.utils import get_firestore_db
+from utils.phone_utils import phone_match_key
+from utils.utils import get_canonical_user_id_and_phone, get_firestore_db
+
+
+def stable_ai_claim_identity(user_id: str, phone_number: Optional[str] = None) -> str:
+    """
+    Stable key for ai_turn_claims: digits-only for phone users (same person regardless of +961 vs 961
+    or room→phone resolution timing), else stripped room / raw id.
+    """
+    canonical, normalized = get_canonical_user_id_and_phone(user_id, phone_number)
+    pk = phone_match_key(normalized or canonical or user_id)
+    if pk:
+        return pk
+    return (canonical or user_id or "").strip()
 
 
 def record_inbound_mid_for_ai_turn(user_data: dict, source_message_id: Optional[str]) -> None:
@@ -34,11 +47,13 @@ def _is_already_exists(exc: BaseException) -> bool:
     return "already exists" in s or "already_exists" in s
 
 
-async def try_claim_ai_turn(canonical_user_id: str, inbound_mids: List[str]) -> bool:
+async def try_claim_ai_turn(stable_identity: str, inbound_mids: List[str]) -> bool:
     """
     Return True if this process should run the AI turn (claim created).
     Return False if another worker already claimed the same inbound id batch (skip GPT).
     Empty mids or no DB: return True (fail-open).
+
+    Pass stable_identity from stable_ai_claim_identity(user_id, phone) so workers agree on the key.
     """
     mids = sorted({str(m).strip() for m in (inbound_mids or []) if m and str(m).strip()})
     if not mids:
@@ -46,7 +61,8 @@ async def try_claim_ai_turn(canonical_user_id: str, inbound_mids: List[str]) -> 
     db = get_firestore_db()
     if not db:
         return True
-    key_basis = f"{canonical_user_id}\0" + "|".join(mids)
+    sid = (stable_identity or "").strip()
+    key_basis = f"{sid}\0" + "|".join(mids)
     doc_id = hashlib.sha256(key_basis.encode("utf-8")).hexdigest()
     ref = (
         db.collection("artifacts")
@@ -59,7 +75,7 @@ async def try_claim_ai_turn(canonical_user_id: str, inbound_mids: List[str]) -> 
         ref.create(
             {
                 "created_at": firestore.SERVER_TIMESTAMP,
-                "canonical_user_id": (canonical_user_id or "")[:256],
+                "stable_identity": (sid or "")[:256],
                 "inbound_ids_preview": "|".join(mids)[:500],
             }
         )
