@@ -933,9 +933,27 @@ async def handle_message_whatsapp_with_adapter(user_id: str, user_input_text: st
         print(f"❌ CRITICAL: No phone_number extracted for user {user_id}!")
         config.user_data_whatsapp[user_id]['phone_number'] = None
 
+    _same_turn_text_sends = set()
+
     async def adapter_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
         if message_text:
-            return await adapter.send_text_message(to_number, message_text)
+            from services.whatsapp_adapters.outbound_text_dedupe import outbound_fingerprint
+
+            fp = outbound_fingerprint(
+                to_number,
+                message_text,
+                phone_hint=phone_number or config.user_data_whatsapp.get(user_id, {}).get("phone_number"),
+            )
+            if fp and fp in _same_turn_text_sends:
+                print(
+                    f"⚠️ Duplicate AI/outbound text in same WhatsApp turn suppressed "
+                    f"(user={user_id[:16]}… len={len(message_text)})"
+                )
+                return {"success": True, "deduped_same_turn": True}
+            result = await adapter.send_text_message(to_number, message_text)
+            if fp and result and result.get("success"):
+                _same_turn_text_sends.add(fp)
+            return result
         elif image_url:
             return await adapter.send_image_message(to_number, image_url)
         elif audio_url:

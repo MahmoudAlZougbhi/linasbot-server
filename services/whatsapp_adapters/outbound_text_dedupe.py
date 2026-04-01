@@ -13,10 +13,13 @@ import hashlib
 import os
 import re
 import time
-from typing import Dict, Set
+import unicodedata
+from typing import Dict, Optional, Set
+
+from utils.phone_utils import phone_match_key
 
 # Same user can legitimately get two different messages within seconds; identical body is the bug.
-WINDOW_SEC = float(os.getenv("OUTBOUND_TEXT_DEDUPE_WINDOW_SEC", "25"))
+WINDOW_SEC = float(os.getenv("OUTBOUND_TEXT_DEDUPE_WINDOW_SEC", "90"))
 
 _cache: Dict[str, float] = {}
 _inflight: Set[str] = set()
@@ -24,22 +27,48 @@ _lock = asyncio.Lock()
 
 
 def _normalize_recipient(phone_or_room: str) -> str:
-    """One key per human: strip and use last N digits when phone-like; else full stripped id (room)."""
+    """One stable key per human: prefer E.164 digits via phone_match_key; else room/non-phone id."""
     s = (phone_or_room or "").strip()
     if not s:
         return ""
+    pk = phone_match_key(s)
+    if pk:
+        return pk
     digits = re.sub(r"\D", "", s)
     if len(digits) >= 8:
         return digits[-15:]
     return s
 
 
+_ZW_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060]")
+
+
 def _body_key(message: str) -> str:
     t = (message or "").strip()
     if not t:
         return ""
+    t = unicodedata.normalize("NFKC", t)
+    t = _ZW_RE.sub("", t)
     # Collapse internal runs of whitespace so tiny formatting diffs still match
     return re.sub(r"\s+", " ", t)
+
+
+def outbound_fingerprint(recipient: str, message: str, phone_hint: Optional[str] = None) -> str:
+    """
+    Same key as should_skip_outbound_text uses after optional phone hint (canonical number).
+    Use for per-handler duplicate suppression aligned with global dedupe.
+    """
+    hint = (phone_hint or "").strip()
+    if hint:
+        pk = phone_match_key(hint)
+        if pk:
+            rn = pk
+        else:
+            rn = _normalize_recipient(recipient)
+    else:
+        rn = _normalize_recipient(recipient)
+    k = _cache_key(rn, message)
+    return k or ""
 
 
 def _cache_key(recipient_norm: str, body: str) -> str:
