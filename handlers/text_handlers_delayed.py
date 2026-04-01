@@ -1,6 +1,7 @@
 # handlers/text_handlers_delayed.py
 # Handles delayed message processing (message combining)
 
+import uuid
 from typing import Optional
 
 from handlers.text_handlers_firestore import *
@@ -20,6 +21,8 @@ async def _delayed_process_messages(
     combine_delay_seconds: if set (e.g. 0 for dashboard tests), overrides MESSAGE_COMBINING_DELAY.
     """
     try:
+        user_data["_ai_turn_trace_id"] = str(uuid.uuid4())
+        trace = user_data["_ai_turn_trace_id"]
         await send_action_func(user_id)  # Send typing indicator
         delay = (
             config.MESSAGE_COMBINING_DELAY
@@ -59,10 +62,20 @@ async def _delayed_process_messages(
                 claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
                 if mids and not await try_claim_ai_turn(claim_id, mids):
                     print(
-                        f"⚠️ [_delayed_process_messages] Skipping AI turn (duplicate Firestore claim) "
-                        f"user={user_id[:24]}… mids={len(mids)}"
+                        f"⚠️ [ai-turn] trace_id={trace} claim=DUPLICATE_SKIP "
+                        f"user={user_id[:20]}… mids={len(mids)} claim_key={claim_id[:16]}…"
                     )
                     return
+                if mids:
+                    print(
+                        f"[ai-turn] trace_id={trace} claim=OK claim_key={claim_id[:20]}… "
+                        f"inbound_mids_n={len(mids)} combined_len={len(combined_message or '')}"
+                    )
+                else:
+                    print(
+                        f"[ai-turn] trace_id={trace} claim=SKIPPED(no_inbound_mids) "
+                        f"combined_len={len(combined_message or '')} — distributed dedupe inactive for this turn"
+                    )
                 await _process_and_respond(
                     user_id,
                     user_name=config.user_names.get(user_id, "عميل"),

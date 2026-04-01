@@ -7,6 +7,7 @@ Handles webhook reception, parsing, and routing messages to appropriate handlers
 import asyncio
 import hashlib
 import json
+import uuid
 import re
 import datetime
 import io
@@ -945,12 +946,29 @@ async def handle_message_whatsapp_with_adapter(user_id: str, user_input_text: st
                 phone_hint=phone_number or config.user_data_whatsapp.get(user_id, {}).get("phone_number"),
             )
             if fp and fp in _same_turn_text_sends:
+                tid = config.user_data_whatsapp.get(user_id, {}).get("_ai_turn_trace_id", "?")
                 print(
-                    f"⚠️ Duplicate AI/outbound text in same WhatsApp turn suppressed "
-                    f"(user={user_id[:16]}… len={len(message_text)})"
+                    f"⚠️ [whatsapp-send] trace_id={tid} dedupe=same_turn_suppressed "
+                    f"user={user_id[:16]}… text_len={len(message_text)}"
                 )
                 return {"success": True, "deduped_same_turn": True}
             result = await adapter.send_text_message(to_number, message_text)
+            tid = config.user_data_whatsapp.get(user_id, {}).get("_ai_turn_trace_id", "?")
+            if result:
+                if result.get("deduped_outbound"):
+                    print(
+                        f"[whatsapp-send] trace_id={tid} dedupe=global_window user={user_id[:12]}… "
+                        f"text_len={len(message_text)}"
+                    )
+                elif (
+                    result.get("success")
+                    and not result.get("dry_run")
+                    and os.getenv("TRACE_AI_OUTBOUND", "").lower() in ("1", "true", "yes")
+                ):
+                    print(
+                        f"[whatsapp-send] trace_id={tid} sent=ok user={user_id[:12]}… "
+                        f"text_len={len(message_text)}"
+                    )
             if fp and result and result.get("success"):
                 _same_turn_text_sends.add(fp)
             return result
@@ -1212,13 +1230,24 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             return False
 
         from modules.whatsapp_adapters import send_whatsapp_typing_indicator
+        user_data["_ai_turn_trace_id"] = str(uuid.uuid4())
+        trace = user_data["_ai_turn_trace_id"]
         mids = user_data.pop("_batch_inbound_mids", []) or []
         claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
         if mids and not await try_claim_ai_turn(claim_id, mids):
             print(
-                f"⚠️ Skipping image AI turn (duplicate Firestore claim) user={user_id[:24]}…"
+                f"⚠️ [ai-turn] trace_id={trace} image claim=DUPLICATE_SKIP user={user_id[:20]}…"
             )
             return
+        if mids:
+            print(
+                f"[ai-turn] trace_id={trace} image claim=OK claim_key={claim_id[:20]}… mids_n={len(mids)}"
+            )
+        else:
+            print(
+                f"[ai-turn] trace_id={trace} image claim=SKIPPED(no_inbound_mids) — "
+                f"add TRACE or check provider message ids"
+            )
         await _process_and_respond(
             user_id=user_id,
             user_name=user_name,
