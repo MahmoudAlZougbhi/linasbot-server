@@ -118,3 +118,12 @@ def test_webhook_memory_concurrent_only_one_claim():
         assert results.count(False) == 2
 
     asyncio.run(run())
+
+
+def test_outbound_duplicate_text_second_call_is_duplicate():
+    from services.whatsapp_adapters import outbound_text_dedupe as od
+
+    od._cache.clear()
+    assert od.is_duplicate_outbound_text("+96171110001", "نفس النص") is False
+    assert od.is_duplicate_outbound_text("+96171110001", "نفس النص") is True
+    od._cache.clear()

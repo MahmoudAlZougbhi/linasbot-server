@@ -7,6 +7,7 @@ import json
 import time
 from typing import Dict, Any, Optional
 from .base_adapter import WhatsAppAdapter
+from .outbound_text_dedupe import is_duplicate_outbound_text
 
 
 def _synthetic_wa_message_id(message: Dict[str, Any]) -> str:
@@ -72,6 +73,9 @@ class MontyMobileAdapter(WhatsAppAdapter):
             to_number: Destination phone number (can be room_id or phone)
             message: Text message to send
         """
+        if is_duplicate_outbound_text(to_number, message):
+            return {"success": True, "deduped_outbound": True}
+
         # NEW ENDPOINT - Updated from testing
         url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
         
