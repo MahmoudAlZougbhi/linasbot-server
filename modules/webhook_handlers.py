@@ -40,10 +40,42 @@ _webhook_memory_dedup_locks: Dict[str, asyncio.Lock] = {}
 WEBHOOK_DEDUP_WINDOW_SECONDS = 60  # Consider duplicate if received within 60 seconds (Qiscus can send duplicates up to 15+ seconds apart)
 
 # Some providers deliver the same user text twice with different message ids; message_id dedupe misses that.
-WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS = 5.0
+# MontyMobile / retries can arrive >5s apart — keep a generous window so we do not run GPT twice for one user tap.
+WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS = 45.0
 WEBHOOK_TEXT_BODYFP_MAX_CHARS = 4000
 _webhook_bodyfp_cache: Dict[str, float] = {}
 _webhook_bodyfp_locks: Dict[str, asyncio.Lock] = {}
+
+# If the same inbound is processed twice (or any bug double-calls send), block identical outbound body twice in a row.
+_OUTBOUND_TEXT_DEDUP_CACHE: Dict[str, float] = {}
+OUTBOUND_TEXT_DEDUP_WINDOW_SEC = 15.0
+
+
+async def _adapter_send_text_deduped(adapter, to_number: str, message_text: str) -> Dict[str, Any]:
+    """Send WhatsApp text; skip if the same trimmed body was just sent to the same recipient."""
+    text = (message_text or "").strip()
+    if not text:
+        return await adapter.send_text_message(to_number, message_text)
+    key = hashlib.sha256(
+        f"{(to_number or '').strip()}\0{text}".encode("utf-8", errors="replace")
+    ).hexdigest()[:32]
+    now = time.time()
+    stale = [
+        k
+        for k, ts in _OUTBOUND_TEXT_DEDUP_CACHE.items()
+        if now - ts > OUTBOUND_TEXT_DEDUP_WINDOW_SEC * 5
+    ]
+    for k in stale:
+        _OUTBOUND_TEXT_DEDUP_CACHE.pop(k, None)
+    prev_ts = _OUTBOUND_TEXT_DEDUP_CACHE.get(key)
+    if prev_ts is not None and (now - prev_ts) < OUTBOUND_TEXT_DEDUP_WINDOW_SEC:
+        print(
+            f"⚠️ Outbound duplicate suppressed: same text to same recipient within "
+            f"{now - prev_ts:.1f}s (window={OUTBOUND_TEXT_DEDUP_WINDOW_SEC}s)"
+        )
+        return {"success": True, "deduped_outbound": True}
+    _OUTBOUND_TEXT_DEDUP_CACHE[key] = now
+    return await adapter.send_text_message(to_number, message_text)
 
 
 def _normalize_phone_for_bodyfp(phone: str) -> str:
@@ -934,7 +966,7 @@ async def handle_message_whatsapp_with_adapter(user_id: str, user_input_text: st
 
     async def adapter_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
         if message_text:
-            return await adapter.send_text_message(to_number, message_text)
+            return await _adapter_send_text_deduped(adapter, to_number, message_text)
         elif image_url:
             return await adapter.send_image_message(to_number, image_url)
         elif audio_url:
@@ -1152,7 +1184,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             image_url_for_training = f"data:image/{image_format};base64,{base64_image}"
             async def adapter_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
                 if message_text:
-                    return await adapter.send_text_message(to_number, message_text)
+                    return await _adapter_send_text_deduped(adapter, to_number, message_text)
                 elif image_url:
                     return await adapter.send_image_message(to_number, image_url)
                 elif audio_url:
@@ -1178,7 +1210,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
 
         async def adapter_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
             if message_text:
-                return await adapter.send_text_message(to_number, message_text)
+                return await _adapter_send_text_deduped(adapter, to_number, message_text)
             elif image_url:
                 return await adapter.send_image_message(to_number, image_url)
             elif audio_url:
@@ -1370,7 +1402,7 @@ async def handle_voice_message_whatsapp_with_adapter(user_id: str, audio_id: str
 
         async def adapter_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
             if message_text:
-                return await adapter.send_text_message(to_number, message_text)
+                return await _adapter_send_text_deduped(adapter, to_number, message_text)
             elif image_url:
                 return await adapter.send_image_message(to_number, image_url)
             elif audio_url:
@@ -1403,7 +1435,7 @@ async def start_training_mode_whatsapp(user_whatsapp_id: str):
 
     async def _adapter_send(to: str, msg: str = None, img: str = None, aud: str = None):
         if msg:
-            return await adapter.send_text_message(to, msg)
+            return await _adapter_send_text_deduped(adapter, to, msg)
         elif img:
             return await adapter.send_image_message(to, img)
         elif aud:
@@ -1432,7 +1464,7 @@ async def exit_training_mode_whatsapp(user_whatsapp_id: str):
 
     async def _adapter_send(to: str, msg: str = None, img: str = None, aud: str = None):
         if msg:
-            return await adapter.send_text_message(to, msg)
+            return await _adapter_send_text_deduped(adapter, to, msg)
         elif img:
             return await adapter.send_image_message(to, img)
         elif aud:
@@ -1461,7 +1493,7 @@ async def generate_daily_report_command_whatsapp(user_whatsapp_id: str):
 
     async def _adapter_send(to: str, msg: str = None, img: str = None, aud: str = None):
         if msg:
-            return await adapter.send_text_message(to, msg)
+            return await _adapter_send_text_deduped(adapter, to, msg)
         elif img:
             return await adapter.send_image_message(to, img)
         elif aud:
