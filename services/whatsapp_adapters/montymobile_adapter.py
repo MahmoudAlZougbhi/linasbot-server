@@ -7,7 +7,7 @@ import json
 import time
 from typing import Dict, Any, Optional
 from .base_adapter import WhatsAppAdapter
-from .outbound_text_dedupe import is_duplicate_outbound_text
+from .outbound_text_dedupe import finish_outbound_text_attempt, should_skip_outbound_text
 
 
 def _synthetic_wa_message_id(message: Dict[str, Any]) -> str:
@@ -73,15 +73,14 @@ class MontyMobileAdapter(WhatsAppAdapter):
             to_number: Destination phone number (can be room_id or phone)
             message: Text message to send
         """
-        if is_duplicate_outbound_text(to_number, message):
+        # Resolve phone first so dedupe matches +961… / 961… / room→phone as one user
+        phone_number = self._get_phone_from_room_id(to_number)
+        if await should_skip_outbound_text(phone_number, message):
             return {"success": True, "deduped_outbound": True}
 
         # NEW ENDPOINT - Updated from testing
         url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
-        
-        # Convert room_id to phone number if needed
-        phone_number = self._get_phone_from_room_id(to_number)
-        
+
         # NEW PAYLOAD FORMAT - No apiId required
         payload = {
             "to": phone_number,
@@ -91,42 +90,45 @@ class MontyMobileAdapter(WhatsAppAdapter):
                 "body": message
             }
         }
-        
+
+        send_success = False
         try:
             import os
             if os.getenv("DEBUG_MONTYMOBILE", "false").lower() == "true":
                 print(f"🔄 MONTYMOBILE: Sending to {phone_number[:6]}***")
-            
+
             t0 = time.time()
             response = await self.client.post(url, headers=self.headers, json=payload)
             elapsed_ms = (time.time() - t0) * 1000
 
             response_text = response.text
-            
+
             # Parse response
             try:
                 result = response.json()
-                
+
                 # Check if successful based on MontyMobile response format
                 if response.status_code == 200 and result.get("success"):
                     message_id = result.get("data", {}).get("messageId", "unknown")
                     print(f"✅ SUCCESS: Message sent to {phone_number}")
                     print(f"✅ Message ID: {message_id}")
+                    send_success = True
                     return {"success": True, "data": result, "message_id": message_id}
                 else:
                     error_msg = result.get("message", "Unknown error")
                     print(f"❌ FAILED: {error_msg}")
                     return {"success": False, "error": error_msg, "response": result}
-                    
+
             except json.JSONDecodeError:
                 print(f"⚠️  Non-JSON response")
                 if response.status_code == 200:
                     print(f"✅ Assuming success (HTTP 200)")
+                    send_success = True
                     return {"success": True, "message": "Message sent"}
                 else:
                     print(f"❌ Failed with status {response.status_code}")
                     return {"success": False, "error": f"HTTP {response.status_code}: {response_text}"}
-                    
+
         except Exception as e:
             print(f"\n{'='*80}")
             print(f"❌ EXCEPTION sending MontyMobile message")
@@ -137,6 +139,8 @@ class MontyMobileAdapter(WhatsAppAdapter):
             traceback.print_exc()
             print(f"{'='*80}\n")
             return {"success": False, "error": str(e)}
+        finally:
+            await finish_outbound_text_attempt(phone_number, message, send_success)
     
     async def send_image_message(self, to_number: str, image_url: str, caption: str = None) -> Dict[str, Any]:
         """
