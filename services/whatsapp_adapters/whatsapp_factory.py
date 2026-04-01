@@ -12,6 +12,7 @@ from .dialog360_adapter import Dialog360Adapter
 from .qiscus_adapter import QiscusAdapter
 from .montymobile_adapter import MontyMobileAdapter
 from .safe_send_adapter import SafeSendAdapter
+from .outbound_dedupe_text_adapter import DedupeOutboundTextAdapter
 
 try:
     import config
@@ -61,6 +62,7 @@ class WhatsAppFactory:
         # Add provider name for tracking
         cls._current_adapter.provider_name = cls._current_provider
         cls._current_adapter = _wrap_if_safe_send(cls._current_adapter)
+        cls._current_adapter = DedupeOutboundTextAdapter(cls._current_adapter)
         return cls._current_adapter
     
     @classmethod

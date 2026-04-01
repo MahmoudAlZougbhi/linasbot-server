@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import re
 import time
 from typing import Dict, Set
 
 # Same user can legitimately get two different messages within seconds; identical body is the bug.
-WINDOW_SEC = 25.0
+WINDOW_SEC = float(os.getenv("OUTBOUND_TEXT_DEDUPE_WINDOW_SEC", "25"))
 
 _cache: Dict[str, float] = {}
 _inflight: Set[str] = set()

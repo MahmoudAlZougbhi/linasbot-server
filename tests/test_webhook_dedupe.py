@@ -120,10 +120,31 @@ def test_webhook_memory_concurrent_only_one_claim():
     asyncio.run(run())
 
 
-def test_outbound_duplicate_text_second_call_is_duplicate():
+def test_outbound_duplicate_suppressed_after_successful_send():
+    import asyncio
+
     from services.whatsapp_adapters import outbound_text_dedupe as od
 
-    od._cache.clear()
-    assert od.is_duplicate_outbound_text("+96171110001", "نفس النص") is False
-    assert od.is_duplicate_outbound_text("+96171110001", "نفس النص") is True
-    od._cache.clear()
+    async def _run():
+        od._cache.clear()
+        od._inflight.clear()
+        assert await od.should_skip_outbound_text("+96171110001", "نفس النص") is False
+        await od.finish_outbound_text_attempt("+96171110001", "نفس النص", True)
+        assert await od.should_skip_outbound_text("+96171110001", "نفس النص") is True
+
+    asyncio.run(_run())
+
+
+def test_outbound_same_user_different_phone_formats_share_dedupe():
+    import asyncio
+
+    from services.whatsapp_adapters import outbound_text_dedupe as od
+
+    async def _run():
+        od._cache.clear()
+        od._inflight.clear()
+        assert await od.should_skip_outbound_text("+96171110001", "hi") is False
+        await od.finish_outbound_text_attempt("96171110001", "hi", True)
+        assert await od.should_skip_outbound_text("+96171110001", "hi") is True
+
+    asyncio.run(_run())
