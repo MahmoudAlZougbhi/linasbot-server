@@ -7,6 +7,7 @@ from typing import Optional
 from handlers.text_handlers_firestore import *
 from handlers.text_handlers_delayed import _delayed_process_messages
 from services.dynamic_messages_service import get_dynamic_message
+from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 
 GREETING_INACTIVITY_SECONDS = 43200  # 12 hours
 
@@ -187,6 +188,7 @@ async def handle_message(
         message_metadata = {"type": "text"}
         if source_message_id:
             message_metadata["source_message_id"] = source_message_id
+        record_inbound_mid_for_ai_turn(user_data, source_message_id)
 
         await save_conversation_message_to_firestore(
             user_id,

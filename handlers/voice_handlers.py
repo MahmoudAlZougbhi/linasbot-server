@@ -17,6 +17,7 @@ from services.llm_core_service import client as openai_client # Assuming this is
 from services.analytics_events import analytics  # 📊 ANALYTICS
 # We'll call text_handlers.handle_message directly, but need to pass all required args
 from handlers.text_handlers import handle_message as handle_text_message_from_voice
+from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from handlers.training_handlers import handle_training_input
 
 
@@ -56,6 +57,7 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
     }
     if source_message_id:
         voice_metadata["source_message_id"] = source_message_id
+    record_inbound_mid_for_ai_turn(user_data, source_message_id)
     await save_conversation_message_to_firestore(
         user_id,
         "user",

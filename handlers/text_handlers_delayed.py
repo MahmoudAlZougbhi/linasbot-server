@@ -5,6 +5,8 @@ from typing import Optional
 
 from handlers.text_handlers_firestore import *
 from handlers.text_handlers_respond import _process_and_respond
+from services.outbound_turn_idempotency import try_claim_ai_turn
+from utils.utils import get_canonical_user_id_and_phone
 
 
 async def _delayed_process_messages(
@@ -54,6 +56,16 @@ async def _delayed_process_messages(
 
         if combined_message:
             try:
+                mids = user_data.pop("_batch_inbound_mids", []) or []
+                canonical_user_id, _ = get_canonical_user_id_and_phone(
+                    user_id, user_data.get("phone_number")
+                )
+                if mids and not await try_claim_ai_turn(canonical_user_id, mids):
+                    print(
+                        f"⚠️ [_delayed_process_messages] Skipping AI turn (duplicate Firestore claim) "
+                        f"user={user_id[:24]}… mids={len(mids)}"
+                    )
+                    return
                 await _process_and_respond(
                     user_id,
                     user_name=config.user_names.get(user_id, "عميل"),

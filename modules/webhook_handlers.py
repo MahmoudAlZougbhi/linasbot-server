@@ -1188,6 +1188,10 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
         image_metadata = {"type": "image"}
         if source_message_id:
             image_metadata["source_message_id"] = source_message_id
+        from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn, try_claim_ai_turn
+        from utils.utils import get_canonical_user_id_and_phone
+
+        record_inbound_mid_for_ai_turn(user_data, source_message_id)
         await save_conversation_message_to_firestore(
             user_id, "user", "[صورة]",
             user_data.get('current_conversation_id'),
@@ -1205,6 +1209,13 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             return False
 
         from modules.whatsapp_adapters import send_whatsapp_typing_indicator
+        mids = user_data.pop("_batch_inbound_mids", []) or []
+        canonical_uid, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+        if mids and not await try_claim_ai_turn(canonical_uid, mids):
+            print(
+                f"⚠️ Skipping image AI turn (duplicate Firestore claim) user={user_id[:24]}…"
+            )
+            return
         await _process_and_respond(
             user_id=user_id,
             user_name=user_name,
