@@ -26,6 +26,8 @@ from modules.models import WebhookRequest
 import config
 from config import WHATSAPP_API_TOKEN
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from services.whatsapp_adapters.outbound_text_dedupe import normalize_text_body_for_dedupe
+from utils.phone_utils import phone_match_key
 from utils.utils import get_firestore_db, set_human_takeover_status, save_conversation_message_to_firestore
 from services.api_integrations import log_report_event
 from handlers.text_handlers import handle_message, start_command, _delayed_processing_tasks, _process_and_respond
@@ -48,32 +50,28 @@ _webhook_bodyfp_cache: Dict[str, float] = {}
 _webhook_bodyfp_locks: Dict[str, asyncio.Lock] = {}
 
 
-def _normalize_phone_for_bodyfp(phone: str) -> str:
-    d = re.sub(r"\D", "", (phone or "").strip())
-    if len(d) >= 10:
-        return d[-15:]
-    return d
-
-
 def _webhook_text_body_fingerprint(parsed_message: Dict[str, Any]) -> str:
-    """Stable key for short-window text dedupe (same sender + same body). Empty if not applicable."""
+    """
+    Stable key for short-window text dedupe (same logical sender + same body).
+    Aligns phone with phone_match_key (+961 vs 961, room→phone) and text with outbound NFKC/ZW normalization
+    so parallel workers and duplicate provider deliveries collapse to one fingerprint.
+    """
     if (parsed_message.get("type") or "") != "text":
         return ""
-    content = parsed_message.get("content")
-    if not isinstance(content, dict):
-        return ""
-    text = (content.get("text") or "").strip()
+    text = _extract_text_from_content(parsed_message.get("content"))
+    text = normalize_text_body_for_dedupe(text)
     if not text:
         return ""
     text = text[:WEBHOOK_TEXT_BODYFP_MAX_CHARS]
-    phone = (
-        (parsed_message.get("phone_number") or parsed_message.get("user_id") or "")
-        .strip()
-    )
-    norm = _normalize_phone_for_bodyfp(phone)
-    if not norm:
-        return ""
-    basis = f"{norm}|{text}"
+    raw_sender = (parsed_message.get("phone_number") or parsed_message.get("user_id") or "").strip()
+    sender_key = phone_match_key(raw_sender)
+    if not sender_key:
+        # Room / non-E.164 ids: still dedupe duplicate webhooks for the same provider id
+        sid = (parsed_message.get("user_id") or raw_sender or "").strip()
+        if not sid:
+            return ""
+        sender_key = "id_" + hashlib.sha256(sid.encode("utf-8", errors="replace")).hexdigest()[:24]
+    basis = f"{sender_key}|{text}"
     return "bodyfp_" + hashlib.sha256(basis.encode("utf-8", errors="replace")).hexdigest()[:48]
 
 
@@ -170,6 +168,55 @@ async def _webhook_firestore_try_acquire(message_id: str) -> bool:
         if _is_dup(e):
             return False
         print(f"⚠️ Webhook Firestore dedupe create failed (using memory fallback): {e}")
+        return True
+
+
+async def _webhook_bodyfp_firestore_try_acquire(body_fp: str, current_time: float) -> bool:
+    """
+    Multi-worker: same inbound text + sender within WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS (bucketed)
+    should only enqueue one process_parsed_message, even when the provider sends different message_ids.
+    """
+    fp = (body_fp or "").strip()
+    if not fp:
+        return True
+    db = get_firestore_db()
+    if not db:
+        return True
+    slot = int(current_time // WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS)
+    basis = f"{fp}\0bodyfp_slot{slot}"
+    doc_id = hashlib.sha256(basis.encode("utf-8")).hexdigest()
+    ref = (
+        db.collection("artifacts")
+        .document("linas-ai-bot-backend")
+        .collection("webhook_text_body_processed")
+        .document(doc_id)
+    )
+
+    def _create():
+        ref.create(
+            {
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "body_fingerprint_prefix": fp[:120],
+                "time_slot": slot,
+            }
+        )
+
+    def _is_dup(exc: BaseException) -> bool:
+        if type(exc).__name__ in ("AlreadyExists", "Conflict"):
+            return True
+        code = getattr(exc, "code", None)
+        if code in (409, "ALREADY_EXISTS"):
+            return True
+        s = str(exc).lower()
+        return "already exists" in s or "already_exists" in s
+
+    try:
+        await asyncio.to_thread(_create)
+        return True
+    except Exception as e:
+        if _is_dup(e):
+            return False
+        print(f"⚠️ Webhook body-fp Firestore dedupe create failed (fail-open): {e}")
         return True
 
 
@@ -342,6 +389,19 @@ async def receive_webhook(request: Request):
 
             body_fp = _webhook_text_body_fingerprint(parsed_message)
             if body_fp:
+                if not await _webhook_bodyfp_firestore_try_acquire(body_fp, current_time):
+                    print(
+                        f"⚠️ DUPLICATE WEBHOOK (Firestore body-fp, same text+sender within "
+                        f"{WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS}s bucket): body_fp={body_fp[:40]}..."
+                    )
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "status": "skipped",
+                            "reason": "duplicate_inbound_text_firestore",
+                            "body_fingerprint_prefix": body_fp[:24],
+                        },
+                    )
                 if not await _webhook_bodyfp_try_claim(body_fp, current_time):
                     print(
                         f"⚠️ DUPLICATE WEBHOOK (same text+sender within {WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS}s): "

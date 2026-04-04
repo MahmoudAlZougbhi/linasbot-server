@@ -43,14 +43,18 @@ def _normalize_recipient(phone_or_room: str) -> str:
 _ZW_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060]")
 
 
-def _body_key(message: str) -> str:
+def normalize_text_body_for_dedupe(message: str) -> str:
+    """NFKC + strip ZWSP + collapse whitespace; shared by inbound webhook fp and outbound dedupe."""
     t = (message or "").strip()
     if not t:
         return ""
     t = unicodedata.normalize("NFKC", t)
     t = _ZW_RE.sub("", t)
-    # Collapse internal runs of whitespace so tiny formatting diffs still match
     return re.sub(r"\s+", " ", t)
+
+
+def _body_key(message: str) -> str:
+    return normalize_text_body_for_dedupe(message)
 
 
 def outbound_fingerprint(recipient: str, message: str, phone_hint: Optional[str] = None) -> str:
