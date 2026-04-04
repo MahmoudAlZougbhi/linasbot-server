@@ -59,21 +59,26 @@ async def _delayed_process_messages(
         if combined_message:
             try:
                 mids = user_data.pop("_batch_inbound_mids", []) or []
+                bfps = user_data.pop("_batch_turn_body_fps", []) or []
                 claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
-                if mids and not await try_claim_ai_turn(claim_id, mids):
+                if (mids or bfps) and not await try_claim_ai_turn(
+                    claim_id, mids, inbound_body_fps=bfps
+                ):
                     print(
                         f"⚠️ [ai-turn] trace_id={trace} claim=DUPLICATE_SKIP "
-                        f"user={user_id[:20]}… mids={len(mids)} claim_key={claim_id[:16]}…"
+                        f"user={user_id[:20]}… mids={len(mids)} bfps={len(bfps)} "
+                        f"claim_key={claim_id[:16]}…"
                     )
                     return
-                if mids:
+                if mids or bfps:
                     print(
                         f"[ai-turn] trace_id={trace} claim=OK claim_key={claim_id[:20]}… "
-                        f"inbound_mids_n={len(mids)} combined_len={len(combined_message or '')}"
+                        f"inbound_mids_n={len(mids)} body_fps_n={len(bfps)} "
+                        f"combined_len={len(combined_message or '')}"
                     )
                 else:
                     print(
-                        f"[ai-turn] trace_id={trace} claim=SKIPPED(no_inbound_mids) "
+                        f"[ai-turn] trace_id={trace} claim=SKIPPED(no_mids_no_bodyfp) "
                         f"combined_len={len(combined_message or '')} — distributed dedupe inactive for this turn"
                     )
                 await _process_and_respond(

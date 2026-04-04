@@ -712,6 +712,12 @@ async def _process_parsed_message_impl(parsed_message: Dict[str, Any], adapter):
     else:
         config.user_data_whatsapp[user_id].pop("_source_message_id", None)
 
+    # Collect webhook text body fingerprints for cross-worker AI turn claim (same text, different wamid).
+    if message_type == "text":
+        _tbfp = _webhook_text_body_fingerprint(parsed_message)
+        if _tbfp:
+            config.user_data_whatsapp[user_id].setdefault("_batch_turn_body_fps", []).append(_tbfp)
+
     # ===== RESTORE USER STATE FROM FIRESTORE FIRST (handles server restart) =====
     # Always try to restore from Firestore before API lookup
     # Only restore if gender is not already set to a valid value
@@ -1232,6 +1238,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
         from modules.whatsapp_adapters import send_whatsapp_typing_indicator
         user_data["_ai_turn_trace_id"] = str(uuid.uuid4())
         trace = user_data["_ai_turn_trace_id"]
+        user_data.pop("_batch_turn_body_fps", None)
         mids = user_data.pop("_batch_inbound_mids", []) or []
         claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
         if mids and not await try_claim_ai_turn(claim_id, mids):
