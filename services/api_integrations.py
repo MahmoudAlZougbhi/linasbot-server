@@ -115,6 +115,26 @@ def _body_part_endpoint_candidates() -> list:
     return out
 
 
+def _extract_body_parts_from_service_data_response(sd: dict) -> Optional[list]:
+    """
+    GET service/data often carries the same rows as GET body-parts under data.body_parts
+    (or areas / body_areas on some hosts). Returns None if the payload cannot supply a list.
+    """
+    if not isinstance(sd, dict) or not sd.get("success"):
+        return None
+    d = sd.get("data")
+    if not isinstance(d, dict):
+        return None
+    for key in ("body_parts", "areas", "body_areas"):
+        if key not in d:
+            continue
+        bp = d[key]
+        if isinstance(bp, list):
+            return bp
+        return None
+    return None
+
+
 async def get_body_parts(service_id: int = None, machine_id: int = None):
     """Returns list of body parts (id, name) for pricing/booking. Optional service_id/machine_id filters."""
     print("API Call: get_body_parts")
@@ -162,6 +182,26 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
             },
         )
         return response
+    # Dedicated GET body-parts routes missing (404): Appointment API still exposes areas on GET service/data.
+    if service_id is not None:
+        sd = await get_service_data(int(service_id), machine_id)
+        parts = _extract_body_parts_from_service_data_response(sd)
+        if parts is not None:
+            out = {"success": True, "data": parts}
+            log_report_event(
+                "api_call",
+                "System",
+                "N/A",
+                {
+                    "api": "get_body_parts",
+                    "path": "service/data (fallback)",
+                    "status": "success",
+                    "count": len(parts),
+                    "service_id": service_id,
+                    "machine_id": machine_id,
+                },
+            )
+            return out
     log_report_event(
         "api_call",
         "System",
