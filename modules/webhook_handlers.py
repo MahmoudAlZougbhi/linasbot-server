@@ -357,7 +357,8 @@ async def receive_webhook(request: Request):
             print(f"Parsed: user_id={parsed_message.get('user_id', 'N/A')} phone={parsed_message.get('phone_number', 'N/A')} message_id={parsed_message.get('message_id', 'N/A')}")
         
         if not parsed_message:
-            print("Trying Meta fallback parser...")
+            if not _webhook_is_meta_status_only(webhook_data):
+                print("Trying Meta fallback parser...")
             parsed_message = await handle_meta_webhook(webhook_data)
         if not parsed_message:
             parsed_message = _parse_webhook_raw_dict(webhook_data)
@@ -425,12 +426,16 @@ async def receive_webhook(request: Request):
             asyncio.ensure_future(process_parsed_message(parsed_message, adapter))
             print("Message queued for processing (background)")
         else:
-            print("ERROR: Could not parse webhook from any provider")
-            print(f"Webhook keys: {list(webhook_data.keys()) if isinstance(webhook_data, dict) else 'not-dict'}")
-            if isinstance(webhook_data, dict) and "entry" in webhook_data:
-                e0 = webhook_data.get("entry", [])
-                if e0 and isinstance(e0, list):
-                    print(f"Webhook entry[0] keys: {list(e0[0].keys()) if isinstance(e0[0], dict) else 'N/A'}")
+            if _webhook_is_meta_status_only(webhook_data):
+                if os.getenv("DEBUG_WEBHOOK_STATUSES", "false").lower() in ("1", "true", "yes"):
+                    print("ℹ️ Webhook: status-only payload (delivered/read); no inbound message to process")
+            else:
+                print("ERROR: Could not parse webhook from any provider")
+                print(f"Webhook keys: {list(webhook_data.keys()) if isinstance(webhook_data, dict) else 'not-dict'}")
+                if isinstance(webhook_data, dict) and "entry" in webhook_data:
+                    e0 = webhook_data.get("entry", [])
+                    if e0 and isinstance(e0, list):
+                        print(f"Webhook entry[0] keys: {list(e0[0].keys()) if isinstance(e0[0], dict) else 'N/A'}")
 
         # Explicit JSONResponse: MontyMobile expects 200 + JSON body. Returning null causes "Response Body: null" in their logs.
         return JSONResponse(status_code=200, content={"status": "success"})
@@ -441,6 +446,26 @@ async def receive_webhook(request: Request):
         traceback.print_exc()
         # Return 200 with error payload to avoid MontyMobile retries on parse/server errors
         return JSONResponse(status_code=200, content={"status": "error", "message": str(e)})
+
+
+def _webhook_is_meta_status_only(webhook_data: Dict[str, Any]) -> bool:
+    """WhatsApp Cloud API sends delivery/read/sent updates with statuses[] and no messages[]."""
+    try:
+        entries = webhook_data.get("entry") or []
+        if not entries or not isinstance(entries, list):
+            return False
+        entry = entries[0] if isinstance(entries[0], dict) else {}
+        changes = entry.get("changes") or []
+        if not changes or not isinstance(changes, list):
+            return False
+        ch = changes[0] if isinstance(changes[0], dict) else {}
+        value = ch.get("value") or {}
+        if not isinstance(value, dict):
+            return False
+        msgs = value.get("messages") or []
+        return bool(value.get("statuses")) and not msgs
+    except Exception:
+        return False
 
 
 def _parse_webhook_raw_dict(webhook_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

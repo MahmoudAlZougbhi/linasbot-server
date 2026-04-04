@@ -344,6 +344,7 @@ class MontyMobileAdapter(WhatsAppAdapter):
         """
         try:
             import os
+
             if os.getenv("DEBUG_MONTYMOBILE", "false").lower() == "true":
                 print(f"🔔 MontyMobile webhook: object={webhook_data.get('object', 'N/A')}")
             
@@ -354,6 +355,13 @@ class MontyMobileAdapter(WhatsAppAdapter):
                 changes = entry0.get("changes", []) if isinstance(entry0, dict) else []
                 if changes and len(changes) > 0 and isinstance(changes[0], dict):
                     val = changes[0].get("value", {})
+                    if isinstance(val, dict):
+                        # Delivered/read/sent receipts — not inbound user text (avoid "Unknown format" noise)
+                        msgs = val.get("messages") or []
+                        if val.get("statuses") and not msgs:
+                            if os.getenv("DEBUG_WEBHOOK_STATUSES", "false").lower() == "true":
+                                print("ℹ️ MontyMobile webhook: status-only (delivery/read); ignored")
+                            return None
                     if isinstance(val, dict) and ("messages" in val or "contacts" in val):
                         print(f"✅ Detected Meta/WhatsApp format (entry+changes)")
                         result = self._parse_meta_format(webhook_data)
