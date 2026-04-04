@@ -43,7 +43,10 @@ def _doc_id(recipient_pk: str, body_norm: str) -> str:
 
 
 def firestore_outbound_dedupe_enabled() -> bool:
-    return os.getenv("OUTBOUND_TEXT_FIRESTORE_DEDUPE", "true").lower() in (
+    # Default off: if another replica claims Firestore then crashes before send, a second
+    # instance gets AlreadyExists and would skip — user sees no reply. Opt-in when you
+    # accept that tradeoff and have stable single-writer or monitored replicas.
+    return os.getenv("OUTBOUND_TEXT_FIRESTORE_DEDUPE", "false").lower() in (
         "1",
         "true",
         "yes",
