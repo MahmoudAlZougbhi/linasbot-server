@@ -1546,9 +1546,12 @@ def _normalize_booking_date_for_tool_args(function_args: dict) -> Tuple[bool, Op
 
 
 def _bot_reply_claims_completed_booking(bot_reply: str) -> bool:
+    """True if the assistant text tells the user a NEW booking was completed (CRM must have confirmed)."""
     br = (bot_reply or "").strip().lower()
     if not br:
         return False
+    # Keep in sync with the booking_claimed_without_* guard below. Models vary wording
+    # (e.g. «صار الحجز مُثبت») — all must be caught to avoid false «booked» without tools.
     return any(
         x in br
         for x in (
@@ -1556,8 +1559,21 @@ def _bot_reply_claims_completed_booking(bot_reply: str) -> bool:
             "تمّ تثبيت",
             "تم حجز",
             "تمّ حجز",
+            "صار الحجز",
+            "صار موعدك",
+            "الحجز مُثبت",
+            "الحجز مثبت",
+            "حجز مُثبت",
+            "حجز مثبت",
+            "تم تأكيد الحجز",
+            "تمّ تأكيد الحجز",
+            "تأكيد حجزك",
+            "حجزك تم",
+            "تم حجزك",
             "booked successfully",
             "appointment has been booked",
+            "your appointment is confirmed",
+            "appointment is confirmed",
         )
     )
 
@@ -4703,17 +4719,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             and not recovered_create_appointment_ok
             and not _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
         ):
-            if any(
-                x in _brl_flow
-                for x in (
-                    "تم تثبيت",
-                    "تمّ تثبيت",
-                    "تم حجز",
-                    "تمّ حجز",
-                    "booked successfully",
-                    "appointment has been booked",
-                )
-            ):
+            if _bot_reply_claims_completed_booking(parsed_response.get("bot_reply") or ""):
                 tattoo_soft_recover = False
                 try:
                     leaked_book = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")

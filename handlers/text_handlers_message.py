@@ -604,6 +604,11 @@ async def handle_message(
     if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
         _delayed_processing_tasks[user_id].cancel()
 
+    # New epoch for this combine/GPT wave. A previously cancelled task may still finish GPT and
+    # try to send; outbound uses this so stale turns skip WhatsApp delivery (duplicate bubble fix).
+    user_data["_text_turn_epoch"] = user_data.get("_text_turn_epoch", 0) + 1
+    text_turn_epoch = user_data["_text_turn_epoch"]
+
     # Dashboard /api/test-* sets _dashboard_test_simulation: run GPT path inline so the HTTP handler
     # sees captured replies before returning (background create_task was still racing / missing awaits).
     if user_data.get("_dashboard_test_simulation"):
@@ -615,6 +620,7 @@ async def handle_message(
                 send_message_func,
                 send_action_func,
                 combine_delay_seconds=message_combine_delay,
+                text_turn_epoch=text_turn_epoch,
             )
         finally:
             _delayed_processing_tasks.pop(user_id, None)
@@ -627,5 +633,6 @@ async def handle_message(
             send_message_func,
             send_action_func,
             combine_delay_seconds=message_combine_delay,
+            text_turn_epoch=text_turn_epoch,
         )
     )

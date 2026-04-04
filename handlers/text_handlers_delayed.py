@@ -15,14 +15,42 @@ async def _delayed_process_messages(
     send_message_func,
     send_action_func,
     combine_delay_seconds: Optional[float] = None,
+    text_turn_epoch: Optional[int] = None,
 ):
     """
     Delays processing to combine rapid messages from the same user.
     combine_delay_seconds: if set (e.g. 0 for dashboard tests), overrides MESSAGE_COMBINING_DELAY.
+    text_turn_epoch: incremented in handle_message per schedule wave; stale tasks must not send.
     """
     try:
         user_data["_ai_turn_trace_id"] = str(uuid.uuid4())
         trace = user_data["_ai_turn_trace_id"]
+
+        _raw_send = send_message_func
+
+        async def _guarded_send(
+            to_number: str,
+            message_text: str = None,
+            image_url: str = None,
+            audio_url: str = None,
+        ):
+            if text_turn_epoch is not None:
+                latest = user_data.get("_text_turn_epoch", 0)
+                if text_turn_epoch < latest:
+                    print(
+                        f"⚠️ [text-turn] trace_id={trace} send=STALE_SKIP "
+                        f"epoch={text_turn_epoch} latest={latest} user={user_id[:16]}…"
+                    )
+                    return {"success": True, "skipped_stale_text_turn": True}
+            return await _raw_send(
+                to_number,
+                message_text=message_text,
+                image_url=image_url,
+                audio_url=audio_url,
+            )
+
+        outbound_send = _guarded_send if text_turn_epoch is not None else send_message_func
+
         await send_action_func(user_id)  # Send typing indicator
         delay = (
             config.MESSAGE_COMBINING_DELAY
@@ -86,7 +114,7 @@ async def _delayed_process_messages(
                     user_name=config.user_names.get(user_id, "عميل"),
                     user_input_to_process=combined_message,
                     user_data=user_data,
-                    send_message_func=send_message_func,
+                    send_message_func=outbound_send,
                     send_action_func=send_action_func,
                 )
             finally:
@@ -116,7 +144,7 @@ async def _delayed_process_messages(
                             "لم يُعالَج نص الرسالة (طابور الرسائل فاضي). "
                             "جرّب مرة ثانية وتجنّب طلبين معًا لنفس الرقم."
                         )
-                    await send_message_func(user_id, empty_q_msg)
+                    await outbound_send(user_id, empty_q_msg)
                 except Exception as eq_err:
                     print(f"[_delayed_process_messages] Dashboard empty-queue notify failed: {eq_err}")
 
@@ -160,7 +188,7 @@ async def _delayed_process_messages(
                             "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏"
                         }
                         waiting_msg = waiting_messages.get(user_lang, waiting_messages['ar'])
-                        await send_message_func(user_id, waiting_msg)
+                        await outbound_send(user_id, waiting_msg)
                         user_name = config.user_names.get(user_id, "عميل")
                         await save_conversation_message_to_firestore(
                             user_id, "ai", waiting_msg, current_conversation_id,
@@ -180,7 +208,7 @@ async def _delayed_process_messages(
                     get_dynamic_message("generic_error_message", user_lang)
                     or "عذراً، صار خطأ أثناء المعالجة. جرّب مرة ثانية أو راجع سجلات السيرفر."
                 )
-                await send_message_func(user_id, err_msg)
+                await outbound_send(user_id, err_msg)
                 print(
                     f"[_delayed_process_messages] Sent generic error for dashboard test after exception: {e!r}"
                 )
