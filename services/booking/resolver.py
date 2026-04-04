@@ -357,6 +357,38 @@ def _expand_body_area_synonyms(label: str) -> str:
         extras.extend(["underarm", "armpit"])
     if "bikini" in low or "بيكيني" in label or "bikine" in compact:
         extras.append("bikini")
+    # Buttocks / intimate zone (LB spoken Arabic + franco) → CRM often labels "Bikini", "Extended", "Brazilian", "Buttocks"
+    if any(
+        x in compact
+        for x in (
+            "tiez",
+            "teez",
+            "teiz",
+            "tizeh",
+            "tize",
+            "tizi",
+            "mo25ra",
+            "mo25rah",
+            "m25ra",
+            "m25rah",
+            "ardaf",
+            "ardaff",
+            "3ajiz",
+            "3ajez",
+            "3ajize",
+        )
+    ) or any(
+        x in label
+        for x in (
+            "طيز",
+            "مؤخرة",
+            "أرداف",
+            "الأرداف",
+            "عجيز",
+            "المؤخرة",
+        )
+    ):
+        extras.extend(["bikini", "buttocks", "butt", "gluteal", "brazilian", "extended"])
     if any(x in compact for x in ("dahre", "dahr", "dahra", "zahr")) or "ظهر" in label or "ضهر" in label:
         extras.append("back")
     if "ذقن" in label or "d2n" in compact or "d2en" in compact or "chin" in low:
@@ -374,6 +406,85 @@ def _expand_body_area_synonyms(label: str) -> str:
     return f"{label} {' '.join(extras)}".strip()
 
 
+def _text_suggests_buttocks_bikini_zone(label: str) -> bool:
+    """Spoken requests for buttocks / bikini line (often not spelled like CRM English names)."""
+    low = (label or "").strip().lower()
+    compact = re.sub(r"[\s_\-]+", "", low)
+    if any(
+        x in compact
+        for x in (
+            "tiez",
+            "teez",
+            "teiz",
+            "tizeh",
+            "tize",
+            "tizi",
+            "mo25ra",
+            "mo25rah",
+            "m25ra",
+            "m25rah",
+            "ardaf",
+            "ardaff",
+            "3ajiz",
+            "3ajez",
+            "bikine",
+            "bikini",
+        )
+    ):
+        return True
+    if any(
+        x in label
+        for x in (
+            "طيز",
+            "مؤخرة",
+            "أرداف",
+            "الأرداف",
+            "عجيز",
+            "المؤخرة",
+            "بيكيني",
+        )
+    ):
+        return True
+    if any(x in low for x in ("buttock", "brazilian", "glute")):
+        return True
+    return False
+
+
+def _crm_row_is_bikini_butt_zone(nm: str) -> bool:
+    n = (nm or "").strip().lower()
+    if not n:
+        return False
+    return any(
+        k in n
+        for k in (
+            "bikini",
+            "butt",
+            "glute",
+            "brazil",
+            "extended",
+            "line",
+            "بيكيني",
+            "عجيز",
+            "مؤخرة",
+            "ارداف",
+            "أرداف",
+        )
+    )
+
+
+def _score_bikini_butt_row(crm_name: str) -> float:
+    """Higher = better when the user meant buttocks / bikini extended zone."""
+    n = crm_name.lower()
+    s = 0.12
+    if any(k in n for k in ("brazil", "extended", "line")):
+        s += 0.55
+    if "bikini" in n or "بيكيني" in n:
+        s += 0.42
+    if any(k in n for k in ("butt", "glute", "buttock")):
+        s += 0.38
+    return s
+
+
 def match_best_body_part_row(rows: List[dict], label: str) -> Optional[int]:
     """
     Pick one CRM body_part id from live API rows using user text (LB franco, Arabic, English).
@@ -387,6 +498,7 @@ def match_best_body_part_row(rows: List[dict], label: str) -> Optional[int]:
     ll = label.lower()
     expanded = _expand_body_area_synonyms(label).lower()
     leg_rows: List[Tuple[int, str]] = []
+    zone_rows: List[Tuple[int, str]] = []
     best_id: Optional[int] = None
     best_score = 0.0
 
@@ -399,8 +511,21 @@ def match_best_body_part_row(rows: List[dict], label: str) -> Optional[int]:
             return bid
         if expanded and expanded != ll and (expanded in nm or nm in expanded):
             return bid
+        if _crm_row_is_bikini_butt_zone(nm):
+            zone_rows.append((bid, nm))
         if _crm_row_is_leg(nm):
             leg_rows.append((bid, nm))
+
+    if _text_suggests_buttocks_bikini_zone(label) and zone_rows:
+        best_zone: Optional[Tuple[int, float]] = None
+        for bid, nm in zone_rows:
+            sc = _score_bikini_butt_row(nm)
+            if best_zone is None or sc > best_zone[1]:
+                best_zone = (bid, sc)
+        if best_zone is not None and best_zone[1] >= 0.4:
+            return best_zone[0]
+        if len(zone_rows) == 1:
+            return zone_rows[0][0]
 
     if _text_suggests_legs(label) and leg_rows:
         scope = _legs_scope_from_label(label)
