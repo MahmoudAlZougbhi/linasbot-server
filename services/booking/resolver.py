@@ -9,6 +9,7 @@ import re
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
+import config
 from services import api_integrations
 
 from services.booking.constants import (
@@ -442,12 +443,47 @@ def match_best_body_part_row(rows: List[dict], label: str) -> Optional[int]:
 
 def server_may_infer_body_parts() -> bool:
     """
-    When LINASLASER_BODY_PART_IDS_FROM_AI_ONLY=1 (true/yes/on), the server does not map free-text
-    area names to CRM ids — the model must supply body_part_ids from get_body_parts. Tattoo env
-    synonyms may still apply for service 13 when the API list is empty.
+    True only when LINASLASER_BOOKING_LEGACY_INFERENCE=1 — allows fuzzy body-part mapping and
+    conversation fallbacks. Default (strict): AI must send body_part_ids from get_body_parts.
     """
-    v = (os.getenv("LINASLASER_BODY_PART_IDS_FROM_AI_ONLY") or "").strip().lower()
-    return v not in ("1", "true", "yes", "on")
+    return bool(getattr(config, "BOOKING_LEGACY_INFERENCE", False))
+
+
+async def _validate_explicit_body_part_ids_against_crm(
+    service_id: int, body_part_ids: List[int], machine_id: Optional[int] = None
+) -> Tuple[bool, List[int], Dict[str, Any]]:
+    """Ensure every id exists on GET body_parts / service:data for this service."""
+    r = await api_integrations.get_body_parts(service_id=service_id, machine_id=machine_id)
+    if not r.get("success"):
+        return False, [], {
+            "code": "TOOL_DATA_REQUIRED",
+            "reason": "get_body_parts_failed",
+            "service_id": service_id,
+        }
+    rows = _norm_api_list(r.get("data"))
+    if not rows:
+        return False, [], {
+            "code": "TOOL_DATA_REQUIRED",
+            "reason": "empty_body_parts_list",
+            "service_id": service_id,
+            "expected_source": "get_body_parts",
+        }
+    allowed = {_safe_int(x.get("id") or x.get("body_part_id")) for x in rows}
+    allowed.discard(None)
+    invalid: List[int] = []
+    cleaned: List[int] = []
+    for i in body_part_ids:
+        if i not in allowed:
+            invalid.append(i)
+        else:
+            cleaned.append(i)
+    if invalid:
+        return False, [], {
+            "invalid_ids": invalid,
+            "service_id": service_id,
+            "expected_source": "get_body_parts",
+        }
+    return True, cleaned, {}
 
 
 async def resolve_body_part_ids(
@@ -455,7 +491,11 @@ async def resolve_body_part_ids(
     body_part_label: Optional[str],
     explicit_ids: Optional[List[Any]],
     machine_id: Optional[int] = None,
-) -> Tuple[List[int], Optional[str]]:
+) -> Tuple[List[int], Optional[str], Optional[Dict[str, Any]]]:
+    """
+    Returns (ids, miss_token, details_dict).
+    miss_token: None if ok; 'body_part' if missing; 'invalid_body_part_ids' if ids not in CRM.
+    """
     raw_ids = explicit_ids or []
     out: List[int] = []
     for x in raw_ids:
@@ -463,28 +503,33 @@ async def resolve_body_part_ids(
         if i is not None:
             out.append(i)
     if out:
-        return out, None
+        ok, cleaned, det = await _validate_explicit_body_part_ids_against_crm(
+            service_id, out, machine_id
+        )
+        if not ok:
+            return [], "invalid_body_part_ids", det
+        return cleaned, None, None
     label = (body_part_label or "").strip()
     if not label:
-        return [], "body_part"
+        return [], "body_part", None
     if not server_may_infer_body_parts():
-        if service_id == TATTOO_SERVICE_ID:
+        if service_id == TATTOO_SERVICE_ID and getattr(config, "BOOKING_LEGACY_INFERENCE", False):
             env_id = _tattoo_body_part_id_from_env_synonyms(label)
             if env_id is not None and env_id > 0:
-                return [env_id], None
-        return [], "body_part"
+                return [env_id], None, None
+        return [], "body_part", {"code": "MISSING_BODY_PART_IDS", "service_id": service_id}
     r = await api_integrations.get_body_parts(service_id=service_id, machine_id=machine_id)
     rows = _norm_api_list(r.get("data")) if r.get("success") else []
     if service_id == TATTOO_SERVICE_ID and label and (not r.get("success") or not rows):
         env_id = _tattoo_body_part_id_from_env_synonyms(label)
         if env_id is not None and env_id > 0:
-            return [env_id], None
+            return [env_id], None, None
     if not rows:
-        return [], "body_part"
+        return [], "body_part", None
     matched = match_best_body_part_row(rows, label)
     if matched is not None:
-        return [matched], None
-    return [], "body_part"
+        return [matched], None, None
+    return [], "body_part", None
 
 
 def machine_label_for(machine_id: int, machines: List[dict]) -> str:

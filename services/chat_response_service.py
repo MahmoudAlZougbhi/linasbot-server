@@ -995,7 +995,9 @@ def _merge_pricing_args_with_booking_state(
     if function_name not in {"create_appointment"}:
         return
 
-    inferred_service_id = _infer_service_id_for_pricing(user_input, current_gender, booking_state)
+    inferred_service_id = None
+    if getattr(config, "BOOKING_LEGACY_INFERENCE", False):
+        inferred_service_id = _infer_service_id_for_pricing(user_input, current_gender, booking_state)
     # Prefer booking_state > inferred > GPT: booking_state has API-valid IDs; GPT schema may not match backend
     state_service = _safe_int(booking_state.get("service_id"))
     state_machine = _safe_int(booking_state.get("machine_id"))
@@ -1964,6 +1966,8 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     the thread or auxiliary JSON (never auto-generated placeholders).
     Returns the same tool-output dict as create_appointment (success + api_response, or validation_error) if executed; None if skipped.
     """
+    if not getattr(config, "BOOKING_LEGACY_INFERENCE", False):
+        return None
     if is_reschedule_intent:
         return None
     recent = _collect_recent_user_text_for_change_intent(current_context_messages, user_input)
@@ -3612,12 +3616,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         return parsed_response
 
 
-                    # NEW: Provide default values for service_id, machine_id, branch_id if missing
-                    # Use .get() with a fallback to config defaults
-                    function_args["service_id"] = function_args.get("service_id", config.DEFAULT_SERVICE_ID)
-                    function_args["machine_id"] = function_args.get("machine_id", config.DEFAULT_MACHINE_ID)
-                    function_args["branch_id"] = function_args.get("branch_id", config.DEFAULT_BRANCH_ID)
-                    _remember_booking_selection(user_id, function_args)
+                    _legacy_inf = getattr(config, "BOOKING_LEGACY_INFERENCE", False)
+                    if _legacy_inf:
+                        # Legacy: default ids + area-name coercion + conversation inference for body parts
+                        function_args["service_id"] = function_args.get("service_id", config.DEFAULT_SERVICE_ID)
+                        function_args["machine_id"] = function_args.get("machine_id", config.DEFAULT_MACHINE_ID)
+                        function_args["branch_id"] = function_args.get("branch_id", config.DEFAULT_BRANCH_ID)
+                        _remember_booking_selection(user_id, function_args)
 
                     selected_service_id = _safe_int(function_args.get("service_id"))
                     function_args["machine_id"] = await _resolve_machine_for_booking(
@@ -3625,20 +3630,20 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
                     _remember_booking_selection(user_id, function_args)
 
-                    # GPT often sends body_part_ids as objects or area names; merge layer only normalizes ints.
-                    sid_for_coerce = (
-                        selected_service_id
-                        if selected_service_id is not None
-                        else _safe_int(config.DEFAULT_SERVICE_ID)
-                    )
-                    coerced_bp = await _coerce_body_part_ids_from_gpt_booking_args(
-                        function_args,
-                        sid_for_coerce if sid_for_coerce is not None else 1,
-                        _safe_int(function_args.get("machine_id")),
-                    )
-                    if coerced_bp:
-                        function_args["body_part_ids"] = coerced_bp
-                        _remember_booking_selection(user_id, function_args)
+                    if _legacy_inf:
+                        sid_for_coerce = (
+                            selected_service_id
+                            if selected_service_id is not None
+                            else _safe_int(config.DEFAULT_SERVICE_ID)
+                        )
+                        coerced_bp = await _coerce_body_part_ids_from_gpt_booking_args(
+                            function_args,
+                            sid_for_coerce if sid_for_coerce is not None else 1,
+                            _safe_int(function_args.get("machine_id")),
+                        )
+                        if coerced_bp:
+                            function_args["body_part_ids"] = coerced_bp
+                            _remember_booking_selection(user_id, function_args)
 
                     # If the model passed body_parts_with_sessions, normalize and align body_part_ids.
                     bps_raw = function_args.get("body_parts_with_sessions")
@@ -3662,7 +3667,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if selected_body_part_ids:
                         function_args["body_part_ids"] = selected_body_part_ids
                         _remember_booking_selection(user_id, function_args)
-                    elif selected_service_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
+                    elif _legacy_inf and selected_service_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
                         inferred_bp = await _try_infer_body_part_ids_from_conversation(
                             selected_service_id,
                             user_input,
@@ -4738,7 +4743,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             booking_state = config.user_booking_state[user_id]
             pricing_payload_to_send = latest_pricing_payload
             service_id_for_sync = _safe_int(booking_state.get("service_id"))
-            if service_id_for_sync is None:
+            if service_id_for_sync is None and getattr(config, "BOOKING_LEGACY_INFERENCE", False):
                 inferred_service = _infer_service_id_for_pricing(user_input, current_gender, booking_state)
                 if inferred_service is not None:
                     booking_state["service_id"] = inferred_service
