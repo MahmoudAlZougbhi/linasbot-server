@@ -303,6 +303,7 @@ USER RETURNED FROM HUMAN TAKEOVER (when in operational_context):
 
 OUTPUT POLICY:
 - Your response must always be a valid JSON object only.
+- Emit that object once only — never repeat the same JSON object twice in one reply.
 - Do not return markdown.
 - Do not return code fences.
 - Do not return extra text outside the JSON object.

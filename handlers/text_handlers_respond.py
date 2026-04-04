@@ -1528,6 +1528,8 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     action = gpt_response_data.get("action")
     bot_reply_text = gpt_response_data.get("bot_reply")
+    if bot_reply_text:
+        bot_reply_text = _clean_reply_text(bot_reply_text)
     handover_degree = str(gpt_response_data.get("handover_degree") or "none").strip().lower()
     _flow_error_reason = None  # For Activity Flow: which step failed
     detected_gender_from_gpt = gpt_response_data.get("detected_gender")
@@ -2046,6 +2048,18 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     flow_steps = None
     msg_type = "text"
 
+    def _tool_trip_executed_content(tr: dict) -> str:
+        """Tool JSON returned to the model, plus structured backend_execution when present."""
+        body = tr.get("bot_returned") or ""
+        be = tr.get("backend_execution")
+        if not be:
+            return body
+        try:
+            summary = json.dumps(be, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            summary = str(be)
+        return f"Backend execution (summary):\n{summary}\n\nFull response:\n{body}"
+
     # Build multimodal prepended steps for Activity Flow
     def _prepend_multimodal_steps(steps_list, step_start: int) -> tuple:
         prepended = []
@@ -2124,9 +2138,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
             step_num += 1
             for tr in tool_round_trips:
-                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}", "tokens": 0, "model": None, "cost_usd": None})
+                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}", "tokens": 0, "model": None, "cost_usd": None, "metadata": {"backend_execution": tr.get("backend_execution")}})
                 step_num += 1
-                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", ""), "tokens": 0, "model": None, "cost_usd": None})
+                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": _tool_trip_executed_content(tr), "tokens": 0, "model": None, "cost_usd": None, "metadata": {"backend_execution": tr.get("backend_execution")}})
                 step_num += 1
             steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
             step_num += 1
@@ -2144,7 +2158,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         steps.append(resp_step)
         total_cost = selector_cost + main_cost
         summary_parts = [f"Selector ({SELECTOR_MODEL}): {sel_pt + sel_ct} tokens, ${selector_cost:.6f}", f"Main GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${total_cost:.6f}"]
-        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0), "model": None, "cost_usd": round(total_cost, 6)})
+        _tb = flow_meta.get("token_breakdown")
+        if _tb and _tb.get("first_gpt_call") and _tb.get("second_gpt_call"):
+            _f1, _f2 = _tb["first_gpt_call"], _tb["second_gpt_call"]
+            summary_parts.append(
+                f"Main GPT token split: 1st ({_f1.get('model')}): {_f1.get('total_tokens')} | 2nd ({_f2.get('model')}): {_f2.get('total_tokens')}"
+            )
+        elif _tb and _tb.get("single_call"):
+            _sc = _tb["single_call"]
+            summary_parts.append(f"GPT tokens ({_sc.get('model')}): {_sc.get('total_tokens')}")
+        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0), "model": None, "cost_usd": round(total_cost, 6), "metadata": {"token_breakdown": _tb}})
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     else:
         tool_round_trips = flow_meta.get("tool_round_trips") or []
@@ -2174,15 +2197,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "tokens": 0,
                     "model": None,
                     "cost_usd": None,
+                    "metadata": {"backend_execution": tr.get("backend_execution")},
                 })
                 step_num += 1
                 steps.append({
                     "step": step_num,
                     "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})",
-                    "content": tr.get("bot_returned", ""),
+                    "content": _tool_trip_executed_content(tr),
                     "tokens": 0,
                     "model": None,
                     "cost_usd": None,
+                    "metadata": {"backend_execution": tr.get("backend_execution")},
                 })
                 step_num += 1
             steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
@@ -2200,7 +2225,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             resp_step["metadata"] = {"handover": True}
         steps.append(resp_step)
         summary_parts = [f"GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${main_cost:.6f}"]
-        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (pt or 0) + (ct or 0), "model": None, "cost_usd": round(main_cost, 6)})
+        _tb2 = flow_meta.get("token_breakdown")
+        if _tb2 and _tb2.get("first_gpt_call") and _tb2.get("second_gpt_call"):
+            _g1, _g2 = _tb2["first_gpt_call"], _tb2["second_gpt_call"]
+            summary_parts.append(
+                f"Token split: 1st ({_g1.get('model')}): {_g1.get('total_tokens')} | 2nd ({_g2.get('model')}): {_g2.get('total_tokens')}"
+            )
+        elif _tb2 and _tb2.get("single_call"):
+            _sc2 = _tb2["single_call"]
+            summary_parts.append(f"Tokens ({_sc2.get('model')}): {_sc2.get('total_tokens')}")
+        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (pt or 0) + (ct or 0), "model": None, "cost_usd": round(main_cost, 6), "metadata": {"token_breakdown": _tb2}})
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     flow_error_for_log = flow_meta.get("error") or _flow_error_reason
     log_interaction(

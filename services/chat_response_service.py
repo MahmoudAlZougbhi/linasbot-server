@@ -65,6 +65,58 @@ def _compute_cost_from_usage(model: str, prompt_tokens: int, completion_tokens: 
     return {"input_cost_usd": round(input_cost, 6), "output_cost_usd": round(output_cost, 6), "cost_usd": round(input_cost + output_cost, 6)}
 
 
+_TOOL_ROUND_ARGS_MAX = 48_000
+_TOOL_ROUND_RESPONSE_MAX = 48_000
+
+
+def _record_tool_round_trip(
+    function_name: str,
+    function_args: Any,
+    tool_content: str,
+    parsed_output: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Activity-flow record: full JSON args + backend response for dashboard (no 300-char clip).
+    Adds backend_execution summary when tool returns structured booking/validation JSON.
+    """
+    try:
+        args_str = json.dumps(function_args, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        args_str = str(function_args)
+    if len(args_str) > _TOOL_ROUND_ARGS_MAX:
+        args_str = args_str[:_TOOL_ROUND_ARGS_MAX] + "…[truncated]"
+    out = tool_content or ""
+    if len(out) > _TOOL_ROUND_RESPONSE_MAX:
+        out = out[:_TOOL_ROUND_RESPONSE_MAX] + "…[truncated]"
+    rec: Dict[str, Any] = {
+        "ai_requested": function_name,
+        "args": args_str,
+        "bot_returned": out,
+    }
+    po = parsed_output
+    if po is None and out:
+        try:
+            po = json.loads(out)
+        except (json.JSONDecodeError, TypeError):
+            po = None
+    if isinstance(po, dict):
+        summ = {
+            "success": po.get("success"),
+            "error_type": po.get("error_type"),
+            "code": po.get("code"),
+            "status": po.get("status"),
+            "repair_attempt": po.get("repair_attempt"),
+            "max_repair_attempts": po.get("max_repair_attempts"),
+            "booking_flow_state": po.get("booking_flow_state"),
+            "handover_to_human": po.get("handover_to_human"),
+            "handover_reason": po.get("handover_reason"),
+            "missing_fields": po.get("missing_fields"),
+            "message": po.get("message"),
+        }
+        rec["backend_execution"] = {k: v for k, v in summ.items() if v is not None}
+    return rec
+
+
 def _clinic_holiday_calendar_block(user_id: str, current_local_time: datetime.datetime) -> str:
     """Inject branch holiday / closure rules from dashboard Settings into the system prompt."""
     try:
@@ -1299,21 +1351,64 @@ def _extract_json_objects(raw: str):
             break
 
 
+def _dedupe_bot_reply_text(text: str) -> str:
+    """
+    Models sometimes echo the same user-visible text twice, or concatenate two identical JSON blobs
+    inside bot_reply. Collapse so WhatsApp users see a single message.
+    """
+    s = (text or "").strip()
+    if not s:
+        return s
+    n = len(s)
+    if n >= 24 and n % 2 == 0 and s[: n // 2] == s[n // 2 :]:
+        return s[: n // 2].strip()
+    lines = [ln.strip() for ln in s.split("\n") if ln.strip()]
+    if len(lines) == 2 and lines[0] == lines[1]:
+        return lines[0]
+    if s.startswith("{") and '"action"' in s:
+        parts = list(_extract_json_objects(s))
+        if len(parts) >= 2:
+            try:
+                d0 = json.loads(parts[0])
+                d1 = json.loads(parts[1])
+                if isinstance(d0, dict) and isinstance(d1, dict):
+                    b0 = (d0.get("bot_reply") or "").strip()
+                    b1 = (d1.get("bot_reply") or "").strip()
+                    if b0 and b0 == b1:
+                        return b0
+                    if b0:
+                        return b0
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return s
+
+
 def _parse_gpt_response_json(raw: str) -> dict:
     """
     Parse GPT response that may contain multiple JSON objects. Returns the first object
     that has both action and bot_reply. GPT sometimes returns two objects:
     - First: preferred_service, preferred_branch, etc. (no action/bot_reply)
     - Second: action, bot_reply (the actual response)
+    It may also emit the same JSON object twice; duplicates are collapsed.
     """
+    matches: List[Dict[str, Any]] = []
     for obj_str in _extract_json_objects(raw):
         try:
             parsed = json.loads(obj_str)
             if isinstance(parsed, dict) and parsed.get("action") and parsed.get("bot_reply"):
-                return parsed
+                br = _dedupe_bot_reply_text(str(parsed.get("bot_reply") or ""))
+                parsed = {**parsed, "bot_reply": br}
+                matches.append(parsed)
         except (json.JSONDecodeError, TypeError):
             continue
-    raise json.JSONDecodeError("No valid JSON object with action and bot_reply found", raw, 0)
+    if not matches:
+        raise json.JSONDecodeError("No valid JSON object with action and bot_reply found", raw, 0)
+    if len(matches) == 1:
+        return matches[0]
+    sigs = [json.dumps(m, sort_keys=True, ensure_ascii=False) for m in matches]
+    if len(set(sigs)) == 1:
+        return matches[0]
+    return matches[0]
 
 
 def _extract_preferred_booking_from_gpt(raw: str) -> dict:
@@ -3542,11 +3637,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 else:
                                     print(f"ERROR: Failed to create customer {customer_name}: {create_customer_response.get('message', 'Unknown error')}")
                                     err_content = json.dumps({"success": False, "message": f"Failed to create customer: {create_customer_response.get('message', 'Unknown error')}"})
-                                    tool_round_trips.append({
-                                        "ai_requested": "create_customer",
-                                        "args": json.dumps(function_args)[:300],
-                                        "bot_returned": err_content[:600],
-                                    })
+                                    tool_round_trips.append(
+                                        _record_tool_round_trip("create_customer", function_args, err_content, None)
+                                    )
                                     messages.append({
                                         "tool_call_id": tool_call.id,
                                         "role": "tool",
@@ -3705,11 +3798,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             }
                         )
                         tool_round_trips.append(
-                            {
-                                "ai_requested": function_name,
-                                "args": json.dumps(function_args)[:300],
-                                "bot_returned": err_content[:600],
-                            }
+                            _record_tool_round_trip(function_name, function_args, err_content, None)
                         )
                         messages.append(
                             {
@@ -3734,11 +3823,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             }
                         )
                         tool_round_trips.append(
-                            {
-                                "ai_requested": function_name,
-                                "args": json.dumps(function_args)[:300],
-                                "bot_returned": err_content[:600],
-                            }
+                            _record_tool_round_trip(function_name, function_args, err_content, None)
                         )
                         messages.append(
                             {
@@ -3890,11 +3975,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 }
                             )
                             tool_round_trips.append(
-                                {
-                                    "ai_requested": function_name,
-                                    "args": json.dumps(function_args)[:300],
-                                    "bot_returned": err_content[:600],
-                                }
+                                _record_tool_round_trip(function_name, function_args, err_content, None)
                             )
                             messages.append(
                                 {
@@ -3983,11 +4064,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     }
                                 )
                                 tool_round_trips.append(
-                                    {
-                                        "ai_requested": function_name,
-                                        "args": json.dumps(function_args)[:300],
-                                        "bot_returned": err_content[:600],
-                                    }
+                                    _record_tool_round_trip(function_name, function_args, err_content, None)
                                 )
                                 messages.append(
                                     {
@@ -4029,12 +4106,16 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         else:
                             tool_output = {"action": "fallback_to_general", "content": config.CORE_KNOWLEDGE_BASE or ""}
                         tool_content = json.dumps(tool_output)
-                        tool_round_trips.append({"ai_requested": function_name, "args": json.dumps(function_args)[:300], "bot_returned": (tool_content[:600] + "...") if len(tool_content) > 600 else tool_content})
+                        tool_round_trips.append(
+                            _record_tool_round_trip(function_name, function_args, tool_content, None)
+                        )
                         messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": tool_content})
                     except Exception as kr_e:
                         print(f"⚠️ retrieve_relevant_knowledge error: {kr_e}")
                         err_content = json.dumps({"success": False, "content": "", "message": str(kr_e)})
-                        tool_round_trips.append({"ai_requested": function_name, "args": json.dumps(function_args)[:300], "bot_returned": err_content[:600]})
+                        tool_round_trips.append(
+                            _record_tool_round_trip(function_name, function_args, err_content, None)
+                        )
                         messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": err_content})
                 elif function_name == "submit_booking_intent":
                     from services.booking.intent_pipeline import handle_submit_booking_intent
@@ -4054,11 +4135,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
                     tool_content = json.dumps(tool_output, default=str)
                     tool_round_trips.append(
-                        {
-                            "ai_requested": function_name,
-                            "args": json.dumps(function_args)[:300],
-                            "bot_returned": (tool_content[:600] + "...") if len(tool_content) > 600 else tool_content,
-                        }
+                        _record_tool_round_trip(
+                            function_name,
+                            function_args,
+                            tool_content,
+                            tool_output if isinstance(tool_output, dict) else None,
+                        )
                     )
                     messages.append(
                         {
@@ -4325,11 +4407,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"update_appointment_date tool: API failed: {err_msg}")
 
                         tool_content = json.dumps(tool_output)
-                        tool_round_trips.append({
-                            "ai_requested": function_name,
-                            "args": json.dumps(function_args)[:300],
-                            "bot_returned": (tool_content[:600] + "...") if len(tool_content) > 600 else tool_content,
-                        })
+                        tool_round_trips.append(
+                            _record_tool_round_trip(
+                                function_name,
+                                function_args,
+                                tool_content,
+                                tool_output if isinstance(tool_output, dict) else None,
+                            )
+                        )
                         messages.append(
                             {
                                 "tool_call_id": tool_call.id,
@@ -4342,11 +4427,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         api_failure_reason = f"tool_execution_error:{function_name}: {tool_e}"
                         print(f"â‌Œ ERROR executing tool {function_name}: {tool_e}")
                         err_content = json.dumps({"success": False, "message": f"Error executing tool: {tool_e}"})
-                        tool_round_trips.append({
-                            "ai_requested": function_name,
-                            "args": json.dumps(function_args)[:300],
-                            "bot_returned": err_content[:600],
-                        })
+                        tool_round_trips.append(
+                            _record_tool_round_trip(function_name, function_args, err_content, None)
+                        )
                         messages.append(
                             {
                                 "tool_call_id": tool_call.id,
@@ -4359,11 +4442,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     api_failure_reason = f"tool_not_found:{function_name}"
                     print(f"â‌Œ ERROR: Tool function '{function_name}' not found in api_integrations.")
                     err_content = json.dumps({"success": False, "message": f"Tool function '{function_name}' not implemented."})
-                    tool_round_trips.append({
-                        "ai_requested": function_name,
-                        "args": json.dumps(function_args)[:300],
-                        "bot_returned": err_content[:600],
-                    })
+                    tool_round_trips.append(
+                        _record_tool_round_trip(function_name, function_args, err_content, None)
+                    )
                     messages.append(
                         {
                             "tool_call_id": tool_call.id,
@@ -4476,13 +4557,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 tool_names_so_far=tool_names,
             )
             if rec_api is not None:
-                rec_dump = json.dumps(rec_api)
+                rec_dump = json.dumps(rec_api, default=str)
                 tool_round_trips.append(
-                    {
-                        "ai_requested": "create_appointment_recovered_from_auxiliary_gpt_json",
-                        "args": "(parsed from model output before action JSON)",
-                        "bot_returned": (rec_dump[:600] + "...") if len(rec_dump) > 600 else rec_dump,
-                    }
+                    _record_tool_round_trip(
+                        "create_appointment_recovered_from_auxiliary_gpt_json",
+                        {"note": "parsed from model output before action JSON", "recovered": True},
+                        rec_dump,
+                        rec_api if isinstance(rec_api, dict) else None,
+                    )
                 )
                 if rec_api.get("success") and rec_api.get("booking_flow_state") == "booked":
                     recovered_create_appointment_ok = True
@@ -4692,6 +4774,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # Token usage: when tool calls exist, sum BOTH first and second API call usage (second_response alone misses first call's output)
         first_usage = getattr(response, "usage", None) if tool_calls else None
         usage = (getattr(second_response, "usage", None) if tool_calls else getattr(response, "usage", None))
+        token_breakdown: Optional[Dict[str, Any]] = None
         if tool_calls and first_usage and usage:
             pt1 = getattr(first_usage, "prompt_tokens", 0) or 0
             ct1 = getattr(first_usage, "completion_tokens", 0) or 0
@@ -4707,11 +4790,34 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 "output_cost_usd": round((cost1.get("output_cost_usd", 0) or 0) + (cost2.get("output_cost_usd", 0) or 0), 6),
                 "cost_usd": round((cost1.get("cost_usd", 0) or 0) + (cost2.get("cost_usd", 0) or 0), 6),
             }
+            token_breakdown = {
+                "first_gpt_call": {
+                    "model": selected_model,
+                    "prompt_tokens": pt1,
+                    "completion_tokens": ct1,
+                    "total_tokens": pt1 + ct1,
+                },
+                "second_gpt_call": {
+                    "model": "gpt-5.4-mini",
+                    "prompt_tokens": pt2,
+                    "completion_tokens": ct2,
+                    "total_tokens": pt2 + ct2,
+                },
+            }
         else:
             tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
             prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
             completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
             cost_info = _compute_cost_from_usage(selected_model, prompt_tokens_val or 0, completion_tokens_val or 0) if (prompt_tokens_val is not None or completion_tokens_val is not None) else {}
+            if usage and prompt_tokens_val is not None:
+                token_breakdown = {
+                    "single_call": {
+                        "model": selected_model,
+                        "prompt_tokens": prompt_tokens_val,
+                        "completion_tokens": completion_tokens_val or 0,
+                        "total_tokens": tokens_val,
+                    }
+                }
         flow_meta = {
             "model": selected_model,
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
@@ -4722,6 +4828,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "tokens": tokens_val,
             "prompt_tokens": prompt_tokens_val,
             "completion_tokens": completion_tokens_val,
+            "token_breakdown": token_breakdown,
             **cost_info,
         }
         if api_failure_reason:
