@@ -41,6 +41,8 @@ TESTING_MODE = False  # When True, Firebase saving is disabled for testing
 # - True: AI decides conversation action/routing; backend executes.
 # - False: Use code-first router short-circuit logic.
 AI_PRIMARY_ORCHESTRATION = os.getenv("AI_PRIMARY_ORCHESTRATION", "true").strip().lower() == "true"
+# Optional env: LINASLASER_BODY_PART_IDS_FROM_AI_ONLY=1 — server does not fuzzy-map body area text to
+# CRM ids; the model must supply body_part_ids from get_body_parts (resolver.server_may_infer_body_parts).
 # After operator releases chat to bot: block auto re-escalation (handover_degree / error→handover) for this many minutes.
 POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES = int(os.getenv("POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", "45"))
 

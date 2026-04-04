@@ -268,30 +268,54 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
         sd = await get_service_data(int(service_id), machine_id)
         last = sd
         parts = _extract_body_parts_from_service_data_response(sd)
+        if parts is None:
+            parts = _deep_scan_body_parts(sd)
         if parts is not None:
             out = {"success": True, "data": parts}
             _log_body_parts_success("service/data", len(parts))
             return out
         if sd.get("success"):
-            print("API Call: get_body_parts — service/data OK but no body_parts list in payload; trying legacy GET paths")
-        else:
-            msg = str(sd.get("message") or "").lower()
-            sc = sd.get("status_code")
-            if sc not in (404, None) and "not found" not in msg:
-                log_report_event(
-                    "api_call",
-                    "System",
-                    "N/A",
-                    {
-                        "api": "get_body_parts",
-                        "path": "service/data",
-                        "status": "failed",
-                        "error": sd.get("message"),
-                        "service_id": service_id,
-                        "machine_id": machine_id,
-                    },
-                )
-                return sd
+            err = {
+                "success": False,
+                "message": (
+                    "GET service/data succeeded but no body_parts rows were found in the JSON. "
+                    "Confirm the CRM exposes body_parts (or areas) under data per Appointment API."
+                ),
+                "service_data_shape": _service_data_shape_hint(sd),
+            }
+            log_report_event(
+                "api_call",
+                "System",
+                "N/A",
+                {
+                    "api": "get_body_parts",
+                    "path": "service/data",
+                    "status": "failed",
+                    "error": err["message"],
+                    "service_id": service_id,
+                    "machine_id": machine_id,
+                    "hint": _service_data_shape_hint(sd),
+                },
+            )
+            return err
+        msg = str(sd.get("message") or "").lower()
+        sc = sd.get("status_code")
+        if sc not in (404, None) and "not found" not in msg:
+            log_report_event(
+                "api_call",
+                "System",
+                "N/A",
+                {
+                    "api": "get_body_parts",
+                    "path": "service/data",
+                    "status": "failed",
+                    "error": sd.get("message"),
+                    "service_id": service_id,
+                    "machine_id": machine_id,
+                },
+            )
+            return sd
+        print("API Call: get_body_parts — service/data unavailable (404), trying legacy GET paths")
 
     for ep in _body_part_endpoint_candidates():
         if ep == custom:

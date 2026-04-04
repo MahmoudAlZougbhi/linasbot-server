@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Import all API functions from api_integrations
 from services import api_integrations
+from services.booking.resolver import match_best_body_part_row, server_may_infer_body_parts
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
@@ -1565,6 +1566,8 @@ async def _try_infer_body_part_ids_from_conversation(
     machine_id: Optional[int] = None,
 ) -> Optional[List[int]]:
     """When GPT omitted valid IDs but the user already named an area (e.g. underarm / ta7t el bat)."""
+    if not server_may_infer_body_parts():
+        return None
     if _safe_int(service_id) not in LASER_HAIR_REMOVAL_SERVICE_IDS:
         return None
     blob = _recent_booking_context_blob(context_messages, user_input).lower()
@@ -1598,6 +1601,17 @@ async def _try_infer_body_part_ids_from_conversation(
             )
             if resolved:
                 return resolved
+    legs_ctx = (
+        any(t in compact for t in ("ejren", "ejrin", "ejeren", "sa2en", "s2en", "se2en"))
+        or any(t in blob for t in ("رجلين", "رجل", "ساق", "ساقين"))
+        or re.search(r"\blegs?\b", blob) is not None
+    )
+    if legs_ctx:
+        resolved = await _resolve_body_part_ids_from_area_hint(
+            blob[:500], service_id, machine_id
+        )
+        if resolved:
+            return resolved
     return None
 
 
@@ -2159,11 +2173,12 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
             if not area and isinstance(_raw_id, str) and _raw_id.strip() and not str(_raw_id).strip().isdigit():
                 area = str(_raw_id).strip()
             if area:
-                resolved = await _resolve_body_part_ids_from_area_hint(
-                    str(area), service_id, machine_id
-                )
-                if resolved:
-                    out.extend(resolved)
+                if server_may_infer_body_parts():
+                    resolved = await _resolve_body_part_ids_from_area_hint(
+                        str(area), service_id, machine_id
+                    )
+                    if resolved:
+                        out.extend(resolved)
     normalized = _normalize_body_part_ids(out)
     return normalized if normalized else None
 
@@ -2271,6 +2286,8 @@ async def _resolve_body_part_ids_from_area_hint(
     area_hint: str, service_id: int, machine_id: Optional[int] = None
 ) -> Optional[List[int]]:
     """Resolve body_part_ids when only a human-readable area (e.g. back) is known."""
+    if not server_may_infer_body_parts():
+        return None
     if not area_hint or not str(area_hint).strip():
         return None
     static_ids = _area_name_to_body_part_ids(area_hint, service_id)
@@ -2322,11 +2339,9 @@ async def _resolve_body_part_ids_from_area_hint(
             if any(term in name for term in needle_terms):
                 bid = _safe_int(item.get("id"))
                 return [bid] if bid is not None else None
-        for item in bp_resp["data"]:
-            name = (item.get("name") or "").strip().lower()
-            if al in name or name in al:
-                bid = _safe_int(item.get("id"))
-                return [bid] if bid is not None else None
+        bid = match_best_body_part_row(bp_resp["data"], area_hint)
+        if bid is not None:
+            return [bid]
     except Exception as ex:
         print(f"_resolve_body_part_ids_from_area_hint: {ex}")
     return None
@@ -4110,7 +4125,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 "when they already described the location (e.g. neck / رقبة / ra2be). "
                                 "Call submit_booking_intent with body_part set to their wording and body_part_ids empty when possible "
                                 "so the server resolves IDs, or briefly apologize and offer branch contact if resolution is impossible. "
-                                "Ops: LINASLASER_GET_BODY_PARTS_PATH or LINASLASER_TATTOO_BODY_SYNONYMS_JSON."
+                                "Ops: Appointment API uses GET /service/data for areas (LINASLASER_SERVICE_DATA_PATH); "
+                                "legacy hosts may set LINASLASER_GET_BODY_PARTS_PATH or LINASLASER_TATTOO_BODY_SYNONYMS_JSON."
                             )
                         if (
                             function_name == "update_appointment_date"
