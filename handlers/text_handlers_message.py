@@ -2,6 +2,7 @@
 # Main message handler for WhatsApp text messages
 # Human handoff: AI detects intent (no keyword/regex - AI understands context)
 
+import asyncio
 from typing import Optional
 
 from handlers.text_handlers_firestore import *
@@ -10,6 +11,18 @@ from services.dynamic_messages_service import get_dynamic_message
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 
 GREETING_INACTIVITY_SECONDS = 43200  # 12 hours
+
+# Serialize append + epoch bump + create_task per user so two concurrent handle_message calls
+# cannot both read the same _text_turn_epoch and schedule two waves with the same epoch (duplicate sends).
+_combine_schedule_locks: dict[str, asyncio.Lock] = {}
+
+
+def _combine_schedule_lock(user_id: str) -> asyncio.Lock:
+    lock = _combine_schedule_locks.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _combine_schedule_locks[user_id] = lock
+    return lock
 
 
 def _extract_greeting_from_style_content(style_content: str) -> str:
@@ -591,30 +604,44 @@ async def handle_message(
     # GPT is then instructed to respond in the detected language
     print(f"[handle_message] 🌐 Language will be detected pre-GPT by language_detection_service for user {user_id}")
 
-    # Message combining logic
-    config.user_pending_messages[user_id].append(raw_msg)
-    # Dashboard /api/test-*: if a webhook-delayed task for this user was just cancelled, it may have
-    # left the pending deque empty; keep a copy so _delayed_process_messages can still run GPT.
-    if user_data.get("_dashboard_test_simulation"):
-        user_data["_dashboard_last_message_for_fallback"] = raw_msg
-        # Survives pending-queue races (e.g. cancelled delayed task cleared deque); cleared in delayed after GPT turn.
-        user_data["_dashboard_test_turn_sticky"] = raw_msg
+    async with _combine_schedule_lock(user_id):
+        # Message combining logic
+        config.user_pending_messages[user_id].append(raw_msg)
+        # Dashboard /api/test-*: if a webhook-delayed task for this user was just cancelled, it may have
+        # left the pending deque empty; keep a copy so _delayed_process_messages can still run GPT.
+        if user_data.get("_dashboard_test_simulation"):
+            user_data["_dashboard_last_message_for_fallback"] = raw_msg
+            # Survives pending-queue races (e.g. cancelled delayed task cleared deque); cleared in delayed after GPT turn.
+            user_data["_dashboard_test_turn_sticky"] = raw_msg
 
-    # Cancel any previously scheduled processing task
-    if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
-        _delayed_processing_tasks[user_id].cancel()
+        # Cancel any previously scheduled processing task
+        if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
+            _delayed_processing_tasks[user_id].cancel()
 
-    # New epoch for this combine/GPT wave. A previously cancelled task may still finish GPT and
-    # try to send; outbound uses this so stale turns skip WhatsApp delivery (duplicate bubble fix).
-    user_data["_text_turn_epoch"] = user_data.get("_text_turn_epoch", 0) + 1
-    text_turn_epoch = user_data["_text_turn_epoch"]
+        # New epoch for this combine/GPT wave. A previously cancelled task may still finish GPT and
+        # try to send; outbound uses this so stale turns skip WhatsApp delivery (duplicate bubble fix).
+        user_data["_text_turn_epoch"] = user_data.get("_text_turn_epoch", 0) + 1
+        text_turn_epoch = user_data["_text_turn_epoch"]
 
-    # Dashboard /api/test-* sets _dashboard_test_simulation: run GPT path inline so the HTTP handler
-    # sees captured replies before returning (background create_task was still racing / missing awaits).
-    if user_data.get("_dashboard_test_simulation"):
-        print(f"[handle_message] Dashboard test simulation: inline delayed processing for {user_id}")
-        try:
-            await _delayed_process_messages(
+        # Dashboard /api/test-* sets _dashboard_test_simulation: run GPT path inline so the HTTP handler
+        # sees captured replies before returning (background create_task was still racing / missing awaits).
+        if user_data.get("_dashboard_test_simulation"):
+            print(f"[handle_message] Dashboard test simulation: inline delayed processing for {user_id}")
+            try:
+                await _delayed_process_messages(
+                    user_id,
+                    user_data,
+                    send_message_func,
+                    send_action_func,
+                    combine_delay_seconds=message_combine_delay,
+                    text_turn_epoch=text_turn_epoch,
+                )
+            finally:
+                _delayed_processing_tasks.pop(user_id, None)
+            return
+
+        _delayed_processing_tasks[user_id] = asyncio.create_task(
+            _delayed_process_messages(
                 user_id,
                 user_data,
                 send_message_func,
@@ -622,17 +649,4 @@ async def handle_message(
                 combine_delay_seconds=message_combine_delay,
                 text_turn_epoch=text_turn_epoch,
             )
-        finally:
-            _delayed_processing_tasks.pop(user_id, None)
-        return
-
-    _delayed_processing_tasks[user_id] = asyncio.create_task(
-        _delayed_process_messages(
-            user_id,
-            user_data,
-            send_message_func,
-            send_action_func,
-            combine_delay_seconds=message_combine_delay,
-            text_turn_epoch=text_turn_epoch,
         )
-    )

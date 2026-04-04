@@ -2076,9 +2076,9 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     Does **not** create a fake CRM name: if the customer has no file yet, a **real** name must come from
     the thread or auxiliary JSON (never auto-generated placeholders).
     Returns the same tool-output dict as create_appointment (success + api_response, or validation_error) if executed; None if skipped.
+    When BOOKING_LEGACY_INFERENCE is False, runs submit_booking_intent with the same validated extraction instead of returning early.
     """
-    if not getattr(config, "BOOKING_LEGACY_INFERENCE", False):
-        return None
+    legacy_inference = bool(getattr(config, "BOOKING_LEGACY_INFERENCE", False))
     if is_reschedule_intent:
         return None
     recent = _collect_recent_user_text_for_change_intent(current_context_messages, user_input)
@@ -2240,6 +2240,45 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
         {"body_part_id": bp_id, "session_number": 1} for bp_id in selected_body_part_ids
     ]
     _remember_booking_selection(user_id, fa)
+
+    if not legacy_inference:
+        print(
+            f"RECOVERY: executing submit_booking_intent from auxiliary GPT JSON (tools were: {tool_names_so_far})"
+        )
+        from services.booking.intent_pipeline import handle_submit_booking_intent
+
+        g_eff = str(leaked.get("gender") or current_gender or "").strip().lower()
+        if g_eff not in ("male", "female"):
+            g_eff = str(current_gender or "female").strip().lower()
+        if g_eff not in ("male", "female"):
+            g_eff = "female"
+        submit_args: Dict[str, Any] = {
+            "service_id": _safe_int(fa.get("service_id")),
+            "branch_id": _safe_int(fa.get("branch_id")),
+            "machine_id": _safe_int(fa.get("machine_id")),
+            "body_part_ids": list(selected_body_part_ids),
+            "gender": g_eff,
+            "customer_name": customer_name,
+            "date": fa.get("date"),
+            "date_components": leaked.get("date_components"),
+            "calendar_day_intent": leaked.get("calendar_day_intent"),
+            "execute_booking": bool(leaked.get("execute_booking", True)),
+        }
+        bp_txt = leaked.get("body_part")
+        if bp_txt and str(bp_txt).strip():
+            submit_args["body_part"] = str(bp_txt).strip()
+        if leaked.get("normalized_date"):
+            submit_args["normalized_date"] = leaked.get("normalized_date")
+        if leaked.get("normalized_time"):
+            submit_args["normalized_time"] = leaked.get("normalized_time")
+
+        return await handle_submit_booking_intent(
+            user_id=user_id,
+            phone=str(phone_number),
+            current_gender=current_gender,
+            user_input=user_input,
+            function_args=submit_args,
+        )
 
     print(
         f"RECOVERY: executing create_appointment from auxiliary GPT JSON (tools were: {tool_names_so_far})"
@@ -4716,6 +4755,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             not api_failure_reason
             and tool_calls
             and "create_appointment" not in tool_names
+            and "submit_booking_intent" not in tool_names
             and not recovered_create_appointment_ok
             and not _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
         ):
