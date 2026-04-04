@@ -115,24 +115,98 @@ def _body_part_endpoint_candidates() -> list:
     return out
 
 
+def _row_looks_like_body_part(entry: Any) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    return entry.get("id") is not None or entry.get("body_part_id") is not None
+
+
+def _coerce_body_parts_list(raw: Any) -> Optional[list]:
+    """Return a list if raw is a non-empty list of body-part-like dicts, or an empty list if explicitly empty."""
+    if not isinstance(raw, list):
+        return None
+    if len(raw) == 0:
+        return []
+    if all(_row_looks_like_body_part(x) for x in raw):
+        return raw
+    return None
+
+
 def _extract_body_parts_from_service_data_response(sd: dict) -> Optional[list]:
     """
-    GET service/data often carries the same rows as GET body-parts under data.body_parts
-    (or areas / body_areas on some hosts). Returns None if the payload cannot supply a list.
+    GET service/data carries pricing + body area rows (BOC Appointment API). Same rows may appear under
+    data.body_parts, areas, body_areas, top-level body_parts, or nested (e.g. under service / pricing).
     """
     if not isinstance(sd, dict) or not sd.get("success"):
         return None
+    for key in ("body_parts", "areas", "body_areas"):
+        if key in sd:
+            got = _coerce_body_parts_list(sd[key])
+            if got is not None:
+                return got
     d = sd.get("data")
+    if d is None:
+        return None
+    if isinstance(d, list):
+        return _coerce_body_parts_list(d)
     if not isinstance(d, dict):
         return None
-    for key in ("body_parts", "areas", "body_areas"):
+    for key in ("body_parts", "areas", "body_areas", "zones", "locations", "parts"):
         if key not in d:
             continue
-        bp = d[key]
-        if isinstance(bp, list):
-            return bp
-        return None
+        got = _coerce_body_parts_list(d[key])
+        if got is not None:
+            return got
+    for nest_key in ("service", "pricing", "details", "options"):
+        nested = d.get(nest_key)
+        if not isinstance(nested, dict):
+            continue
+        for key in ("body_parts", "areas", "body_areas"):
+            if key not in nested:
+                continue
+            got = _coerce_body_parts_list(nested[key])
+            if got is not None:
+                return got
+    for v in d.values():
+        got = _coerce_body_parts_list(v)
+        if got is not None:
+            return got
     return None
+
+
+def _deep_scan_body_parts(obj: Any, depth: int = 0) -> Optional[list]:
+    """Find a body-part row list anywhere in a successful service/data JSON (odd CRM nesting)."""
+    if depth > 8 or obj is None:
+        return None
+    got = _coerce_body_parts_list(obj)
+    if got is not None:
+        return got
+    if isinstance(obj, dict):
+        for k in ("body_parts", "areas", "body_areas", "zones", "locations", "parts"):
+            if k not in obj:
+                continue
+            got = _coerce_body_parts_list(obj[k])
+            if got is not None:
+                return got
+        for v in obj.values():
+            found = _deep_scan_body_parts(v, depth + 1)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _deep_scan_body_parts(item, depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
+def _service_data_shape_hint(sd: dict) -> Any:
+    d = sd.get("data") if isinstance(sd, dict) else None
+    if isinstance(d, dict):
+        return {"data_keys": list(d.keys())[:40]}
+    if isinstance(d, list):
+        return {"data": "list", "len": len(d)}
+    return {"data_type": type(d).__name__}
 
 
 async def get_body_parts(service_id: int = None, machine_id: int = None):
@@ -145,23 +219,89 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
         params["machine_id"] = machine_id
     q = params if params else None
     last: dict = {"success": False, "message": "get_body_parts: no endpoint tried"}
-    for ep in _body_part_endpoint_candidates():
-        response = await _make_api_request("GET", ep, params=q)
+
+    def _log_body_parts_success(path: str, count: int) -> None:
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_body_parts",
+                "path": path,
+                "status": "success",
+                "count": count,
+                "service_id": service_id,
+                "machine_id": machine_id,
+            },
+        )
+
+    custom = (os.getenv("LINASLASER_GET_BODY_PARTS_PATH") or "").strip().lstrip("/")
+    if custom:
+        response = await _make_api_request("GET", custom, params=q)
         last = response
         if response.get("success"):
+            rows = response.get("data")
+            n = len(rows) if isinstance(rows, list) else 0
+            _log_body_parts_success(custom, n)
+            return response
+        msg = str(response.get("message") or "").lower()
+        sc = response.get("status_code")
+        if sc != 404 and "not found" not in msg:
             log_report_event(
                 "api_call",
                 "System",
                 "N/A",
                 {
                     "api": "get_body_parts",
-                    "path": ep,
-                    "status": "success",
-                    "count": len(response.get("data") or []),
+                    "path": custom,
+                    "status": "failed",
+                    "error": response.get("message"),
                     "service_id": service_id,
                     "machine_id": machine_id,
                 },
             )
+            return response
+        print(f"API Call: get_body_parts — {custom} failed, continuing")
+
+    # BOC Appointment API: areas + price come from GET service/data (there is no GET body_parts in the official doc).
+    if service_id is not None:
+        sd = await get_service_data(int(service_id), machine_id)
+        last = sd
+        parts = _extract_body_parts_from_service_data_response(sd)
+        if parts is not None:
+            out = {"success": True, "data": parts}
+            _log_body_parts_success("service/data", len(parts))
+            return out
+        if sd.get("success"):
+            print("API Call: get_body_parts — service/data OK but no body_parts list in payload; trying legacy GET paths")
+        else:
+            msg = str(sd.get("message") or "").lower()
+            sc = sd.get("status_code")
+            if sc not in (404, None) and "not found" not in msg:
+                log_report_event(
+                    "api_call",
+                    "System",
+                    "N/A",
+                    {
+                        "api": "get_body_parts",
+                        "path": "service/data",
+                        "status": "failed",
+                        "error": sd.get("message"),
+                        "service_id": service_id,
+                        "machine_id": machine_id,
+                    },
+                )
+                return sd
+
+    for ep in _body_part_endpoint_candidates():
+        if ep == custom:
+            continue
+        response = await _make_api_request("GET", ep, params=q)
+        last = response
+        if response.get("success"):
+            rows = response.get("data")
+            n = len(rows) if isinstance(rows, list) else 0
+            _log_body_parts_success(ep, n)
             return response
         msg = str(response.get("message") or "").lower()
         sc = response.get("status_code")
@@ -182,26 +322,7 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
             },
         )
         return response
-    # Dedicated GET body-parts routes missing (404): Appointment API still exposes areas on GET service/data.
-    if service_id is not None:
-        sd = await get_service_data(int(service_id), machine_id)
-        parts = _extract_body_parts_from_service_data_response(sd)
-        if parts is not None:
-            out = {"success": True, "data": parts}
-            log_report_event(
-                "api_call",
-                "System",
-                "N/A",
-                {
-                    "api": "get_body_parts",
-                    "path": "service/data (fallback)",
-                    "status": "success",
-                    "count": len(parts),
-                    "service_id": service_id,
-                    "machine_id": machine_id,
-                },
-            )
-            return out
+
     log_report_event(
         "api_call",
         "System",
