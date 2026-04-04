@@ -9,8 +9,17 @@ from typing import Any, Dict
 
 from utils.phone_utils import phone_match_key
 
+from services.outbound_text_firestore_dedupe import (
+    release_outbound_send_firestore,
+    try_acquire_outbound_send_firestore,
+)
+
 from .base_adapter import WhatsAppAdapter
-from .outbound_text_dedupe import finish_outbound_text_attempt, should_skip_outbound_text
+from .outbound_text_dedupe import (
+    finish_outbound_text_attempt,
+    normalize_text_body_for_dedupe,
+    should_skip_outbound_text,
+)
 
 
 class DedupeOutboundTextAdapter:
@@ -38,6 +47,17 @@ class DedupeOutboundTextAdapter:
         resolved = self._resolve_recipient(to_number)
         if await should_skip_outbound_text(resolved, message):
             return {"success": True, "deduped_outbound": True}
+
+        body_norm = normalize_text_body_for_dedupe(message)
+        fs_doc = await try_acquire_outbound_send_firestore(resolved, body_norm)
+        if fs_doc is None:
+            print(
+                f"⚠️ Outbound duplicate suppressed (Firestore cross-replica): "
+                f"recipient={resolved[:16]}… text_len={len(message or '')}"
+            )
+            await finish_outbound_text_attempt(resolved, message, False)
+            return {"success": True, "deduped_outbound": True}
+
         send_success = False
         try:
             result = await self._inner.send_text_message(to_number, message)
@@ -45,6 +65,8 @@ class DedupeOutboundTextAdapter:
             return result
         finally:
             await finish_outbound_text_attempt(resolved, message, send_success)
+            if fs_doc:
+                await release_outbound_send_firestore(fs_doc, send_success)
 
     def __getattr__(self, name: str):
         return getattr(self._inner, name)
