@@ -1395,8 +1395,17 @@ def _parse_gpt_response_json(raw: str) -> dict:
     for obj_str in _extract_json_objects(raw):
         try:
             parsed = json.loads(obj_str)
-            if isinstance(parsed, dict) and parsed.get("action") and parsed.get("bot_reply"):
+            # Require action + bot_reply key; allow empty bot_reply (models sometimes emit "" with a tool blob above).
+            if (
+                isinstance(parsed, dict)
+                and parsed.get("action") is not None
+                and "bot_reply" in parsed
+            ):
                 br = _dedupe_bot_reply_text(str(parsed.get("bot_reply") or ""))
+                if not (br or "").strip():
+                    br = (
+                        "عذراً، لم يُكتمل نص الرد تلقائياً. جرّب مرة ثانية أو تواصل مع الفرع."
+                    )
                 parsed = {**parsed, "bot_reply": br}
                 matches.append(parsed)
         except (json.JSONDecodeError, TypeError):
@@ -1448,7 +1457,7 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
             parsed = json.loads(obj_str)
             if not isinstance(parsed, dict):
                 continue
-            if parsed.get("action") and parsed.get("bot_reply"):
+            if parsed.get("action") is not None and "bot_reply" in parsed:
                 continue
             for k in (
                 "date",
@@ -1459,6 +1468,7 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
                 "branch",
                 "branch_id",
                 "body_part",
+                "body_part_text",
                 "phone",
                 "body_part_ids",
                 "body_parts",
@@ -1467,11 +1477,22 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
                 "customer_phone",
                 "detected_name",
                 "customer_name",
+                "execute_booking",
+                "gender",
             ):
                 if k in parsed and parsed[k] is not None:
                     out[k] = parsed[k]
         except (json.JSONDecodeError, TypeError):
             continue
+    if not out.get("body_part") and out.get("body_part_text"):
+        out["body_part"] = str(out.get("body_part_text") or "").strip()
+    # GPT often splits clock into separate "time" — recovery normalize expects one "date" string.
+    if out.get("date") is not None and out.get("time"):
+        ds = str(out["date"]).strip()
+        ts = str(out["time"]).strip()
+        if ds and ts and "T" not in ds and not re.search(r"\b\d{1,2}:\d{2}\b", ds):
+            out["date"] = f"{ds} {ts}".strip()
+        out.pop("time", None)
     return out
 
 
