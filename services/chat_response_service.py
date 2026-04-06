@@ -2056,6 +2056,40 @@ def _extract_customer_name_from_conversation_for_booking(
     return customer_name
 
 
+async def _recovery_map_body_part_label_to_ids(
+    service_id: int,
+    machine_id: Optional[int],
+    label: str,
+) -> Optional[List[int]]:
+    """
+    Auxiliary-JSON recovery only: GPT often sends body_part (e.g. mo25rah) but omits body_part_ids.
+    Map via live get_body_parts + match_best_body_part_row. Independent of BOOKING_LEGACY_INFERENCE.
+    """
+    lab = (label or "").strip()
+    if not lab:
+        return None
+    sid = _safe_int(service_id)
+    if sid is None or sid not in LASER_HAIR_REMOVAL_SERVICE_IDS:
+        return None
+    r = await api_integrations.get_body_parts(service_id=sid, machine_id=machine_id)
+    if not r.get("success"):
+        return None
+    raw = r.get("data")
+    rows: List[dict] = []
+    if isinstance(raw, list):
+        rows = [x for x in raw if isinstance(x, dict)]
+    elif isinstance(raw, dict):
+        inner = raw.get("data")
+        if isinstance(inner, list):
+            rows = [x for x in inner if isinstance(x, dict)]
+    if not rows:
+        return None
+    bid = match_best_body_part_row(rows, lab)
+    if bid is None:
+        return None
+    return [bid]
+
+
 async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     gpt_raw_content: str,
     *,
@@ -2111,6 +2145,14 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
         )
         if inferred_bp:
             bp_norm = inferred_bp
+    if not bp_norm and temp_sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
+        lbl = (leaked.get("body_part") or "").strip()
+        if lbl:
+            mapped = await _recovery_map_body_part_label_to_ids(
+                temp_sid, _safe_int(leaked.get("machine_id")), lbl
+            )
+            if mapped:
+                bp_norm = mapped
     if not bp_norm:
         return None
 
@@ -2214,6 +2256,15 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
         if inf_bp:
             selected_body_part_ids = inf_bp
             fa["body_part_ids"] = inf_bp
+    if sid in LASER_HAIR_REMOVAL_SERVICE_IDS and not selected_body_part_ids:
+        lbl2 = (fa.get("body_part") or leaked.get("body_part") or "").strip()
+        if lbl2:
+            mapped2 = await _recovery_map_body_part_label_to_ids(
+                sid, _safe_int(fa.get("machine_id")), lbl2
+            )
+            if mapped2:
+                selected_body_part_ids = mapped2
+                fa["body_part_ids"] = mapped2
     if sid in body_part_required_service_ids and not selected_body_part_ids:
         print("RECOVERY create_appointment: missing body_part_ids for service")
         return None
