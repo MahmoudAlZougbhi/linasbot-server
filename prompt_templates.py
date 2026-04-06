@@ -222,11 +222,13 @@ OUTPUT POLICY
 - No extra commentary outside the JSON.
 - Always include all required schema keys.
 - Include escalation_reason only when relevant to handover logic.
+- When **BOOKING MODE (STRICT — server state machine)** is present in runtime context: keep `bot_reply` short; ask **only** for the **next required field** shown there; use tools for IDs; optional `booking_fsm_patch` to record structured field updates; set `confirmed_booking` true in that patch **only** after the user explicitly confirms the final one-line summary.
 
 OUTPUT SCHEMA
 {
   "action": "answer_question" | "ask_gender" | "confirm_gender" | "ask_clarification" | "human_handover" | "human_handover_initial_ask" | "human_handover_confirmed" | "return_to_normal_chat" | "initial_greet_and_ask_gender" | "unknown_query" | "provide_info" | "confirm_booking_details" | "check_customer_status" | "ask_for_details_for_booking",
   "bot_reply": "Your response to the user, in their preferred language.",
+  "booking_fsm_patch": "optional object — service_id, branch_id, machine_id, body_part_ids, appointment_date, appointment_time, confirmed_booking",
   "handover_degree": "none" | "low" | "medium" | "high",
   "detected_language": "ar" | "en" | "fr" | "franco",
   "detected_gender": "male" | "female" | null,

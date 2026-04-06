@@ -1139,6 +1139,24 @@ def _remember_booking_selection(user_id: str, function_args: Dict[str, Any]) -> 
         state["branch_id"] = branch_id
     if body_part_ids:
         state["body_part_ids"] = body_part_ids
+    ds = str(function_args.get("date") or "").strip()
+    if ds:
+        if " " in ds or "T" in ds.lower():
+            parts = ds.replace("T", " ").split()
+            state["appointment_date"] = parts[0][:10]
+            if len(parts) > 1:
+                state["appointment_time"] = parts[1][:8]
+        elif len(ds) >= 10:
+            state["appointment_date"] = ds[:10]
+    if function_args.get("time"):
+        state["appointment_time"] = str(function_args["time"]).strip()[:16]
+    try:
+        from services.booking import booking_fsm as _bfsm
+
+        if _bfsm.fsm_enabled():
+            _bfsm.sync_from_flat_booking_state(user_id)
+    except Exception:
+        pass
 
 
 def _extract_first_numeric(item: Dict[str, Any], keys: List[str]) -> Optional[float]:
@@ -2855,6 +2873,38 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if is_bulk_reschedule_all_intent:
         print("🔁 Intent routing: bulk reschedule ALL rows requested.")
 
+    booking_fsm_prompt_block = ""
+    try:
+        from services.booking import booking_fsm as _booking_fsm_mod
+
+        if _booking_fsm_mod.fsm_enabled():
+            if not (
+                is_reschedule_intent
+                or is_appointment_inquiry_intent
+                or is_bulk_reschedule_all_intent
+            ):
+                _booking_fsm_mod.maybe_enter_booking_mode(user_id, user_input)
+            _booking_fsm_mod.maybe_exit_booking_mode(user_id, user_input)
+            _booking_fsm_mod.sync_from_flat_booking_state(user_id)
+            _booking_fsm_mod.set_session_context(user_id, current_gender, customer_phone_clean or "")
+            _booking_fsm_mod.apply_heuristic_confirmation(user_id, user_input)
+            booking_fsm_prompt_block = _booking_fsm_mod.build_prompt_block(user_id, current_gender)
+            if booking_fsm_prompt_block:
+                _fsm_snap = config.user_booking_state[user_id].get("booking_fsm") or {}
+                _g_fs = _fsm_snap.get("customer_gender") or current_gender
+                _ok_fc, _miss_fc = _booking_fsm_mod.fields_complete(_fsm_snap, _g_fs)
+                _nxt_fc = _booking_fsm_mod.first_missing_field(_fsm_snap, _g_fs) if not _ok_fc else None
+                _can_ex, _gr = _booking_fsm_mod.can_execute_submit(user_id, current_gender)
+                _booking_fsm_mod.record_decision_log(
+                    user_id,
+                    phase="pre_gpt",
+                    next_field=_nxt_fc,
+                    gate=_gr or ("ready" if _can_ex else "blocked"),
+                    extracted={"user_message_excerpt": (user_input or "")[:240]},
+                )
+    except Exception as _fsm_init_e:
+        print(f"⚠️ booking_fsm pre-gpt: {_fsm_init_e}")
+
     # NOTE: conversation_log.jsonl is NO LONGER USED
     # Q&A matching is now handled by qa_database_service.py (API-based)
     # This happens in text_handlers.py BEFORE calling this function
@@ -3036,6 +3086,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"**📅 CALENDAR ANCHOR (do not guess today/tomorrow; use this):** {format_clinic_calendar_anchor(current_local_time)}\n"
         f"{_clinic_holiday_calendar_block(user_id, current_local_time)}"
         f"{customer_file_summary}"
+        + ((f"\n\n{booking_fsm_prompt_block}") if booking_fsm_prompt_block else "")
     )
 
     # Compact customer context for Activity Flow visibility (what Bot sends to AI about this customer)
@@ -3095,6 +3146,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         "\n\nOUTPUT FORMAT (MANDATORY):\n"
         "- Reply with a valid json object only.\n"
         "- Include at least these keys: \"action\" and \"bot_reply\".\n"
+        "- Optional: \"booking_fsm_patch\" — object with any of: service_id, branch_id, machine_id, body_part_ids, "
+        "appointment_date (YYYY-MM-DD), appointment_time (HH:MM), confirmed_booking (true only after explicit user yes to final summary).\n"
         "- Do not return markdown, code fences, or extra text outside json.\n"
     )
 
@@ -4260,6 +4313,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": err_content})
                 elif function_name == "submit_booking_intent":
                     from services.booking.intent_pipeline import handle_submit_booking_intent
+                    from services.booking.schemas import validation_error_response
+                    from services.booking.booking_fsm import (
+                        can_execute_submit,
+                        fsm_enabled as _fsm_gate_enabled,
+                        human_gate_message,
+                        mark_booking_completed,
+                        parse_gate_reason,
+                    )
 
                     _sb_phone = (
                         function_args.get("phone")
@@ -4267,13 +4328,36 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
                         or ""
                     )
-                    tool_output = await handle_submit_booking_intent(
-                        user_id=user_id,
-                        phone=str(_sb_phone).strip(),
-                        current_gender=current_gender,
-                        user_input=user_input,
-                        function_args=function_args,
-                    )
+                    _ok_submit, _gate_reason = can_execute_submit(user_id, current_gender)
+                    if _fsm_gate_enabled() and not _ok_submit:
+                        _mf = parse_gate_reason(_gate_reason or "")
+                        tool_output = validation_error_response(
+                            missing_fields=_mf,
+                            human_readable_reason=human_gate_message(_gate_reason or "", current_preferred_lang),
+                            activity_trace={
+                                "failure_stage": "booking_fsm_gate",
+                                "execution_phase": "pre_execution",
+                                "detail": _gate_reason,
+                                "pipeline_phase": "submit_booking_intent_blocked",
+                            },
+                        )
+                    else:
+                        tool_output = await handle_submit_booking_intent(
+                            user_id=user_id,
+                            phone=str(_sb_phone).strip(),
+                            current_gender=current_gender,
+                            user_input=user_input,
+                            function_args=function_args,
+                        )
+                        if (
+                            isinstance(tool_output, dict)
+                            and tool_output.get("success")
+                            and tool_output.get("booking_flow_state") == "booked"
+                        ):
+                            try:
+                                mark_booking_completed(user_id)
+                            except Exception as _fsm_mc_e:
+                                print(f"⚠️ booking_fsm mark_booking_completed: {_fsm_mc_e}")
                     tool_content = json.dumps(tool_output, default=str)
                     tool_round_trips.append(
                         _record_tool_round_trip(
@@ -4608,6 +4692,17 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
         else:
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
+
+        try:
+            from services.booking import booking_fsm as _bfsm_patch
+
+            if _bfsm_patch.fsm_enabled():
+                _bp = parsed_response.get("booking_fsm_patch")
+                if isinstance(_bp, dict) and _bp:
+                    _bfsm_patch.merge_patch(user_id, _bp)
+            parsed_response.pop("booking_fsm_patch", None)
+        except Exception as _bfsm_patch_e:
+            print(f"⚠️ booking_fsm_patch merge: {_bfsm_patch_e}")
 
         _apply_inferred_name_from_user_bundle(user_id, user_input, parsed_response)
         _prune_redundant_booking_questions_when_name_from_bundle(user_input, parsed_response)

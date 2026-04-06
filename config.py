@@ -151,6 +151,17 @@ WAITING_REPLY_COOLDOWN_SECONDS = 60
 # Tracks: service, body_area, machine, branch, date, etc.
 user_booking_state = defaultdict(dict)
 
+# Server-side booking state machine (strict collection + one confirmation before submit).
+BOOKING_FSM_ENABLED = os.getenv("LINASLASER_BOOKING_FSM", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# When True (default): submit_booking_intent is rejected until user confirms once in booking mode.
+BOOKING_FSM_REQUIRE_CONFIRMATION = os.getenv(
+    "LINASLASER_BOOKING_FSM_REQUIRE_CONFIRMATION", "true"
+).strip().lower() in ("1", "true", "yes")
+
 # For training handlers:
 training_stage = defaultdict(int)
 last_generated_qa_for_save = defaultdict(list)
