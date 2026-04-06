@@ -20,6 +20,50 @@ import time
 import re
 import json
 
+
+def _parse_tool_round_bot_returned(bot_returned: str):
+    if not bot_returned or not isinstance(bot_returned, str):
+        return None
+    try:
+        return json.loads(bot_returned)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _flow_meta_has_crm_booking_confirmation(flow_meta: dict) -> bool:
+    """
+    True when this GPT turn actually ran submit_booking_intent (or legacy create_appointment)
+    and the tool JSON reports CRM booked success.
+    """
+    for tr in flow_meta.get("tool_round_trips") or []:
+        name = str(tr.get("ai_requested") or "").strip()
+        if name not in ("submit_booking_intent", "create_appointment"):
+            continue
+        po = _parse_tool_round_bot_returned(tr.get("bot_returned") or "")
+        if isinstance(po, dict) and po.get("success") is True and po.get("booking_flow_state") == "booked":
+            return True
+    return False
+
+
+def _booking_not_confirmed_safe_reply(lang: str) -> str:
+    """User-facing text when the model tried to confirm a booking without CRM success."""
+    l = (lang or "ar").lower()
+    if l == "en":
+        return (
+            "Your appointment is not saved in our system yet—the booking step did not complete successfully. "
+            "Please do not consider it confirmed until the system confirms it; I will complete the booking next."
+        )
+    if l == "fr":
+        return (
+            "Votre rendez-vous n'est pas encore enregistré dans notre système — la réservation n'a pas abouti. "
+            "Merci de ne pas le considérer comme confirmé tant que le système ne l'a pas validé."
+        )
+    return (
+        "لم يُسجَّل الموعد بعد في نظام العيادة لأن خطوة الحجز لم تُكمَل بنجاح. "
+        "من فضلك لا تعتبري الموعد مؤكداً قبل ما يظهر تأكيد من النظام—رح كمّل إجراء الحجز بالأدوات المناسبة."
+    )
+
+
 PRICE_INTENT_KEYWORDS = [
     "price",
     "prices",
@@ -1651,6 +1695,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     if action_was_coerced:
         bot_reply_text = _clean_reply_text(bot_reply_text)
     # AI-PRIMARY: No turn-by-turn truncation or greeting strip. Send AI reply as-is.
+
+    # Never allow a CRM-style confirmation unless this turn actually received booked=true from the booking tool.
+    if action == "confirm_booking_details" and not _flow_meta_has_crm_booking_confirmation(flow_meta):
+        print(
+            "[_process_and_respond] BLOCKED confirm_booking_details: no submit_booking_intent/create_appointment "
+            "with success+booking_flow_state=booked in tool_round_trips"
+        )
+        action = "answer_question"
+        bot_reply_text = _booking_not_confirmed_safe_reply(current_preferred_lang)
 
     if (
         is_post_takeover_escalation_cooldown(user_data)
