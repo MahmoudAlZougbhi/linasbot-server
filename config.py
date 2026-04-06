@@ -49,6 +49,17 @@ BOOKING_LEGACY_INFERENCE = os.getenv(
     "LINASLASER_BOOKING_LEGACY_INFERENCE", "false"
 ).strip().lower() in ("1", "true", "yes")
 
+# When True, submit_booking_intent rejects execution if datetime was inferred only from raw_user_* (AI must send resolved date+time).
+BOOKING_REQUIRE_RESOLVED_DATETIME = os.getenv(
+    "LINASLASER_BOOKING_REQUIRE_RESOLVED_DATETIME", "false"
+).strip().lower() in ("1", "true", "yes")
+
+# When True (default): backend does NOT map service/branch/machine/body names to IDs — AI must send IDs from tools first.
+# Set LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES=true for legacy fuzzy resolution on the server.
+BOOKING_BACKEND_RESOLVES_NAMES = os.getenv(
+    "LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES", "false"
+).strip().lower() in ("1", "true", "yes")
+
 # --- Local / development environment (same APIs as prod, safe messaging) ---
 # Set APP_MODE=local or ENV=development to run locally with real APIs but controlled sending.
 APP_MODE = os.getenv("APP_MODE", "").strip().lower()  # "local" = local env

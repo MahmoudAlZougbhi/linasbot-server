@@ -17,6 +17,7 @@ from services.booking.constants import (
     BEIRUT_BRANCH_ID,
     HAIR_MEN,
     HAIR_WOMEN,
+    HAIR_REMOVAL_MACHINE_IDS,
     LASER_HAIR_REMOVAL_SERVICE_IDS,
     TATTOO_SERVICE_ID,
 )
@@ -145,6 +146,10 @@ def resolve_service_id(
     return None, "service"
 
 
+def _alnum_compact(s: str) -> str:
+    return re.sub(r"[^a-z0-9\u0600-\u06ff]", "", (s or "").lower())
+
+
 def resolve_machine_id(
     name: Optional[str],
     machine_id: Optional[int],
@@ -157,22 +162,42 @@ def resolve_machine_id(
         return mid, None
     n = (name or "").strip().lower()
     if not n:
-        return None, "machine"
+        return None, "machine_id"
+    nu = _alnum_compact(n)
     best = None
     best_score = 0.0
     for m in machines:
-        mn = str(m.get("name") or "").lower()
+        mn_raw = str(m.get("name") or "")
+        mn = mn_raw.lower()
         if not mn:
             continue
+        mid_c = _safe_int(m.get("id"))
+        if mid_c is None:
+            continue
         if n in mn or mn in n:
-            return _safe_int(m.get("id")), None
+            return mid_c, None
+        mu = _alnum_compact(mn_raw)
+        if nu and mu and len(nu) >= 2 and (nu in mu or mu in nu):
+            return mid_c, None
+        for kw in ("neo", "candela", "quadro", "trio", "dpl", "pico"):
+            if kw in n and kw in mn:
+                return mid_c, None
         sc = SequenceMatcher(None, n, mn).ratio()
         if sc > best_score:
             best_score = sc
-            best = _safe_int(m.get("id"))
+            best = mid_c
     if best is not None and best_score >= 0.4:
         return best, None
-    return None, "machine"
+    # Last resort: map common spoken names to hair-removal devices present in CRM
+    for m in machines:
+        mid_c = _safe_int(m.get("id"))
+        mn = str(m.get("name") or "").lower()
+        if mid_c is None or mid_c not in HAIR_REMOVAL_MACHINE_IDS or not mn:
+            continue
+        for kw in ("neo", "candela", "quadro", "trio", "dpl"):
+            if kw in n and kw in mn:
+                return mid_c, None
+    return None, "machine_id"
 
 
 def pick_default_machine_for_non_hair(service_id: int, machines: List[dict]) -> Optional[int]:
@@ -220,6 +245,46 @@ def pick_pico_or_default_machine(machines: List[dict]) -> Optional[int]:
     return pick_default_machine_for_non_hair(0, machines)
 
 
+def _split_composite_body_label(label: str) -> List[str]:
+    """
+    Split user-written multi-area phrases (Arabic و, commas, +) into one label per CRM row.
+    Example: «بكيني ومؤخرة» → [«بكيني», «مؤخرة»]
+    """
+    s = (label or "").strip()
+    if not s:
+        return []
+    if "و" in s and len(s) > 2:
+        parts = [p.strip() for p in s.split("و") if p.strip()]
+        if len(parts) >= 2:
+            return parts
+    parts = re.split(r"\s*[،,/+]\s*", s)
+    parts = [p.strip() for p in parts if p.strip()]
+    return parts if len(parts) > 1 else [s]
+
+
+def _match_body_part_label_to_id(rows: List[dict], segment: str) -> Optional[int]:
+    """Map one human phrase to a single body_part id from API rows."""
+    if not rows or not (segment or "").strip():
+        return None
+    ll = segment.strip().lower()
+    best_id: Optional[int] = None
+    best_score = 0.0
+    for row in rows:
+        bid = _safe_int(row.get("id") or row.get("body_part_id"))
+        nm = str(row.get("name") or row.get("body_part") or row.get("title") or "").strip().lower()
+        if bid is None or not nm:
+            continue
+        if ll in nm or nm in ll:
+            return bid
+        sc = SequenceMatcher(None, ll, nm).ratio()
+        if sc > best_score:
+            best_score = sc
+            best_id = bid
+    if best_id is not None and best_score >= 0.35:
+        return best_id
+    return None
+
+
 async def resolve_body_part_ids(
     service_id: int,
     body_part_label: Optional[str],
@@ -237,31 +302,33 @@ async def resolve_body_part_ids(
     label = (body_part_label or "").strip()
     if not label:
         return [], "body_part"
-    r = await api_integrations.get_body_parts(service_id=service_id, machine_id=machine_id)
-    rows = _norm_api_list(r.get("data")) if r.get("success") else []
-    if service_id == TATTOO_SERVICE_ID and label and (not r.get("success") or not rows):
+
+    async def _fetch_rows(mid: Optional[int]) -> Tuple[List[dict], bool]:
+        r = await api_integrations.get_body_parts(service_id=service_id, machine_id=mid)
+        ok = bool(r.get("success"))
+        rows = _norm_api_list(r.get("data")) if ok else []
+        return rows, ok
+
+    rows, r_ok = await _fetch_rows(machine_id)
+    if not rows and machine_id is not None:
+        rows, r_ok = await _fetch_rows(None)
+
+    if service_id == TATTOO_SERVICE_ID and label and (not r_ok or not rows):
         env_id = _tattoo_body_part_id_from_env_synonyms(label)
         if env_id is not None and env_id > 0:
             return [env_id], None
     if not rows:
         return [], "body_part"
-    ll = label.lower()
-    best_id = None
-    best_score = 0.0
-    for row in rows:
-        bid = _safe_int(row.get("id") or row.get("body_part_id"))
-        nm = str(row.get("name") or row.get("body_part") or "").lower()
-        if bid is None or not nm:
-            continue
-        if ll in nm or nm in ll:
-            return [bid], None
-        sc = SequenceMatcher(None, ll, nm).ratio()
-        if sc > best_score:
-            best_score = sc
-            best_id = bid
-    if best_id is not None and best_score >= 0.35:
-        return [best_id], None
-    return [], "body_part"
+
+    segments = _split_composite_body_label(label)
+    collected: List[int] = []
+    for seg in segments:
+        bid = _match_body_part_label_to_id(rows, seg)
+        if bid is None:
+            return [], "body_part"
+        if bid not in collected:
+            collected.append(bid)
+    return collected, None
 
 
 def machine_label_for(machine_id: int, machines: List[dict]) -> str:
@@ -289,24 +356,6 @@ def server_may_infer_body_parts() -> bool:
 def match_best_body_part_row(rows: List[dict], label: str) -> Optional[int]:
     """
     Pick the best CRM body_part id from get_body_parts rows for a human label (substring then fuzzy).
-    Used by chat_response recovery paths; same scoring idea as resolve_body_part_ids.
+    Used by chat_response recovery paths; same scoring as resolve_body_part_ids.
     """
-    if not rows or not (label or "").strip():
-        return None
-    ll = label.strip().lower()
-    best_id: Optional[int] = None
-    best_score = 0.0
-    for row in rows:
-        bid = _safe_int(row.get("id") or row.get("body_part_id"))
-        nm = str(row.get("name") or row.get("body_part") or row.get("title") or "").strip().lower()
-        if bid is None or not nm:
-            continue
-        if ll in nm or nm in ll:
-            return bid
-        sc = SequenceMatcher(None, ll, nm).ratio()
-        if sc > best_score:
-            best_score = sc
-            best_id = bid
-    if best_id is not None and best_score >= 0.35:
-        return best_id
-    return None
+    return _match_body_part_label_to_id(rows, label)

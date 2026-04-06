@@ -2395,6 +2395,13 @@ def get_openai_tools_schema():
                     "Do NOT tell the user the appointment is booked unless this tool returns success with booking_flow_state=booked. "
                     "Do NOT use create_appointment for normal new bookings—use this tool first. "
                     "Leave IDs null when unsure; use get_services/get_branches/get_machines/get_body_parts first if needed. "
+                    "DATETIME: Before execute_booking=true, resolve all relative NL into absolute values (Asia/Beirut). "
+                    "IDs: By default the server does NOT convert service_name/branch_name/machine_name/body text to ids — "
+                    "you MUST call get_services, get_branches, get_machines, get_body_parts and send service_id, branch_id, "
+                    "machine_id (when required), body_part_ids, plus date/time/timezone. "
+                    "Do not send name-only payloads with execute_booking=true. "
+                    "raw_user_* and calendar_day_intent are optional trace fields only. "
+                    "Legacy name resolution on the server exists only if the deployment sets LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES=true. "
                     "For reschedule use update_appointment_date, not this tool."
                 ),
                 "parameters": {
@@ -2443,15 +2450,29 @@ def get_openai_tools_schema():
                             "type": "string",
                             "description": "Full name in Latin for new CRM customers when file does not exist.",
                         },
-                        "raw_user_date_text": {"type": "string"},
-                        "raw_user_time_text": {"type": "string"},
+                        "raw_user_date_text": {
+                            "type": "string",
+                            "description": "Optional: original user wording for logs (e.g. tomorrow). Not used as execution source if date+time are set.",
+                        },
+                        "raw_user_time_text": {
+                            "type": "string",
+                            "description": "Optional: original user time phrase for logs. Not execution source if time/date are resolved.",
+                        },
                         "normalized_date": {"type": "string", "description": "If resolved, e.g. YYYY-MM-DD."},
                         "normalized_time": {"type": "string", "description": "If resolved, e.g. 15:00 or 3 PM phrasing already converted."},
+                        "time": {
+                            "type": "string",
+                            "description": "Resolved clock time for execution when date is YYYY-MM-DD only, e.g. 09:00 or 17:30 (24h preferred).",
+                        },
                         "timezone": {
                             "type": "string",
-                            "description": "Always Asia/Beirut; server uses fixed clinic +02:00 clock.",
+                            "description": "Execution timezone; use Asia/Beirut unless the deployment specifies otherwise.",
                         },
-                        "calendar_day_intent": {"type": "string", "enum": ["today", "tomorrow"]},
+                        "calendar_day_intent": {
+                            "type": "string",
+                            "enum": ["today", "tomorrow"],
+                            "description": "Optional hint for debugging; do not rely on this alone for execution—send resolved date+time.",
+                        },
                         "date_components": {
                             "type": "object",
                             "description": "Concrete civil datetime after resolving vague weekday phrases.",
@@ -2465,7 +2486,8 @@ def get_openai_tools_schema():
                         },
                         "date": {
                             "type": "string",
-                            "description": "Full API datetime YYYY-MM-DD HH:MM:SS if already resolved.",
+                            "description": "Execution date or full datetime: YYYY-MM-DD, or YYYY-MM-DD HH:MM:SS, or ISO-like string. "
+                            "Must be absolute (no 'tomorrow' as the only value). Combine with time when passing date-only.",
                         },
                         "missing_fields": {"type": "array", "items": {"type": "string"}},
                         "ambiguities": {"type": "array", "items": {"type": "string"}},

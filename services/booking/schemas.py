@@ -26,6 +26,7 @@ def empty_booking_intent_template() -> Dict[str, Any]:
         "raw_user_time_text": None,
         "normalized_date": None,
         "normalized_time": None,
+        "time": None,
         "timezone": BOOKING_TIMEZONE_LABEL,
         "calendar_day_intent": None,
         "date_components": None,
@@ -50,6 +51,7 @@ def validation_error_response(
     suggested_slots: Optional[List[Any]] = None,
     human_readable_reason: str = "",
     slot_validation: Optional[Dict[str, Any]] = None,
+    activity_trace: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "success": False,
@@ -64,6 +66,8 @@ def validation_error_response(
     }
     if slot_validation:
         out["slot_validation"] = slot_validation
+    if activity_trace:
+        out["activity_trace"] = activity_trace
     return out
 
 

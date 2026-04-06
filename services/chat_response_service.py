@@ -111,8 +111,22 @@ def _record_tool_round_trip(
             "handover_to_human": po.get("handover_to_human"),
             "handover_reason": po.get("handover_reason"),
             "missing_fields": po.get("missing_fields"),
+            "invalid_fields": po.get("invalid_fields"),
+            "conflicting_fields": po.get("conflicting_fields"),
+            "human_readable_reason": po.get("human_readable_reason"),
             "message": po.get("message"),
+            "activity_trace": po.get("activity_trace"),
+            "slot_validation": po.get("slot_validation"),
+            "crm_rejection": po.get("crm_rejection"),
+            "ambiguities": po.get("ambiguities"),
         }
+        ar = po.get("api_response")
+        if isinstance(ar, dict) and ar:
+            msg = ar.get("message")
+            summ["api_response_summary"] = {
+                "success": ar.get("success"),
+                "message": (str(msg)[:4000] if msg is not None else None),
+            }
         rec["backend_execution"] = {k: v for k, v in summ.items() if v is not None}
     return rec
 

@@ -2126,7 +2126,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             for tr in tool_round_trips:
                 steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}", "tokens": 0, "model": None, "cost_usd": None})
                 step_num += 1
-                steps.append({"step": step_num, "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})", "content": tr.get("bot_returned", ""), "tokens": 0, "model": None, "cost_usd": None})
+                exec_step = {
+                    "step": step_num,
+                    "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})",
+                    "content": tr.get("bot_returned", ""),
+                    "tokens": 0,
+                    "model": None,
+                    "cost_usd": None,
+                }
+                if tr.get("backend_execution"):
+                    exec_step["metadata"] = {"backend_execution": tr["backend_execution"]}
+                steps.append(exec_step)
                 step_num += 1
             steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
             step_num += 1
@@ -2176,14 +2186,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "cost_usd": None,
                 })
                 step_num += 1
-                steps.append({
+                exec_step = {
                     "step": step_num,
                     "title": f"Bot → AI (executed {tr.get('ai_requested', '?')})",
                     "content": tr.get("bot_returned", ""),
                     "tokens": 0,
                     "model": None,
                     "cost_usd": None,
-                })
+                }
+                if tr.get("backend_execution"):
+                    exec_step["metadata"] = {"backend_execution": tr["backend_execution"]}
+                steps.append(exec_step)
                 step_num += 1
             steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
             step_num += 1
