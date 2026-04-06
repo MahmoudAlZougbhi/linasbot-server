@@ -44,6 +44,11 @@ AI_PRIMARY_ORCHESTRATION = os.getenv("AI_PRIMARY_ORCHESTRATION", "true").strip()
 # After operator releases chat to bot: block auto re-escalation (handover_degree / error→handover) for this many minutes.
 POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES = int(os.getenv("POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", "45"))
 
+# Booking: when True, chat_response may infer body_part_ids from conversation + fuzzy CRM row match (legacy path).
+BOOKING_LEGACY_INFERENCE = os.getenv(
+    "LINASLASER_BOOKING_LEGACY_INFERENCE", "false"
+).strip().lower() in ("1", "true", "yes")
+
 # --- Local / development environment (same APIs as prod, safe messaging) ---
 # Set APP_MODE=local or ENV=development to run locally with real APIs but controlled sending.
 APP_MODE = os.getenv("APP_MODE", "").strip().lower()  # "local" = local env

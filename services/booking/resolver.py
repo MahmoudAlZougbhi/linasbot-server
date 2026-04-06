@@ -10,6 +10,7 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
 from services import api_integrations
+import config
 
 from services.booking.constants import (
     ANTELIAS_BRANCH_ID,
@@ -275,3 +276,37 @@ def is_pico_machine(machine_id: Optional[int], machines: List[dict]) -> bool:
         return False
     lab = machine_label_for(machine_id, machines).lower()
     return "pico" in lab
+
+
+def server_may_infer_body_parts() -> bool:
+    """
+    When True, chat_response may map free-text body areas to CRM body_part_ids
+    (conversation hints, auxiliary JSON recovery). Controlled by LINASLASER_BOOKING_LEGACY_INFERENCE / config.
+    """
+    return bool(getattr(config, "BOOKING_LEGACY_INFERENCE", False))
+
+
+def match_best_body_part_row(rows: List[dict], label: str) -> Optional[int]:
+    """
+    Pick the best CRM body_part id from get_body_parts rows for a human label (substring then fuzzy).
+    Used by chat_response recovery paths; same scoring idea as resolve_body_part_ids.
+    """
+    if not rows or not (label or "").strip():
+        return None
+    ll = label.strip().lower()
+    best_id: Optional[int] = None
+    best_score = 0.0
+    for row in rows:
+        bid = _safe_int(row.get("id") or row.get("body_part_id"))
+        nm = str(row.get("name") or row.get("body_part") or row.get("title") or "").strip().lower()
+        if bid is None or not nm:
+            continue
+        if ll in nm or nm in ll:
+            return bid
+        sc = SequenceMatcher(None, ll, nm).ratio()
+        if sc > best_score:
+            best_score = sc
+            best_id = bid
+    if best_id is not None and best_score >= 0.35:
+        return best_id
+    return None
