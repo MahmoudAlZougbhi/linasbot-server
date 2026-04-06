@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PlusIcon,
-  PencilIcon,
   TrashIcon,
   DocumentTextIcon,
   XMarkIcon,
@@ -22,6 +21,12 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileContent, setFileContent] = useState("");
+  /** Editable metadata (full file loaded via getContentFile includes these) */
+  const [editTitle, setEditTitle] = useState("");
+  const [editTags, setEditTags] = useState("");
+  const [editLanguage, setEditLanguage] = useState("");
+  const [editAudience, setEditAudience] = useState("general");
+  const [editPriority, setEditPriority] = useState("3");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -52,13 +57,27 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
     loadFiles();
   }, [section]);
 
+  const applyFileToEditor = (data) => {
+    setSelectedFile(data);
+    setFileContent(data.content || "");
+    setEditTitle(data.title || "");
+    const tags = data.tags;
+    setEditTags(Array.isArray(tags) ? tags.join(", ") : "");
+    setEditLanguage(data.language || "");
+    const aud = (data.audience || "general").toLowerCase();
+    setEditAudience(["men", "women", "general"].includes(aud) ? aud : "general");
+    const p = data.priority;
+    setEditPriority(
+      p !== undefined && p !== null && String(p).trim() !== "" ? String(Math.min(5, Math.max(1, parseInt(p, 10) || 3))) : "3"
+    );
+  };
+
   const handleSelectFile = async (file) => {
     try {
       setLoading(true);
       const res = await getContentFile(section, file.id);
       if (res.success && res.data) {
-        setSelectedFile(res.data);
-        setFileContent(res.data.content || "");
+        applyFileToEditor(res.data);
       }
     } catch (e) {
       toast.error("Failed to load file");
@@ -69,14 +88,38 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
 
   const handleSaveEdit = async () => {
     if (!selectedFile) return;
+    if (!editTitle.trim()) {
+      toast.error("Title is required");
+      return;
+    }
     try {
       setLoading(true);
+      const tags = editTags
+        ? editTags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
+      const prio = parseInt(editPriority, 10);
       const res = await updateContentFile(section, selectedFile.id, {
+        title: editTitle.trim(),
         content: fileContent,
-        title: selectedFile.title,
+        tags,
+        language: editLanguage.trim(),
+        audience: editAudience || "general",
+        priority: Number.isFinite(prio) ? prio : 3,
       });
       if (res.success) {
-        setSelectedFile({ ...selectedFile, content: fileContent });
+        const updated = res.data || {
+          ...selectedFile,
+          title: editTitle.trim(),
+          content: fileContent,
+          tags,
+          language: editLanguage.trim(),
+          audience: editAudience || "general",
+          priority: Number.isFinite(prio) ? prio : 3,
+        };
+        applyFileToEditor(updated);
         await loadFiles();
         toast.success("File updated!");
       } else {
@@ -184,6 +227,12 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
                 onClick={() => handleSelectFile(f)}
               >
                 <p className="font-medium text-slate-800 truncate">{f.title || "Untitled"}</p>
+                <p className="text-xs text-slate-400">
+                  {[f.audience || "general", f.priority != null ? `priority ${f.priority}` : null]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {f.language ? ` · ${f.language}` : ""}
+                </p>
                 {f.tags?.length > 0 && (
                   <p className="text-xs text-slate-500 truncate">{f.tags.join(", ")}</p>
                 )}
@@ -205,23 +254,84 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
       {/* Editor */}
       <div className="flex-1 card min-w-0">
         {selectedFile ? (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-800">{selectedFile.title}</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="font-semibold text-slate-800 truncate" title={editTitle}>
+                Edit file
+              </h3>
               <button
+                type="button"
                 onClick={handleSaveEdit}
                 disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 Save
               </button>
             </div>
-            <textarea
-              value={fileContent}
-              onChange={(e) => setFileContent(e.target.value)}
-              className="w-full h-96 p-4 border border-slate-200 rounded-lg font-mono text-sm resize-none"
-              placeholder="File content..."
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                  placeholder="File title"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tags (comma-separated)</label>
+                <input
+                  type="text"
+                  value={editTags}
+                  onChange={(e) => setEditTags(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                  placeholder="booking, crm, laser"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Language</label>
+                <input
+                  type="text"
+                  value={editLanguage}
+                  onChange={(e) => setEditLanguage(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                  placeholder="ar, en, fr — optional"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Audience</label>
+                <select
+                  value={editAudience}
+                  onChange={(e) => setEditAudience(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                >
+                  <option value="general">general</option>
+                  <option value="men">men</option>
+                  <option value="women">women</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Priority (1–5)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={editPriority}
+                  onChange={(e) => setEditPriority(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Content</label>
+              <textarea
+                value={fileContent}
+                onChange={(e) => setFileContent(e.target.value)}
+                className="w-full min-h-[280px] h-96 p-4 border border-slate-200 rounded-lg font-mono text-sm resize-y"
+                placeholder="File content..."
+              />
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-96 text-slate-500">

@@ -9,7 +9,6 @@ import re
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
-import config
 from services import api_integrations
 
 from services.booking.constants import (
@@ -220,407 +219,12 @@ def pick_pico_or_default_machine(machines: List[dict]) -> Optional[int]:
     return pick_default_machine_for_non_hair(0, machines)
 
 
-def _text_suggests_legs(label: str) -> bool:
-    """User wording for legs (LB/FR/AR/EN) — distinct from generic 'legacy' etc."""
-    if not label or not str(label).strip():
-        return False
-    low = label.lower()
-    compact = re.sub(r"[\s_\-]+", "", low)
-    if re.search(r"\blegs?\b", low):
-        return True
-    if any(x in low for x in ("thigh", "فخذ", "cuisse")):
-        return True
-    if any(x in compact for x in ("ejren", "ejrin", "ejeren", "sa2en", "s2en", "se2en", "ejrin")):
-        return True
-    if any(x in label for x in ("رجلين", "رجل", "ساقين", "ساق")):
-        return True
-    return False
-
-
-def _crm_row_is_leg(crm_name: str) -> bool:
-    n = (crm_name or "").lower()
-    return any(
-        x in n
-        for x in (
-            "leg",
-            "legs",
-            "thigh",
-            "فخذ",
-            "ساق",
-            "رجل",
-            "lower limb",
-            "jambe",
-            "cuiss",
-        )
-    )
-
-
-def _legs_scope_from_label(label: str) -> str:
-    """
-    Classify legs intent for CRM rows like 'Full Legs' vs 'Half Legs'.
-    Returns: 'full' | 'half' | 'unspecified'
-    """
-    low = label.lower()
-    compact = re.sub(r"[\s_\-]+", "", low)
-    half_patterns = (
-        "half leg",
-        "half legs",
-        "halfejren",
-        "nosejren",
-        "nos ejren",
-        "ejren nos",
-        "ejrennos",
-        "nosejre",
-        "media leg",
-        "partial leg",
-        "نص رجل",
-        "نص رجلين",
-        "نص ساق",
-        "نص ساقين",
-    )
-    for p in half_patterns:
-        if p in low:
-            return "half"
-    if "نص" in label and ("رجل" in label or "ساق" in label or "ejren" in compact):
-        return "half"
-    full_patterns = (
-        "full leg",
-        "full legs",
-        "fullejren",
-        "ejrenkamel",
-        "ejrenkamle",
-        "kamelejren",
-        "kamel ejren",
-        "both legs",
-        "رجلين كامل",
-        "ساقين كامل",
-        "كل الرجلين",
-    )
-    for p in full_patterns:
-        if p in low:
-            return "full"
-    if "كامل" in label and ("رجل" in label or "ساق" in label or "ejren" in compact):
-        return "full"
-    if re.search(r"kamel.*ejren|ejren.*kamel|kamle.*ejren", compact):
-        return "full"
-    return "unspecified"
-
-
-def _score_leg_row(crm_name: str, scope: str) -> float:
-    """Higher = better match for a leg row given full/half/unspecified user intent."""
-    n = crm_name.lower()
-    if not _crm_row_is_leg(n):
-        return 0.0
-    score = 0.12
-    if scope == "full":
-        if any(x in n for x in ("full", "كامل", "complete", "entier", "entire")):
-            score += 0.72
-        if any(x in n for x in ("half", "نص", "partial", "media")):
-            score -= 0.58
-    elif scope == "half":
-        if any(x in n for x in ("half", "نص", "partial", "media", "lower")):
-            score += 0.72
-        if any(x in n for x in ("full", "كامل", "complete", "entier")):
-            score -= 0.48
-    else:
-        score += 0.28
-        if any(x in n for x in ("full", "half", "نص", "كامل")):
-            score += 0.08
-    return score
-
-
-def _expand_body_area_synonyms(label: str) -> str:
-    """
-    Add English / normalized glosses for common LB/AR/FR wording so CRM labels (often EN) score better.
-    This is not exhaustive—any zone still falls through to fuzzy matching on the full list.
-    """
-    label = (label or "").strip()
-    if not label:
-        return ""
-    low = label.lower()
-    compact = re.sub(r"[\s_\-]+", "", low)
-    extras: List[str] = []
-    if any(x in compact for x in ("ejren", "ejrin", "ejeren", "sa2en", "s2en", "se2en")):
-        extras.extend(["legs", "leg"])
-    if any(x in label for x in ("رجلين", "رجل", "ساقين", "ساق")):
-        extras.extend(["legs", "leg"])
-    if any(
-        x in compact
-        for x in (
-            "ta7telbat",
-            "tahtelbat",
-            "t7telbat",
-            "7telbat",
-            "ta7tlbat",
-        )
-    ) or "ابط" in label or "إبط" in label:
-        extras.extend(["underarm", "armpit"])
-    if "bikini" in low or "بيكيني" in label or "bikine" in compact:
-        extras.append("bikini")
-    # Buttocks / intimate zone (LB spoken Arabic + franco) → CRM often labels "Bikini", "Extended", "Brazilian", "Buttocks"
-    if any(
-        x in compact
-        for x in (
-            "tiez",
-            "teez",
-            "teiz",
-            "tizeh",
-            "tize",
-            "tizi",
-            "mo25ra",
-            "mo25rah",
-            "m25ra",
-            "m25rah",
-            "ardaf",
-            "ardaff",
-            "3ajiz",
-            "3ajez",
-            "3ajize",
-        )
-    ) or any(
-        x in label
-        for x in (
-            "طيز",
-            "مؤخرة",
-            "أرداف",
-            "الأرداف",
-            "عجيز",
-            "المؤخرة",
-        )
-    ):
-        extras.extend(["bikini", "buttocks", "butt", "gluteal", "brazilian", "extended"])
-    if any(x in compact for x in ("dahre", "dahr", "dahra", "zahr")) or "ظهر" in label or "ضهر" in label:
-        extras.append("back")
-    if "ذقن" in label or "d2n" in compact or "d2en" in compact or "chin" in low:
-        extras.extend(["chin", "face"])
-    if "بطن" in label or "batn" in compact or "belly" in low or "abdomen" in low:
-        extras.extend(["abdomen", "stomach", "belly"])
-    if "صدر" in label or "sdr" in compact or "chest" in low or "breast" in low:
-        extras.extend(["chest", "breast"])
-    if "رقبة" in label or "ra2be" in compact or "ra2bet" in compact or "neck" in low:
-        extras.append("neck")
-    if "شفايف" in label or "lip" in low or "lips" in low:
-        extras.extend(["lip", "lips"])
-    if not extras:
-        return label
-    return f"{label} {' '.join(extras)}".strip()
-
-
-def _text_suggests_buttocks_bikini_zone(label: str) -> bool:
-    """Spoken requests for buttocks / bikini line (often not spelled like CRM English names)."""
-    low = (label or "").strip().lower()
-    compact = re.sub(r"[\s_\-]+", "", low)
-    if any(
-        x in compact
-        for x in (
-            "tiez",
-            "teez",
-            "teiz",
-            "tizeh",
-            "tize",
-            "tizi",
-            "mo25ra",
-            "mo25rah",
-            "m25ra",
-            "m25rah",
-            "ardaf",
-            "ardaff",
-            "3ajiz",
-            "3ajez",
-            "bikine",
-            "bikini",
-        )
-    ):
-        return True
-    if any(
-        x in label
-        for x in (
-            "طيز",
-            "مؤخرة",
-            "أرداف",
-            "الأرداف",
-            "عجيز",
-            "المؤخرة",
-            "بيكيني",
-        )
-    ):
-        return True
-    if any(x in low for x in ("buttock", "brazilian", "glute")):
-        return True
-    return False
-
-
-def _crm_row_is_bikini_butt_zone(nm: str) -> bool:
-    n = (nm or "").strip().lower()
-    if not n:
-        return False
-    return any(
-        k in n
-        for k in (
-            "bikini",
-            "butt",
-            "glute",
-            "brazil",
-            "extended",
-            "line",
-            "بيكيني",
-            "عجيز",
-            "مؤخرة",
-            "ارداف",
-            "أرداف",
-        )
-    )
-
-
-def _score_bikini_butt_row(crm_name: str) -> float:
-    """Higher = better when the user meant buttocks / bikini extended zone."""
-    n = crm_name.lower()
-    s = 0.12
-    if any(k in n for k in ("brazil", "extended", "line")):
-        s += 0.55
-    if "bikini" in n or "بيكيني" in n:
-        s += 0.42
-    if any(k in n for k in ("butt", "glute", "buttock")):
-        s += 0.38
-    return s
-
-
-def match_best_body_part_row(rows: List[dict], label: str) -> Optional[int]:
-    """
-    Pick one CRM body_part id from live API rows using user text (LB franco, Arabic, English).
-    Generally: substring / expanded synonyms, then fuzzy (SequenceMatcher) across all rows.
-    Extra logic for **legs** only when the CRM splits e.g. Full Legs vs Half Legs (common example;
-    same idea applies elsewhere—map user wording to the closest row name from get_body_parts).
-    """
-    label = (label or "").strip()
-    if not label or not rows:
-        return None
-    ll = label.lower()
-    expanded = _expand_body_area_synonyms(label).lower()
-    leg_rows: List[Tuple[int, str]] = []
-    zone_rows: List[Tuple[int, str]] = []
-    best_id: Optional[int] = None
-    best_score = 0.0
-
-    for row in rows:
-        bid = _safe_int(row.get("id") or row.get("body_part_id"))
-        nm = str(row.get("name") or row.get("body_part") or row.get("title") or "").strip().lower()
-        if bid is None or not nm:
-            continue
-        if ll in nm or nm in ll:
-            return bid
-        if expanded and expanded != ll and (expanded in nm or nm in expanded):
-            return bid
-        if _crm_row_is_bikini_butt_zone(nm):
-            zone_rows.append((bid, nm))
-        if _crm_row_is_leg(nm):
-            leg_rows.append((bid, nm))
-
-    if _text_suggests_buttocks_bikini_zone(label) and zone_rows:
-        best_zone: Optional[Tuple[int, float]] = None
-        for bid, nm in zone_rows:
-            sc = _score_bikini_butt_row(nm)
-            if best_zone is None or sc > best_zone[1]:
-                best_zone = (bid, sc)
-        if best_zone is not None and best_zone[1] >= 0.4:
-            return best_zone[0]
-        if len(zone_rows) == 1:
-            return zone_rows[0][0]
-
-    if _text_suggests_legs(label) and leg_rows:
-        scope = _legs_scope_from_label(label)
-        if scope == "unspecified":
-            for bid, nm in leg_rows:
-                for src in (expanded, ll):
-                    sc = SequenceMatcher(None, src, nm).ratio()
-                    if sc > best_score:
-                        best_score = sc
-                        best_id = bid
-            if best_id is not None and best_score >= 0.38:
-                return best_id
-            if len(leg_rows) == 1:
-                return leg_rows[0][0]
-        else:
-            best_leg: Optional[Tuple[int, float]] = None
-            for bid, nm in leg_rows:
-                sc = _score_leg_row(nm, scope)
-                if best_leg is None or sc > best_leg[1]:
-                    best_leg = (bid, sc)
-            if best_leg is not None and best_leg[1] >= 0.35:
-                return best_leg[0]
-
-    for row in rows:
-        bid = _safe_int(row.get("id") or row.get("body_part_id"))
-        nm = str(row.get("name") or row.get("body_part") or row.get("title") or "").strip().lower()
-        if bid is None or not nm:
-            continue
-        sc = max(
-            SequenceMatcher(None, expanded, nm).ratio(),
-            SequenceMatcher(None, ll, nm).ratio(),
-        )
-        if sc > best_score:
-            best_score = sc
-            best_id = bid
-    if best_id is not None and best_score >= 0.35:
-        return best_id
-    return None
-
-
-def server_may_infer_body_parts() -> bool:
-    """
-    True only when LINASLASER_BOOKING_LEGACY_INFERENCE=1 — allows fuzzy body-part mapping and
-    conversation fallbacks. Default (strict): AI must send body_part_ids from get_body_parts.
-    """
-    return bool(getattr(config, "BOOKING_LEGACY_INFERENCE", False))
-
-
-async def _validate_explicit_body_part_ids_against_crm(
-    service_id: int, body_part_ids: List[int], machine_id: Optional[int] = None
-) -> Tuple[bool, List[int], Dict[str, Any]]:
-    """Ensure every id exists on GET body_parts / service:data for this service."""
-    r = await api_integrations.get_body_parts(service_id=service_id, machine_id=machine_id)
-    if not r.get("success"):
-        return False, [], {
-            "code": "TOOL_DATA_REQUIRED",
-            "reason": "get_body_parts_failed",
-            "service_id": service_id,
-        }
-    rows = _norm_api_list(r.get("data"))
-    if not rows:
-        return False, [], {
-            "code": "TOOL_DATA_REQUIRED",
-            "reason": "empty_body_parts_list",
-            "service_id": service_id,
-            "expected_source": "get_body_parts",
-        }
-    allowed = {_safe_int(x.get("id") or x.get("body_part_id")) for x in rows}
-    allowed.discard(None)
-    invalid: List[int] = []
-    cleaned: List[int] = []
-    for i in body_part_ids:
-        if i not in allowed:
-            invalid.append(i)
-        else:
-            cleaned.append(i)
-    if invalid:
-        return False, [], {
-            "invalid_ids": invalid,
-            "service_id": service_id,
-            "expected_source": "get_body_parts",
-        }
-    return True, cleaned, {}
-
-
 async def resolve_body_part_ids(
     service_id: int,
     body_part_label: Optional[str],
     explicit_ids: Optional[List[Any]],
     machine_id: Optional[int] = None,
-) -> Tuple[List[int], Optional[str], Optional[Dict[str, Any]]]:
-    """
-    Returns (ids, miss_token, details_dict).
-    miss_token: None if ok; 'body_part' if missing; 'invalid_body_part_ids' if ids not in CRM.
-    """
+) -> Tuple[List[int], Optional[str]]:
     raw_ids = explicit_ids or []
     out: List[int] = []
     for x in raw_ids:
@@ -628,33 +232,35 @@ async def resolve_body_part_ids(
         if i is not None:
             out.append(i)
     if out:
-        ok, cleaned, det = await _validate_explicit_body_part_ids_against_crm(
-            service_id, out, machine_id
-        )
-        if not ok:
-            return [], "invalid_body_part_ids", det
-        return cleaned, None, None
+        return out, None
     label = (body_part_label or "").strip()
     if not label:
-        return [], "body_part", None
-    if not server_may_infer_body_parts():
-        if service_id == TATTOO_SERVICE_ID and getattr(config, "BOOKING_LEGACY_INFERENCE", False):
-            env_id = _tattoo_body_part_id_from_env_synonyms(label)
-            if env_id is not None and env_id > 0:
-                return [env_id], None, None
-        return [], "body_part", {"code": "MISSING_BODY_PART_IDS", "service_id": service_id}
+        return [], "body_part"
     r = await api_integrations.get_body_parts(service_id=service_id, machine_id=machine_id)
     rows = _norm_api_list(r.get("data")) if r.get("success") else []
     if service_id == TATTOO_SERVICE_ID and label and (not r.get("success") or not rows):
         env_id = _tattoo_body_part_id_from_env_synonyms(label)
         if env_id is not None and env_id > 0:
-            return [env_id], None, None
+            return [env_id], None
     if not rows:
-        return [], "body_part", None
-    matched = match_best_body_part_row(rows, label)
-    if matched is not None:
-        return [matched], None, None
-    return [], "body_part", None
+        return [], "body_part"
+    ll = label.lower()
+    best_id = None
+    best_score = 0.0
+    for row in rows:
+        bid = _safe_int(row.get("id") or row.get("body_part_id"))
+        nm = str(row.get("name") or row.get("body_part") or "").lower()
+        if bid is None or not nm:
+            continue
+        if ll in nm or nm in ll:
+            return [bid], None
+        sc = SequenceMatcher(None, ll, nm).ratio()
+        if sc > best_score:
+            best_score = sc
+            best_id = bid
+    if best_id is not None and best_score >= 0.35:
+        return [best_id], None
+    return [], "body_part"
 
 
 def machine_label_for(machine_id: int, machines: List[dict]) -> str:

@@ -40,25 +40,6 @@ from services.booking.resolver import (
     resolve_service_id,
 )
 from services.booking.schemas import empty_booking_intent_template, success_validation_shell, validation_error_response
-from services.booking.strict_ids import (
-    strict_validate_branch_id,
-    strict_validate_machine_id,
-    strict_validate_service_id,
-)
-from services.booking.validation_contract import (
-    booking_validation_error,
-    CODE_AMBIGUOUS_BOOKING_REQUEST,
-    CODE_CUSTOMER_DATA_INCOMPLETE,
-    CODE_INVALID_BODY_PART_IDS,
-    CODE_INVALID_BRANCH_ID,
-    CODE_INVALID_MACHINE_ID,
-    CODE_INVALID_SERVICE_ID,
-    CODE_MAX_REPAIR_ATTEMPTS_EXCEEDED,
-    CODE_MISSING_BODY_PART_IDS,
-    CODE_MISSING_REQUIRED_FIELD,
-    CODE_TIME_SLOT_UNAVAILABLE,
-    CODE_TOOL_DATA_REQUIRED,
-)
 from services.booking_service_mapping import validate_service_mapping_from_text
 from utils.appointment_slot_rules import parse_normalized_api_datetime, validate_booking_slot
 from utils.datetime_utils import (
@@ -277,7 +258,6 @@ async def finalize_crm_booking_tool_output(
 
     if ok:
         st["booking_flow_state"] = "booked"
-        st["booking_validation_failures"] = 0
         st["last_booking_success"] = copy.deepcopy(api_resp.get("data"))
         return {
             "success": True,
@@ -432,15 +412,6 @@ async def _ensure_customer(
     return False, str(cr.get("message") or "create_customer_failed")
 
 
-def _bump_booking_validation_failure(user_id: str) -> None:
-    st = config.user_booking_state[user_id]
-    st["booking_validation_failures"] = int(st.get("booking_validation_failures", 0)) + 1
-
-
-def _reset_booking_validation_failures(user_id: str) -> None:
-    config.user_booking_state[user_id]["booking_validation_failures"] = 0
-
-
 async def handle_submit_booking_intent(
     *,
     user_id: str,
@@ -450,20 +421,18 @@ async def handle_submit_booking_intent(
     function_args: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    AI supplies structured intent; backend validates (no conversational guessing) and executes CRM.
+    Run full validation and optionally execute create_appointment.
+
+    Returns a dict suitable for JSON tool output to the model.
     """
     raw_msg = user_input
-    legacy = bool(getattr(config, "BOOKING_LEGACY_INFERENCE", False))
-    max_rep = int(getattr(config, "BOOKING_MAX_REPAIR_ATTEMPTS", 5))
     intent = _merge_intent(dict(function_args or {}))
     execute = bool(intent.get("execute_booking", True))
     phone_clean = str(phone or intent.get("phone") or "").strip()
     if not phone_clean:
-        err = booking_validation_error(
-            code=CODE_MISSING_REQUIRED_FIELD,
-            message="Phone is required for booking.",
+        err = validation_error_response(
             missing_fields=["phone"],
-            details={"field": "phone"},
+            human_readable_reason="Phone is required for booking.",
         )
         _log_booking_attempt(
             {
@@ -477,38 +446,17 @@ async def handle_submit_booking_intent(
         return err
 
     st = config.user_booking_state[user_id]
-    if int(st.get("booking_validation_failures", 0)) >= max_rep:
-        err = booking_validation_error(
-            code=CODE_MAX_REPAIR_ATTEMPTS_EXCEEDED,
-            message="Too many failed validation attempts for this booking flow; human handover required.",
-            details={"max_attempts": max_rep, "repair_attempts": st.get("booking_validation_failures", 0)},
-            handover_to_human=True,
-            handover_reason="max_repair_attempts",
-        )
-        err["repair_attempt"] = int(st.get("booking_validation_failures", 0))
-        err["max_repair_attempts"] = max_rep
-        st["booking_flow_state"] = "validation_failed"
-        st["last_validation_error"] = err
-        _log_booking_attempt(
-            {
-                "phase": "submit_booking_intent",
-                "raw_user_message": raw_msg,
-                "ai_extracted": intent,
-                "validation": err,
-                "endpoint_called": None,
-            }
-        )
-        return err
-
     st["booking_flow_state"] = "ready_for_validation"
     st["last_booking_intent"] = copy.deepcopy(intent)
 
-    def _fail(err: Dict[str, Any], *, state: str = "validation_failed") -> Dict[str, Any]:
-        _bump_booking_validation_failure(user_id)
-        err["repair_attempt"] = int(st.get("booking_validation_failures", 0))
-        err["max_repair_attempts"] = max_rep
-        st["booking_flow_state"] = state
-        st["last_validation_error"] = err
+    gender_raw = _effective_gender(intent, current_gender)
+    if gender_raw == "unknown":
+        err = validation_error_response(
+            missing_fields=["gender"],
+            human_readable_reason="Gender is required to validate branch/day rules.",
+            normalized_values={"timezone": BOOKING_TIMEZONE_LABEL},
+        )
+        st["booking_flow_state"] = "needs_clarification"
         _log_booking_attempt(
             {
                 "phase": "submit_booking_intent",
@@ -519,17 +467,6 @@ async def handle_submit_booking_intent(
             }
         )
         return err
-
-    gender_raw = _effective_gender(intent, current_gender)
-    if gender_raw == "unknown":
-        err = booking_validation_error(
-            code=CODE_MISSING_REQUIRED_FIELD,
-            message="Gender is required to validate branch/day rules.",
-            missing_fields=["gender"],
-            normalized_values={"timezone": BOOKING_TIMEZONE_LABEL},
-            details={"field": "gender"},
-        )
-        return _fail(err, state="needs_clarification")
 
     gender_cap = "Male" if gender_raw == "male" else "Female"
 
@@ -537,106 +474,65 @@ async def handle_submit_booking_intent(
     branches = await load_branches()
     machines = await load_machines()
 
-    allowed_payload = {
-        "branches": [{"id": b.get("id"), "name": b.get("name")} for b in branches[:20]],
-        "services": [{"id": s.get("id"), "name": s.get("name")} for s in services[:40]],
-        "machines": [{"id": m.get("id"), "name": m.get("name")} for m in machines[:40]],
-    }
-
-    svc_id: Optional[int] = None
-    svc_miss: Optional[str] = None
-    br_id: Optional[int] = None
-    br_miss: Optional[str] = None
+    svc_id, svc_miss = resolve_service_id(
+        intent.get("service_name"),
+        intent.get("service_id"),
+        gender_raw,
+        services,
+    )
+    br_id, br_miss = resolve_branch_id(intent.get("branch_name"), intent.get("branch_id"), branches)
     had_branch_hint = bool(intent.get("branch_name")) or intent.get("branch_id") is not None
-
-    if legacy:
-        svc_id, svc_miss = resolve_service_id(
-            intent.get("service_name"),
-            intent.get("service_id"),
-            gender_raw,
-            services,
-        )
-        br_id, br_miss = resolve_branch_id(intent.get("branch_name"), intent.get("branch_id"), branches)
-        if br_id is None:
-            br_id = int(config.DEFAULT_BRANCH_ID or BEIRUT_BRANCH_ID)
-    else:
-        svc_id, svc_st = strict_validate_service_id(intent.get("service_id"), services)
-        if svc_st == "missing":
-            svc_miss = "service_id"
-        elif svc_st == "invalid":
-            svc_miss = "invalid_service_id"
-        br_id, br_st = strict_validate_branch_id(intent.get("branch_id"), branches)
-        if br_st == "missing":
-            br_miss = "branch_id"
-        elif br_st == "invalid":
-            br_miss = "invalid_branch_id"
+    if br_id is None:
+        br_id = int(config.DEFAULT_BRANCH_ID or BEIRUT_BRANCH_ID)
 
     missing: List[str] = []
     if svc_miss:
         missing.append(svc_miss)
-    if legacy:
-        if br_miss and had_branch_hint:
-            missing.append(br_miss)
-    else:
-        if br_miss:
-            missing.append(br_miss)
+    if br_miss and had_branch_hint:
+        missing.append(br_miss)
 
     mach_id: Optional[int] = None
     mach_miss: Optional[str] = None
     machine_required = _service_requires_machine(svc_id)
-
-    if legacy:
-        if machine_required and svc_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
-            mach_id, mach_miss = resolve_machine_id(
-                intent.get("machine_name"),
-                intent.get("machine_id"),
-                machines,
-            )
-            if mach_miss:
-                missing.append(mach_miss)
-        elif machine_required and svc_id == TATTOO_SERVICE_ID:
-            mach_id, _ = resolve_machine_id(
-                intent.get("machine_name"),
-                intent.get("machine_id"),
-                machines,
-            )
-            if mach_id is None or not is_pico_machine(mach_id, machines):
-                mach_id = pick_pico_or_default_machine(machines)
-            if mach_id is None:
-                missing.append("machine")
-                mach_miss = "machine"
-        elif machine_required:
-            mach_id = resolve_machine_id(
-                intent.get("machine_name"),
-                intent.get("machine_id"),
-                machines,
-            )[0]
-            if mach_id is None:
-                mach_id = pick_default_machine_for_non_hair(svc_id or 0, machines)
-            if mach_id is None:
-                missing.append("machine")
-                mach_miss = "machine"
-        else:
-            mach_id = resolve_machine_id(
-                intent.get("machine_name"),
-                intent.get("machine_id"),
-                machines,
-            )[0]
+    if machine_required and svc_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
+        mach_id, mach_miss = resolve_machine_id(
+            intent.get("machine_name"),
+            intent.get("machine_id"),
+            machines,
+        )
+        if mach_miss:
+            missing.append(mach_miss)
+    elif machine_required and svc_id == TATTOO_SERVICE_ID:
+        mach_id, _ = resolve_machine_id(
+            intent.get("machine_name"),
+            intent.get("machine_id"),
+            machines,
+        )
+        if mach_id is None or not is_pico_machine(mach_id, machines):
+            mach_id = pick_pico_or_default_machine(machines)
+        if mach_id is None:
+            missing.append("machine")
+            mach_miss = "machine"
+    elif machine_required:
+        mach_id = resolve_machine_id(
+            intent.get("machine_name"),
+            intent.get("machine_id"),
+            machines,
+        )[0]
+        if mach_id is None:
+            mach_id = pick_default_machine_for_non_hair(svc_id or 0, machines)
+        if mach_id is None:
+            missing.append("machine")
+            mach_miss = "machine"
     else:
-        if machine_required:
-            mach_id, mst = strict_validate_machine_id(intent.get("machine_id"), machines)
-            if mst == "missing":
-                missing.append("machine_id")
-            elif mst == "invalid":
-                missing.append("invalid_machine_id")
-        else:
-            mid_opt = _coerce_int_id(intent.get("machine_id"))
-            if mid_opt is not None:
-                mach_id, mst = strict_validate_machine_id(mid_opt, machines)
-                if mst == "invalid":
-                    missing.append("invalid_machine_id")
+        # Service explicitly allows booking without machine; keep machine if provided.
+        mach_id = resolve_machine_id(
+            intent.get("machine_name"),
+            intent.get("machine_id"),
+            machines,
+        )[0]
 
-    if legacy and svc_id == TATTOO_SERVICE_ID and not str(intent.get("body_part") or "").strip():
+    if svc_id == TATTOO_SERVICE_ID and not str(intent.get("body_part") or "").strip():
         um = (raw_msg or "").lower()
         if any(
             tok in um
@@ -656,15 +552,14 @@ async def handle_submit_booking_intent(
 
     body_ids: List[int] = []
     bp_miss: Optional[str] = None
-    bp_details: Optional[Dict[str, Any]] = None
     if svc_id is not None:
         explicit = intent.get("body_part_ids")
         if isinstance(explicit, list) and explicit:
-            body_ids, bp_miss, bp_details = await resolve_body_part_ids(
+            body_ids, bp_miss = await resolve_body_part_ids(
                 svc_id, intent.get("body_part"), explicit, mach_id
             )
         else:
-            body_ids, bp_miss, bp_details = await resolve_body_part_ids(
+            body_ids, bp_miss = await resolve_body_part_ids(
                 svc_id, intent.get("body_part"), None, mach_id
             )
         if bp_miss:
@@ -689,7 +584,7 @@ async def handle_submit_booking_intent(
                 "allowed_machine_ids": sorted(HAIR_REMOVAL_MACHINE_IDS),
             }
 
-    if legacy and svc_id is not None and user_input:
+    if svc_id is not None and user_input:
         map_chk = validate_service_mapping_from_text(user_input, svc_id)
         if not map_chk.get("is_valid"):
             conflicts["service_text_intent"] = {
@@ -708,51 +603,54 @@ async def handle_submit_booking_intent(
     if dt_local is not None:
         norm_vals["api_date"] = dt_local.astimezone(BOT_FIXED_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
-    if bp_miss == "invalid_body_part_ids" and bp_details:
-        err = booking_validation_error(
-            code=CODE_INVALID_BODY_PART_IDS,
-            message="One or more body_part_ids are not valid for this service.",
-            details=bp_details,
-            allowed_values=allowed_payload,
-            normalized_values=norm_vals,
-        )
-        if ambiguities:
-            err["ambiguities"] = ambiguities
-        return _fail(err)
-
     if missing or conflicts:
-        code = CODE_AMBIGUOUS_BOOKING_REQUEST if conflicts else CODE_MISSING_REQUIRED_FIELD
-        if "invalid_service_id" in missing:
-            code = CODE_INVALID_SERVICE_ID
-        if "invalid_branch_id" in missing:
-            code = CODE_INVALID_BRANCH_ID
-        if "invalid_machine_id" in missing:
-            code = CODE_INVALID_MACHINE_ID
-        err = booking_validation_error(
-            code=code,
-            message="Resolve missing or conflicting structured fields; use tools to fetch ids — do not rely on server guessing.",
+        err = validation_error_response(
             missing_fields=sorted(set(missing)),
             invalid_fields=invalid,
             conflicting_fields=conflicts,
-            allowed_values=allowed_payload,
+            allowed_values={
+                "branches": [{"id": b.get("id"), "name": b.get("name")} for b in branches[:20]],
+                "services": [{"id": s.get("id"), "name": s.get("name")} for s in services[:40]],
+                "machines": [{"id": m.get("id"), "name": m.get("name")} for m in machines[:40]],
+            },
             normalized_values=norm_vals,
-            details={"legacy_inference": legacy},
+            human_readable_reason="Resolve missing or conflicting fields before booking.",
         )
         if ambiguities:
             err["ambiguities"] = ambiguities
-        return _fail(err)
+        st["booking_flow_state"] = "validation_failed"
+        st["last_validation_error"] = err
+        _log_booking_attempt(
+            {
+                "phase": "submit_booking_intent",
+                "raw_user_message": raw_msg,
+                "ai_extracted": intent,
+                "normalized_values": norm_vals,
+                "validation": err,
+                "endpoint_called": None,
+            }
+        )
+        return err
 
     assert svc_id is not None and br_id is not None and dt_local is not None
 
     if svc_id in DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS and not body_ids:
-        err = booking_validation_error(
-            code=CODE_MISSING_BODY_PART_IDS,
-            message="body_part_ids are required for this service (from get_body_parts).",
-            missing_fields=["body_part_ids"],
+        err = validation_error_response(
+            missing_fields=["body_part"],
             normalized_values=norm_vals,
-            details={"service_id": svc_id, "expected_source": "get_body_parts"},
+            human_readable_reason="body_part_ids required for this service.",
         )
-        return _fail(err)
+        st["booking_flow_state"] = "validation_failed"
+        _log_booking_attempt(
+            {
+                "phase": "submit_booking_intent",
+                "raw_user_message": raw_msg,
+                "ai_extracted": intent,
+                "validation": err,
+                "endpoint_called": None,
+            }
+        )
+        return err
 
     api_date = norm_vals["api_date"]
     dt_for_slot = parse_normalized_api_datetime(api_date, BOT_FIXED_TZ)
@@ -766,27 +664,44 @@ async def handle_submit_booking_intent(
         )
         if not vr.get("ok"):
             sv = vr.get("slot_validation") or {}
-            err = booking_validation_error(
-                code=CODE_TIME_SLOT_UNAVAILABLE,
-                message=sv.get("explanation_en", "Slot not allowed for this service/branch/gender."),
+            err = validation_error_response(
                 invalid_fields={"slot": sv.get("code")},
                 normalized_values=norm_vals,
+                human_readable_reason=sv.get("explanation_en", "Slot not allowed for this service/branch/gender."),
                 slot_validation=sv,
                 suggested_slots=[],
-                details={"slot_validation": sv},
             )
-            return _fail(err)
+            st["booking_flow_state"] = "validation_failed"
+            _log_booking_attempt(
+                {
+                    "phase": "submit_booking_intent",
+                    "raw_user_message": raw_msg,
+                    "ai_extracted": intent,
+                    "validation": err,
+                    "endpoint_called": None,
+                }
+            )
+            return err
 
     customer_name = intent.get("customer_name") or config.user_names.get(user_id, "")
     ok_cust, cust_err = await _ensure_customer(phone_clean, customer_name or None, gender_cap)
     if not ok_cust:
-        err = booking_validation_error(
-            code=CODE_CUSTOMER_DATA_INCOMPLETE,
-            message=cust_err or "Could not ensure customer record.",
+        err = validation_error_response(
             missing_fields=["customer_name"] if "name" in (cust_err or "") else [],
+            human_readable_reason=cust_err or "Could not ensure customer record.",
             normalized_values=norm_vals,
         )
-        return _fail(err, state="needs_clarification")
+        st["booking_flow_state"] = "needs_clarification"
+        _log_booking_attempt(
+            {
+                "phase": "submit_booking_intent",
+                "raw_user_message": raw_msg,
+                "ai_extracted": intent,
+                "validation": err,
+                "endpoint_called": None,
+            }
+        )
+        return err
 
     if not execute:
         shell = success_validation_shell(
@@ -794,9 +709,7 @@ async def handle_submit_booking_intent(
             booking_flow_state="ready_to_book",
         )
         shell["message"] = "Validation passed; execute_booking=false so CRM was not called."
-        shell["status"] = "success"
         st["booking_flow_state"] = "ready_to_book"
-        _reset_booking_validation_failures(user_id)
         _log_booking_attempt(
             {
                 "phase": "submit_booking_intent",
