@@ -3240,6 +3240,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     if context_cap > 0 and len(context_messages_for_ai) > context_cap:
         context_messages_for_ai = context_messages_for_ai[-context_cap:]
 
+    if len(context_messages_for_ai) < 4:
+        system_instruction_final += (
+            "\n\n**THREAD LENGTH NOTE:** CONTEXT MESSAGES below may be short (e.g. testing without full Firestore history). "
+            "Use CUSTOMER STATUS and any «Last message we sent to the user» line from operational context. "
+            "Short replies such as «eh» / «إيه» / «نعم» usually confirm the last bot question—continue booking/pricing, do not reset to a generic greeting.\n"
+        )
+
     messages = [{"role": "system", "content": system_instruction_final}]
     messages.extend(context_messages_for_ai)
 

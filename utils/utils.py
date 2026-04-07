@@ -7,6 +7,7 @@ import datetime
 import logging
 import asyncio
 from typing import Any, Optional
+from collections import deque
 from difflib import SequenceMatcher
 
 import config
@@ -647,6 +648,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         if human_takeover:
             return "assigned_to_operator" if operator_id_val else "waiting_for_operator"
         return "bot_active"
+
+    # In-memory transcript for GPT (always, including when tests skip Firestore).
+    append_turn_to_user_context_memory(user_id, role, text)
 
     # Check if we're in testing mode - skip Firebase saving for tests
     if hasattr(config, 'TESTING_MODE') and config.TESTING_MODE:
@@ -1815,6 +1819,56 @@ async def set_human_takeover_status(
         print(f"❌ ERROR setting human takeover status for conversation {conversation_id} (user {user_id}): {e}")
         import traceback
         traceback.print_exc()
+
+
+def append_turn_to_user_context_memory(user_id: str, role: str, text: str) -> None:
+    """
+    In-process ring buffer of recent turns (OpenAI shape) for GPT context.
+    Used when Firestore history is shorter (e.g. TESTING_MODE skips saves, or replication lag).
+    """
+    if not user_id or not text or not str(text).strip():
+        return
+    uid = str(user_id).strip()
+    if uid not in config.user_context:
+        config.user_context[uid] = deque(maxlen=config.MAX_CONTEXT_MESSAGES)
+    r = (role or "").strip().lower()
+    if r == "user":
+        oai_role = "user"
+    elif r in ("ai", "assistant", "operator"):
+        oai_role = "assistant"
+    else:
+        oai_role = "assistant"
+    config.user_context[uid].append({"role": oai_role, "content": str(text).strip()})
+
+
+async def get_conversation_context_for_gpt(
+    user_id: str,
+    conversation_id: str,
+    *,
+    window_hours: int = None,
+    alternate_user_id: str = None,
+) -> list:
+    """
+    Loads Firestore history for the configured time window, then prefers the in-memory transcript
+    when it contains strictly more turns (testing / save-skipped paths).
+    """
+    wh = window_hours if window_hours is not None else int(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
+    fs = await get_conversation_history_from_firestore(
+        user_id,
+        conversation_id,
+        max_messages=0,
+        window_hours=wh,
+        alternate_user_id=alternate_user_id,
+    )
+    mem = list(config.user_context.get(str(user_id).strip()) or [])
+    if len(mem) > len(fs):
+        cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
+        use = mem[-cap:] if cap > 0 else mem
+        print(
+            f"ℹ️ GPT context: in-memory transcript ({len(use)} msgs) > Firestore ({len(fs)}); using in-memory."
+        )
+        return use
+    return fs
 
 
 async def get_conversation_history_from_firestore(
