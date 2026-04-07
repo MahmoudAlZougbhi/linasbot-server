@@ -2614,7 +2614,9 @@ def get_openai_tools_schema():
                 "description": (
                     "Advanced paused-appointment edit. Use when the user wants to modify a paused row details beyond date only "
                     "(body parts, session_number per part, machine, and/or explicit status to Available). "
-                    "Pass appointment_id selected by the user. This executes one CRM update payload for that paused row."
+                    "Pass appointment_id selected by the user. This executes one CRM update payload for that paused row. "
+                    "After **success**, tell the user the **new session/total price** from the API response (or fetch via get_appointment_details). "
+                    "If a **final agreed price** was already set with the customer for this appointment_id, call **sync_appointment_agreed_price** in the same turn (or immediately after) with that agreed_price so the system stays aligned."
                 ),
                 "parameters": {
                     "type": "object",
@@ -2658,7 +2660,9 @@ def get_openai_tools_schema():
                     "service, machine, branch, date, body_parts with per-area session_number, discounts. "
                     "Use when the user changes several fields at once or replaces body areas/sessions. "
                     "For **date-only** reschedule prefer update_appointment_date. "
-                    "Either phone OR user_code required. Do not send root session_number together with body_parts unless the API requires it."
+                    "Either phone OR user_code required. Do not send root session_number together with body_parts unless the API requires it. "
+                    "After **success**, always communicate the **new session/total price** to the user (from response JSON or get_appointment_details). "
+                    "If you had an **agreed final price** with the customer for this appointment_id, call **sync_appointment_agreed_price** with the same agreed_price so CRM discount matches after body/machine changes."
                 ),
                 "parameters": {
                     "type": "object",
@@ -2952,6 +2956,7 @@ def get_openai_tools_schema():
                     "(new booking just created, existing row, or after any change)—call this so the backend can align the system price. "
                     "The server reads the current CRM total (or uses `system_total_known` if you pass it from the last booking response), "
                     "and if the CRM price is **higher** than the agreed amount, it POSTs `appointments/discount/add` with the difference. "
+                    "**Important:** after **edit_appointment** / **update_paused_appointment** changes **body parts** or **machine**, CRM may show a **new** list total—call this again with the **same** agreed_price and **same** appointment_id to re-apply alignment. "
                     "Do not invent numbers: only use after the user clearly confirmed the price. "
                     "If agreed price is higher than CRM, the tool will not increase CRM price—explain honestly."
                 ),
