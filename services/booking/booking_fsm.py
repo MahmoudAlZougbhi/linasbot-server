@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import re
-from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
 
 import config
@@ -27,6 +26,13 @@ _BOOKING_ENTRY_RE = re.compile(
 )
 _CANCEL_RE = re.compile(
     r"(?i)\b(cancel|stop|never\s*mind|الغاء|الغي|ما بدي|بطلت|لغيت)\b"
+)
+
+# User already named body areas (Lebanese/Arabic/Franco) — do not ask again in chat.
+_BODY_AREA_MENTION_RE = re.compile(
+    r"(?i)(بكيني|بيكيني|bikini|تيز|tize|طيز|مؤخرة|مؤخره|ورا|خلفي|قدام|حماس|"
+    r"إبط|ابط|ابط|رجل|رجلين|وجه|وش|صدر|ظهر|bikini|butt|underarm|leg|face)",
+    re.UNICODE,
 )
 
 # Short affirmative / negative (confirmation step)
@@ -73,6 +79,8 @@ def new_fsm_state() -> Dict[str, Any]:
         "booking_status": "idle",
         "execution_allowed": False,
         "last_asked_field": None,
+        "body_area_already_described": False,
+        "bikini_tize_single_package": False,
         "pending_confirmation_summary": None,
         "retry_counts": {
             "service": 0,
@@ -187,6 +195,31 @@ def maybe_exit_booking_mode(user_id: str, user_input: str) -> None:
         exit_booking_mode(user_id, "user_cancel")
 
 
+def infer_body_area_from_user_message(user_id: str, user_input: str) -> None:
+    """
+    Mark body areas as already described from NL so we do not re-ask the same question.
+    Bikini + buttocks (تيز/مؤخرة) are one commercial package — do not split in bot_reply.
+    """
+    if not fsm_enabled():
+        return
+    fsm = _fsm_root(user_id)
+    if not fsm.get("active"):
+        return
+    t = (user_input or "").strip()
+    if not t:
+        return
+    if _BODY_AREA_MENTION_RE.search(t):
+        fsm["body_area_already_described"] = True
+        log_fsm(user_id, "body_area_nl_detected", {"excerpt": t[:200]})
+    # Bikini line / tize / buttocks: same package (front+back coverage) — never ask «بكيني ولا تيز» as two separate products
+    if re.search(
+        r"(?i)(بكيني|بيكيني|bikini).{0,40}(تيز|طيز|مؤخرة|tize|butt)|(تيز|طيز|مؤخرة|tize|butt).{0,40}(بكيني|بيكيني|bikini)",
+        t,
+    ) or re.search(r"(?i)(بكيني\s*و\s*مؤخرة|مؤخرة\s*و\s*بكيني|bikini\s*\+\s*butt|تيز\s*و\s*بكيني)", t):
+        fsm["bikini_tize_single_package"] = True
+        fsm["body_area_already_described"] = True
+
+
 def apply_heuristic_confirmation(user_id: str, user_input: str) -> None:
     """If awaiting confirmation and user sends a short yes, allow execution."""
     if not fsm_enabled():
@@ -213,6 +246,8 @@ def invalidate_dependents(fsm: Dict[str, Any], changed: str) -> None:
     if ch == "service_id":
         fsm["body_part_ids"] = []
         fsm["body_part_names"] = []
+        fsm["body_area_already_described"] = False
+        fsm["bikini_tize_single_package"] = False
         fsm["machine_id"] = None
         fsm["machine_name"] = None
         fsm["appointment_date"] = None
@@ -276,6 +311,8 @@ def merge_patch(user_id: str, patch: Dict[str, Any]) -> List[str]:
                         fsm[fk].append(int(x))
                     except (TypeError, ValueError):
                         continue
+                if fsm[fk]:
+                    fsm["body_area_already_described"] = True
             updated.append(fk)
             continue
         old = fsm.get(fk)
@@ -336,6 +373,13 @@ def sync_from_flat_booking_state(user_id: str) -> None:
                 pass
     if st.get("body_part_ids") is not None and isinstance(st.get("body_part_ids"), list):
         fsm["body_part_ids"] = list(st["body_part_ids"])
+        if fsm["body_part_ids"]:
+            fsm["body_area_already_described"] = True
+    li = st.get("last_booking_intent")
+    if isinstance(li, dict) and str(li.get("body_part") or "").strip():
+        fsm["body_area_already_described"] = True
+    if str(st.get("body_part") or "").strip():
+        fsm["body_area_already_described"] = True
 
 
 def sync_from_tool_call(
@@ -418,6 +462,36 @@ def first_missing_field(fsm: Dict[str, Any], gender: str) -> Optional[str]:
     return miss[0] if miss else None
 
 
+def first_missing_field_for_user_chat(fsm: Dict[str, Any], gender: str) -> Optional[str]:
+    """
+    Same as first_missing_field but skips re-asking body_part_ids when the user already
+    described areas in natural language — model must map via get_body_parts instead.
+    """
+    ok, miss = fields_complete(fsm, gender)
+    if ok:
+        return None
+    order = [
+        "service_id",
+        "branch_id",
+        "body_part_ids",
+        "machine_id",
+        "appointment_date",
+        "appointment_time",
+    ]
+    for f in order:
+        if f not in miss:
+            continue
+        if f == "body_part_ids" and fsm.get("body_area_already_described"):
+            continue
+        return f
+    if "body_part_ids" in miss and fsm.get("body_area_already_described"):
+        for f in order:
+            if f in miss and f != "body_part_ids":
+                return f
+        return None
+    return miss[0] if miss else None
+
+
 def can_execute_submit(user_id: str, current_gender: str) -> Tuple[bool, str]:
     if not fsm_enabled():
         return True, ""
@@ -485,6 +559,7 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
     g = fsm.get("customer_gender") or current_gender
     ok, miss = fields_complete(fsm, g)
     nxt = first_missing_field(fsm, g) if not ok else None
+    nxt_user = first_missing_field_for_user_chat(fsm, g) if not ok else None
     can_ex, gate_reason = can_execute_submit(user_id, current_gender)
     snap = {
         k: fsm.get(k)
@@ -498,17 +573,35 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
             "booking_status",
             "confirmation_status",
             "execution_allowed",
+            "body_area_already_described",
+            "bikini_tize_single_package",
         )
     }
     lines = [
         "**BOOKING MODE (STRICT — server state machine)**",
         "- You are in **booking mode**. Replies must be **short**. Ask **only one** clear question per message.",
         "- **Do not** re-ask for fields already set in BOOKING STATE below.",
+        "- **Body areas (Arabic):** If the user already said which areas (e.g. بكيني، مؤخرة، تيز، إبط…), **do not ask again** which area. "
+        "Call `get_body_parts` and map their words to CRM ids; put them in `submit_booking_intent.body_part_ids`.",
+        "- **Forbidden in bot_reply to customers:** asking again for the same body area, or stiff wording like «منطقة من النظام» / «رقم المنطقة». "
+        "If you must ask once (only when nothing was said yet), use natural Arabic e.g. «شو المناطق يلي بدك ياها للجلسة؟» or «أي مناطق بالجسم بدك تعمليها؟».",
+        "- **Bikini + buttocks (تيز/مؤخرة):** At this clinic, bikini package covers the full intimate line (front + back). "
+        "If the user said تيز or مؤخرة or بكيني for laser hair removal, treat it as **one booking intent** — do **not** ask «بكيني ولا تيز» as two separate things; map with `get_body_parts` to the correct row(s).",
         "- **Do not** repeat confirmation. If `execution_allowed` is true, you may call `submit_booking_intent` in this turn.",
         "- If `booking_status` is `awaiting_confirmation` and `execution_allowed` is false: send **one** summary and ask yes/no only. **Do not** call `submit_booking_intent` until the user confirms.",
         "- Use **only** IDs returned by your tools (services, branches, machines, body_parts). Never invent IDs.",
-        "- Next required field to collect (if any): "
+        "- Next field still missing internally (includes CRM ids): "
         + (nxt or "(none — awaiting confirmation or ready)"),
+        "- **Next question to ask the user** (skips re-asking body areas if already described in chat): "
+        + (
+            nxt_user
+            if nxt_user is not None
+            else (
+                "(use get_body_parts to map areas — do not ask the user again)"
+                if (not ok and "body_part_ids" in miss and fsm.get("body_area_already_described"))
+                else ("(none — awaiting confirmation or ready)" if ok else "(see missing fields)")
+            )
+        ),
         "- Fields still missing: " + (", ".join(miss) if miss else "(none)"),
         "- Gate for tool execution: "
         + ("READY" if can_ex else f"BLOCKED ({gate_reason})"),

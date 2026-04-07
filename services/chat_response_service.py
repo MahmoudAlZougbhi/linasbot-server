@@ -2441,6 +2441,44 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
     return normalized if normalized else None
 
 
+# Shown to the model in tool JSON on submit_booking_intent failure — never raw stack traces.
+_SUBMIT_BOOKING_TOOL_HINT_TECHNICAL = (
+    "A temporary technical error occurred while contacting the booking system. "
+    "Do NOT show stack traces, exception text, HTTP bodies, or internal codes to the user. "
+    "Reply in the user's language in one short message: apologize briefly, say the booking could not "
+    "be completed right now, and ask whether they prefer another day or another time (or to try again shortly). "
+    "Do not claim the appointment was booked."
+)
+_SUBMIT_BOOKING_TOOL_HINT_CRM_REJECT = (
+    "The clinic calendar did not confirm this exact slot (it may be unavailable or blocked). "
+    "Do NOT paste raw API messages, JSON, or field names to the user. "
+    "Reply in the user's language in one short message: apologize softly and ask them to choose "
+    "another day or another time. When they answer, call submit_booking_intent again with the updated choice. "
+    "Do not claim the appointment was booked."
+)
+
+
+def _sanitize_submit_booking_tool_for_model(tool_output: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Strip internal/technical strings from tool JSON before sending to the model so the assistant
+    does not echo full exceptions or CRM payloads to the user.
+    """
+    if not isinstance(tool_output, dict):
+        return tool_output
+    out = dict(tool_output)
+    if out.get("crm_rejection"):
+        out["human_readable_reason"] = _SUBMIT_BOOKING_TOOL_HINT_CRM_REJECT
+        if isinstance(out.get("api_response"), dict):
+            ar = out["api_response"]
+            out["api_response"] = {
+                "success": ar.get("success"),
+                "message": "(redacted for user-facing channel; use human_readable_reason only)",
+            }
+    elif out.get("error_type") == "submit_exception":
+        out["human_readable_reason"] = _SUBMIT_BOOKING_TOOL_HINT_TECHNICAL
+    return out
+
+
 def _missing_body_part_booking_prompt(service_id: Optional[int], lang: str) -> str:
     """Ask for body area in wording that matches the service (tattoo vs hair vs other)."""
     sid = _safe_int(service_id)
@@ -2887,13 +2925,18 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             _booking_fsm_mod.maybe_exit_booking_mode(user_id, user_input)
             _booking_fsm_mod.sync_from_flat_booking_state(user_id)
             _booking_fsm_mod.set_session_context(user_id, current_gender, customer_phone_clean or "")
+            _booking_fsm_mod.infer_body_area_from_user_message(user_id, user_input)
             _booking_fsm_mod.apply_heuristic_confirmation(user_id, user_input)
             booking_fsm_prompt_block = _booking_fsm_mod.build_prompt_block(user_id, current_gender)
             if booking_fsm_prompt_block:
                 _fsm_snap = config.user_booking_state[user_id].get("booking_fsm") or {}
                 _g_fs = _fsm_snap.get("customer_gender") or current_gender
                 _ok_fc, _miss_fc = _booking_fsm_mod.fields_complete(_fsm_snap, _g_fs)
-                _nxt_fc = _booking_fsm_mod.first_missing_field(_fsm_snap, _g_fs) if not _ok_fc else None
+                _nxt_fc = (
+                    _booking_fsm_mod.first_missing_field_for_user_chat(_fsm_snap, _g_fs)
+                    if not _ok_fc
+                    else None
+                )
                 _can_ex, _gr = _booking_fsm_mod.can_execute_submit(user_id, current_gender)
                 _booking_fsm_mod.record_decision_log(
                     user_id,
@@ -3272,7 +3315,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         parsed_response = {}
         latest_pricing_payload = None
-        api_failure_reason = None  # Set when create_appointment or other API fails → triggers human handover
+        api_failure_reason = None  # Set when create_appointment/other API fails → flow_meta.error → human handover (submit_booking_intent uses sanitized tool hints + AI reply, no raw exceptions)
         update_appointment_date_success_count = 0  # Successful API updates this turn (bulk guard)
         tool_round_trips: List[Dict[str, Any]] = []
         ai_first_response_with_tools = ""
@@ -4342,13 +4385,26 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             },
                         )
                     else:
-                        tool_output = await handle_submit_booking_intent(
-                            user_id=user_id,
-                            phone=str(_sb_phone).strip(),
-                            current_gender=current_gender,
-                            user_input=user_input,
-                            function_args=function_args,
-                        )
+                        try:
+                            tool_output = await handle_submit_booking_intent(
+                                user_id=user_id,
+                                phone=str(_sb_phone).strip(),
+                                current_gender=current_gender,
+                                user_input=user_input,
+                                function_args=function_args,
+                            )
+                        except Exception as _sb_exc:
+                            print(f"ERROR: submit_booking_intent raised: {_sb_exc}")
+                            tool_output = {
+                                "success": False,
+                                "error_type": "submit_exception",
+                                "human_readable_reason": _SUBMIT_BOOKING_TOOL_HINT_TECHNICAL,
+                                "activity_trace": {
+                                    "failure_stage": "submit_exception",
+                                    "detail": f"{type(_sb_exc).__name__}: {str(_sb_exc)[:500]}",
+                                    "pipeline_phase": "submit_booking_intent",
+                                },
+                            }
                         if (
                             isinstance(tool_output, dict)
                             and tool_output.get("success")
@@ -4358,7 +4414,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 mark_booking_completed(user_id)
                             except Exception as _fsm_mc_e:
                                 print(f"⚠️ booking_fsm mark_booking_completed: {_fsm_mc_e}")
-                    tool_content = json.dumps(tool_output, default=str)
+                    _tool_for_model = (
+                        _sanitize_submit_booking_tool_for_model(tool_output)
+                        if isinstance(tool_output, dict)
+                        else tool_output
+                    )
+                    tool_content = json.dumps(_tool_for_model, default=str)
                     tool_round_trips.append(
                         _record_tool_round_trip(
                             function_name,
