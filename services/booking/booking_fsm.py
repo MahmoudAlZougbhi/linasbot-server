@@ -81,6 +81,7 @@ def new_fsm_state() -> Dict[str, Any]:
         "last_asked_field": None,
         "body_area_already_described": False,
         "bikini_tize_single_package": False,
+        "crm_customer_file": False,
         "pending_confirmation_summary": None,
         "retry_counts": {
             "service": 0,
@@ -104,12 +105,23 @@ def require_final_confirmation() -> bool:
     return getattr(config, "BOOKING_FSM_REQUIRE_CONFIRMATION", True)
 
 
-def set_session_context(user_id: str, gender: str, phone: str) -> None:
+def set_session_context(
+    user_id: str,
+    gender: str,
+    phone: str,
+    *,
+    customer_display_name: Optional[str] = None,
+    crm_customer_file: bool = False,
+) -> None:
     fsm = _fsm_root(user_id)
-    if gender:
+    # Only persist real genders — avoid storing the string "unknown" and confusing the model
+    if gender in ("male", "female"):
         fsm["customer_gender"] = gender
     if phone:
         fsm["customer_phone"] = str(phone).strip()
+    if customer_display_name and str(customer_display_name).strip():
+        fsm["customer_name"] = str(customer_display_name).strip()
+    fsm["crm_customer_file"] = bool(crm_customer_file)
 
 
 def log_fsm(user_id: str, event: str, payload: Optional[Dict[str, Any]] = None) -> None:
@@ -498,7 +510,10 @@ def can_execute_submit(user_id: str, current_gender: str) -> Tuple[bool, str]:
     fsm = _fsm_root(user_id)
     if not fsm.get("active"):
         return True, ""
-    g = fsm.get("customer_gender") or current_gender
+    _cg = fsm.get("customer_gender")
+    if _cg == "unknown":
+        _cg = None
+    g = _cg or current_gender
     ok, miss = fields_complete(fsm, g)
     if not ok:
         return False, f"fsm_incomplete:{','.join(miss)}"
@@ -556,7 +571,10 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
     if not fsm.get("active"):
         return ""
     sync_from_flat_booking_state(user_id)
-    g = fsm.get("customer_gender") or current_gender
+    _cg_fsm = fsm.get("customer_gender")
+    if _cg_fsm == "unknown":
+        _cg_fsm = None
+    g = _cg_fsm or current_gender
     ok, miss = fields_complete(fsm, g)
     nxt = first_missing_field(fsm, g) if not ok else None
     nxt_user = first_missing_field_for_user_chat(fsm, g) if not ok else None
@@ -575,10 +593,38 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
             "execution_allowed",
             "body_area_already_described",
             "bikini_tize_single_package",
+            "customer_name",
+            "crm_customer_file",
         )
     }
+    g_eff = _cg_fsm or current_gender or "unknown"
+    _un = (config.user_names.get(user_id) or "").strip()
+    _ph = {"client", "unknown", "unknown customer", "test user"}
+    _nl = _un.lower()
+    _name_ok = _un and _un != "client" and _nl not in _ph and not _nl.startswith("test user")
+    _crm = bool(fsm.get("crm_customer_file")) or bool(
+        config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
+    )
+    _name_line = (
+        f"«{_un}» — **do NOT** ask for full name; use in address."
+        if _name_ok
+        else (
+            "CRM file exists — **do NOT** ask for name (address politely without requesting name)."
+            if _crm
+            else "(name not on server — ask once only if booking flow still requires it per Style Guide)"
+        )
+    )
+    _gender_line = (
+        f"'{g_eff}' — **FORBIDDEN**: ask_gender, «شو جنسك», «للرجال أو للنساء», or any men-vs-women question."
+        if g_eff in ("male", "female")
+        else f"'{g_eff}' — collect gender only if Style Guide allows (one short question)."
+    )
     lines = [
         "**BOOKING MODE (STRICT — server state machine)**",
+        "- **SERVER-KNOWN PROFILE (authoritative):** "
+        f"Name: {_name_line} | Gender on server: {_gender_line}",
+        "- Collect **only remaining** booking facts (service/branch/areas/machine/date/time per BOOKING STATE); "
+        "merge into tools / `booking_fsm_patch`. **Do not** re-verify identity when the line above already has name or gender.",
         "- You are in **booking mode**. Replies must be **short**. Ask **only one** clear question per message.",
         "- **Do not** re-ask for fields already set in BOOKING STATE below.",
         "- **Body areas (Arabic):** If the user already said which areas (e.g. بكيني، مؤخرة، تيز، إبط…), **do not ask again** which area. "

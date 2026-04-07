@@ -2885,6 +2885,18 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         customer_phone_clean = str(customer_phone_full).replace("+", "").replace(" ", "").replace("-", "")
         if customer_phone_clean.startswith("961"):
             customer_phone_clean = customer_phone_clean[3:]  # Remove Lebanon country code
+
+    # Authoritative server profile (after CRM sync) — booking FSM + prompts must not re-ask these
+    user_name = config.user_names.get(user_id, "client")
+    _placeholder_names_profile = {"client", "unknown", "unknown customer", "test user"}
+    _name_lower_profile = (user_name or "").strip().lower()
+    name_is_known = (
+        user_name
+        and user_name != "client"
+        and _name_lower_profile not in _placeholder_names_profile
+        and not _name_lower_profile.startswith("test user")
+    )
+    crm_customer_exists = config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
     
     # Check rate limits first
     within_limits, limit_message = await check_rate_limits(user_id, 'message')
@@ -2924,7 +2936,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 _booking_fsm_mod.maybe_enter_booking_mode(user_id, user_input)
             _booking_fsm_mod.maybe_exit_booking_mode(user_id, user_input)
             _booking_fsm_mod.sync_from_flat_booking_state(user_id)
-            _booking_fsm_mod.set_session_context(user_id, current_gender, customer_phone_clean or "")
+            _booking_fsm_mod.set_session_context(
+                user_id,
+                current_gender,
+                customer_phone_clean or "",
+                customer_display_name=(user_name if name_is_known else None),
+                crm_customer_file=bool(crm_customer_exists),
+            )
             _booking_fsm_mod.infer_body_area_from_user_message(user_id, user_input)
             _booking_fsm_mod.apply_heuristic_confirmation(user_id, user_input)
             booking_fsm_prompt_block = _booking_fsm_mod.build_prompt_block(user_id, current_gender)
@@ -2984,19 +3002,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         print("📄 GPT will skip price_list.txt in context (not a price-related question)")
 
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
-    # Treat placeholder names (Test User, Unknown, etc.) as NOT known - avoid "تست يوزر" in Arabic
-    # Re-read user_name after CRM sync (may have been updated above)
-    user_name = config.user_names.get(user_id, "client")
+    # user_name, name_is_known, crm_customer_exists: set after CRM sync (see block above)
     customer_first_name = (user_name.split()[0] if user_name and user_name != "client" else user_name) if user_name else None
     _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
     _name_lower = (user_name or "").strip().lower()
-    name_is_known = (
-        user_name
-        and user_name != "client"
-        and _name_lower not in _placeholder_names
-        and not _name_lower.startswith("test user")
-    )
-    crm_customer_exists = config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
     current_local_time = now_in_bot_tz()
     current_date_str = current_local_time.strftime("%Y-%m-%d")
     current_time_str = current_local_time.strftime("%H:%M:%S")
@@ -3110,6 +3119,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
     dynamic_customer_context = (
         "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
+        "- **Profile lock (server)**: The name, phone, and gender lines below are loaded from the live system each turn. "
+        "Do **not** ask the user to repeat them when this block already shows a known name, known gender (male/female), or an existing CRM file.\n"
         f"- **Show greeting**: {_show_greeting} - Reason: {_greeting_reason}. Use greeting ONLY when True (new user or inactive 12+ hours). Otherwise go straight to the answer. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
         f"- **Customer Name**: {customer_name_context}\n"
         f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, submit_booking_intent, create_appointment if ever used, update_appointment_date). Do NOT ask for phone number.\n"
