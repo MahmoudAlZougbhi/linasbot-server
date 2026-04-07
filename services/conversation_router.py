@@ -190,10 +190,9 @@ def is_gender_answer(message: str) -> bool:
 
 
 def get_gender_from_message(message: str) -> Optional[str]:
-    """Extract gender from message. Returns 'male', 'female', or None."""
+    """Extract gender from message. Returns 'male', 'female', or None.
+    Works for long messages too (e.g. one line with booking + «ana shab» + name)."""
     t = _normalize(message)
-    if len(t) > 50:  # Too long to be just gender
-        return None
     for p in GENDER_MALE_PATTERNS:
         if re.search(p, t, re.IGNORECASE | re.UNICODE):
             return "male"
@@ -312,8 +311,10 @@ def route(user_id: str, message: str, state: dict) -> Optional[str]:
     if not has_pending and is_greeting_only(msg):
         return "greeting"
 
-    # 6. Gender required + unknown
+    # 6. Gender required + unknown (but not if gender is already stated in this message)
     if needs_gender_for_service(msg) and state.get("gender") == "unknown":
+        if get_gender_from_message(msg) in ("male", "female"):
+            return "answer_question"
         return "ask_gender"
 
     # 7. Enough info

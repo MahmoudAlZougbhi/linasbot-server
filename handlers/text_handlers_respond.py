@@ -1005,6 +1005,26 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         return
 
     # ===== AI SMART EMPLOYEE: ROUTER (Phase 2, 10) =====
+    # Long one-line messages often include gender («ana shab», «شاب», etc.). Infer before router/GPT
+    # so runtime context and router do not ask again. Full user_input_to_process is still sent to GPT unchanged.
+    if current_gender == "unknown" and (user_input_to_process or "").strip():
+        _ginf = get_gender_from_message(user_input_to_process)
+        if _ginf in ("male", "female"):
+            config.user_gender[user_id] = _ginf
+            current_gender = _ginf
+            if config.user_greeting_stage.get(user_id, 0) < 2:
+                config.user_greeting_stage[user_id] = 2
+            try:
+                await user_persistence.save_user_gender(
+                    user_id,
+                    _ginf,
+                    phone=user_data.get("phone_number", user_id),
+                    name=user_name,
+                )
+            except Exception as _ge:
+                print(f"⚠️ save_user_gender (pre-router infer): {_ge}")
+            print(f"[_process_and_respond] ✅ Gender inferred from full message (pre-router): {_ginf}")
+
     config.ensure_conversation_state(user_data)
     conv_state = config.get_conversation_state(user_id, user_data)
     ai_primary_mode = bool(getattr(config, "AI_PRIMARY_ORCHESTRATION", True))
