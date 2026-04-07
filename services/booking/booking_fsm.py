@@ -583,10 +583,10 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
         "- **Do not** re-ask for fields already set in BOOKING STATE below.",
         "- **Body areas (Arabic):** If the user already said which areas (e.g. بكيني، مؤخرة، تيز، إبط…), **do not ask again** which area. "
         "Call `get_body_parts` and map their words to CRM ids; put them in `submit_booking_intent.body_part_ids`.",
-        "- **Forbidden in bot_reply to customers:** asking again for the same body area, or stiff wording like «منطقة من النظام» / «رقم المنطقة». "
+        "- **Forbidden in bot_reply to customers:** asking again for the same body area, or stiff wording like «منطقة من النظام» / «رقم المنطقة» / «قطعة الجسم الدقيقة» / «أي جزء». "
         "If you must ask once (only when nothing was said yet), use natural Arabic e.g. «شو المناطق يلي بدك ياها للجلسة؟» or «أي مناطق بالجسم بدك تعمليها؟».",
-        "- **Bikini + buttocks (تيز/مؤخرة):** At this clinic, bikini package covers the full intimate line (front + back). "
-        "If the user said تيز or مؤخرة or بكيني for laser hair removal, treat it as **one booking intent** — do **not** ask «بكيني ولا تيز» as two separate things; map with `get_body_parts` to the correct row(s).",
+        "- **Bikini + buttocks (تيز/مؤخرة):** One package (front + back intimate line). "
+        "If the user said تيز or مؤخرة or بكيني (or any mix), treat as **one booking intent** — do **not** ask «بكيني فقط ولا مع المؤخرة؟» or «بكيني ولا تيز»; map with `get_body_parts` and continue.",
         "- **Do not** repeat confirmation. If `execution_allowed` is true, you may call `submit_booking_intent` in this turn.",
         "- If `booking_status` is `awaiting_confirmation` and `execution_allowed` is false: send **one** summary and ask yes/no only. **Do not** call `submit_booking_intent` until the user confirms.",
         "- Use **only** IDs returned by your tools (services, branches, machines, body_parts). Never invent IDs.",
