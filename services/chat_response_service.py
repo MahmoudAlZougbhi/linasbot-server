@@ -2857,6 +2857,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if user_id in config.user_data_whatsapp:
                         config.user_data_whatsapp[user_id]["crm_customer_exists"] = True
                         config.user_data_whatsapp[user_id]["customer_file_status"] = "existing_file"
+                        if ext.get("external_id"):
+                            config.user_data_whatsapp[user_id]["crm_customer_id"] = ext["external_id"]
                     # Also set gender from customer file so we don't ask when it's already in CRM
                     if ext.get("gender") in ("male", "female"):
                         config.user_gender[user_id] = ext["gender"]
@@ -2868,6 +2870,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if user_id in config.user_data_whatsapp:
                         config.user_data_whatsapp[user_id]["crm_customer_exists"] = True
                         config.user_data_whatsapp[user_id]["customer_file_status"] = "existing_file"
+                        if ext.get("external_id"):
+                            config.user_data_whatsapp[user_id]["crm_customer_id"] = ext["external_id"]
                     # Customer has file but no name - still try to use gender if present
                     if ext.get("gender") in ("male", "female"):
                         config.user_gender[user_id] = ext["gender"]
@@ -2897,7 +2901,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         and not _name_lower_profile.startswith("test user")
     )
     crm_customer_exists = config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
-    
+    crm_customer_id = config.user_data_whatsapp.get(user_id, {}).get("crm_customer_id")
+
     # Check rate limits first
     within_limits, limit_message = await check_rate_limits(user_id, 'message')
     if not within_limits:
@@ -2942,7 +2947,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 customer_phone_clean or "",
                 customer_display_name=(user_name if name_is_known else None),
                 crm_customer_file=bool(crm_customer_exists),
+                customer_id=str(crm_customer_id).strip() if crm_customer_id else None,
             )
+            if explicitly_detected_gender_from_input in ("male", "female"):
+                _booking_fsm_mod.lock_gender_from_user_message(
+                    user_id, explicitly_detected_gender_from_input
+                )
             _booking_fsm_mod.infer_body_area_from_user_message(user_id, user_input)
             _booking_fsm_mod.apply_heuristic_confirmation(user_id, user_input)
             booking_fsm_prompt_block = _booking_fsm_mod.build_prompt_block(user_id, current_gender)
@@ -2950,10 +2960,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 _fsm_snap = config.user_booking_state[user_id].get("booking_fsm") or {}
                 _g_fs = _fsm_snap.get("customer_gender") or current_gender
                 _ok_fc, _miss_fc = _booking_fsm_mod.fields_complete(_fsm_snap, _g_fs)
-                _nxt_fc = (
-                    _booking_fsm_mod.first_missing_field_for_user_chat(_fsm_snap, _g_fs)
-                    if not _ok_fc
-                    else None
+                _nxt_fc = _booking_fsm_mod.first_missing_field_for_user_chat(
+                    _fsm_snap, _g_fs, user_id
                 )
                 _can_ex, _gr = _booking_fsm_mod.can_execute_submit(user_id, current_gender)
                 _booking_fsm_mod.record_decision_log(
@@ -2963,6 +2971,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     gate=_gr or ("ready" if _can_ex else "blocked"),
                     extracted={"user_message_excerpt": (user_input or "")[:240]},
                 )
+                try:
+                    _u_act = _booking_fsm_mod.build_unified_booking_snapshot(
+                        user_id,
+                        current_gender,
+                        customer_exists=bool(crm_customer_exists),
+                        customer_id=str(crm_customer_id).strip() if crm_customer_id else None,
+                        name_is_known=bool(name_is_known),
+                        crm_data_used=bool(_fsm_snap.get("crm_profile_applied")),
+                    )
+                    print(
+                        "[BOOKING_ACTIVITY] "
+                        + json.dumps(_u_act, ensure_ascii=False, default=str)[:12000]
+                    )
+                except Exception as _ba_e:
+                    print(f"⚠️ BOOKING_ACTIVITY log: {_ba_e}")
     except Exception as _fsm_init_e:
         print(f"⚠️ booking_fsm pre-gpt: {_fsm_init_e}")
 
@@ -3119,6 +3142,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     # Dynamic customer status block - provides current values for the rules defined in style_guide.txt
     dynamic_customer_context = (
         "**📋 CURRENT CUSTOMER STATUS (Use these values when applying the rules from the Style Guide):**\n"
+        f"- **customer_exists (CRM file)**: {bool(crm_customer_exists)} — **customer_id**: "
+        f"{crm_customer_id if crm_customer_id else '—'}\n"
         "- **Profile lock (server)**: The name, phone, and gender lines below are loaded from the live system each turn. "
         "Do **not** ask the user to repeat them when this block already shows a known name, known gender (male/female), or an existing CRM file.\n"
         f"- **Show greeting**: {_show_greeting} - Reason: {_greeting_reason}. Use greeting ONLY when True (new user or inactive 12+ hours). Otherwise go straight to the answer. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
@@ -3147,6 +3172,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     _file_raw = customer_file_summary.strip().lstrip("\n") if customer_file_summary else ""
     flow_customer_context_sent = (
         "=== CUSTOMER STATUS ===\n"
+        f"- customer_exists: {bool(crm_customer_exists)}\n"
+        f"- customer_id: {crm_customer_id or '(none)'}\n"
         f"- Name: {customer_name_context}\n"
         f"- Phone: {customer_phone_clean or '(none)'}\n"
         f"- Gender: {current_gender}\n"
@@ -4798,6 +4825,22 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             bot_reply = _normalize_arabic_reply(bot_reply)
             parsed_response["bot_reply"] = bot_reply
 
+        try:
+            from services.booking import booking_fsm as _bfsm_guard
+
+            if _bfsm_guard.fsm_enabled():
+                br2, _gmeta = _bfsm_guard.guard_bot_reply_booking_identity(
+                    user_id,
+                    parsed_response.get("bot_reply") or "",
+                    current_gender,
+                    lang=detected_language,
+                )
+                if _gmeta.get("guard_applied"):
+                    parsed_response["bot_reply"] = br2
+                    parsed_response["booking_reply_guard"] = _gmeta
+        except Exception as _bg_e:
+            print(f"⚠️ booking reply guard: {_bg_e}")
+
         # Ensure current_gender_from_config in the output reflects the *actual* config value
         # This is critical for GPT to "see" the current state of the bot's knowledge about gender.
         parsed_response['current_gender_from_config'] = current_gender
@@ -4812,8 +4855,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             parsed_response['detected_gender'] = explicitly_detected_gender_from_input
         elif 'detected_gender' in parsed_response and parsed_response['detected_gender'] not in ["male", "female"]:
             # If GPT returned something like 'unknown' or 'null' for detected_gender, set it to None
-            parsed_response['detected_gender'] = None 
-        
+            parsed_response['detected_gender'] = None
+
+        try:
+            from services.booking import booking_fsm as _bfsm_lock_g
+
+            _dg_final = parsed_response.get("detected_gender")
+            if (
+                _bfsm_lock_g.fsm_enabled()
+                and _dg_final in ("male", "female")
+                and (config.user_booking_state.get(user_id) or {}).get("booking_fsm", {}).get("active")
+            ):
+                _bfsm_lock_g.lock_gender_from_session(user_id, _dg_final, "model_output")
+        except Exception as _lg_e:
+            print(f"⚠️ booking_fsm lock gender (post-parse): {_lg_e}")
+
         if "action" not in parsed_response or "bot_reply" not in parsed_response:
             raise ValueError("GPT response missing required fields (action or bot_reply)")
 

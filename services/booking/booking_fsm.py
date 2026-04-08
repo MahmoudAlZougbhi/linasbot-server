@@ -49,6 +49,15 @@ _NEGATIVE_RE = re.compile(
     r")\s*\.?\s*$"
 )
 
+# Strip re-confirmation questions when gender is already known (server-side guard).
+_GENDER_RECONFIRM_RE = re.compile(
+    r"(?is)[^\n.!?؟]*"
+    r"(تأكد|للتأكيد|بس\s*أتأكد|فقط\s*للتأكيد|just\s*to\s*confirm|confirm\s+your|are\s+you\s+sure)"
+    r"[^\n.!?؟]{0,80}"
+    r"(شاب|شابة|ذكر|أنثى|رجل|مرأة|بنت|ولد|جنسك|جنس|male|female|man|woman|boy|girl)"
+    r"[^\n]*"
+)
+
 
 def _fsm_root(user_id: str) -> Dict[str, Any]:
     st = config.user_booking_state[user_id]
@@ -61,6 +70,7 @@ def new_fsm_state() -> Dict[str, Any]:
     return {
         "intent": "book_appointment",
         "active": False,
+        "customer_id": None,
         "customer_name": None,
         "customer_phone": None,
         "customer_gender": None,
@@ -82,6 +92,10 @@ def new_fsm_state() -> Dict[str, Any]:
         "body_area_already_described": False,
         "bikini_tize_single_package": False,
         "crm_customer_file": False,
+        "crm_profile_applied": False,
+        "locked_fields": {},
+        "last_next_question_field": None,
+        "duplicate_question_detected": False,
         "pending_confirmation_summary": None,
         "retry_counts": {
             "service": 0,
@@ -112,16 +126,89 @@ def set_session_context(
     *,
     customer_display_name: Optional[str] = None,
     crm_customer_file: bool = False,
+    customer_id: Optional[str] = None,
 ) -> None:
     fsm = _fsm_root(user_id)
+    lf = fsm.setdefault("locked_fields", {})
+    if customer_id is not None and str(customer_id).strip():
+        fsm["customer_id"] = str(customer_id).strip()
     # Only persist real genders — avoid storing the string "unknown" and confusing the model
     if gender in ("male", "female"):
         fsm["customer_gender"] = gender
+        if crm_customer_file:
+            lf["customer_gender"] = "crm"
     if phone:
         fsm["customer_phone"] = str(phone).strip()
     if customer_display_name and str(customer_display_name).strip():
         fsm["customer_name"] = str(customer_display_name).strip()
+        if crm_customer_file:
+            lf["customer_name"] = "crm"
     fsm["crm_customer_file"] = bool(crm_customer_file)
+    if crm_customer_file:
+        fsm["crm_profile_applied"] = True
+
+
+def lock_field(fsm: Dict[str, Any], field: str, source: str) -> None:
+    fsm.setdefault("locked_fields", {})[field] = source
+
+
+def lock_gender_from_user_message(user_id: str, gender: str) -> None:
+    if gender not in ("male", "female"):
+        return
+    fsm = _fsm_root(user_id)
+    if fsm.get("locked_fields", {}).get("customer_gender") == "crm":
+        return
+    fsm["customer_gender"] = gender
+    lock_field(fsm, "customer_gender", "user_message")
+
+
+def lock_gender_from_session(user_id: str, gender: str, source: str = "model_output") -> None:
+    """Persist model/session gender into FSM when CRM did not already lock it."""
+    if gender not in ("male", "female"):
+        return
+    fsm = _fsm_root(user_id)
+    if fsm.get("locked_fields", {}).get("customer_gender") == "crm":
+        return
+    fsm["customer_gender"] = gender
+    lock_field(fsm, "customer_gender", source)
+
+
+def _crm_exists_for_user(user_id: str, fsm: Dict[str, Any]) -> bool:
+    return bool(fsm.get("crm_customer_file")) or bool(
+        config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
+    )
+
+
+def _name_satisfied(fsm: Dict[str, Any], user_id: str) -> bool:
+    if _crm_exists_for_user(user_id, fsm):
+        return True
+    if fsm.get("locked_fields", {}).get("customer_name"):
+        return True
+    un = (config.user_names.get(user_id) or "").strip()
+    ph = {"client", "unknown", "unknown customer", "test user"}
+    nl = un.lower()
+    return bool(un and un != "client" and nl not in ph and not nl.startswith("test user"))
+
+
+def _gender_satisfied(fsm: Dict[str, Any], user_id: str, current_gender: str) -> bool:
+    if _crm_exists_for_user(user_id, fsm):
+        return True
+    if fsm.get("locked_fields", {}).get("customer_gender"):
+        return True
+    g = fsm.get("customer_gender") or current_gender
+    return g in ("male", "female")
+
+
+def identity_missing(fsm: Dict[str, Any], user_id: str, current_gender: str) -> List[str]:
+    """New customers only: name + gender required before slot collection policy."""
+    if _crm_exists_for_user(user_id, fsm):
+        return []
+    miss: List[str] = []
+    if not _name_satisfied(fsm, user_id):
+        miss.append("customer_name")
+    if not _gender_satisfied(fsm, user_id, current_gender):
+        miss.append("customer_gender")
+    return miss
 
 
 def log_fsm(user_id: str, event: str, payload: Optional[Dict[str, Any]] = None) -> None:
@@ -288,6 +375,7 @@ def merge_patch(user_id: str, patch: Dict[str, Any]) -> List[str]:
         return []
     fsm = _fsm_root(user_id)
     updated: List[str] = []
+    lf = fsm.setdefault("locked_fields", {})
     key_map = {
         "service_id": "service_id",
         "service_name": "service_name",
@@ -301,6 +389,7 @@ def merge_patch(user_id: str, patch: Dict[str, Any]) -> List[str]:
         "appointment_time": "appointment_time",
         "slot_id": "slot_id",
         "customer_name": "customer_name",
+        "customer_gender": "customer_gender",
         "confirmed_booking": "_confirmed_booking",
         "confirmation_accepted": "_confirmed_booking",
     }
@@ -314,6 +403,32 @@ def merge_patch(user_id: str, patch: Dict[str, Any]) -> List[str]:
                 fsm["confirmation_status"] = "confirmed"
                 fsm["booking_status"] = "ready_to_execute"
                 updated.append("confirmation")
+            continue
+        if fk == "customer_gender" and val is not None:
+            gs = str(val).strip().lower()
+            if gs in ("male", "female"):
+                if lf.get("customer_gender") == "crm":
+                    log_fsm(
+                        user_id,
+                        "merge_patch_skipped_locked",
+                        {"field": "customer_gender", "reason": "crm_lock"},
+                    )
+                    continue
+                fsm["customer_gender"] = gs
+                lf["customer_gender"] = "patch"
+                updated.append(fk)
+            continue
+        if fk == "customer_name" and val is not None and str(val).strip():
+            if lf.get("customer_name") == "crm":
+                log_fsm(
+                    user_id,
+                    "merge_patch_skipped_locked",
+                    {"field": "customer_name", "reason": "crm_lock"},
+                )
+                continue
+            fsm["customer_name"] = str(val).strip()
+            lf["customer_name"] = "patch"
+            updated.append(fk)
             continue
         if fk == "body_part_ids" and val is not None:
             if isinstance(val, list):
@@ -356,14 +471,16 @@ def recompute_confirmation_gate(user_id: str) -> None:
         return
     if fsm.get("execution_allowed") or fsm.get("booking_status") == "ready_to_execute":
         return
-    gender = fsm.get("customer_gender") or "unknown"
-    ok, _missing = fields_complete(fsm, gender)
-    if not ok:
+    cur_g = config.user_gender.get(user_id, "unknown")
+    id_m = identity_missing(fsm, user_id, cur_g)
+    ok_slots, _missing_slots = fields_complete(fsm, cur_g)
+    ok_all = (not id_m) and ok_slots
+    if not ok_all:
         if fsm.get("booking_status") == "awaiting_confirmation":
             fsm["booking_status"] = "collecting"
             fsm["confirmation_status"] = "none"
         return
-    if ok and fsm.get("booking_status") in ("collecting", None, "idle"):
+    if ok_all and fsm.get("booking_status") in ("collecting", None, "idle"):
         fsm["booking_status"] = "awaiting_confirmation"
         fsm["confirmation_status"] = "pending"
         fsm["execution_allowed"] = False
@@ -456,7 +573,12 @@ def fields_complete(fsm: Dict[str, Any], gender: str) -> Tuple[bool, List[str]]:
     return (len(missing) == 0, missing)
 
 
-def first_missing_field(fsm: Dict[str, Any], gender: str) -> Optional[str]:
+def first_missing_field(fsm: Dict[str, Any], gender: str, user_id: str) -> Optional[str]:
+    id_m = identity_missing(fsm, user_id, gender)
+    if "customer_name" in id_m:
+        return "customer_name"
+    if "customer_gender" in id_m:
+        return "customer_gender"
     ok, miss = fields_complete(fsm, gender)
     if ok:
         return None
@@ -474,11 +596,16 @@ def first_missing_field(fsm: Dict[str, Any], gender: str) -> Optional[str]:
     return miss[0] if miss else None
 
 
-def first_missing_field_for_user_chat(fsm: Dict[str, Any], gender: str) -> Optional[str]:
+def first_missing_field_for_user_chat(fsm: Dict[str, Any], gender: str, user_id: str) -> Optional[str]:
     """
     Same as first_missing_field but skips re-asking body_part_ids when the user already
     described areas in natural language — model must map via get_body_parts instead.
     """
+    id_m = identity_missing(fsm, user_id, gender)
+    if "customer_name" in id_m:
+        return "customer_name"
+    if "customer_gender" in id_m:
+        return "customer_gender"
     ok, miss = fields_complete(fsm, gender)
     if ok:
         return None
@@ -514,6 +641,9 @@ def can_execute_submit(user_id: str, current_gender: str) -> Tuple[bool, str]:
     if _cg == "unknown":
         _cg = None
     g = _cg or current_gender
+    id_m = identity_missing(fsm, user_id, current_gender)
+    if id_m:
+        return False, f"fsm_incomplete:{','.join(id_m)}"
     ok, miss = fields_complete(fsm, g)
     if not ok:
         return False, f"fsm_incomplete:{','.join(miss)}"
@@ -564,6 +694,95 @@ def mark_booking_completed(user_id: str) -> None:
     log_fsm(user_id, "booking_completed", {})
 
 
+def build_unified_booking_snapshot(
+    user_id: str,
+    current_gender: str,
+    *,
+    customer_exists: bool,
+    customer_id: Optional[str],
+    name_is_known: bool,
+    crm_data_used: bool,
+) -> Dict[str, Any]:
+    """Single structured object for prompts + activity logs (session memory)."""
+    fsm = _fsm_root(user_id)
+    _cg_fsm = fsm.get("customer_gender")
+    if _cg_fsm == "unknown":
+        _cg_fsm = None
+    g = _cg_fsm or current_gender
+    id_miss = identity_missing(fsm, user_id, current_gender)
+    ok_slots, slot_miss = fields_complete(fsm, g)
+    miss_all = list(id_miss) + [x for x in slot_miss if x not in id_miss]
+    nxt = first_missing_field_for_user_chat(fsm, g, user_id) if miss_all else None
+    can_ex, gate = can_execute_submit(user_id, current_gender)
+    lf = dict(fsm.get("locked_fields") or {})
+    return {
+        "customer_exists": bool(customer_exists),
+        "customer_id": customer_id or fsm.get("customer_id"),
+        "customer_name": fsm.get("customer_name") or config.user_names.get(user_id),
+        "gender": g if g in ("male", "female") else None,
+        "customer_name_source": lf.get("customer_name")
+        or ("crm" if customer_exists and name_is_known else ("session" if name_is_known else None)),
+        "gender_source": lf.get("customer_gender")
+        or (
+            "crm"
+            if customer_exists and g in ("male", "female")
+            else ("session" if g in ("male", "female") else None)
+        ),
+        "gender_question_skipped": bool(customer_exists and g in ("male", "female")),
+        "crm_profile_data_used": bool(crm_data_used),
+        "service_id": fsm.get("service_id"),
+        "service_name": fsm.get("service_name"),
+        "body_part_ids": fsm.get("body_part_ids"),
+        "machine_id": fsm.get("machine_id"),
+        "branch_id": fsm.get("branch_id"),
+        "desired_date": fsm.get("appointment_date"),
+        "desired_time": fsm.get("appointment_time"),
+        "confirmation_required": bool(require_final_confirmation()),
+        "confirmation_received": bool(fsm.get("execution_allowed")),
+        "missing_fields": miss_all,
+        "next_question_target": nxt,
+        "booking_status": fsm.get("booking_status"),
+        "submit_gate": "ready" if can_ex else gate,
+        "locked_fields": lf,
+        "slots_complete": ok_slots,
+        "identity_complete": not bool(id_miss),
+    }
+
+
+def guard_bot_reply_booking_identity(
+    user_id: str,
+    bot_reply: str,
+    current_gender: str,
+    *,
+    lang: str = "ar",
+) -> Tuple[str, Dict[str, Any]]:
+    """Remove gender re-confirmation lines when gender is already known (logic-level anti-loop)."""
+    fsm = _fsm_root(user_id)
+    meta: Dict[str, Any] = {"guard_applied": False}
+    if not fsm.get("active"):
+        return bot_reply, meta
+    br = (bot_reply or "").strip()
+    if not br:
+        return bot_reply, meta
+    g_eff = (fsm.get("customer_gender") or current_gender or "").strip().lower()
+    if g_eff not in ("male", "female"):
+        return bot_reply, meta
+    if not _GENDER_RECONFIRM_RE.search(br):
+        return bot_reply, meta
+    cleaned = _GENDER_RECONFIRM_RE.sub("", br)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    if len(re.sub(r"\s+", "", cleaned)) < 12:
+        cleaned = (
+            "تمام، منكمل بخطوات الحجز حسب اللي ناقص (خدمة، فرع، وقت…)."
+            if (lang or "ar").lower() != "en"
+            else "OK — let’s continue with the remaining booking details."
+        )
+    meta["guard_applied"] = True
+    meta["reason"] = "gender_reconfirmation_removed"
+    log_fsm(user_id, "bot_reply_guard", meta)
+    return cleaned, meta
+
+
 def build_prompt_block(user_id: str, current_gender: str) -> str:
     if not fsm_enabled():
         return ""
@@ -575,10 +794,28 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
     if _cg_fsm == "unknown":
         _cg_fsm = None
     g = _cg_fsm or current_gender
-    ok, miss = fields_complete(fsm, g)
-    nxt = first_missing_field(fsm, g) if not ok else None
-    nxt_user = first_missing_field_for_user_chat(fsm, g) if not ok else None
+    _un = (config.user_names.get(user_id) or "").strip()
+    _ph = {"client", "unknown", "unknown customer", "test user"}
+    _nl = _un.lower()
+    _name_ok = _un and _un != "client" and _nl not in _ph and not _nl.startswith("test user")
+    _crm = bool(fsm.get("crm_customer_file")) or bool(
+        config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
+    )
+    id_miss = identity_missing(fsm, user_id, current_gender)
+    ok_slots, miss = fields_complete(fsm, g)
+    miss_all = list(id_miss) + [x for x in miss if x not in id_miss]
+    ok_all = (not id_miss) and ok_slots
+    nxt = first_missing_field(fsm, g, user_id) if not ok_all else None
+    nxt_user = first_missing_field_for_user_chat(fsm, g, user_id) if not ok_all else None
     can_ex, gate_reason = can_execute_submit(user_id, current_gender)
+    unified = build_unified_booking_snapshot(
+        user_id,
+        current_gender,
+        customer_exists=bool(_crm),
+        customer_id=fsm.get("customer_id"),
+        name_is_known=bool(_name_ok),
+        crm_data_used=bool(fsm.get("crm_profile_applied")),
+    )
     snap = {
         k: fsm.get(k)
         for k in (
@@ -595,16 +832,11 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
             "bikini_tize_single_package",
             "customer_name",
             "crm_customer_file",
+            "customer_id",
+            "locked_fields",
         )
     }
     g_eff = _cg_fsm or current_gender or "unknown"
-    _un = (config.user_names.get(user_id) or "").strip()
-    _ph = {"client", "unknown", "unknown customer", "test user"}
-    _nl = _un.lower()
-    _name_ok = _un and _un != "client" and _nl not in _ph and not _nl.startswith("test user")
-    _crm = bool(fsm.get("crm_customer_file")) or bool(
-        config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
-    )
     _name_line = (
         f"«{_un}» — **do NOT** ask for full name; use in address."
         if _name_ok
@@ -644,16 +876,24 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
             if nxt_user is not None
             else (
                 "(use get_body_parts to map areas — do not ask the user again)"
-                if (not ok and "body_part_ids" in miss and fsm.get("body_area_already_described"))
-                else ("(none — awaiting confirmation or ready)" if ok else "(see missing fields)")
+                if (
+                    not ok_all
+                    and "body_part_ids" in miss_all
+                    and fsm.get("body_area_already_described")
+                )
+                else ("(none — awaiting confirmation or ready)" if ok_all else "(see missing fields)")
             )
         ),
-        "- Fields still missing: " + (", ".join(miss) if miss else "(none)"),
+        "- Fields still missing (identity + booking): "
+        + (", ".join(miss_all) if miss_all else "(none)"),
         "- Gate for tool execution: "
         + ("READY" if can_ex else f"BLOCKED ({gate_reason})"),
         "",
         "BOOKING_STATE_JSON:",
         json.dumps(snap, ensure_ascii=False, default=str),
+        "",
+        "UNIFIED_BOOKING_STATE_JSON (server memory — merge updates each turn; do not re-ask locked fields):",
+        json.dumps(unified, ensure_ascii=False, default=str),
         "",
         "Emit optional `booking_fsm_patch` in your JSON with updated fields when the user provides them "
         '(e.g. {"service_id":12,"branch_id":1}). Set `"confirmed_booking": true` only after the user explicitly '
@@ -670,6 +910,23 @@ def record_decision_log(
     gate: str,
     extracted: Optional[Dict[str, Any]] = None,
 ) -> None:
+    fsm = _fsm_root(user_id)
+    dup = False
+    if (
+        next_field is not None
+        and fsm.get("last_next_question_field") is not None
+        and fsm.get("last_next_question_field") == next_field
+    ):
+        dup = True
+        fsm["duplicate_question_detected"] = True
+        log_fsm(
+            user_id,
+            "duplicate_question_warning",
+            {"field": next_field, "phase": phase},
+        )
+    else:
+        fsm["duplicate_question_detected"] = False
+    fsm["last_next_question_field"] = next_field
     log_fsm(
         user_id,
         "turn_decision",
@@ -677,6 +934,7 @@ def record_decision_log(
             "phase": phase,
             "first_missing_field": next_field,
             "gate": gate,
+            "duplicate_question_detected": dup,
             "extracted": extracted or {},
         },
     )
