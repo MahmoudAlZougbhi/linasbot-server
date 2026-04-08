@@ -18,10 +18,13 @@ from services.booking.constants import DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS
 from services.booking.intent_pipeline import _service_requires_machine
 
 # --- Intent detection (booking mode entry) ---
+# Include Franco spellings (mw3ad = موعد, 7ejz = حجز) so booking FSM + body-area NL run on short replies.
 _BOOKING_ENTRY_RE = re.compile(
     r"(?i)\b("
-    r"book|booking|appointment|reserve|reservation|schedule|حجز|موعد|مواعيد|"
-    r"احجز|بدي موعد|عندي موعد|جلسة|جلسات|session"
+    r"book|booking|appointment|appt|reserve|reservation|schedule|session|"
+    r"mw3ad|mw3ede|mwede|mw3id|maw3ed|maw3id|maw3ad|"
+    r"7ejz|7ajz|a7jaz|7ez|"
+    r"حجز|موعد|مواعيد|احجز|بدي موعد|عندي موعد|جلسة|جلسات"
     r")\b"
 )
 _CANCEL_RE = re.compile(
@@ -30,7 +33,7 @@ _CANCEL_RE = re.compile(
 
 # User already named body areas (Lebanese/Arabic/Franco) — do not ask again in chat.
 _BODY_AREA_MENTION_RE = re.compile(
-    r"(?i)(بكيني|بيكيني|bikini|تيز|tize|طيز|مؤخرة|مؤخره|ورا|خلفي|قدام|حماس|"
+    r"(?i)(بكيني|بيكيني|bikini|تيز|tizeh?|طيز|مؤخرة|مؤخره|ورا|خلفي|قدام|حماس|"
     r"إبط|ابط|ابط|رجل|رجلين|وجه|وش|صدر|ظهر|bikini|butt|underarm|leg|face)",
     re.UNICODE,
 )
@@ -229,6 +232,22 @@ def log_fsm(user_id: str, event: str, payload: Optional[Dict[str, Any]] = None) 
         del log[:-30]
 
 
+def combined_user_text_for_fsm(user_input: Optional[str]) -> str:
+    """
+    Merge main message + any [User clarified: ...] blocks so Franco stubs + clarification
+    still trigger booking mode and body-area detection (e.g. Ok + clarified «tizeh»).
+    """
+    raw = (user_input or "").strip()
+    if not raw:
+        return ""
+    parts: List[str] = [raw]
+    for m in re.finditer(r"\[User clarified:\s*(.+?)\]", raw, flags=re.IGNORECASE | re.DOTALL):
+        inner = (m.group(1) or "").strip()
+        if inner:
+            parts.append(inner.split("\n")[0].strip())
+    return "\n".join(parts)
+
+
 def detect_booking_intent_message(text: str) -> bool:
     if not text or not str(text).strip():
         return False
@@ -280,7 +299,8 @@ def exit_booking_mode(user_id: str, reason: str) -> None:
 def maybe_enter_booking_mode(user_id: str, user_input: str) -> None:
     if not fsm_enabled():
         return
-    if detect_booking_intent_message(user_input):
+    combined = combined_user_text_for_fsm(user_input)
+    if detect_booking_intent_message(combined):
         enter_booking_mode(user_id, "keyword")
 
 
@@ -304,7 +324,7 @@ def infer_body_area_from_user_message(user_id: str, user_input: str) -> None:
     fsm = _fsm_root(user_id)
     if not fsm.get("active"):
         return
-    t = (user_input or "").strip()
+    t = combined_user_text_for_fsm(user_input).strip()
     if not t:
         return
     if _BODY_AREA_MENTION_RE.search(t):
@@ -312,7 +332,7 @@ def infer_body_area_from_user_message(user_id: str, user_input: str) -> None:
         log_fsm(user_id, "body_area_nl_detected", {"excerpt": t[:200]})
     # Bikini line / tize / buttocks: same package (front+back coverage) — never ask «بكيني ولا تيز» as two separate products
     if re.search(
-        r"(?i)(بكيني|بيكيني|bikini).{0,40}(تيز|طيز|مؤخرة|tize|butt)|(تيز|طيز|مؤخرة|tize|butt).{0,40}(بكيني|بيكيني|bikini)",
+        r"(?i)(بكيني|بيكيني|bikini).{0,40}(تيز|طيز|مؤخرة|tizeh?|butt)|(تيز|طيز|مؤخرة|tizeh?|butt).{0,40}(بكيني|بيكيني|bikini)",
         t,
     ) or re.search(r"(?i)(بكيني\s*و\s*مؤخرة|مؤخرة\s*و\s*بكيني|bikini\s*\+\s*butt|تيز\s*و\s*بكيني)", t):
         fsm["bikini_tize_single_package"] = True
@@ -899,6 +919,12 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
         '(e.g. {"service_id":12,"branch_id":1}). Set `"confirmed_booking": true` only after the user explicitly '
         "confirms the final summary.",
     ]
+    if fsm.get("body_area_already_described"):
+        lines.insert(
+            7,
+            "- **CRITICAL — body_area_already_described is TRUE:** the user already named a zone (incl. Franco **tize/tizeh**, Arabic تيز/مؤخرة/بكيني). "
+            "**Do NOT** ask «شو المنطقة بالضبط» or repeat «منطقة». Call `get_body_parts`, map to ids, then ask only what is still missing (usually branch or time).",
+        )
     return "\n".join(lines)
 
 
