@@ -7,7 +7,7 @@ import json
 import os
 import re
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from services import api_integrations
 import config
@@ -245,6 +245,38 @@ def pick_pico_or_default_machine(machines: List[dict]) -> Optional[int]:
     return pick_default_machine_for_non_hair(0, machines)
 
 
+def body_part_synonym_candidates(segment: str) -> List[str]:
+    """
+    Expand Lebanese Franco / slang so backend resolution matches CRM names.
+    e.g. tize/tizeh/teze → try bikini / مؤخرة (same commercial package as bikini line + buttocks).
+    """
+    s = (segment or "").strip()
+    if not s:
+        return []
+    seen: Set[str] = set()
+    out: List[str] = []
+
+    def add(x: str) -> None:
+        xl = x.strip()
+        if not xl:
+            return
+        k = xl.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(xl)
+
+    add(s)
+    low = s.lower()
+    # Franco: buttocks / intimate back — CRM rows often use "Bikini" or Arabic مؤخرة
+    if re.search(
+        r"(?i)(?<![a-z0-9])(tizeh|tize|tizi|teze|teiz|tizza|tyze|tise|teize)(?![a-z0-9])",
+        low,
+    ):
+        for x in ("bikini", "Bikini", "مؤخرة", "butt", "buttocks", "ورا", "خلفي"):
+            add(x)
+    return out
+
+
 def _split_composite_body_label(label: str) -> List[str]:
     """
     Split user-written multi-area phrases (Arabic و, commas, +) into one label per CRM row.
@@ -262,8 +294,8 @@ def _split_composite_body_label(label: str) -> List[str]:
     return parts if len(parts) > 1 else [s]
 
 
-def _match_body_part_label_to_id(rows: List[dict], segment: str) -> Optional[int]:
-    """Map one human phrase to a single body_part id from API rows."""
+def _match_body_part_label_to_id_one(rows: List[dict], segment: str) -> Optional[int]:
+    """Map one normalized phrase to a single body_part id from API rows."""
     if not rows or not (segment or "").strip():
         return None
     ll = segment.strip().lower()
@@ -282,6 +314,17 @@ def _match_body_part_label_to_id(rows: List[dict], segment: str) -> Optional[int
             best_id = bid
     if best_id is not None and best_score >= 0.35:
         return best_id
+    return None
+
+
+def _match_body_part_label_to_id(rows: List[dict], segment: str) -> Optional[int]:
+    """Map one human phrase (incl. Franco tizeh) to a single body_part id from API rows."""
+    if not rows or not (segment or "").strip():
+        return None
+    for cand in body_part_synonym_candidates(segment):
+        bid = _match_body_part_label_to_id_one(rows, cand)
+        if bid is not None:
+            return bid
     return None
 
 

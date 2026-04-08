@@ -881,6 +881,8 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
         "- **Do not** re-ask for fields already set in BOOKING STATE below.",
         "- **Body areas (Arabic):** If the user already said which areas (e.g. بكيني، مؤخرة، تيز، إبط…), **do not ask again** which area. "
         "Call `get_body_parts` and map their words to CRM ids; put them in `submit_booking_intent.body_part_ids`.",
+        "- **Franco Lebanese (server + CRM mapping):** **tize / tizeh / teze / teiz** = مؤخرة/طيز — same **bikini-line package** as Arabic **تيز/مؤخرة**. "
+        "Resolve with **`get_body_parts`** to the **Bikini** (or equivalent) row; pass **`body_part_ids`** in **`submit_booking_intent`**. **Never** drop or ignore this wording from the user message.",
         "- **Forbidden in bot_reply to customers:** asking again for the same body area, or stiff wording like «منطقة من النظام» / «رقم المنطقة» / «قطعة الجسم الدقيقة» / «أي جزء». "
         "If you must ask once (only when nothing was said yet), use natural Arabic e.g. «شو المناطق يلي بدك ياها للجلسة؟» or «أي مناطق بالجسم بدك تعمليها؟».",
         "- **Bikini + buttocks (تيز/مؤخرة):** One package (front + back intimate line). "
