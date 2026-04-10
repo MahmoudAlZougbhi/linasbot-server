@@ -1491,9 +1491,26 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
                 continue
             if parsed.get("action") is not None and "bot_reply" in parsed:
                 continue
+            pseudo_tool_uses = parsed.get("tool_uses")
+            if isinstance(pseudo_tool_uses, list):
+                for tu in pseudo_tool_uses:
+                    if not isinstance(tu, dict):
+                        continue
+                    recipient = str(tu.get("recipient_name") or "").strip().lower()
+                    if recipient not in (
+                        "functions.submit_booking_intent",
+                        "submit_booking_intent",
+                    ):
+                        continue
+                    params = tu.get("parameters")
+                    if isinstance(params, dict):
+                        parsed = {**parsed, **params}
+                        break
             for k in (
                 "date",
                 "time",
+                "appointment_date",
+                "appointment_time",
                 "machine_id",
                 "service_id",
                 "service",
@@ -1510,12 +1527,19 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
                 "detected_name",
                 "customer_name",
                 "execute_booking",
+                "confirmed_booking",
                 "gender",
             ):
                 if k in parsed and parsed[k] is not None:
                     out[k] = parsed[k]
         except (json.JSONDecodeError, TypeError):
             continue
+    if out.get("date") is None and out.get("appointment_date") is not None:
+        out["date"] = out.get("appointment_date")
+    if out.get("time") is None and out.get("appointment_time") is not None:
+        out["time"] = out.get("appointment_time")
+    if out.get("execute_booking") is None and out.get("confirmed_booking") is True:
+        out["execute_booking"] = True
     if not out.get("body_part") and out.get("body_part_text"):
         out["body_part"] = str(out.get("body_part_text") or "").strip()
     # GPT often splits clock into separate "time" — recovery normalize expects one "date" string.
@@ -1526,6 +1550,64 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
             out["date"] = f"{ds} {ts}".strip()
         out.pop("time", None)
     return out
+
+
+def _enrich_booking_args_from_session_state(user_id: str, leaked: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Primary server execution path: combine structured extraction with persisted session/FSM state.
+    This lets the backend execute booking from the authoritative server-side booking state even
+    when the model returns structured payload in JSON instead of a real tool call.
+    """
+    out = dict(leaked or {})
+    st = config.user_booking_state.get(user_id) or {}
+    fsm = (st.get("booking_fsm") or {}) if isinstance(st.get("booking_fsm"), dict) else {}
+
+    def _fill(dst_key: str, *sources: Any) -> None:
+        cur = out.get(dst_key)
+        if cur not in (None, "", [], {}):
+            return
+        for src in sources:
+            if src in (None, "", [], {}):
+                continue
+            out[dst_key] = src
+            return
+
+    _fill("service_id", fsm.get("service_id"), st.get("service_id"))
+    _fill("branch_id", fsm.get("branch_id"), st.get("branch_id"))
+    _fill("machine_id", fsm.get("machine_id"), st.get("machine_id"))
+    _fill("body_part_ids", fsm.get("body_part_ids"), st.get("body_part_ids"))
+    _fill("date", fsm.get("appointment_date"), st.get("appointment_date"))
+    _fill("time", fsm.get("appointment_time"), st.get("appointment_time"))
+    _fill("customer_name", fsm.get("customer_name"), config.user_names.get(user_id))
+    _fill("gender", fsm.get("customer_gender"), config.user_gender.get(user_id))
+    _fill(
+        "body_part",
+        (st.get("last_booking_intent") or {}).get("body_part")
+        if isinstance(st.get("last_booking_intent"), dict)
+        else None,
+        st.get("body_part"),
+    )
+    if out.get("execute_booking") is None and fsm.get("execution_allowed"):
+        out["execute_booking"] = True
+    return out
+
+
+def _server_booking_failure_reply(lang: str) -> str:
+    l = (lang or "ar").lower()
+    if l == "en":
+        return (
+            "Sorry, I could not finalize this booking time just now. "
+            "Please send another time or another day and I will continue."
+        )
+    if l == "fr":
+        return (
+            "Désolée, je n'ai pas pu finaliser ce créneau pour le moment. "
+            "Envoyez-moi une autre heure ou un autre jour et je continue."
+        )
+    return (
+        "عذراً، ما قدرت ثبّت هيدا الوقت حالياً. "
+        "ابعتيلي وقت تاني أو يوم تاني وبكمّل معك."
+    )
 
 
 def _detect_change_request_intent(user_text: str) -> bool:
@@ -2171,16 +2253,11 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     recent = _collect_recent_user_text_for_change_intent(current_context_messages, user_input)
     if _detect_change_request_intent(recent):
         return None
-    # Typical failure mode: tooling stopped after get_machines.
-    if tool_names_so_far and not any(
-        n in tool_names_so_far for n in ("get_machines", "get_body_parts", "check_next_appointment")
-    ):
-        return None
-
-    leaked = _extract_booking_args_from_gpt_raw(gpt_raw_content)
+    leaked = _enrich_booking_args_from_session_state(
+        user_id,
+        _extract_booking_args_from_gpt_raw(gpt_raw_content),
+    )
     if not leaked.get("date") and not leaked.get("date_components"):
-        return None
-    if _safe_int(leaked.get("machine_id")) is None:
         return None
     bp_norm = _normalize_body_part_ids(leaked.get("body_part_ids"))
     lw = dict(leaked)
@@ -2192,6 +2269,8 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     temp_sid = _safe_int(leaked.get("service_id"))
     if temp_sid is None:
         temp_sid = _infer_service_id_from_leak(leaked, current_gender)
+    if _safe_int(leaked.get("machine_id")) is None and temp_sid not in MACHINE_OPTIONAL_SERVICE_IDS:
+        return None
     if not bp_norm and temp_sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
         inferred_bp = await _try_infer_body_part_ids_from_conversation(
             temp_sid, user_input, current_context_messages
@@ -4799,6 +4878,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         else:
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
 
+        _booking_fsm_patch_raw = (
+            dict(parsed_response.get("booking_fsm_patch") or {})
+            if isinstance(parsed_response.get("booking_fsm_patch"), dict)
+            else {}
+        )
+
         try:
             from services.booking import booking_fsm as _bfsm_patch
 
@@ -4883,6 +4968,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         )
 
         _leaked_rec = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")
+        _leaked_rec = _enrich_booking_args_from_session_state(user_id, _leaked_rec)
         _rec_has_date = bool(_leaked_rec.get("date") or _leaked_rec.get("date_components"))
         _rec_mach = _safe_int(_leaked_rec.get("machine_id"))
         _rec_lw = dict(_leaked_rec)
@@ -4898,6 +4984,64 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             and _rec_mach is not None
             and _rec_sid in LASER_HAIR_REMOVAL_SERVICE_IDS
         )
+
+        # Primary server-side execution path:
+        # if the model produced a complete structured booking payload (or confirmed_booking=true in FSM patch)
+        # but failed to emit a real submit_booking_intent tool call, the backend executes it directly.
+        _server_exec_trigger = bool(
+            _leaked_rec.get("execute_booking") is True
+            or _booking_fsm_patch_raw.get("confirmed_booking") is True
+        )
+        if (
+            _server_exec_trigger
+            and "submit_booking_intent" not in tool_names
+            and "create_appointment" not in tool_names
+            and not api_failure_reason
+            and not is_reschedule_intent
+        ):
+            _primary_exec = await _try_recover_create_appointment_from_auxiliary_gpt_json(
+                gpt_raw_content,
+                user_id=user_id,
+                customer_phone_clean=customer_phone_clean,
+                current_gender=current_gender,
+                current_preferred_lang=current_preferred_lang,
+                current_context_messages=current_context_messages,
+                user_input=user_input,
+                body_part_required_service_ids=body_part_required_service_ids,
+                is_reschedule_intent=is_reschedule_intent,
+                tool_names_so_far=tool_names,
+            )
+            if _primary_exec is not None:
+                tool_names.append("submit_booking_intent")
+                _primary_dump = json.dumps(_primary_exec, default=str)
+                tool_round_trips.append(
+                    _record_tool_round_trip(
+                        "submit_booking_intent",
+                        {"note": "server_structured_execution", "recovered": True},
+                        _primary_dump,
+                        _primary_exec if isinstance(_primary_exec, dict) else None,
+                    )
+                )
+                if (
+                    isinstance(_primary_exec, dict)
+                    and _primary_exec.get("success")
+                    and _primary_exec.get("booking_flow_state") == "booked"
+                ):
+                    recovered_create_appointment_ok = True
+                    if not _bot_reply_claims_completed_booking(parsed_response.get("bot_reply") or ""):
+                        parsed_response["action"] = "answer_question"
+                        parsed_response["bot_reply"] = (
+                            _normalize_arabic_reply(
+                                "تم تثبيت الحجز على السيستم بنجاح 🌷"
+                            )
+                            if detected_language in ("ar", "franco")
+                            else "Your appointment has been saved successfully."
+                        )
+                else:
+                    parsed_response["action"] = "answer_question"
+                    parsed_response["bot_reply"] = _server_booking_failure_reply(
+                        detected_language
+                    )
 
         # Model sometimes puts create_appointment-shaped JSON in the assistant text but only calls get_machines.
         if (
