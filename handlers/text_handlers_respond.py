@@ -64,6 +64,38 @@ def _booking_not_confirmed_safe_reply(lang: str) -> str:
     )
 
 
+def _reply_claims_booking_done(text: str) -> bool:
+    """
+    True only when the assistant wording tells the user the booking already happened.
+    A summary + yes/no confirmation request must remain allowed.
+    """
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    positive_done_patterns = [
+        r"تم(?:\s+)?(?:تأكيد|تثبيت|حجز)\s+الموعد",
+        r"صار(?:\s+)?(?:الحجز|الموعد)\s+(?:مؤكد|مثبت)",
+        r"الموعد(?:\s+)?(?:صار|أصبح)?\s*(?:مؤكد|مثبت|محجوز)",
+        r"your appointment is confirmed",
+        r"appointment is confirmed",
+        r"appointment has been booked",
+        r"booked successfully",
+        r"rendez-vous.*confirm",
+    ]
+    request_confirmation_patterns = [
+        r"هل .*مظبوط",
+        r"هل .*صحيح",
+        r"فيك[ي]?\s+تأك",
+        r"confirm",
+        r"yes/no",
+        r"before i .*complete",
+        r"قبل .*أكم",
+    ]
+    if any(re.search(p, t, flags=re.IGNORECASE) for p in request_confirmation_patterns):
+        return False
+    return any(re.search(p, t, flags=re.IGNORECASE) for p in positive_done_patterns)
+
+
 PRICE_INTENT_KEYWORDS = [
     "price",
     "prices",
@@ -1717,11 +1749,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         bot_reply_text = _clean_reply_text(bot_reply_text)
     # AI-PRIMARY: No turn-by-turn truncation or greeting strip. Send AI reply as-is.
 
-    # Never allow a CRM-style confirmation unless this turn actually received booked=true from the booking tool.
-    if action == "confirm_booking_details" and not _flow_meta_has_crm_booking_confirmation(flow_meta):
+    # Allow summary + confirmation request before submit; block only if the text falsely claims booking already happened.
+    if (
+        action == "confirm_booking_details"
+        and not _flow_meta_has_crm_booking_confirmation(flow_meta)
+        and _reply_claims_booking_done(bot_reply_text)
+    ):
         print(
-            "[_process_and_respond] BLOCKED confirm_booking_details: no submit_booking_intent/create_appointment "
-            "with success+booking_flow_state=booked in tool_round_trips"
+            "[_process_and_respond] BLOCKED confirm_booking_details: text claims booking already happened "
+            "without submit_booking_intent/create_appointment success+booking_flow_state=booked"
         )
         action = "answer_question"
         bot_reply_text = _booking_not_confirmed_safe_reply(current_preferred_lang)

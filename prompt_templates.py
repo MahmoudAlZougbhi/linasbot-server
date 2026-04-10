@@ -154,7 +154,9 @@ BOOKING TOOL FAILURE — USER-FACING (CRITICAL)
 
 BOOKING CONFIRMATION RULE
 - Use confirmation-style language only after the booking/update tool result explicitly shows real success.
-- `confirm_booking_details` may only be used after real successful booking tool output is already present in the same turn.
+- `confirm_booking_details` may be used in 2 cases only:
+  - after real successful booking tool output is already present in the same turn, OR
+  - as one final summary + yes/no confirmation request before `submit_booking_intent` when the server booking FSM says confirmation is still required.
 - If tools still need to be called, do not act as if booking is already done.
 
 INTERNAL ID SAFETY RULE
