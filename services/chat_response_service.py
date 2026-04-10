@@ -1631,6 +1631,15 @@ def _bot_reply_claims_completed_booking(bot_reply: str) -> bool:
     )
 
 
+def _parse_tool_round_bot_returned_local(bot_returned: str):
+    if not bot_returned or not isinstance(bot_returned, str):
+        return None
+    try:
+        return json.loads(bot_returned)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
 def _extract_submit_booking_failure_details(tool_round_trips: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Return the last submit_booking_intent failure with structured details for loop guard logs."""
     last_detail: Optional[Dict[str, Any]] = None
@@ -1638,7 +1647,7 @@ def _extract_submit_booking_failure_details(tool_round_trips: List[Dict[str, Any
         name = str(tr.get("ai_requested") or "").strip()
         if name != "submit_booking_intent":
             continue
-        bot_returned = _parse_tool_round_bot_returned(tr.get("bot_returned") or "")
+        bot_returned = _parse_tool_round_bot_returned_local(tr.get("bot_returned") or "")
         if not isinstance(bot_returned, dict) or bot_returned.get("success") is True:
             continue
         last_detail = {
