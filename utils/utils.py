@@ -1838,7 +1838,35 @@ def append_turn_to_user_context_memory(user_id: str, role: str, text: str) -> No
         oai_role = "assistant"
     else:
         oai_role = "assistant"
-    config.user_context[uid].append({"role": oai_role, "content": str(text).strip()})
+    config.user_context[uid].append(
+        {
+            "role": oai_role,
+            "content": str(text).strip(),
+            "timestamp": utc_now(),
+        }
+    )
+
+
+def _filter_in_memory_context_for_window(mem: list, window_hours: int) -> list:
+    """
+    Apply the same time window discipline to in-process memory as Firestore context.
+    Entries without timestamps are excluded when a positive window is enforced, so stale
+    RAM-only history cannot bypass the configured context window.
+    """
+    if not mem:
+        return []
+    if not window_hours or int(window_hours) <= 0:
+        return list(mem)
+    cutoff = utc_now() - datetime.timedelta(hours=int(window_hours))
+    filtered = []
+    for msg in mem:
+        ts_raw = msg.get("timestamp")
+        if ts_raw is None:
+            continue
+        msg_ts = parse_timestamp_utc(ts_raw, fallback=None)
+        if msg_ts is not None and msg_ts >= cutoff:
+            filtered.append(msg)
+    return filtered
 
 
 async def get_conversation_context_for_gpt(
@@ -1860,7 +1888,10 @@ async def get_conversation_context_for_gpt(
         window_hours=wh,
         alternate_user_id=alternate_user_id,
     )
-    mem = list(config.user_context.get(str(user_id).strip()) or [])
+    mem = _filter_in_memory_context_for_window(
+        list(config.user_context.get(str(user_id).strip()) or []),
+        wh,
+    )
     if len(mem) > len(fs):
         cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
         use = mem[-cap:] if cap > 0 else mem
@@ -1928,7 +1959,7 @@ async def get_conversation_history_from_firestore(
         conversation_data = doc_snap.to_dict()
         messages = conversation_data.get('messages', [])
 
-        # Time-based memory window (default 48h): include only recent messages.
+        # Time-based memory window: include only recent messages.
         effective_window_hours = (
             window_hours
             if window_hours is not None
@@ -1940,9 +1971,8 @@ async def get_conversation_history_from_firestore(
             filtered_messages = []
             for msg in messages:
                 ts_raw = msg.get("timestamp")
-                # Keep legacy messages without timestamp for backward compatibility.
+                # Do not let legacy messages without timestamps bypass the active window.
                 if ts_raw is None:
-                    filtered_messages.append(msg)
                     continue
                 msg_ts = parse_timestamp_utc(
                     ts_raw,
@@ -2093,7 +2123,7 @@ async def get_last_bot_message_for_gpt_context(
     user_id: str,
     conversation_id: Optional[str],
     alternate_user_id: str = None,
-    within_hours: float = 72,
+    within_hours: Optional[float] = None,
 ) -> Optional[dict]:
     """
     Last outbound message for GPT operational context. If the smart message was saved on another
@@ -2101,8 +2131,15 @@ async def get_last_bot_message_for_gpt_context(
     thread's last bot message. When conversation_id is missing, still returns a recent smart_message
     if any (e.g. new inbound right after restart before conv is resolved).
     """
+    effective_within_hours = (
+        float(within_hours)
+        if within_hours is not None
+        else float(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
+    )
     canonical = (alternate_user_id or "").strip() or user_id
-    smart = await _latest_smart_ai_across_conversations(canonical, within_hours=within_hours)
+    smart = await _latest_smart_ai_across_conversations(
+        canonical, within_hours=effective_within_hours
+    )
     if not conversation_id:
         return smart
     cur = await get_last_bot_message_from_conversation(
@@ -2114,13 +2151,21 @@ async def get_last_bot_message_for_gpt_context(
             return None
         return parse_timestamp_utc(m.get("timestamp"), fallback=None)
 
+    cutoff = utc_now() - datetime.timedelta(hours=effective_within_hours)
+    st, ct = _ts(smart), _ts(cur)
+    if st is not None and st < cutoff:
+        smart = None
+        st = None
+    if ct is not None and ct < cutoff:
+        cur = None
+        ct = None
+
     if smart and not cur:
         return smart
     if cur and not smart:
         return cur
     if not cur and not smart:
         return None
-    st, ct = _ts(smart), _ts(cur)
     if st and ct:
         return smart if st > ct else cur
     if st and not ct:
