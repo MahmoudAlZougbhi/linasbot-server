@@ -1632,9 +1632,26 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     detected_name_from_gpt = gpt_response_data.get("detected_name")
     escalation_reason_from_gpt = gpt_response_data.get("escalation_reason")
     flow_meta = gpt_response_data.get("_flow_meta") or {}
+    booking_retry = flow_meta.get("booking_retry") or {}
+
+    if int(booking_retry.get("failed_submit_count") or 0) >= 5:
+        action = "human_handover"
+        escalation_reason_from_gpt = "technical_error"
+        _flow_error_reason = (
+            "Step: submit_booking_intent retry guard | exceeded 5 failed booking attempts | "
+            f"error_code={booking_retry.get('last_error_code') or 'unknown'} | "
+            f"failure_stage={booking_retry.get('last_failure_stage') or 'unknown'} | "
+            f"pipeline_phase={booking_retry.get('last_pipeline_phase') or 'unknown'}"
+        )
+        flow_meta["booking_retry_exceeded"] = True
+        print(
+            "[_process_and_respond] booking retry guard → human handover | "
+            f"count={booking_retry.get('failed_submit_count')} | "
+            f"error_code={booking_retry.get('last_error_code')}"
+        )
 
     # When GPT fails (error in flow_meta): if user in waiting queue → waiting message; else → hand over to human
-    if flow_meta.get("error"):
+    if flow_meta.get("error") and action != "human_handover":
         in_waiting = config.user_in_human_takeover_mode.get(user_id, False)
         if not in_waiting and current_conversation_id:
             try:
@@ -1767,6 +1784,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         and action == "human_handover"
         and bot_reply_text
         and not _user_explicitly_requests_human_agent(user_input_to_process)
+        and not flow_meta.get("booking_retry_exceeded")
     ):
         print(
             "[_process_and_respond] post-release cooldown: AI chose human_handover without explicit user request → answer_question"
@@ -2255,7 +2273,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"})
+            err_step = {"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"}
+            if booking_retry:
+                err_step["metadata"] = {"booking_retry": booking_retry}
+            steps.append(err_step)
             step_num += 1
         resp_step = {"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None, "event_type": "response_sent"}
         if action in ("human_handover", "human_handover_confirmed"):
@@ -2315,7 +2336,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            steps.append({"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"})
+            err_step = {"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"}
+            if booking_retry:
+                err_step["metadata"] = {"booking_retry": booking_retry}
+            steps.append(err_step)
             step_num += 1
         resp_step = {"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None, "event_type": "response_sent"}
         if action in ("human_handover", "human_handover_confirmed"):

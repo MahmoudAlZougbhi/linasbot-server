@@ -269,6 +269,12 @@ OUTPUT POLICY
 - No code fences.
 - No extra commentary outside the JSON.
 - Never emit pseudo tool calls such as `tool_uses`, `functions.submit_booking_intent`, or any tool wrapper inside the JSON body. Use real tool calls through the tool interface only.
+- For booking execution, the backend expects canonical CRM values. Before `submit_booking_intent`, you must resolve and send official IDs from the live tools:
+  - `service_id` from `get_services`
+  - `branch_id` from `get_branches`
+  - `machine_id` from `get_machines` when required
+  - `body_part_ids` from `get_body_parts` when required
+- Do not rely on the backend to interpret free-text names, aliases, slang, or pseudo structured booking payloads at execution time.
 - Always include all required schema keys.
 - Include escalation_reason only when relevant to handover logic.
 - When **BOOKING MODE (STRICT — server state machine)** is present in runtime context: keep `bot_reply` short; ask **only** for the **next required field** shown there; use tools for IDs; optional `booking_fsm_patch` to record structured field updates; set `confirmed_booking` true in that patch **only** after the user explicitly confirms the final one-line summary.
