@@ -66,7 +66,8 @@ def _booking_not_confirmed_safe_reply(lang: str) -> str:
 
 def _reply_claims_booking_done(text: str) -> bool:
     """
-    True only when the assistant wording tells the user the booking already happened.
+    True when the assistant wording tells the user the booking already happened
+    or that the booking request was already sent/submitted to the system.
     A summary + yes/no confirmation request must remain allowed.
     """
     t = (text or "").strip().lower()
@@ -74,8 +75,17 @@ def _reply_claims_booking_done(text: str) -> bool:
         return False
     positive_done_patterns = [
         r"تم(?:\s+)?(?:تأكيد|تثبيت|حجز)\s+الموعد",
+        r"تم(?:\s+)?تأكيد\s+حجز(?:ك|كم)?",
+        r"تم(?:\s+)?تثبيت\s+حجز(?:ك|كم)?",
+        r"حجز(?:ك|كم)?\s+تم(?:\s+)?تأكيده?",
         r"صار(?:\s+)?(?:الحجز|الموعد)\s+(?:مؤكد|مثبت)",
         r"الموعد(?:\s+)?(?:صار|أصبح)?\s*(?:مؤكد|مثبت|محجوز)",
+        r"بعث(?:ت|نا)\s+الطلب(?:\s+)?(?:للحجز)?",
+        r"تم(?:\s+)?إرسال\s+الطلب(?:\s+)?(?:للحجز)?",
+        r"تم(?:\s+)?رفع\s+الطلب(?:\s+)?(?:للحجز)?",
+        r"submitted\s+the\s+booking",
+        r"sent\s+the\s+booking\s+request",
+        r"booking\s+request\s+has\s+been\s+sent",
         r"your appointment is confirmed",
         r"appointment is confirmed",
         r"appointment has been booked",
@@ -1766,14 +1776,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         bot_reply_text = _clean_reply_text(bot_reply_text)
     # AI-PRIMARY: No turn-by-turn truncation or greeting strip. Send AI reply as-is.
 
-    # Allow summary + confirmation request before submit; block only if the text falsely claims booking already happened.
+    # Allow summary + confirmation request before submit; block any false claim that booking
+    # already happened or that the request was already sent to the system without CRM success.
     if (
-        action == "confirm_booking_details"
-        and not _flow_meta_has_crm_booking_confirmation(flow_meta)
+        not _flow_meta_has_crm_booking_confirmation(flow_meta)
         and _reply_claims_booking_done(bot_reply_text)
     ):
         print(
-            "[_process_and_respond] BLOCKED confirm_booking_details: text claims booking already happened "
+            "[_process_and_respond] BLOCKED booking claim: text claims booking/request already happened "
             "without submit_booking_intent/create_appointment success+booking_flow_state=booked"
         )
         action = "answer_question"
