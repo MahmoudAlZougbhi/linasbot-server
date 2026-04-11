@@ -1304,7 +1304,7 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     }.get(language, "💰 Here is the exact system pricing:")
 
     if not rows:
-        raw_payload = json.dumps(pricing_payload, ensure_ascii=False)
+        raw_payload = json.dumps(pricing_payload, ensure_ascii=False, default=str)
         if len(raw_payload) > 900:
             raw_payload = raw_payload[:900] + "..."
         return f"{title}\n{raw_payload}"
@@ -1446,7 +1446,7 @@ def _parse_gpt_response_json(raw: str) -> dict:
         raise json.JSONDecodeError("No valid JSON object with action and bot_reply found", raw, 0)
     if len(matches) == 1:
         return matches[0]
-    sigs = [json.dumps(m, sort_keys=True, ensure_ascii=False) for m in matches]
+    sigs = [json.dumps(m, sort_keys=True, ensure_ascii=False, default=str) for m in matches]
     if len(set(sigs)) == 1:
         return matches[0]
     return matches[0]
@@ -4187,7 +4187,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 tool_output = {"action": "fallback_to_general", "content": merged or ""}
                         else:
                             tool_output = {"action": "fallback_to_general", "content": config.CORE_KNOWLEDGE_BASE or ""}
-                        tool_content = json.dumps(tool_output)
+                        tool_content = json.dumps(tool_output, default=str)
                         tool_round_trips.append(
                             _record_tool_round_trip(function_name, function_args, tool_content, None)
                         )
@@ -4473,7 +4473,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 if isinstance(_api, dict) and _api.get("message") is not None
                                 else tool_output.get("human_readable_reason", "Unknown error")
                             )
-                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
+                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
                             api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
                             print(f"create_appointment tool: API failed (no user-text retry): {err_msg}")
                         
@@ -4533,11 +4533,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     print(f"WARNING: analytics pause_cleared: {pr_e}")
                         elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
-                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
+                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
                             api_failure_reason = f"update_appointment_date_tool_failed: {err_msg}"
                             print(f"update_appointment_date tool: API failed: {err_msg}")
 
-                        tool_content = json.dumps(tool_output)
+                        tool_content = json.dumps(tool_output, default=str)
                         tool_round_trips.append(
                             _record_tool_round_trip(
                                 function_name,
@@ -4796,7 +4796,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         else (rec_api or {}).get("human_readable_reason", "Unknown error")
                     )
                     err_msg = (
-                        str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw)
+                        str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
                     )
                     api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
 
