@@ -1776,8 +1776,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         bot_reply_text = _clean_reply_text(bot_reply_text)
     # AI-PRIMARY: No turn-by-turn truncation or greeting strip. Send AI reply as-is.
 
-    # Allow summary + confirmation request before submit; block any false claim that booking
-    # already happened or that the request was already sent to the system without CRM success.
+    # Allow summary + confirmation request before submit; if the model falsely claims that booking
+    # already happened or that the request was already sent to the system without CRM success,
+    # treat it as an execution-path failure and hand over instead of showing the user fake progress.
     if (
         not _flow_meta_has_crm_booking_confirmation(flow_meta)
         and _reply_claims_booking_done(bot_reply_text)
@@ -1786,8 +1787,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             "[_process_and_respond] BLOCKED booking claim: text claims booking/request already happened "
             "without submit_booking_intent/create_appointment success+booking_flow_state=booked"
         )
-        action = "answer_question"
-        bot_reply_text = _booking_not_confirmed_safe_reply(current_preferred_lang)
+        action = "human_handover"
+        escalation_reason_from_gpt = "technical_error"
+        _flow_error_reason = (
+            "Step: Booking execution guard | assistant claimed booking/request already happened "
+            "without real CRM success"
+        )
 
     if (
         is_post_takeover_escalation_cooldown(user_data)

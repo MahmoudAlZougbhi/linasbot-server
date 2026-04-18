@@ -2443,7 +2443,35 @@ async def _resolve_body_part_ids_from_area_hint(
     return None
 
 
-async def _resolve_machine_for_booking(service_id: Optional[int], candidate: Optional[int]) -> int:
+def _user_explicitly_requests_machine_change(text: Optional[str]) -> bool:
+    s = (text or "").strip().lower()
+    if not s:
+        return False
+    return any(
+        token in s
+        for token in (
+            "machine",
+            "device",
+            "جهاز",
+            "الماكينة",
+            "المكنة",
+            "neo",
+            "candela",
+            "quadro",
+            "trio",
+            "نيو",
+            "كانديلا",
+            "كوادرو",
+            "تريو",
+        )
+    )
+
+
+async def _resolve_machine_for_booking(
+    service_id: Optional[int],
+    candidate: Optional[int],
+    preferred_existing_machine_id: Optional[int] = None,
+) -> int:
     """
     Only laser hair removal (1, 12) uses the customer's machine choice from get_machines.
     Tattoo, CO2, whitening, etc. have a fixed device on the backend — ignore wrong GPT picks
@@ -2451,16 +2479,50 @@ async def _resolve_machine_for_booking(service_id: Optional[int], candidate: Opt
     """
     sid = _safe_int(service_id)
     cand = _safe_int(candidate)
+    preferred_existing = _safe_int(preferred_existing_machine_id)
     fallback = _safe_int(getattr(config, "DEFAULT_MACHINE_ID", None))
     if fallback is None:
         fallback = 1
+
+    def _first_non_none(*values: Optional[int]) -> Optional[int]:
+        for value in values:
+            if value is not None:
+                return value
+        return None
+
     if sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
-        return cand if cand is not None else fallback
+        try:
+            resp = await api_integrations.get_machines()
+            if resp.get("success") and isinstance(resp.get("data"), list):
+                hair_ids: List[int] = []
+                for machine in resp["data"]:
+                    mid = _safe_int(machine.get("id"))
+                    name = str(machine.get("name") or "").strip().lower()
+                    if mid is None:
+                        continue
+                    if mid in HAIR_REMOVAL_MACHINE_IDS or any(
+                        kw in name for kw in ("neo", "candela", "quadro", "trio")
+                    ):
+                        hair_ids.append(mid)
+                hair_allowed = set(hair_ids)
+                for choice in (cand, preferred_existing, fallback):
+                    if choice is not None and choice in hair_allowed:
+                        return choice
+                if hair_ids:
+                    return hair_ids[0]
+        except Exception as ex:
+            print(f"_resolve_machine_for_booking: {ex}")
+        for choice in (cand, preferred_existing, fallback):
+            if choice is not None and choice in HAIR_REMOVAL_MACHINE_IDS:
+                return choice
+        return _first_non_none(preferred_existing, cand, fallback)
     try:
         resp = await api_integrations.get_machines()
         if not resp.get("success") or not isinstance(resp.get("data"), list):
-            return cand if cand is not None else fallback
+            return _first_non_none(cand, preferred_existing, fallback)
         machines = resp["data"]
+        allowed_ids = {_safe_int(m.get("id")) for m in machines}
+        allowed_ids.discard(None)
 
         def nm(m: dict) -> str:
             return (m.get("name") or "").strip().lower()
@@ -2472,6 +2534,11 @@ async def _resolve_machine_for_booking(service_id: Optional[int], candidate: Opt
                     if mid is not None:
                         return mid
             return None
+
+        if cand is not None and cand in allowed_ids:
+            return cand
+        if preferred_existing is not None and preferred_existing in allowed_ids:
+            return preferred_existing
 
         if sid == 13:
             mid = first_id(lambda n: "pico" in n)
@@ -2493,7 +2560,7 @@ async def _resolve_machine_for_booking(service_id: Optional[int], candidate: Opt
                 return mid
     except Exception as ex:
         print(f"_resolve_machine_for_booking: {ex}")
-    return cand if cand is not None else fallback
+    return _first_non_none(preferred_existing, cand, fallback)
 
 
 def _area_name_to_body_part_ids(area_name: str, service_id: int) -> Optional[List[int]]:
@@ -4037,6 +4104,40 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                     if phone_for_pause_guard and not function_args.get("phone"):
                         function_args["phone"] = phone_for_pause_guard
+
+                    aid_for_machine = _safe_int(function_args.get("appointment_id"))
+                    machine_row = (
+                        find_appointment_row_in_check_next_payload(
+                            check_next_appointment_result, aid_for_machine
+                        )
+                        if aid_for_machine is not None and check_next_appointment_result
+                        else None
+                    )
+                    row_service_id = row_branch_id = row_machine_id = None
+                    if machine_row is not None:
+                        row_service_id, row_branch_id, row_machine_id = (
+                            extract_appointment_booking_fields(machine_row)
+                        )
+                    requested_machine_change = _user_explicitly_requests_machine_change(
+                        all_user_text_for_date
+                    )
+                    arg_machine_id = _safe_int(function_args.get("machine_id"))
+                    if arg_machine_id is not None and not requested_machine_change:
+                        print(
+                            "SAFETY: Removing unrequested machine_id from appointment update "
+                            f"(appointment_id={aid_for_machine}, machine_id={arg_machine_id})"
+                        )
+                        function_args.pop("machine_id", None)
+                    elif arg_machine_id is not None:
+                        resolved_machine_id = await _resolve_machine_for_booking(
+                            _safe_int(function_args.get("service_id")) or row_service_id,
+                            arg_machine_id,
+                            preferred_existing_machine_id=row_machine_id,
+                        )
+                        if resolved_machine_id is not None:
+                            function_args["machine_id"] = resolved_machine_id
+                        else:
+                            function_args.pop("machine_id", None)
 
                     requires_date = (
                         function_name == "update_appointment_date"
