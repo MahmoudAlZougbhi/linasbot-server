@@ -17,6 +17,7 @@ import Training from './pages/Training';
 import ContentManagers from './pages/ContentManagers';
 import ActivityFlow from './pages/ActivityFlow';
 import LiveChat from './pages/LiveChat';
+import MobileLiveChat from './pages/MobileLiveChat';
 import SmartMessaging from './pages/SmartMessaging';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
@@ -144,6 +145,16 @@ function AppContent() {
   );
 }
 
+function MobileLiveChatRoute() {
+  return (
+    <OperatorStatusProvider>
+      <div className="h-[100dvh] overflow-hidden bg-slate-950">
+        <MobileLiveChat />
+      </div>
+    </OperatorStatusProvider>
+  );
+}
+
 function App() {
   return (
     <Router>
@@ -153,6 +164,15 @@ function App() {
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+
+            <Route
+              path="/mobile/live-chat"
+              element={
+                <ProtectedRoute>
+                  <MobileLiveChatRoute />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Protected App Routes */}
             <Route path="/*" element={

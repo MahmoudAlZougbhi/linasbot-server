@@ -31,6 +31,7 @@ import {
   StatusBadge,
   NewCustomerBadge,
 } from "../components/LiveChat/ConversationIndicators";
+import MobileLiveChatView from "../components/LiveChat/MobileLiveChatView";
 import { useLiveChatSSE } from "../hooks/useLiveChatSSE";
 import { useLiveChatMediaComposer } from "../hooks/useLiveChatMediaComposer";
 import {
@@ -42,7 +43,7 @@ import {
   markConversationRead as markConversationReadApi,
 } from "../utils/liveChatApi";
 
-const LiveChat = () => {
+const LiveChat = ({ mobile = false }) => {
   const [searchParams] = useSearchParams();
   const [activeConversations, setActiveConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -105,6 +106,10 @@ const LiveChat = () => {
   const [rebuildingIndex, setRebuildingIndex] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [botPanelOpen, setBotPanelOpen] = useState(false); // With bot floating panel when sidebar collapsed
+  const [mobileListSection, setMobileListSection] = useState("queue");
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [mobileFilterSheetOpen, setMobileFilterSheetOpen] = useState(false);
+  const isMobileView = Boolean(mobile);
 
   const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min - avoid refetch when switching back to same conv
 
@@ -406,6 +411,18 @@ const LiveChat = () => {
       .sort((a, b) => b._lastTs - a._lastTs);
   }, [filteredBotConversations, getConversationLastTs]);
 
+  const mobileVisibleConversations = React.useMemo(() => {
+    if (mobileListSection === "mine") return filteredWithOperator;
+    if (mobileListSection === "bot") return [...liveBotConversations, ...historyBotConversations];
+    return filteredWaitingQueue;
+  }, [
+    mobileListSection,
+    filteredWithOperator,
+    liveBotConversations,
+    historyBotConversations,
+    filteredWaitingQueue,
+  ]);
+
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
   // Local state for optimistic UI; API unread_count is source of truth (persists across refresh)
   const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
@@ -477,6 +494,25 @@ const LiveChat = () => {
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
   }, [selectedConversation]);
+
+  useEffect(() => {
+    if (!isMobileView || selectedConversation?.conversation || !mobileDetailsOpen) return;
+    setMobileDetailsOpen(false);
+  }, [isMobileView, selectedConversation?.conversation, mobileDetailsOpen]);
+
+  useEffect(() => {
+    if (!isMobileView) return undefined;
+
+    const handlePopState = () => {
+      if (selectedConversationRef.current?.conversation) {
+        setSelectedConversation(null);
+        setMobileDetailsOpen(false);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isMobileView]);
 
   useEffect(() => {
     hasMoreMessagesRef.current = hasMoreMessages;
@@ -785,6 +821,38 @@ const LiveChat = () => {
     ];
   }, []);
 
+  const getConversationUnreadCount = React.useCallback((conversation) => {
+    if (!conversation) return 0;
+    const readKey = `${conversation.user_id}_${conversation.conversation_id}`;
+    const readCount = readMessageCountByConv[readKey] ?? 0;
+    const msgCount = conversation.message_count || 0;
+    if (readCount > 0 && readCount >= msgCount) return 0;
+    if (typeof conversation.unread_count === "number") return conversation.unread_count;
+    return Math.max(0, msgCount - readCount);
+  }, [readMessageCountByConv]);
+
+  const buildConversationFromQueueItem = React.useCallback((item) => {
+    return activeConversations.find(
+      (c) =>
+        c.conversation_id === item.conversation_id &&
+        c.user_id === item.user_id
+    ) || {
+      conversation_id: item.conversation_id,
+      user_id: item.user_id,
+      user_name: item.user_name,
+      user_phone: item.user_phone,
+      status: "waiting_human",
+      language: item.language || "ar",
+      sentiment: item.sentiment,
+      message_count: item.message_count || 0,
+      last_message: item.last_message ? { content: item.last_message } : null,
+      is_new_customer: item.is_new_customer,
+      wait_time_seconds: item.wait_time_seconds,
+      reason: item.reason,
+      unread_count: item.unread_count,
+    };
+  }, [activeConversations]);
+
   const selectConversation = React.useCallback((conv) => {
     const cacheKey = `${conv.user_id}_${conv.conversation_id}`;
     const cached = messageCacheRef.current.get(cacheKey);
@@ -804,6 +872,19 @@ const LiveChat = () => {
       setMessagesLoading(true);
     }
   }, [markConversationRead]);
+
+  const openConversation = React.useCallback((conv) => {
+    if (isMobileView && !selectedConversationRef.current?.conversation) {
+      window.history.pushState({ mobileLiveChatOpen: true }, "");
+    }
+    setMobileDetailsOpen(false);
+    selectConversation(conv);
+  }, [isMobileView, selectConversation]);
+
+  const openWaitingConversation = React.useCallback((item) => {
+    markWaitingConversationRead(item.user_id, item.conversation_id, item.message_count || 0);
+    openConversation(buildConversationFromQueueItem(item));
+  }, [buildConversationFromQueueItem, markWaitingConversationRead, openConversation]);
 
   useEffect(() => {
     if (!selectedConversation?.conversation) return;
@@ -2223,7 +2304,268 @@ const LiveChat = () => {
     }
   };
 
+  const sharedOverlayModals = (
+    <>
+      {feedbackModal?.feedbackType === "like" && (
+        <LikeFeedbackModal
+          message={feedbackModal.message}
+          userQuestion={getPreviousUserMessage(feedbackModal.message)}
+          onClose={() => setFeedbackModal(null)}
+          onSubmit={submitLikeToFaq}
+        />
+      )}
+      {feedbackModal?.feedbackType === "wrong" && (
+        <FeedbackModal
+          message={feedbackModal.message}
+          conversation={selectedConversation?.conversation}
+          onClose={() => setFeedbackModal(null)}
+          onSubmit={submitCorrection}
+        />
+      )}
+
+      {editMessageModal?.message && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-xl"
+          >
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+              <span className="text-xl mr-2">✏️</span>
+              Edit bot reply
+            </h3>
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="Edit the reply text..."
+              className="input-field w-full min-h-[120px] resize-y mb-4"
+              disabled={isSubmittingEdit}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditMessageModal(null)}
+                className="btn-secondary"
+                disabled={isSubmittingEdit}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitEditMessage}
+                className="btn-primary disabled:opacity-50"
+                disabled={isSubmittingEdit || !(editContent || "").trim()}
+              >
+                {isSubmittingEdit ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {faqCorrectionModal?.message && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto"
+          >
+            <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
+              <span className="text-xl mr-2">📚</span>
+              Correct reply from FAQ
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              View the original FAQ question that matched the user's message, the match score, and edit the answer. Save Change = update the same question in all languages. Save New = save the user's question with the answer as a new FAQ entry in all languages without changing the original.
+            </p>
+            {faqContextLoading ? (
+              <p className="text-slate-500 text-sm">Loading match context...</p>
+            ) : faqContext?.faq_match ? (
+              <>
+                <div className="space-y-3 mb-4 text-sm">
+                  <div>
+                    <span className="font-medium text-slate-600">Original FAQ question that matched the user's message:</span>
+                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
+                      {faqContext.faq_match.stored_question || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-600">User's question:</span>
+                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
+                      {faqContext.faq_match.user_question || "—"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-600">Match score:</span>
+                    <span className="text-primary-600 font-medium">
+                      {faqContext.faq_match.similarity != null
+                        ? `${Math.round(Number(faqContext.faq_match.similarity) * 100)}%`
+                        : "—"}
+                    </span>
+                    {faqContext.faq_match.tier && (
+                      <span className="text-xs px-2 py-0.5 bg-slate-200 rounded">{faqContext.faq_match.tier}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Answer (editable):</label>
+                  <textarea
+                    value={faqEditAnswer}
+                    onChange={(e) => setFaqEditAnswer(e.target.value)}
+                    placeholder="Edit the answer..."
+                    className="input-field w-full min-h-[100px] resize-y"
+                    disabled={faqSubmitting}
+                  />
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFaqCorrectionModal(null)}
+                    className="btn-secondary"
+                    disabled={faqSubmitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFaqSaveChange}
+                    className="btn-primary disabled:opacity-50"
+                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
+                  >
+                    {faqSubmitting ? "..." : "Save Change — Update original question answer in all languages"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFaqSaveNew}
+                    className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
+                  >
+                    {faqSubmitting ? "..." : "Save New — Save user's question + answer as new FAQ in all languages (original unchanged)"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3 mb-4 text-sm">
+                  <div>
+                    <span className="font-medium text-slate-600">Original FAQ question:</span>
+                    <p className="mt-1 p-2 bg-slate-100 rounded border border-slate-200 text-slate-500 italic">—</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-600">User's question:</span>
+                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
+                      {getPreviousUserMessage(faqCorrectionModal.message) || "—"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-600">Match score:</span>
+                    <span className="text-slate-400">—</span>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Answer (editable):</label>
+                  <textarea
+                    value={faqEditAnswer}
+                    onChange={(e) => setFaqEditAnswer(e.target.value)}
+                    placeholder="Edit the answer..."
+                    className="input-field w-full min-h-[100px] resize-y"
+                    disabled={faqSubmitting}
+                  />
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFaqCorrectionModal(null)}
+                    className="btn-secondary"
+                    disabled={faqSubmitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFaqSaveNew}
+                    className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
+                  >
+                    {faqSubmitting ? "..." : "Save New — Save user's question + answer as new FAQ in all languages"}
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+    </>
+  );
+
+  if (isMobileView) {
+    return (
+      <>
+        <MobileLiveChatView
+          formatLastRefreshTime={formatLastRefreshTime}
+          handleManualRefresh={handleManualRefresh}
+          isRefreshing={isRefreshing}
+          setMobileFilterSheetOpen={setMobileFilterSheetOpen}
+          liveSearchQuery={liveSearchQuery}
+          setLiveSearchQuery={setLiveSearchQuery}
+          mobileListSection={mobileListSection}
+          setMobileListSection={setMobileListSection}
+          filteredWaitingQueue={filteredWaitingQueue}
+          filteredWithOperator={filteredWithOperator}
+          filteredBotConversations={filteredBotConversations}
+          mobileVisibleConversations={mobileVisibleConversations}
+          isLoading={isLoading}
+          buildConversationFromQueueItem={buildConversationFromQueueItem}
+          getConversationUnreadCount={getConversationUnreadCount}
+          formatPhoneForDisplay={formatPhoneForDisplay}
+          formatConversationListDate={formatConversationListDate}
+          openWaitingConversation={openWaitingConversation}
+          openConversation={openConversation}
+          mobileFilterSheetOpen={mobileFilterSheetOpen}
+          botDateFrom={botDateFrom}
+          setBotDateFrom={setBotDateFrom}
+          botDateTo={botDateTo}
+          setBotDateTo={setBotDateTo}
+          hasMoreChats={hasMoreChats}
+          loadingMoreChats={loadingMoreChats}
+          loadMoreChats={loadMoreChats}
+          selectedConversation={selectedConversation}
+          setSelectedConversation={setSelectedConversation}
+          reloadSelectedConversationMessages={reloadSelectedConversationMessages}
+          messagesContainerRef={messagesContainerRef}
+          messagesLoading={messagesLoading}
+          messagesEndRef={messagesEndRef}
+          handleFeedback={handleFeedback}
+          mobileDetailsOpen={mobileDetailsOpen}
+          setMobileDetailsOpen={setMobileDetailsOpen}
+          handleTakeOver={handleTakeOver}
+          handleReleaseToBot={handleReleaseToBot}
+          handleEndConversation={handleEndConversation}
+          selectedImage={selectedImage}
+          discardImage={discardImage}
+          sendImageMessage={sendImageMessage}
+          recordedAudio={recordedAudio}
+          discardRecording={discardRecording}
+          sendVoiceMessage={sendVoiceMessage}
+          isSendingVoice={isSendingVoice}
+          imageInputRef={imageInputRef}
+          handleImageSelect={handleImageSelect}
+          isRecording={isRecording}
+          stopRecording={stopRecording}
+          startRecording={startRecording}
+          formatRecordingTime={formatRecordingTime}
+          messageInput={messageInput}
+          setMessageInput={setMessageInput}
+          handleSendMessage={handleSendMessage}
+          isSending={isSending}
+        />
+        {sharedOverlayModals}
+      </>
+    );
+  }
+
   return (
+    <>
     <div className="h-[calc(100vh-5rem)] -m-6 p-4 flex flex-col min-h-0">
       {/* Header - Operator Status + Refresh - compact */}
       <motion.div
@@ -3598,200 +3940,9 @@ const LiveChat = () => {
         </motion.div>
       </div>
 
-      {/* Feedback Modals */}
-      {feedbackModal?.feedbackType === "like" && (
-        <LikeFeedbackModal
-          message={feedbackModal.message}
-          userQuestion={getPreviousUserMessage(feedbackModal.message)}
-          onClose={() => setFeedbackModal(null)}
-          onSubmit={submitLikeToFaq}
-        />
-      )}
-      {feedbackModal?.feedbackType === "wrong" && (
-        <FeedbackModal
-          message={feedbackModal.message}
-          conversation={selectedConversation.conversation}
-          onClose={() => setFeedbackModal(null)}
-          onSubmit={submitCorrection}
-        />
-      )}
-
-      {/* Edit bot message modal (dislike → edit reply, non-FAQ) */}
-      {editMessageModal?.message && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-xl"
-          >
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-              <span className="text-xl mr-2">✏️</span>
-              Edit bot reply
-            </h3>
-            <textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              placeholder="Edit the reply text..."
-              className="input-field w-full min-h-[120px] resize-y mb-4"
-              disabled={isSubmittingEdit}
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditMessageModal(null)}
-                className="btn-secondary"
-                disabled={isSubmittingEdit}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitEditMessage}
-                className="btn-primary disabled:opacity-50"
-                disabled={isSubmittingEdit || !(editContent || "").trim()}
-              >
-                {isSubmittingEdit ? "Saving..." : "Save changes"}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* FAQ Correction modal (dislike on FAQ-sourced bot reply) */}
-      {faqCorrectionModal?.message && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto"
-          >
-            <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
-              <span className="text-xl mr-2">📚</span>
-              Correct reply from FAQ
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              View the original FAQ question that matched the user's message, the match score, and edit the answer. Save Change = update the same question in all languages. Save New = save the user's question with the answer as a new FAQ entry in all languages without changing the original.
-            </p>
-            {faqContextLoading ? (
-              <p className="text-slate-500 text-sm">Loading match context...</p>
-            ) : faqContext?.faq_match ? (
-              <>
-                <div className="space-y-3 mb-4 text-sm">
-                  <div>
-                    <span className="font-medium text-slate-600">Original FAQ question that matched the user's message:</span>
-                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
-                      {faqContext.faq_match.stored_question || "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-600">User's question:</span>
-                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
-                      {faqContext.faq_match.user_question || "—"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-600">Match score:</span>
-                    <span className="text-primary-600 font-medium">
-                      {faqContext.faq_match.similarity != null
-                        ? `${Math.round(Number(faqContext.faq_match.similarity) * 100)}%`
-                        : "—"}
-                    </span>
-                    {faqContext.faq_match.tier && (
-                      <span className="text-xs px-2 py-0.5 bg-slate-200 rounded">{faqContext.faq_match.tier}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Answer (editable):</label>
-                  <textarea
-                    value={faqEditAnswer}
-                    onChange={(e) => setFaqEditAnswer(e.target.value)}
-                    placeholder="Edit the answer..."
-                    className="input-field w-full min-h-[100px] resize-y"
-                    disabled={faqSubmitting}
-                  />
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setFaqCorrectionModal(null)}
-                    className="btn-secondary"
-                    disabled={faqSubmitting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFaqSaveChange}
-                    className="btn-primary disabled:opacity-50"
-                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
-                  >
-                    {faqSubmitting ? "..." : "Save Change — Update original question answer in all languages"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFaqSaveNew}
-                    className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
-                  >
-                    {faqSubmitting ? "..." : "Save New — Save user's question + answer as new FAQ in all languages (original unchanged)"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* No FAQ match: show user question + editable answer + Save New only */}
-                <div className="space-y-3 mb-4 text-sm">
-                  <div>
-                    <span className="font-medium text-slate-600">Original FAQ question:</span>
-                    <p className="mt-1 p-2 bg-slate-100 rounded border border-slate-200 text-slate-500 italic">—</p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-600">User's question:</span>
-                    <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
-                      {getPreviousUserMessage(faqCorrectionModal.message) || "—"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-600">Match score:</span>
-                    <span className="text-slate-400">—</span>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Answer (editable):</label>
-                  <textarea
-                    value={faqEditAnswer}
-                    onChange={(e) => setFaqEditAnswer(e.target.value)}
-                    placeholder="Edit the answer..."
-                    className="input-field w-full min-h-[100px] resize-y"
-                    disabled={faqSubmitting}
-                  />
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setFaqCorrectionModal(null)}
-                    className="btn-secondary"
-                    disabled={faqSubmitting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFaqSaveNew}
-                    className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-                    disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
-                  >
-                    {faqSubmitting ? "..." : "Save New — Save user's question + answer as new FAQ in all languages"}
-                  </button>
-                </div>
-              </>
-            )}
-          </motion.div>
-        </div>
-      )}
+      {sharedOverlayModals}
     </div>
+    </>
   );
 };
 

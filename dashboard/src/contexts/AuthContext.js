@@ -169,7 +169,7 @@ export const AuthProvider = ({ children }) => {
 
   const TRANSIENT_AUTH_ERROR = 'Authentication service temporarily unavailable';
 
-  const login = async (email, password, retryCount = 0) => {
+  const login = async (email, password, redirectTo = '/', retryCount = 0) => {
     const maxRetries = 2;
     try {
       const controller = new AbortController();
@@ -195,7 +195,7 @@ export const AuthProvider = ({ children }) => {
           toast.loading(`Service temporarily unavailable. Retrying in 3s... (${retryCount + 1}/${maxRetries})`, { id: 'auth-retry' });
           await new Promise((r) => setTimeout(r, 3000));
           toast.dismiss('auth-retry');
-          return login(email, password, retryCount + 1);
+          return login(email, password, redirectTo, retryCount + 1);
         }
         throw new Error(errMsg);
       }
@@ -222,7 +222,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('auth_session', JSON.stringify(session));
       setUser(userData);
       toast.success('Welcome back!');
-      navigate('/');
+      navigate(redirectTo || '/');
       console.log('[AuthContext] login: setUser + localStorage + navigate completed');
 
       return userData;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   EnvelopeIcon, 
@@ -17,6 +17,10 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
+  const location = useLocation();
+  const redirectTo = location.state?.from
+    ? `${location.state.from.pathname || ''}${location.state.from.search || ''}`
+    : '/';
 
   const isConnectionError = (message) => {
     const value = (message || '').toLowerCase();
@@ -32,7 +36,7 @@ const Login = () => {
   const tryLogin = async () => {
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, redirectTo);
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.');
       console.error('Login error:', err);

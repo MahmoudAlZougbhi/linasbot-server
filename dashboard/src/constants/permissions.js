@@ -60,6 +60,7 @@ export const FEATURES = {
 export const PATH_TO_PERMISSION = {
   '/': 'dashboard',
   '/live-chat': 'liveChat',
+  '/mobile/live-chat': 'liveChat',
   '/chat-history': 'chatHistory',
   '/training': 'training',
   '/testing': 'testing',
