@@ -2669,7 +2669,7 @@ def get_openai_tools_schema():
                 "name": "update_appointment_date",
                 "description": (
                     "Updates the date/time of an existing appointment on the calendar. Use for reschedule/postpone/change to a NEW slot (Arabic «تأجيل الموعد»). "
-                    "Same tool to put a PAUSED row onto a new datetime once the user chose the slot—do NOT call pause_appointment for that. "
+                    "Same tool to put a PAUSED row onto a new datetime once the user chose the slot—this also covers phrasing like «يرجع يجي عالموعد», «كمّل الموعد», or 'resume the paused appointment'. Do NOT call pause_appointment for that. "
                     "You MUST pass the **exact appointment_id** the user selected (from check_next_appointment / customer_appointments JSON), plus structured **date**. "
                     "If multiple rows: first show each row to the user with appointment_id + service + machine + areas + price (if in JSON), ask them for the id (or line number), then call this tool. "
                     "Do NOT use pause_appointment to move to another day. "

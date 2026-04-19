@@ -599,7 +599,8 @@ def _user_intent_resume_paused_appointment(user_text: str) -> bool:
         return False
     if re.search(
         r"موقوف|موقف|الموقوف|المعلّق|المعلق|من\s*البوز|البوز|طلع.*موقوف|شيل.*موقوف|فك.*موقوف|"
-        r"إخراج.*موقوف|رجع.*موعد|ارجع.*موعد|كمّل.*جلس|كمل.*جلس|تكمل",
+        r"إخراج.*موقوف|رجع.*موعد|ارجع.*موعد|يرجع.*موعد|رجع.*يجي.*(?:على|ع)\s*موعد|"
+        r"يرجع.*يجي.*(?:على|ع)\s*موعد|كمّل.*جلس|كمل.*جلس|كمّل.*موعد|كمل.*موعد|تكمل",
         t,
         re.I,
     ):
@@ -609,7 +610,8 @@ def _user_intent_resume_paused_appointment(user_text: str) -> bool:
         r"(\bmw3ad|appointment).*\b(pause|paused|mw2of|boz)\b|"
         r"\b(kmel|kammel|kml)\b.*(\bmw3ad|pause|boz|mw2of)|"
         r"\b(rod|rj3|rje3)\b.*(\bavailable|\bavail|\bmw3ad)|"
-        r"\b(available|avail)\b.*(\bboz|\bpause|mw2of)",
+        r"\b(available|avail)\b.*(\bboz|\bpause|mw2of)|"
+        r"\b(rj3|rje3|rja3)\b.{0,10}\b(yje|yeje|iji|yiji|ji)\b.{0,20}\b(3a|3al|aal|al)\b.{0,8}\b(mw3ad|maw3ad|mou3ad)\b",
         t,
         re.I,
     ):
@@ -3359,9 +3361,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 change_patterns = [
                     r"\b(reschedule|rescheduling|postpone|postponing|push back|move appointment|change appointment|shift appointment)\b",
+                    r"\b(resume|reactivate|bring back|continue)\b.{0,30}\b(appointment|slot)\b",
                     r"\b(reporter|decaler|décaler|deplacer|déplacer|changer rendez[- ]?vous)\b",
                     r"(تأجيل|اجل|أجل|أجّل|تغيير الموعد|غير الموعد|غيّر الموعد|نقل الموعد|تبديل الموعد|موعد تاني|موعد اخر|موعد آخر)",
+                    r"(?:رج[ّ]?ع|ارجع|يرجع|كم[ّ]?ل|كمل|فك|شيل).{0,35}(?:الموعد|موعدي|موعد|الموقوف|موقوف|البوز)",
+                    r"(?:رج[ّ]?ع|ارجع|يرجع).{0,12}(?:يجي|جي).{0,24}(?:على|ع)\s*(?:الموعد|موعدي|موعد)",
                     r"\b(2ajel|ajjel|ghayer el maw3ed|ghayer maw3ed|postpone el maw3ed|reschedule el maw3ed)\b",
+                    r"\b(rj+3|rje3|rja3|rod|rudd|kamm?el|kmel|fokk|fok|shil)\b.{0,30}\b(mw3ad|maw3ad|mou3ad|boz|pause|paused)\b",
+                    r"\b(rj+3|rje3|rja3)\b.{0,10}\b(yje|yeje|iji|yiji|ji)\b.{0,20}\b(3a|3al|aal|al)\b.{0,8}\b(mw3ad|maw3ad|mou3ad)\b",
                 ]
                 return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns) or (
                     detect_existing_appointment_edit_intent(text)

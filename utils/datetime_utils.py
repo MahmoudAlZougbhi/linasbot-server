@@ -107,12 +107,17 @@ _RESCHEDULE_INTENT_PATTERNS = [
     r"\bmove(?:\s+up)?\s+(?:my\s+)?appointment\b",
     r"\bchange\s+(?:my\s+)?appointment\b",
     r"\bshift\s+(?:my\s+)?appointment\b",
+    r"\b(?:resume|reactivate|bring\s+back|continue)\b.{0,30}\b(?:appointment|appt|slot)\b",
     # Arabic
     r"(?:بدي|بدّي|ممكن|اريد|أريد|حابب|حابة)?\s*(?:أج[ّ]?ل|اج[ّ]?ل|تأجيل|تاجيل|أخ[ّ]?ر|اخر|غي[ّ]?ر|غير|عد[ّ]?ل|عدل|نق[ّ]?ل|نقل)\s*(?:لي)?\s*(?:موعدي|الموعد|موعد)",
     r"(?:موعدي|الموعد|موعد)\s*(?:بدي|بدّي|ممكن|اريد|أريد)?\s*(?:أج[ّ]?ل|اج[ّ]?ل|تأجيل|تاجيل|تعديل|تغيير|تأخير|تاخير|نقل)",
     r"(?:تأجيل|تاجيل|تغيير\s*الموعد|تبديل\s*الموعد|نقل\s*الموعد|موعد\s*تاني|موعد\s*اخر|موعد\s*آخر)",
+    r"(?:رج[ّ]?ع|ارجع|يرجع|كم[ّ]?ل|كمل|فك|شيل).{0,35}(?:الموعد|موعدي|موعد|الموقوف|موقوف|البوز)",
+    r"(?:رج[ّ]?ع|ارجع|يرجع).{0,12}(?:يجي|جي).{0,24}(?:على|ع)\s*(?:الموعد|موعدي|موعد)",
     # Franco-Arabic
     r"\b(a2?aj+el|ajjel|ta2?jil|2ajel|akher|ghayy?er|8ayyer|baddel|na2?el)\b.*\b(maw3ad|m3ad|mo3ad|mou3ad|appointment)\b",
+    r"\b(rj+3|rje3|rja3|rod|rudd|kamm?el|kmel|fokk|fok|shil)\b.{0,30}\b(mw3ad|maw3ad|mou3ad|boz|pause|paused)\b",
+    r"\b(rj+3|rje3|rja3)\b.{0,10}\b(yje|yeje|iji|yiji|ji)\b.{0,20}\b(3a|3al|aal|al)\b.{0,8}\b(mw3ad|maw3ad|mou3ad)\b",
     # French
     r"\b(reporter|reprogrammer|replanifier|d[ée]caler|changer)\b.*\b(rendez[- ]?vous)\b",
 ]
