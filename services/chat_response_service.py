@@ -19,6 +19,7 @@ from services.booking.resolver import match_best_body_part_row, server_may_infer
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
+    detect_existing_appointment_edit_intent,
     datetime_from_ai_date_components,
     detect_appointment_inquiry_intent,
     detect_bulk_reschedule_all_intent,
@@ -574,12 +575,19 @@ def _operational_context_promises_imminent_appointment_update(ctx: Optional[str]
         "سوف أعدّل",
         "رح أغيّر",
         "رح اغير",
+        "رح غيّر",
+        "رح بدّل",
+        "رح ضيف",
+        "رح شيل",
     )
     needles_en = (
         "will update your appointment",
         "will reschedule",
         "i will move your appointment",
         "going to update your appointment",
+        "will edit your appointment",
+        "will change the machine",
+        "will update the body parts",
     )
     return any(n in c for n in needles_ar) or any(n in c_low for n in needles_en)
 
@@ -1538,7 +1546,9 @@ def _detect_change_request_intent(user_text: str) -> bool:
         r"(تأجيل|اجل|أجل|أجّل|تغيير الموعد|غير الموعد|غيّر الموعد|نقل الموعد|تبديل الموعد|موعد تاني|موعد اخر|موعد آخر)",
         r"\b(2ajel|ajjel|ghayer el maw3ed|ghayer maw3ed|postpone el maw3ed|reschedule el maw3ed)\b",
     ]
-    return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns)
+    return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns) or (
+        detect_existing_appointment_edit_intent(text)
+    )
 
 
 def _collect_recent_user_text_for_change_intent(
@@ -2788,12 +2798,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     is_reschedule_intent = detect_reschedule_intent(user_input)
     is_appointment_inquiry_intent = detect_appointment_inquiry_intent(user_input)
     is_bulk_reschedule_all_intent = detect_bulk_reschedule_all_intent(user_input)
+    is_existing_appointment_edit_intent = detect_existing_appointment_edit_intent(user_input)
     if is_reschedule_intent:
         print("🔁 Intent routing lock: reschedule/postpone intent detected.")
     if is_appointment_inquiry_intent:
         print("📅 Intent routing: appointment status / listing inquiry detected.")
     if is_bulk_reschedule_all_intent:
         print("🔁 Intent routing: bulk reschedule ALL rows requested.")
+    if is_existing_appointment_edit_intent:
+        print("🛠️ Intent routing: existing appointment edit detected.")
 
     booking_fsm_prompt_block = ""
     try:
@@ -2804,6 +2817,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 is_reschedule_intent
                 or is_appointment_inquiry_intent
                 or is_bulk_reschedule_all_intent
+                or is_existing_appointment_edit_intent
             ):
                 _booking_fsm_mod.maybe_enter_booking_mode(user_id, user_input)
             _booking_fsm_mod.maybe_exit_booking_mode(user_id, user_input)
@@ -3066,6 +3080,18 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         if reschedule_multi_hint:
             routing_guardrail += reschedule_multi_hint
 
+    if is_existing_appointment_edit_intent:
+        routing_guardrail += (
+            "\n\n"
+            "**🛠️ EXISTING APPOINTMENT EDIT (THIS MESSAGE):**\n"
+            "- The user wants to modify an already booked appointment (for example: change machine/device, add/remove body areas, switch service, or change branch).\n"
+            "- This is **NOT** a new booking flow. Do **NOT** ask full booking questions again if the appointment row already exists in CRM.\n"
+            "- Do **NOT** use `submit_booking_intent` or `create_appointment` for this request.\n"
+            "- First identify the correct existing row with `check_next_appointment`; if several rows exist, ask for `appointment_id` or the line number only.\n"
+            "- Then use **`edit_appointment`** for machine/body-part/service/branch edits. Use **`update_appointment_date`** only when the change is date/time only.\n"
+            "- Reuse the current appointment facts from CRM and ask only for the single missing detail needed to complete the edit.\n"
+        )
+
     if is_appointment_inquiry_intent and customer_phone_clean:
         routing_guardrail += (
             "\n\n"
@@ -3131,11 +3157,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 "- The user's latest message is only a short **yes / ok / proceed** style confirmation.\n"
                 "- Your previous assistant turn (or thread context) already committed to **updating or rescheduling** an appointment.\n"
                 "- **Interpret** their reply as authorization to **execute that same operation now**.\n"
-                "- You MUST call the real tools in this response: `check_next_appointment` if you still need `appointment_id`, then **`update_appointment_date`** using the **date/time and service/branch already agreed** in the conversation. Do **not** claim the update is done in `bot_reply` unless `update_appointment_date` actually succeeded in this request.\n"
+                "- You MUST call the real tools in this response: `check_next_appointment` if you still need `appointment_id`, then use **`update_appointment_date`** for date/time-only changes or **`edit_appointment`** for machine/body-part/service/branch changes already agreed in the conversation. Do **not** claim the update is done in `bot_reply` unless the real update tool actually succeeded in this request.\n"
             )
 
     # Authoritative CRM rows in-system so «emtan mw3de» / multi-paused listings cannot be hallucinated or merged.
-    if (is_appointment_inquiry_intent or is_reschedule_intent) and customer_phone_clean:
+    if (
+        is_appointment_inquiry_intent
+        or is_reschedule_intent
+        or is_existing_appointment_edit_intent
+    ) and customer_phone_clean:
         _live_snap = await _build_live_crm_appointments_snapshot(customer_phone_clean)
         if _live_snap:
             system_instruction_final += _live_snap
@@ -3333,7 +3363,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     r"(تأجيل|اجل|أجل|أجّل|تغيير الموعد|غير الموعد|غيّر الموعد|نقل الموعد|تبديل الموعد|موعد تاني|موعد اخر|موعد آخر)",
                     r"\b(2ajel|ajjel|ghayer el maw3ed|ghayer maw3ed|postpone el maw3ed|reschedule el maw3ed)\b",
                 ]
-                return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns)
+                return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns) or (
+                    detect_existing_appointment_edit_intent(text)
+                )
 
             async def find_paused_appointment_id(phone_to_lookup: str):
                 nonlocal check_next_appointment_result

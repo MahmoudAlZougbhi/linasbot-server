@@ -117,6 +117,23 @@ _RESCHEDULE_INTENT_PATTERNS = [
     r"\b(reporter|reprogrammer|replanifier|d[ée]caler|changer)\b.*\b(rendez[- ]?vous)\b",
 ]
 
+# User wants to edit an existing appointment without re-running a full new-booking flow
+# (change machine/body areas/service/branch on a booked row).
+_EXISTING_APPOINTMENT_EDIT_INTENT_PATTERNS = [
+    # English
+    r"\b(?:change|update|edit|switch|replace|add|remove)\b.*\b(?:machine|device|body\s*part|body\s*parts|area|areas|service|branch)\b.*\b(?:appointment|appt)\b",
+    r"\b(?:appointment|appt)\b.*\b(?:change|update|edit|switch|replace|add|remove)\b.*\b(?:machine|device|body\s*part|body\s*parts|area|areas|service|branch)\b",
+    # Arabic
+    r"(?:موعدي|الموعد|موعد)\s*(?:بد[ّي]|\s*)?(?:غي[ّ]?ر|بد[ّ]?ل|عد[ّ]?ل|ض[يّ]?ف|ز[يي]د|شيل|احذف|بدّي\s*غي[ّ]?ر|بدّي\s*ض[يّ]?ف|بدّي\s*شيل).{0,40}(?:جهاز|الماكينة|المكنة|ماكنة|منطقة|مناطق|الخدمة|الفرع|body\s*part)",
+    r"(?:غي[ّ]?ر|بد[ّ]?ل|عد[ّ]?ل|ض[يّ]?ف|ز[يي]د|شيل|احذف).{0,40}(?:جهاز|الماكينة|المكنة|ماكنة|منطقة|مناطق|الخدمة|الفرع|body\s*part).{0,30}(?:موعدي|الموعد|موعد)",
+    # Franco-Arabic
+    r"\b(?:ghayy?er|8ayyer|baddel|3addel|adel|zid|zeed|deef|dif|add|remove|shil)\b.{0,40}\b(?:machine|device|makina|mkene|mekne|body\s*part|body\s*parts|area|areas|service|branch|manati2|manta2a)\b.{0,30}\b(?:maw3ad|mw3ad|mou3ad|appointment)\b",
+    r"\b(?:maw3ad|mw3ad|mou3ad|appointment)\b.{0,30}\b(?:ghayy?er|8ayyer|baddel|3addel|adel|zid|zeed|deef|dif|add|remove|shil)\b.{0,40}\b(?:machine|device|makina|mkene|mekne|body\s*part|body\s*parts|area|areas|service|branch|manati2|manta2a)\b",
+    # French
+    r"\b(?:changer|modifier|ajouter|retirer|enlever)\b.*\b(?:machine|appareil|zone|zones|service|branche)\b.*\b(?:rendez[- ]?vous)\b",
+    r"\b(?:rendez[- ]?vous)\b.*\b(?:changer|modifier|ajouter|retirer|enlever)\b.*\b(?:machine|appareil|zone|zones|service|branche)\b",
+]
+
 # User wants to *see* appointment(s): when, what is booked, list paused, etc. (not necessarily reschedule).
 _APPOINTMENT_INQUIRY_INTENT_PATTERNS = [
     # Franco: emtan/2mtan/mtan + mw3ad / mw3de / maw3ad…
@@ -183,6 +200,17 @@ def detect_bulk_reschedule_all_intent(text: str) -> bool:
     if any(x in raw for x in ("كلهم", "كلون", "كل المواعيد", "كل مواعيدي")):
         return True
     return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _BULK_RESCHEDULE_ALL_PATTERNS)
+
+
+def detect_existing_appointment_edit_intent(text: str) -> bool:
+    """True when the user wants to edit machine/body parts/service/branch on an existing appointment."""
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+    return any(
+        re.search(pattern, normalized, re.IGNORECASE | re.UNICODE)
+        for pattern in _EXISTING_APPOINTMENT_EDIT_INTENT_PATTERNS
+    )
 
 
 def detect_relative_intent(text: str) -> Optional[str]:
