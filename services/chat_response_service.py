@@ -55,6 +55,9 @@ MODEL_PRICING = {
     "gpt-4-turbo": {"input": 10.0, "output": 30.0},
 }
 
+ORCHESTRATION_MODEL = "gpt-5.1"
+FINAL_RESPONSE_MODEL = "gpt-5.4-mini"
+
 
 def _compute_cost_from_usage(model: str, prompt_tokens: int, completion_tokens: int) -> dict:
     """Compute input_cost_usd, output_cost_usd, cost_usd from token counts."""
@@ -3231,15 +3234,16 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     
     gpt_raw_content = "" # Initialize gpt_raw_content here to make it accessible in except blocks
 
-    # Main GPT model is fixed per latest routing policy.
-    selected_model = "gpt-5.1"
+    # Stage split: keep orchestration/tool-routing on 5.1; final user-facing response after tools on 5.4-mini.
+    selected_model = ORCHESTRATION_MODEL
     model_metadata = {
         "complexity": "FIXED",
-        "reason": "Main flow using gpt-5.1",
+        "reason": f"Planning/tool-routing on {ORCHESTRATION_MODEL}",
     }
     print(f"🤖 Model selected: {selected_model} | Reason: {model_metadata['reason']}")
 
     try:
+        final_response_model_used = selected_model
         response = await client.chat.completions.create(
             model=selected_model,
             messages=messages,
@@ -4781,10 +4785,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     )
 
             second_response = await client.chat.completions.create(
-                model="gpt-5.4-mini",
+                model=FINAL_RESPONSE_MODEL,
                 messages=messages,
                 response_format={"type": "json_object"}
             )
+            final_response_model_used = FINAL_RESPONSE_MODEL
             if not second_response.choices:
                 raise ValueError("GPT returned no choices (after tool call)")
             gpt_raw_content = second_response.choices[0].message.content.strip() if second_response.choices[0].message.content else ""
@@ -5141,7 +5146,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             prompt_tokens_val = pt1 + pt2
             completion_tokens_val = ct1 + ct2
             cost1 = _compute_cost_from_usage(selected_model, pt1, ct1)
-            cost2 = _compute_cost_from_usage("gpt-5.4-mini", pt2, ct2)
+            cost2 = _compute_cost_from_usage(final_response_model_used, pt2, ct2)
             tokens_val = prompt_tokens_val + completion_tokens_val
             cost_info = {
                 "input_cost_usd": round((cost1.get("input_cost_usd", 0) or 0) + (cost2.get("input_cost_usd", 0) or 0), 6),
@@ -5154,30 +5159,39 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     "prompt_tokens": pt1,
                     "completion_tokens": ct1,
                     "total_tokens": pt1 + ct1,
+                    **cost1,
                 },
                 "second_gpt_call": {
-                    "model": "gpt-5.4-mini",
+                    "model": final_response_model_used,
                     "prompt_tokens": pt2,
                     "completion_tokens": ct2,
                     "total_tokens": pt2 + ct2,
+                    **cost2,
                 },
             }
         else:
             tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
             prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
             completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
-            cost_info = _compute_cost_from_usage(selected_model, prompt_tokens_val or 0, completion_tokens_val or 0) if (prompt_tokens_val is not None or completion_tokens_val is not None) else {}
+            cost_info = _compute_cost_from_usage(final_response_model_used, prompt_tokens_val or 0, completion_tokens_val or 0) if (prompt_tokens_val is not None or completion_tokens_val is not None) else {}
             if usage and prompt_tokens_val is not None:
                 token_breakdown = {
                     "single_call": {
-                        "model": selected_model,
+                        "model": final_response_model_used,
                         "prompt_tokens": prompt_tokens_val,
                         "completion_tokens": completion_tokens_val or 0,
                         "total_tokens": tokens_val,
+                        **cost_info,
                     }
                 }
         flow_meta = {
             "model": selected_model,
+            "orchestration_model": selected_model,
+            "final_response_model": final_response_model_used,
+            "stage_models": {
+                "planning": selected_model,
+                "final_response": final_response_model_used,
+            },
             "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
             "ai_query_summary": flow_ai_query_summary,
             "bot_sent_to_ai": flow_bot_sent_to_ai_full,
@@ -5319,6 +5333,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "current_gender_from_config": current_gender, # Pass the actual gender from config
             "_flow_meta": {
                 "model": selected_model,
+                "orchestration_model": selected_model,
+                "final_response_model": final_response_model_used,
+                "stage_models": {
+                    "planning": selected_model,
+                    "final_response": final_response_model_used,
+                },
                 "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
                 "ai_query_summary": flow_ai_query_summary,
                 "bot_sent_to_ai": flow_bot_sent_to_ai_full,
@@ -5347,6 +5367,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "current_gender_from_config": current_gender, # Pass the actual gender from config
             "_flow_meta": {
                 "model": selected_model,
+                "orchestration_model": selected_model,
+                "final_response_model": final_response_model_used,
+                "stage_models": {
+                    "planning": selected_model,
+                    "final_response": final_response_model_used,
+                },
                 "ai_raw_response": gpt_raw_content[:2000] if gpt_raw_content else None,
                 "ai_query_summary": flow_ai_query_summary,
                 "bot_sent_to_ai": flow_bot_sent_to_ai_full,

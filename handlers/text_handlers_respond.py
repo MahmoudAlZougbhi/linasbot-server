@@ -2247,7 +2247,21 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         sel_ct = dr.get("selector_completion_tokens") or 0
         pt = flow_meta.get("prompt_tokens")
         ct = flow_meta.get("completion_tokens")
-        main_model = flow_meta.get("model") or "gpt-5.1"
+        stage_models = flow_meta.get("stage_models") or {}
+        token_breakdown = flow_meta.get("token_breakdown") or {}
+        first_call = token_breakdown.get("first_gpt_call") or token_breakdown.get("single_call") or {}
+        second_call = token_breakdown.get("second_gpt_call") or {}
+        orchestration_model = (
+            flow_meta.get("orchestration_model")
+            or stage_models.get("planning")
+            or flow_meta.get("model")
+            or "gpt-5.1"
+        )
+        final_model = (
+            flow_meta.get("final_response_model")
+            or stage_models.get("final_response")
+            or orchestration_model
+        )
         main_cost = flow_meta.get("cost_usd") or 0.0
         selector_cost = (sel_pt / 1_000_000 * SELECTOR_MODEL_INPUT_PER_1M_USD) + (
             sel_ct / 1_000_000 * SELECTOR_MODEL_OUTPUT_PER_1M_USD
@@ -2261,7 +2275,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         cust_ctx = flow_meta.get("customer_context_sent")
         if cust_ctx:
             steps.append({"step": 5, "title": "Bot → AI (Customer context)", "content": cust_ctx, "tokens": 0, "model": None, "cost_usd": None, "event_type": "customer_context_sent"})
-        steps.append({"step": len(steps) + 1, "title": "Bot → AI (GPT)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
+        steps.append({"step": len(steps) + 1, "title": "Bot → AI (GPT planning)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": first_call.get("prompt_tokens", pt), "model": orchestration_model, "cost_usd": round(first_call.get("input_cost_usd") or flow_meta.get("input_cost_usd") or 0, 6) if (first_call.get("input_cost_usd") is not None or flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
         step_num = len(steps) + 1
         if tool_round_trips:
             steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
@@ -2281,10 +2295,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     exec_step["metadata"] = {"backend_execution": tr["backend_execution"]}
                 steps.append(exec_step)
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": second_call.get("completion_tokens", ct), "model": final_model, "cost_usd": round(second_call.get("cost_usd") or flow_meta.get("output_cost_usd") or 0, 6) if (second_call.get("cost_usd") is not None or flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
+            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {final_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": final_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
@@ -2299,7 +2313,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             resp_step["metadata"] = {"handover": True}
         steps.append(resp_step)
         total_cost = selector_cost + main_cost
-        summary_parts = [f"Selector ({SELECTOR_MODEL}): {sel_pt + sel_ct} tokens, ${selector_cost:.6f}", f"Main GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${total_cost:.6f}"]
+        summary_parts = [f"Selector ({SELECTOR_MODEL}): {sel_pt + sel_ct} tokens, ${selector_cost:.6f}"]
+        if second_call:
+            summary_parts.append(
+                f"Planning GPT ({orchestration_model}): {(first_call.get('prompt_tokens', 0) or 0) + (first_call.get('completion_tokens', 0) or 0)} tokens, ${float(first_call.get('cost_usd') or 0):.6f}"
+            )
+            summary_parts.append(
+                f"Final GPT ({final_model}): {(second_call.get('prompt_tokens', 0) or 0) + (second_call.get('completion_tokens', 0) or 0)} tokens, ${float(second_call.get('cost_usd') or 0):.6f}"
+            )
+        else:
+            summary_parts.append(f"Main GPT ({final_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}")
+        summary_parts.append(f"Total cost: ${total_cost:.6f}")
         steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0), "model": None, "cost_usd": round(total_cost, 6)})
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     else:
@@ -2309,7 +2333,21 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         ai_raw_or_error = flow_meta.get("ai_raw_response") or (f"AI error: {ai_error}" if ai_error else None)
         pt = flow_meta.get("prompt_tokens")
         ct = flow_meta.get("completion_tokens")
-        main_model = flow_meta.get("model") or "gpt-5.1"
+        stage_models = flow_meta.get("stage_models") or {}
+        token_breakdown = flow_meta.get("token_breakdown") or {}
+        first_call = token_breakdown.get("first_gpt_call") or token_breakdown.get("single_call") or {}
+        second_call = token_breakdown.get("second_gpt_call") or {}
+        orchestration_model = (
+            flow_meta.get("orchestration_model")
+            or stage_models.get("planning")
+            or flow_meta.get("model")
+            or "gpt-5.1"
+        )
+        final_model = (
+            flow_meta.get("final_response_model")
+            or stage_models.get("final_response")
+            or orchestration_model
+        )
         main_cost = flow_meta.get("cost_usd") or 0.0
         steps = [
             {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
@@ -2317,7 +2355,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         cust_ctx = flow_meta.get("customer_context_sent")
         if cust_ctx:
             steps.append({"step": 2, "title": "Bot → AI (Customer context)", "content": cust_ctx, "tokens": 0, "model": None, "cost_usd": None, "event_type": "customer_context_sent"})
-        steps.append({"step": len(steps) + 1, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": pt, "model": main_model, "cost_usd": round(flow_meta.get("input_cost_usd") or 0, 6) if (flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
+        steps.append({"step": len(steps) + 1, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": first_call.get("prompt_tokens", pt), "model": orchestration_model, "cost_usd": round(first_call.get("input_cost_usd") or flow_meta.get("input_cost_usd") or 0, 6) if (first_call.get("input_cost_usd") is not None or flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
         step_num = len(steps) + 1
         if tool_round_trips:
             steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
@@ -2344,10 +2382,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     exec_step["metadata"] = {"backend_execution": tr["backend_execution"]}
                 steps.append(exec_step)
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": ct, "model": main_model, "cost_usd": round(flow_meta.get("output_cost_usd") or 0, 6) if (flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
+            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": second_call.get("completion_tokens", ct), "model": final_model, "cost_usd": round(second_call.get("cost_usd") or flow_meta.get("output_cost_usd") or 0, 6) if (second_call.get("cost_usd") is not None or flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {main_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": main_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
+            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {final_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": final_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
@@ -2361,7 +2399,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             resp_step["event_type"] = "handover_triggered"
             resp_step["metadata"] = {"handover": True}
         steps.append(resp_step)
-        summary_parts = [f"GPT ({main_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${main_cost:.6f}"]
+        if second_call:
+            summary_parts = [
+                f"Planning GPT ({orchestration_model}): {(first_call.get('prompt_tokens', 0) or 0) + (first_call.get('completion_tokens', 0) or 0)} tokens, ${float(first_call.get('cost_usd') or 0):.6f}",
+                f"Final GPT ({final_model}): {(second_call.get('prompt_tokens', 0) or 0) + (second_call.get('completion_tokens', 0) or 0)} tokens, ${float(second_call.get('cost_usd') or 0):.6f}",
+                f"Total cost: ${main_cost:.6f}",
+            ]
+        else:
+            summary_parts = [f"GPT ({final_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${main_cost:.6f}"]
         steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (pt or 0) + (ct or 0), "model": None, "cost_usd": round(main_cost, 6)})
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     flow_error_for_log = flow_meta.get("error") or _flow_error_reason
@@ -2379,7 +2424,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         bot_sent_to_ai_full=flow_meta.get("bot_sent_to_ai"),
         customer_context_sent=flow_meta.get("customer_context_sent"),
         ai_raw_response=flow_meta.get("ai_raw_response"),
-        model=flow_meta.get("model"),
+        model=flow_meta.get("final_response_model") or flow_meta.get("model"),
         tokens=flow_meta.get("tokens"),
         prompt_tokens=flow_meta.get("prompt_tokens"),
         completion_tokens=flow_meta.get("completion_tokens"),
@@ -2402,7 +2447,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         prompt_tokens = count_tokens(get_system_instruction(user_id, current_preferred_lang) + "\n\n" + user_input_to_process)
         completion_tokens = count_tokens(bot_reply_text)
         total_tokens = prompt_tokens + completion_tokens
-        cost = (prompt_tokens / 1_000_000 * 1.25) + (completion_tokens / 1_000_000 * 10)  # gpt-5.1 pricing
+        fallback_model = flow_meta.get("final_response_model") or flow_meta.get("model") or "gpt-5.1"
+        fallback_pricing = {
+            "gpt-5.1": (1.25, 10.0),
+            "gpt-5.4": (1.25, 10.0),
+            "gpt-5.4-mini": (0.25, 2.0),
+            "gpt-5-mini": (0.25, 2.0),
+        }
+        input_per_1m, output_per_1m = fallback_pricing.get(fallback_model, fallback_pricing["gpt-5.1"])
+        cost = (prompt_tokens / 1_000_000 * input_per_1m) + (completion_tokens / 1_000_000 * output_per_1m)
         print(f"[_process_and_respond] 🔹 Prompt tokens: {prompt_tokens} | Completion: {completion_tokens} | Est. cost: ${cost:.6f}")
         save_for_training_conversation_log(user_input_to_process, bot_reply_text)
     
@@ -2416,7 +2469,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         sentiment="neutral",  # Could be enhanced with sentiment detection
         tokens=prompt_tokens + completion_tokens,
         cost_usd=cost,
-        model=flow_meta.get("model") or "gpt-5.1",
+        model=flow_meta.get("final_response_model") or flow_meta.get("model") or "gpt-5.1",
         response_time_ms=response_time_ms,
         message_length=len(bot_reply_text) if bot_reply_text else 0
     )
