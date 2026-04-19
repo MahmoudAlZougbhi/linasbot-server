@@ -399,6 +399,7 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
             "- **FORBIDDEN:** Do **NOT** call **`pause_appointment`** to «تأجيل» or move to another day—that tool only **puts** a slot on hold without a new calendar time. "
             "**Postpone / new day / إخراج من البوز بتاريخ جديد** = **`update_appointment_date`** with structured `date` (+ `calendar_day_intent` / `date_components` when needed) on the correct `appointment_id`.\n"
             "- **PAUSED row:** Take the new date/time then call **`update_appointment_date`** on **that paused row's id**. The server may also call the CRM **resume** endpoint after a successful date update so status becomes **Available**—check tool JSON `resume_appointment` (success vs failed vs skipped). In `bot_reply`, if resume succeeded, say the موعد صار فعّال/متاح بالوقت الجديد; if resume failed or skipped but date update succeeded, say الوقت اتعدّل وإذا لسا ظاهر موقوف يتأكد الاستقبال.\n"
+            "- **Resume without changing date/time:** If the user only wants the paused row back as active/Available at the **same slot**, call **`resume_appointment`** on that paused row's id.\n"
             "- **AVAILABLE / ACTIVE row:** Normal upcoming booking—reschedule only with **`update_appointment_date`**.\n"
         )
     return (
@@ -3260,7 +3261,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         parsed_response = {}
         latest_pricing_payload = None
         api_failure_reason = None  # Set when create_appointment/other API fails → flow_meta.error → human handover (submit_booking_intent uses sanitized tool hints + AI reply, no raw exceptions)
-        update_appointment_date_success_count = 0  # Successful API updates this turn (bulk guard)
+        update_appointment_date_success_count = 0  # Successful date/edit updates this turn (bulk guard)
+        pause_resume_success_count = 0  # Successful pause-lift actions (date update auto-resume or direct resume_appointment)
         tool_round_trips: List[Dict[str, Any]] = []
         ai_first_response_with_tools = ""
         recovered_create_appointment_ok = False
@@ -4053,7 +4055,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
                         del function_args['name']
 
-                if function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment"):
+                if function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment", "resume_appointment"):
                     phone_for_pause_guard = normalize_phone_for_lookup(
                         function_args.get("phone")
                         or customer_phone_clean
@@ -4085,7 +4087,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 gpt_aid_int = None
                             if gpt_aid_int != paused_appointment_id:
                                 print(
-                                    f"SAFETY: Overriding update_appointment_date appointment_id with paused NEXT appointment_id={paused_appointment_id}"
+                                    f"SAFETY: Overriding {function_name} appointment_id with paused NEXT appointment_id={paused_appointment_id}"
                                 )
                                 function_args["appointment_id"] = paused_appointment_id
                                 forced_update_appointment_id = paused_appointment_id
@@ -4122,7 +4124,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 if gpt_aid_mix is None or gpt_aid_mix == _next_id_mix:
                                     print(
                                         f"SAFETY: Next appointment is active id={_next_id_mix} but user resumes "
-                                        f"single paused id={single_paused} — overriding update_appointment_date"
+                                        f"single paused id={single_paused} — overriding {function_name}"
                                     )
                                     function_args["appointment_id"] = single_paused
                                     forced_update_appointment_id = single_paused
@@ -4167,6 +4169,32 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                     if phone_for_pause_guard and not function_args.get("phone"):
                         function_args["phone"] = phone_for_pause_guard
+
+                    # Direct resume must never auto-chain to an active next appointment id.
+                    if (
+                        function_name == "resume_appointment"
+                        and check_next_appointment_result
+                        and not forced_update_appointment_id
+                    ):
+                        _next_pl_resume = extract_check_next_appointment(check_next_appointment_result)
+                        _next_id_resume = extract_appointment_id(_next_pl_resume)
+                        _next_st_resume = extract_appointment_status(_next_pl_resume)
+                        if _next_id_resume is not None and is_paused_status(_next_st_resume):
+                            try:
+                                gpt_aid_resume = (
+                                    int(function_args.get("appointment_id"))
+                                    if function_args.get("appointment_id") is not None
+                                    and str(function_args.get("appointment_id")).strip() != ""
+                                    else None
+                                )
+                            except (TypeError, ValueError):
+                                gpt_aid_resume = None
+                            if gpt_aid_resume is None:
+                                print(
+                                    f"DEBUG: Auto-chaining paused NEXT appointment_id for resume -> {_next_id_resume}"
+                                )
+                                function_args["appointment_id"] = _next_id_resume
+                                forced_update_appointment_id = _next_id_resume
 
                     aid_for_machine = _safe_int(function_args.get("appointment_id"))
                     machine_row = (
@@ -4679,6 +4707,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"📊 Analytics: Appointment rescheduled - {service_name}")
                             ra = tool_output.get("resume_appointment") or {}
                             if ra.get("attempted") and ra.get("success"):
+                                pause_resume_success_count += 1
                                 try:
                                     aid = function_args.get("appointment_id")
                                     phone_arg = (
@@ -4695,6 +4724,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     )
                                 except Exception as pr_e:
                                     print(f"WARNING: analytics pause_cleared: {pr_e}")
+                        elif function_name == "resume_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
+                            pause_resume_success_count += 1
                         elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
@@ -4844,6 +4875,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "update_appointment_date" in tool_names
             or "update_paused_appointment" in tool_names
             or "edit_appointment" in tool_names
+            or "resume_appointment" in tool_names
         )
 
         _leaked_rec = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")
@@ -5016,10 +5048,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             not api_failure_reason
             and tool_calls
             and had_update_tool
-            and update_appointment_date_success_count == 0
+            and pause_resume_success_count == 0
             and _bot_reply_claims_pause_lifted_or_resumed(parsed_response.get("bot_reply") or "")
         ):
-            api_failure_reason = "pause_resume_claimed_without_successful_update_appointment_date"
+            api_failure_reason = "pause_resume_claimed_without_successful_resume_action"
 
         if (
             not api_failure_reason
