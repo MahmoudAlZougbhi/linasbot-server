@@ -3558,6 +3558,30 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 forced_update_appointment_id = None
                 booking_state = config.user_booking_state[user_id]
 
+                if function_name == "pause_appointment":
+                    print("SAFETY: Blocking pause_appointment tool call; AI pause is disabled.")
+                    err_content = json.dumps(
+                        {
+                            "success": False,
+                            "message": "pause_appointment_disabled_for_ai",
+                            "hint_for_model": (
+                                "Do not pause appointments. For paused rows that should become active again, "
+                                "use check_next_appointment and then update_appointment_date or update_paused_appointment "
+                                "so the backend can restore Available status."
+                            ),
+                        },
+                        ensure_ascii=False,
+                    )
+                    tool_outputs.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": err_content,
+                        }
+                    )
+                    continue
+
                 # Keep pricing args and persisted booking state in sync.
                 _merge_pricing_args_with_booking_state(
                     function_name=function_name,

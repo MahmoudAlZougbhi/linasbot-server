@@ -3085,21 +3085,6 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
-                "name": "pause_appointment",
-                "description": "FORBIDDEN as a way to «postpone» or reschedule: never call this to move an appointment to another day or to «تأجيل». It only sets status Paused with NO new datetime. Use ONLY when the customer explicitly asks to hold/suspend without picking a new date yet. If they want a new day (including lifting a paused slot onto a new date), use update_appointment_date—not another pause. If they have both paused and Available appointments, confirm which row first; do not pause the active one to «help».",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "phone": {"type": "string", "description": "Customer's phone number."},
-                        "appointment_id": {"type": "integer", "description": "The ID of the appointment to pause."}
-                    },
-                    "required": ["phone", "appointment_id"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "get_clients_without_today",
                 "description": "Returns active clients who do not have appointments on the given date. Useful for outreach or availability checks.",
                 "parameters": {

@@ -632,34 +632,113 @@ async def pause_appointment(phone: str, appointment_id: int):
     return response
 
 
+async def update_appointments_status(
+    appointment_ids: list[int],
+    status_id: int,
+    date: str = None,
+):
+    """
+    Bulk/single appointment status update via POST appointments/update-status.
+
+    API contract:
+    - appointment_ids: required array
+    - status_id: required
+    - date: required only when status_id == 3 (Postponed)
+    """
+    ids: list[int] = []
+    for raw in appointment_ids or []:
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return {"success": False, "message": "invalid_appointment_ids"}
+    try:
+        status_id_int = int(status_id)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "invalid_status_id"}
+
+    json_data = {
+        "appointment_ids": ids,
+        "status_id": status_id_int,
+    }
+    if status_id_int == 3:
+        date_str = str(date or "").strip()
+        if not date_str:
+            return {"success": False, "message": "date_required_for_postponed_status"}
+        json_data["date"] = date_str
+
+    print(
+        "API Call: update_appointments_status "
+        f"appointment_ids={ids}, status_id={status_id_int}, date={json_data.get('date')}"
+    )
+    response = await _make_api_request("POST", "appointments/update-status", json_data=json_data)
+    if response.get("success"):
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "update_appointments_status",
+                "status": "success",
+                "appointment_ids": ids,
+                "status_id": status_id_int,
+                "date": json_data.get("date"),
+            },
+        )
+    else:
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "update_appointments_status",
+                "status": "failed",
+                "error": response.get("message"),
+                "appointment_ids": ids,
+                "status_id": status_id_int,
+                "date": json_data.get("date"),
+            },
+        )
+    return response
+
+
 async def resume_appointment(phone: str, appointment_id: int, endpoint: str = None):
     """
-    Clears Paused / sets appointment back to active (Available) when the Agent API exposes a resume endpoint.
+    Clears Paused / sets appointment back to active (Available).
 
-    **LINASLASER_APPOINTMENT_RESUME_PATH** overrides the POST path (e.g. ``appointments/unpause``).
-    If unset, defaults to ``appointments/resume`` (symmetric with ``appointments/pause``).
-    Set to ``off``, ``0``, ``false``, or ``none`` to skip the call entirely.
+    Current preferred path uses POST appointments/update-status with:
+    {
+      "appointment_ids": [appointment_id],
+      "status_id": 2
+    }
+
+    The ``phone`` argument is kept for backwards compatibility with existing callers.
     """
-    phone_clean = _phone_clean_for_appointment_api(phone)
-    if endpoint is not None:
-        path = str(endpoint).strip()
-    else:
-        raw = os.getenv("LINASLASER_APPOINTMENT_RESUME_PATH")
-        if raw is None:
-            path = "appointments/resume"
-        else:
-            path = str(raw).strip()
-    if not path or path.lower() in ("0", "false", "off", "none"):
-        return {"success": False, "message": "resume_skipped_no_path", "skipped": True}
-    print(f"API Call: resume_appointment for phone={phone_clean}, appointment_id={appointment_id}, path={path}")
-    json_data = {"phone": phone_clean, "appointment_id": appointment_id}
-    response = await _make_api_request("POST", path, json_data=json_data)
+    _ = phone  # kept so existing callers do not break
+    response = await update_appointments_status([appointment_id], status_id=2)
     merged = dict(response) if isinstance(response, dict) else {"success": False, "message": str(response)}
-    merged["path"] = path
+    merged["path"] = str(endpoint).strip() if endpoint else "appointments/update-status"
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "resume_appointment", "status": "success", "appointment_id": appointment_id, "path": path})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "resume_appointment", "status": "success", "appointment_id": appointment_id, "path": merged["path"]},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "resume_appointment", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id, "path": path})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "resume_appointment",
+                "status": "failed",
+                "error": response.get("message"),
+                "appointment_id": appointment_id,
+                "path": merged["path"],
+            },
+        )
     return merged
 
 async def get_clients_without_today(date: str = None, branch_id: int = None):
