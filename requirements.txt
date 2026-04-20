@@ -18,6 +18,10 @@ python-dotenv==1.0.0
 # Firebase & Database
 firebase-admin==6.1.0
 google-cloud-firestore==2.11.1
+# Pin grpc/protobuf explicitly to avoid long pip backtracking on Python 3.13 during deploy
+grpcio==1.80.0
+grpcio-status==1.80.0
+protobuf>=6.31.1,<7.0.0
 
 # Audio Processing
 pydub==0.25.1
