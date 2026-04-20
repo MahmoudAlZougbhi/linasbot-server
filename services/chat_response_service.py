@@ -694,6 +694,11 @@ def _build_pause_resume_execution_guardrail(
     return "\n".join(facts)
 
 
+def _status_requests_available(status_val: Any) -> bool:
+    sv = str(status_val or "").strip().lower()
+    return sv in ("available", "active", "resume", "resumed")
+
+
 def _arabic_indic_digits_to_ascii(text: str) -> str:
     if not text:
         return ""
@@ -3134,7 +3139,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "- This is **NOT** a new booking flow. Do **NOT** ask full booking questions again if the appointment row already exists in CRM.\n"
             "- Do **NOT** use `submit_booking_intent` or `create_appointment` for this request.\n"
             "- First identify the correct existing row with `check_next_appointment`; if several rows exist, ask for `appointment_id` or the line number only.\n"
-            "- Then use **`edit_appointment`** for machine/body-part/service/branch edits. Use **`update_appointment_date`** only when the change is date/time only.\n"
+            "- If the chosen row is **PAUSED / موقوف** and the user is editing it to continue/resume treatment, you MUST make it **Available** in the **same execution turn**. Do **not** leave it paused after the edit.\n"
+            "- **Date-only paused change:** use **`update_appointment_date`** on that paused row.\n"
+            "- **Paused row + machine/body-part/date details:** prefer **`update_paused_appointment`** and explicitly set **`status` = `Available`**.\n"
+            "- **Paused row + service/branch or any edit that still needs `edit_appointment`:** call **`edit_appointment`** for the detail change **and** call **`resume_appointment`** in the same turn for that same `appointment_id`.\n"
+            "- **Non-paused existing rows:** use **`edit_appointment`** for machine/body-part/service/branch edits. Use **`update_appointment_date`** only when the change is date/time only.\n"
             "- Reuse the current appointment facts from CRM and ask only for the single missing detail needed to complete the edit.\n"
         )
 
@@ -3203,7 +3212,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 "- The user's latest message is only a short **yes / ok / proceed** style confirmation.\n"
                 "- Your previous assistant turn (or thread context) already committed to **updating or rescheduling** an appointment.\n"
                 "- **Interpret** their reply as authorization to **execute that same operation now**.\n"
-                "- You MUST call the real tools in this response: `check_next_appointment` if you still need `appointment_id`, then use **`update_appointment_date`** for date/time-only changes or **`edit_appointment`** for machine/body-part/service/branch changes already agreed in the conversation. Do **not** claim the update is done in `bot_reply` unless the real update tool actually succeeded in this request.\n"
+                "- You MUST call the real tools in this response: `check_next_appointment` if you still need `appointment_id`, then use **`update_appointment_date`** for date/time-only changes or **`edit_appointment`** / **`update_paused_appointment`** for detail changes already agreed in the conversation.\n"
+                "- If that row is **PAUSED** and this confirmation means they want to continue, you MUST also ensure the same execution turn removes pause and returns it to **Available** (either **`update_paused_appointment status=Available`** or **`resume_appointment`** when needed).\n"
+                "- Do **not** claim the update is done in `bot_reply` unless the real update tool actually succeeded in this request.\n"
             )
 
     # Authoritative CRM rows in-system so «emtan mw3de» / multi-paused listings cannot be hallucinated or merged.
@@ -3310,6 +3321,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         pause_resume_attempted = False
         pause_resume_confirmed_via_date_update = False
         direct_resume_success = False
+        paused_followup_update_succeeded = False
+        paused_followup_available_action_requested = False
         tool_round_trips: List[Dict[str, Any]] = []
         ai_first_response_with_tools = ""
         recovered_create_appointment_ok = False
@@ -4256,6 +4269,26 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         row_service_id, row_branch_id, row_machine_id = (
                             extract_appointment_booking_fields(machine_row)
                         )
+                    target_row_was_paused = False
+                    if machine_row is not None:
+                        target_row_was_paused = is_paused_status(
+                            extract_appointment_status(machine_row)
+                        )
+                    elif forced_update_appointment_id is not None:
+                        target_row_was_paused = True
+                    if target_row_was_paused and function_name in (
+                        "update_appointment_date",
+                        "update_paused_appointment",
+                        "edit_appointment",
+                        "resume_appointment",
+                    ):
+                        if function_name == "update_appointment_date":
+                            paused_followup_available_action_requested = True
+                        elif function_name == "update_paused_appointment":
+                            if _status_requests_available(function_args.get("status")):
+                                paused_followup_available_action_requested = True
+                        elif function_name == "resume_appointment":
+                            paused_followup_available_action_requested = True
                     requested_machine_change = _user_explicitly_requests_machine_change(
                         all_user_text_for_date
                     )
@@ -4736,6 +4769,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         # 📊 ANALYTICS: Track appointment reschedule
                         elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and tool_output.get("success"):
                             update_appointment_date_success_count += 1
+                            if target_row_was_paused:
+                                paused_followup_update_succeeded = True
                             from services.analytics_events import analytics
                             
                             # Get service from appointment data if available
@@ -4791,6 +4826,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         elif function_name == "resume_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             pause_resume_success_count += 1
                             direct_resume_success = True
+                            if target_row_was_paused:
+                                paused_followup_update_succeeded = True
                         elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
@@ -5121,6 +5158,20 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 api_failure_reason = "reschedule_claimed_without_update_appointment_date_tool"
 
         # Claims paused appointment was cleared / became active without a successful CRM update.
+        if (
+            not api_failure_reason
+            and paused_followup_update_succeeded
+            and not paused_followup_available_action_requested
+        ):
+            api_failure_reason = "paused_update_missing_available_action_request"
+
+        if (
+            not api_failure_reason
+            and paused_followup_update_succeeded
+            and pause_resume_success_count == 0
+        ):
+            api_failure_reason = "paused_update_completed_without_available_confirmation"
+
         if (
             not api_failure_reason
             and tool_calls

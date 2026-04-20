@@ -2670,6 +2670,7 @@ def get_openai_tools_schema():
                 "description": (
                     "Updates the date/time of an existing appointment on the calendar. Use for reschedule/postpone/change to a NEW slot (Arabic «تأجيل الموعد»). "
                     "Same tool to put a PAUSED row onto a new datetime once the user chose the slot—this also covers phrasing like «يرجع يجي عالموعد», «كمّل الموعد», or 'resume the paused appointment'. Do NOT call pause_appointment for that. "
+                    "If that row was PAUSED and the customer is continuing with it, do NOT leave it paused after this update. "
                     "You MUST pass the **exact appointment_id** the user selected (from check_next_appointment / customer_appointments JSON), plus structured **date**. "
                     "If multiple rows: first show each row to the user with appointment_id + service + machine + areas + price (if in JSON), ask them for the id (or line number), then call this tool. "
                     "Do NOT use pause_appointment to move to another day. "
@@ -2745,6 +2746,7 @@ def get_openai_tools_schema():
                 "description": (
                     "Advanced paused-appointment edit. Use when the user wants to modify a paused row details beyond date only "
                     "(body parts, session_number per part, machine, and/or explicit status to Available). "
+                    "If the paused customer is continuing with this appointment, you MUST explicitly set `status` to `Available` in the same tool call so the row does not stay paused after the edit. "
                     "Pass appointment_id selected by the user. This executes one CRM update payload for that paused row. "
                     "After **success**, tell the user the **new session/total price** from the API response (or fetch via get_appointment_details). "
                     "If a **final agreed price** was already set with the customer for this appointment_id, call **sync_appointment_agreed_price** in the same turn (or immediately after) with that agreed_price so the system stays aligned."
@@ -2791,6 +2793,7 @@ def get_openai_tools_schema():
                     "service, machine, branch, date, body_parts with per-area session_number, discounts. "
                     "Use when the user changes several fields at once or replaces body areas/sessions. "
                     "For **date-only** reschedule prefer update_appointment_date. "
+                    "If the edited row is PAUSED and the customer is continuing with it, do NOT use this tool alone: also call `resume_appointment` in the same turn so the appointment becomes Available again. "
                     "Either phone OR user_code required. Do not send root session_number together with body_parts unless the API requires it. "
                     "After **success**, always communicate the **new session/total price** to the user (from response JSON or get_appointment_details). "
                     "If you had an **agreed final price** with the customer for this appointment_id, call **sync_appointment_agreed_price** with the same agreed_price so CRM discount matches after body/machine changes."
