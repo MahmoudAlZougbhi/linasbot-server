@@ -67,6 +67,7 @@ const MobileLiveChatView = ({
   imageInputRef,
   handleImageSelect,
   isRecording,
+  recordingTime,
   stopRecording,
   startRecording,
   formatRecordingTime,
