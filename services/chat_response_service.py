@@ -654,6 +654,46 @@ def _bot_reply_claims_pause_lifted_or_resumed(bot_reply: str) -> bool:
     return False
 
 
+def _build_pause_resume_execution_guardrail(
+    *,
+    resume_attempted: bool,
+    resume_succeeded: bool,
+    date_update_succeeded: bool,
+    direct_resume_succeeded: bool,
+) -> str:
+    """
+    Structured instruction for the final response pass.
+    Keep it factual and non-user-facing so the final model verbalizes only what tools proved.
+    """
+    facts = [
+        "AUTHORITATIVE EXECUTION FACTS FOR FINAL BOT REPLY:",
+        f"- date_update_succeeded={bool(date_update_succeeded)}",
+        f"- resume_attempted={bool(resume_attempted)}",
+        f"- resume_succeeded={bool(resume_succeeded)}",
+        f"- direct_resume_succeeded={bool(direct_resume_succeeded)}",
+    ]
+    if resume_succeeded or direct_resume_succeeded:
+        facts.append(
+            "- You MAY say the paused appointment became active/Available again because the backend confirmed it."
+        )
+    elif date_update_succeeded:
+        facts.append(
+            "- You MUST NOT say the paused appointment became Available. Only say the date/time changed successfully."
+        )
+        facts.append(
+            "- If needed, say status may still appear paused until reception/back office confirms it."
+        )
+    elif resume_attempted:
+        facts.append(
+            "- Resume was attempted but not confirmed successful. Do NOT say the appointment is Available now."
+        )
+    else:
+        facts.append(
+            "- No successful resume action was confirmed. Do NOT claim the paused status was removed."
+        )
+    return "\n".join(facts)
+
+
 def _arabic_indic_digits_to_ascii(text: str) -> str:
     if not text:
         return ""
@@ -3267,6 +3307,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         api_failure_reason = None  # Set when create_appointment/other API fails → flow_meta.error → human handover (submit_booking_intent uses sanitized tool hints + AI reply, no raw exceptions)
         update_appointment_date_success_count = 0  # Successful date/edit updates this turn (bulk guard)
         pause_resume_success_count = 0  # Successful pause-lift actions (date update auto-resume or direct resume_appointment)
+        pause_resume_attempted = False
+        pause_resume_confirmed_via_date_update = False
+        direct_resume_success = False
         tool_round_trips: List[Dict[str, Any]] = []
         ai_first_response_with_tools = ""
         recovered_create_appointment_ok = False
@@ -4543,16 +4586,19 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 "legacy hosts may set LINASLASER_GET_BODY_PARTS_PATH or LINASLASER_TATTOO_BODY_SYNONYMS_JSON."
                             )
                         if (
-                            function_name == "update_appointment_date"
+                            function_name in ("update_appointment_date", "update_paused_appointment")
                             and isinstance(tool_output, dict)
                             and tool_output.get("success")
                         ):
                             tool_output = dict(tool_output)
                             ra = tool_output.get("resume_appointment") or {}
+                            if ra.get("attempted"):
+                                pause_resume_attempted = True
                             base = (
                                 "This tool returned success — the Agent API accepted the new datetime (see data.old_date / new_date). "
                             )
                             if ra.get("attempted") and ra.get("success"):
+                                pause_resume_confirmed_via_date_update = True
                                 base += (
                                     "A follow-up **resume** call also succeeded — the CRM should show the slot as active/Available "
                                     "(not Paused) in addition to the new time. Say so briefly in Arabic if bot_reply is Arabic. "
@@ -4576,6 +4622,20 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 )
                             base += "Do not claim the update failed unless a later tool result contradicts this."
                             tool_output["hint_for_model"] = base
+                        if function_name == "resume_appointment" and isinstance(tool_output, dict):
+                            pause_resume_attempted = True
+                            tool_output = dict(tool_output)
+                            if tool_output.get("success"):
+                                direct_resume_success = True
+                                tool_output["hint_for_model"] = (
+                                    "This tool returned success — the paused appointment was restored to active/Available "
+                                    "without changing the slot. You may say the appointment is active again."
+                                )
+                            else:
+                                tool_output["hint_for_model"] = (
+                                    "Resume was requested but this tool did not confirm success. "
+                                    "Do NOT say the appointment became Available. If needed, say the request did not complete and staff may need to verify it."
+                                )
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
 
                         # Enrich "next" with full customer list so the model can list every upcoming booking.
@@ -4730,6 +4790,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     print(f"WARNING: analytics pause_cleared: {pr_e}")
                         elif function_name == "resume_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
                             pause_resume_success_count += 1
+                            direct_resume_success = True
                         elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
@@ -4784,6 +4845,17 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         }
                     )
 
+            messages.append(
+                {
+                    "role": "system",
+                    "content": _build_pause_resume_execution_guardrail(
+                        resume_attempted=pause_resume_attempted,
+                        resume_succeeded=(pause_resume_success_count > 0),
+                        date_update_succeeded=(update_appointment_date_success_count > 0),
+                        direct_resume_succeeded=direct_resume_success,
+                    ),
+                }
+            )
             second_response = await client.chat.completions.create(
                 model=FINAL_RESPONSE_MODEL,
                 messages=messages,

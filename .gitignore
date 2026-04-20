@@ -129,6 +129,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Android wrapper local toolchains / build cache
+mobile/live-chat-android/.android-sdk/
+mobile/live-chat-android/.build-tools/
+mobile/live-chat-android/.gradle/
+mobile/live-chat-android/.jdk/
+mobile/live-chat-android/app/build/
+
 #-------------------------
 # Sensitive Data
 #-------------------------

@@ -12,6 +12,7 @@ from storage.persistent_storage import migrate_from_legacy
 migrate_from_legacy()
 
 from fastapi.staticfiles import StaticFiles
+from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from modules.core import app
 from utils.utils import initialize_firestore
@@ -20,6 +21,12 @@ import config
 # Serve dashboard static files and SPA
 DASHBOARD_BUILD_PATH = os.path.join(os.path.dirname(__file__), "dashboard", "build")
 INDEX_HTML_PATH = os.path.join(DASHBOARD_BUILD_PATH, "index.html") if DASHBOARD_BUILD_PATH else None
+LIVE_CHAT_ANDROID_APK_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "mobile",
+    "releases",
+    "linas-live-chat-android.apk",
+)
 
 if os.path.exists(DASHBOARD_BUILD_PATH):
     # Mount static files (js, css, etc.)
@@ -45,6 +52,16 @@ import modules.auth_api  # Dashboard user authentication
 import modules.content_files_api  # Content Files: Knowledge, Price, Style (CRUD + dynamic retrieval)
 import modules.flow_api  # Activity Flow: User ↔ Bot ↔ AI transparency
 
+@app.get("/downloads/live-chat-android.apk")
+async def download_live_chat_android_apk():
+    if not os.path.exists(LIVE_CHAT_ANDROID_APK_PATH):
+        raise HTTPException(status_code=404, detail="APK not found")
+    return FileResponse(
+        LIVE_CHAT_ANDROID_APK_PATH,
+        media_type="application/vnd.android.package-archive",
+        filename="linas-live-chat-android.apk",
+    )
+
 # Serve dashboard SPA (index.html for / and all non-API routes) - must be after API routes
 if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
     @app.get("/")
@@ -54,8 +71,12 @@ if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
     @app.get("/{full_path:path}")
     async def serve_dashboard_spa(full_path: str):
         # Don't serve index.html for API or static paths
-        if full_path.startswith("api/") or full_path.startswith("static/") or full_path == "webhook":
-            from fastapi import HTTPException
+        if (
+            full_path.startswith("api/")
+            or full_path.startswith("static/")
+            or full_path.startswith("downloads/")
+            or full_path == "webhook"
+        ):
             raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(INDEX_HTML_PATH)
 

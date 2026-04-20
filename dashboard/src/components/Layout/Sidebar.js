@@ -7,6 +7,7 @@ import {
   AcademicCapIcon,
   FolderIcon,
   ChatBubbleLeftRightIcon,
+  ArrowDownTrayIcon,
   ArrowPathRoundedSquareIcon,
   ClockIcon,
   BellIcon,
@@ -68,6 +69,16 @@ const navigationItems = [
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, permissionKey: "settings" },
 ];
 
+const downloadItems = [
+  {
+    name: "Download Live Chat APK",
+    href: "/downloads/live-chat-android.apk",
+    icon: ArrowDownTrayIcon,
+    badge: "Android",
+    permissionKey: "liveChat",
+  },
+];
+
 const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const { user } = useAuth();
 
@@ -82,6 +93,19 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
 
     // Filter based on permissions
     return navigationItems.filter(item => {
+      if (!item.permissionKey) return true;
+      return hasPermission(user, item.permissionKey);
+    });
+  }, [user]);
+
+  const downloads = useMemo(() => {
+    if (!user) return [];
+
+    if (user.role === "admin") {
+      return downloadItems;
+    }
+
+    return downloadItems.filter((item) => {
       if (!item.permissionKey) return true;
       return hasPermission(user, item.permissionKey);
     });
@@ -212,6 +236,51 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
               </motion.div>
             );
           })}
+
+          {downloads.length > 0 && (
+            <div className={`${collapsed ? "pt-2" : "pt-4"} border-t border-white/20`}>
+              {!collapsed && (
+                <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Mobile App
+                </p>
+              )}
+              {downloads.map((item) => (
+                <motion.div
+                  key={item.name}
+                  initial={{ x: -50, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <a
+                    href={item.href}
+                    download
+                    title={collapsed ? item.name : undefined}
+                    className={`group flex items-center rounded-xl transition-all duration-200 relative overflow-hidden ${
+                      collapsed ? "px-3 py-3 justify-center" : "px-4 py-3"
+                    } text-sm font-medium text-slate-700 hover:bg-white/50 hover:text-slate-900`}
+                  >
+                    <div className="relative flex items-center w-full">
+                      <item.icon
+                        className={`h-5 w-5 transition-colors flex-shrink-0 ${
+                          collapsed ? "" : "mr-3"
+                        } text-slate-500 group-hover:text-slate-700`}
+                      />
+                      {!collapsed && (
+                        <>
+                          <span className="flex-1">{item.name}</span>
+                          {item.badge && (
+                            <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
+                              {item.badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </a>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </nav>
 
         {/* Footer */}
