@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
@@ -16,6 +17,9 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -25,6 +29,10 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var loadingOverlay: LinearLayout
+    private lateinit var errorOverlay: LinearLayout
+    private lateinit var errorMessage: TextView
+    private lateinit var retryButton: Button
 
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermissionRequest: PermissionRequest? = null
@@ -56,17 +64,28 @@ class MainActivity : AppCompatActivity() {
 
         swipeRefresh = findViewById(R.id.swipeRefresh)
         webView = findViewById(R.id.webView)
+        loadingOverlay = findViewById(R.id.loadingOverlay)
+        errorOverlay = findViewById(R.id.errorOverlay)
+        errorMessage = findViewById(R.id.errorMessage)
+        retryButton = findViewById(R.id.retryButton)
 
         configureWebView()
         configureBackNavigation()
 
         swipeRefresh.setOnRefreshListener {
+            showLoading()
+            webView.reload()
+        }
+        retryButton.setOnClickListener {
+            showLoading()
             webView.reload()
         }
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
+            hideLoading()
         } else {
+            showLoading()
             webView.loadUrl(BuildConfig.LIVE_CHAT_URL)
         }
     }
@@ -84,6 +103,11 @@ class MainActivity : AppCompatActivity() {
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         settings.userAgentString = settings.userAgentString + " LinasLiveChatAndroid/1.0"
+        settings.setSupportZoom(false)
+        settings.builtInZoomControls = false
+        settings.displayZoomControls = false
+        settings.loadWithOverviewMode = true
+        settings.useWideViewPort = true
 
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
@@ -98,6 +122,18 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 swipeRefresh.isRefreshing = false
                 CookieManager.getInstance().flush()
+                hideLoading()
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: android.webkit.WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    showError(error?.description?.toString() ?: "Main page failed to load.")
+                }
             }
 
             override fun shouldOverrideUrlLoading(
@@ -159,6 +195,26 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showLoading() {
+        loadingOverlay.visibility = View.VISIBLE
+        errorOverlay.visibility = View.GONE
+        webView.visibility = View.VISIBLE
+    }
+
+    private fun hideLoading() {
+        loadingOverlay.visibility = View.GONE
+        errorOverlay.visibility = View.GONE
+        webView.visibility = View.VISIBLE
+    }
+
+    private fun showError(message: String) {
+        swipeRefresh.isRefreshing = false
+        loadingOverlay.visibility = View.GONE
+        webView.visibility = View.INVISIBLE
+        errorOverlay.visibility = View.VISIBLE
+        errorMessage.text = message
     }
 
     private fun configureBackNavigation() {
