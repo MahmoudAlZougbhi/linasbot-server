@@ -1241,6 +1241,45 @@ def _extract_direct_submit_booking_args_from_user_message(
     return out if _booking_submit_payload_complete_for_execution(out, gender or current_gender) else None
 
 
+def _merge_explicit_user_booking_args(
+    function_args: Dict[str, Any],
+    explicit_args: Optional[Dict[str, Any]],
+) -> bool:
+    """Overlay explicit technical ids/date from the latest user message onto model tool args."""
+    if not isinstance(function_args, dict) or not isinstance(explicit_args, dict):
+        return False
+    changed = False
+    for key in (
+        "service_id",
+        "branch_id",
+        "machine_id",
+        "body_part_ids",
+        "gender",
+        "normalized_date",
+        "normalized_time",
+        "time",
+        "timezone",
+        "date",
+        "execute_booking",
+    ):
+        val = explicit_args.get(key)
+        if val is None or val == "" or val == []:
+            continue
+        if function_args.get(key) != val:
+            function_args[key] = val
+            changed = True
+    if explicit_args.get("phone") and not function_args.get("phone"):
+        function_args["phone"] = explicit_args["phone"]
+        changed = True
+    if explicit_args.get("customer_name") and not function_args.get("customer_name"):
+        function_args["customer_name"] = explicit_args["customer_name"]
+        changed = True
+    if changed:
+        function_args.pop("date_components", None)
+        function_args.pop("calendar_day_intent", None)
+    return changed
+
+
 def _reply_from_submit_booking_tool(tool_output: Dict[str, Any], language: str) -> str:
     if isinstance(tool_output, dict) and tool_output.get("success") and tool_output.get("booking_flow_state") == "booked":
         api = tool_output.get("api_response") or {}
@@ -4852,6 +4891,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         merge_patch as _fsm_merge_patch,
                         parse_gate_reason,
                     )
+
+                    explicit_submit_args = _extract_direct_submit_booking_args_from_user_message(
+                        user_input,
+                        phone=customer_phone_clean
+                        or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                        or user_id,
+                        current_gender=current_gender,
+                        fallback_name=config.user_names.get(user_id, user_name),
+                    )
+                    if _merge_explicit_user_booking_args(function_args, explicit_submit_args):
+                        print(
+                            "[BOOKING_DIRECT] overlaid explicit user booking args onto submit_booking_intent "
+                            f"user={user_id} service_id={function_args.get('service_id')} "
+                            f"date={function_args.get('date')}"
+                        )
 
                     _sb_phone = (
                         function_args.get("phone")
