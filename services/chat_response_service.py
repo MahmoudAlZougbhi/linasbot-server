@@ -2868,6 +2868,8 @@ async def _resolve_machine_for_booking(
                     ):
                         hair_ids.append(mid)
                 hair_allowed = set(hair_ids)
+                if cand is not None and cand not in hair_allowed:
+                    return None
                 for choice in (cand, preferred_existing, fallback):
                     if choice is not None and choice in hair_allowed:
                         return choice

@@ -563,28 +563,37 @@ async def legacy_create_appointment_tool_output(
         missing.append("machine_id")
     if not date_str:
         missing.append("date")
-    if missing:
+    conflicts: Dict[str, Any] = {}
+    if machine_required_legacy and mid is not None and mid not in HAIR_REMOVAL_MACHINE_IDS:
+        conflicts["machine_service"] = {
+            "detail": "machine_id is not an available hair-removal device. Trio is no longer available.",
+            "machine_id": mid,
+            "allowed_machine_ids": sorted(HAIR_REMOVAL_MACHINE_IDS),
+        }
+    if missing or conflicts:
         st = config.user_booking_state[user_id]
         st["booking_flow_state"] = "validation_failed"
         intent_snap = _merge_intent(fa)
         mf = sorted(set(missing))
         primary = _infer_primary_failure_stage(
             missing=mf,
-            conflicts={},
+            conflicts=conflicts,
             invalid={},
             backend_resolves=False,
         )
         err = validation_error_response(
             missing_fields=mf,
+            conflicting_fields=conflicts,
             normalized_values=norm_vals,
-            human_readable_reason="Incomplete arguments for legacy create_appointment; gather required fields and prefer submit_booking_intent.",
+            human_readable_reason="Incomplete or invalid arguments for create_appointment; gather valid fields and prefer submit_booking_intent.",
             activity_trace=_build_booking_activity_trace(
                 failure_stage=primary,
                 execution_phase="pre_execution",
                 backend_resolves_names=False,
                 intent=intent_snap,
-                detail=f"Legacy create_appointment blocked before CRM: missing {mf}.",
+                detail=f"Legacy create_appointment blocked before CRM: missing={mf}, conflicts={list(conflicts.keys())}.",
                 missing_fields=mf,
+                conflicting_fields=conflicts,
                 normalized_values_snapshot=norm_vals,
                 pipeline_phase="legacy_create_appointment_validation",
             ),
