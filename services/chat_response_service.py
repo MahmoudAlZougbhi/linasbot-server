@@ -4121,6 +4121,55 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 
                 # --- create_appointment: structured tool args only (no user-text booking inference) ---
                 if function_name == "create_appointment":
+                    explicit_booking_args = _extract_direct_submit_booking_args_from_user_message(
+                        user_input,
+                        phone=customer_phone_clean
+                        or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                        or user_id,
+                        current_gender=current_gender,
+                        fallback_name=config.user_names.get(user_id, user_name),
+                    )
+                    _merge_explicit_user_booking_args(function_args, explicit_booking_args)
+                    explicit_machine_id = (
+                        _safe_int(explicit_booking_args.get("machine_id"))
+                        if isinstance(explicit_booking_args, dict)
+                        else None
+                    )
+                    explicit_service_id = (
+                        _safe_int(explicit_booking_args.get("service_id"))
+                        if isinstance(explicit_booking_args, dict)
+                        else None
+                    )
+                    if (
+                        explicit_service_id in LASER_HAIR_REMOVAL_SERVICE_IDS
+                        and explicit_machine_id is not None
+                        and explicit_machine_id not in HAIR_REMOVAL_MACHINE_IDS
+                    ):
+                        tool_output = {
+                            "success": False,
+                            "error_type": "validation_error",
+                            "conflicting_fields": {
+                                "machine_id": {
+                                    "detail": "Requested machine is unavailable. Trio is no longer available.",
+                                    "machine_id": explicit_machine_id,
+                                    "allowed_machine_ids": sorted(HAIR_REMOVAL_MACHINE_IDS),
+                                }
+                            },
+                            "human_readable_reason": "Trio is no longer available. Ask the user to choose Neo, Quadro, or Candela.",
+                        }
+                        tool_content = json.dumps(tool_output, ensure_ascii=False, default=str)
+                        tool_round_trips.append(
+                            _record_tool_round_trip(function_name, function_args, tool_content, tool_output)
+                        )
+                        messages.append(
+                            {
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": tool_content,
+                            }
+                        )
+                        continue
                     _fix_misassigned_tattoo_service_for_hair_booking(
                         function_args,
                         current_gender,
