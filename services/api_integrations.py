@@ -943,7 +943,7 @@ def _clean_body_parts_with_sessions_for_api(raw: Any) -> list:
     return out
 
 
-async def create_appointment(phone: str, service_id: int, machine_id: Optional[int], branch_id: int, date: str, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
+async def create_appointment(phone: str, service_id: int, branch_id: int, date: str, machine_id: Optional[int] = None, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
     """
     POST appointments/create.
 
