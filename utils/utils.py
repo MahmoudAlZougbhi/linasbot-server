@@ -2533,7 +2533,8 @@ def get_openai_tools_schema():
                     "Do NOT tell the user the appointment is booked unless this tool returns success with booking_flow_state=booked. "
                     "Do NOT use create_appointment for normal new bookings—use this tool first. "
                     "Leave IDs null when unsure; use get_services/get_branches/get_machines/get_body_parts first if needed. "
-                    "If the user already supplied service, area, machine, branch, date, and time in one message, extract all of them into this tool call; do not ask the same fields again. "
+                    "Only Laser Hair Removal Men/Women (service_id 1/12) require a machine. For every other service, do NOT ask for machine and do NOT send machine_id. "
+                    "If the user already supplied service, area, branch, date, time, and machine when required for hair removal in one message, extract all of them into this tool call; do not ask the same fields again. "
                     "DATETIME: Before execute_booking=true, resolve all relative NL into absolute values (Asia/Beirut). "
                     "IDs: By default the server does NOT convert service_name/branch_name/machine_name/body text to ids — "
                     "you MUST call get_services, get_branches, get_machines, get_body_parts and send service_id, branch_id, "
@@ -2580,8 +2581,8 @@ def get_openai_tools_schema():
                             },
                             "description": "Optional. When session numbers differ per area, pass one row per id (same ids as body_part_ids). Server sends BOC body_parts as {id, session_number} per official API doc.",
                         },
-                        "machine_name": {"type": "string", "description": "Device name for hair removal (Neo/Quadro/Candela/Trio)."},
-                        "machine_id": {"type": "integer", "description": "Only if verified from get_machines."},
+                        "machine_name": {"type": "string", "description": "Device name for Laser Hair Removal Men/Women only (Neo/Quadro/Candela/Trio). Do not use for other services."},
+                        "machine_id": {"type": "integer", "description": "Only for service_id 1 or 12 after verified from get_machines. Omit for all other services."},
                         "branch_name": {"type": "string", "description": "Beirut or Antelias."},
                         "branch_id": {"type": "integer", "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume, use live list)."},
                         "gender": {"type": "string", "enum": ["male", "female"], "description": "Required for schedule rules if not already in session."},
@@ -2650,9 +2651,9 @@ def get_openai_tools_schema():
                     "Always use submit_booking_intent first; the server may still accept this tool for backward compatibility "
                     "but it runs the same CRM create step and returns the same structured success or validation-style failure "
                     "as submit_booking_intent (including when the calendar rejects the slot after local rules pass). "
-                    "Requires phone, service_id, branch_id, date/time, body_part_ids, machine_id. "
+                    "Requires phone, service_id, branch_id, date/time, and body_part_ids. "
                     "Only laser hair removal (1/12) uses customer-chosen device (get_machines: Neo/Quadro/Candela/Trio). "
-                    "For tattoo/CO2/whitening pass a valid machine_id from get_machines without asking the customer. "
+                    "For tattoo/CO2/whitening/hydrofacial/HIFU/etc. omit machine_id entirely. "
                     "NEVER use for reschedule when a paused appointment exists—use update_appointment_date."
                 ),
                 "parameters": {
@@ -2660,8 +2661,8 @@ def get_openai_tools_schema():
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number, e.g., '71 123 456'."},
                         "service_id": {"type": "integer", "description": "Service ID: 1=Hair Men, 12=Hair Women, 2/11=CO2, 13=Tattoo, 4/5/14=Whitening. For female hair removal use 12, not 3."},
-                        "machine_id": {"type": "integer", "description": "From get_machines. REQUIRED for API. For hair removal (1/12) the value must match the device the customer chose. For tattoo/CO2/whitening pass any valid id from list—the system assigns the correct device."},
-                        "branch_id": {"type": "integer", "description": "Branch ID: 1=Beirut Manara, 2=Antelias. Default to 1 if not specified."},
+                        "machine_id": {"type": "integer", "description": "Only for hair removal service_id 1/12. Omit for tattoo/CO2/whitening/hydrofacial/HIFU/etc."},
+                        "branch_id": {"type": "integer", "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume)."},
                         "calendar_day_intent": {
                             "type": "string",
                             "enum": ["today", "tomorrow"],
@@ -2699,7 +2700,7 @@ def get_openai_tools_schema():
                             "description": "Optional; session numbers per area. Default create sends body_parts [{id, session_number}]. LINASLASER_APPOINTMENT_BODY_PART_IDS_ONLY=1 forces body_part_ids only when all sessions are 1.",
                         },
                     },
-                    "required": ["phone", "service_id", "machine_id", "branch_id", "date", "body_part_ids"]
+                    "required": ["phone", "service_id", "branch_id", "date", "body_part_ids"]
                 }
             }
         },

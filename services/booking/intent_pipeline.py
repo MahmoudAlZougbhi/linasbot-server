@@ -18,7 +18,7 @@ import datetime
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import config
 from services import api_integrations
@@ -28,7 +28,6 @@ from services.booking.constants import (
     DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS,
     HAIR_REMOVAL_MACHINE_IDS,
     LASER_HAIR_REMOVAL_SERVICE_IDS,
-    MACHINE_OPTIONAL_SERVICE_IDS,
     TATTOO_SERVICE_ID,
 )
 from services.booking.resolver import (
@@ -318,34 +317,13 @@ def _merge_body_parts_sessions_from_intent(
     return out
 
 
-def _services_without_machine_from_env() -> Set[int]:
-    """
-    Optional override for services that should allow booking without machine_id.
-    Env example: LINASLASER_SERVICES_WITHOUT_MACHINE_IDS="20,21"
-    """
-    raw = (os.getenv("LINASLASER_SERVICES_WITHOUT_MACHINE_IDS") or "").strip()
-    if not raw:
-        return set()
-    out: Set[int] = set()
-    for tok in raw.split(","):
-        try:
-            i = int(tok.strip())
-            if i > 0:
-                out.add(i)
-        except (TypeError, ValueError):
-            continue
-    return out
-
-
 def _service_requires_machine(service_id: Optional[int]) -> bool:
     """
-    Default policy: machine is required unless service is explicitly allowlisted.
+    Only laser hair removal services use customer-selected machines.
     """
     if service_id is None:
-        return True
-    if service_id in MACHINE_OPTIONAL_SERVICE_IDS:
         return False
-    return service_id not in _services_without_machine_from_env()
+    return int(service_id) in LASER_HAIR_REMOVAL_SERVICE_IDS
 
 
 def _crm_rejection_validation_error(
@@ -572,6 +550,9 @@ async def legacy_create_appointment_tool_output(
 
     missing: List[str] = []
     machine_required_legacy = _service_requires_machine(sid)
+    if not machine_required_legacy:
+        mid = None
+        norm_vals["machine_id"] = None
     if not phone:
         missing.append("phone")
     if sid is None:
@@ -617,7 +598,7 @@ async def legacy_create_appointment_tool_output(
         "branch_id": int(bid),
         "date": date_str,
     }
-    if mid is not None:
+    if machine_required_legacy and mid is not None:
         payload["machine_id"] = int(mid)
     uc = fa.get("user_code")
     if uc:
@@ -808,11 +789,7 @@ async def handle_submit_booking_intent(
                 missing.append("machine_id")
                 mach_miss = "machine_id"
         else:
-            mach_id = resolve_machine_id(
-                intent.get("machine_name"),
-                intent.get("machine_id"),
-                machines,
-            )[0]
+            mach_id = None
 
         if svc_id == TATTOO_SERVICE_ID and not str(intent.get("body_part") or "").strip():
             um = (raw_msg or "").lower()
@@ -871,6 +848,8 @@ async def handle_submit_booking_intent(
 
         mach_id = _coerce_int_id(intent.get("machine_id"))
         machine_required = _service_requires_machine(svc_id)
+        if not machine_required:
+            mach_id = None
         if svc_id is not None:
             if machine_required and svc_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
                 if mach_id is None:
@@ -1172,7 +1151,7 @@ async def handle_submit_booking_intent(
         "body_part_ids": body_ids,
         "body_parts_with_sessions": payload_bps,
     }
-    if mach_id is not None:
+    if machine_required and mach_id is not None:
         payload["machine_id"] = mach_id
     return await finalize_crm_booking_tool_output(
         user_id=user_id,

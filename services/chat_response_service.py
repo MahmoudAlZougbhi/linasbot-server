@@ -1148,7 +1148,9 @@ def _booking_submit_payload_complete_for_execution(function_args: Dict[str, Any]
     bid = _safe_int(function_args.get("branch_id"))
     mid = _safe_int(function_args.get("machine_id"))
     gender = str(function_args.get("gender") or current_gender or "").strip().lower()
-    if sid is None or bid is None or mid is None or gender not in ("male", "female"):
+    if sid is None or bid is None or gender not in ("male", "female"):
+        return False
+    if sid in LASER_HAIR_REMOVAL_SERVICE_IDS and mid is None:
         return False
 
     body_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
@@ -1227,7 +1229,7 @@ def _extract_direct_submit_booking_args_from_user_message(
         "phone": phone or "",
         "service_id": sid,
         "branch_id": bid,
-        "machine_id": mid,
+        "machine_id": mid if sid in LASER_HAIR_REMOVAL_SERVICE_IDS else None,
         "body_part_ids": bp_ids,
         "gender": gender,
         "customer_name": fallback_name,
@@ -4401,9 +4403,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         _remember_booking_selection(user_id, function_args)
 
                     selected_service_id = _safe_int(function_args.get("service_id"))
-                    function_args["machine_id"] = await _resolve_machine_for_booking(
-                        selected_service_id, _safe_int(function_args.get("machine_id"))
-                    )
+                    if selected_service_id in LASER_HAIR_REMOVAL_SERVICE_IDS:
+                        function_args["machine_id"] = await _resolve_machine_for_booking(
+                            selected_service_id, _safe_int(function_args.get("machine_id"))
+                        )
+                    else:
+                        function_args.pop("machine_id", None)
+                        function_args.pop("machine_name", None)
                     _remember_booking_selection(user_id, function_args)
 
                     if _legacy_inf:
