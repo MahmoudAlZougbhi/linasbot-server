@@ -640,7 +640,7 @@ async def update_appointments_status(
     date: str = None,
 ):
     """
-    Bulk/single appointment status update via POST appointments/update-status.
+    Bulk/single appointment status update via POST api/appointments/update-status.
 
     API contract:
     - appointment_ids: required array
@@ -674,7 +674,28 @@ async def update_appointments_status(
         "API Call: update_appointments_status "
         f"appointment_ids={ids}, status_id={status_id_int}, date={json_data.get('date')}"
     )
-    response = await _make_api_request("POST", "appointments/update-status", json_data=json_data)
+    configured_path = (os.getenv("LINASLASER_UPDATE_STATUS_PATH") or "").strip().lstrip("/")
+    path_candidates = [configured_path] if configured_path else [
+        "api/appointments/update-status",
+        "appointments/update-status",
+    ]
+    response = {"success": False, "message": "update_status_endpoint_not_tried"}
+    path_used = path_candidates[0]
+    for path in path_candidates:
+        if not path:
+            continue
+        path_used = path
+        response = await _make_api_request("POST", path, json_data=json_data)
+        if response.get("success"):
+            break
+        msg = str(response.get("message") or "").lower()
+        if response.get("status_code") == 404 or "not found" in msg:
+            print(f"API Call: update_appointments_status — {path} not found, trying next path")
+            continue
+        break
+    if isinstance(response, dict):
+        response = dict(response)
+        response["path"] = path_used
     if response.get("success"):
         log_report_event(
             "api_call",
@@ -686,6 +707,7 @@ async def update_appointments_status(
                 "appointment_ids": ids,
                 "status_id": status_id_int,
                 "date": json_data.get("date"),
+                "path": path_used,
             },
         )
     else:
@@ -700,6 +722,7 @@ async def update_appointments_status(
                 "appointment_ids": ids,
                 "status_id": status_id_int,
                 "date": json_data.get("date"),
+                "path": path_used,
             },
         )
     return response
@@ -726,7 +749,7 @@ async def resume_appointment(phone: str, appointment_id: int, endpoint: str = No
     if not configured and response.get("status_code") == 404:
         fallback = await update_appointments_status([appointment_id], status_id=2)
         response = dict(fallback)
-        path = "appointments/update-status"
+        path = response.get("path") or "api/appointments/update-status"
     merged = dict(response) if isinstance(response, dict) else {"success": False, "message": str(response)}
     merged["path"] = path
     if response.get("success"):
