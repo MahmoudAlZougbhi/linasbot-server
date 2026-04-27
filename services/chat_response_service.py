@@ -1170,6 +1170,98 @@ def _booking_submit_payload_complete_for_execution(function_args: Dict[str, Any]
     return has_datetime
 
 
+def _extract_direct_submit_booking_args_from_user_message(
+    text: str,
+    *,
+    phone: Optional[str],
+    current_gender: str,
+    fallback_name: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Parse explicit technical booking fields from dashboard/admin test messages."""
+    raw = text or ""
+    low = raw.lower()
+    if not any(tok in low for tok in ("احجز", "احجزي", "حجز", "book", "execute", "نفّذ", "نفذ")):
+        return None
+
+    def pick_int(field: str) -> Optional[int]:
+        m = re.search(rf"\b{re.escape(field)}\s*[:=]\s*(\d+)\b", raw, flags=re.IGNORECASE)
+        return _safe_int(m.group(1)) if m else None
+
+    sid = pick_int("service_id")
+    bid = pick_int("branch_id")
+    mid = pick_int("machine_id")
+
+    bp_ids: List[int] = []
+    m_bp = re.search(r"\bbody_part_ids\s*[:=]\s*\[([^\]]+)\]", raw, flags=re.IGNORECASE)
+    if m_bp:
+        bp_ids = _normalize_body_part_ids(m_bp.group(1))
+    else:
+        one_bp = pick_int("body_part_id")
+        if one_bp is not None:
+            bp_ids = [one_bp]
+
+    m_dt = re.search(
+        r"\b(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}(?::\d{2})?))?\b",
+        raw,
+    )
+    if not m_dt:
+        return None
+    date_part = m_dt.group(1)
+    time_part = m_dt.group(2)
+    if not time_part:
+        m_time = re.search(r"\b(\d{1,2}:\d{2})(?::\d{2})?\b", raw[m_dt.end():])
+        time_part = m_time.group(1) if m_time else None
+    if not time_part:
+        return None
+    if len(time_part.split(":")) == 2:
+        time_part = f"{time_part}:00"
+
+    gender = current_gender if current_gender in ("male", "female") else None
+    if any(tok in low for tok in ("نساء", "women", "female", "انثى", "أنثى", "بنت")):
+        gender = "female"
+    elif any(tok in low for tok in ("رجال", "men", "male", "ذكر", "شب")):
+        gender = "male"
+
+    out = {
+        "intent": "create_appointment",
+        "phone": phone or "",
+        "service_id": sid,
+        "branch_id": bid,
+        "machine_id": mid,
+        "body_part_ids": bp_ids,
+        "gender": gender,
+        "customer_name": fallback_name,
+        "normalized_date": date_part,
+        "normalized_time": time_part[:5],
+        "time": time_part[:5],
+        "timezone": "Asia/Beirut",
+        "date": f"{date_part} {time_part}",
+        "execute_booking": True,
+    }
+    return out if _booking_submit_payload_complete_for_execution(out, gender or current_gender) else None
+
+
+def _reply_from_submit_booking_tool(tool_output: Dict[str, Any], language: str) -> str:
+    if isinstance(tool_output, dict) and tool_output.get("success") and tool_output.get("booking_flow_state") == "booked":
+        api = tool_output.get("api_response") or {}
+        data = api.get("data") if isinstance(api, dict) else {}
+        appt = (data or {}).get("appointment") if isinstance(data, dict) else {}
+        aid = appt.get("id") or appt.get("appointment_id")
+        date = appt.get("date")
+        cost = appt.get("cost")
+        if language == "en":
+            return f"Appointment booked successfully. Appointment ID: {aid}, date: {date}, system price: {cost}."
+        return f"تم تثبيت الحجز على السيستم. رقم الموعد {aid}، التاريخ {date}، والسعر الظاهر بالنظام {cost}."
+    reason = (
+        tool_output.get("human_readable_reason")
+        or tool_output.get("message")
+        or "لم يكتمل الحجز على السيستم."
+        if isinstance(tool_output, dict)
+        else "لم يكتمل الحجز على السيستم."
+    )
+    return str(reason)
+
+
 def _get_body_part_required_service_ids() -> set:
     configured_ids = set(DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS)
     try:
@@ -5285,6 +5377,59 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             or "edit_appointment" in tool_names
             or "resume_appointment" in tool_names
         )
+
+        if (
+            tool_calls
+            and "submit_booking_intent" not in tool_names
+            and "create_appointment" not in tool_names
+            and not api_failure_reason
+        ):
+            direct_submit_args = _extract_direct_submit_booking_args_from_user_message(
+                user_input,
+                phone=customer_phone_clean or config.user_data_whatsapp.get(user_id, {}).get("phone_number") or user_id,
+                current_gender=current_gender,
+                fallback_name=config.user_names.get(user_id, user_name),
+            )
+            if direct_submit_args:
+                try:
+                    from services.booking.intent_pipeline import handle_submit_booking_intent
+                    from services.booking.booking_fsm import merge_patch as _fsm_merge_patch, mark_booking_completed
+
+                    _fsm_merge_patch(user_id, {"confirmed_booking": True})
+                    direct_output = await handle_submit_booking_intent(
+                        user_id=user_id,
+                        phone=str(direct_submit_args.get("phone") or "").strip(),
+                        current_gender=current_gender,
+                        user_input=user_input,
+                        function_args=direct_submit_args,
+                    )
+                    direct_content = json.dumps(direct_output, ensure_ascii=False, default=str)
+                    tool_round_trips.append(
+                        _record_tool_round_trip(
+                            "submit_booking_intent_direct_from_user_message",
+                            direct_submit_args,
+                            direct_content,
+                            direct_output if isinstance(direct_output, dict) else None,
+                        )
+                    )
+                    tool_names.append("submit_booking_intent")
+                    parsed_response["action"] = "answer_question"
+                    parsed_response["bot_reply"] = _reply_from_submit_booking_tool(
+                        direct_output if isinstance(direct_output, dict) else {},
+                        detected_language,
+                    )
+                    if (
+                        isinstance(direct_output, dict)
+                        and direct_output.get("success")
+                        and direct_output.get("booking_flow_state") == "booked"
+                    ):
+                        recovered_create_appointment_ok = True
+                        try:
+                            mark_booking_completed(user_id)
+                        except Exception as _direct_mc_e:
+                            print(f"⚠️ direct submit mark_booking_completed: {_direct_mc_e}")
+                except Exception as direct_submit_e:
+                    print(f"⚠️ direct submit from user message failed: {direct_submit_e}")
 
         _leaked_rec = _extract_booking_args_from_gpt_raw(gpt_raw_content or "")
         _rec_has_date = bool(_leaked_rec.get("date") or _leaked_rec.get("date_components"))
