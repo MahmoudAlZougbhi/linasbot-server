@@ -2065,7 +2065,7 @@ def _fix_misassigned_tattoo_service_for_hair_booking(
         )
     )
     tattoo_thread = any(t in blob for t in ("tattoo", "وشم", "تاتو", "détatouage", "detatouage"))
-    if mid in HAIR_REMOVAL_MACHINE_IDS or (hair_thread and not tattoo_thread):
+    if not tattoo_thread and (mid in HAIR_REMOVAL_MACHINE_IDS or hair_thread):
         new_sid = 12 if current_gender == "female" else 1
         print(
             f"DEBUG: Corrected service_id 13 → {new_sid} (hair booking; machine_id={mid}, hair_thread={hair_thread})"
