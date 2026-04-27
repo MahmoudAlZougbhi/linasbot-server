@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 from typing import Any, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 # No more telegram.Update or ContextTypes here
@@ -21,6 +22,13 @@ api_client = httpx.AsyncClient(
     base_url=api_config.LINASLASER_API_BASE_URL,
     timeout=60.0  # 60 seconds timeout instead of default 5 seconds
 )
+
+
+def _root_api_url(path: str) -> str:
+    """Build an absolute URL at the API host root, outside /agent when needed."""
+    parts = urlsplit(api_config.LINASLASER_API_BASE_URL)
+    clean_path = "/" + str(path or "").lstrip("/")
+    return urlunsplit((parts.scheme, parts.netloc, clean_path, "", ""))
 
 async def _make_api_request(method: str, endpoint: str, params: dict = None, json_data: dict = None):
     """
@@ -678,17 +686,28 @@ async def update_appointments_status(
     path_candidates = [configured_path] if configured_path else [
         "api/appointments/update-status",
         "appointments/update-status",
+        _root_api_url("api/appointments/update-status"),
     ]
     response = {"success": False, "message": "update_status_endpoint_not_tried"}
     path_used = path_candidates[0]
+    attempted_paths: list[str] = []
+    path_errors: list[dict] = []
     for path in path_candidates:
         if not path:
             continue
         path_used = path
+        attempted_paths.append(path)
         response = await _make_api_request("POST", path, json_data=json_data)
         if response.get("success"):
             break
         msg = str(response.get("message") or "").lower()
+        path_errors.append(
+            {
+                "path": path,
+                "status_code": response.get("status_code"),
+                "message": response.get("message"),
+            }
+        )
         if response.get("status_code") == 404 or "not found" in msg:
             print(f"API Call: update_appointments_status — {path} not found, trying next path")
             continue
@@ -696,6 +715,9 @@ async def update_appointments_status(
     if isinstance(response, dict):
         response = dict(response)
         response["path"] = path_used
+        response["attempted_paths"] = attempted_paths
+        if path_errors:
+            response["path_errors"] = path_errors
     if response.get("success"):
         log_report_event(
             "api_call",
