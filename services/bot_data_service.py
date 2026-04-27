@@ -131,11 +131,6 @@ When a customer asks about Candela or which branch has Candela, inform them Cand
                 "interval": 21, "pain": 2, "results_after": "10–15",
                 "blonde_red": "50% – 70%"
             },
-            "Trio": {
-                "sessions_light": "12–15", "sessions_dark": 20, "result_pct": "Around 70%",
-                "interval": 21, "pain": 6, "results_after": "10–15",
-                "blonde_red": "Not effective"
-            }
         }
         
         for machine in machines:

@@ -971,12 +971,12 @@ OFF_TOPIC_PRICE_FALSE_POSITIVE_HINTS = [
 ]
 
 # All bookable laser services must send body_part_ids + session_number on create.
-# Hair removal (1, 12) is the only family where the customer chooses the device (Neo/Quadro/Candela/…).
+# Hair removal (1, 12) is the only family where the customer chooses the device (Neo/Quadro/Candela).
 DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS = {1, 2, 4, 5, 11, 12, 13, 14}
 LASER_HAIR_REMOVAL_SERVICE_IDS = {1, 12}
-# get_machines IDs that are laser-hair devices (Quadro, Trio, NEO, Candela) — not Pico/tattoo/DPL.
+# get_machines IDs that are laser-hair devices (Quadro, NEO, Candela) — not Trio/Pico/tattoo/DPL.
 # If GPT sends service_id 13 (tattoo) with one of these, it is almost always a hair booking misfire.
-HAIR_REMOVAL_MACHINE_IDS = frozenset({9, 10, 13, 15})
+HAIR_REMOVAL_MACHINE_IDS = frozenset({9, 13, 15})
 
 def validate_language_match(user_language: str, bot_response: str, detected_response_lang: str) -> tuple:
     """
@@ -1352,7 +1352,7 @@ def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_
     text = str(user_input or "").lower()
     if any(
         keyword in text
-        for keyword in ("candela", "كانديلا", "kandila", "quadro", "كوادرو", "trio", " neo", "neo ")
+        for keyword in ("candela", "كانديلا", "kandila", "quadro", "كوادرو", " neo", "neo ")
     ):
         return 12 if current_gender == "female" else 1
     if any(keyword in text for keyword in ["tattoo", "وشم", "تاتو", "détatouage"]):
@@ -2090,7 +2090,6 @@ def _fix_misassigned_tattoo_service_for_hair_booking(
             " neo",
             "neo ",
             "niyo",
-            "trio",
             "ليزر شعر",
             "إزالة شعر",
             "ازالة شعر",
@@ -2824,11 +2823,9 @@ def _user_explicitly_requests_machine_change(text: Optional[str]) -> bool:
             "neo",
             "candela",
             "quadro",
-            "trio",
             "نيو",
             "كانديلا",
             "كوادرو",
-            "تريو",
         )
     )
 
@@ -2867,7 +2864,7 @@ async def _resolve_machine_for_booking(
                     if mid is None:
                         continue
                     if mid in HAIR_REMOVAL_MACHINE_IDS or any(
-                        kw in name for kw in ("neo", "candela", "quadro", "trio")
+                        kw in name for kw in ("neo", "candela", "quadro")
                     ):
                         hair_ids.append(mid)
                 hair_allowed = set(hair_ids)
@@ -2919,9 +2916,6 @@ async def _resolve_machine_for_booking(
                 return mid
         if sid in (4, 5, 14):
             mid = first_id(lambda n: "dpl" in n)
-            if mid is not None:
-                return mid
-            mid = first_id(lambda n: "trio" in n and "hair" not in n)
             if mid is not None:
                 return mid
     except Exception as ex:

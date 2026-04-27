@@ -41,7 +41,7 @@ _BODY_AREA_MENTION_RE = re.compile(
 # Short affirmative / negative (confirmation step)
 _AFFIRM_RE = re.compile(
     r"(?i)^\s*("
-    r"ok|okay|yes|yeah|yep|sure|deal|done|confirm|neo|quadro|candela|trio|"
+    r"ok|okay|yes|yeah|yep|sure|deal|done|confirm|neo|quadro|candela|"
     r"تمام|اوكي|أوكي|ايه|نعم|اه|آه|تم|ماشي|حاضر|يلا|نعم\s*نفذ|نفذ|موافق|"
     r"👍|✅"
     r")\s*\.?\s*$"

@@ -179,7 +179,7 @@ def resolve_machine_id(
         mu = _alnum_compact(mn_raw)
         if nu and mu and len(nu) >= 2 and (nu in mu or mu in nu):
             return mid_c, None
-        for kw in ("neo", "candela", "quadro", "trio", "dpl", "pico"):
+        for kw in ("neo", "candela", "quadro", "dpl", "pico"):
             if kw in n and kw in mn:
                 return mid_c, None
         sc = SequenceMatcher(None, n, mn).ratio()
@@ -194,7 +194,7 @@ def resolve_machine_id(
         mn = str(m.get("name") or "").lower()
         if mid_c is None or mid_c not in HAIR_REMOVAL_MACHINE_IDS or not mn:
             continue
-        for kw in ("neo", "candela", "quadro", "trio", "dpl"):
+        for kw in ("neo", "candela", "quadro", "dpl"):
             if kw in n and kw in mn:
                 return mid_c, None
     return None, "machine_id"

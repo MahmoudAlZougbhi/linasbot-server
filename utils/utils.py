@@ -2581,7 +2581,7 @@ def get_openai_tools_schema():
                             },
                             "description": "Optional. When session numbers differ per area, pass one row per id (same ids as body_part_ids). Server sends BOC body_parts as {id, session_number} per official API doc.",
                         },
-                        "machine_name": {"type": "string", "description": "Device name for Laser Hair Removal Men/Women only (Neo/Quadro/Candela/Trio). Do not use for other services."},
+                        "machine_name": {"type": "string", "description": "Device name for Laser Hair Removal Men/Women only (Neo/Quadro/Candela). Trio is no longer available. Do not use for other services."},
                         "machine_id": {"type": "integer", "description": "Only for service_id 1 or 12 after verified from get_machines. Omit for all other services."},
                         "branch_name": {"type": "string", "description": "Beirut or Antelias."},
                         "branch_id": {"type": "integer", "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume, use live list)."},
@@ -2652,7 +2652,7 @@ def get_openai_tools_schema():
                     "but it runs the same CRM create step and returns the same structured success or validation-style failure "
                     "as submit_booking_intent (including when the calendar rejects the slot after local rules pass). "
                     "Requires phone, service_id, branch_id, date/time, and body_part_ids. "
-                    "Only laser hair removal (1/12) uses customer-chosen device (get_machines: Neo/Quadro/Candela/Trio). "
+                    "Only laser hair removal (1/12) uses customer-chosen device (get_machines: Neo/Quadro/Candela). Trio is no longer available. "
                     "For tattoo/CO2/whitening/hydrofacial/HIFU/etc. omit machine_id entirely. "
                     "NEVER use for reschedule when a paused appointment exists—use update_appointment_date."
                 ),
@@ -2899,7 +2899,7 @@ def get_openai_tools_schema():
             "type": "function",
             "function": {
                 "name": "get_machines",
-                "description": "Lists machines in the clinic. Call when booking laser hair removal (service 1 or 12) to pick the device the customer agreed to (Neo, Quadro, Candela, Trio). For tattoo, CO2, or whitening you may still call once to get a valid machine_id for the API, but do not ask the customer to choose a device for those services.",
+                "description": "Lists machines in the clinic. Call when booking laser hair removal (service 1 or 12) to pick the device the customer agreed to (Neo, Quadro, Candela). Trio is no longer available. For non-hair services, do not ask for or send machine_id.",
                 "parameters": {"type": "object", "properties": {}}
             }
         },

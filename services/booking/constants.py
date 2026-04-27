@@ -19,7 +19,8 @@ WHITENING_SERVICE_IDS: FrozenSet[int] = frozenset({4, 5, 14})
 LASER_HAIR_REMOVAL_SERVICE_IDS: FrozenSet[int] = frozenset({HAIR_MEN, HAIR_WOMEN})
 
 # Machines that are hair-removal class in current CRM mapping (not Pico/tattoo).
-HAIR_REMOVAL_MACHINE_IDS: FrozenSet[int] = frozenset({9, 10, 13, 15})
+# Trio (id=10) is no longer available.
+HAIR_REMOVAL_MACHINE_IDS: FrozenSet[int] = frozenset({9, 13, 15})
 
 # Services that can be booked without selecting a machine.
 # As requested: tattoo removal + CO2 laser + whitening.
