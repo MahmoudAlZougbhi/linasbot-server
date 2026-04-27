@@ -5272,7 +5272,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 else tool_output.get("human_readable_reason", "Unknown error")
                             )
                             err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
-                            api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
+                            if tool_output.get("error_type") == "validation_error":
+                                print(f"create_appointment tool: validation failed (no handover): {err_msg}")
+                            else:
+                                api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
                             print(f"create_appointment tool: API failed (no user-text retry): {err_msg}")
                         
                         # 📊 ANALYTICS: Track appointment reschedule
