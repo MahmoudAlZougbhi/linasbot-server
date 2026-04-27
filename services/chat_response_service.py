@@ -3603,6 +3603,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         tool_round_trips: List[Dict[str, Any]] = []
         ai_first_response_with_tools = ""
         recovered_create_appointment_ok = False
+        booking_create_attempted_this_turn = False
 
         # When GPT asks for gender (unknown), send that reply and do NOT run tool calls.
         # Otherwise a second response after tools can replace it with booking flow (date/time/branch).
@@ -4858,56 +4859,72 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
                         or ""
                     )
-                    _ok_submit, _gate_reason = can_execute_submit(user_id, current_gender)
-                    if (
-                        _fsm_gate_enabled()
-                        and not _ok_submit
-                        and _gate_reason == "fsm_confirmation_required"
-                        and _booking_submit_payload_complete_for_execution(function_args, current_gender)
-                    ):
-                        try:
-                            _fsm_merge_patch(user_id, {"confirmed_booking": True})
-                            _ok_submit, _gate_reason = can_execute_submit(user_id, current_gender)
-                            print(
-                                "[BOOKING_FSM] auto-confirmed complete one-message booking payload "
-                                f"user={user_id} service_id={function_args.get('service_id')} "
-                                f"date={function_args.get('date') or function_args.get('date_components')}"
-                            )
-                        except Exception as _auto_confirm_e:
-                            print(f"⚠️ booking_fsm auto-confirm failed: {_auto_confirm_e}")
-                    if _fsm_gate_enabled() and not _ok_submit:
-                        _mf = parse_gate_reason(_gate_reason or "")
+                    if booking_create_attempted_this_turn and not detect_bulk_reschedule_all_intent(user_input):
                         tool_output = validation_error_response(
-                            missing_fields=_mf,
-                            human_readable_reason=human_gate_message(_gate_reason or "", current_preferred_lang),
+                            missing_fields=[],
+                            human_readable_reason=(
+                                "Only one new booking may be executed per user turn unless the user explicitly asks for multiple bookings. "
+                                "Ask which second appointment they want to book next."
+                            ),
                             activity_trace={
-                                "failure_stage": "booking_fsm_gate",
+                                "failure_stage": "multiple_booking_create_blocked",
                                 "execution_phase": "pre_execution",
-                                "detail": _gate_reason,
+                                "detail": "second submit_booking_intent blocked in same turn",
                                 "pipeline_phase": "submit_booking_intent_blocked",
                             },
                         )
                     else:
-                        try:
-                            tool_output = await handle_submit_booking_intent(
-                                user_id=user_id,
-                                phone=str(_sb_phone).strip(),
-                                current_gender=current_gender,
-                                user_input=user_input,
-                                function_args=function_args,
-                            )
-                        except Exception as _sb_exc:
-                            print(f"ERROR: submit_booking_intent raised: {_sb_exc}")
-                            tool_output = {
-                                "success": False,
-                                "error_type": "submit_exception",
-                                "human_readable_reason": _SUBMIT_BOOKING_TOOL_HINT_TECHNICAL,
-                                "activity_trace": {
-                                    "failure_stage": "submit_exception",
-                                    "detail": f"{type(_sb_exc).__name__}: {str(_sb_exc)[:500]}",
-                                    "pipeline_phase": "submit_booking_intent",
+                        booking_create_attempted_this_turn = True
+                        _ok_submit, _gate_reason = can_execute_submit(user_id, current_gender)
+                        if (
+                            _fsm_gate_enabled()
+                            and not _ok_submit
+                            and _gate_reason == "fsm_confirmation_required"
+                            and _booking_submit_payload_complete_for_execution(function_args, current_gender)
+                        ):
+                            try:
+                                _fsm_merge_patch(user_id, {"confirmed_booking": True})
+                                _ok_submit, _gate_reason = can_execute_submit(user_id, current_gender)
+                                print(
+                                    "[BOOKING_FSM] auto-confirmed complete one-message booking payload "
+                                    f"user={user_id} service_id={function_args.get('service_id')} "
+                                    f"date={function_args.get('date') or function_args.get('date_components')}"
+                                )
+                            except Exception as _auto_confirm_e:
+                                print(f"⚠️ booking_fsm auto-confirm failed: {_auto_confirm_e}")
+                        if _fsm_gate_enabled() and not _ok_submit:
+                            _mf = parse_gate_reason(_gate_reason or "")
+                            tool_output = validation_error_response(
+                                missing_fields=_mf,
+                                human_readable_reason=human_gate_message(_gate_reason or "", current_preferred_lang),
+                                activity_trace={
+                                    "failure_stage": "booking_fsm_gate",
+                                    "execution_phase": "pre_execution",
+                                    "detail": _gate_reason,
+                                    "pipeline_phase": "submit_booking_intent_blocked",
                                 },
-                            }
+                            )
+                        else:
+                            try:
+                                tool_output = await handle_submit_booking_intent(
+                                    user_id=user_id,
+                                    phone=str(_sb_phone).strip(),
+                                    current_gender=current_gender,
+                                    user_input=user_input,
+                                    function_args=function_args,
+                                )
+                            except Exception as _sb_exc:
+                                print(f"ERROR: submit_booking_intent raised: {_sb_exc}")
+                                tool_output = {
+                                    "success": False,
+                                    "error_type": "submit_exception",
+                                    "human_readable_reason": _SUBMIT_BOOKING_TOOL_HINT_TECHNICAL,
+                                    "activity_trace": {
+                                        "failure_stage": "submit_exception",
+                                        "detail": f"{type(_sb_exc).__name__}: {str(_sb_exc)[:500]}",
+                                        "pipeline_phase": "submit_booking_intent",
+                                    },
+                                }
                         if (
                             isinstance(tool_output, dict)
                             and tool_output.get("success")
