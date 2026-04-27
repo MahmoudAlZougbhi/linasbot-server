@@ -3642,6 +3642,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         paused_followup_update_succeeded = False
         paused_followup_available_action_requested = False
         tool_round_trips: List[Dict[str, Any]] = []
+        extra_tool_names: List[str] = []
         ai_first_response_with_tools = ""
         recovered_create_appointment_ok = False
         booking_create_attempted_this_turn = False
@@ -5371,6 +5372,56 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         else:
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
 
+        if not tool_calls:
+            direct_submit_args = _extract_direct_submit_booking_args_from_user_message(
+                user_input,
+                phone=customer_phone_clean
+                or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+                or user_id,
+                current_gender=current_gender,
+                fallback_name=config.user_names.get(user_id, user_name),
+            )
+            if direct_submit_args:
+                try:
+                    from services.booking.intent_pipeline import handle_submit_booking_intent
+                    from services.booking.booking_fsm import merge_patch as _fsm_merge_patch, mark_booking_completed
+
+                    _fsm_merge_patch(user_id, {"confirmed_booking": True})
+                    direct_output = await handle_submit_booking_intent(
+                        user_id=user_id,
+                        phone=str(direct_submit_args.get("phone") or "").strip(),
+                        current_gender=current_gender,
+                        user_input=user_input,
+                        function_args=direct_submit_args,
+                    )
+                    direct_content = json.dumps(direct_output, ensure_ascii=False, default=str)
+                    tool_round_trips.append(
+                        _record_tool_round_trip(
+                            "submit_booking_intent_direct_from_user_message",
+                            direct_submit_args,
+                            direct_content,
+                            direct_output if isinstance(direct_output, dict) else None,
+                        )
+                    )
+                    extra_tool_names.append("submit_booking_intent")
+                    parsed_response["action"] = "answer_question"
+                    parsed_response["bot_reply"] = _reply_from_submit_booking_tool(
+                        direct_output if isinstance(direct_output, dict) else {},
+                        parsed_response.get("detected_language") or current_preferred_lang,
+                    )
+                    if (
+                        isinstance(direct_output, dict)
+                        and direct_output.get("success")
+                        and direct_output.get("booking_flow_state") == "booked"
+                    ):
+                        recovered_create_appointment_ok = True
+                        try:
+                            mark_booking_completed(user_id)
+                        except Exception as _direct_mc_e:
+                            print(f"⚠️ direct submit mark_booking_completed: {_direct_mc_e}")
+                except Exception as direct_submit_e:
+                    print(f"⚠️ no-tool direct submit from user message failed: {direct_submit_e}")
+
         try:
             from services.booking import booking_fsm as _bfsm_patch
 
@@ -5446,7 +5497,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             raise ValueError("GPT response missing required fields (action or bot_reply)")
 
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
-        tool_names = [tc.function.name for tc in tool_calls] if tool_calls else []
+        tool_names = ([tc.function.name for tc in tool_calls] if tool_calls else []) + extra_tool_names
         _brl_flow = (parsed_response.get("bot_reply") or "").strip().lower()
         had_update_tool = bool(tool_calls) and (
             "update_appointment_date" in tool_names
