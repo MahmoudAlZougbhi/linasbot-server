@@ -874,6 +874,52 @@ def _user_explicitly_requests_human_agent(text: str) -> bool:
     return any(n in m for n in needles)
 
 
+def _reply_offers_handover_confirmation(text: str) -> bool:
+    """True when the AI reply asks permission before connecting the user to staff."""
+    if not text or not str(text).strip():
+        return False
+    m = str(text).lower()
+    permission_markers = (
+        "إذا بتحب",
+        "اذا بتحب",
+        "إذا بتحبي",
+        "اذا بتحبي",
+        "إذا حابب",
+        "اذا حابب",
+        "إذا حابة",
+        "اذا حابة",
+        "بدك",
+        "would you like",
+        "do you want me to",
+        "if you want",
+        "si vous voulez",
+        "souhaitez-vous",
+    )
+    handover_markers = (
+        "الفريق",
+        "موظف",
+        "اختصاصية",
+        "يتواصل",
+        "يتواصلوا",
+        "أوصلك",
+        "اوصلك",
+        "أحولك",
+        "احولك",
+        "أحيل",
+        "احيل",
+        "connect you",
+        "transfer you",
+        "team contact",
+        "specialist",
+        "staff",
+        "mettre en relation",
+        "équipe",
+        "specialiste",
+        "spécialiste",
+    )
+    return any(p in m for p in permission_markers) and any(h in m for h in handover_markers)
+
+
 async def _process_and_respond(user_id: str, user_name: str, user_input_to_process: str, user_data: dict, send_message_func, send_action_func, user_image_base64: str = None, user_image_format: str = "jpeg"):
     """
     Core logic for processing user input and generating bot response.
@@ -1701,14 +1747,30 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 escalation_reason_from_gpt = "technical_error"
                 print(f"[_process_and_respond] GPT/system error → handing over to human. error={flow_meta.get('error')}")
 
-    # AI-assessed handover degree: if GPT says medium/high, override to human_handover
+    _handover_offer_needs_confirmation = (
+        bool(bot_reply_text)
+        and _reply_offers_handover_confirmation(bot_reply_text)
+        and not _user_explicitly_requests_human_agent(user_input_to_process)
+        and not flow_meta.get("error")
+        and not flow_meta.get("booking_retry_exceeded")
+        and str(escalation_reason_from_gpt or "").strip().lower() != "technical_error"
+    )
+
+    # AI-assessed handover degree: if GPT says medium/high, escalate, but do not
+    # skip a permission question that the model already wrote for the user.
     if (
         handover_degree in ("medium", "high")
         and action not in ("human_handover", "human_handover_confirmed", "human_handover_initial_ask")
         and not is_post_takeover_escalation_cooldown(user_data)
     ):
-        print(f"[_process_and_respond] 🔄 handover_degree={handover_degree} → overriding action to human_handover")
-        action = "human_handover"
+        if _handover_offer_needs_confirmation:
+            print(
+                f"[_process_and_respond] handover_degree={handover_degree} with permission wording → human_handover_initial_ask"
+            )
+            action = "human_handover_initial_ask"
+        else:
+            print(f"[_process_and_respond] 🔄 handover_degree={handover_degree} → overriding action to human_handover")
+            action = "human_handover"
         escalation_reason_from_gpt = escalation_reason_from_gpt or "frustration_detected"
     elif handover_degree in ("medium", "high") and is_post_takeover_escalation_cooldown(user_data):
         print(
@@ -1767,6 +1829,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 escalation_reason_from_gpt = "technical_error"
                 _flow_error_reason = f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')}"
                 print(f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → handing over to human. flow_error={flow_meta.get('error', 'none')}")
+
+    if action == "human_handover" and _handover_offer_needs_confirmation:
+        print(
+            "[_process_and_respond] GPT requested human_handover but bot_reply asks permission → human_handover_initial_ask"
+        )
+        action = "human_handover_initial_ask"
 
     # AI-PRIMARY: No bot-side overrides. Send AI reply as-is.
 

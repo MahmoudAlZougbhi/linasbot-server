@@ -1895,10 +1895,17 @@ async def get_conversation_context_for_gpt(
     if len(mem) > len(fs):
         cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
         use = mem[-cap:] if cap > 0 else mem
+        openai_safe = [
+            {
+                "role": msg.get("role", "user"),
+                "content": str(msg.get("content", "") or ""),
+            }
+            for msg in use
+        ]
         print(
             f"ℹ️ GPT context: in-memory transcript ({len(use)} msgs) > Firestore ({len(fs)}); using in-memory."
         )
-        return use
+        return openai_safe
     return fs
 
 
@@ -2486,6 +2493,38 @@ def get_openai_tools_schema():
         {
             "type": "function",
             "function": {
+                "name": "update_customer_profile",
+                "description": (
+                    "Update the saved profile for the current WhatsApp user when they explicitly ask to correct/change "
+                    "their name or gender, or they say the bot is addressing them with the wrong gender/name. "
+                    "Use this before replying to confirmations like 'my name is X now', 'change my name to X', "
+                    "'I am female not male', 'ana bent mesh shab', or Arabic/franco equivalents. "
+                    "Do not call this for weak inference; only when the user clearly provides the new value."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "new_name": {
+                            "type": "string",
+                            "description": "The corrected customer display name exactly as the user wants it saved. Omit if not changing name.",
+                        },
+                        "new_gender": {
+                            "type": "string",
+                            "enum": ["male", "female"],
+                            "description": "Corrected gender in normalized backend format. Omit if not changing gender.",
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Short reason from the user's message, e.g. 'user requested gender correction'.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "submit_booking_intent",
                 "description": (
                     "DEFAULT and REQUIRED path for every NEW booking: send structured extraction from the conversation. "
@@ -2494,6 +2533,7 @@ def get_openai_tools_schema():
                     "Do NOT tell the user the appointment is booked unless this tool returns success with booking_flow_state=booked. "
                     "Do NOT use create_appointment for normal new bookings—use this tool first. "
                     "Leave IDs null when unsure; use get_services/get_branches/get_machines/get_body_parts first if needed. "
+                    "If the user already supplied service, area, machine, branch, date, and time in one message, extract all of them into this tool call; do not ask the same fields again. "
                     "DATETIME: Before execute_booking=true, resolve all relative NL into absolute values (Asia/Beirut). "
                     "IDs: By default the server does NOT convert service_name/branch_name/machine_name/body text to ids — "
                     "you MUST call get_services, get_branches, get_machines, get_body_parts and send service_id, branch_id, "
@@ -2519,7 +2559,7 @@ def get_openai_tools_schema():
                         "service_id": {"type": "integer", "description": "Only if already verified from get_services."},
                         "body_part": {
                             "type": "string",
-                            "description": "Optional human-readable area hint; for booking you must still set body_part_ids from get_body_parts.",
+                            "description": "Human-readable area hint from the user. Preserve it even when body_part_ids are available; never ask again when user already gave it.",
                         },
                         "body_part_ids": {
                             "type": "array",
@@ -2543,7 +2583,7 @@ def get_openai_tools_schema():
                         "machine_name": {"type": "string", "description": "Device name for hair removal (Neo/Quadro/Candela/Trio)."},
                         "machine_id": {"type": "integer", "description": "Only if verified from get_machines."},
                         "branch_name": {"type": "string", "description": "Beirut or Antelias."},
-                        "branch_id": {"type": "integer", "description": "1=Beirut, 2=Antelias when known."},
+                        "branch_id": {"type": "integer", "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume, use live list)."},
                         "gender": {"type": "string", "enum": ["male", "female"], "description": "Required for schedule rules if not already in session."},
                         "customer_name": {
                             "type": "string",

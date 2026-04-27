@@ -4,6 +4,7 @@ import json
 import random
 import config
 from utils.utils import detect_language, get_system_instruction, get_openai_tools_schema
+from utils.utils import get_canonical_user_id_and_phone, get_firestore_db, merge_conversation_user_id_variants
 from prompt_templates import CUSTOMER_STATUS_TOKEN
 from services.llm_core_service import client
 from services.gender_recognition_service import get_gender_from_gpt
@@ -133,6 +134,107 @@ def _record_tool_round_trip(
             }
         rec["backend_execution"] = {k: v for k, v in summ.items() if v is not None}
     return rec
+
+
+def _normalize_profile_gender(value: Any) -> Optional[str]:
+    """Normalize user-facing gender words to the backend profile values."""
+    s = str(value or "").strip().lower()
+    if not s:
+        return None
+    male_values = {"male", "m", "man", "boy", "ذكر", "رجل", "شب", "zakar", "shab", "sabe", "sabi"}
+    female_values = {"female", "f", "woman", "girl", "أنثى", "انثى", "بنت", "صبية", " بنت", "bent", "sabeye", "sabye"}
+    if s in male_values:
+        return "male"
+    if s in female_values:
+        return "female"
+    return None
+
+
+def _validate_profile_name(value: Any) -> Tuple[Optional[str], Optional[str]]:
+    """Return (clean_name, error) for a user-requested profile name change."""
+    name = str(value or "").strip()
+    if not name:
+        return None, None
+    name_pattern = r"^[A-Za-z\u00C0-\u00FF\u0600-\u06FF\s\-\']+$"
+    if not (2 <= len(name) <= 50):
+        return None, "name_length_invalid"
+    if not re.match(name_pattern, name, re.UNICODE):
+        return None, "name_characters_invalid"
+    return name, None
+
+
+async def _update_profile_name_in_firestore(user_id: str, name: str, phone_number: Optional[str]) -> int:
+    """Persist a profile name on all known user-id variants we can safely resolve."""
+    db = get_firestore_db()
+    if not db:
+        return 0
+    app_id = "linas-ai-bot-backend"
+    canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, phone_number)
+    users_coll = db.collection("artifacts").document(app_id).collection("users")
+    updated = 0
+    for uid in merge_conversation_user_id_variants(user_id, canonical_user_id):
+        if not uid:
+            continue
+        user_doc_ref = users_coll.document(uid)
+        payload = {
+            "user_id": uid,
+            "name": name,
+            "last_updated": datetime.datetime.now(),
+            "last_activity": datetime.datetime.now(),
+        }
+        try:
+            snap = await asyncio.to_thread(user_doc_ref.get)
+            if snap.exists:
+                await asyncio.to_thread(user_doc_ref.update, payload)
+            else:
+                payload["created_at"] = datetime.datetime.now()
+                await asyncio.to_thread(user_doc_ref.set, payload)
+            updated += 1
+        except Exception as exc:
+            print(f"⚠️ update profile name failed for {uid}: {exc}")
+    return updated
+
+
+async def _update_current_conversation_customer_info(
+    user_id: str,
+    conversation_id: Optional[str],
+    *,
+    name: Optional[str] = None,
+    gender: Optional[str] = None,
+    phone_number: Optional[str] = None,
+) -> int:
+    """Keep dashboard customer_info aligned after explicit profile corrections."""
+    db = get_firestore_db()
+    if not db or not conversation_id:
+        return 0
+    app_id = "linas-ai-bot-backend"
+    canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, phone_number)
+    users_coll = db.collection("artifacts").document(app_id).collection("users")
+    updated = 0
+    for uid in merge_conversation_user_id_variants(user_id, canonical_user_id):
+        ref = users_coll.document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        try:
+            snap = await asyncio.to_thread(ref.get)
+            if not snap.exists:
+                continue
+            data = snap.to_dict() or {}
+            customer_info = dict(data.get("customer_info") or {})
+            if name:
+                customer_info["name"] = name
+            if gender:
+                customer_info["gender"] = gender
+                customer_info["greeting_stage"] = 2
+            await asyncio.to_thread(
+                ref.update,
+                {
+                    "customer_info": customer_info,
+                    "last_updated": datetime.datetime.now(),
+                },
+            )
+            updated += 1
+        except Exception as exc:
+            print(f"⚠️ update conversation customer_info failed for {uid}/{conversation_id}: {exc}")
+    return updated
 
 
 def _clinic_holiday_calendar_block(user_id: str, current_local_time: datetime.datetime) -> str:
@@ -1033,6 +1135,41 @@ def _normalize_body_part_ids(raw_value: Any) -> List[int]:
     return [parsed_single] if parsed_single is not None and parsed_single > 0 else []
 
 
+def _booking_submit_payload_complete_for_execution(function_args: Dict[str, Any], current_gender: str) -> bool:
+    """True when submit_booking_intent has enough concrete values to execute without a recap round-trip."""
+    if not isinstance(function_args, dict):
+        return False
+    if function_args.get("needs_clarification") is True:
+        return False
+    if function_args.get("execute_booking") is False:
+        return False
+
+    sid = _safe_int(function_args.get("service_id"))
+    bid = _safe_int(function_args.get("branch_id"))
+    mid = _safe_int(function_args.get("machine_id"))
+    gender = str(function_args.get("gender") or current_gender or "").strip().lower()
+    if sid is None or bid is None or mid is None or gender not in ("male", "female"):
+        return False
+
+    body_ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
+    session_rows = function_args.get("body_parts_with_sessions")
+    has_session_rows = isinstance(session_rows, list) and bool(session_rows)
+    if sid in _get_body_part_required_service_ids() and not (body_ids or has_session_rows):
+        return False
+
+    has_datetime = bool(function_args.get("date_components")) or bool(function_args.get("date"))
+    if not has_datetime:
+        has_datetime = bool(
+            (function_args.get("normalized_date") or function_args.get("raw_user_date_text"))
+            and (
+                function_args.get("normalized_time")
+                or function_args.get("time")
+                or function_args.get("raw_user_time_text")
+            )
+        )
+    return has_datetime
+
+
 def _get_body_part_required_service_ids() -> set:
     configured_ids = set(DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS)
     try:
@@ -1699,6 +1836,41 @@ def _parse_tool_round_bot_returned_local(bot_returned: str):
         return json.loads(bot_returned)
     except (json.JSONDecodeError, TypeError):
         return None
+
+
+def _latest_successful_update_date_from_tool_rounds(tool_round_trips: List[Dict[str, Any]]) -> Optional[str]:
+    """Return the most recent CRM new_date from a successful appointment date/update tool."""
+    for tr in reversed(tool_round_trips or []):
+        name = str(tr.get("ai_requested") or "").strip()
+        if name not in ("update_appointment_date", "update_paused_appointment", "edit_appointment"):
+            continue
+        returned = _parse_tool_round_bot_returned_local(tr.get("bot_returned") or "")
+        if not isinstance(returned, dict) or not returned.get("success"):
+            continue
+        data = returned.get("data") if isinstance(returned.get("data"), dict) else {}
+        new_date = data.get("new_date") or data.get("date") or returned.get("new_date")
+        if new_date:
+            return str(new_date)
+    return None
+
+
+def _partial_paused_date_update_reply(language: str, new_date: Optional[str]) -> str:
+    """User-facing fallback when date changed but pause/Available status did not confirm."""
+    when = f" إلى {new_date}" if new_date else ""
+    if language == "en":
+        return (
+            f"The appointment time was updated in the system{(' to ' + new_date) if new_date else ''}. "
+            "The API did not confirm removing the pause status, so if reception still sees it as paused, they need to clear it manually."
+        )
+    if language == "fr":
+        return (
+            f"L'heure du rendez-vous a été modifiée dans le système{(' à ' + new_date) if new_date else ''}. "
+            "L'API n'a pas confirmé la suppression du statut pause; si la réception le voit encore en pause, elle doit le réactiver manuellement."
+        )
+    return (
+        f"الوقت اتعدّل على السيستم{when}. "
+        "حالة البوز ما تأكد تغييرها من الـ API، فإذا بقيت ظاهرة عند الاستقبال بدها متابعة يدوية."
+    )
 
 
 def _extract_submit_booking_failure_details(tool_round_trips: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -3083,6 +3255,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, submit_booking_intent, create_appointment if ever used, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{current_gender}'"
         + (" - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n" if current_gender in ['male', 'female'] else " - UNKNOWN. Follow gender collection rules in Style Guide.\n")
+        + "- **Profile correction rule**: If the user explicitly asks to change/correct their saved name or gender, call `update_customer_profile` with the new value before replying. Do not only set detected_name/detected_gender.\n"
         + f"- **Language**: YOU decide. Current hint: '{current_preferred_lang}'. Follow LANGUAGE rules: prefer Arabic when mixed; full English when all English; full French when all French.\n"
         + arabic_script_policy
         + arabic_addressing_policy
@@ -3227,7 +3400,19 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         if _live_snap:
             system_instruction_final += _live_snap
 
-    context_messages_for_ai = list(current_context_messages or [])
+    context_messages_for_ai = []
+    for _ctx_msg in current_context_messages or []:
+        if not isinstance(_ctx_msg, dict):
+            continue
+        _role = str(_ctx_msg.get("role") or "user").strip().lower()
+        if _role not in ("system", "assistant", "user", "function", "tool"):
+            _role = "assistant"
+        _content = _ctx_msg.get("content", _ctx_msg.get("text", ""))
+        if _content is None:
+            _content = ""
+        elif not isinstance(_content, str):
+            _content = json.dumps(_content, ensure_ascii=False, default=str)
+        context_messages_for_ai.append({"role": _role, "content": _content})
     context_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
     if context_cap > 0 and len(context_messages_for_ai) > context_cap:
         context_messages_for_ai = context_messages_for_ai[-context_cap:]
@@ -3647,6 +3832,98 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             "role": "tool",
                             "name": function_name,
                             "content": err_content,
+                        }
+                    )
+                    continue
+
+                if function_name == "update_customer_profile":
+                    new_name, name_error = _validate_profile_name(
+                        function_args.get("new_name") or function_args.get("name")
+                    )
+                    new_gender = _normalize_profile_gender(
+                        function_args.get("new_gender") or function_args.get("gender")
+                    )
+                    errors = []
+                    updated_fields: Dict[str, Any] = {}
+
+                    if name_error:
+                        errors.append(name_error)
+                    if (function_args.get("new_gender") or function_args.get("gender")) and not new_gender:
+                        errors.append("gender_invalid")
+
+                    if new_name:
+                        config.user_names[user_id] = new_name
+                        if user_id in config.user_data_whatsapp:
+                            config.user_data_whatsapp[user_id]["collected_name"] = new_name
+                            config.user_data_whatsapp[user_id]["name_source"] = "user_requested_profile_update"
+                            config.user_data_whatsapp[user_id]["awaiting_name_input"] = False
+                        config.user_greeting_stage[user_id] = 2
+                        name_paths = await _update_profile_name_in_firestore(
+                            user_id,
+                            new_name,
+                            customer_phone_full,
+                        )
+                        updated_fields["name"] = {
+                            "value": new_name,
+                            "firestore_paths_updated": name_paths,
+                        }
+                        user_name = new_name
+
+                    if new_gender:
+                        from services.user_persistence_service import user_persistence
+
+                        await user_persistence.save_user_gender(
+                            user_id,
+                            new_gender,
+                            phone=customer_phone_full or user_id,
+                            name=config.user_names.get(user_id, user_name),
+                        )
+                        current_gender = new_gender
+                        updated_fields["gender"] = {"value": new_gender}
+
+                    if updated_fields:
+                        conv_updates = await _update_current_conversation_customer_info(
+                            user_id,
+                            config.user_data_whatsapp.get(user_id, {}).get("current_conversation_id"),
+                            name=new_name,
+                            gender=new_gender,
+                            phone_number=customer_phone_full,
+                        )
+                        tool_output = {
+                            "success": True,
+                            "updated_fields": updated_fields,
+                            "conversation_customer_info_paths_updated": conv_updates,
+                            "message": "profile_updated",
+                            "hint_for_model": (
+                                "Tell the user briefly that the saved profile was updated. "
+                                "Use the corrected name/gender from now on."
+                            ),
+                        }
+                    else:
+                        tool_output = {
+                            "success": False,
+                            "error_type": "missing_or_invalid_profile_update",
+                            "errors": errors or ["no_profile_fields_provided"],
+                            "hint_for_model": (
+                                "Ask the user for the exact new name or whether the gender should be male/female."
+                            ),
+                        }
+
+                    tool_content = json.dumps(tool_output, ensure_ascii=False, default=str)
+                    tool_round_trips.append(
+                        _record_tool_round_trip(
+                            function_name,
+                            function_args,
+                            tool_content,
+                            tool_output,
+                        )
+                    )
+                    messages.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": tool_content,
                         }
                     )
                     continue
@@ -4479,6 +4756,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         fsm_enabled as _fsm_gate_enabled,
                         human_gate_message,
                         mark_booking_completed,
+                        merge_patch as _fsm_merge_patch,
                         parse_gate_reason,
                     )
 
@@ -4489,6 +4767,22 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         or ""
                     )
                     _ok_submit, _gate_reason = can_execute_submit(user_id, current_gender)
+                    if (
+                        _fsm_gate_enabled()
+                        and not _ok_submit
+                        and _gate_reason == "fsm_confirmation_required"
+                        and _booking_submit_payload_complete_for_execution(function_args, current_gender)
+                    ):
+                        try:
+                            _fsm_merge_patch(user_id, {"confirmed_booking": True})
+                            _ok_submit, _gate_reason = can_execute_submit(user_id, current_gender)
+                            print(
+                                "[BOOKING_FSM] auto-confirmed complete one-message booking payload "
+                                f"user={user_id} service_id={function_args.get('service_id')} "
+                                f"date={function_args.get('date') or function_args.get('date_components')}"
+                            )
+                        except Exception as _auto_confirm_e:
+                            print(f"⚠️ booking_fsm auto-confirm failed: {_auto_confirm_e}")
                     if _fsm_gate_enabled() and not _ok_submit:
                         _mf = parse_gate_reason(_gate_reason or "")
                         tool_output = validation_error_response(
@@ -5158,10 +5452,27 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 api_failure_reason = "reschedule_claimed_without_update_appointment_date_tool"
 
         # Claims paused appointment was cleared / became active without a successful CRM update.
+        _paused_date_changed_without_resume = (
+            update_appointment_date_success_count > 0
+            and pause_resume_attempted
+            and pause_resume_success_count == 0
+        )
+        if (
+            not api_failure_reason
+            and _paused_date_changed_without_resume
+            and _bot_reply_claims_pause_lifted_or_resumed(parsed_response.get("bot_reply") or "")
+        ):
+            parsed_response["action"] = "answer_question"
+            parsed_response["bot_reply"] = _partial_paused_date_update_reply(
+                detected_language,
+                _latest_successful_update_date_from_tool_rounds(tool_round_trips),
+            )
+
         if (
             not api_failure_reason
             and paused_followup_update_succeeded
             and not paused_followup_available_action_requested
+            and not _paused_date_changed_without_resume
         ):
             api_failure_reason = "paused_update_missing_available_action_request"
 
@@ -5169,6 +5480,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             not api_failure_reason
             and paused_followup_update_succeeded
             and pause_resume_success_count == 0
+            and not _paused_date_changed_without_resume
         ):
             api_failure_reason = "paused_update_completed_without_available_confirmation"
 
@@ -5177,6 +5489,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             and tool_calls
             and had_update_tool
             and pause_resume_success_count == 0
+            and not _paused_date_changed_without_resume
             and _bot_reply_claims_pause_lifted_or_resumed(parsed_response.get("bot_reply") or "")
         ):
             api_failure_reason = "pause_resume_claimed_without_successful_resume_action"

@@ -279,10 +279,12 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
                 "success": False,
                 "message": (
                     "GET service/data succeeded but no body_parts rows were found in the JSON. "
-                    "Confirm the CRM exposes body_parts (or areas) under data per Appointment API."
+                    "Trying legacy body-parts endpoints next; if they also fail, confirm the CRM exposes body_parts "
+                    "(or areas) under data per Appointment API."
                 ),
                 "service_data_shape": _service_data_shape_hint(sd),
             }
+            last = err
             log_report_event(
                 "api_call",
                 "System",
@@ -297,7 +299,7 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
                     "hint": _service_data_shape_hint(sd),
                 },
             )
-            return err
+            print("API Call: get_body_parts — service/data had no rows, trying legacy GET paths")
         msg = str(sd.get("message") or "").lower()
         sc = sd.get("status_code")
         if sc not in (404, None) and "not found" not in msg:
@@ -707,18 +709,26 @@ async def resume_appointment(phone: str, appointment_id: int, endpoint: str = No
     """
     Clears Paused / sets appointment back to active (Available).
 
-    Current preferred path uses POST appointments/update-status with:
-    {
-      "appointment_ids": [appointment_id],
-      "status_id": 2
-    }
+    Default path uses POST appointments/resume with phone + appointment_id. Deployments that
+    expose a different route can set LINASLASER_APPOINTMENT_RESUME_PATH. For backwards
+    compatibility, a 404 on the default route falls back to appointments/update-status.
 
     The ``phone`` argument is kept for backwards compatibility with existing callers.
     """
-    _ = phone  # kept so existing callers do not break
-    response = await update_appointments_status([appointment_id], status_id=2)
+    phone_clean = _phone_clean_for_appointment_api(phone)
+    configured = endpoint if endpoint is not None else os.getenv("LINASLASER_APPOINTMENT_RESUME_PATH")
+    path = (configured or "appointments/resume").strip().lstrip("/")
+    if path.lower() in ("off", "0", "false", "none"):
+        return {"success": False, "skipped": True, "message": "resume_appointment_disabled", "path": path}
+
+    payload = {"appointment_id": int(appointment_id), "phone": phone_clean}
+    response = await _make_api_request("POST", path, json_data=payload)
+    if not configured and response.get("status_code") == 404:
+        fallback = await update_appointments_status([appointment_id], status_id=2)
+        response = dict(fallback)
+        path = "appointments/update-status"
     merged = dict(response) if isinstance(response, dict) else {"success": False, "message": str(response)}
-    merged["path"] = str(endpoint).strip() if endpoint else "appointments/update-status"
+    merged["path"] = path
     if response.get("success"):
         log_report_event(
             "api_call",
@@ -1321,7 +1331,7 @@ async def update_paused_appointment(
     Intended for paused-row editing workflows where the AI prepares a full JSON patch.
     """
     phone_clean = _phone_clean_for_appointment_api(phone)
-    path = (os.getenv("LINASLASER_UPDATE_PAUSED_APPOINTMENT_PATH") or "appointments/update").strip().lstrip("/")
+    path = (os.getenv("LINASLASER_UPDATE_PAUSED_APPOINTMENT_PATH") or "appointments/edit").strip().lstrip("/")
     print(
         "API Call: update_paused_appointment "
         f"appointment_id={appointment_id}, phone={phone_clean}, path={path}"
@@ -1339,11 +1349,13 @@ async def update_paused_appointment(
         except (TypeError, ValueError):
             pass
     clean_ids = _clean_body_part_ids_for_api(body_part_ids or [])
+    cleaned_sessions = _clean_body_parts_with_sessions_for_api(body_parts_with_sessions)
     if clean_ids:
         json_data["body_part_ids"] = clean_ids
-    cleaned_sessions = _clean_body_parts_with_sessions_for_api(body_parts_with_sessions)
     if cleaned_sessions:
         json_data["body_parts"] = cleaned_sessions
+    elif clean_ids:
+        json_data["body_parts"] = [_body_part_session_row(bid, 1) for bid in clean_ids]
 
     status_raw = (status or "").strip()
     default_set_available = os.getenv(

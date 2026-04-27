@@ -888,7 +888,8 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
         "- **Bikini + buttocks (تيز/مؤخرة):** One package (front + back intimate line). "
         "If the user said تيز or مؤخرة or بكيني (or any mix), treat as **one booking intent** — do **not** ask «بكيني فقط ولا مع المؤخرة؟» or «بكيني ولا تيز»; map with `get_body_parts` and continue.",
         "- **Do not** repeat confirmation. If `execution_allowed` is true, you may call `submit_booking_intent` in this turn.",
-        "- If `booking_status` is `awaiting_confirmation` and `execution_allowed` is false: send **one** summary and ask yes/no only. **Do not** call `submit_booking_intent` until the user confirms.",
+        "- If the user's current message already contains all booking details and clearly asks to book/execute/check availability, call `submit_booking_intent` with every extracted field now; the backend may auto-confirm complete one-message booking payloads.",
+        "- If details are incomplete or ambiguous and `booking_status` is `awaiting_confirmation` with `execution_allowed` false: send **one** summary and ask yes/no only.",
         "- Use **only** IDs returned by your tools (services, branches, machines, body_parts). Never invent IDs.",
         "- Next field still missing internally (includes CRM ids): "
         + (nxt or "(none — awaiting confirmation or ready)"),
@@ -918,8 +919,8 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
         json.dumps(unified, ensure_ascii=False, default=str),
         "",
         "Emit optional `booking_fsm_patch` in your JSON with updated fields when the user provides them "
-        '(e.g. {"service_id":12,"branch_id":1}). Set `"confirmed_booking": true` only after the user explicitly '
-        "confirms the final summary.",
+        '(e.g. {"service_id":12,"branch_id":1}). Set `"confirmed_booking": true` after the user explicitly '
+        "confirms the final summary, or when the same current user message already provided all required booking details and asked you to book/execute.",
     ]
     if fsm.get("body_area_already_described"):
         lines.insert(
