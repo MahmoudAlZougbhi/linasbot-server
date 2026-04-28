@@ -59,13 +59,15 @@ def _update_status_post_url_candidates() -> list[str]:
         if norm:
             out.append(norm)
     for d in (
+        # Some stacks expose update/status (slash) instead of update-status (hyphen).
+        _root_api_url("api/appointments/update/status"),
         _root_api_url("api/appointments/update-status"),
         "api/appointments/update-status",
         "appointments/update-status",
     ):
         if d and d not in out:
             out.append(d)
-    return out or [_root_api_url("api/appointments/update-status")]
+    return out or [_root_api_url("api/appointments/update/status")]
 
 
 _UPDATE_STATUS_LOG_BODY_MAX = 12000
@@ -808,7 +810,9 @@ async def update_appointments_status(
     date: str = None,
 ):
     """
-    CRM: POST /api/appointments/update-status (host root, not under /agent/).
+    CRM: POST appointment status on host ``/api/...`` (not under ``/agent/``).
+    Tries ``/api/appointments/update/status`` then ``/api/appointments/update-status`` unless
+    ``LINASLASER_UPDATE_STATUS_PATH`` is set.
 
     Body:
     - appointment_ids: required array of integers
@@ -864,8 +868,11 @@ async def update_appointments_status(
                 "message": response.get("message"),
             }
         )
-        if response.get("status_code") == 404 or "not found" in msg:
-            print(f"API Call: update_appointments_status — {path} not found, trying next path")
+        code = response.get("status_code")
+        if code in (404, 405) or "not found" in msg:
+            print(
+                f"API Call: update_appointments_status — {path} HTTP {code!r}, trying next path"
+            )
             continue
         break
     if isinstance(response, dict):
