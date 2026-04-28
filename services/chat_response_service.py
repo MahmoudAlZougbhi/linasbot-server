@@ -5153,8 +5153,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 )
                             elif ra.get("skipped"):
                                 base += (
-                                    "Resume-from-pause was skipped (LINASLASER_APPOINTMENT_RESUME_PATH=off or empty). "
-                                    "If the row stays Paused in the CRM, enable resume path or ask backend to clear pause on date update. "
+                                    "Follow-up Paused→Available (update-status) was skipped by the server. "
+                                    "If the row stays Paused in the CRM, ask backend/reception to verify POST /api/appointments/update-status. "
                                 )
                             else:
                                 base += (

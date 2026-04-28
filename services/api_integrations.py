@@ -30,6 +30,166 @@ def _root_api_url(path: str) -> str:
     clean_path = "/" + str(path or "").lstrip("/")
     return urlunsplit((parts.scheme, parts.netloc, clean_path, "", ""))
 
+
+def _normalize_update_status_endpoint(path: str) -> str:
+    """
+    Map LINASLASER_UPDATE_STATUS_PATH to the URL used by httpx.
+
+    - ``/api/appointments/update-status`` or ``api/appointments/update-status`` → same host as
+      LINASLASER_API_BASE_URL but path under site root (not under ``/agent/``).
+    - Full ``http(s)://...`` → unchanged.
+    - Anything else → agent-relative path (leading slashes stripped).
+    """
+    p = str(path or "").strip()
+    if not p or p.lower() in ("off", "0", "false", "none"):
+        return ""
+    if p.lower().startswith(("http://", "https://")):
+        return p
+    if p.startswith("/") or p.startswith("api/"):
+        return _root_api_url(p.lstrip("/"))
+    return p.lstrip("/")
+
+
+def _update_status_post_url_candidates() -> list[str]:
+    """Ordered POST targets for CRM update-status; CRM lives at host ``/api/...``, not under ``/agent/``."""
+    out: list[str] = []
+    configured = (os.getenv("LINASLASER_UPDATE_STATUS_PATH") or "").strip()
+    if configured:
+        norm = _normalize_update_status_endpoint(configured)
+        if norm:
+            out.append(norm)
+    for d in (
+        _root_api_url("api/appointments/update-status"),
+        "api/appointments/update-status",
+        "appointments/update-status",
+    ):
+        if d and d not in out:
+            out.append(d)
+    return out or [_root_api_url("api/appointments/update-status")]
+
+
+_UPDATE_STATUS_LOG_BODY_MAX = 12000
+
+
+async def _post_update_status_logged(resolved_url: str, json_data: dict) -> dict:
+    """
+    POST JSON to CRM update-status with full request/response logging (URL, method, payload, status, body).
+    Normalizes CRM success when the body message is ``Status updated for X appointments``.
+    """
+    headers = {
+        "Authorization": f"Bearer {api_config.LINASLASER_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    method = "POST"
+    try:
+        payload_preview = json.dumps(json_data, ensure_ascii=False)
+    except (TypeError, ValueError):
+        payload_preview = str(json_data)
+    print(
+        f"update_appointments_status HTTP {method} final_url={resolved_url} payload={payload_preview}"
+    )
+    try:
+        response = await api_client.post(resolved_url, json=json_data, headers=headers)
+    except httpx.RequestError as e:
+        print(
+            f"update_appointments_status response status=(network_error) final_url={resolved_url} "
+            f"body={repr(e)}"
+        )
+        return {
+            "success": False,
+            "message": f"Connection error (Network Error). {e!s}",
+            "details": repr(e),
+            "final_url": resolved_url,
+            "http_method": method,
+        }
+
+    status_code = response.status_code
+    body_text = response.text or ""
+    body_log = body_text[:_UPDATE_STATUS_LOG_BODY_MAX]
+    print(
+        f"update_appointments_status response status={status_code} final_url={resolved_url} "
+        f"body[:{_UPDATE_STATUS_LOG_BODY_MAX}]={body_log}"
+    )
+
+    base_meta = {"final_url": str(response.url), "http_method": method, "status_code": status_code}
+
+    if status_code == 404:
+        try:
+            data = response.json()
+            if isinstance(data, dict):
+                merged = dict(data)
+                merged.setdefault("success", False)
+                merged.update(base_meta)
+                return merged
+        except json.JSONDecodeError:
+            pass
+        return {
+            "success": False,
+            "message": f"API endpoint not found (404).",
+            "status_code": 404,
+            "raw_response": body_text[:500],
+            **base_meta,
+        }
+
+    parsed: Any = None
+    if body_text.strip():
+        try:
+            parsed = response.json()
+        except json.JSONDecodeError:
+            parsed = None
+
+    if status_code >= 400:
+        msg = None
+        if isinstance(parsed, dict):
+            msg = parsed.get("message") or parsed.get("error")
+        msg = msg or body_text[:2000] or f"HTTP {status_code}"
+        out = {
+            "success": False,
+            "message": f"Connection error (HTTP Error): {status_code}. Details: {msg}",
+            "status_code": status_code,
+            "raw_response": body_text[:2000],
+            **base_meta,
+        }
+        if isinstance(parsed, dict):
+            out["data"] = parsed
+        return out
+
+    # 2xx: normalize CRM success message
+    ok = False
+    message_str = ""
+    if isinstance(parsed, dict):
+        if parsed.get("success") is True:
+            ok = True
+        message_str = str(parsed.get("message", "") or "")
+        if not ok and "status updated for" in message_str.lower():
+            ok = True
+    elif isinstance(parsed, str):
+        message_str = parsed
+        if "status updated for" in message_str.lower():
+            ok = True
+
+    if ok:
+        out = dict(parsed) if isinstance(parsed, dict) else {"message": message_str or body_text.strip()}
+        out["success"] = True
+        out.update(base_meta)
+        return out
+
+    # 2xx with unexpected shape — treat as success if empty body (e.g. 204)
+    if status_code in (200, 201, 204) and (parsed is None or parsed == {}):
+        return {"success": True, "message": body_text.strip() or "ok", **base_meta}
+
+    if isinstance(parsed, dict) and parsed.get("success") is False:
+        out = dict(parsed)
+        out.update(base_meta)
+        return out
+
+    out = dict(parsed) if isinstance(parsed, dict) else {"message": body_text.strip()[:500]}
+    # 2xx JSON without explicit failure — treat as success (CRM may return shapes beyond the documented message).
+    out["success"] = bool(isinstance(parsed, dict))
+    out.update(base_meta)
+    return out
+
+
 async def _make_api_request(method: str, endpoint: str, params: dict = None, json_data: dict = None):
     """
     Helper function to make authenticated API requests to the LinasLaser Agent API.
@@ -648,12 +808,12 @@ async def update_appointments_status(
     date: str = None,
 ):
     """
-    Bulk/single appointment status update via POST api/appointments/update-status.
+    CRM: POST /api/appointments/update-status (host root, not under /agent/).
 
-    API contract:
-    - appointment_ids: required array
+    Body:
+    - appointment_ids: required array of integers
     - status_id: required
-    - date: required only when status_id == 3 (Postponed)
+    - date: **only** when status_id == 3 (Postponed); omitted for all other statuses (including 2 Available)
     """
     ids: list[int] = []
     for raw in appointment_ids or []:
@@ -668,7 +828,7 @@ async def update_appointments_status(
     except (TypeError, ValueError):
         return {"success": False, "message": "invalid_status_id"}
 
-    json_data = {
+    json_data: dict[str, Any] = {
         "appointment_ids": ids,
         "status_id": status_id_int,
     }
@@ -680,16 +840,12 @@ async def update_appointments_status(
 
     print(
         "API Call: update_appointments_status "
-        f"appointment_ids={ids}, status_id={status_id_int}, date={json_data.get('date')}"
+        f"appointment_ids={ids}, status_id={status_id_int}, "
+        f"date={'(omitted)' if status_id_int != 3 else json_data.get('date')}"
     )
-    configured_path = (os.getenv("LINASLASER_UPDATE_STATUS_PATH") or "").strip().lstrip("/")
-    path_candidates = [configured_path] if configured_path else [
-        "api/appointments/update-status",
-        "appointments/update-status",
-        _root_api_url("api/appointments/update-status"),
-    ]
-    response = {"success": False, "message": "update_status_endpoint_not_tried"}
-    path_used = path_candidates[0]
+    path_candidates = _update_status_post_url_candidates()
+    response: dict = {"success": False, "message": "update_status_endpoint_not_tried"}
+    path_used = path_candidates[0] if path_candidates else ""
     attempted_paths: list[str] = []
     path_errors: list[dict] = []
     for path in path_candidates:
@@ -697,7 +853,7 @@ async def update_appointments_status(
             continue
         path_used = path
         attempted_paths.append(path)
-        response = await _make_api_request("POST", path, json_data=json_data)
+        response = await _post_update_status_logged(path, json_data)
         if response.get("success"):
             break
         msg = str(response.get("message") or "").lower()
@@ -728,8 +884,9 @@ async def update_appointments_status(
                 "status": "success",
                 "appointment_ids": ids,
                 "status_id": status_id_int,
-                "date": json_data.get("date"),
+                "date": json_data.get("date") if status_id_int == 3 else None,
                 "path": path_used,
+                "final_url": response.get("final_url"),
             },
         )
     else:
@@ -743,8 +900,9 @@ async def update_appointments_status(
                 "error": response.get("message"),
                 "appointment_ids": ids,
                 "status_id": status_id_int,
-                "date": json_data.get("date"),
+                "date": json_data.get("date") if status_id_int == 3 else None,
                 "path": path_used,
+                "final_url": response.get("final_url"),
             },
         )
     return response
@@ -752,29 +910,18 @@ async def update_appointments_status(
 
 async def resume_appointment(phone: str, appointment_id: int, endpoint: str = None):
     """
-    Clears Paused / sets appointment back to active (Available).
+    Paused → Available: POST ``/api/appointments/update-status`` with body
+    ``{"appointment_ids": [id], "status_id": 2}`` only (no ``date``, no ``appointment_id``).
 
-    Default path uses POST appointments/resume with phone + appointment_id. Deployments that
-    expose a different route can set LINASLASER_APPOINTMENT_RESUME_PATH. For backwards
-    compatibility, a 404 on the default route falls back to appointments/update-status.
-
-    The ``phone`` argument is kept for backwards compatibility with existing callers.
+    ``phone`` and ``endpoint`` are kept for tool/signature compatibility; CRM update-status does not
+    use them. Override URLs via ``LINASLASER_UPDATE_STATUS_PATH`` (see ``update_appointments_status``).
     """
-    phone_clean = _phone_clean_for_appointment_api(phone)
-    configured = endpoint if endpoint is not None else os.getenv("LINASLASER_APPOINTMENT_RESUME_PATH")
-    path = (configured or "appointments/resume").strip().lstrip("/")
-    if path.lower() in ("off", "0", "false", "none"):
-        return {"success": False, "skipped": True, "message": "resume_appointment_disabled", "path": path}
-
-    payload = {"appointment_id": int(appointment_id), "phone": phone_clean}
-    response = await _make_api_request("POST", path, json_data=payload)
-    if not configured and response.get("status_code") == 404:
-        fallback = await update_appointments_status([appointment_id], status_id=2)
-        response = dict(fallback)
-        path = response.get("path") or "api/appointments/update-status"
+    _ = _phone_clean_for_appointment_api(phone)
+    _ = endpoint
+    response = await update_appointments_status([int(appointment_id)], status_id=2)
     merged = dict(response) if isinstance(response, dict) else {"success": False, "message": str(response)}
-    merged["path"] = path
-    if response.get("success"):
+    merged["path"] = merged.get("path") or merged.get("final_url") or "api/appointments/update-status"
+    if merged.get("success"):
         log_report_event(
             "api_call",
             "System",
@@ -789,7 +936,7 @@ async def resume_appointment(phone: str, appointment_id: int, endpoint: str = No
             {
                 "api": "resume_appointment",
                 "status": "failed",
-                "error": response.get("message"),
+                "error": merged.get("message"),
                 "appointment_id": appointment_id,
                 "path": merged["path"],
             },
@@ -1221,7 +1368,7 @@ async def update_appointment_date(appointment_id: int, phone: str, date: str, us
     response = await _make_api_request("POST", "appointments/update/date", json_data=json_data)
     if response.get("success"):
         log_report_event("api_call", "System", "N/A", {"api": "update_appointment_date", "status": "success", "phone": phone, "appointment_id": appointment_id, "new_date": date})
-        # After reschedule: try to clear Paused → Available (CRM UI) via resume endpoint; see resume_appointment docstring.
+        # After reschedule: Paused→Available via CRM POST /api/appointments/update-status (see resume_appointment).
         resume_resp = await resume_appointment(phone, appointment_id)
         response = dict(response)
         if resume_resp.get("skipped"):
@@ -1426,7 +1573,7 @@ async def update_paused_appointment(
                 "path": path,
             },
         )
-        # Safety fallback: if target status is Available, also try resume endpoint.
+        # If edit sets Available, also POST update-status so CRM row leaves Paused when needed.
         target_available = str(json_data.get("status") or "").strip().lower() in (
             "available",
             "active",
