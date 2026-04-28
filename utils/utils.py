@@ -2754,7 +2754,7 @@ def get_openai_tools_schema():
                 "name": "resume_appointment",
                 "description": (
                     "PRIMARY way to turn a **Paused** CRM row into **Available** again **without changing date/time**. "
-                    "The backend calls CRM POST /api/appointments/update-status with status_id=2 (same slot). "
+                    "The backend calls CRM update-status with status_id=2 and both appointment_ids and appointment_id as the same int array (same slot). "
                     "Use when the customer wants the paused appointment active again: «رجّع الموعد», «خليه available», "
                     "«موقوف بدي يصير متاح», «فكّ البوز», «resume», same-slot reactivation. "
                     "You MUST pass the exact paused appointment_id from check_next_appointment / customer_appointments JSON. "

@@ -815,7 +815,8 @@ async def update_appointments_status(
     ``LINASLASER_UPDATE_STATUS_PATH`` is set.
 
     Body:
-    - appointment_ids: required array of integers
+    - appointment_ids: required array of integers (canonical)
+    - appointment_id: same ids as an array (some CRM stacks expect this singular key with an array value, e.g. ``[35306]``)
     - status_id: required
     - date: **only** when status_id == 3 (Postponed); omitted for all other statuses (including 2 Available)
     """
@@ -832,8 +833,10 @@ async def update_appointments_status(
     except (TypeError, ValueError):
         return {"success": False, "message": "invalid_status_id"}
 
+    ids_list = list(ids)
     json_data: dict[str, Any] = {
-        "appointment_ids": ids,
+        "appointment_ids": ids_list,
+        "appointment_id": ids_list,
         "status_id": status_id_int,
     }
     if status_id_int == 3:
@@ -917,8 +920,8 @@ async def update_appointments_status(
 
 async def resume_appointment(phone: str, appointment_id: int, endpoint: str = None):
     """
-    Paused → Available: POST ``/api/appointments/update-status`` with body
-    ``{"appointment_ids": [id], "status_id": 2}`` only (no ``date``, no ``appointment_id``).
+    Paused → Available: POST CRM update-status with body
+    ``{"appointment_ids": [id], "appointment_id": [id], "status_id": 2}`` only (no ``date``).
 
     ``phone`` and ``endpoint`` are kept for tool/signature compatibility; CRM update-status does not
     use them. Override URLs via ``LINASLASER_UPDATE_STATUS_PATH`` (see ``update_appointments_status``).
