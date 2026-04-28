@@ -501,7 +501,8 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
             "\n**⏸️ PAUSED vs ✅ AVAILABLE/ACTIVE (same customer):**\n"
             "- They have **both** paused/on-hold rows and **Available/active** upcoming rows—often **different services**. "
             "You MUST confirm **which row** they mean — **prefer asking for `appointment_id` (رقم الموعد في النظام)** shown on each line, or line number 1/2/3 matching your list — before any reschedule tool.\n"
-            "- **FORBIDDEN:** Do **NOT** call **`pause_appointment`** to «تأجيل» or move to another day—that tool only **puts** a slot on hold without a new calendar time. "
+            "- **Pause from chat:** The assistant **does not** put appointments on hold—`pause_appointment` is disabled server-side. "
+            "If someone asks to «وقف الموعد» for hold-without-new-date, tell them reception can do it; your job is **reactivation** and rescheduling.\n"
             "**Postpone / new day / إخراج من البوز بتاريخ جديد** = **`update_appointment_date`** with structured `date` (+ `calendar_day_intent` / `date_components` when needed) on the correct `appointment_id`.\n"
             "- **PAUSED row:** Take the new date/time then call **`update_appointment_date`** on **that paused row's id**. The server may also call the CRM **resume** endpoint after a successful date update so status becomes **Available**—check tool JSON `resume_appointment` (success vs failed vs skipped). In `bot_reply`, if resume succeeded, say the موعد صار فعّال/متاح بالوقت الجديد; if resume failed or skipped but date update succeeded, say الوقت اتعدّل وإذا لسا ظاهر موقوف يتأكد الاستقبال.\n"
             "- **Resume without changing date/time:** If the user only wants the paused row back as active/Available at the **same slot**, call **`resume_appointment`** on that paused row's id.\n"
@@ -515,7 +516,7 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
         "**`appointment_id`**, date/time, service, branch, machine/device, body areas/parts, **price/total only if present in JSON** (never invent prices), status. "
         "Then ask **one** question: e.g. «ابعتلي رقم الموعد (appointment_id) اللي بدك ترجّعو/تعدّلو» or Franco «ابعتيلي الـ id تبع الموعد» — they may also answer with the **line number** (1/2/3) matching your list.\n"
         "- After they specify the **`appointment_id`** (or the line number maps to that id), call **`update_appointment_date`** with that **`appointment_id`**, structured **`date`** (and phone). Pass the same facts the user confirmed; **never** assume «the next appointment» or pick arbitrarily.\n"
-        "- **Never** use **`pause_appointment`** as a shortcut for postponing; only if they explicitly ask to **hold without a new date**.\n"
+        "- **Never** call **`pause_appointment`** — it is disabled. For **Paused → Available at the same date/time**, call **`resume_appointment`** once you have the right **`appointment_id`**.\n"
     )
 
 
@@ -706,7 +707,9 @@ def _user_intent_resume_paused_appointment(user_text: str) -> bool:
     if re.search(
         r"موقوف|موقف|الموقوف|المعلّق|المعلق|من\s*البوز|البوز|طلع.*موقوف|شيل.*موقوف|فك.*موقوف|"
         r"إخراج.*موقوف|رجع.*موعد|ارجع.*موعد|يرجع.*موعد|رجع.*يجي.*(?:على|ع)\s*موعد|"
-        r"يرجع.*يجي.*(?:على|ع)\s*موعد|كمّل.*جلس|كمل.*جلس|كمّل.*موعد|كمل.*موعد|تكمل",
+        r"يرجع.*يجي.*(?:على|ع)\s*موعد|كمّل.*جلس|كمل.*جلس|كمّل.*موعد|كمل.*موعد|تكمل|"
+        r"خليه.{0,20}available|يصير.{0,12}available|متاح.{0,18}موقوف|موقوف.{0,22}متاح|"
+        r"مش.{0,6}موقوف|ما.{0,6}بقى.{0,8}موقوف|فك.{0,10}الموقوف|رجّع.{0,15}فعّال",
         t,
         re.I,
     ):
@@ -3950,9 +3953,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             "success": False,
                             "message": "pause_appointment_disabled_for_ai",
                             "hint_for_model": (
-                                "Do not pause appointments. For paused rows that should become active again, "
-                                "use check_next_appointment and then update_appointment_date or update_paused_appointment "
-                                "so the backend can restore Available status."
+                                "pause_appointment is disabled — do not try to pause from chat. "
+                                "For a **Paused** row that should become **Available** again at the **same** slot, call **resume_appointment** "
+                                "(appointment_id + phone). For a **new** date/time on a paused row, use **update_appointment_date**. "
+                                "For edits (areas/machine) on a paused row while making it Available, use **update_paused_appointment** "
+                                "and/or **resume_appointment** per tool rules."
                             ),
                         },
                         ensure_ascii=False,

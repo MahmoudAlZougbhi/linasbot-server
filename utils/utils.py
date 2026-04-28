@@ -2753,12 +2753,14 @@ def get_openai_tools_schema():
             "function": {
                 "name": "resume_appointment",
                 "description": (
-                    "Re-activates a PAUSED appointment without changing its date/time. "
-                    "Use this when the customer says things like «رجّع الموعد», «رجع خليه available», "
-                    "«please rj3 hotle el mw3ad», or wants the paused row to become active again with the same slot. "
-                    "You MUST pass the exact paused appointment_id the user selected from CRM JSON. "
-                    "If multiple paused rows exist, list them first and ask which appointment_id/line they mean. "
-                    "Do not use this tool for a new date/time; for that use update_appointment_date."
+                    "PRIMARY way to turn a **Paused** CRM row into **Available** again **without changing date/time**. "
+                    "The backend calls CRM POST /api/appointments/update-status with status_id=2 (same slot). "
+                    "Use when the customer wants the paused appointment active again: «رجّع الموعد», «خليه available», "
+                    "«موقوف بدي يصير متاح», «فكّ البوز», «resume», same-slot reactivation. "
+                    "You MUST pass the exact paused appointment_id from check_next_appointment / customer_appointments JSON. "
+                    "If multiple paused rows exist, list them first, then call this tool with the chosen id. "
+                    "Do NOT use this for a new calendar slot—for that use update_appointment_date. "
+                    "Do NOT use pause_appointment from chat (it is disabled)—your role here is un-pause / re-activate, not pause."
                 ),
                 "parameters": {
                     "type": "object",
