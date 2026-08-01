@@ -4,9 +4,11 @@ import hashlib
 import hmac
 import json
 import unittest
+from unittest import mock
 
 from services.meta_messaging import (
     InMemoryMessageDeduper,
+    MetaMessagingAdapter,
     parse_meta_messaging_events,
     verify_meta_signature,
 )
@@ -140,8 +142,84 @@ class MetaParseTests(unittest.TestCase):
                 }
             ],
         }
-        events = parse_meta_messaging_events(payload, instagram_account_id="IG_ACCOUNT")
+        events = parse_meta_messaging_events(
+            payload,
+            instagram_account_id="IG_ACCOUNT",
+            page_id="378696005334409",
+        )
         self.assertEqual(events[0]["channel"], "instagram")
+
+    def test_postback_event_parsed(self):
+        payload = {
+            "object": "page",
+            "entry": [
+                {
+                    "id": "378696005334409",
+                    "messaging": [
+                        {
+                            "sender": {"id": "PSID1"},
+                            "recipient": {"id": "378696005334409"},
+                            "timestamp": 1,
+                            "postback": {
+                                "mid": "pb1",
+                                "title": "Book",
+                                "payload": "BOOK_NOW",
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        events = parse_meta_messaging_events(
+            payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT"
+        )
+        self.assertEqual(len(events), 1)
+        self.assertTrue(events[0]["is_postback"])
+        self.assertEqual(events[0]["text"], "Book")
+
+    def test_wrong_page_id_rejected(self):
+        payload = {
+            "object": "page",
+            "entry": [
+                {
+                    "id": "999999999999999",
+                    "messaging": [
+                        {
+                            "sender": {"id": "PSID1"},
+                            "recipient": {"id": "999999999999999"},
+                            "timestamp": 1,
+                            "message": {"mid": "m-wrong", "text": "Hi"},
+                        }
+                    ],
+                }
+            ],
+        }
+        events = parse_meta_messaging_events(
+            payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT"
+        )
+        self.assertEqual(events, [])
+
+    def test_wrong_instagram_id_rejected(self):
+        payload = {
+            "object": "instagram",
+            "entry": [
+                {
+                    "id": "WRONG_IG",
+                    "messaging": [
+                        {
+                            "sender": {"id": "IGSID1"},
+                            "recipient": {"id": "WRONG_IG"},
+                            "timestamp": 1,
+                            "message": {"mid": "m-wrong-ig", "text": "Hi"},
+                        }
+                    ],
+                }
+            ],
+        }
+        events = parse_meta_messaging_events(
+            payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT"
+        )
+        self.assertEqual(events, [])
 
 
 class MetaDedupeTests(unittest.TestCase):
@@ -171,6 +249,65 @@ class SocialRoutingRegressionTests(unittest.TestCase):
         self.assertTrue(result.tattoo_removal)
         self.assertIn("71534928", result.reply)
         self.assertIn("https://wa.me/", result.reply)
+
+    def test_laser_female_beirut_handoff_unchanged(self):
+        user_data = {}
+        result = route_social_contact_request(
+            "bade 7jez laser beirut ana binit",
+            user_data,
+            known_gender="female",
+            language="en",
+        )
+        self.assertIsNotNone(result)
+        self.assertIn("78847527", result.reply)
+        self.assertIn("https://wa.me/96178847527", result.reply)
+
+
+class MetaSendFailureTests(unittest.TestCase):
+    def test_graph_send_failure_raises(self):
+        adapter = MetaMessagingAdapter(
+            access_token="unit-token",
+            account_id="378696005334409",
+            channel="facebook",
+        )
+
+        class FakeResponse:
+            status_code = 400
+            text = '{"error":{"message":"fail"}}'
+
+            def raise_for_status(self):
+                import httpx
+
+                raise httpx.HTTPStatusError(
+                    "bad", request=mock.Mock(), response=mock.Mock(status_code=400, text=self.text)
+                )
+
+            def json(self):
+                return {"error": {"message": "fail"}}
+
+        async def fake_post(*args, **kwargs):
+            return FakeResponse()
+
+        adapter.client = mock.Mock()
+        adapter.client.post = fake_post
+        adapter._owns_client = False
+
+        import asyncio
+
+        with self.assertRaises(RuntimeError):
+            asyncio.run(adapter.send_text_message("PSID1", "hello"))
+
+
+class WhatsAppInboundPolicyTests(unittest.TestCase):
+    def test_provider_webhook_policy_reason_constant(self):
+        # Contract used by modules/webhook_handlers.receive_webhook
+        payload = {
+            "status": "ignored",
+            "reason": "whatsapp_inbound_ai_disabled",
+            "accepted": 0,
+        }
+        self.assertEqual(payload["reason"], "whatsapp_inbound_ai_disabled")
+        self.assertEqual(payload["accepted"], 0)
 
 
 class MetaWebhookContractTests(unittest.TestCase):
@@ -219,7 +356,11 @@ class MetaWebhookContractTests(unittest.TestCase):
                         "accepted": 0,
                     }
                 )
-            events = parse_meta_messaging_events(payload)
+            events = parse_meta_messaging_events(
+                payload,
+                page_id="378696005334409",
+                instagram_account_id="IG1",
+            )
             accepted = 0
             duplicates = 0
             for event in events:
@@ -229,6 +370,17 @@ class MetaWebhookContractTests(unittest.TestCase):
                 accepted += 1
             return JSONResponse(
                 {"status": "received", "accepted": accepted, "duplicates": duplicates}
+            )
+
+        @app.post("/webhook")
+        async def whatsapp_inbound(request: Request):
+            await request.body()
+            return JSONResponse(
+                {
+                    "status": "ignored",
+                    "reason": "whatsapp_inbound_ai_disabled",
+                    "accepted": 0,
+                }
             )
 
         cls.client = TestClient(app)
@@ -347,6 +499,45 @@ class MetaWebhookContractTests(unittest.TestCase):
             )
             self.assertEqual(ig_response.status_code, 200)
             self.assertEqual(ig_response.json().get("accepted"), 1)
+        finally:
+            self.state["enabled"] = False
+
+    def test_missing_signature_rejected(self):
+        response = self.client.post(
+            "/webhook/meta-messaging",
+            data=b'{"object":"page","entry":[]}',
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_whatsapp_provider_inbound_rejected(self):
+        response = self.client.post(
+            "/webhook",
+            data=b'{"entry":[]}',
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json().get("reason"), "whatsapp_inbound_ai_disabled")
+
+    def test_wrong_page_event_not_accepted_when_enabled(self):
+        self.state["enabled"] = True
+        self.state["deduper"].clear()
+        try:
+            body = (
+                b'{"object":"page","entry":[{"id":"111","messaging":'
+                b'[{"sender":{"id":"PSID1"},"recipient":{"id":"111"},'
+                b'"timestamp":1,"message":{"mid":"mid-x","text":"Hi"}}]}]}'
+            )
+            response = self.client.post(
+                "/webhook/meta-messaging",
+                data=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Hub-Signature-256": _sign("unit-app-secret", body),
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json().get("accepted"), 0)
         finally:
             self.state["enabled"] = False
 

@@ -101,15 +101,41 @@ def _event_channel(
     return "facebook"
 
 
+def _account_allowed_for_channel(
+    channel: str,
+    entry_id: str,
+    recipient_id: str,
+    page_id: str,
+    instagram_account_id: str,
+) -> bool:
+    """Reject events that do not belong to the configured Page / Instagram account."""
+    page_id = (page_id or "").strip()
+    instagram_account_id = (instagram_account_id or "").strip()
+    ids = {entry_id, recipient_id}
+    if channel == "facebook":
+        if not page_id:
+            return False
+        return page_id in ids
+    if channel == "instagram":
+        if not instagram_account_id:
+            return False
+        # Page-linked Instagram deliveries may use either the IG account id or Page id.
+        allowed = {instagram_account_id, page_id} if page_id else {instagram_account_id}
+        return bool(ids & allowed)
+    return False
+
+
 def parse_meta_messaging_events(
     payload: Dict[str, Any],
     instagram_account_id: str = "",
+    page_id: str = "",
 ) -> List[Dict[str, Any]]:
     """Parse Messenger Platform webhook payloads into normalized inbound events.
 
     Only Facebook Page (`object=page`) and Instagram (`object=instagram`) events are
     accepted. WhatsApp Cloud / other Meta objects yield an empty list so they cannot
-    invoke the social AI pipeline.
+    invoke the social AI pipeline. When page_id / instagram_account_id are provided,
+    events for any other account are dropped.
     """
     payload_object = str(payload.get("object") or "").strip().lower()
     if payload_object in {"whatsapp_business_account", "whatsapp"}:
@@ -144,11 +170,18 @@ def parse_meta_messaging_events(
                 stable = f"{payload_object}|{entry_id}|{sender_id}|{item.get('timestamp')}|{text}|{attachments}"
                 message_id = "meta_synth_" + hashlib.sha256(stable.encode("utf-8")).hexdigest()[:48]
 
+            channel = _event_channel(
+                payload_object, entry_id, recipient_id, instagram_account_id
+            )
+            if page_id or instagram_account_id:
+                if not _account_allowed_for_channel(
+                    channel, entry_id, recipient_id, page_id, instagram_account_id
+                ):
+                    continue
+
             events.append(
                 {
-                    "channel": _event_channel(
-                        payload_object, entry_id, recipient_id, instagram_account_id
-                    ),
+                    "channel": channel,
                     "sender_id": sender_id,
                     "recipient_id": recipient_id,
                     "account_id": entry_id or recipient_id,
@@ -156,6 +189,7 @@ def parse_meta_messaging_events(
                     "timestamp": item.get("timestamp"),
                     "text": text,
                     "attachments": attachments,
+                    "is_postback": bool(postback),
                 }
             )
     return events

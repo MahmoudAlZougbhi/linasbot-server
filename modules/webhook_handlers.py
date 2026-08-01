@@ -320,132 +320,38 @@ async def verify_webhook(request: Request):
 
 @app.post("/webhook")
 async def receive_webhook(request: Request):
-    """Endpoint for receiving WhatsApp messages from different providers."""
-    # Auto-enable debug in local/dev so you can see if webhooks reach the server
-    _debug = os.getenv("DEBUG_WEBHOOK_LOGGING", "false").lower() == "true"
-    if not _debug and getattr(config, "is_local_env", lambda: False)():
-        _debug = True
-    if _debug:
-        print("\n" + "="*80)
-        print("🚨 WEBHOOK HIT DETECTED!")
-        print(f"⏰ {datetime.datetime.now()} | IP: {request.client.host if request.client else 'Unknown'}")
-        print("="*80)
+    """Endpoint for receiving WhatsApp messages from different providers.
 
+    Inbound WhatsApp (MontyMobile / Meta Cloud / any provider) must not invoke the AI.
+    Facebook Messenger and Instagram DMs are handled only on /webhook/meta-messaging.
+    WhatsApp numbers remain available as social-channel handoff destinations only.
+    """
     global _last_webhook_received_at, _last_webhook_parsed_at, _last_webhook_user_id
     try:
         raw_body = await request.body()
         _last_webhook_received_at = time.time()
-        print(f"📥 Webhook POST received ({len(raw_body)} bytes)")
-        if _debug:
-            print(f"📦 Raw body: {len(raw_body)} bytes")
-
-        try:
-            webhook_data = json.loads(raw_body.decode('utf-8'))
-        except UnicodeDecodeError:
-            webhook_data = json.loads(raw_body.decode('utf-8', errors='ignore'))
-
-        if _debug:
-            print(f"Provider: {WhatsAppFactory.get_current_provider()} | Data: {json.dumps(webhook_data, ensure_ascii=False)[:500]}...")
-        
-        current_provider = WhatsAppFactory.get_current_provider()
-        adapter = WhatsAppFactory.get_adapter(current_provider)
-        if _debug:
-            print(f"Adapter: {type(adapter).__name__}")
-
-        parsed_message = adapter.parse_webhook_message(webhook_data)
-        if _debug and parsed_message:
-            print(f"Parsed: user_id={parsed_message.get('user_id', 'N/A')} phone={parsed_message.get('phone_number', 'N/A')} message_id={parsed_message.get('message_id', 'N/A')}")
-        
-        if not parsed_message:
-            if not _webhook_is_meta_status_only(webhook_data):
-                print("Trying Meta fallback parser...")
-            parsed_message = await handle_meta_webhook(webhook_data)
-        if not parsed_message:
-            parsed_message = _parse_webhook_raw_dict(webhook_data)
-        
-        # Check for duplicate webhooks (Firestore first = multi-worker safe, then in-memory)
-        if parsed_message:
-            message_id = parsed_message.get("message_id", "")
-            current_time = time.time()
-
-            if message_id:
-                if not await _webhook_firestore_try_acquire(message_id):
-                    print(f"⚠️ DUPLICATE WEBHOOK (Firestore): message_id={message_id[:64]}...")
-                    return JSONResponse(
-                        status_code=200,
-                        content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id},
-                    )
-
-            if message_id:
-                if not await _webhook_memory_try_claim(message_id, current_time):
-                    print(
-                        f"⚠️ DUPLICATE WEBHOOK DETECTED (memory): message_id={message_id} "
-                        f"(within {WEBHOOK_DEDUP_WINDOW_SECONDS}s window)"
-                    )
-                    return JSONResponse(
-                        status_code=200,
-                        content={"status": "skipped", "reason": "duplicate_webhook", "message_id": message_id},
-                    )
-                print(f"✅ Webhook recorded in dedup cache: {message_id}")
-
-            body_fp = _webhook_text_body_fingerprint(parsed_message)
-            if body_fp:
-                if not await _webhook_bodyfp_firestore_try_acquire(body_fp, current_time):
-                    print(
-                        f"⚠️ DUPLICATE WEBHOOK (Firestore body-fp, same text+sender within "
-                        f"{WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS}s bucket): body_fp={body_fp[:40]}..."
-                    )
-                    return JSONResponse(
-                        status_code=200,
-                        content={
-                            "status": "skipped",
-                            "reason": "duplicate_inbound_text_firestore",
-                            "body_fingerprint_prefix": body_fp[:24],
-                        },
-                    )
-                if not await _webhook_bodyfp_try_claim(body_fp, current_time):
-                    print(
-                        f"⚠️ DUPLICATE WEBHOOK (same text+sender within {WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS}s): "
-                        f"body_fp={body_fp[:40]}..."
-                    )
-                    return JSONResponse(
-                        status_code=200,
-                        content={
-                            "status": "skipped",
-                            "reason": "duplicate_inbound_text_short_window",
-                            "body_fingerprint_prefix": body_fp[:24],
-                        },
-                    )
-        
-        if parsed_message:
-            _last_webhook_parsed_at = time.time()
-            _last_webhook_user_id = parsed_message.get("user_id", "")
-            print(f"Processing parsed message: {parsed_message}")
-            # IMPORTANT: Process in background so we return 200 immediately.
-            # MontyMobile throttles/backs off if webhook responses are slow.
-            asyncio.ensure_future(process_parsed_message(parsed_message, adapter))
-            print("Message queued for processing (background)")
-        else:
-            if _webhook_is_meta_status_only(webhook_data):
-                if os.getenv("DEBUG_WEBHOOK_STATUSES", "false").lower() in ("1", "true", "yes"):
-                    print("ℹ️ Webhook: status-only payload (delivered/read); no inbound message to process")
-            else:
-                print("ERROR: Could not parse webhook from any provider")
-                print(f"Webhook keys: {list(webhook_data.keys()) if isinstance(webhook_data, dict) else 'not-dict'}")
-                if isinstance(webhook_data, dict) and "entry" in webhook_data:
-                    e0 = webhook_data.get("entry", [])
-                    if e0 and isinstance(e0, list):
-                        print(f"Webhook entry[0] keys: {list(e0[0].keys()) if isinstance(e0[0], dict) else 'N/A'}")
-
-        # Explicit JSONResponse: MontyMobile expects 200 + JSON body. Returning null causes "Response Body: null" in their logs.
-        return JSONResponse(status_code=200, content={"status": "success"})
-        
+        print(
+            f"📥 WhatsApp webhook POST received ({len(raw_body)} bytes) — "
+            "inbound AI disabled (social handoff-only policy)"
+        )
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "ignored",
+                "reason": "whatsapp_inbound_ai_disabled",
+                "accepted": 0,
+            },
+        )
     except Exception as e:
-        print(f"CRITICAL ERROR processing webhook: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return 200 with error payload to avoid MontyMobile retries on parse/server errors
-        return JSONResponse(status_code=200, content={"status": "error", "message": str(e)})
+        print(f"CRITICAL ERROR acknowledging WhatsApp webhook: {e}")
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "ignored",
+                "reason": "whatsapp_inbound_ai_disabled",
+                "accepted": 0,
+            },
+        )
 
 
 def _webhook_is_meta_status_only(webhook_data: Dict[str, Any]) -> bool:

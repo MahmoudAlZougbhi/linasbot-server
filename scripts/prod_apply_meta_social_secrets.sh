@@ -5,8 +5,10 @@ set -euo pipefail
 
 required_nonempty=(
   META_APP_ID
+  META_APP_SECRET
   META_PAGE_ID
   META_PAGE_ACCESS_TOKEN
+  META_INSTAGRAM_ACCOUNT_ID
   META_WEBHOOK_VERIFY_TOKEN
   META_GRAPH_API_VERSION
 )
@@ -34,15 +36,14 @@ from pathlib import Path
 
 KEYS_ALWAYS = [
     "META_APP_ID",
+    "META_APP_SECRET",
     "META_PAGE_ID",
     "META_PAGE_ACCESS_TOKEN",
+    "META_INSTAGRAM_ACCOUNT_ID",
     "META_WEBHOOK_VERIFY_TOKEN",
     "META_GRAPH_API_VERSION",
 ]
-OPTIONAL = [
-    "META_APP_SECRET",
-    "META_INSTAGRAM_ACCOUNT_ID",
-]
+OPTIONAL = []
 
 def upsert(path: Path, updates: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,7 +150,7 @@ CODE_BAD="$(curl -sS -o /tmp/meta_bad_body -w '%{http_code}' --max-time 10 \
 echo "local_incorrect_http=$CODE_BAD"
 test "$CODE_BAD" != "200"
 
-# Invalid signature POST should be rejected when app secret exists; otherwise expect disabled/incomplete.
+# Invalid signature POST must be rejected whenever App Secret is configured.
 POST_CODE="$(curl -sS -o /tmp/meta_post_body -w '%{http_code}' --max-time 10 \
   -X POST "http://127.0.0.1:8003/webhook/meta-messaging" \
   -H 'Content-Type: application/json' \
@@ -158,6 +159,18 @@ POST_CODE="$(curl -sS -o /tmp/meta_post_body -w '%{http_code}' --max-time 10 \
 POST_BODY="$(cat /tmp/meta_post_body 2>/dev/null || true)"
 echo "local_invalid_sig_http=$POST_CODE"
 echo "local_invalid_sig_body=$POST_BODY"
+test "$POST_CODE" = "401"
+
+# Existing WhatsApp provider webhook must not invoke AI.
+WA_CODE="$(curl -sS -o /tmp/wa_inbound_body -w '%{http_code}' --max-time 10 \
+  -X POST "http://127.0.0.1:8003/webhook" \
+  -H 'Content-Type: application/json' \
+  -d '{"object":"whatsapp_business_account","entry":[]}' || true)"
+WA_BODY="$(cat /tmp/wa_inbound_body 2>/dev/null || true)"
+echo "local_whatsapp_inbound_http=$WA_CODE"
+echo "local_whatsapp_inbound_body=$WA_BODY"
+test "$WA_CODE" = "200"
+printf '%s' "$WA_BODY" | grep -q 'whatsapp_inbound_ai_disabled'
 
 PUB_OK="$(curl -sS -o /tmp/pub_ok -w '%{http_code}' --max-time 15 \
   "https://www.linasaibot.com/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=${META_WEBHOOK_VERIFY_TOKEN}&hub.challenge=${CHALLENGE}" || true)"

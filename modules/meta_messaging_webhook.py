@@ -64,7 +64,12 @@ async def receive_meta_messaging_webhook(request: Request):
 
     if not settings.enabled:
         return JSONResponse({"status": "disabled"})
-    if not settings.app_secret or not settings.page_access_token or not settings.page_id:
+    if (
+        not settings.app_secret
+        or not settings.page_access_token
+        or not settings.page_id
+        or not settings.instagram_account_id
+    ):
         raise HTTPException(status_code=503, detail="Meta messaging credentials are incomplete")
 
     try:
@@ -92,7 +97,11 @@ async def receive_meta_messaging_webhook(request: Request):
             }
         )
 
-    events = parse_meta_messaging_events(payload, settings.instagram_account_id)
+    events = parse_meta_messaging_events(
+        payload,
+        instagram_account_id=settings.instagram_account_id,
+        page_id=settings.page_id,
+    )
     accepted = 0
     duplicates = 0
     for event in events:
