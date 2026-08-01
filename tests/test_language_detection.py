@@ -38,8 +38,8 @@ except ImportError as e:
 
 
 @dataclass
-class TestCase:
-    """A single test case for language detection."""
+class LanguageSample:
+    """A single sample for language detection checks."""
     message: str
     expected_language: str
     description: str
@@ -53,9 +53,9 @@ class LanguageDetectionTester:
         self.resolver = LanguageResolver()
         self.passed = 0
         self.failed = 0
-        self.results: List[Tuple[TestCase, str, bool]] = []
+        self.results: List[Tuple[LanguageSample, str, bool]] = []
 
-    def test_case(self, test: TestCase, conversation_id: str = "test_conv") -> bool:
+    def test_case(self, test: LanguageSample, conversation_id: str = "test_conv") -> bool:
         """Run a single test case and return whether it passed."""
         detected = self.resolver.resolve(
             conversation_id=conversation_id,
@@ -69,7 +69,7 @@ class LanguageDetectionTester:
             self.failed += 1
         return passed
 
-    def print_result(self, test: TestCase, detected: str, passed: bool):
+    def print_result(self, test: LanguageSample, detected: str, passed: bool):
         """Print a single test result."""
         status = "✅ PASS" if passed else "❌ FAIL"
         print(f"  {status}: {test.description}")
@@ -77,7 +77,7 @@ class LanguageDetectionTester:
             print(f"       Message: '{test.message[:50]}{'...' if len(test.message) > 50 else ''}'")
             print(f"       Expected: {test.expected_language}, Got: {detected}")
 
-    def run_category(self, category: str, tests: List[TestCase]):
+    def run_category(self, category: str, tests: List[LanguageSample]):
         """Run all tests in a category."""
         print(f"\n{'='*60}")
         print(f"📋 {category}")
@@ -108,143 +108,143 @@ class LanguageDetectionTester:
                     print(f"    Expected: {test.expected_language}, Got: {detected}")
 
 
-def get_arabic_tests() -> List[TestCase]:
+def get_arabic_tests() -> List[LanguageSample]:
     """Tests for Arabic script detection."""
     return [
-        TestCase("مرحبا", "ar", "Simple Arabic greeting", "Arabic"),
-        TestCase("مرحبا، شو الخدمات؟", "ar", "Arabic question about services", "Arabic"),
-        TestCase("كيفك؟", "ar", "Arabic 'how are you'", "Arabic"),
-        TestCase("أهلاً وسهلاً", "ar", "Arabic welcome", "Arabic"),
-        TestCase("بدي موعد", "ar", "Arabic 'I want appointment'", "Arabic"),
-        TestCase("شو سعر الليزر؟", "ar", "Arabic price question", "Arabic"),
-        TestCase("الليزر للرجال", "ar", "Arabic service for men", "Arabic"),
-        TestCase("شكراً كتير", "ar", "Arabic thank you", "Arabic"),
-        TestCase("بكرا الساعة 3", "ar", "Arabic tomorrow at 3", "Arabic"),
-        TestCase("مساء الخير", "ar", "Arabic good evening", "Arabic"),
-        TestCase("أنا شب", "ar", "Arabic 'I am male'", "Arabic"),
-        TestCase("أنا صبية", "ar", "Arabic 'I am female'", "Arabic"),
+        LanguageSample("مرحبا", "ar", "Simple Arabic greeting", "Arabic"),
+        LanguageSample("مرحبا، شو الخدمات؟", "ar", "Arabic question about services", "Arabic"),
+        LanguageSample("كيفك؟", "ar", "Arabic 'how are you'", "Arabic"),
+        LanguageSample("أهلاً وسهلاً", "ar", "Arabic welcome", "Arabic"),
+        LanguageSample("بدي موعد", "ar", "Arabic 'I want appointment'", "Arabic"),
+        LanguageSample("شو سعر الليزر؟", "ar", "Arabic price question", "Arabic"),
+        LanguageSample("الليزر للرجال", "ar", "Arabic service for men", "Arabic"),
+        LanguageSample("شكراً كتير", "ar", "Arabic thank you", "Arabic"),
+        LanguageSample("بكرا الساعة 3", "ar", "Arabic tomorrow at 3", "Arabic"),
+        LanguageSample("مساء الخير", "ar", "Arabic good evening", "Arabic"),
+        LanguageSample("أنا شب", "ar", "Arabic 'I am male'", "Arabic"),
+        LanguageSample("أنا صبية", "ar", "Arabic 'I am female'", "Arabic"),
     ]
 
 
-def get_franco_arabic_tests() -> List[TestCase]:
+def get_franco_arabic_tests() -> List[LanguageSample]:
     """Tests for Franco-Arabic/Arabizi detection."""
     return [
-        TestCase("kifak", "franco", "Franco greeting 'kifak'", "Franco-Arabic"),
-        TestCase("shu akhbarak", "franco", "Franco 'what's up'", "Franco-Arabic"),
-        TestCase("ana bade maw3ad", "franco", "Franco 'I want appointment'", "Franco-Arabic"),
-        TestCase("kifak, bade booking", "franco", "Franco mixed with English", "Franco-Arabic"),
-        TestCase("se3er el laser", "franco", "Franco with digit (3=ع)", "Franco-Arabic"),
-        TestCase("7abibi", "franco", "Franco with digit (7=ح)", "Franco-Arabic"),
-        TestCase("ma3 el saleme", "franco", "Franco goodbye", "Franco-Arabic"),
-        TestCase("shukran ktir", "franco", "Franco thank you", "Franco-Arabic"),
-        TestCase("ana shab", "franco", "Franco 'I am male'", "Franco-Arabic"),
-        TestCase("ana sabieh", "franco", "Franco 'I am female'", "Franco-Arabic"),
-        TestCase("shou el as3ar", "franco", "Franco 'what are the prices'", "Franco-Arabic"),
-        TestCase("bukra el sa3a 5", "franco", "Franco 'tomorrow at 5'", "Franco-Arabic"),
-        TestCase("wein el clinic", "franco", "Franco 'where is clinic'", "Franco-Arabic"),
-        TestCase("yalla book it", "franco", "Franco + English", "Franco-Arabic"),
-        TestCase("la2 mesh hek", "franco", "Franco 'no not like that'", "Franco-Arabic"),
-        TestCase("3am fakir fi", "franco", "Franco 'I'm thinking about it'", "Franco-Arabic"),
+        LanguageSample("kifak", "franco", "Franco greeting 'kifak'", "Franco-Arabic"),
+        LanguageSample("shu akhbarak", "franco", "Franco 'what's up'", "Franco-Arabic"),
+        LanguageSample("ana bade maw3ad", "franco", "Franco 'I want appointment'", "Franco-Arabic"),
+        LanguageSample("kifak, bade booking", "franco", "Franco mixed with English", "Franco-Arabic"),
+        LanguageSample("se3er el laser", "franco", "Franco with digit (3=ع)", "Franco-Arabic"),
+        LanguageSample("7abibi", "franco", "Franco with digit (7=ح)", "Franco-Arabic"),
+        LanguageSample("ma3 el saleme", "franco", "Franco goodbye", "Franco-Arabic"),
+        LanguageSample("shukran ktir", "franco", "Franco thank you", "Franco-Arabic"),
+        LanguageSample("ana shab", "franco", "Franco 'I am male'", "Franco-Arabic"),
+        LanguageSample("ana sabieh", "franco", "Franco 'I am female'", "Franco-Arabic"),
+        LanguageSample("shou el as3ar", "franco", "Franco 'what are the prices'", "Franco-Arabic"),
+        LanguageSample("bukra el sa3a 5", "franco", "Franco 'tomorrow at 5'", "Franco-Arabic"),
+        LanguageSample("wein el clinic", "franco", "Franco 'where is clinic'", "Franco-Arabic"),
+        LanguageSample("yalla book it", "franco", "Franco + English", "Franco-Arabic"),
+        LanguageSample("la2 mesh hek", "franco", "Franco 'no not like that'", "Franco-Arabic"),
+        LanguageSample("3am fakir fi", "franco", "Franco 'I'm thinking about it'", "Franco-Arabic"),
     ]
 
 
-def get_english_tests() -> List[TestCase]:
+def get_english_tests() -> List[LanguageSample]:
     """Tests for English detection."""
     return [
-        TestCase("Hello, what services do you offer?", "en", "English greeting + question", "English"),
-        TestCase("I want to book an appointment", "en", "English booking request", "English"),
-        TestCase("What is the price for laser?", "en", "English price question", "English"),
-        TestCase("I'm male", "en", "English gender statement", "English"),
-        TestCase("im female", "en", "English gender (informal)", "English"),
-        TestCase("Thank you for your help", "en", "English gratitude", "English"),
-        TestCase("Can I schedule for tomorrow?", "en", "English scheduling", "English"),
-        TestCase("How much does hair removal cost?", "en", "English cost inquiry", "English"),
-        TestCase("I would like information about your services", "en", "English info request", "English"),
-        TestCase("What are your working hours?", "en", "English hours question", "English"),
-        TestCase("Please confirm my appointment", "en", "English confirmation", "English"),
-        TestCase("I need to reschedule", "en", "English reschedule", "English"),
+        LanguageSample("Hello, what services do you offer?", "en", "English greeting + question", "English"),
+        LanguageSample("I want to book an appointment", "en", "English booking request", "English"),
+        LanguageSample("What is the price for laser?", "en", "English price question", "English"),
+        LanguageSample("I'm male", "en", "English gender statement", "English"),
+        LanguageSample("im female", "en", "English gender (informal)", "English"),
+        LanguageSample("Thank you for your help", "en", "English gratitude", "English"),
+        LanguageSample("Can I schedule for tomorrow?", "en", "English scheduling", "English"),
+        LanguageSample("How much does hair removal cost?", "en", "English cost inquiry", "English"),
+        LanguageSample("I would like information about your services", "en", "English info request", "English"),
+        LanguageSample("What are your working hours?", "en", "English hours question", "English"),
+        LanguageSample("Please confirm my appointment", "en", "English confirmation", "English"),
+        LanguageSample("I need to reschedule", "en", "English reschedule", "English"),
     ]
 
 
-def get_french_tests() -> List[TestCase]:
+def get_french_tests() -> List[LanguageSample]:
     """Tests for French detection."""
     return [
-        TestCase("Bonjour, quels services offrez-vous?", "fr", "French greeting + question", "French"),
-        TestCase("Je voudrais prendre rendez-vous", "fr", "French booking request", "French"),
-        TestCase("Quel est le prix du laser?", "fr", "French price question", "French"),
-        TestCase("Merci beaucoup", "fr", "French thank you", "French"),
-        TestCase("Je suis un homme", "fr", "French 'I am a man'", "French"),
-        TestCase("Je suis une femme", "fr", "French 'I am a woman'", "French"),
-        TestCase("C'est combien?", "fr", "French 'how much'", "French"),
-        TestCase("J'ai besoin d'informations", "fr", "French info request", "French"),
-        TestCase("À quelle heure ouvrez-vous?", "fr", "French hours question", "French"),
-        TestCase("S'il vous plaît confirmez", "fr", "French confirmation request", "French"),
-        TestCase("Je voudrais annuler mon rendez-vous", "fr", "French cancel request", "French"),
-        TestCase("Pouvez-vous m'aider?", "fr", "French help request", "French"),
+        LanguageSample("Bonjour, quels services offrez-vous?", "fr", "French greeting + question", "French"),
+        LanguageSample("Je voudrais prendre rendez-vous", "fr", "French booking request", "French"),
+        LanguageSample("Quel est le prix du laser?", "fr", "French price question", "French"),
+        LanguageSample("Merci beaucoup", "fr", "French thank you", "French"),
+        LanguageSample("Je suis un homme", "fr", "French 'I am a man'", "French"),
+        LanguageSample("Je suis une femme", "fr", "French 'I am a woman'", "French"),
+        LanguageSample("C'est combien?", "fr", "French 'how much'", "French"),
+        LanguageSample("J'ai besoin d'informations", "fr", "French info request", "French"),
+        LanguageSample("À quelle heure ouvrez-vous?", "fr", "French hours question", "French"),
+        LanguageSample("S'il vous plaît confirmez", "fr", "French confirmation request", "French"),
+        LanguageSample("Je voudrais annuler mon rendez-vous", "fr", "French cancel request", "French"),
+        LanguageSample("Pouvez-vous m'aider?", "fr", "French help request", "French"),
     ]
 
 
-def get_time_expression_tests() -> List[TestCase]:
+def get_time_expression_tests() -> List[LanguageSample]:
     """Tests to ensure time expressions don't trigger false Franco detection."""
     return [
-        TestCase("I want appointment at 7", "en", "English with time '7'", "Time Expressions"),
-        TestCase("Book me for 7pm", "en", "English with '7pm'", "Time Expressions"),
-        TestCase("Schedule at 3:30", "en", "English with '3:30'", "Time Expressions"),
-        TestCase("Tomorrow at 2pm please", "en", "English with '2pm'", "Time Expressions"),
-        TestCase("I can come around 5", "en", "English with 'around 5'", "Time Expressions"),
-        TestCase("Je veux un rendez-vous à 7h", "fr", "French with '7h'", "Time Expressions"),
-        TestCase("Rendez-vous vers 15h30", "fr", "French with '15h30'", "Time Expressions"),
-        TestCase("at 7 tomorrow morning", "en", "English time tomorrow", "Time Expressions"),
-        TestCase("available from 9 to 5", "en", "English time range", "Time Expressions"),
+        LanguageSample("I want appointment at 7", "en", "English with time '7'", "Time Expressions"),
+        LanguageSample("Book me for 7pm", "en", "English with '7pm'", "Time Expressions"),
+        LanguageSample("Schedule at 3:30", "en", "English with '3:30'", "Time Expressions"),
+        LanguageSample("Tomorrow at 2pm please", "en", "English with '2pm'", "Time Expressions"),
+        LanguageSample("I can come around 5", "en", "English with 'around 5'", "Time Expressions"),
+        LanguageSample("Je veux un rendez-vous à 7h", "fr", "French with '7h'", "Time Expressions"),
+        LanguageSample("Rendez-vous vers 15h30", "fr", "French with '15h30'", "Time Expressions"),
+        LanguageSample("at 7 tomorrow morning", "en", "English time tomorrow", "Time Expressions"),
+        LanguageSample("available from 9 to 5", "en", "English time range", "Time Expressions"),
     ]
 
 
-def get_full_name_tests() -> List[TestCase]:
+def get_full_name_tests() -> List[LanguageSample]:
     """Tests for full name detection (should preserve previous language)."""
     # Note: These require the expecting_full_name flag or heuristic detection
     return [
-        TestCase("Jean-Pierre Dubois", "en", "French-style name (preserves default)", "Full Names"),
-        TestCase("Mohammed Al-Rashid", "en", "Arabic-style name in Latin", "Full Names"),
-        TestCase("Sarah Johnson", "en", "English name", "Full Names"),
-        TestCase("Marie-Claire Lefebvre", "en", "French hyphenated name", "Full Names"),
-        TestCase("Ahmad Khalil", "en", "Arabic name in Latin", "Full Names"),
+        LanguageSample("Jean-Pierre Dubois", "en", "French-style name (preserves default)", "Full Names"),
+        LanguageSample("Mohammed Al-Rashid", "en", "Arabic-style name in Latin", "Full Names"),
+        LanguageSample("Sarah Johnson", "en", "English name", "Full Names"),
+        LanguageSample("Marie-Claire Lefebvre", "en", "French hyphenated name", "Full Names"),
+        LanguageSample("Ahmad Khalil", "en", "Arabic name in Latin", "Full Names"),
     ]
 
 
-def get_mixed_language_tests() -> List[TestCase]:
+def get_mixed_language_tests() -> List[LanguageSample]:
     """Tests for mixed language inputs."""
     return [
-        TestCase("Hello merci", "en", "English + French greeting (keep locked)", "Mixed"),
-        TestCase("Bonjour thank you", "en", "French + English (keep locked)", "Mixed"),
-        TestCase("I want laser please merci", "en", "Mostly English with French word", "Mixed"),
-        TestCase("Je veux booking please", "fr", "Mostly French with English", "Mixed"),
+        LanguageSample("Hello merci", "en", "English + French greeting (keep locked)", "Mixed"),
+        LanguageSample("Bonjour thank you", "en", "French + English (keep locked)", "Mixed"),
+        LanguageSample("I want laser please merci", "en", "Mostly English with French word", "Mixed"),
+        LanguageSample("Je veux booking please", "fr", "Mostly French with English", "Mixed"),
     ]
 
 
-def get_low_signal_tests() -> List[TestCase]:
+def get_low_signal_tests() -> List[LanguageSample]:
     """Tests for low-signal inputs (should preserve previous language)."""
     return [
-        TestCase("ok", "en", "Single word 'ok'", "Low Signal"),
-        TestCase("yes", "en", "Single word 'yes'", "Low Signal"),
-        TestCase("no", "en", "Single word 'no'", "Low Signal"),
-        TestCase("oui", "en", "Single word 'oui' (keeps default)", "Low Signal"),
-        TestCase("non", "en", "Single word 'non' (keeps default)", "Low Signal"),
-        TestCase("neo", "en", "Machine name 'neo'", "Low Signal"),
-        TestCase("manara", "en", "Location 'manara'", "Low Signal"),
-        TestCase("beirut", "en", "Location 'beirut'", "Low Signal"),
+        LanguageSample("ok", "en", "Single word 'ok'", "Low Signal"),
+        LanguageSample("yes", "en", "Single word 'yes'", "Low Signal"),
+        LanguageSample("no", "en", "Single word 'no'", "Low Signal"),
+        LanguageSample("oui", "en", "Single word 'oui' (keeps default)", "Low Signal"),
+        LanguageSample("non", "en", "Single word 'non' (keeps default)", "Low Signal"),
+        LanguageSample("neo", "en", "Machine name 'neo'", "Low Signal"),
+        LanguageSample("manara", "en", "Location 'manara'", "Low Signal"),
+        LanguageSample("beirut", "en", "Location 'beirut'", "Low Signal"),
     ]
 
 
-def get_edge_case_tests() -> List[TestCase]:
+def get_edge_case_tests() -> List[LanguageSample]:
     """Edge case and regression tests."""
     return [
-        TestCase("", "en", "Empty string (keeps default)", "Edge Cases"),
-        TestCase("   ", "en", "Whitespace only (keeps default)", "Edge Cases"),
-        TestCase("123", "en", "Numbers only (keeps default)", "Edge Cases"),
-        TestCase("😊", "en", "Emoji only (keeps default)", "Edge Cases"),
-        TestCase("!!!", "en", "Punctuation only (keeps default)", "Edge Cases"),
-        TestCase("https://example.com", "en", "URL (keeps default)", "Edge Cases"),
-        TestCase("test@email.com", "en", "Email (keeps default)", "Edge Cases"),
+        LanguageSample("", "en", "Empty string (keeps default)", "Edge Cases"),
+        LanguageSample("   ", "en", "Whitespace only (keeps default)", "Edge Cases"),
+        LanguageSample("123", "en", "Numbers only (keeps default)", "Edge Cases"),
+        LanguageSample("😊", "en", "Emoji only (keeps default)", "Edge Cases"),
+        LanguageSample("!!!", "en", "Punctuation only (keeps default)", "Edge Cases"),
+        LanguageSample("https://example.com", "en", "URL (keeps default)", "Edge Cases"),
+        LanguageSample("test@email.com", "en", "Email (keeps default)", "Edge Cases"),
     ]
 
 
@@ -256,7 +256,7 @@ def test_helper_functions():
 
     # Test clean()
     assert clean("Hello  World") == "Hello World", "clean() should normalize spaces"
-    assert clean("test@email.com text") == "  text", "clean() should remove emails"
+    assert clean("test@email.com text") == "text", "clean() should remove emails and normalize spaces"
     print("  ✅ clean() works correctly")
 
     # Test alpha_len()

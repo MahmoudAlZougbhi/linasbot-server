@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Durable rate limiting for auth and sensitive mutations (file-backed + memory)."""
 
 from __future__ import annotations
@@ -7,7 +6,6 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Tuple
 
 from storage.persistent_storage import _DATA_ROOT
 
@@ -22,7 +20,7 @@ class RateLimitService:
         safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in key)[:180]
         return self._dir / f"{safe}.json"
 
-    def hit(self, key: str, *, limit: int, window_seconds: int) -> Tuple[bool, int]:
+    def hit(self, key: str, *, limit: int, window_seconds: int) -> tuple[bool, int]:
         """
         Record a hit. Returns (allowed, retry_after_seconds).
         """

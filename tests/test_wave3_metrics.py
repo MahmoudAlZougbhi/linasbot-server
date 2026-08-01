@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Wave 3 metric reconciliation and honesty regressions."""
 
 from __future__ import annotations
@@ -19,8 +18,8 @@ os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave3-test-secret")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 
-from services.analytics_events import AnalyticsEvents
 from modules.api_security import PERMISSION_KEYS, SYSTEM_ROLE_PERMISSIONS
+from services.analytics_events import AnalyticsEvents
 
 
 @pytest.fixture()
@@ -156,9 +155,7 @@ class TestMetricReconciliation:
         assert summary["success"] is True
         assert summary["overview"]["total_messages"] == 0
         assert summary["satisfaction"]["likes"] == 0
-        assert summary["sentiment_distribution"] == {} or sum(
-            summary["sentiment_distribution"].values()
-        ) == 0
+        assert summary["sentiment_distribution"] == {} or sum(summary["sentiment_distribution"].values()) == 0
 
     def test_aggregation_error_is_not_zero_success(self, analytics_tmp, monkeypatch):
         a = analytics_tmp
@@ -176,7 +173,7 @@ class TestMetricReconciliation:
 class TestPermissionMatrixWave3:
     def test_chat_history_permission_removed(self):
         assert "chatHistory" not in PERMISSION_KEYS
-        for role, perms in SYSTEM_ROLE_PERMISSIONS.items():
+        for _role, perms in SYSTEM_ROLE_PERMISSIONS.items():
             assert "chatHistory" not in perms
             assert "contentManagers" in perms
             assert "activityFlow" in perms
@@ -186,12 +183,13 @@ class TestIntegrationsStatus:
     def test_integrations_redacted_and_auth_required(self):
         os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
         from fastapi.testclient import TestClient
-        from modules.core import app
+
         import modules.settings_api  # noqa: F401
+        from modules.core import app
         from services.dashboard_session_service import (
-            session_service,
-            SESSION_COOKIE_NAME,
             CSRF_COOKIE_NAME,
+            SESSION_COOKIE_NAME,
+            session_service,
         )
 
         client = TestClient(app)

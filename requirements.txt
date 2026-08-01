@@ -26,7 +26,7 @@ proto-plus>=1.25.0,<2.0.0
 
 # Audio Processing
 pydub==0.25.1
-audioop-lts>=0.2.0  # Required for Python 3.13+ (audioop removed from stdlib)
+audioop-lts>=0.2.0; python_version >= "3.13"  # audioop removed from stdlib in 3.13+
 
 # Image Processing (>=11.0 for Python 3.13 compatibility)
 Pillow>=11.0.0

@@ -1,51 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 
-// Components
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
 import LoadingScreen from './components/Common/LoadingScreen';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
-
-// Pages
-import Dashboard from './pages/Dashboard';
-import Testing from './pages/Testing';
-import SimpleApiTest from './pages/SimpleApiTest';
-import Training from './pages/Training';
-import ContentManagers from './pages/ContentManagers';
-import ActivityFlow from './pages/ActivityFlow';
-import LiveChat from './pages/LiveChat';
-import MobileLiveChat from './pages/MobileLiveChat';
-import SmartMessaging from './pages/SmartMessaging';
-import Analytics from './pages/Analytics';
-import NotFound from './pages/NotFound';
-import Settings from './pages/Settings';
 import Login from './pages/Login';
-
-// Contexts
+import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { OperatorStatusProvider } from './contexts/OperatorStatusContext';
-
-// Hooks
 import { useApi } from './hooks/useApi';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Testing = lazy(() => import('./pages/Testing'));
+const SimpleApiTest = lazy(() => import('./pages/SimpleApiTest'));
+const Training = lazy(() => import('./pages/Training'));
+const ContentManagers = lazy(() => import('./pages/ContentManagers'));
+const ActivityFlow = lazy(() => import('./pages/ActivityFlow'));
+const LiveChat = lazy(() => import('./pages/LiveChat'));
+const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
+const SmartMessaging = lazy(() => import('./pages/SmartMessaging'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+const RouteFallback = () => (
+  <div className="flex items-center justify-center py-24 text-slate-600 text-sm">
+    Loading…
+  </div>
+);
 
 function AppContent() {
   const [loading, setLoading] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { botStatus, fetchBotStatus } = useApi();
+  const { botStatus } = useApi();
 
   useEffect(() => {
-    // TEST: fetchBotStatus temporarily disabled to check if it causes login hang
-    // try {
-    //   await fetchBotStatus();
-    // } catch (error) {
-    //   // silent
-    // }
     setTimeout(() => setLoading(false), 300);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loading) {
     return <LoadingScreen />;
@@ -54,7 +47,6 @@ function AppContent() {
   return (
       <OperatorStatusProvider>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        {/* Background Effects */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse-slow"></div>
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-secondary-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse-slow animation-delay-400"></div>
@@ -62,7 +54,6 @@ function AppContent() {
         </div>
 
         <div className="relative flex h-screen overflow-hidden">
-          {/* Sidebar - collapsible */}
           <motion.div
             initial={false}
             animate={{ width: sidebarCollapsed ? 80 : 320 }}
@@ -76,15 +67,12 @@ function AppContent() {
             />
           </motion.div>
 
-          {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Header */}
             <Header
               onMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               botStatus={botStatus}
             />
 
-            {/* Page Content - full width when sidebar collapsed */}
             <main className="flex-1 overflow-y-auto p-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -92,27 +80,26 @@ function AppContent() {
                 transition={{ duration: 0.15 }}
                 className={sidebarCollapsed ? "max-w-full" : "max-w-7xl mx-auto"}
               >
-                <Routes>
-                  {/* TEST: Inner ProtectedRoute removed - protection only at top level */}
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/testing" element={<Testing />} />
-                  <Route path="/api-debug" element={<SimpleApiTest />} />
-                  <Route path="/training" element={<Training />} />
-                  <Route path="/content-managers" element={<ContentManagers />} />
-                  <Route path="/activity-flow" element={<ActivityFlow />} />
-                  <Route path="/live-chat" element={<LiveChat />} />
-                  <Route path="/analytics" element={<Navigate to="/" replace />} />
-                  <Route path="/smart-messaging" element={<SmartMessaging />} />
-                  <Route path="/settings" element={<Settings />} />
-
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/testing" element={<Testing />} />
+                    <Route path="/api-debug" element={<SimpleApiTest />} />
+                    <Route path="/training" element={<Training />} />
+                    <Route path="/content-managers" element={<ContentManagers />} />
+                    <Route path="/activity-flow" element={<ActivityFlow />} />
+                    <Route path="/live-chat" element={<LiveChat />} />
+                    <Route path="/analytics" element={<Navigate to="/" replace />} />
+                    <Route path="/smart-messaging" element={<SmartMessaging />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
               </motion.div>
             </main>
           </div>
         </div>
 
-        {/* Toast Notifications */}
         <Toaster
           position="top-right"
           toastOptions={{
@@ -148,7 +135,9 @@ function MobileLiveChatRoute() {
   return (
     <OperatorStatusProvider>
       <div className="h-[100dvh] overflow-hidden bg-slate-950">
-        <MobileLiveChat />
+        <Suspense fallback={<RouteFallback />}>
+          <MobileLiveChat />
+        </Suspense>
       </div>
     </OperatorStatusProvider>
   );
@@ -160,9 +149,7 @@ function App() {
       <AuthProvider>
         <PermissionsProvider>
           <Routes>
-            {/* Public Routes */}
             <Route path="/login" element={<Login />} />
-            {/* Public self-registration removed — accounts are admin-provisioned */}
 
             <Route
               path="/mobile/live-chat"
@@ -173,7 +160,6 @@ function App() {
               }
             />
 
-            {/* Protected App Routes */}
             <Route path="/*" element={
               <ProtectedRoute>
                 <AppContent />

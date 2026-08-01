@@ -1,14 +1,12 @@
-# -*- coding: utf-8 -*-
 """Wave 1 security regression tests (AuthN/AuthZ, SSRF, path traversal, secrets)."""
 
 from __future__ import annotations
 
-import ipaddress
 import json
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,16 +22,15 @@ os.environ["DISABLE_API_DOCS"] = "true"
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 
 
-from services.safe_path import is_safe_relative_name, resolve_backup_filename, resolve_under_root
-from services.ssrf_guard import SSRFValidationError, validate_fetch_url
-from services.dashboard_session_service import session_service, SESSION_COOKIE_NAME, CSRF_COOKIE_NAME
 from modules.api_security import (
     is_public_api,
+    is_social_user_id,
     required_permission_for,
     resolve_permissions,
-    user_has_permission,
-    is_social_user_id,
 )
+from services.dashboard_session_service import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, session_service
+from services.safe_path import is_safe_relative_name, resolve_backup_filename, resolve_under_root
+from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
 
 class TestSafePath:
@@ -110,9 +107,7 @@ class TestSessionService:
         assert session_service.get_valid_session(cookie) is None
 
     def test_tampered_cookie_rejected(self):
-        rec = session_service.create_session(
-            user_id="u2", email="b@example.com", role="viewer", permissions=None
-        )
+        rec = session_service.create_session(user_id="u2", email="b@example.com", role="viewer", permissions=None)
         cookie = session_service.cookie_value_for(rec) + "x"
         assert session_service.get_valid_session(cookie) is None
 
@@ -125,9 +120,6 @@ class TestRBACHelpers:
         assert required_permission_for("GET", "/api/analytics/summary") == "analytics"
         assert required_permission_for("POST", "/api/smart-messaging/toggle") == "smartMessaging"
         assert required_permission_for("GET", "/api/content-files/knowledge/list") == "contentManagers"
-        admin = MagicMock(role="admin", permissions=None)
-        viewer = MagicMock(role="viewer", permissions=None)
-        # use real SessionRecord-like via resolve_permissions
         assert resolve_permissions("admin", None)["userManagement"] is True
         assert resolve_permissions("viewer", None)["userManagement"] is False
         assert is_social_user_id("instagram:123")
@@ -152,15 +144,17 @@ def client():
     os.environ["ENVIRONMENT"] = "test"
     os.environ["DISABLE_API_DOCS"] = "true"
     from fastapi.testclient import TestClient
-    from modules.core import app
+
     # Import route modules
     import modules.analytics_api  # noqa: F401
     import modules.auth_api  # noqa: F401
-    import modules.media_api  # noqa: F401
     import modules.dashboard_api  # noqa: F401
     import modules.live_chat_api  # noqa: F401
-    import modules.smart_messaging_api  # noqa: F401
+    import modules.media_api  # noqa: F401
     import modules.settings_api  # noqa: F401
+    import modules.smart_messaging_api  # noqa: F401
+    from modules.core import app
+
     return TestClient(app)
 
 
@@ -190,18 +184,14 @@ class TestAPIAuthEnforcement:
         r = client.get("/api/media/audio", params={"url": "http://127.0.0.1:9/"})
         assert r.status_code == 401
         # Authenticated viewer with liveChat
-        rec = session_service.create_session(
-            user_id="op1", email="op@example.com", role="operator", permissions=None
-        )
+        rec = session_service.create_session(user_id="op1", email="op@example.com", role="operator", permissions=None)
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r2 = client.get("/api/media/audio", params={"url": "http://127.0.0.1:9/"})
         assert r2.status_code == 400
 
     def test_simulate_webhook_disabled(self, client):
-        rec = session_service.create_session(
-            user_id="t1", email="t@example.com", role="admin", permissions=None
-        )
+        rec = session_service.create_session(user_id="t1", email="t@example.com", role="admin", permissions=None)
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r = client.post(
@@ -215,9 +205,7 @@ class TestAPIAuthEnforcement:
         assert "disabled" in (body.get("error") or "").lower()
 
     def test_social_takeover_forbidden(self, client):
-        rec = session_service.create_session(
-            user_id="op2", email="op2@example.com", role="admin", permissions=None
-        )
+        rec = session_service.create_session(user_id="op2", email="op2@example.com", role="admin", permissions=None)
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r = client.post(
@@ -241,18 +229,14 @@ class TestAPIAuthEnforcement:
         assert r.json().get("success") is False
 
     def test_csrf_required_on_mutation(self, client):
-        rec = session_service.create_session(
-            user_id="op3", email="op3@example.com", role="admin", permissions=None
-        )
+        rec = session_service.create_session(user_id="op3", email="op3@example.com", role="admin", permissions=None)
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r = client.post("/api/smart-messaging/toggle", json={})
         assert r.status_code == 403
 
     def test_role_matrix_viewer_forbidden_users(self, client):
-        rec = session_service.create_session(
-            user_id="v1", email="v@example.com", role="viewer", permissions=None
-        )
+        rec = session_service.create_session(user_id="v1", email="v@example.com", role="viewer", permissions=None)
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         r = client.get("/api/auth/users")
         assert r.status_code == 403

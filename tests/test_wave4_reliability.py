@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Wave 4 reliability: durable claims, queue persistence, preview gate, templates."""
 
 from __future__ import annotations
@@ -10,8 +9,6 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _TEST_ROOT = tempfile.mkdtemp(prefix="linas_wave4_")
 os.environ["LINASBOT_DATA_ROOT"] = _TEST_ROOT
@@ -69,9 +66,7 @@ class TestSmartMessagingPersistence:
         monkeypatch.setattr(
             ps, "PENDING_SMART_MESSAGES_FILE", tmp_path / "smart_messaging" / "pending_smart_messages.json"
         )
-        monkeypatch.setattr(
-            ps, "SENT_SMART_MESSAGES_FILE", tmp_path / "smart_messaging" / "sent_smart_messages.json"
-        )
+        monkeypatch.setattr(ps, "SENT_SMART_MESSAGES_FILE", tmp_path / "smart_messaging" / "sent_smart_messages.json")
         monkeypatch.setattr(ps, "MESSAGE_TEMPLATES_FILE", tmp_path / "smart_messaging" / "message_templates.json")
         monkeypatch.setattr(ps, "APP_SETTINGS_FILE", tmp_path / "settings" / "app_settings.json")
         monkeypatch.setattr(
@@ -181,9 +176,10 @@ class TestReadyEndpoint:
         asyncio.set_event_loop(loop)
         try:
             from fastapi.testclient import TestClient
-            from modules.core import app
+
             import modules.dashboard_api  # noqa: F401
             from modules.api_security import is_public_api
+            from modules.core import app
 
             assert is_public_api("GET", "/api/ready")
             client = TestClient(app)

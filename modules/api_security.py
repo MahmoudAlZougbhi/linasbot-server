@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Deny-by-default API authentication, CSRF, rate limits, and RBAC.
 
@@ -10,7 +9,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -24,7 +23,6 @@ from services.dashboard_session_service import (
     session_service,
 )
 from services.rate_limit_service import rate_limit_service
-
 
 # Frontend-aligned permission keys
 PERMISSION_KEYS = {
@@ -40,7 +38,7 @@ PERMISSION_KEYS = {
     "activityFlow",
 }
 
-SYSTEM_ROLE_PERMISSIONS: Dict[str, Dict[str, bool]] = {
+SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
     "admin": {k: True for k in PERMISSION_KEYS},
     "operator": {
         "dashboard": True,
@@ -74,7 +72,7 @@ def is_production_env() -> bool:
     return env in {"prod", "production"}
 
 
-def resolve_permissions(role: str, custom: Optional[Dict[str, bool]]) -> Dict[str, bool]:
+def resolve_permissions(role: str, custom: dict[str, bool] | None) -> dict[str, bool]:
     base = dict(SYSTEM_ROLE_PERMISSIONS.get(role) or SYSTEM_ROLE_PERMISSIONS["viewer"])
     if role == "admin":
         return {k: True for k in PERMISSION_KEYS}
@@ -91,7 +89,7 @@ def user_has_permission(session: SessionRecord, permission: str) -> bool:
 
 
 # Exact public API paths (method, path)
-_PUBLIC_EXACT: Set[Tuple[str, str]] = {
+_PUBLIC_EXACT: set[tuple[str, str]] = {
     ("GET", "/api/health"),
     ("GET", "/api/ready"),
     ("POST", "/api/auth/login"),
@@ -100,7 +98,7 @@ _PUBLIC_EXACT: Set[Tuple[str, str]] = {
 }
 
 # Prefix public (rare)
-_PUBLIC_PREFIX: Tuple[str, ...] = ()
+_PUBLIC_PREFIX: tuple[str, ...] = ()
 
 
 def _normalize_path(path: str) -> str:
@@ -122,12 +120,11 @@ def is_public_api(method: str, path: str) -> bool:
     return False
 
 
-def required_permission_for(method: str, path: str) -> Optional[str]:
+def required_permission_for(method: str, path: str) -> str | None:
     """
     Return permission key required for path, or None if authenticated-any is enough.
     """
     p = _normalize_path(path)
-    m = method.upper()
 
     if p.startswith("/api/auth/users"):
         return "userManagement"
@@ -148,7 +145,12 @@ def required_permission_for(method: str, path: str) -> Optional[str]:
         return "training"
     if p.startswith("/api/content-files") or p.startswith("/api/retrieval-debug"):
         return "contentManagers"
-    if p.startswith("/api/local-qa") or p.startswith("/api/faq") or p.startswith("/api/qa") or p.startswith("/api/training"):
+    if (
+        p.startswith("/api/local-qa")
+        or p.startswith("/api/faq")
+        or p.startswith("/api/qa")
+        or p.startswith("/api/training")
+    ):
         return "training"
     if p.startswith("/api/feedback"):
         return "training"
@@ -183,7 +185,7 @@ def _client_ip(request: Request) -> str:
     return "unknown"
 
 
-def check_rate_limit(request: Request, path: str) -> Optional[JSONResponse]:
+def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
     ip = _client_ip(request)
     rules = []
     if path == "/api/auth/login":
@@ -203,7 +205,7 @@ def check_rate_limit(request: Request, path: str) -> Optional[JSONResponse]:
     return None
 
 
-def get_request_session(request: Request) -> Optional[SessionRecord]:
+def get_request_session(request: Request) -> SessionRecord | None:
     return getattr(request.state, "dashboard_session", None)
 
 
@@ -222,7 +224,7 @@ def require_permission(request: Request, permission: str) -> SessionRecord:
 
 
 class DashboardAuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         path = _normalize_path(request.url.path)
         method = request.method.upper()
 
@@ -280,13 +282,13 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
 _SOCIAL_USER_RE = re.compile(r"^(instagram|facebook):", re.I)
 
 
-def is_social_user_id(user_id: Optional[str]) -> bool:
+def is_social_user_id(user_id: str | None) -> bool:
     if not user_id:
         return False
     return bool(_SOCIAL_USER_RE.match(str(user_id).strip()))
 
 
-def reject_social_operator_mutation(user_id: Optional[str], channel: Optional[str] = None) -> None:
+def reject_social_operator_mutation(user_id: str | None, channel: str | None = None) -> None:
     """Raise 403 if operator mutation targets Instagram/Facebook conversation."""
     ch = (channel or "").strip().lower()
     if ch in {"instagram", "facebook"} or is_social_user_id(user_id):

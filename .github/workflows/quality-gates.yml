@@ -1,0 +1,119 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches: [main, fix/**]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Ruff lint (security/reliability + wave tests)
+        run: >
+          ruff check
+          services/durable_event_claim.py
+          services/ssrf_guard.py
+          services/safe_path.py
+          services/rate_limit_service.py
+          modules/api_security.py
+          tests/test_wave1_security.py
+          tests/test_wave2_social_routing.py
+          tests/test_wave3_metrics.py
+          tests/test_wave4_reliability.py
+          tests/conftest.py
+      - name: Ruff format check (same scope)
+        run: >
+          ruff format --check
+          services/durable_event_claim.py
+          services/ssrf_guard.py
+          services/safe_path.py
+          services/rate_limit_service.py
+          modules/api_security.py
+          tests/test_wave1_security.py
+          tests/test_wave2_social_routing.py
+          tests/test_wave3_metrics.py
+          tests/test_wave4_reliability.py
+          tests/conftest.py
+      - name: Mypy (strict security/reliability core)
+        run: mypy --config-file mypy.ini services/durable_event_claim.py services/ssrf_guard.py services/safe_path.py modules/api_security.py
+      - name: Backend tests
+        env:
+          OPENAI_API_KEY: sk-test-ci-not-real
+          LINASLASER_API_BASE_URL: https://example.com
+          LINASLASER_API_TOKEN: ci-token
+          DASHBOARD_AUTH_SECRET: ci-dashboard-secret
+          ENVIRONMENT: test
+          DISABLE_API_DOCS: "true"
+        run: pytest tests/ -q --tb=short
+      - name: Dependency audit
+        run: pip-audit -r requirements.txt --strict
+      - name: Bandit security lint (high+)
+        run: bandit -q -r services modules utils -x '*/tests/*' -lll
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Audit (production deps; CRA transitive leftovers reported)
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=critical || {
+            echo "Critical production vulnerabilities remain after overrides — failing gate"
+            exit 1
+          }
+      - name: Test
+        run: CI=true npm test -- --watchAll=false
+      - name: Build
+        run: npm run build
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret patterns
+        run: |
+          set -euo pipefail
+          if command -v rg >/dev/null; then RG=rg; else RG="grep -RInE"; fi
+          if $RG -n --glob '!*.md' --glob '!.env*' --glob '!node_modules/**' --glob '!.venv*' \
+              -e 'sk-proj-[A-Za-z0-9_-]{20,}' \
+              -e 'EAA[A-Za-z0-9]{30,}' \
+              -e 'admin123' \
+              . ; then
+            echo "Potential secret or default password found"
+            exit 1
+          fi
+          echo "Secret scan passed"
+
+  deploy-readiness:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, secret-scan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Document readiness gate (no production deploy)
+        run: |
+          set -euo pipefail
+          echo "Quality gates passed. Production deploy is NOT executed in this workflow."
+          echo "Required release check: GET /api/ready must return ok=true after deploy."
+          echo "Rollback artifact: previous container image tag / previous git SHA on main."
+          test -f docs/AUDIT_CLOSURE_LEDGER.md
+          test -f .github/workflows/deploy.yml

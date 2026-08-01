@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
 """SSRF-safe URL validation for server-side fetches."""
 
 from __future__ import annotations
 
 import ipaddress
 import socket
-from typing import FrozenSet, Iterable, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
 from urllib.parse import urlparse, urlunparse
 
-
-DEFAULT_ALLOWED_HOST_SUFFIXES: FrozenSet[str] = frozenset(
+DEFAULT_ALLOWED_HOST_SUFFIXES: frozenset[str] = frozenset(
     {
         "firebasestorage.googleapis.com",
         "storage.googleapis.com",
@@ -66,7 +64,7 @@ def _host_allowed(hostname: str, allowed_suffixes: Iterable[str]) -> bool:
     return False
 
 
-def _ip_blocked(ip: ipaddress._BaseAddress) -> bool:
+def _ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
         return True
     if ip.is_unspecified:
@@ -80,8 +78,8 @@ def _ip_blocked(ip: ipaddress._BaseAddress) -> bool:
 def resolve_and_validate_host(
     hostname: str,
     *,
-    allowed_suffixes: Optional[Sequence[str]] = None,
-) -> Tuple[str, Sequence[str]]:
+    allowed_suffixes: Sequence[str] | None = None,
+) -> tuple[str, Sequence[str]]:
     """Validate hostname allowlist and DNS resolution targets."""
     suffixes = tuple(allowed_suffixes) if allowed_suffixes is not None else tuple(DEFAULT_ALLOWED_HOST_SUFFIXES)
     host = (hostname or "").strip().lower().rstrip(".")
@@ -124,7 +122,7 @@ def validate_fetch_url(
     url: str,
     *,
     allowed_schemes: Sequence[str] = ("https",),
-    allowed_suffixes: Optional[Sequence[str]] = None,
+    allowed_suffixes: Sequence[str] | None = None,
     allow_http_for_local_dev: bool = False,
 ) -> str:
     """
@@ -149,7 +147,5 @@ def validate_fetch_url(
         raise SSRFValidationError("URL host is required")
     resolve_and_validate_host(parsed.hostname, allowed_suffixes=allowed_suffixes)
     # Rebuild without fragments
-    normalized = urlunparse(
-        (scheme, parsed.netloc.lower(), parsed.path or "", parsed.params, parsed.query, "")
-    )
+    normalized = urlunparse((scheme, parsed.netloc.lower(), parsed.path or "", parsed.params, parsed.query, ""))
     return normalized

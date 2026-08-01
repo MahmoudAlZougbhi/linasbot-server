@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Durable event/outbound claim helpers for multi-instance safety.
 
@@ -15,14 +14,13 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 from storage.persistent_storage import LOGS_DIR, ensure_dirs
 
 
 def _claims_dir() -> Path:
     ensure_dirs()
-    d = LOGS_DIR / "durable_claims"
+    d = Path(LOGS_DIR) / "durable_claims"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -38,7 +36,7 @@ def _is_already_exists(exc: BaseException) -> bool:
 
 
 def _file_claim_path(namespace: str, key: str) -> Path:
-    digest = hashlib.sha256(f"{namespace}\0{key}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{namespace}\0{key}".encode()).hexdigest()
     return _claims_dir() / namespace / f"{digest}.json"
 
 
@@ -116,7 +114,7 @@ async def try_claim_event(
     key: str,
     *,
     ttl_seconds: float = 300.0,
-    firestore_collection: Optional[str] = None,
+    firestore_collection: str | None = None,
 ) -> bool:
     """
     Return True if this worker owns the event and should process it.
@@ -129,8 +127,9 @@ async def try_claim_event(
     coll = (firestore_collection or ns).strip()
 
     try:
-        from utils.utils import get_firestore_db
         from google.cloud import firestore
+
+        from utils.utils import get_firestore_db
 
         db = get_firestore_db()
     except Exception:
@@ -138,15 +137,10 @@ async def try_claim_event(
         firestore = None  # type: ignore
 
     if db is not None and firestore is not None:
-        doc_id = hashlib.sha256(f"{ns}\0{mid}".encode("utf-8")).hexdigest()
-        ref = (
-            db.collection("artifacts")
-            .document("linas-ai-bot-backend")
-            .collection(coll)
-            .document(doc_id)
-        )
+        doc_id = hashlib.sha256(f"{ns}\0{mid}".encode()).hexdigest()
+        ref = db.collection("artifacts").document("linas-ai-bot-backend").collection(coll).document(doc_id)
 
-        def _create():
+        def _create() -> None:
             ref.create(
                 {
                     "created_at": firestore.SERVER_TIMESTAMP,
@@ -173,7 +167,7 @@ async def release_event_claim(
     namespace: str,
     key: str,
     *,
-    firestore_collection: Optional[str] = None,
+    firestore_collection: str | None = None,
 ) -> None:
     """Release a claim so a retry can reprocess after failure."""
     mid = (key or "").strip()
@@ -191,13 +185,8 @@ async def release_event_claim(
         db = None
     if not db:
         return
-    doc_id = hashlib.sha256(f"{ns}\0{mid}".encode("utf-8")).hexdigest()
-    ref = (
-        db.collection("artifacts")
-        .document("linas-ai-bot-backend")
-        .collection(coll)
-        .document(doc_id)
-    )
+    doc_id = hashlib.sha256(f"{ns}\0{mid}".encode()).hexdigest()
+    ref = db.collection("artifacts").document("linas-ai-bot-backend").collection(coll).document(doc_id)
     try:
         await asyncio.to_thread(ref.delete)
     except Exception as e:
@@ -208,7 +197,7 @@ async def complete_event_claim(
     namespace: str,
     key: str,
     *,
-    firestore_collection: Optional[str] = None,
+    firestore_collection: str | None = None,
 ) -> None:
     mid = (key or "").strip()
     if not mid:
@@ -217,8 +206,9 @@ async def complete_event_claim(
     await asyncio.to_thread(_file_complete, ns, mid)
     # Firestore create already proves ownership; leave doc as completed marker.
     try:
-        from utils.utils import get_firestore_db
         from google.cloud import firestore
+
+        from utils.utils import get_firestore_db
 
         db = get_firestore_db()
     except Exception:
@@ -226,13 +216,8 @@ async def complete_event_claim(
     if not db:
         return
     coll = (firestore_collection or ns).strip()
-    doc_id = hashlib.sha256(f"{ns}\0{mid}".encode("utf-8")).hexdigest()
-    ref = (
-        db.collection("artifacts")
-        .document("linas-ai-bot-backend")
-        .collection(coll)
-        .document(doc_id)
-    )
+    doc_id = hashlib.sha256(f"{ns}\0{mid}".encode()).hexdigest()
+    ref = db.collection("artifacts").document("linas-ai-bot-backend").collection(coll).document(doc_id)
     try:
         await asyncio.to_thread(
             ref.set,

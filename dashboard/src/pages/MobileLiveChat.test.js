@@ -1,25 +1,28 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import MobileLiveChat from "./MobileLiveChat";
+import "@testing-library/jest-dom";
 
 jest.mock("./LiveChat", () => {
-  const MockLiveChat = jest.fn(() => <div data-testid="mock-live-chat">LiveChat</div>);
+  const React = require("react");
   return {
     __esModule: true,
-    default: MockLiveChat,
+    default: function MockLiveChat(props) {
+      return React.createElement(
+        "div",
+        { "data-testid": "mock-live-chat", "data-mobile": props.mobile ? "true" : "false" },
+        "LiveChat"
+      );
+    },
   };
 });
 
-const LiveChat = require("./LiveChat").default;
+import MobileLiveChat from "./MobileLiveChat";
 
 describe("MobileLiveChat", () => {
   it("renders the shared live chat container in mobile mode", () => {
-    render(<MobileLiveChat />);
-
-    expect(screen.getByTestId("mock-live-chat")).toBeInTheDocument();
-    expect(LiveChat).toHaveBeenCalledWith(
-      expect.objectContaining({ mobile: true }),
-      expect.anything()
-    );
+    render(React.createElement(MobileLiveChat));
+    const node = screen.getByTestId("mock-live-chat");
+    expect(node).toBeTruthy();
+    expect(node.getAttribute("data-mobile")).toBe("true");
   });
 });

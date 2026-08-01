@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canonical path containment helpers for backup/restore/upload paths."""
 
 from __future__ import annotations
@@ -6,8 +5,6 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Optional, Union
-
 
 _UNSAFE_NAME = re.compile(r"[\x00]|[/\\]|\.\.")
 
@@ -29,7 +26,7 @@ def is_safe_relative_name(name: str) -> bool:
     return True
 
 
-def resolve_under_root(root: Union[str, Path], *parts: str) -> Path:
+def resolve_under_root(root: str | Path, *parts: str) -> Path:
     """
     Join parts under root and resolve. Raise ValueError if result escapes root.
     """
@@ -42,7 +39,7 @@ def resolve_under_root(root: Union[str, Path], *parts: str) -> Path:
     return candidate
 
 
-def resolve_backup_filename(root: Union[str, Path], filename: str, *, required_prefix: Optional[str] = None) -> Path:
+def resolve_backup_filename(root: str | Path, filename: str, *, required_prefix: str | None = None) -> Path:
     """
     Resolve a server-listed backup filename under root.
     Only plain basenames are accepted; optional prefix filter for known backups.

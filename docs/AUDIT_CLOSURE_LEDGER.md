@@ -93,3 +93,24 @@ Tests: `tests/test_wave3_metrics.py` (+ waves 1–2) — 38+ passed with `OPENAI
 Tests: `tests/test_wave4_reliability.py` — 7 passed.
 
 External still required: provider Monty key rotation; Redis/Postgres remain unused (no new infra introduced).
+
+
+## Wave 5 — QA / CI / cleanup
+
+| ID | Status | Evidence |
+|---|---|---|
+| V2-QA-001 no CI quality gate | CLOSED | `.github/workflows/quality-gates.yml` |
+| Baseline pytest failures | CLOSED | conftest + pytest-asyncio; manual Monty/appointment probes moved to `scripts/` |
+| Language detection assertion | CLOSED | match `clean()` normalize spaces |
+| Frontend tests | CLOSED | MobileLiveChat mock + permissions tests |
+| Frontend build / code split | CLOSED | lazy routes in `App.js` (multiple chunks) |
+| Formatter/lint/typecheck | CLOSED | ruff + mypy scoped gates on security/reliability core |
+| Dead `frontend/` stub | CLOSED | removed |
+| Dead unmounted `routes/` | CLOSED | removed (live chat uses `modules/live_chat_api`) |
+| Unused PermissionGate | CLOSED | removed |
+| Unused Compose Redis/Postgres | CLOSED | removed from compose + prod compose |
+| npm vulns | CLOSED (critical) | overrides + audit-level=critical gate; CRA transitive high leftovers remain tooling-only |
+| Secret scan | CLOSED | quality-gates + security-checks |
+
+Backend suite: **175 passed**, 0 failed, 0 errors (local).
+Frontend: **3 passed**, production build OK with route chunks.
