@@ -82,8 +82,10 @@ const Testing = () => {
   );
   const chatEndRef = useRef(null);
 
-  // Hardcoded provider - MontyMobile (default)
+  // Hardcoded provider - MontyMobile (default for WhatsApp-style lab)
   const selectedProvider = "montymobile";
+  // Meta social parity: when set, backend uses process_meta_social_event (capture-only)
+  const [socialChannel, setSocialChannel] = useState("");
 
   const resolvedPhone = useMemo(() => {
     const normalizedPhone = (userPhone || "").trim();
@@ -91,8 +93,8 @@ const Testing = () => {
   }, [userPhone]);
 
   const activeChatKey = useMemo(
-    () => `${selectedProvider}:${resolvedPhone}`,
-    [selectedProvider, resolvedPhone]
+    () => `${selectedProvider}:${socialChannel || "wa"}:${resolvedPhone}`,
+    [selectedProvider, socialChannel, resolvedPhone]
   );
 
   const activeChatMessages = useMemo(
@@ -246,7 +248,8 @@ const Testing = () => {
       const result = await testMessageWithProvider(
         outgoingMessage,
         selectedProvider,
-        phoneForTest
+        phoneForTest,
+        socialChannel || null
       );
       const responseTime = Date.now() - startTime;
       const outputText =
@@ -638,6 +641,25 @@ const Testing = () => {
                                 placeholder="961XXXXXXXX"
                                 className="input-field w-full text-sm"
                               />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-purple-700 mb-1">
+                                Channel (parity)
+                              </label>
+                              <select
+                                value={socialChannel}
+                                onChange={(e) => setSocialChannel(e.target.value)}
+                                className="input-field w-full text-sm"
+                              >
+                                <option value="">WhatsApp-style lab (legacy)</option>
+                                <option value="instagram">Instagram (Meta social parity)</option>
+                                <option value="facebook">Facebook (Meta social parity)</option>
+                              </select>
+                              {socialChannel && (
+                                <p className="mt-1 text-xs text-purple-600">
+                                  Uses production social processor; Graph send is simulated only.
+                                </p>
+                              )}
                             </div>
                           </div>
                           {userType === "admin" && (

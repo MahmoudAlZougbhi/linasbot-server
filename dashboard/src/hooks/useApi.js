@@ -406,26 +406,35 @@ export const useApi = () => {
     }
   }, []);
 
-  // Test message with provider
+  // Test message with provider (optional channel=instagram|facebook for Meta parity)
   const testMessageWithProvider = useCallback(
-    async (message, provider = currentProvider, userPhone = "") => {
+    async (message, provider = currentProvider, userPhone = "", channel = null) => {
       try {
         setLoading(true);
-        const response = await api.post("/api/test-message", {
+        const payload = {
           phone: userPhone || "123456789",
           message,
           provider,
-        });
-        toast.success("Message processed successfully!");
-        return response.data;
+        };
+        if (channel === "instagram" || channel === "facebook") {
+          payload.channel = channel;
+        }
+        const response = await api.post("/api/test-message", payload);
+        const data = response.data || {};
+        if (data.simulation || data.parity_mode === "meta_social") {
+          toast.success("Simulated Meta social path (no external Graph send)");
+        } else {
+          toast.success("Message processed successfully!");
+        }
+        return data;
       } catch (error) {
-        // Handle network error with mock response
+        // Never fake a green bot reply when the backend is offline
         if (error.code === "ERR_NETWORK") {
-          toast.info("Backend offline - showing mock response");
+          toast.error("Backend offline — cannot run Testing Lab");
           return {
-            success: true,
-            bot_response: `Mock response from ${provider}: ${message}`,
-            response_time_ms: 100,
+            success: false,
+            error: "Backend offline",
+            bot_response: "",
             provider,
           };
         }
