@@ -35,6 +35,7 @@ if os.path.exists(DASHBOARD_BUILD_PATH):
 # Import all modules to register routes and events
 import modules.event_handlers
 import modules.webhook_handlers
+import modules.meta_messaging_webhook
 import modules.whatsapp_adapters
 import modules.dashboard_api
 import modules.qa_api
@@ -76,6 +77,7 @@ if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
             or full_path.startswith("static/")
             or full_path.startswith("downloads/")
             or full_path == "webhook"
+            or full_path.startswith("webhook/")
         ):
             raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(INDEX_HTML_PATH)

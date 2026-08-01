@@ -953,6 +953,55 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     print(f"[_process_and_respond] 🌐 Language detected: {current_preferred_lang} → respond in: {response_language}")
     # =====================================
 
+    # Instagram/Facebook never create or manage appointments inside the social DM.
+    # Route booking and human-agent requests to the correct branch/gender WhatsApp contact
+    # before any GPT or CRM tool can run.
+    from services.social_contact_routing import (
+        is_social_channel,
+        route_social_contact_request,
+    )
+
+    if is_social_channel(user_data.get("channel")):
+        if user_data.get("user_preferred_lang") != current_preferred_lang:
+            user_persistence.save_user_language(user_id, current_preferred_lang)
+        social_route = route_social_contact_request(
+            user_input_to_process,
+            user_data,
+            current_gender,
+            current_preferred_lang,
+        )
+        if social_route:
+            if social_route.gender in ("male", "female"):
+                gender_changed = config.user_gender.get(user_id) != social_route.gender
+                config.user_gender[user_id] = social_route.gender
+                current_gender = social_route.gender
+                if gender_changed:
+                    try:
+                        await user_persistence.save_user_gender(
+                            user_id,
+                            social_route.gender,
+                            phone=user_data.get("phone_number"),
+                            name=user_name,
+                        )
+                    except Exception as social_gender_error:
+                        print(f"[_process_and_respond] social gender persistence skipped: {social_gender_error}")
+            await send_message_func(user_id, social_route.reply)
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                social_route.reply,
+                current_conversation_id,
+                user_name,
+                user_data.get("phone_number"),
+                metadata={
+                    "handled_by": "deterministic_social_router",
+                    "channel": user_data.get("channel"),
+                    "social_contact_intent": social_route.intent,
+                    "social_contact_env": social_route.contact_env,
+                },
+            )
+            return
+
     # DEBUG: Log gender state at start of processing
     print(f"[_process_and_respond] 🔍 USER STATE for {user_id}:")
     print(f"   - current_gender: '{current_gender}'")
@@ -1129,6 +1178,33 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 1. Human handover (top priority) - transfer immediately
     if (not ai_primary_mode) and router_action == "human_handover":
+        if is_social_channel(user_data.get("channel")):
+            social_route = route_social_contact_request(
+                user_input_to_process,
+                user_data,
+                current_gender,
+                current_preferred_lang,
+                force_intent="human",
+            )
+            if social_route:
+                await send_message_func(user_id, social_route.reply)
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    social_route.reply,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={
+                        "handled_by": "deterministic_social_router",
+                        "channel": user_data.get("channel"),
+                        "social_contact_intent": social_route.intent,
+                        "social_contact_env": social_route.contact_env,
+                        "source": "router_human_handover_social",
+                    },
+                )
+            return
+
         async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str) -> bool:
             from utils.utils import (
                 conversation_any_path_post_release_blocked,
@@ -1874,6 +1950,37 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         )
         action = "answer_question"
 
+    if is_social_channel(user_data.get("channel")):
+        social_force_intent = None
+        if action in {
+            "human_handover",
+            "human_handover_confirmed",
+            "human_handover_initial_ask",
+        }:
+            social_force_intent = "human"
+        elif action in {
+            "confirm_booking_details",
+            "ask_for_details_for_booking",
+            "confirm_appointment_reschedule",
+            "ask_for_service_type",
+            "ask_for_tattoo_photo",
+        }:
+            social_force_intent = "booking"
+        if social_force_intent:
+            social_route = route_social_contact_request(
+                user_input_to_process,
+                user_data,
+                current_gender,
+                current_preferred_lang,
+                force_intent=social_force_intent,
+            )
+            if social_route:
+                action = "answer_question"
+                bot_reply_text = social_route.reply
+                handover_degree = "none"
+                escalation_reason_from_gpt = None
+                user_data["awaiting_human_handover_confirmation"] = False
+
     def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []
         for candidate in [canonical_user_id, raw_user_id]:
@@ -1909,6 +2016,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             merge_conversation_user_id_variants,
             update_conversation_on_all_existing_paths,
         )
+
+        # Instagram/Facebook must never enter the dashboard human-takeover queue.
+        if is_social_channel(user_data.get("channel")):
+            print(
+                f"[_activate_ai_handover] blocked for social channel "
+                f"channel={user_data.get('channel')} trigger={trigger_source}"
+            )
+            return False
 
         wrote = False
         db = get_firestore_db()
@@ -2208,31 +2323,75 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     else:
         # Unexpected action → hand over to human instead of generic error
-        _flow_error_reason = f"Step: Bot → User | Unexpected action: '{action}'"
-        print(f"[_process_and_respond] ERROR: Unexpected action '{action}' → handing over to human. bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}")
-        handover_ok = await _activate_ai_handover(
-            escalation_reason=escalation_reason_from_gpt or "technical_error",
-            trigger_source="unexpected_action"
-        )
-        if handover_ok:
-            handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
-            sent_reply = handoff_msg
-            await send_message_func(user_id, handoff_msg)
-            await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-            log_report_event("human_handover", user_id, current_gender, {
-                "message": user_input_to_process,
-                "status": "direct",
-                "source": "unexpected_action"
-            })
-            await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
-        else:
-            fallback = (bot_reply_text or "").strip() or (
-                get_dynamic_message("generic_error_message", current_preferred_lang)
-                or "عذراً، صار خطأ بسيط. جرّب توضّح طلبك مرة ثانية."
+        # Social DMs never enter dashboard takeover; route to WhatsApp contact instead.
+        if is_social_channel(user_data.get("channel")):
+            social_route = route_social_contact_request(
+                user_input_to_process,
+                user_data,
+                current_gender,
+                current_preferred_lang,
+                force_intent="human",
             )
-            sent_reply = fallback
-            await send_message_func(user_id, fallback)
-            await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            if social_route:
+                sent_reply = social_route.reply
+                await send_message_func(user_id, social_route.reply)
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    social_route.reply,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={
+                        "handled_by": "deterministic_social_router",
+                        "channel": user_data.get("channel"),
+                        "social_contact_intent": social_route.intent,
+                        "social_contact_env": social_route.contact_env,
+                        "source": "unexpected_action_social",
+                    },
+                )
+            else:
+                fallback = (bot_reply_text or "").strip() or (
+                    get_dynamic_message("generic_error_message", current_preferred_lang)
+                    or "عذراً، صار خطأ بسيط. جرّب توضّح طلبك مرة ثانية."
+                )
+                sent_reply = fallback
+                await send_message_func(user_id, fallback)
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    fallback,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={"handled_by": "ai", "channel": user_data.get("channel")},
+                )
+        else:
+            _flow_error_reason = f"Step: Bot → User | Unexpected action: '{action}'"
+            print(f"[_process_and_respond] ERROR: Unexpected action '{action}' → handing over to human. bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}")
+            handover_ok = await _activate_ai_handover(
+                escalation_reason=escalation_reason_from_gpt or "technical_error",
+                trigger_source="unexpected_action"
+            )
+            if handover_ok:
+                handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+                sent_reply = handoff_msg
+                await send_message_func(user_id, handoff_msg)
+                await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+                log_report_event("human_handover", user_id, current_gender, {
+                    "message": user_input_to_process,
+                    "status": "direct",
+                    "source": "unexpected_action"
+                })
+                await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+            else:
+                fallback = (bot_reply_text or "").strip() or (
+                    get_dynamic_message("generic_error_message", current_preferred_lang)
+                    or "عذراً، صار خطأ بسيط. جرّب توضّح طلبك مرة ثانية."
+                )
+                sent_reply = fallback
+                await send_message_func(user_id, fallback)
+                await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
 
     # Keep yes/no booking-follow-up state when we explicitly ask:
     # "Would you like to book a new appointment?"

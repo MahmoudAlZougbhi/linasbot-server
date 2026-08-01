@@ -3061,9 +3061,16 @@ async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Opti
 async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None, last_ai_response_at: Optional[datetime.datetime] = None, user_image_base64: str = None, user_image_format: str = "jpeg") -> dict:
     user_name = config.user_names.get(user_id, "client")
     current_gender_attempts = config.gender_attempts.get(user_id, 0)
+    social_channel = str(
+        config.user_data_whatsapp.get(user_id, {}).get("channel") or ""
+    ).strip().lower() in {"instagram", "facebook"}
 
     # Extract customer phone number (without country code for API calls)
-    customer_phone_full = config.user_data_whatsapp.get(user_id, {}).get('phone_number')
+    customer_phone_full = (
+        None
+        if social_channel
+        else config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+    )
 
     # CRITICAL: Sync CRM lookup when we have phone but no known name (fixes race: defer_external
     # runs in background, so AI was called before CRM name arrived - bot asked for name when customer has file)
@@ -3167,7 +3174,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     try:
         from services.booking import booking_fsm as _booking_fsm_mod
 
-        if _booking_fsm_mod.fsm_enabled():
+        if _booking_fsm_mod.fsm_enabled() and not social_channel:
             if not (
                 is_reschedule_intent
                 or is_appointment_inquiry_intent
@@ -3404,6 +3411,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"{customer_file_summary}"
         + ((f"\n\n{booking_fsm_prompt_block}") if booking_fsm_prompt_block else "")
     )
+    if social_channel:
+        dynamic_customer_context += (
+            "\n\n**SOCIAL CHANNEL POLICY (MANDATORY):**\n"
+            "- This conversation is on Instagram/Facebook, not WhatsApp.\n"
+            "- Never create, change, cancel, confirm, list, or check an appointment or customer CRM record here.\n"
+            "- Never claim an appointment is booked or submitted.\n"
+            "- Appointment and human-agent requests are handled by a deterministic server router that asks for branch/gender and provides a WhatsApp-only contact.\n"
+            "- You may answer general questions about services, prices, branches, preparation, and policies normally.\n"
+        )
 
     # Compact customer context for Activity Flow visibility (what Bot sends to AI about this customer)
     _file_raw = customer_file_summary.strip().lstrip("\n") if customer_file_summary else ""
@@ -3616,7 +3632,34 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             model=selected_model,
             messages=messages,
             temperature=0.7,
-            tools=get_openai_tools_schema(),
+            tools=get_openai_tools_schema(
+                excluded_tool_names={
+                    "update_customer_profile",
+                    "submit_booking_intent",
+                    "create_appointment",
+                    "update_appointment_date",
+                    "update_paused_appointment",
+                    "edit_appointment",
+                    "resume_appointment",
+                    "sync_appointment_agreed_price",
+                    "send_appointment_reminders",
+                    "check_next_appointment",
+                    "get_appointment_details",
+                    "check_appointment_payment",
+                    "get_customer_sessions",
+                    "get_sessions_count_by_phone",
+                    "move_client_branch",
+                    "get_customer_by_phone",
+                    "check_customer_gender",
+                    "create_customer",
+                    "add_customer_note",
+                    "get_all_customers",
+                    "get_clients_without_today",
+                    "get_missed_appointments",
+                }
+                if social_channel
+                else None
+            ),
             tool_choice="auto",
             response_format={"type": "json_object"}
         )
@@ -5425,7 +5468,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         else:
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
 
-        if not tool_calls:
+        if not tool_calls and not social_channel:
             direct_submit_args = _extract_direct_submit_booking_args_from_user_message(
                 user_input,
                 phone=customer_phone_clean
@@ -5478,7 +5521,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         try:
             from services.booking import booking_fsm as _bfsm_patch
 
-            if _bfsm_patch.fsm_enabled():
+            if _bfsm_patch.fsm_enabled() and not social_channel:
                 _bp = parsed_response.get("booking_fsm_patch")
                 if isinstance(_bp, dict) and _bp:
                     _bfsm_patch.merge_patch(user_id, _bp)
@@ -5504,7 +5547,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         try:
             from services.booking import booking_fsm as _bfsm_guard
 
-            if _bfsm_guard.fsm_enabled():
+            if _bfsm_guard.fsm_enabled() and not social_channel:
                 br2, _gmeta = _bfsm_guard.guard_bot_reply_booking_identity(
                     user_id,
                     parsed_response.get("bot_reply") or "",
@@ -5538,7 +5581,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
             _dg_final = parsed_response.get("detected_gender")
             if (
-                _bfsm_lock_g.fsm_enabled()
+                not social_channel
+                and _bfsm_lock_g.fsm_enabled()
                 and _dg_final in ("male", "female")
                 and (config.user_booking_state.get(user_id) or {}).get("booking_fsm", {}).get("active")
             ):
@@ -5560,7 +5604,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         )
 
         if (
-            tool_calls
+            not social_channel
+            and tool_calls
             and "submit_booking_intent" not in tool_names
             and "create_appointment" not in tool_names
             and not api_failure_reason
@@ -5631,7 +5676,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         # Model sometimes puts create_appointment-shaped JSON in the assistant text but only calls get_machines.
         if (
-            tool_calls
+            not social_channel
+            and tool_calls
             and "create_appointment" not in tool_names
             and "submit_booking_intent" not in tool_names
             and not api_failure_reason

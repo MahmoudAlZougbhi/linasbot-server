@@ -199,6 +199,9 @@ async def handle_message(
 
         source_message_id = user_data.pop("_source_message_id", None)
         message_metadata = {"type": "text"}
+        channel = str(user_data.get("channel") or "").strip().lower()
+        if channel:
+            message_metadata["channel"] = channel
         if source_message_id:
             message_metadata["source_message_id"] = source_message_id
         record_inbound_mid_for_ai_turn(user_data, source_message_id)

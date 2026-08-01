@@ -825,11 +825,16 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     }
     if crm_exists is not None:
         customer_info["crm_customer_exists"] = bool(crm_exists)
+    channel = str(user_data.get("channel") or "").strip().lower()
+    if channel:
+        customer_info["channel"] = channel
 
     def _build_message_data() -> dict:
         safe_text = text if isinstance(text, str) else str(text or "")
         detected_language = detect_language(safe_text)["language"]
         normalized_metadata = dict(metadata or {})
+        if channel:
+            normalized_metadata.setdefault("channel", channel)
         source_message_id = _extract_source_message_id(normalized_metadata)
         if source_message_id:
             normalized_metadata["source_message_id"] = source_message_id
@@ -2484,7 +2489,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
     return translations
 
 # NEW FUNCTION: Define API Tools in OpenAI Function Calling format
-def get_openai_tools_schema():
+def get_openai_tools_schema(excluded_tool_names=None):
     """
     Returns the list of tools available to the OpenAI model in its required schema format.
     These definitions are based on LinasLaser AI Agent API Documentation.pdf.
@@ -3240,6 +3245,13 @@ def get_openai_tools_schema():
             }
         },
     ]
+    excluded = {str(name).strip() for name in (excluded_tool_names or []) if str(name).strip()}
+    if excluded:
+        tools = [
+            tool
+            for tool in tools
+            if str((tool.get("function") or {}).get("name") or "").strip() not in excluded
+        ]
     return tools
 
 def get_system_instruction(

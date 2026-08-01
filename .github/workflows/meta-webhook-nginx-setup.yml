@@ -1,0 +1,227 @@
+name: Meta Webhook Nginx Setup
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: meta-webhook-nginx-setup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Fix Nginx + set Meta verify token
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Apply production Nginx + verify-token setup
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          envs: META_WEBHOOK_VERIFY_TOKEN
+          script: |
+            set -euo pipefail
+
+            if [ -z "${META_WEBHOOK_VERIFY_TOKEN:-}" ]; then
+              echo "META_WEBHOOK_VERIFY_TOKEN secret is empty"
+              exit 1
+            fi
+
+            echo "::add-mask::${META_WEBHOOK_VERIFY_TOKEN}"
+
+            NGINX_SITE=""
+            for candidate in \
+              /etc/nginx/sites-enabled/linasaibot \
+              /etc/nginx/sites-available/linasaibot \
+              /etc/nginx/sites-enabled/default \
+              /etc/nginx/sites-available/default
+            do
+              if [ -f "$candidate" ] && grep -qE 'linasaibot\.com|server_name' "$candidate"; then
+                NGINX_SITE="$candidate"
+                break
+              fi
+            done
+
+            if [ -z "$NGINX_SITE" ]; then
+              echo "Could not locate linasaibot nginx site config"
+              ls -la /etc/nginx/sites-available /etc/nginx/sites-enabled || true
+              exit 1
+            fi
+
+            echo "[setup] Using nginx site: $NGINX_SITE"
+            BACKUP="${NGINX_SITE}.bak.meta-webhook-$(date +%Y%m%d%H%M%S)"
+            sudo cp -a "$NGINX_SITE" "$BACKUP"
+            echo "[setup] Backup: $BACKUP"
+
+            export NGINX_SITE
+            sudo -E python3 <<'PY'
+            import os
+            import re
+            from pathlib import Path
+
+            path = Path(os.environ["NGINX_SITE"])
+            text = path.read_text()
+            original = text
+
+            webhook_block = """    # WhatsApp + Meta Messenger/Instagram webhooks (GET verify + POST events).
+                # ^~ prevents /webhook/* from falling through to the SPA try_files.
+                location ^~ /webhook {
+                    proxy_pass http://127.0.0.1:8003;
+                    proxy_http_version 1.1;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                }
+            """
+
+            if re.search(r"location\s+\^~\s+/webhook\b", text):
+                print("[setup] ^~ /webhook already present")
+            else:
+                # Normalize exact or prefix /webhook locations to ^~
+                text2, n = re.subn(
+                    r"location\s+=\s+/webhook\b",
+                    "location ^~ /webhook",
+                    text,
+                    count=1,
+                )
+                if n:
+                    text = text2
+                    print("[setup] Converted location = /webhook to ^~ /webhook")
+                else:
+                    text2, n = re.subn(
+                        r"location\s+/webhook\b",
+                        "location ^~ /webhook",
+                        text,
+                        count=1,
+                    )
+                    if n:
+                        text = text2
+                        print("[setup] Converted location /webhook to ^~ /webhook")
+                    else:
+                        marker = "location / {"
+                        idx = text.find(marker)
+                        if idx < 0:
+                            raise SystemExit("SPA location / { not found; refusing to patch")
+                        text = text[:idx] + webhook_block + "\n    " + text[idx:]
+                        print("[setup] Inserted ^~ /webhook block before SPA location /")
+
+            if text != original:
+                path.write_text(text)
+                print("[setup] Wrote updated nginx site config")
+            else:
+                print("[setup] Nginx site config unchanged")
+            PY
+
+            echo "[setup] nginx -t"
+            sudo nginx -t
+
+            echo "[setup] Reloading nginx"
+            if command -v systemctl >/dev/null 2>&1; then
+              sudo systemctl reload nginx
+            else
+              sudo service nginx reload
+            fi
+
+            upsert_env() {
+              local env_file="$1"
+              local key="$2"
+              local value="$3"
+              sudo mkdir -p "$(dirname "$env_file")"
+              if [ ! -f "$env_file" ]; then
+                sudo touch "$env_file"
+                sudo chmod 600 "$env_file"
+              fi
+              if sudo grep -qE "^${key}=" "$env_file"; then
+                sudo sed -i -E "s|^${key}=.*|${key}=${value}|" "$env_file"
+              else
+                printf '%s=%s\n' "$key" "$value" | sudo tee -a "$env_file" >/dev/null
+              fi
+            }
+
+            for env_file in /opt/linasbot/.env /opt/linasbot/linaslaserbot-2.7.22/.env; do
+              if [ -d "$(dirname "$env_file")" ]; then
+                echo "[setup] Updating $env_file"
+                upsert_env "$env_file" "META_WEBHOOK_VERIFY_TOKEN" "$META_WEBHOOK_VERIFY_TOKEN"
+                if sudo grep -qE '^META_SOCIAL_MESSAGING_ENABLED=' "$env_file"; then
+                  current="$(sudo grep -E '^META_SOCIAL_MESSAGING_ENABLED=' "$env_file" | tail -1 | cut -d= -f2-)"
+                  echo "[setup] META_SOCIAL_MESSAGING_ENABLED remains: $current"
+                else
+                  upsert_env "$env_file" "META_SOCIAL_MESSAGING_ENABLED" "false"
+                  echo "[setup] META_SOCIAL_MESSAGING_ENABLED set to false"
+                fi
+              fi
+            done
+
+            echo "[setup] Restarting linasbot to load verify token (WhatsApp untouched)"
+            sudo systemctl restart linasbot
+            sleep 5
+            sudo systemctl is-active linasbot
+
+            CHALLENGE="meta_challenge_$(date +%s)"
+            echo "[setup] Local backend verify with correct token"
+            CODE_OK="$(curl -sS -o /tmp/meta_ok_body -w '%{http_code}' --max-time 10 \
+              "http://127.0.0.1:8003/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=${META_WEBHOOK_VERIFY_TOKEN}&hub.challenge=${CHALLENGE}" || true)"
+            BODY_OK="$(cat /tmp/meta_ok_body 2>/dev/null || true)"
+            echo "local_correct_http=$CODE_OK"
+            if [ "$CODE_OK" != "200" ] || [ "$BODY_OK" != "$CHALLENGE" ]; then
+              echo "Local correct-token verification failed"
+              echo "body_preview=$(printf '%s' "$BODY_OK" | head -c 200)"
+              sudo journalctl -u linasbot -n 40 --no-pager || true
+              exit 1
+            fi
+
+            echo "[setup] Local backend verify with incorrect token"
+            CODE_BAD="$(curl -sS -o /tmp/meta_bad_body -w '%{http_code}' --max-time 10 \
+              "http://127.0.0.1:8003/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=${CHALLENGE}" || true)"
+            echo "local_incorrect_http=$CODE_BAD"
+            if [ "$CODE_BAD" = "200" ]; then
+              echo "Incorrect token unexpectedly accepted"
+              exit 1
+            fi
+
+            echo "[setup] Public incorrect-token check (must not be dashboard HTML)"
+            PUB_BAD_CODE="$(curl -sS -D /tmp/meta_pub_headers -o /tmp/meta_pub_body --max-time 15 \
+              "https://www.linasaibot.com/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=${CHALLENGE}" \
+              -w '%{http_code}' || true)"
+            PUB_CT="$(grep -i '^content-type:' /tmp/meta_pub_headers | tr -d '\r' || true)"
+            PUB_BODY_HEAD="$(head -c 120 /tmp/meta_pub_body || true)"
+            echo "public_incorrect_http=$PUB_BAD_CODE"
+            echo "public_incorrect_content_type=$PUB_CT"
+            if printf '%s' "$PUB_BODY_HEAD" | grep -qi '<!doctype html'; then
+              echo "Public endpoint still returning dashboard HTML"
+              exit 1
+            fi
+
+            echo "[setup] Public correct-token challenge"
+            PUB_OK_CODE="$(curl -sS -o /tmp/meta_pub_ok_body -w '%{http_code}' --max-time 15 \
+              "https://www.linasaibot.com/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=${META_WEBHOOK_VERIFY_TOKEN}&hub.challenge=${CHALLENGE}" || true)"
+            PUB_OK_BODY="$(cat /tmp/meta_pub_ok_body 2>/dev/null || true)"
+            echo "public_correct_http=$PUB_OK_CODE"
+            if [ "$PUB_OK_CODE" != "200" ] || [ "$PUB_OK_BODY" != "$CHALLENGE" ]; then
+              echo "Public correct-token verification failed"
+              echo "body_preview=$(printf '%s' "$PUB_OK_BODY" | head -c 200)"
+              exit 1
+            fi
+
+            WA_CODE="$(curl -sS -o /tmp/wa_body -w '%{http_code}' --max-time 10 \
+              "https://www.linasaibot.com/webhook" || true)"
+            echo "whatsapp_webhook_http=$WA_CODE"
+            if head -c 80 /tmp/wa_body | grep -qi '<!doctype html'; then
+              echo "WhatsApp /webhook unexpectedly returned HTML"
+              exit 1
+            fi
+
+            echo "[setup] SUCCESS"
+            echo "customer_messaging_not_enabled=true"
+            echo "whatsapp_preserved=true"
