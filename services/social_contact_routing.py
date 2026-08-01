@@ -1,16 +1,25 @@
-"""Deterministic WhatsApp routing for appointment and human-agent requests on social DMs."""
+"""Deterministic WhatsApp routing for appointment and human-agent requests on social DMs.
+
+Normal Instagram/Facebook messages must reach the canonical Linas AI. This module only
+intercepts after an explicit booking/human-agent (or tattoo-removal contact) intent, then
+collects missing branch/gender one field at a time before returning a WhatsApp handoff.
+"""
 
 from __future__ import annotations
 
 import os
 import re
+import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from services.conversation_router import get_gender_from_message, is_human_request
 
 
 SOCIAL_CHANNELS = {"instagram", "facebook"}
+
+# Pending handoff collection TTL (seconds). After expiry, the next message returns to AI.
+SOCIAL_CONTACT_FLOW_TTL_SECONDS = 30 * 60
 
 # Public business WhatsApp contacts (authoritative defaults). Env vars override per key.
 DEFAULT_SOCIAL_WHATSAPP_CONTACTS = {
@@ -46,6 +55,23 @@ _BEIRUT_RE = re.compile(
     r"rmle(?:h)?(?:\s*(?:el\s*)?bayda)?)",
     re.IGNORECASE | re.UNICODE,
 )
+_CANCEL_HANDOFF_RE = re.compile(
+    r"(?:"
+    r"\b(?:cancel|stop|never\s*mind|forget\s*it|no\s*thanks|quit)\b|"
+    r"إلغاء|الغي|بطّل|بطل|وليكن|ما\s*بدي|"
+    r"\b(?:cancel|annule|oublie|laisse\s*tomber)\b|"
+    r"\b(?:cancel|stop|ma\s*bade|ma\s*baddi|batal|batel)\b"
+    r")",
+    re.IGNORECASE | re.UNICODE,
+)
+_GREETING_ONLY_RE = re.compile(
+    r"^\s*(?:"
+    r"hello|hi|hey|yo|bonjour|salut|bonsoir|coucou|"
+    r"مرحبا|أهلا|اهلا|هلا|سلام|أهلين|اهلين|marhaba|mar7aba|ahla|"
+    r"good\s*morning|good\s*evening|good\s*afternoon"
+    r")[\s!?.]*$",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 @dataclass(frozen=True)
@@ -68,7 +94,6 @@ def is_appointment_request(message: str) -> bool:
 
 def detect_branch(message: str) -> Optional[str]:
     text = message or ""
-    # Prefer the more specific Antelias match when both appear.
     antelias = bool(_ANTELIAS_RE.search(text))
     beirut = bool(_BEIRUT_RE.search(text))
     if antelias and not beirut:
@@ -76,7 +101,6 @@ def detect_branch(message: str) -> Optional[str]:
     if beirut and not antelias:
         return "beirut"
     if antelias and beirut:
-        # Explicit Antelias usually wins when both are present ("not Beirut, Antelias").
         return "antelias"
     return None
 
@@ -102,13 +126,17 @@ def resolve_social_whatsapp_number(env_name: str) -> Optional[str]:
     return default.strip() if default else None
 
 
+def clear_social_contact_flow(user_data: dict) -> None:
+    """Clear legacy and channel-scoped pending social handoff state."""
+    user_data.pop("social_contact_flow", None)
+    for key in list(user_data.keys()):
+        if str(key).startswith("social_contact_flow::"):
+            user_data.pop(key, None)
+
+
 def _language(language: Optional[str]) -> str:
     value = str(language or "ar").strip().lower()
     return value if value in {"ar", "en", "fr", "franco"} else "ar"
-
-
-def _word_count(message: str) -> int:
-    return len([part for part in re.split(r"\s+", (message or "").strip()) if part])
 
 
 def _ask_branch(language: str) -> str:
@@ -185,13 +213,94 @@ def _tattoo_contact_reply(language: str, phone: str) -> str:
     )
 
 
-def _should_continue_active_flow(message: str) -> bool:
-    """Keep collecting branch/gender for short answers; let side questions reach the AI."""
-    if detect_branch(message) or get_gender_from_message(message):
+def _is_greeting_only(message: str) -> bool:
+    return bool(_GREETING_ONLY_RE.match((message or "").strip()))
+
+
+def _is_cancel_handoff(message: str) -> bool:
+    return bool(_CANCEL_HANDOFF_RE.search(message or ""))
+
+
+def _explicit_handoff_intent(message: str) -> Optional[str]:
+    if is_human_request(message):
+        return "human"
+    if is_appointment_request(message) or is_tattoo_removal_request(message):
+        return "booking"
+    return None
+
+
+def _flow_state_key(user_data: dict) -> str:
+    """Isolate pending handoff state by channel (+ meta account when present)."""
+    channel = str(user_data.get("channel") or "").strip().lower() or "unknown"
+    account = str(user_data.get("meta_account_id") or "").strip()
+    if account:
+        return f"social_contact_flow::{channel}::{account}"
+    return f"social_contact_flow::{channel}"
+
+
+def _get_flow_state(user_data: dict) -> dict:
+    key = _flow_state_key(user_data)
+    # Migrate legacy un-namespaced state once, only for the same channel.
+    legacy = user_data.get("social_contact_flow")
+    if isinstance(legacy, dict) and legacy.get("intent") and key not in user_data:
+        legacy_channel = str(legacy.get("channel") or "").strip().lower()
+        current = str(user_data.get("channel") or "").strip().lower()
+        if not legacy_channel or legacy_channel == current:
+            user_data[key] = dict(legacy)
+        user_data.pop("social_contact_flow", None)
+    state = user_data.get(key)
+    return state if isinstance(state, dict) else {}
+
+
+def _set_flow_state(user_data: dict, state: dict) -> None:
+    key = _flow_state_key(user_data)
+    state = dict(state)
+    state["channel"] = str(user_data.get("channel") or "").strip().lower()
+    state["meta_account_id"] = str(user_data.get("meta_account_id") or "").strip()
+    state["updated_at"] = time.time()
+    if "started_at" not in state:
+        state["started_at"] = state["updated_at"]
+    user_data[key] = state
+    # Never keep a cross-channel legacy blob around.
+    user_data.pop("social_contact_flow", None)
+
+
+def _clear_flow_state(user_data: dict) -> None:
+    user_data.pop(_flow_state_key(user_data), None)
+    user_data.pop("social_contact_flow", None)
+
+
+def _state_expired(state: dict) -> bool:
+    """Expire after SOCIAL_CONTACT_FLOW_TTL_SECONDS of inactivity (updated_at)."""
+    if not state:
+        return False
+    stamp = state.get("updated_at") or state.get("started_at")
+    try:
+        stamp_f = float(stamp)
+    except (TypeError, ValueError):
         return True
-    if is_appointment_request(message) or is_human_request(message) or is_tattoo_removal_request(message):
+    return (time.time() - stamp_f) > SOCIAL_CONTACT_FLOW_TTL_SECONDS
+
+
+def _is_valid_continuation(message: str, state: dict) -> bool:
+    """Only branch/gender answers (or re-stated handoff intent) continue a pending flow."""
+    if detect_branch(message):
         return True
-    return _word_count(message) <= 4
+    if get_gender_from_message(message):
+        return True
+    if _explicit_handoff_intent(message):
+        return True
+    return False
+
+
+def _is_topic_change_during_handoff(message: str, state: dict) -> bool:
+    """Greetings, cancels, or non-answer text while waiting for branch/gender → return to AI."""
+    if not state.get("intent"):
+        return False
+    if _is_cancel_handoff(message) or _is_greeting_only(message):
+        return True
+    # Waiting for a field but message is neither a valid answer nor a new handoff intent.
+    return not _is_valid_continuation(message, state)
 
 
 def route_social_contact_request(
@@ -201,26 +310,51 @@ def route_social_contact_request(
     language: Optional[str] = None,
     force_intent: Optional[str] = None,
 ) -> Optional[SocialContactRouteResult]:
-    """Return a deterministic reply when social DMs must be routed to WhatsApp."""
-    state = user_data.setdefault("social_contact_flow", {})
-    active_intent = state.get("intent")
+    """Return a deterministic WhatsApp-handoff reply only for explicit social handoff flows.
+
+    ``force_intent`` (from GPT/router) cannot start a new handoff by itself. A new flow
+    starts only when the user message explicitly requests booking/human/tattoo contact.
+    Pending branch/gender collection continues only on valid answers; greetings, cancels,
+    topic changes, and expired state return None so the canonical AI handles the message.
+    """
+    state = _get_flow_state(user_data)
+    if state and _state_expired(state):
+        _clear_flow_state(user_data)
+        state = {}
+
+    explicit = _explicit_handoff_intent(message)
+    active_intent = state.get("intent") if state.get("intent") in {"booking", "human"} else None
+
+    # GPT/router hints may continue an already-open flow, but never open a new one alone.
+    forced = force_intent if force_intent in {"booking", "human"} else None
 
     detected_intent = None
-    if force_intent in {"booking", "human"}:
-        detected_intent = force_intent
-    elif is_human_request(message):
-        detected_intent = "human"
-    elif is_appointment_request(message):
-        detected_intent = "booking"
-    elif active_intent in {"booking", "human"} and _should_continue_active_flow(message):
+    if explicit:
+        detected_intent = explicit
+    elif active_intent and _is_valid_continuation(message, state):
         detected_intent = active_intent
+    elif forced and active_intent == forced and _is_valid_continuation(message, state):
+        detected_intent = forced
+    elif forced and explicit:
+        detected_intent = forced
+
+    if active_intent and not detected_intent:
+        if _is_topic_change_during_handoff(message, state):
+            _clear_flow_state(user_data)
+        return None
 
     if not detected_intent:
         if not state:
-            user_data.pop("social_contact_flow", None)
+            _clear_flow_state(user_data)
         return None
 
+    if _is_cancel_handoff(message) and not explicit:
+        _clear_flow_state(user_data)
+        return None
+
+    state = dict(state) if state else {}
     state["intent"] = detected_intent
+
     detected_branch = detect_branch(message)
     if detected_branch:
         state["branch"] = detected_branch
@@ -236,8 +370,8 @@ def route_social_contact_request(
         gender = state["gender"]
 
     lang = _language(language)
+    _set_flow_state(user_data, state)
 
-    # Tattoo removal: Beirut-only, all genders, never ask Antelias/gender for contact selection.
     if tattoo:
         phone = resolve_social_whatsapp_number("SOCIAL_WHATSAPP_TATTOO_REMOVAL")
         if not phone:
@@ -250,7 +384,7 @@ def route_social_contact_request(
                 tattoo_removal=True,
             )
         reply = _tattoo_contact_reply(lang, phone)
-        user_data.pop("social_contact_flow", None)
+        _clear_flow_state(user_data)
         return SocialContactRouteResult(
             reply,
             detected_intent,
@@ -278,7 +412,7 @@ def route_social_contact_request(
         )
 
     reply = _laser_contact_reply(lang, branch, phone)
-    user_data.pop("social_contact_flow", None)
+    _clear_flow_state(user_data)
     return SocialContactRouteResult(
         reply,
         detected_intent,
@@ -286,3 +420,23 @@ def route_social_contact_request(
         gender=gender,
         contact_env=env_name,
     )
+
+
+def expire_social_contact_flows_in_user_data(user_data: dict) -> int:
+    """Clear expired/invalid social handoff blobs on a user_data dict. Returns cleared count."""
+    cleared = 0
+    for key in list(user_data.keys()):
+        if key != "social_contact_flow" and not str(key).startswith("social_contact_flow::"):
+            continue
+        state = user_data.get(key)
+        if not isinstance(state, dict) or not state.get("intent") or _state_expired(state):
+            user_data.pop(key, None)
+            cleared += 1
+    return cleared
+
+
+def reset_social_contact_flow_for_sender(user_data: dict) -> bool:
+    """Reset pending handoff for the current channel/account scope only."""
+    before = _get_flow_state(user_data)
+    _clear_flow_state(user_data)
+    return bool(before)

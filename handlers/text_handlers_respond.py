@@ -1203,71 +1203,72 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         "source": "router_human_handover_social",
                     },
                 )
-            return
-
-        async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str) -> bool:
-            from utils.utils import (
-                conversation_any_path_post_release_blocked,
-                merge_conversation_user_id_variants,
-                update_conversation_on_all_existing_paths,
-            )
-
-            wrote = False
-            db = get_firestore_db()
-            if db and current_conversation_id:
-                try:
-                    if await conversation_any_path_post_release_blocked(current_conversation_id, user_id):
-                        print("⚠️ router handover blocked: post-release cooldown on at least one path")
-                        return False
-                    payload = {
-                        "status": "waiting_human",
-                        "human_takeover_active": True,
-                        "human_takeover_requested": True,
-                        "operator_id": None,
-                        "conversation_state": "waiting_for_operator",
-                        "escalation_reason": escalation_reason,
-                        "escalation_time": datetime.datetime.now(),
-                        "last_updated": datetime.datetime.now(),
-                        "post_release_escalation_suppressed_until": None,
-                    }
-                    n = await update_conversation_on_all_existing_paths(
-                        current_conversation_id, user_id, payload
-                    )
-                    if n > 0:
-                        wrote = True
-                except Exception as e:
-                    print(f"⚠️ Failed to update handover state: {e}")
-            if not wrote:
-                return False
-            for vid in merge_conversation_user_id_variants("", user_id):
-                config.user_in_human_takeover_mode[vid] = True
-            notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification=f"AI handover - {escalation_reason}")
-            try:
-                from services.human_takeover_notification_service import human_takeover_notification_service
-                await human_takeover_notification_service.notify_and_audit_handoff(
-                    user_id=user_id, user_gender=current_gender, customer_name=user_name,
-                    customer_phone=user_data.get('phone_number', 'Unknown'),
-                    escalation_reason=escalation_reason, last_message=user_input_to_process,
-                    trigger_source=trigger_source, conversation_id=current_conversation_id,
-                    extra_details={"action": "router_human_handover"}
-                )
-            except Exception as notify_error:
-                print(f"⚠️ Failed to send handoff: {notify_error}")
-            return True
-
-        router_handover_ok = await _activate_ai_handover_router("customer_requested_human", "router_human_handover")
-        if router_handover_ok:
-            handoff_msg = {"ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏", "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏", "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"}
-            sent_reply = handoff_msg.get(current_preferred_lang, handoff_msg["ar"])
-            await send_message_func(user_id, sent_reply)
-            await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-            log_report_event("human_handover", user_id, current_gender, {"message": user_input_to_process, "status": "router_direct", "source": "router"})
-            await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+                return
+            # No explicit social handoff intent → skip dashboard takeover; continue to AI.
         else:
-            fb = get_dynamic_message("generic_error_message", current_preferred_lang) or "كيف فيني ساعدك؟"
-            await send_message_func(user_id, fb)
-            await save_conversation_message_to_firestore(user_id, "ai", fb, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        return
+            async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str) -> bool:
+                from utils.utils import (
+                    conversation_any_path_post_release_blocked,
+                    merge_conversation_user_id_variants,
+                    update_conversation_on_all_existing_paths,
+                )
+
+                wrote = False
+                db = get_firestore_db()
+                if db and current_conversation_id:
+                    try:
+                        if await conversation_any_path_post_release_blocked(current_conversation_id, user_id):
+                            print("⚠️ router handover blocked: post-release cooldown on at least one path")
+                            return False
+                        payload = {
+                            "status": "waiting_human",
+                            "human_takeover_active": True,
+                            "human_takeover_requested": True,
+                            "operator_id": None,
+                            "conversation_state": "waiting_for_operator",
+                            "escalation_reason": escalation_reason,
+                            "escalation_time": datetime.datetime.now(),
+                            "last_updated": datetime.datetime.now(),
+                            "post_release_escalation_suppressed_until": None,
+                        }
+                        n = await update_conversation_on_all_existing_paths(
+                            current_conversation_id, user_id, payload
+                        )
+                        if n > 0:
+                            wrote = True
+                    except Exception as e:
+                        print(f"⚠️ Failed to update handover state: {e}")
+                if not wrote:
+                    return False
+                for vid in merge_conversation_user_id_variants("", user_id):
+                    config.user_in_human_takeover_mode[vid] = True
+                notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification=f"AI handover - {escalation_reason}")
+                try:
+                    from services.human_takeover_notification_service import human_takeover_notification_service
+                    await human_takeover_notification_service.notify_and_audit_handoff(
+                        user_id=user_id, user_gender=current_gender, customer_name=user_name,
+                        customer_phone=user_data.get('phone_number', 'Unknown'),
+                        escalation_reason=escalation_reason, last_message=user_input_to_process,
+                        trigger_source=trigger_source, conversation_id=current_conversation_id,
+                        extra_details={"action": "router_human_handover"}
+                    )
+                except Exception as notify_error:
+                    print(f"⚠️ Failed to send handoff: {notify_error}")
+                return True
+
+            router_handover_ok = await _activate_ai_handover_router("customer_requested_human", "router_human_handover")
+            if router_handover_ok:
+                handoff_msg = {"ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏", "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏", "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"}
+                sent_reply = handoff_msg.get(current_preferred_lang, handoff_msg["ar"])
+                await send_message_func(user_id, sent_reply)
+                await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+                log_report_event("human_handover", user_id, current_gender, {"message": user_input_to_process, "status": "router_direct", "source": "router"})
+                await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
+            else:
+                fb = get_dynamic_message("generic_error_message", current_preferred_lang) or "كيف فيني ساعدك؟"
+                await send_message_func(user_id, fb)
+                await save_conversation_message_to_firestore(user_id, "ai", fb, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            return
 
     # 2. Greeting only (Phase 7)
     if (not ai_primary_mode) and router_action == "greeting":
@@ -1977,6 +1978,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             if social_route:
                 action = "answer_question"
                 bot_reply_text = social_route.reply
+                handover_degree = "none"
+                escalation_reason_from_gpt = None
+                user_data["awaiting_human_handover_confirmation"] = False
+            else:
+                # GPT/router booking/handover without explicit user handoff intent must
+                # stay on the canonical AI answer path — never open branch/gender collection.
+                print(
+                    "[_process_and_respond] social: declining force_intent="
+                    f"{social_force_intent} without explicit handoff → answer_question"
+                )
+                action = "answer_question"
                 handover_degree = "none"
                 escalation_reason_from_gpt = None
                 user_data["awaiting_human_handover_confirmation"] = False

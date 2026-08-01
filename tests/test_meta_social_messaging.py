@@ -238,7 +238,7 @@ class SocialRoutingRegressionTests(unittest.TestCase):
         self.assertNotIn("wa.link", url)
 
     def test_tattoo_routing_beirut_only(self):
-        user_data = {}
+        user_data = {"channel": "instagram"}
         result = route_social_contact_request(
             "bade 7jez tattoo removal",
             user_data,
@@ -251,7 +251,7 @@ class SocialRoutingRegressionTests(unittest.TestCase):
         self.assertIn("https://wa.me/", result.reply)
 
     def test_laser_female_beirut_handoff_unchanged(self):
-        user_data = {}
+        user_data = {"channel": "instagram"}
         result = route_social_contact_request(
             "bade 7jez laser beirut ana binit",
             user_data,
@@ -261,6 +261,159 @@ class SocialRoutingRegressionTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIn("78847527", result.reply)
         self.assertIn("https://wa.me/96178847527", result.reply)
+
+
+class SocialHandoffStateMachineTests(unittest.TestCase):
+    """Canonical AI vs deterministic handoff — production IG bug regressions."""
+
+    BRANCH_AR = "أي فرع بدك"
+    BRANCH_EN = "Which branch do you prefer"
+
+    def _ig(self, account="17841413184256533"):
+        return {"channel": "instagram", "meta_account_id": account}
+
+    def test_fresh_hello_does_not_ask_branch(self):
+        ud = self._ig()
+        result = route_social_contact_request("Hello", ud, None, "en")
+        self.assertIsNone(result)
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
+
+    def test_arabizi_general_chat_does_not_ask_branch(self):
+        ud = self._ig()
+        msg = "Sho bek 3al2t 3am elak meen ma3e"
+        result = route_social_contact_request(msg, ud, None, "ar")
+        self.assertIsNone(result)
+        # GPT force_intent must not open handoff without explicit booking/human intent.
+        forced = route_social_contact_request(msg, ud, None, "ar", force_intent="booking")
+        self.assertIsNone(forced)
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
+
+    def test_ambiguous_au_cannot_loop_branch_question(self):
+        ud = self._ig()
+        start = route_social_contact_request("bade 7jez", ud, None, "en")
+        self.assertIsNotNone(start)
+        self.assertIn(self.BRANCH_EN, start.reply)
+        replies = []
+        for _ in range(5):
+            r = route_social_contact_request("Au", ud, None, "en")
+            replies.append(r)
+        self.assertTrue(all(r is None for r in replies))
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
+
+    def test_appointment_request_starts_missing_field_flow(self):
+        ud = self._ig()
+        result = route_social_contact_request("I want to book an appointment", ud, None, "en")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.intent, "booking")
+        self.assertIn(self.BRANCH_EN, result.reply)
+
+    def test_human_agent_request_starts_missing_field_flow(self):
+        ud = self._ig()
+        result = route_social_contact_request("I want to speak with a human agent", ud, None, "en")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.intent, "human")
+        self.assertIn(self.BRANCH_EN, result.reply)
+
+    def test_valid_branch_and_gender_advance(self):
+        ud = self._ig()
+        r1 = route_social_contact_request("bade 7jez", ud, None, "en")
+        self.assertIn(self.BRANCH_EN, r1.reply)
+        r2 = route_social_contact_request("Antelias", ud, None, "en")
+        self.assertIsNotNone(r2)
+        self.assertIn("male or female", r2.reply.lower())
+        r3 = route_social_contact_request("male", ud, None, "en")
+        self.assertIsNotNone(r3)
+        self.assertIn("71226082", r3.reply)
+        self.assertIn("https://wa.me/", r3.reply)
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
+
+    def test_beirut_female_mapping_unchanged(self):
+        ud = self._ig()
+        route_social_contact_request("book appointment", ud, None, "en")
+        route_social_contact_request("Beirut", ud, None, "en")
+        result = route_social_contact_request("female", ud, None, "en")
+        self.assertIn("78847527", result.reply)
+
+    def test_new_topic_during_pending_handoff_returns_to_ai(self):
+        ud = self._ig()
+        route_social_contact_request("bade 7jez", ud, None, "ar")
+        result = route_social_contact_request("قديش سعر الليزر؟", ud, None, "ar")
+        self.assertIsNone(result)
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
+
+    def test_cancellation_resets_pending_flow(self):
+        ud = self._ig()
+        route_social_contact_request("bade 7jez", ud, None, "en")
+        result = route_social_contact_request("cancel", ud, None, "en")
+        self.assertIsNone(result)
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
+        # Fresh booking can start again.
+        again = route_social_contact_request("book appointment", ud, None, "en")
+        self.assertIsNotNone(again)
+
+    def test_expired_handoff_state_returns_to_ai(self):
+        from services import social_contact_routing as scr
+
+        ud = self._ig()
+        route_social_contact_request("bade 7jez", ud, None, "en")
+        key = "social_contact_flow::instagram::17841413184256533"
+        self.assertIn(key, ud)
+        ud[key]["updated_at"] = 0
+        ud[key]["started_at"] = 0
+        result = route_social_contact_request("Beirut", ud, None, "en")
+        self.assertIsNone(result)
+        self.assertNotIn(key, ud)
+        self.assertEqual(scr.SOCIAL_CONTACT_FLOW_TTL_SECONDS, 30 * 60)
+
+    def test_instagram_messenger_state_isolation(self):
+        ig = self._ig()
+        fb = {"channel": "facebook", "meta_account_id": "378696005334409"}
+        route_social_contact_request("bade 7jez", ig, None, "en")
+        self.assertIsNone(route_social_contact_request("Hello", fb, None, "en"))
+        self.assertTrue(any(str(k).startswith("social_contact_flow::instagram") for k in ig))
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in fb))
+        # Messenger booking must not consume Instagram pending state.
+        fb_book = route_social_contact_request("book appointment", fb, None, "en")
+        self.assertIn(self.BRANCH_EN, fb_book.reply)
+        self.assertTrue(any(str(k).startswith("social_contact_flow::facebook") for k in fb))
+        self.assertTrue(any(str(k).startswith("social_contact_flow::instagram") for k in ig))
+
+    def test_force_intent_cannot_start_without_explicit_user_intent(self):
+        ud = self._ig()
+        for intent in ("booking", "human"):
+            r = route_social_contact_request("Hello", ud, None, "en", force_intent=intent)
+            self.assertIsNone(r)
+        self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
+
+    def test_whatsapp_matrix_keys_unchanged(self):
+        expected = {
+            "SOCIAL_WHATSAPP_BEIRUT_FEMALE": "+96178847527",
+            "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": "+96170707354",
+            "SOCIAL_WHATSAPP_BEIRUT_MALE": "+96171534928",
+            "SOCIAL_WHATSAPP_ANTELIAS_MALE": "+96171226082",
+            "SOCIAL_WHATSAPP_TATTOO_REMOVAL": "+96171534928",
+        }
+        self.assertEqual(DEFAULT_SOCIAL_WHATSAPP_CONTACTS, expected)
+
+
+class SocialCanonicalAiPathTests(unittest.TestCase):
+    """Normal IG messages must enter handle_message (canonical AI), not branch prompts."""
+
+    def test_hello_does_not_open_handoff_so_canonical_ai_path_runs(self):
+        """Contract: router returns None for Hello → processor always calls handle_message."""
+        from pathlib import Path
+
+        ud = {"channel": "instagram", "meta_account_id": "17841413184256533"}
+        self.assertIsNone(route_social_contact_request("Hello", ud, None, "en"))
+        self.assertIsNone(
+            route_social_contact_request("Hello", ud, None, "en", force_intent="booking")
+        )
+        processor_src = Path("services/social_messaging_processor.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("await handle_message(", processor_src)
+        self.assertNotIn("social_ai", processor_src.lower())
+        self.assertNotIn("simplified_prompt", processor_src.lower())
 
 
 class MetaSendFailureTests(unittest.TestCase):

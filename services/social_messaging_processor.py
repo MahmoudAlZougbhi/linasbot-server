@@ -56,6 +56,10 @@ async def process_meta_social_event(event: dict, settings: MetaMessagingSettings
                 "_source_message_id": str(event.get("message_id") or ""),
             }
         )
+        # Bounded handoff TTL: drop expired channel-scoped social_contact_flow blobs.
+        from services.social_contact_routing import expire_social_contact_flows_in_user_data
+
+        expire_social_contact_flows_in_user_data(user_data)
         if not config.user_names.get(user_id):
             config.user_names[user_id] = (
                 "Instagram Customer" if channel == "instagram" else "Facebook Customer"
