@@ -104,11 +104,44 @@ async def receive_meta_messaging_webhook(request: Request):
     )
     accepted = 0
     duplicates = 0
+
+    async def _process_claimed(event: dict) -> None:
+        from services.durable_event_claim import complete_event_claim, release_event_claim
+
+        mid = str(event.get("message_id") or "")
+        try:
+            await process_meta_social_event(event, settings)
+            await complete_event_claim(
+                "meta_messaging_mid",
+                mid,
+                firestore_collection="meta_messaging_mid_claims",
+            )
+        except Exception:
+            await release_event_claim(
+                "meta_messaging_mid",
+                mid,
+                firestore_collection="meta_messaging_mid_claims",
+            )
+            raise
+
     for event in events:
-        if not _message_deduper.claim(event["message_id"]):
+        mid = str(event.get("message_id") or "")
+        # Fast local reject for same-process redeliveries
+        if not _message_deduper.claim(mid):
             duplicates += 1
             continue
-        _track_task(asyncio.create_task(process_meta_social_event(event, settings)))
+        from services.durable_event_claim import try_claim_event
+
+        claimed = await try_claim_event(
+            "meta_messaging_mid",
+            mid,
+            ttl_seconds=300.0,
+            firestore_collection="meta_messaging_mid_claims",
+        )
+        if not claimed:
+            duplicates += 1
+            continue
+        _track_task(asyncio.create_task(_process_claimed(event)))
         accepted += 1
     return JSONResponse(
         {

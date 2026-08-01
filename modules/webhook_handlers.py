@@ -135,7 +135,14 @@ async def _webhook_firestore_try_acquire(message_id: str) -> bool:
         return True
     db = get_firestore_db()
     if not db:
-        return True
+        from services.durable_event_claim import try_claim_event
+
+        return await try_claim_event(
+            "webhook_inbound_processed",
+            mid,
+            ttl_seconds=300.0,
+            firestore_collection="webhook_inbound_processed_file",
+        )
     doc_id = hashlib.sha256(mid.encode("utf-8")).hexdigest()
     ref = (
         db.collection("artifacts")
@@ -167,8 +174,15 @@ async def _webhook_firestore_try_acquire(message_id: str) -> bool:
     except Exception as e:
         if _is_dup(e):
             return False
-        print(f"⚠️ Webhook Firestore dedupe create failed (using memory fallback): {e}")
-        return True
+        print(f"⚠️ Webhook Firestore dedupe create failed; durable file fallback: {e}")
+        from services.durable_event_claim import try_claim_event
+
+        return await try_claim_event(
+            "webhook_inbound_processed",
+            mid,
+            ttl_seconds=300.0,
+            firestore_collection="webhook_inbound_processed_file",
+        )
 
 
 async def _webhook_bodyfp_firestore_try_acquire(body_fp: str, current_time: float) -> bool:
@@ -179,11 +193,18 @@ async def _webhook_bodyfp_firestore_try_acquire(body_fp: str, current_time: floa
     fp = (body_fp or "").strip()
     if not fp:
         return True
-    db = get_firestore_db()
-    if not db:
-        return True
     slot = int(current_time // WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS)
     basis = f"{fp}\0bodyfp_slot{slot}"
+    db = get_firestore_db()
+    if not db:
+        from services.durable_event_claim import try_claim_event
+
+        return await try_claim_event(
+            "webhook_text_body_processed",
+            basis,
+            ttl_seconds=float(WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS) * 2,
+            firestore_collection="webhook_text_body_processed_file",
+        )
     doc_id = hashlib.sha256(basis.encode("utf-8")).hexdigest()
     ref = (
         db.collection("artifacts")
@@ -216,8 +237,15 @@ async def _webhook_bodyfp_firestore_try_acquire(body_fp: str, current_time: floa
     except Exception as e:
         if _is_dup(e):
             return False
-        print(f"⚠️ Webhook body-fp Firestore dedupe create failed (fail-open): {e}")
-        return True
+        print(f"⚠️ Webhook body-fp Firestore dedupe create failed; durable file fallback: {e}")
+        from services.durable_event_claim import try_claim_event
+
+        return await try_claim_event(
+            "webhook_text_body_processed",
+            basis,
+            ttl_seconds=float(WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS) * 2,
+            firestore_collection="webhook_text_body_processed_file",
+        )
 
 
 # Second line of defense: same worker can queue two process_parsed_message tasks for the same message_id

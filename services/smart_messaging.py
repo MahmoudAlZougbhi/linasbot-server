@@ -11,21 +11,14 @@ from pathlib import Path
 from services.message_logs_service import message_logs_service
 from services.smart_messaging_catalog import TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS, normalize_template_id
 
-# When previewBeforeSend is on, do not queue these for manual approval — they must stay "scheduled"
-# so the monitor job can send them via process_scheduled_messages + Monty templates.
-AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES = frozenset(
-    {
-        "daily_template_dispatcher",
-        "appointment_scheduler",
-        "missed_paused_campaign",
-        "chatted_no_crm_lead_campaign",
-    }
-)
+# Preview mode blocks automatic sends. No metadata source may bypass approval.
+AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES = frozenset()
 from storage.persistent_storage import (
     SENT_SMART_MESSAGES_FILE,
     MESSAGE_TEMPLATES_FILE,
     APP_SETTINGS_FILE,
     SERVICE_TEMPLATE_MAPPING_FILE,
+    PENDING_SMART_MESSAGES_FILE,
     ensure_dirs,
 )
 
@@ -45,6 +38,7 @@ class SmartMessagingService:
     STUCK_SENDING_MAX_AGE_SECONDS = 600.0
 
     SENT_MESSAGES_FILE = str(SENT_SMART_MESSAGES_FILE)
+    QUEUE_FILE = str(PENDING_SMART_MESSAGES_FILE)
 
     def __init__(self):
         ensure_dirs()
@@ -55,51 +49,85 @@ class SmartMessagingService:
         self.scheduled_messages = {}
         self.sent_messages_log = []
         self._load_sent_messages()
+        self._load_pending_queue()
         
     # ------------------------------------------------------------------
-    # Persistence helpers — keep sent messages across server restarts
+    # Persistence helpers — keep queue + sent messages across restarts
     # ------------------------------------------------------------------
+
+    def _deserialize_entry(self, entry: dict) -> dict:
+        for key in ("send_at", "sent_at", "created_at", "last_attempt"):
+            if entry.get(key):
+                try:
+                    entry[key] = datetime.fromisoformat(entry[key])
+                except (ValueError, TypeError):
+                    pass
+        return entry
+
+    def _serialize_entry(self, msg: dict) -> dict:
+        entry = dict(msg)
+        for key in ("send_at", "sent_at", "created_at", "last_attempt"):
+            if isinstance(entry.get(key), datetime):
+                entry[key] = entry[key].isoformat()
+        return entry
 
     def _load_sent_messages(self):
         """Load previously sent messages from disk into scheduled_messages dict."""
         if not os.path.exists(self.SENT_MESSAGES_FILE):
             return
         try:
-            with open(self.SENT_MESSAGES_FILE, 'r', encoding='utf-8') as f:
+            with open(self.SENT_MESSAGES_FILE, "r", encoding="utf-8") as f:
                 entries = json.load(f)
             loaded = 0
             for message_id, entry in entries.items():
-                # Convert ISO strings back to datetime objects
-                for key in ('send_at', 'sent_at', 'created_at', 'last_attempt'):
-                    if entry.get(key):
-                        try:
-                            entry[key] = datetime.fromisoformat(entry[key])
-                        except (ValueError, TypeError):
-                            pass
-                self.scheduled_messages[message_id] = entry
+                self.scheduled_messages[message_id] = self._deserialize_entry(entry)
                 loaded += 1
             print(f"✅ Loaded {loaded} sent messages from {self.SENT_MESSAGES_FILE}")
         except Exception as e:
             print(f"⚠️ Could not load sent messages: {e}")
 
-    def _persist_sent_messages(self):
-        """Save all sent messages to disk so they survive restarts."""
+    def _load_pending_queue(self):
+        """Load non-terminal scheduled/pending/sending rows across restarts."""
+        if not os.path.exists(self.QUEUE_FILE):
+            return
         try:
-            entries = {}
-            for message_id, msg in self.scheduled_messages.items():
-                if msg.get("status") not in ("sent", "would_send"):
+            with open(self.QUEUE_FILE, "r", encoding="utf-8") as f:
+                entries = json.load(f)
+            loaded = 0
+            for message_id, entry in (entries or {}).items():
+                status = (entry or {}).get("status")
+                if status in ("sent", "would_send", "cancelled"):
                     continue
-                # Shallow copy and serialise datetimes
-                entry = dict(msg)
-                for key in ('send_at', 'sent_at', 'created_at', 'last_attempt'):
-                    if isinstance(entry.get(key), datetime):
-                        entry[key] = entry[key].isoformat()
-                entries[message_id] = entry
-            os.makedirs(os.path.dirname(self.SENT_MESSAGES_FILE), exist_ok=True)
-            with open(self.SENT_MESSAGES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(entries, f, ensure_ascii=False, indent=2)
+                # Prefer fresher in-memory/sent file if already present as terminal.
+                existing = self.scheduled_messages.get(message_id)
+                if existing and existing.get("status") in ("sent", "would_send"):
+                    continue
+                self.scheduled_messages[message_id] = self._deserialize_entry(dict(entry))
+                loaded += 1
+            print(f"✅ Loaded {loaded} pending smart messages from {self.QUEUE_FILE}")
         except Exception as e:
-            print(f"⚠️ Could not persist sent messages: {e}")
+            print(f"⚠️ Could not load pending smart message queue: {e}")
+
+    def _persist_sent_messages(self):
+        """Save sent + pending queue so they survive restarts and multi-process reload."""
+        try:
+            sent_entries = {}
+            pending_entries = {}
+            for message_id, msg in self.scheduled_messages.items():
+                status = msg.get("status")
+                entry = self._serialize_entry(msg)
+                if status in ("sent", "would_send"):
+                    sent_entries[message_id] = entry
+                elif status not in ("cancelled",):
+                    pending_entries[message_id] = entry
+            os.makedirs(os.path.dirname(self.SENT_MESSAGES_FILE), exist_ok=True)
+            with open(self.SENT_MESSAGES_FILE, "w", encoding="utf-8") as f:
+                json.dump(sent_entries, f, ensure_ascii=False, indent=2)
+            os.makedirs(os.path.dirname(self.QUEUE_FILE), exist_ok=True)
+            with open(self.QUEUE_FILE, "w", encoding="utf-8") as f:
+                json.dump(pending_entries, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️ Could not persist smart messages: {e}")
 
     def _load_templates(self) -> Dict:
         """Load message templates from JSON file or use defaults"""
@@ -439,14 +467,11 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             "metadata": meta,
         }
 
-        # Preview queue = manual approval. Automation must not get stuck here when preview is on.
-        if self._is_preview_mode_enabled():
-            src = (meta.get("source") or "").strip()
-            if meta.get("skip_preview") is True or src in AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES:
-                pass
-            else:
-                self._add_to_preview_queue(message_id)
+        # Preview mode: every automated row requires explicit approval (no source bypass).
+        if self._is_preview_mode_enabled() and meta.get("skip_preview") is not True:
+            self._add_to_preview_queue(message_id)
 
+        self._persist_sent_messages()
         return message_id
 
     def _is_smart_messaging_enabled(self) -> bool:
@@ -1079,12 +1104,15 @@ async def deliver_scheduled_smart_whatsapp(
             language=lang,
             parameters=params,
         )
-    print(
-        f"⚠️ deliver_scheduled_smart_whatsapp: no Monty template config for {canonical!r} — "
-        f"falling back to session TEXT (usually fails outside WhatsApp 24h window). "
-        f"Add template to config/montymobile_templates.json or fix template id alias."
-    )
-    return await adapter.send_text_message(phone, rendered_text)
+    return {
+        "success": False,
+        "error": (
+            f"Approved WhatsApp template is required for {canonical!r}; "
+            "freeform session text is not allowed for scheduled/campaign sends."
+        ),
+        "template_required": True,
+        "template_id": canonical,
+    }
 
 
 # Mapping of message types to friendly names

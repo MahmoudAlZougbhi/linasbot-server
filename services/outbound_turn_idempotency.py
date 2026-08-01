@@ -70,9 +70,6 @@ async def try_claim_ai_turn(
     )
     if not mids and not bfps:
         return True
-    db = get_firestore_db()
-    if not db:
-        return True
     sid = (stable_identity or "").strip()
 
     if len(mids) > 1:
@@ -91,33 +88,50 @@ async def try_claim_ai_turn(
         key_kind = "textbody_only_slot"
 
     doc_id = hashlib.sha256(key_basis.encode("utf-8")).hexdigest()
-    ref = (
-        db.collection("artifacts")
-        .document("linas-ai-bot-backend")
-        .collection("ai_turn_claims")
-        .document(doc_id)
-    )
-
-    def _create():
-        ref.create(
-            {
-                "created_at": firestore.SERVER_TIMESTAMP,
-                "stable_identity": (sid or "")[:256],
-                "inbound_ids_preview": "|".join(mids)[:500] if mids else "",
-                "key_kind": key_kind,
-                "body_fp_prefix": (bfps[0][:48] + "…") if bfps else "",
-            }
+    db = get_firestore_db()
+    if db:
+        ref = (
+            db.collection("artifacts")
+            .document("linas-ai-bot-backend")
+            .collection("ai_turn_claims")
+            .document(doc_id)
         )
 
-    try:
-        await asyncio.to_thread(_create)
-        return True
-    except Exception as e:
-        if _is_already_exists(e):
-            print(
-                f"⚠️ ai_turn_claims duplicate — skipping duplicate AI turn "
-                f"(doc={doc_id[:16]}… kind={key_kind} mids={len(mids)} bfps={len(bfps)})"
+        def _create():
+            ref.create(
+                {
+                    "created_at": firestore.SERVER_TIMESTAMP,
+                    "stable_identity": (sid or "")[:256],
+                    "inbound_ids_preview": "|".join(mids)[:500] if mids else "",
+                    "key_kind": key_kind,
+                    "body_fp_prefix": (bfps[0][:48] + "…") if bfps else "",
+                }
             )
-            return False
-        print(f"⚠️ ai_turn_claims create failed (fail-open, running AI): {e}")
-        return True
+
+        try:
+            await asyncio.to_thread(_create)
+            return True
+        except Exception as e:
+            if _is_already_exists(e):
+                print(
+                    f"⚠️ ai_turn_claims duplicate — skipping duplicate AI turn "
+                    f"(doc={doc_id[:16]}… kind={key_kind} mids={len(mids)} bfps={len(bfps)})"
+                )
+                return False
+            print(f"⚠️ ai_turn_claims Firestore create failed; durable file fallback: {e}")
+
+    # Fail-closed durable file claim when Firestore is unavailable or errored.
+    from services.durable_event_claim import try_claim_event
+
+    claimed = await try_claim_event(
+        "ai_turn_claims",
+        key_basis,
+        ttl_seconds=120.0,
+        firestore_collection="ai_turn_claims_file",
+    )
+    if not claimed:
+        print(
+            f"⚠️ ai_turn_claims file duplicate — skipping duplicate AI turn "
+            f"(kind={key_kind} mids={len(mids)} bfps={len(bfps)})"
+        )
+    return claimed

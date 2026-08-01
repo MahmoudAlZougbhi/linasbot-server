@@ -23,7 +23,14 @@ WINDOW_SEC = float(os.getenv("OUTBOUND_TEXT_DEDUPE_WINDOW_SEC", "90"))
 
 _cache: Dict[str, float] = {}
 _inflight: Set[str] = set()
-_lock = asyncio.Lock()
+_lock: Optional[asyncio.Lock] = None
+
+
+def _get_lock() -> asyncio.Lock:
+    global _lock
+    if _lock is None:
+        _lock = asyncio.Lock()
+    return _lock
 
 
 def _normalize_recipient(phone_or_room: str) -> str:
@@ -101,7 +108,7 @@ async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bo
     if not k:
         return False
     now = time.time()
-    async with _lock:
+    async with _get_lock():
         _prune_stale(now)
         prev = _cache.get(k)
         if prev is not None and (now - prev) < WINDOW_SEC:
@@ -124,7 +131,7 @@ async def finish_outbound_text_attempt(resolved_recipient: str, message: str, se
     if not k:
         return
     now = time.time()
-    async with _lock:
+    async with _get_lock():
         _inflight.discard(k)
         if send_success:
             _cache[k] = now

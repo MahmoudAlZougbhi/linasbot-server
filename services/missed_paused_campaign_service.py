@@ -391,8 +391,22 @@ class MissedPausedCampaignService:
                 continue
 
             try:
-                result = await adapter.send_text_message(phone, content)
-                if result.get("success"):
+                from services.smart_messaging import deliver_scheduled_smart_whatsapp
+
+                result = await deliver_scheduled_smart_whatsapp(
+                    adapter,
+                    phone=phone,
+                    template_id=self.TEMPLATE_ID,
+                    language=resolved_lang,
+                    placeholders=placeholders,
+                    rendered_text=content,
+                )
+                if result.get("dry_run"):
+                    failed.append({
+                        "phone": phone,
+                        "reason": "dry_run (not delivered)",
+                    })
+                elif result.get("success"):
                     sent_count += 1
                     message_logs_service.log_message(
                         customer_id=recipient.get("customer_id") or phone,

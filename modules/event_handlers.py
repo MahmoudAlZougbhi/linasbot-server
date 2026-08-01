@@ -153,6 +153,11 @@ async def startup_event():
         # Job 0B: Monitor Smart Messaging scheduled messages with global toggle & preview mode support
         async def monitor_smart_messages_job():
             """Monitor scheduled messages with smart controls"""
+            from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+
+            if not try_acquire_job_lock("monitor_smart_messages", ttl_seconds=max(60, monitor_interval_minutes * 60)):
+                print("[smart_scheduler] monitor tick skipped — another instance holds the lock")
+                return
             try:
                 import json
                 import os
@@ -274,9 +279,13 @@ async def startup_event():
                         print(f"Error checking preview queue: {preview_error}")
 
                     print("=" * 80)
+                    # Preview mode blocks automatic scheduled sends; only approved preview items send.
+                    print("PREVIEW MODE: skipping automatic status=scheduled sends")
+                    print("=" * 80)
+                    return
 
-                # Always process due rows with status=scheduled (automation exempts preview; CRM-style queue)
-                print("SENDING due Smart Messaging (status=scheduled, preview-independent)")
+                # Preview off: process due rows with status=scheduled
+                print("SENDING due Smart Messaging (status=scheduled)")
                 print("=" * 80)
 
                 # Get messages that are ready to send
@@ -368,6 +377,8 @@ async def startup_event():
                 print(f"Error in monitor smart messages job: {e}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                release_job_lock("monitor_smart_messages")
         
         # Job 1: Trigger backend appointment reminders every 30 minutes
         async def send_appointment_reminders_job():
@@ -625,6 +636,14 @@ async def startup_event():
             Minute-level runner that dispatches enabled template jobs
             when local time matches configured HH:MM.
             """
+            from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+
+            if not try_acquire_job_lock(
+                "daily_template_dispatcher",
+                ttl_seconds=max(60, dispatcher_interval_minutes * 60),
+            ):
+                print("[smart_scheduler] dispatcher tick skipped — another instance holds the lock")
+                return
             try:
                 dispatch_result = await daily_template_dispatcher.tick()
                 run_count = dispatch_result.get("run_count", 0)
@@ -641,6 +660,8 @@ async def startup_event():
                 print(f"❌ Error in daily template dispatcher: {e}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                release_job_lock("daily_template_dispatcher")
 
         # Schedule jobs
         # DAILY REFRESH: Clear stale in-memory queue once a day

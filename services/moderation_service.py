@@ -189,10 +189,18 @@ async def check_rate_limits(user_id: str, message_type: str = 'message') -> Tupl
     now = datetime.now()
     tracker = user_rate_tracker[user_id]
     
-    # Clean old entries (older than 24 hours)
+    # Clean old entries (older than 24 hours) and bound map size
     cutoff_time = now - timedelta(days=1)
     for msg_type in ['messages', 'images', 'voice']:
         tracker[msg_type] = [t for t in tracker[msg_type] if t > cutoff_time]
+    if len(user_rate_tracker) > 5000:
+        stale_ids = [
+            uid
+            for uid, tr in list(user_rate_tracker.items())
+            if not any(tr.get(k) for k in ("messages", "images", "voice"))
+        ]
+        for uid in stale_ids[:2000]:
+            user_rate_tracker.pop(uid, None)
     
     # Add current request
     if message_type == 'message':

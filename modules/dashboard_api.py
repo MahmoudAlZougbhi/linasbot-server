@@ -173,8 +173,58 @@ async def root():
 
 @app.get("/api/health")
 async def health():
-    """Lightweight health check - no Firestore, returns immediately."""
-    return {"ok": True}
+    """Lightweight liveness check - no dependency probes, returns immediately."""
+    return {"ok": True, "role": "liveness"}
+
+
+@app.get("/api/ready")
+async def ready():
+    """
+    Readiness: required dependencies without exposing secrets.
+    Authenticated (settings permission) so probe details are not public.
+    """
+    import os
+    from pathlib import Path
+
+    checks = {}
+    overall_ok = True
+
+    openai_ok = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    checks["openai_api_key"] = {"ok": openai_ok}
+    if not openai_ok:
+        overall_ok = False
+
+    try:
+        from utils.utils import get_firestore_db
+
+        db = get_firestore_db()
+        fs_ok = db is not None
+        checks["firestore"] = {"ok": fs_ok}
+        if not fs_ok:
+            overall_ok = False
+    except Exception as e:
+        checks["firestore"] = {"ok": False, "error": type(e).__name__}
+        overall_ok = False
+
+    try:
+        from storage.persistent_storage import SETTINGS_DIR, ensure_dirs
+
+        ensure_dirs()
+        writable = os.access(str(SETTINGS_DIR), os.W_OK)
+        checks["data_root_writable"] = {"ok": writable}
+        if not writable:
+            overall_ok = False
+    except Exception as e:
+        checks["data_root_writable"] = {"ok": False, "error": type(e).__name__}
+        overall_ok = False
+
+    status = 200 if overall_ok else 503
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=status,
+        content={"ok": overall_ok, "role": "readiness", "checks": checks},
+    )
 
 
 @app.get("/api/debug/webhook-status")

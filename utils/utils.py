@@ -970,7 +970,47 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         "human_takeover_active": False,
                         "operator_id": None,
                     })
-                await asyncio.to_thread(doc_ref.update, update_payload)
+                # Transactional append: re-read messages under a transaction to avoid RMW races.
+                def _txn_append():
+                    from google.cloud import firestore as gcf
+
+                    transaction = db.transaction()
+
+                    @gcf.transactional
+                    def _run(transaction):
+                        fresh_snap = doc_ref.get(transaction=transaction)
+                        if not fresh_snap.exists:
+                            return "missing", None, None
+                        fresh_data = fresh_snap.to_dict() or {}
+                        msgs = list(fresh_data.get("messages") or [])
+                        if _is_duplicate_message(msgs, message_data):
+                            return "duplicate", fresh_data, None
+                        msgs.append(message_data)
+                        payload = dict(update_payload)
+                        payload["messages"] = msgs
+                        unread_before = int(fresh_data.get("unread_count") or 0)
+                        if role == "user":
+                            payload["unread_count"] = unread_before + 1
+                        elif role == "operator":
+                            payload["unread_count"] = 0
+                        transaction.update(doc_ref, payload)
+                        return "ok", fresh_data, payload
+
+                    return _run(transaction)
+
+                txn_status, txn_doc_data, txn_payload = await asyncio.to_thread(_txn_append)
+                if txn_status == "duplicate":
+                    print(f"🔁 Duplicate message skipped (txn) for conversation {conversation_id}")
+                    _invalidate_live_chat_cache()
+                    return
+                if txn_status != "ok" or not txn_payload:
+                    raise RuntimeError(
+                        f"Transactional message append failed for {conversation_id}: {txn_status}"
+                    )
+                if txn_doc_data is not None:
+                    doc_data = txn_doc_data
+                update_payload = txn_payload
+                current_messages = update_payload.get("messages") or current_messages
                 await _propagate_takeover_state_to_sibling_conversation_docs(
                     db,
                     app_id_for_firestore,

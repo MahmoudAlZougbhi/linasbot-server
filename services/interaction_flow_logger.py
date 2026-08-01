@@ -156,12 +156,19 @@ def log_interaction(
     _load_from_file()
 
     phone = user_phone or user_id
+    store_full_prompts = (os.getenv("FLOW_LOG_FULL_PROMPTS") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    # Default: mask phones and truncate prompts — do not persist full customer prompts.
     entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "user_id": user_id,
+        "user_id": _mask_user_id(user_id),
         "user_id_masked": _mask_user_id(user_id),
         "user_name": (user_name or "").strip() or None,
-        "user_phone": phone,
+        "user_phone": None,
         "user_phone_masked": _mask_user_id(phone) if phone else None,
         "user_gender": (user_gender or "").strip().lower() or "unknown",
         "customer_exists": customer_exists if isinstance(customer_exists, bool) else None,
@@ -169,11 +176,22 @@ def log_interaction(
         "user_message": (user_message or "")[:500],
         "bot_to_user": (bot_to_user or "")[:1000],
         "source": source,
-        # Keep full AI query summary for transparency (includes full dynamic context)
-        "ai_query_summary": (ai_query_summary or "")[:120000] if ai_query_summary else None,
-        "bot_sent_to_ai_full": (bot_sent_to_ai_full or "")[:250000] if bot_sent_to_ai_full else None,
-        "customer_context_sent": (customer_context_sent or "")[:50000] if customer_context_sent else None,
-        "ai_raw_response": (ai_raw_response or "")[:2000] if ai_raw_response else None,
+        "ai_query_summary": (
+            ((ai_query_summary or "")[:120000] if store_full_prompts else (ai_query_summary or "")[:500])
+            if ai_query_summary
+            else None
+        ),
+        "bot_sent_to_ai_full": (
+            ((bot_sent_to_ai_full or "")[:250000] if store_full_prompts else None)
+            if bot_sent_to_ai_full
+            else None
+        ),
+        "customer_context_sent": (
+            ((customer_context_sent or "")[:50000] if store_full_prompts else None)
+            if customer_context_sent
+            else None
+        ),
+        "ai_raw_response": (ai_raw_response or "")[:500] if ai_raw_response else None,
         "model": model,
         "tokens": tokens,
         "prompt_tokens": prompt_tokens,

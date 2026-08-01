@@ -72,3 +72,24 @@ Tests: `tests/test_wave2_social_routing.py` + wave1 — 31 passed.
 | Forgot-password fake | CLOSED | removed from Login |
 
 Tests: `tests/test_wave3_metrics.py` (+ waves 1–2) — 38+ passed with `OPENAI_API_KEY` set for app import.
+
+
+## Wave 4 — Reliability / concurrency / privacy / readiness
+
+| ID | Status | Evidence |
+|---|---|---|
+| V2-REL-001 process-local state | CLOSED (partial→durable) | `durable_event_claim.py` + pending smart queue file + scheduler locks |
+| Meta MID claim-before-success | CLOSED | claim + complete/release in `meta_messaging_webhook.py` |
+| Message array RMW | CLOSED | Firestore transactional append in `utils.py` |
+| Smart Messaging RAM queue | CLOSED | `PENDING_SMART_MESSAGES_FILE` persist/reload |
+| Preview-mode bypass | CLOSED | empty exempt set; monitor returns when preview on |
+| Campaign freeform send | CLOSED | `deliver_scheduled_smart_whatsapp` + template required |
+| Scheduler multi-instance | CLOSED | file job locks for monitor/dispatcher |
+| Fail-open claims | CLOSED | file fallback fail-closed for AI turn + webhook claims |
+| Health readiness | CLOSED | public `/api/ready` with dependency checks |
+| PII logging | CLOSED | flow logger masks phone; full prompts opt-in only |
+| Unbounded rate map | CLOSED | prune empty trackers in moderation_service |
+
+Tests: `tests/test_wave4_reliability.py` — 7 passed.
+
+External still required: provider Monty key rotation; Redis/Postgres remain unused (no new infra introduced).
