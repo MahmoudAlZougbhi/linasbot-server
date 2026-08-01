@@ -21,6 +21,7 @@ import {
   BellAlertIcon,
 } from "@heroicons/react/24/outline";
 import {
+import { authFetch } from '../utils/authFetch';
   LineChart,
   Line,
   BarChart,
@@ -55,7 +56,7 @@ const Analytics = () => {
           ? "http://localhost:8003"
           : window.location.origin;
 
-      const response = await fetch(
+      const response = await authFetch(
         `${baseURL}/api/analytics/summary?time_range=${timeRange}`
       );
       const result = await response.json();

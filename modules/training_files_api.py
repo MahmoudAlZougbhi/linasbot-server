@@ -270,7 +270,20 @@ async def restore_training_file_backup(file_id: str, request: dict):
 
         file_config = TRAINING_FILES[file_id]
         file_path = file_config["path"]
-        backup_path = str(CONTENT_DIR / backup_filename)
+        try:
+            from services.safe_path import resolve_backup_filename
+
+            backup_resolved = resolve_backup_filename(
+                CONTENT_DIR,
+                backup_filename,
+                required_prefix=os.path.basename(file_path).replace(".txt", "") + "_backup_",
+            )
+        except ValueError:
+            return {
+                "success": False,
+                "error": "Invalid backup filename",
+            }
+        backup_path = str(backup_resolved)
 
         if not os.path.exists(backup_path):
             return {
@@ -284,7 +297,9 @@ async def restore_training_file_backup(file_id: str, request: dict):
 
         if os.path.exists(file_path):
             current_backup_filename = f"{os.path.basename(file_path).replace('.txt', '')}_backup_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            current_backup_path = str(CONTENT_DIR / current_backup_filename)
+            from services.safe_path import resolve_under_root
+
+            current_backup_path = str(resolve_under_root(CONTENT_DIR, current_backup_filename))
             with open(file_path, 'r', encoding='utf-8') as f:
                 current_content = f.read()
             with open(current_backup_path, 'w', encoding='utf-8') as f:

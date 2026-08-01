@@ -12,7 +12,7 @@ from storage.persistent_storage import migrate_from_legacy
 migrate_from_legacy()
 
 from fastapi.staticfiles import StaticFiles
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse
 from modules.core import app
 from utils.utils import initialize_firestore
@@ -54,7 +54,15 @@ import modules.content_files_api  # Content Files: Knowledge, Price, Style (CRUD
 import modules.flow_api  # Activity Flow: User ↔ Bot ↔ AI transparency
 
 @app.get("/downloads/live-chat-android.apk")
-async def download_live_chat_android_apk():
+async def download_live_chat_android_apk(request: Request):
+    from modules.api_security import user_has_permission
+    from services.dashboard_session_service import SESSION_COOKIE_NAME, session_service
+
+    session = session_service.get_valid_session(request.cookies.get(SESSION_COOKIE_NAME))
+    if session is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if not user_has_permission(session, "liveChat"):
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not os.path.exists(LIVE_CHAT_ANDROID_APK_PATH):
         raise HTTPException(status_code=404, detail="APK not found")
     return FileResponse(

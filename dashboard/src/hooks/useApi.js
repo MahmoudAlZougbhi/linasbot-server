@@ -3,11 +3,13 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
 import { normalizeConversationMessages } from "../utils/liveChatApi";
+import { getCsrfToken } from "../utils/csrf";
 
 // Create axios instance with default config
 const api = axios.create({
   baseURL: getApiBaseUrl(),
   timeout: 90000, // 90 seconds - increased for slow GPT responses
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -17,6 +19,10 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     config.baseURL = getApiBaseUrl();
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      config.headers["X-CSRF-Token"] = csrfToken;
+    }
     return config;
   },
   (error) => {
@@ -46,6 +52,15 @@ api.interceptors.response.use(
 
     // 504 Gateway Timeout - let the calling component show a friendly message
     if (error.response?.status === 504) {
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 401) {
+      localStorage.removeItem("auth_session");
+      localStorage.removeItem("csrf_token");
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
       return Promise.reject(error);
     }
 

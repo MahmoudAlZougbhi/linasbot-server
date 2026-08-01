@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { resolveUserPermissions } from '../utils/permissions';
+import { csrfHeaders } from '../utils/csrf';
 
 const AuthContext = createContext({});
 
@@ -10,6 +11,15 @@ export const useAuth = () => useContext(AuthContext);
 // API base - fixed relative path (same as last working commit d9a0000)
 const API_BASE = '/api/auth';
 const SESSION_VALIDATE_MIN_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+const withAuthFetch = (options = {}) => ({
+  credentials: 'include',
+  ...options,
+  headers: {
+    ...(options.headers || {}),
+    ...csrfHeaders(),
+  },
+});
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -67,9 +77,9 @@ export const AuthProvider = ({ children }) => {
           // Validate session with backend and get fresh user data (5s timeout for local)
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(`${API_BASE}/session/${sessionData.user.id}`, {
+          const response = await fetch(`${API_BASE}/session`, withAuthFetch({
             signal: controller.signal
-          });
+          }));
           clearTimeout(timeoutId);
           const data = await response.json();
           const authErrorText = String(data?.error || '').toLowerCase();
@@ -174,14 +184,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
-      const response = await fetch(`${API_BASE}/login`, {
+      const response = await fetch(`${API_BASE}/login`, withAuthFetch({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ email, password }),
         signal: controller.signal
-      });
+      }));
       clearTimeout(timeoutId);
 
       const data = await response.json();
@@ -219,6 +229,9 @@ export const AuthProvider = ({ children }) => {
       };
 
       console.log('[AuthContext] login: about to setUser + localStorage + navigate');
+      if (data.csrf_token) {
+        localStorage.setItem('csrf_token', data.csrf_token);
+      }
       localStorage.setItem('auth_session', JSON.stringify(session));
       setUser(userData);
       toast.success('Welcome back!');
@@ -236,8 +249,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch(`${API_BASE}/logout`, withAuthFetch({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }));
+    } catch (error) {
+      console.error('Logout request failed:', error);
+    }
     localStorage.removeItem('auth_session');
+    localStorage.removeItem('csrf_token');
     setUser(null);
     navigate('/login');
     toast.success('Logged out successfully');
@@ -247,17 +271,16 @@ export const AuthProvider = ({ children }) => {
     try {
       if (!user) throw new Error('Not authenticated');
 
-      const response = await fetch(`${API_BASE}/change-password`, {
+      const response = await fetch(`${API_BASE}/change-password`, withAuthFetch({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          user_id: user.id,
           current_password: currentPassword,
           new_password: newPassword
         })
-      });
+      }));
 
       const data = await response.json();
 
@@ -282,7 +305,7 @@ export const AuthProvider = ({ children }) => {
    */
   const getUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/users`);
+      const response = await fetch(`${API_BASE}/users`, withAuthFetch());
       const data = await response.json();
 
       if (!data.success) {
@@ -308,7 +331,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/users?created_by=${user.id}`, {
+      const response = await fetch(`${API_BASE}/users?created_by=${user.id}`, withAuthFetch({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -321,7 +344,7 @@ export const AuthProvider = ({ children }) => {
           permissions: userData.permissions || null,
           status: userData.status || 'active'
         })
-      });
+      }));
 
       const data = await response.json();
 
@@ -347,13 +370,13 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/users/${userId}`, {
+      const response = await fetch(`${API_BASE}/users/${userId}`, withAuthFetch({
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(updates)
-      });
+      }));
 
       const data = await response.json();
 
@@ -398,9 +421,9 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/users/${userId}`, {
+      const response = await fetch(`${API_BASE}/users/${userId}`, withAuthFetch({
         method: 'DELETE'
-      });
+      }));
 
       const data = await response.json();
 
@@ -421,7 +444,7 @@ export const AuthProvider = ({ children }) => {
     if (!user) return;
 
     try {
-      const response = await fetch(`${API_BASE}/session/${user.id}`);
+      const response = await fetch(`${API_BASE}/session`, withAuthFetch());
       const data = await response.json();
 
       if (data.success && data.user && typeof data.user === 'object') {

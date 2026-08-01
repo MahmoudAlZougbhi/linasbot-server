@@ -1,4 +1,15 @@
 import { getApiAbsoluteBaseUrl } from "./apiBaseUrl";
+import { csrfHeaders } from "./csrf";
+
+const liveChatFetch = (url, options = {}) =>
+  fetch(url, {
+    credentials: "include",
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...csrfHeaders(),
+    },
+  });
 
 export const normalizeConversationMessages = (messages = []) =>
   [...messages].sort((left, right) => {
@@ -29,7 +40,7 @@ export const fetchLiveChatConversationMessages = async ({
     const query = params.toString();
     const base = getApiAbsoluteBaseUrl();
     const url = `${base}/api/live-chat/conversation/${userId}/${conversationId}?${query}`;
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await liveChatFetch(url, { signal: controller.signal });
     if (!response.ok) {
       const errText = await response.text();
       throw new Error(`API ${response.status}: ${errText || response.statusText}`);
@@ -59,7 +70,7 @@ export const endLiveChatConversation = async ({
   operatorId = "operator_001",
 }) => {
   const baseURL = getApiAbsoluteBaseUrl();
-  const response = await fetch(`${baseURL}/api/live-chat/end-conversation`, {
+  const response = await liveChatFetch(`${baseURL}/api/live-chat/end-conversation`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -79,7 +90,7 @@ export const endLiveChatConversation = async ({
  */
 export const markConversationRead = async ({ userId, conversationId }) => {
   const baseURL = getApiAbsoluteBaseUrl();
-  const response = await fetch(`${baseURL}/api/live-chat/mark-read`, {
+  const response = await liveChatFetch(`${baseURL}/api/live-chat/mark-read`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -101,7 +112,7 @@ export const editLiveChatMessage = async ({
   newContent,
 }) => {
   const baseURL = getApiAbsoluteBaseUrl();
-  const response = await fetch(`${baseURL}/api/live-chat/edit-message`, {
+  const response = await liveChatFetch(`${baseURL}/api/live-chat/edit-message`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -122,7 +133,7 @@ export const editLiveChatMessage = async ({
 export const fetchFaqMatchContext = async ({ userId, conversationId, messageId }) => {
   const baseURL = getApiAbsoluteBaseUrl();
   const params = new URLSearchParams({ user_id: userId, conversation_id: conversationId, message_id: messageId });
-  const response = await fetch(`${baseURL}/api/live-chat/faq-match-context?${params}`);
+  const response = await liveChatFetch(`${baseURL}/api/live-chat/faq-match-context?${params}`);
   return response.json();
 };
 
@@ -131,7 +142,7 @@ export const fetchFaqMatchContext = async ({ userId, conversationId, messageId }
  */
 export const faqUpdateAnswer = async ({ faqId, newAnswerText, updatedBy = "operator", source = "live_chat_dislike" }) => {
   const baseURL = getApiAbsoluteBaseUrl();
-  const response = await fetch(`${baseURL}/api/faq/update-answer`, {
+  const response = await liveChatFetch(`${baseURL}/api/faq/update-answer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -157,7 +168,7 @@ export const faqCreateFromLivechat = async ({
   matchSimilarity,
 }) => {
   const baseURL = getApiAbsoluteBaseUrl();
-  const response = await fetch(`${baseURL}/api/faq/create-from-livechat`, {
+  const response = await liveChatFetch(`${baseURL}/api/faq/create-from-livechat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

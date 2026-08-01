@@ -25,6 +25,7 @@ import {
 } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import { apiUrl } from "../utils/apiBaseUrl";
+import { authFetch } from '../utils/authFetch';
 
 /**
  * Titles shown on template cards, test-template dropdown, and mappings table.
@@ -199,7 +200,7 @@ const SmartMessaging = () => {
     const run = async () => {
       setSessionStarRatingsLoading(true);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           apiUrl("/api/smart-messaging/post-session-feedback-ratings?limit=400")
         );
         const data = await res.json();
@@ -234,7 +235,7 @@ const SmartMessaging = () => {
       return;
     }
     try {
-      const res = await fetch(
+      const res = await authFetch(
         apiUrl(`/api/smart-messaging/user-language?phone=${encodeURIComponent(p)}`)
       );
       const data = await res.json();
@@ -262,7 +263,7 @@ const SmartMessaging = () => {
         to_date: pausedToDate,
         service_ids: pausedServiceIds.length ? pausedServiceIds : [],
       };
-      const res = await fetch(apiUrl("/api/smart-messaging/campaigns/missed-paused/preview"), {
+      const res = await authFetch(apiUrl("/api/smart-messaging/campaigns/missed-paused/preview"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -307,7 +308,7 @@ const SmartMessaging = () => {
     }
     setPausedSendLoading(true);
     try {
-      const res = await fetch(apiUrl("/api/smart-messaging/campaigns/missed-paused/send"), {
+      const res = await authFetch(apiUrl("/api/smart-messaging/campaigns/missed-paused/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -351,7 +352,7 @@ const SmartMessaging = () => {
         to_date: leadToDate,
         service_ids: leadServiceIds.length ? leadServiceIds : [],
       };
-      const res = await fetch(apiUrl("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/preview"), {
+      const res = await authFetch(apiUrl("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/preview"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -393,7 +394,7 @@ const SmartMessaging = () => {
     }
     setLeadSendLoading(true);
     try {
-      const res = await fetch(apiUrl("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/send"), {
+      const res = await authFetch(apiUrl("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -442,7 +443,7 @@ const SmartMessaging = () => {
       if (headerUrl) {
         payload.header_image_url = headerUrl;
       }
-      const res = await fetch(apiUrl("/api/smart-messaging/send-test-template"), {
+      const res = await authFetch(apiUrl("/api/smart-messaging/send-test-template"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -513,7 +514,7 @@ const SmartMessaging = () => {
   const handleSaveTemplateHeaderImage = async () => {
     setSavingHeaderUrl(true);
     try {
-      const res = await fetch(apiUrl("/api/smart-messaging/settings"), {
+      const res = await authFetch(apiUrl("/api/smart-messaging/settings"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templateHeaderImageUrl: templateHeaderImageUrl.trim() }),
@@ -538,7 +539,7 @@ const SmartMessaging = () => {
   // Fetch smart messaging settings (global toggle, preview mode)
   const fetchSmartMessagingSettings = async () => {
     try {
-      const response = await fetch(apiUrl("/api/smart-messaging/settings"));
+      const response = await authFetch(apiUrl("/api/smart-messaging/settings"));
       const result = await response.json();
       if (result.success) {
         setSmartMessagingEnabled(result.settings?.enabled ?? true);
@@ -553,7 +554,7 @@ const SmartMessaging = () => {
   // Fetch pending approval messages
   const fetchPendingMessages = async () => {
     try {
-      const response = await fetch(apiUrl("/api/smart-messaging/preview-queue?status=pending_approval"));
+      const response = await authFetch(apiUrl("/api/smart-messaging/preview-queue?status=pending_approval"));
       const result = await response.json();
       if (result.success) {
         setPendingMessages(result.messages || []);
@@ -567,8 +568,8 @@ const SmartMessaging = () => {
   const fetchServiceMappings = async () => {
     try {
       const [mappingsResponse, servicesResponse] = await Promise.all([
-        fetch(apiUrl("/api/smart-messaging/service-mappings")),
-        fetch(apiUrl("/api/smart-messaging/services")),
+        authFetch(apiUrl("/api/smart-messaging/service-mappings")),
+        authFetch(apiUrl("/api/smart-messaging/services")),
       ]);
 
       const mappingsResult = await mappingsResponse.json();
@@ -588,7 +589,7 @@ const SmartMessaging = () => {
 
   const fetchTemplateSchedules = async () => {
     try {
-      const response = await fetch(apiUrl("/api/smart-messaging/template-schedules"));
+      const response = await authFetch(apiUrl("/api/smart-messaging/template-schedules"));
       const result = await response.json();
       if (result.success) {
         setTemplateSchedules(result.schedules || {});
@@ -601,7 +602,7 @@ const SmartMessaging = () => {
   // Toggle smart messaging on/off
   const handleToggleSmartMessaging = async () => {
     try {
-      const response = await fetch(apiUrl("/api/smart-messaging/toggle"), {
+      const response = await authFetch(apiUrl("/api/smart-messaging/toggle"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: !smartMessagingEnabled })
@@ -622,7 +623,7 @@ const SmartMessaging = () => {
   // Toggle preview before send setting
   const handleTogglePreviewBeforeSend = async () => {
     try {
-      const response = await fetch(apiUrl("/api/smart-messaging/settings"), {
+      const response = await authFetch(apiUrl("/api/smart-messaging/settings"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ previewBeforeSend: !previewBeforeSend })
@@ -643,7 +644,7 @@ const SmartMessaging = () => {
   // Approve a pending message
   const handleApproveMessage = async (messageId) => {
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/approve`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/approve`), {
         method: "POST"
       });
       const result = await response.json();
@@ -662,7 +663,7 @@ const SmartMessaging = () => {
   // Reject a pending message
   const handleRejectMessage = async (messageId) => {
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/reject`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/reject`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: "Manually rejected" })
@@ -684,7 +685,7 @@ const SmartMessaging = () => {
   const handleBatchApprove = async () => {
     if (selectedPendingMessages.length === 0) return;
     try {
-      const response = await fetch(apiUrl("/api/smart-messaging/preview-queue/batch-approve"), {
+      const response = await authFetch(apiUrl("/api/smart-messaging/preview-queue/batch-approve"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message_ids: selectedPendingMessages })
@@ -707,7 +708,7 @@ const SmartMessaging = () => {
   const handleBatchReject = async () => {
     if (selectedPendingMessages.length === 0) return;
     try {
-      const response = await fetch(apiUrl("/api/smart-messaging/preview-queue/batch-reject"), {
+      const response = await authFetch(apiUrl("/api/smart-messaging/preview-queue/batch-reject"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message_ids: selectedPendingMessages, reason: "Batch rejected" })
@@ -745,7 +746,7 @@ const SmartMessaging = () => {
   const handleSaveServiceMappings = async () => {
     try {
       for (const serviceId of Object.keys(serviceMappings)) {
-        await fetch(apiUrl(`/api/smart-messaging/service-mappings/${serviceId}`), {
+        await authFetch(apiUrl(`/api/smart-messaging/service-mappings/${serviceId}`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -787,7 +788,7 @@ const SmartMessaging = () => {
           payload.delayHours = n;
         }
       }
-      const response = await fetch(apiUrl(`/api/smart-messaging/template-schedules/${templateId}`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/template-schedules/${templateId}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -814,7 +815,7 @@ const SmartMessaging = () => {
     // If we don't have full content, fetch it
     if (!message.full_content && message.message_id) {
       try {
-        const response = await fetch(apiUrl(`/api/smart-messaging/preview-queue/${message.message_id}`));
+        const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${message.message_id}`));
         const result = await response.json();
         if (result.success && result.message) {
           fullContent = result.message.rendered_content || result.message.content || fullContent;
@@ -837,7 +838,7 @@ const SmartMessaging = () => {
     if (!viewingMessage || !viewingMessage.message_id) return;
     setSavingViewEdit(true);
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/preview-queue/${viewingMessage.message_id}/edit`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${viewingMessage.message_id}/edit`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -870,7 +871,7 @@ const SmartMessaging = () => {
     // If we don't have full content, fetch it from the API
     if (!message.full_content) {
       try {
-        const response = await fetch(apiUrl(`/api/smart-messaging/preview-queue/${message.message_id}`));
+        const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${message.message_id}`));
         const result = await response.json();
 
         if (result.success && result.message) {
@@ -894,7 +895,7 @@ const SmartMessaging = () => {
 
     setSavingScheduledEdit(true);
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/preview-queue/${editingScheduledMessage.message_id}/edit`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${editingScheduledMessage.message_id}/edit`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -924,7 +925,7 @@ const SmartMessaging = () => {
     if (!window.confirm("Are you sure you want to cancel this scheduled message?")) return;
 
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/reject`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/reject`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: "Cancelled by user" })
@@ -964,7 +965,7 @@ const SmartMessaging = () => {
 
     setSavingTemplate(editingTemplate.id);
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/templates/${editingTemplate.id}`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/templates/${editingTemplate.id}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1013,7 +1014,7 @@ const SmartMessaging = () => {
 
     setSavingTemplate("new");
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/templates/${newTemplate.id}`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/templates/${newTemplate.id}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1050,7 +1051,7 @@ const SmartMessaging = () => {
     }
 
     try {
-      const response = await fetch(apiUrl(`/api/smart-messaging/templates/${templateId}`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/templates/${templateId}`), {
         method: "DELETE"
       });
 
@@ -1097,7 +1098,7 @@ const SmartMessaging = () => {
 
       const fetchJsonSafely = async (path) => {
         try {
-          const response = await fetch(apiUrl(path));
+          const response = await authFetch(apiUrl(path));
           return await response.json();
         } catch (error) {
           console.error(`Error fetching ${path}:`, error);
@@ -1157,7 +1158,7 @@ const SmartMessaging = () => {
   const handleCollectAndRefresh = async () => {
     try {
       setCollectingCounts(true);
-      const response = await fetch(apiUrl("/api/smart-messaging/collect-scheduled"), {
+      const response = await authFetch(apiUrl("/api/smart-messaging/collect-scheduled"), {
         method: "POST",
       });
       const result = await response.json();
@@ -1189,7 +1190,7 @@ const SmartMessaging = () => {
     try {
       setLoadingCategory(category);
 
-      const response = await fetch(
+      const response = await authFetch(
         apiUrl(`/api/smart-messaging/customers-by-category?category=${encodeURIComponent(category)}`)
       );
       const result = await response.json();
@@ -1233,7 +1234,7 @@ const SmartMessaging = () => {
     try {
       setSavingTemplate(templateId);
 
-      const response = await fetch(apiUrl(`/api/smart-messaging/templates/${templateId}`), {
+      const response = await authFetch(apiUrl(`/api/smart-messaging/templates/${templateId}`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

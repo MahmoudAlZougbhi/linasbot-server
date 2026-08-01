@@ -60,8 +60,12 @@ def _error_response(message: str):
 
 
 async def _run_endpoint(fn: Callable[[], Awaitable[Any]], fallback=None):
+    from fastapi import HTTPException
+
     try:
         return await fn()
+    except HTTPException:
+        raise
     except Exception as e:  # pragma: no cover - defensive catch-all for API stability
         print(f"❌ Endpoint error: {e}")
         import traceback
@@ -219,13 +223,18 @@ async def get_waiting_queue():
 
 
 @app.post("/api/live-chat/takeover")
-async def takeover_conversation(request: TakeoverRequest):
+async def takeover_conversation(request: TakeoverRequest, http_request: Request):
     """Operator takes over a conversation"""
     async def _handler():
+        from modules.api_security import reject_social_operator_mutation, require_session
+
+        session = require_session(http_request)
+        reject_social_operator_mutation(request.user_id)
         result = await live_chat_service.takeover_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
-            operator_id=request.operator_id,
+            operator_id=session.user_id,
+            operator_name=session.email,
         )
         if result.get("success"):
             # Broadcast so all clients (including other tabs) refresh and move conv from Waiting to Active
@@ -236,9 +245,13 @@ async def takeover_conversation(request: TakeoverRequest):
 
 
 @app.post("/api/live-chat/release")
-async def release_conversation(request: ReleaseRequest):
+async def release_conversation(request: ReleaseRequest, http_request: Request):
     """Release conversation back to bot"""
     async def _handler():
+        from modules.api_security import reject_social_operator_mutation, require_session
+
+        require_session(http_request)
+        reject_social_operator_mutation(request.user_id)
         result = await live_chat_service.release_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
@@ -263,15 +276,19 @@ async def mark_conversation_read(request: MarkConversationReadRequest):
 
 
 @app.post("/api/live-chat/send-message")
-async def send_operator_message(request: SendOperatorMessageRequest):
+async def send_operator_message(request: SendOperatorMessageRequest, http_request: Request):
     """Send message from operator to customer"""
     async def _handler():
+        from modules.api_security import reject_social_operator_mutation, require_session
+
+        session = require_session(http_request)
+        reject_social_operator_mutation(request.user_id)
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
         return await live_chat_service.send_operator_message(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
             message=request.message,
-            operator_id=request.operator_id,
+            operator_id=session.user_id,
             message_type=request.message_type,
             adapter=adapter,
             idempotency_key=request.idempotency_key,
@@ -378,9 +395,13 @@ async def get_client_all_conversations(user_id: str):
 
 
 @app.post("/api/live-chat/edit-message")
-async def edit_message(request: EditMessageRequest):
+async def edit_message(request: EditMessageRequest, http_request: Request):
     """Edit a bot message's content (e.g. after operator dislike). Updates Firestore and broadcasts."""
     async def _handler():
+        from modules.api_security import reject_social_operator_mutation, require_session
+
+        require_session(http_request)
+        reject_social_operator_mutation(request.user_id)
         return await live_chat_service.update_message_content(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
@@ -392,24 +413,28 @@ async def edit_message(request: EditMessageRequest):
 
 
 @app.post("/api/live-chat/end-conversation")
-async def end_conversation(request: dict):
+async def end_conversation(request: dict, http_request: Request):
     """Mark conversation as resolved/ended"""
+    from modules.api_security import reject_social_operator_mutation, require_session
+
+    session = require_session(http_request)
     conversation_id = request.get("conversation_id")
     user_id = request.get("user_id")
-    operator_id = request.get("operator_id")
 
-    if not all([conversation_id, user_id, operator_id]):
+    if not all([conversation_id, user_id]):
         return {
             "success": False,
-            "error": "Missing required fields: conversation_id, user_id, operator_id",
+            "error": "Missing required fields: conversation_id, user_id",
         }
+
+    reject_social_operator_mutation(user_id)
 
     async def _handler():
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
         return await live_chat_service.end_conversation(
             conversation_id=conversation_id,
             user_id=user_id,
-            operator_id=operator_id,
+            operator_id=session.user_id,
             adapter=adapter,
         )
 

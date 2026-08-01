@@ -42,8 +42,12 @@ def _ensure_section_dir(section: str) -> str:
 
 
 def _file_path(section: str, file_id: str) -> str:
-    """Get full path for a content file."""
-    return os.path.join(_section_path(section), f"{file_id}.json")
+    """Get full path for a content file (contained under section root)."""
+    from services.safe_path import is_safe_relative_name, resolve_under_root
+
+    if not is_safe_relative_name(file_id):
+        raise ValueError("Invalid file_id")
+    return str(resolve_under_root(_section_path(section), f"{file_id}.json"))
 
 
 def _list_json_files(section: str) -> List[str]:

@@ -42,9 +42,19 @@ import {
   faqCreateFromLivechat,
   markConversationRead as markConversationReadApi,
 } from "../utils/liveChatApi";
+import { useAuth } from "../contexts/AuthContext";
+
+const isSocialChannelUser = (userId, channel) => {
+  const ch = String(channel || "").toLowerCase();
+  if (ch === "instagram" || ch === "facebook") return true;
+  const id = String(userId || "");
+  return id.startsWith("instagram:") || id.startsWith("facebook:");
+};
 
 const LiveChat = ({ mobile = false }) => {
   const [searchParams] = useSearchParams();
+  const { user: authUser } = useAuth();
+  const operatorId = authUser?.id || authUser?.email || "unknown-operator";
   const [activeConversations, setActiveConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [waitingQueue, setWaitingQueue] = useState([]);
@@ -695,7 +705,7 @@ const LiveChat = ({ mobile = false }) => {
   }, []);
 
   useEffect(() => {
-    updateOperatorStatus("operator_001", operatorStatus).catch(() => {
+    updateOperatorStatus(operatorId, operatorStatus).catch(() => {
       // Keep UI responsive even if status update endpoint is temporarily unavailable.
     });
   }, [operatorStatus, updateOperatorStatus]);
@@ -1008,7 +1018,7 @@ const LiveChat = ({ mobile = false }) => {
             setUseMockData(false);
             autoLoadedPagesRef.current = 1;
           } else if (!activeConversationsRef.current?.length) {
-            loadMockData();
+            /* mock fallback removed — show empty/error honestly */ setUseMockData(false);
           }
 
           if (queueResult.status === "fulfilled" && queueResult.value?.success && queueResult.value?.queue) {
@@ -1067,7 +1077,7 @@ const LiveChat = ({ mobile = false }) => {
             }
           }
         } else if (isMountedRef.current && !activeConversations.length) {
-          loadMockData();
+          /* mock fallback removed — show empty/error honestly */ setUseMockData(false);
         }
 
         if (!debouncedSearch.trim()) {
@@ -1087,7 +1097,7 @@ const LiveChat = ({ mobile = false }) => {
         if (is504OrTimeout) {
           toast.error("Server is busy. Will retry automatically.");
         } else if (!activeConversations.length) {
-          loadMockData();
+          /* mock fallback removed — show empty/error honestly */ setUseMockData(false);
         }
       } finally {
         if (isMountedRef.current) setIsLoading(false);
@@ -1286,147 +1296,12 @@ const LiveChat = ({ mobile = false }) => {
 
   // Load mock data fallback
   const loadMockData = () => {
-    setUseMockData(true);
-    const mockConversations = [
-      {
-        conversation_id: "conv_001",
-        user_id: "mock_user_001",
-        user_name: "Sarah Ahmed",
-        user_phone: "+961 70 123456",
-        status: "bot",
-        language: "ar",
-        message_count: 12,
-        last_activity: new Date().toISOString(),
-        duration_seconds: 245,
-        sentiment: "positive",
-        last_message: {
-          content: "When can I book?",
-          is_user: true,
-          timestamp: new Date().toISOString(),
-        },
-      },
-      {
-        conversation_id: "conv_002",
-        user_id: "mock_user_002",
-        user_name: "Marie Dubois",
-        user_phone: "+961 71 234567",
-        status: "human",
-        language: "fr",
-        message_count: 8,
-        last_activity: new Date(Date.now() - 60000).toISOString(),
-        duration_seconds: 180,
-        operator_id: "op_001",
-        sentiment: "neutral",
-        last_message: {
-          content: "Combien coûte le traitement?",
-          is_user: true,
-          timestamp: new Date(Date.now() - 60000).toISOString(),
-        },
-      },
-      {
-        conversation_id: "conv_003",
-        user_id: "mock_user_003",
-        user_name: "John Smith",
-        user_phone: "+961 76 345678",
-        status: "waiting_human",
-        language: "en",
-        message_count: 5,
-        last_activity: new Date(Date.now() - 120000).toISOString(),
-        duration_seconds: 120,
-        sentiment: "negative",
-        last_message: {
-          content: "I need urgent help!",
-          is_user: true,
-          timestamp: new Date(Date.now() - 120000).toISOString(),
-        },
-      },
-    ];
-
-    const mockQueue = [
-      {
-        conversation_id: "conv_003",
-        user_id: "mock_user_003",
-        user_name: "John Smith",
-        user_phone: "+961 76 345678",
-        language: "en",
-        reason: "urgent_detected",
-        wait_time_seconds: 120,
-        sentiment: "negative",
-        message_count: 5,
-      },
-      {
-        conversation_id: "conv_004",
-        user_id: "mock_user_004",
-        user_name: "Fatima Hassan",
-        user_phone: "+961 03 456789",
-        language: "ar",
-        reason: "user_request",
-        wait_time_seconds: 45,
-        sentiment: "neutral",
-        message_count: 3,
-      },
-    ];
-
-    setActiveConversations(mockConversations);
-    setWaitingQueue(mockQueue);
-
-    // Simulate conversation history
-    if (!selectedConversation) {
-      const mockHistory = [
-        {
-          timestamp: new Date(Date.now() - 300000).toISOString(),
-          is_user: true,
-          content: "Hello, I need information about laser hair removal",
-          type: "text",
-        },
-        {
-          timestamp: new Date(Date.now() - 280000).toISOString(),
-          is_user: false,
-          content:
-            "Welcome! We use the latest laser systems for safe, effective hair removal.",
-          type: "text",
-          handled_by: "bot",
-        },
-        {
-          timestamp: new Date(Date.now() - 250000).toISOString(),
-          is_user: true,
-          content: "How many sessions do I need?",
-          type: "text",
-        },
-        {
-          timestamp: new Date(Date.now() - 240000).toISOString(),
-          is_user: false,
-          content:
-            "Typically 6–8 sessions with 4–6 weeks between sessions for best results.",
-          type: "text",
-          handled_by: "bot",
-        },
-        {
-          timestamp: new Date(Date.now() - 200000).toISOString(),
-          is_user: true,
-          content: "What about pricing?",
-          type: "text",
-        },
-        {
-          timestamp: new Date(Date.now() - 180000).toISOString(),
-          is_user: false,
-          content:
-            "Pricing depends on the area treated. Visit us for a free consult and a tailored quote.",
-          type: "text",
-          handled_by: "bot",
-        },
-      ];
-
-      if (mockConversations[0]) {
-        setSelectedConversation({
-          conversation: mockConversations[0],
-          history: mockHistory,
-        });
-      }
-    }
+    // Mock conversation fabrication removed — failures must surface honestly.
+    setUseMockData(false);
+    setActiveConversations((prev) => prev || []);
+    setWaitingQueue((prev) => prev || []);
   };
 
-  // ✅ Load more chats (cursor-based pagination – backend uses cursor, not page offset)
   const loadMoreChats = React.useCallback(async () => {
     if (templateSendFilterActive && templateSendFilterId) return;
     if (loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
@@ -1815,13 +1690,17 @@ const LiveChat = ({ mobile = false }) => {
       toast.error("Cannot take over: missing conversation or user ID");
       return;
     }
+    if (isSocialChannelUser(userId, selectedConversation?.conversation?.channel)) {
+      toast.error("Instagram/Facebook conversations are read-only. Use WhatsApp handoff links.");
+      return;
+    }
 
     try {
       const result = await takeoverConversation(
         conversationId,
         userId,
-        "operator_001"
-      );
+        operatorId
+      )
 
       console.log("📋 Takeover result:", result);
 
@@ -1832,7 +1711,7 @@ const LiveChat = ({ mobile = false }) => {
           const exists = prev.some((conv) => conv.conversation_id === conversationId && conv.user_id === userId);
           const updated = prev.map((conv) =>
             conv.conversation_id === conversationId && conv.user_id === userId
-              ? { ...conv, status: "human", operator_id: "operator_001" }
+              ? { ...conv, status: "human", operator_id: operatorId }
               : conv
           );
           if (exists) return updated;
@@ -1852,7 +1731,7 @@ const LiveChat = ({ mobile = false }) => {
               message_count: 0,
             }),
             status: "human",
-            operator_id: "operator_001",
+            operator_id: operatorId,
           };
           return [newEntry, ...updated];
         });
@@ -1865,7 +1744,7 @@ const LiveChat = ({ mobile = false }) => {
             conversation: {
               ...prev.conversation,
               status: "human",
-              operator_id: "operator_001",
+              operator_id: operatorId,
             },
           }));
         }
@@ -1953,7 +1832,7 @@ const LiveChat = ({ mobile = false }) => {
       const result = await endLiveChatConversation({
         conversationId,
         userId,
-        operatorId: "operator_001",
+        operatorId: operatorId,
       });
 
       if (result.success) {
@@ -1980,6 +1859,10 @@ const LiveChat = ({ mobile = false }) => {
   const sendingRef = React.useRef(false);
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedConversation || isSending || sendingRef.current) return;
+    if (isSocialChannelUser(selectedConversation.conversation?.user_id, selectedConversation.conversation?.channel)) {
+      toast.error("Instagram/Facebook conversations are read-only. Use WhatsApp handoff links.");
+      return;
+    }
 
     sendingRef.current = true;
     setIsSending(true);
@@ -2020,7 +1903,7 @@ const LiveChat = ({ mobile = false }) => {
         selectedConversation.conversation.conversation_id,
         selectedConversation.conversation.user_id,
         messageToSend,
-        "operator_001",
+        operatorId,
         "text",
         idempotencyKey
       );
@@ -2198,7 +2081,7 @@ const LiveChat = ({ mobile = false }) => {
       const res = await faqUpdateAnswer({
         faqId: faqContext.faq_match.faq_id,
         newAnswerText: newAnswer,
-        updatedBy: "operator_001",
+        updatedBy: operatorId,
         source: "live_chat_dislike",
       });
       if (res.success) {
@@ -2245,7 +2128,7 @@ const LiveChat = ({ mobile = false }) => {
         questionText: userQuestion,
         questionLanguage: questionLanguage === "franco" ? "franco" : questionLanguage,
         answerText: newAnswer,
-        createdBy: "operator_001",
+        createdBy: operatorId,
         source: "live_chat_dislike",
         relatedFaqId: faqContext?.faq_match?.faq_id,
         matchSimilarity: faqContext?.faq_match?.similarity,

@@ -21,6 +21,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
+import { authFetch } from '../utils/authFetch';
 
 const TESTING_CHAT_STORAGE_KEY = "testing_chat_sessions_v1";
 const DEFAULT_TEST_PHONE = "123456789";
@@ -735,7 +736,7 @@ const Testing = () => {
                             onClick={async () => {
                               try {
                                 const startTime = Date.now();
-                                const response = await fetch(
+                                const response = await authFetch(
                                   "/api/test-firebase",
                                   {
                                     method: "POST",
@@ -1952,7 +1953,7 @@ const APITestingPanel = () => {
         options.body = JSON.stringify(endpoint.body);
       }
 
-      const response = await fetch(url, options);
+      const response = await authFetch(url, options);
       const data = await response.json();
       const responseTime = Date.now() - startTime;
 

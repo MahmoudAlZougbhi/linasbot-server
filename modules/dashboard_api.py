@@ -199,10 +199,23 @@ async def webhook_status():
 @app.post("/api/debug/simulate-webhook")
 async def simulate_webhook(req: Request):
     """
-    Simulate receiving a webhook (for testing when real WhatsApp messages don't arrive).
+    Simulate receiving a webhook (testing only).
+    Disabled in production. Requires authenticated testing permission via middleware.
     Body: { "phone": "9613000000", "text": "مرحبا" }
-    Runs the same flow as a real webhook - message should appear in Live Chat.
     """
+    from modules.api_security import is_production_env
+
+    allow = os.getenv("ALLOW_DEBUG_SIMULATE_WEBHOOK", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if is_production_env() or not allow:
+        return {
+            "success": False,
+            "error": "simulate-webhook is disabled (non-production requires ALLOW_DEBUG_SIMULATE_WEBHOOK=true)",
+        }
     try:
         from modules.webhook_handlers import process_parsed_message
         try:

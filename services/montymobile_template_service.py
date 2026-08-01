@@ -45,7 +45,16 @@ class MontyMobileTemplateService:
             with open(config_path, 'r', encoding='utf-8') as f:
                 self.config = json.load(f)
             self.templates = self.config.get('templates', {})
-            self.api_config = self.config.get('api_config', {})
+            self.api_config = dict(self.config.get('api_config', {}) or {})
+            # Credentials must come from environment — never from tracked JSON
+            env_key = (os.getenv("MONTYMOBILE_API_KEY") or "").strip()
+            if env_key:
+                self.api_config["api_key"] = env_key
+            else:
+                self.api_config["api_key"] = ""
+            # Never keep a committed secret if one slipped into JSON
+            if self.api_config.get("api_key") and not env_key:
+                self.api_config["api_key"] = ""
             print(f"✅ Loaded {len(self.templates)} MontyMobile templates")
         except (json.JSONDecodeError, KeyError) as e:
             print(f"❌ Error loading MontyMobile config: {e}")
@@ -552,10 +561,16 @@ class MontyMobileTemplateService:
             canon = normalize_template_id(template_id)
             self._log_outbound_template_payload(template_id, canon, payload)
 
-            # Prepare headers
+            # Prepare headers — api key from environment only
+            api_key = (self.api_config.get("api_key") or os.getenv("MONTYMOBILE_API_KEY") or "").strip()
+            if not api_key:
+                return {
+                    "success": False,
+                    "error": "MONTYMOBILE_API_KEY is not configured",
+                }
             headers = {
                 "Tenant": self.api_config['tenant'],
-                "api-key": self.api_config['api_key'],
+                "api-key": api_key,
                 "Content-Type": "application/json"
             }
             
@@ -566,7 +581,7 @@ class MontyMobileTemplateService:
             print(f"   URL: {url}")
             print(f"   Tenant: {self.api_config['tenant']}")
             print(f"   API ID: {self.api_config['api_id']}")
-            print(f"   API Key: {self.api_config['api_key'][:20]}...")
+            print(f"   API Key: configured={bool(api_key)}")
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, headers=headers, json=payload)

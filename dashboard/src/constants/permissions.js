@@ -67,6 +67,8 @@ export const PATH_TO_PERMISSION = {
   '/analytics': 'analytics',
   '/smart-messaging': 'smartMessaging',
   '/settings': 'settings',
+  '/content-managers': 'contentManagers',
+  '/activity-flow': 'activityFlow',
   '/api-debug': 'testing' // Debug route uses testing permission
 };
 
@@ -86,7 +88,9 @@ export const SYSTEM_ROLES = {
       analytics: true,
       smartMessaging: true,
       settings: true,
-      userManagement: true
+      userManagement: true,
+      contentManagers: true,
+      activityFlow: true
     }
   },
   operator: {
@@ -103,7 +107,9 @@ export const SYSTEM_ROLES = {
       analytics: true,
       smartMessaging: true,
       settings: false,
-      userManagement: false
+      userManagement: false,
+      contentManagers: false,
+      activityFlow: true
     }
   },
   viewer: {
@@ -120,7 +126,9 @@ export const SYSTEM_ROLES = {
       analytics: true,
       smartMessaging: false,
       settings: false,
-      userManagement: false
+      userManagement: false,
+      contentManagers: false,
+      activityFlow: true
     }
   }
 };
@@ -135,7 +143,9 @@ export const DEFAULT_PERMISSIONS = {
   analytics: false,
   smartMessaging: false,
   settings: false,
-  userManagement: false
+  userManagement: false,
+  contentManagers: false,
+  activityFlow: false
 };
 
 // Permission keys array for iteration

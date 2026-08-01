@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import UserManagement from '../components/UserManagement/UserManagement';
+import { authFetch } from '../utils/authFetch';
 
 const Settings = () => {
   const { user, changePassword } = useAuth();
@@ -51,7 +52,7 @@ const Settings = () => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const res = await fetch('/api/settings');
+        const res = await authFetch('/api/settings');
         const data = await res.json();
         if (data.success && data.settings) {
           const s = data.settings;
@@ -111,7 +112,7 @@ const Settings = () => {
   const handleSaveSettings = async () => {
     try {
       // Save general settings
-      const generalResponse = await fetch('/api/settings/general', {
+      const generalResponse = await authFetch('/api/settings/general', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,7 +139,7 @@ const Settings = () => {
   const handleSaveNotificationSettings = async () => {
     try {
       // Save notification settings
-      const notificationResponse = await fetch('/api/settings/notifications', {
+      const notificationResponse = await authFetch('/api/settings/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +179,7 @@ const Settings = () => {
           blockBooking: row.blockBooking !== false,
         };
       });
-      const response = await fetch('/api/settings/clinic', {
+      const response = await authFetch('/api/settings/clinic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branchHolidays: normalized }),
@@ -403,7 +404,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-sm text-slate-600">Email</span>
-                    <span className="text-sm font-medium text-slate-800">{user?.email || 'admin@lina.com'}</span>
+                    <span className="text-sm font-medium text-slate-800">{user?.email || ''}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-slate-600">Role</span>

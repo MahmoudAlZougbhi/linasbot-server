@@ -135,8 +135,22 @@ async def restore_backup(request: dict):
                 "error": "Backup filename is required"
             }
         
-        backup_path = str(CONTENT_DIR / backup_filename)
-        
+        try:
+            from services.safe_path import resolve_backup_filename, resolve_under_root
+
+            backup_path = str(
+                resolve_backup_filename(
+                    CONTENT_DIR,
+                    backup_filename,
+                    required_prefix="style_guide_backup_",
+                )
+            )
+        except ValueError:
+            return {
+                "success": False,
+                "error": "Invalid backup filename",
+            }
+
         if not os.path.exists(backup_path):
             return {
                 "success": False,
@@ -149,7 +163,12 @@ async def restore_backup(request: dict):
         
         instructions_path = str(STYLE_GUIDE_FILE)
         if os.path.exists(instructions_path):
-            current_backup_path = str(CONTENT_DIR / f'style_guide_backup_before_restore_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
+            current_backup_path = str(
+                resolve_under_root(
+                    CONTENT_DIR,
+                    f'style_guide_backup_before_restore_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt',
+                )
+            )
             with open(instructions_path, 'r', encoding='utf-8') as f:
                 current_content = f.read()
             with open(current_backup_path, 'w', encoding='utf-8') as f:

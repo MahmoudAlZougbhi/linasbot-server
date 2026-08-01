@@ -266,18 +266,6 @@ const Login = () => {
             </p>
           </div>
 
-          {/* Default credentials (created on first backend start) */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200"
-          >
-            <p className="text-xs text-blue-800 font-medium mb-1">Default credentials:</p>
-            <p className="text-xs text-blue-700">Email: admin@lina.com</p>
-            <p className="text-xs text-blue-700">Password: admin123</p>
-            <p className="text-xs text-blue-600 mt-1">(Created automatically on first backend startup)</p>
-          </motion.div>
         </motion.div>
 
         {/* Footer */}

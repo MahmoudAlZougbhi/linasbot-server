@@ -2992,15 +2992,29 @@ class LiveChatService:
                 # Await WhatsApp send (single delivery; avoids duplicate background tasks)
                 try:
                     result = await adapter.send_text_message(canonical_user_id, message)
-                    if result.get("success"):
-                        print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
-                    else:
-                        print(f"⚠️ WhatsApp send failed but message saved: {result.get('error')}")
+                    if not isinstance(result, dict) or not result.get("success"):
+                        err = (result or {}).get("error") if isinstance(result, dict) else "send failed"
+                        print(f"⚠️ WhatsApp send failed after save: {err}")
+                        return {
+                            "success": False,
+                            "error": f"Message saved locally but delivery failed: {err}",
+                            "delivered": False,
+                        }
+                    print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
                 except Exception as send_error:
-                    print(f"⚠️ WhatsApp adapter error but message saved: {send_error}")
+                    print(f"⚠️ WhatsApp adapter error after save: {send_error}")
+                    return {
+                        "success": False,
+                        "error": f"Message saved locally but delivery failed: {send_error}",
+                        "delivered": False,
+                    }
 
                 completed_ok = True
-                return {"success": True, "message": "Message sent successfully"}
+                return {
+                    "success": True,
+                    "message": "Message sent successfully",
+                    "delivered": True,
+                }
             
         except Exception as e:
             print(f"❌ Error sending operator message: {e}")

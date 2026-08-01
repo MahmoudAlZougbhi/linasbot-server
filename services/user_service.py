@@ -459,38 +459,14 @@ class UserService:
 
     def ensure_default_admin(self) -> Optional[Dict[str, Any]]:
         """
-        Ensure at least one admin user exists
-        Creates default admin@lina.com if no users exist
-
-        Returns:
-            Created admin user or None if users already exist
+        Deprecated: never creates known default credentials.
+        Use AUTH_BOOTSTRAP_* / POST /api/auth/bootstrap-admin instead.
         """
-        try:
-            # Check if any users exist
-            docs = list(
-                self.collection.limit(1).stream(
-                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
-                    retry=None,
-                )
-            )
-
-            if len(docs) == 0:
-                print("No dashboard users found. Creating default admin...")
-                admin = self.create_user({
-                    "email": "admin@lina.com",
-                    "password": "admin123",
-                    "name": "Admin",
-                    "role": "admin",
-                    "permissions": None,
-                    "status": "active"
-                }, created_by=None)
-                print(f"Default admin created: admin@lina.com")
-                return admin
-
-            return None
-        except Exception as e:
-            print(f"Error ensuring default admin: {e}")
-            return None
+        print(
+            "[user_service] ensure_default_admin is disabled — "
+            "refusing to create hardcoded admin credentials"
+        )
+        return None
 
     def count_active_admins(self) -> int:
         """Count the number of active admin users"""

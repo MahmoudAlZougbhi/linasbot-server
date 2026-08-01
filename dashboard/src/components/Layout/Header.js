@@ -224,7 +224,7 @@ const Header = ({ onMenuClick, botStatus }) => {
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium text-slate-700">{user?.name || 'Admin'}</p>
-                <p className="text-xs text-slate-500">{user?.email || 'admin@lina.com'}</p>
+                <p className="text-xs text-slate-500">{user?.email || ''}</p>
               </div>
               <ChevronDownIcon className={`w-4 h-4 text-slate-600 transition-transform ${
                 showDropdown ? 'rotate-180' : ''
@@ -244,7 +244,7 @@ const Header = ({ onMenuClick, botStatus }) => {
                   {/* User Info */}
                   <div className="px-4 py-3 border-b border-white/20">
                     <p className="text-sm font-medium text-slate-800">{user?.name || 'Admin'}</p>
-                    <p className="text-xs text-slate-500">{user?.email || 'admin@lina.com'}</p>
+                    <p className="text-xs text-slate-500">{user?.email || ''}</p>
                   </div>
 
                   {/* Menu Items */}

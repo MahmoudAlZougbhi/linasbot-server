@@ -49,8 +49,17 @@ from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 if PYDUB_AVAILABLE and AudioSegment and FFMPEG_PATH:
     AudioSegment.converter = FFMPEG_PATH
 
-# Initialize FastAPI app
-app = FastAPI()
+# Initialize FastAPI app (hide OpenAPI surfaces in production)
+_env_name = (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "").strip().lower()
+_disable_docs = (
+    _env_name in {"prod", "production"}
+    or os.getenv("DISABLE_API_DOCS", "").strip().lower() in {"1", "true", "yes", "on"}
+)
+app = FastAPI(
+    docs_url=None if _disable_docs else "/docs",
+    redoc_url=None if _disable_docs else "/redoc",
+    openapi_url=None if _disable_docs else "/openapi.json",
+)
 
 # Configure CORS middleware to allow frontend access
 app.add_middleware(
@@ -66,9 +75,14 @@ app.add_middleware(
         "http://www.linasaibot.com",
     ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"],
 )
+
+# Deny-by-default dashboard API auth (must be after CORS so preflight works)
+from modules.api_security import DashboardAuthMiddleware  # noqa: E402
+
+app.add_middleware(DashboardAuthMiddleware)
 
 # Initialize HTTP client for WhatsApp API calls (Meta provider only)
 # Avoids URL with "None" when Meta credentials are missing

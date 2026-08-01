@@ -325,13 +325,44 @@ async def receive_webhook(request: Request):
     Inbound WhatsApp (MontyMobile / Meta Cloud / any provider) must not invoke the AI.
     Facebook Messenger and Instagram DMs are handled only on /webhook/meta-messaging.
     WhatsApp numbers remain available as social-channel handoff destinations only.
+
+    Authentication: require Meta X-Hub-Signature-256 when WHATSAPP_APP_SECRET is set,
+    otherwise require X-Webhook-Secret == WHATSAPP_WEBHOOK_INGEST_SECRET.
+    In production, one of these secrets must be configured.
     """
     global _last_webhook_received_at, _last_webhook_parsed_at, _last_webhook_user_id
     try:
         raw_body = await request.body()
+        app_secret = (os.getenv("WHATSAPP_APP_SECRET") or os.getenv("META_APP_SECRET") or "").strip()
+        ingest_secret = (os.getenv("WHATSAPP_WEBHOOK_INGEST_SECRET") or "").strip()
+        env = (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "").strip().lower()
+        is_prod = env in {"prod", "production"}
+
+        authenticated = False
+        if app_secret:
+            from services.meta_messaging import verify_meta_signature
+
+            if verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), app_secret):
+                authenticated = True
+            else:
+                raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        elif ingest_secret:
+            provided = (request.headers.get("X-Webhook-Secret") or "").strip()
+            if not provided or provided != ingest_secret:
+                raise HTTPException(status_code=401, detail="Invalid webhook secret")
+            authenticated = True
+        elif is_prod:
+            raise HTTPException(
+                status_code=503,
+                detail="WhatsApp webhook authentication is not configured",
+            )
+        else:
+            # Local/dev without secrets: accept but do not run AI
+            authenticated = True
+
         _last_webhook_received_at = time.time()
         print(
-            f"📥 WhatsApp webhook POST received ({len(raw_body)} bytes) — "
+            f"📥 WhatsApp webhook POST received ({len(raw_body)} bytes) auth={authenticated} — "
             "inbound AI disabled (social handoff-only policy)"
         )
         return JSONResponse(
@@ -342,6 +373,8 @@ async def receive_webhook(request: Request):
                 "accepted": 0,
             },
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"CRITICAL ERROR acknowledging WhatsApp webhook: {e}")
         return JSONResponse(

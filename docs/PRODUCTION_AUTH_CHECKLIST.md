@@ -30,7 +30,7 @@ netstat -tlnp | grep 8003
 # From the server itself - does the backend respond?
 curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8003/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@lina.com","password":"admin123"}'
+  -d '{"email":"<YOUR_ADMIN_EMAIL>","password":"<YOUR_ADMIN_PASSWORD>"}'
 ```
 
 Expected: `200` or `401` (not `000` or timeout).
@@ -57,7 +57,7 @@ Expected: `location /api/` with `proxy_pass http://127.0.0.1:8003;`
 # Test through nginx from the server
 curl -s -o /dev/null -w "%{http_code}\n" -X POST https://www.linasaibot.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@lina.com","password":"admin123"}' \
+  -d '{"email":"<YOUR_ADMIN_EMAIL>","password":"<YOUR_ADMIN_PASSWORD>"}' \
   -k
 ```
 
