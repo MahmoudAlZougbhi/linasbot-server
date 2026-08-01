@@ -134,6 +134,10 @@ class TestMessageRequest(BaseModel):
     phone: str
     message: str
     provider: str = "meta"
+    # When set to instagram|facebook, Testing Lab exercises the Meta social processor
+    # (same routing/tools/handoff as production) with a capture-only send adapter.
+    channel: Optional[str] = None
+    simulate_external_send: bool = False
 
 
 class TestImageRequest(BaseModel):

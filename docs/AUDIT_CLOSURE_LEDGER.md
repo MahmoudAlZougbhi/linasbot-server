@@ -32,3 +32,19 @@ Baseline: `main` @ `709c296`. Branch: `fix/audit-closure-waves`.
 | Tracked default password UI/docs | CLOSED | removed |
 
 Tests: `tests/test_wave1_security.py` — 20 passed.
+
+
+## Wave 2 — Social AI / channel / Testing Lab
+
+| ID | Status | Evidence |
+|---|---|---|
+| V2-AI-002 hours/مواعيد | CLOSED | `is_appointment_request` hours exclusion |
+| V2-AI-003 personal care | CLOSED | bare `person` keyword removed + personal guard |
+| V2-AI-004 Arabic human | CLOSED | patterns + keywords for احكي مع حدا |
+| V2-AI-005 Arabizi booking | CLOSED | `bade a7jez` patterns |
+| V2-AI-006 Testing Lab parity | CLOSED | `channel=instagram\|facebook` → `process_meta_social_event(simulation=True)` |
+| V2-OPS-001 false delivery | CLOSED (W1) | adapter-bound success |
+| force_intent leak scrub | CLOSED | clear booking-flavored reply when declined |
+| Contact matrix | CLOSED | tests assert exact wa.me numbers |
+
+Tests: `tests/test_wave2_social_routing.py` + wave1 — 31 passed.

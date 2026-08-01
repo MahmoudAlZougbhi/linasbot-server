@@ -11,6 +11,7 @@ import tempfile
 import os
 import io
 import json
+import re
 from typing import Dict, Any, List, Optional
 
 from fastapi import File, UploadFile, Form, Request
@@ -275,11 +276,93 @@ async def switch_provider(request: ProviderSwitchRequest):
         return {"success": False, "error": str(e)}
 
 
+async def _test_message_meta_social(
+    request: TestMessageRequest,
+    start_time: datetime.datetime,
+    channel: str,
+):
+    """Testing Lab Meta social parity path — no real Graph delivery unless explicitly requested."""
+    from services.meta_messaging import MetaMessagingSettings, get_meta_messaging_settings
+    from services.social_messaging_processor import process_meta_social_event
+
+    sender_id = re.sub(r"\D", "", request.phone or "") or "lab_sender"
+    user_id = f"{channel}:{sender_id}"
+    dashboard_clear_captured_for_user(user_id)
+
+    async def capture_send(to_number, message_text=None, image_url=None, audio_url=None):
+        await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
+        return True
+
+    settings = get_meta_messaging_settings()
+    # Lab may run without live Meta credentials; supply inert placeholders for identity scoping.
+    if not settings.page_access_token:
+        settings = MetaMessagingSettings(
+            enabled=True,
+            page_access_token="lab-simulation-token",
+            page_id=settings.page_id or "lab-page",
+            instagram_account_id=settings.instagram_account_id or "lab-ig",
+            app_secret=settings.app_secret or "",
+            verify_token=settings.verify_token or "",
+            graph_api_version=settings.graph_api_version or "v24.0",
+        )
+
+    event = {
+        "channel": channel,
+        "sender_id": sender_id,
+        "text": request.message,
+        "message_id": f"lab_{int(datetime.datetime.now().timestamp() * 1000)}",
+        "account_id": settings.instagram_account_id if channel == "instagram" else settings.page_id,
+    }
+    await process_meta_social_event(
+        event,
+        settings,
+        capture_send=capture_send,
+        simulation=True,
+        combine_delay=0.0,
+    )
+    end_time = datetime.datetime.now()
+    captured = dashboard_bot_responses.get(user_id) or []
+    bot_response = ""
+    if captured:
+        last = captured[-1]
+        bot_response = last.get("text") or last.get("message") or ""
+        if isinstance(last, str):
+            bot_response = last
+    # Normalize capture list shapes
+    if not bot_response and isinstance(captured, list):
+        for item in reversed(captured):
+            if isinstance(item, dict):
+                bot_response = item.get("text") or item.get("message") or item.get("content") or ""
+            elif isinstance(item, str):
+                bot_response = item
+            if bot_response:
+                break
+    return {
+        "success": True,
+        "bot_response": bot_response,
+        "response_time_ms": int((end_time - start_time).total_seconds() * 1000),
+        "channel": channel,
+        "user_id": user_id,
+        "parity_mode": "meta_social",
+        "external_delivery": False,
+        "simulation": True,
+        "note": "Simulated Meta social path — no external Graph send",
+    }
+
+
 @app.post("/api/test-message")
 async def test_message(request: TestMessageRequest):
-    """Send a test message through the bot"""
+    """Send a test message through the bot.
+
+    Set ``channel`` to ``instagram`` or ``facebook`` to exercise the production
+    Meta social path (handoff router, tool exclusion, identity scoping) with a
+    capture-only adapter. Omitting channel keeps the legacy WhatsApp-style lab path.
+    """
     try:
         start_time = datetime.datetime.now()
+        channel = (request.channel or "").strip().lower() or None
+        if channel in {"instagram", "facebook"}:
+            return await _test_message_meta_social(request, start_time, channel)
         
         try:
             adapter = WhatsAppFactory.switch_provider(request.provider)

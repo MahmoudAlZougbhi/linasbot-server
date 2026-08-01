@@ -1992,6 +1992,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 handover_degree = "none"
                 escalation_reason_from_gpt = None
                 user_data["awaiting_human_handover_confirmation"] = False
+                # Drop booking/branch/WhatsApp handoff wording that leaked from GPT tools.
+                _leak = re.compile(
+                    r"(?:أي\s*فرع|which\s*branch|whatsapp|واتساب|antelias|أنطلياس|"
+                    r"ramlet|الرملة|are\s*you\s*male\s*or\s*female|"
+                    r"شاب\s*أو\s*صبية|book(?:ing)?\s*(?:an?\s*)?appointment)",
+                    re.IGNORECASE | re.UNICODE,
+                )
+                if bot_reply_text and _leak.search(str(bot_reply_text)):
+                    bot_reply_text = None
+                    user_data["_social_force_fresh_answer"] = True
 
     def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []

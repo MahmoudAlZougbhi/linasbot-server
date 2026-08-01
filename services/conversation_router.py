@@ -38,6 +38,10 @@ HUMAN_REQUEST_PATTERNS = [
     r"واحد\s*(?:منكم|منكن)",
     r"بدي\s*حد",
     r"حابب\s*أحكي\s*مع",
+    r"بدي\s*احكي\s*مع",
+    r"بدّي\s*احكي\s*مع",
+    r"بدي\s*أحكي\s*مع",
+    r"احكي\s*مع\s*حدا",
     r"بدي\s*خدمة\s*العملاء",
     r"ما\s*بدي\s*بوت",
     r"ممكن\s*(?:حد|واحد)\s*(?:يحكي|يتكلم)",
@@ -80,10 +84,14 @@ HUMAN_REQUEST_RE = re.compile("|".join(f"({p})" for p in HUMAN_REQUEST_PATTERNS)
 # Simple keywords (fallback when regex misses)
 HUMAN_REQUEST_KEYWORDS = [
     "human", "موظف", "موظفة", "حد يحكي", "بدي حد", "واحد منكم", "شخص حقيقي",
-    "agent", "representative", "employee", "person", "customer service", "service client",
+    # Do not use bare English "person" — matches "personal care tips" falsely.
+    "representative", "employee", "customer service", "service client",
     "بدي حدا", "بدي انسان", "حوّلني", "حولني", "تحويل لموظف",
+    "بدي احكي مع حدا", "بدّي احكي مع حدا", "احكي مع حدا", "مع حدا",
+    "بدي احكي مع شخص", "احكي مع شخص",
     "bade hada", "baddi hada", "bade a7ke", "ehke ma3", "hawelni", "7awelni",
     "ما بدي بوت", "live agent", "no bot", "not a bot", "pas de bot",
+    "human agent", "real person",
 ]
 
 # --- Gender answer patterns ---
@@ -178,9 +186,14 @@ def is_human_request(message: str) -> bool:
     t = _normalize(message)
     if len(t) < 3:
         return False
+    # Personal-care / product questions containing "person" must not escalate.
+    t_lower = t.lower()
+    if re.search(r"\bpersonal\b", t_lower) and not re.search(
+        r"\b(?:real\s+person|speak|talk|human\s+agent)\b", t_lower
+    ):
+        return False
     if HUMAN_REQUEST_RE.search(t):
         return True
-    t_lower = t.lower()
     return any(kw in t_lower for kw in HUMAN_REQUEST_KEYWORDS)
 
 

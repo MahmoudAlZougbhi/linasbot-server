@@ -32,10 +32,24 @@ DEFAULT_SOCIAL_WHATSAPP_CONTACTS = {
 
 _APPOINTMENT_RE = re.compile(
     r"(?:"
-    r"حجز|احجز|أحجز|موعد|مواعيد|تأجيل|اجل|أجل|غيّر\s*موعد|غير\s*موعد|إلغاء\s*موعد|الغاء\s*موعد|"
+    # Explicit booking verbs / appointment actions (not bare "hours/schedule" words)
+    r"حجز|احجز|أحجز|أريد\s*موعد|بدي\s*موعد|بدّي\s*موعد|تأجيل|اجل|أجل|غيّر\s*موعد|غير\s*موعد|إلغاء\s*موعد|الغاء\s*موعد|"
+    r"(?<![A-Za-z])موعد(?!\s*العمل)(?!\s*الدوام)(?!\s*الفتح)|"
     r"book(?:ing)?|appointment|reserve|reservation|reschedul|cancel\s+(?:my\s+)?appointment|"
     r"rendez[- ]?vous|\brdv\b|réserv|reporter\s+(?:mon\s+)?rendez|"
-    r"7ajz|hajz|mou3?ed|maw3?ed|bade\s*e?7?jez|baddi\s*e?7?jez|bade\s*7jez|baddi\s*7jez"
+    r"7ajz|hajz|"
+    r"bade\s*(?:a|e)?7?jez|baddi\s*(?:a|e)?7?jez|bade\s*7jez|baddi\s*7jez|"
+    r"bade\s*a7jez|baddi\s*a7jez|bade\s*ahjez|baddi\s*ahjez"
+    r")",
+    re.IGNORECASE | re.UNICODE,
+)
+
+# Opening-hours / schedule questions must stay on AI (do not start handoff).
+_HOURS_QUESTION_RE = re.compile(
+    r"(?:"
+    r"مواعيد\s*(?:العمل|الدوام|الفتح|الافتتاح)|ساعات\s*(?:العمل|الدوام)|دوامكن|دوامكم|"
+    r"open(?:ing)?\s*hours|working\s*hours|what\s*time\s*do\s*you\s*open|"
+    r"horaires?|heures?\s*d[' ]ouverture"
     r")",
     re.IGNORECASE | re.UNICODE,
 )
@@ -89,8 +103,18 @@ def is_social_channel(channel: Optional[str]) -> bool:
 
 
 def is_appointment_request(message: str) -> bool:
-    return bool(_APPOINTMENT_RE.search(message or ""))
-
+    text = message or ""
+    if _HOURS_QUESTION_RE.search(text):
+        return False
+    # Bare "مواعيد" without booking verbs is treated as hours/info, not booking.
+    stripped = text.strip()
+    if re.fullmatch(r"مواعيد\s*[؟?]?", stripped):
+        return False
+    if "مواعيد" in stripped and not re.search(r"حجز|احجز|أحجز|book|appointment|موعد\b", stripped):
+        # e.g. "شو مواعيد العمل؟" — hours, not booking
+        if _HOURS_QUESTION_RE.search(stripped) or re.search(r"العمل|الدوام|الفتح|دوام", stripped):
+            return False
+    return bool(_APPOINTMENT_RE.search(text))
 
 def detect_branch(message: str) -> Optional[str]:
     text = message or ""
