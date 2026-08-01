@@ -1474,6 +1474,30 @@ class LiveChatService:
                     return self._cached_unified_response(
                         page_num, safe_size, filter_state, search
                     )
+                # Default: never N+1 full-scan the conversation collection on list path.
+                # Explicit opt-in only for emergency recovery (admin/backfill).
+                allow_legacy = (os.getenv("LIVE_CHAT_ALLOW_LEGACY_SCAN") or "").strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                }
+                if not allow_legacy:
+                    print(
+                        "[live_chat:unified] index empty — refusing legacy full scan "
+                        "(set LIVE_CHAT_ALLOW_LEGACY_SCAN=1 only for emergency recovery)"
+                    )
+                    return {
+                        "success": True,
+                        "chats": [],
+                        "total": 0,
+                        "page": page_num,
+                        "page_size": safe_size,
+                        "has_more": False,
+                        "next_cursor": None,
+                        "index_empty": True,
+                        "requires_index_rebuild": True,
+                    }
                 fallback = await self._fallback_unified_chats_with_timeout(
                     search=search,
                     page=page_num,
@@ -1635,34 +1659,21 @@ class LiveChatService:
             print(f"❌ Error in get_unified_chats: {e}")
             import traceback
             traceback.print_exc()
-            fallback = await self._fallback_unified_chats_with_timeout(
-                search=search,
-                page=page_num,
-                page_size=safe_size,
-                filter_state=filter_state,
-            )
-            if fallback.get("success"):
-                if (
-                    page_num == 1
-                    and not cursor
-                    and not search_val
-                    and not state_values
-                ):
-                    self._unified_chats_cache = list(fallback.get("chats") or [])
-                    self._unified_chats_cache_time = utc_now()
-                    self._unified_chats_cache_has_more = bool(
-                        fallback.get("has_more")
-                    )
-                    self._unified_chats_cache_total = int(
-                        fallback.get("total")
-                        or len(fallback.get("chats") or [])
-                    )
-                    self._unified_chats_cache_next_cursor = fallback.get(
-                        "next_cursor"
-                    )
-                    self._unified_chats_cache_page_size = safe_size
-                    self._persist_unified_cache_to_disk()
-                return fallback
+            allow_legacy = (os.getenv("LIVE_CHAT_ALLOW_LEGACY_SCAN") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            if allow_legacy:
+                fallback = await self._fallback_unified_chats_with_timeout(
+                    search=search,
+                    page=page_num,
+                    page_size=safe_size,
+                    filter_state=filter_state,
+                )
+                if fallback.get("success"):
+                    return fallback
             if can_use_stale_cache:
                 return self._cached_unified_response(
                     page_num, safe_size, filter_state, search
