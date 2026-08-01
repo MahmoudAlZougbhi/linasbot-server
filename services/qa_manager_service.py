@@ -5,10 +5,10 @@ Handles all Q&A pair operations with 90% match logic
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
+import uuid
 from datetime import datetime
 from difflib import SequenceMatcher
 from typing import Any, cast
@@ -67,7 +67,8 @@ class QAManager:
         Create a new Q&A pair in all 4 languages
         Returns: QA pair ID
         """
-        qa_id = hashlib.md5(f"{question_ar}{datetime.now()}".encode()).hexdigest()[:12]
+        # Non-cryptographic record id (not a security digest).
+        qa_id = uuid.uuid4().hex[:12]
 
         qa_pair = {
             "id": qa_id,

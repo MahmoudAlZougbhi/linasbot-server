@@ -31,7 +31,8 @@ Closure commit baseline for this cleanup: `bc1308d`.
 | Route/browser smoke | `App.routes.test.jsx` + Vitest suite | covered in 42 FE tests |
 | npm audit gate | `node scripts/npm_audit_gate.mjs` | pass — see exception below |
 | Quality Gates workflow | `.github/workflows/quality-gates.yml` | includes mandatory FE `typecheck`; deploy waits on Quality Gates success |
-| Bandit | `bandit -q -r services modules utils -lll` | exit 0 (no new high+ blockers beyond existing baseline scan) |
+| Bandit | `bandit -q -r services modules utils -lll` | exit 0 (high+ clean after QA id fix) |
+| Hosted FE Node | Quality Gates `setup-node` | **22** (jsdom/undici requires ≥22.19) |
 
 ## Endpoint AuthN/AuthZ (final)
 
@@ -74,9 +75,17 @@ Both highs are the documented GHSA-qwww false-positive on patched Declarative `7
 - No first-party `# type: ignore`, no `ignore_errors`, no per-file mypy ignore lists
 - FE: `checkJs` + `strict` + `noImplicitAny` + `strictNullChecks` + `noUncheckedIndexedAccess`; `maxNodeModuleJsDepth: 0` / `skipLibCheck` for third-party only
 
-## External actions (not performed)
+### Hosted CI follow-up (post first push)
 
-Push; merge; deploy; secret rotation; production backfill; Meta config change; customer message send.
+1. **Frontend tests:** Pin Quality Gates + `dashboard` engines to Node **≥22.19** so jsdom/undici workers start (Node 20 crashed vitest).
+2. **Bandit B324:** Replace non-security `hashlib.md5` QA record id with `uuid.uuid4().hex[:12]` in `services/qa_manager_service.py` (no `# nosec`).
+
+Knowledge Architecture exclusions remain frozen and untouched.
+
+## External actions
+
+- Push of `fix/audit-closure-waves`: performed (non-force).
+- Not performed: merge; deploy; secret rotation; production backfill; Meta config change; customer message send.
 
 ## Safety
 
