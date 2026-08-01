@@ -4,23 +4,10 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-# Isolate persistent auth store under temp dir before imports that touch DATA_ROOT
-_TEST_ROOT = tempfile.mkdtemp(prefix="linas_wave1_")
-os.environ["LINASBOT_DATA_ROOT"] = _TEST_ROOT
-os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
-os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
-os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave1-test-secret")
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
-os.environ["DISABLE_API_DOCS"] = "true"
-os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
-
 
 from modules.api_security import (
     is_public_api,
@@ -116,6 +103,8 @@ class TestRBACHelpers:
     def test_public_and_permissions(self):
         assert is_public_api("GET", "/api/health")
         assert is_public_api("POST", "/api/auth/login")
+        assert not is_public_api("POST", "/api/auth/logout")
+        assert not is_public_api("POST", "/api/auth/bootstrap-admin")
         assert not is_public_api("GET", "/api/analytics/summary")
         assert required_permission_for("GET", "/api/analytics/summary") == "analytics"
         assert required_permission_for("POST", "/api/smart-messaging/toggle") == "smartMessaging"

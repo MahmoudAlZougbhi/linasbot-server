@@ -1,20 +1,28 @@
-# -*- coding: utf-8 -*-
 """
 Core module: FastAPI app setup, imports, and configuration
 This module handles the core initialization of the FastAPI application
 and all essential imports required by the bot.
 """
 
+from __future__ import annotations
+
 import os
-from dotenv import load_dotenv
+from typing import Any
+
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
-import datetime
+
+from config import FFMPEG_PATH, WHATSAPP_PHONE_NUMBER_ID
+from modules.env_bootstrap import ENV_LOADED as _ENV_LOADED  # load .env before config
+
+if not _ENV_LOADED:
+    raise RuntimeError("env bootstrap did not run")
 
 # Try to import pydub, handle gracefully if it fails
 try:
     from pydub import AudioSegment
+
     PYDUB_AVAILABLE = True
 except ImportError as e:
     print("Warning: pydub not available - " + str(e))
@@ -22,28 +30,10 @@ except ImportError as e:
     PYDUB_AVAILABLE = False
     AudioSegment = None
 
-# Load environment variables: .env first, then .env.local (local overrides)
-load_dotenv()
-_env_local = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env.local")
-if os.path.isfile(_env_local):
-    load_dotenv(_env_local)
-
-# Import configuration
-import config
-from config import FFMPEG_PATH, WHATSAPP_API_TOKEN, WHATSAPP_PHONE_NUMBER_ID
-
 # Import Firebase utilities
-from utils.utils import initialize_firestore, get_firestore_db, set_human_takeover_status
-
 # Import handlers
-from handlers.text_handlers import handle_message, start_command
-from handlers.photo_handlers import handle_photo_message
-from handlers.voice_handlers import handle_voice_message
-from handlers.training_handlers import start_training_mode, exit_training_mode
 
 # Import services
-from services.api_integrations import generate_daily_report_command, log_report_event
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 # Ensure FFMPEG is configured for pydub
 if PYDUB_AVAILABLE and AudioSegment and FFMPEG_PATH:
@@ -51,10 +41,12 @@ if PYDUB_AVAILABLE and AudioSegment and FFMPEG_PATH:
 
 # Initialize FastAPI app (hide OpenAPI surfaces in production)
 _env_name = (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "").strip().lower()
-_disable_docs = (
-    _env_name in {"prod", "production"}
-    or os.getenv("DISABLE_API_DOCS", "").strip().lower() in {"1", "true", "yes", "on"}
-)
+_disable_docs = _env_name in {"prod", "production"} or os.getenv("DISABLE_API_DOCS", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 app = FastAPI(
     docs_url=None if _disable_docs else "/docs",
     redoc_url=None if _disable_docs else "/redoc",
@@ -69,7 +61,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:8003",  # Backend (for dashboard serving)
         "http://127.0.0.1:8003",
-        "https://linasaibot.com",   # Production domain
+        "https://linasaibot.com",  # Production domain
         "http://linasaibot.com",
         "https://www.linasaibot.com",
         "http://www.linasaibot.com",
@@ -87,16 +79,16 @@ app.add_middleware(DashboardAuthMiddleware)
 # Initialize HTTP client for WhatsApp API calls (Meta provider only)
 # Avoids URL with "None" when Meta credentials are missing
 _phone_id = (str(WHATSAPP_PHONE_NUMBER_ID).strip() if WHATSAPP_PHONE_NUMBER_ID else "") or "0"
-WHATSAPP_API_BASE_URL = "https://graph.facebook.com/v19.0/{}".format(_phone_id)
+WHATSAPP_API_BASE_URL = f"https://graph.facebook.com/v19.0/{_phone_id}"
 whatsapp_api_client = httpx.AsyncClient(base_url=WHATSAPP_API_BASE_URL)
 
 # Dashboard statistics tracking
-dashboard_stats = {
+dashboard_stats: dict[str, Any] = {
     "total_messages": 0,
     "active_users": set(),
     "response_times": [],
-    "conversations": []
+    "conversations": [],
 }
 
 # Global variable to capture bot responses for dashboard
-dashboard_bot_responses = {}
+dashboard_bot_responses: dict[str, Any] = {}

@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 Shared media helpers for dashboard playback and WhatsApp delivery.
 """
 
+from __future__ import annotations
+
 import mimetypes
 import os
 from pathlib import Path
-from typing import Optional
 from urllib.parse import quote, unquote, urlparse
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MEDIA_SERVE_DIR = PROJECT_ROOT / "static" / "audio"
@@ -57,7 +56,7 @@ def sanitize_media_filename(filename: str) -> str:
     return safe_name
 
 
-def resolve_media_file_path(filename: str) -> Optional[Path]:
+def resolve_media_file_path(filename: str) -> Path | None:
     """
     Resolve a requested media filename into a safe absolute path.
     """

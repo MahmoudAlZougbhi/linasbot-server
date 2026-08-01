@@ -1,24 +1,22 @@
 target-version = "py311"
 line-length = 120
-exclude = [
+extend-exclude = [
   ".venv*",
   "node_modules",
   "dashboard/build",
-  "frontend",
+  "dashboard/dist",
   "live_chat_archive",
   "mobile",
   "linasbot_data",
   "data",
+  "scripts/debug_resume_probe.py",
 ]
 
 [lint]
 select = ["E", "F", "I", "B", "UP"]
 ignore = [
-  "E501",  # line length handled by formatter preference
-  "B008",  # FastAPI Depends in defaults
+  "E501",  # formatter owns line length
+  "B008",  # FastAPI Depends() in defaults is idiomatic
 ]
 
-[lint.per-file-ignores]
-"tests/*" = ["B011", "E402"]
-"handlers/*" = ["E402", "F401", "F841"]
-"modules/*" = ["E402"]
+# No per-file ignore lists — fix findings in source.

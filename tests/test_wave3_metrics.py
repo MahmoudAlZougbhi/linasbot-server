@@ -4,19 +4,10 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-
-_TEST_ROOT = tempfile.mkdtemp(prefix="linas_wave3_")
-os.environ["LINASBOT_DATA_ROOT"] = _TEST_ROOT
-os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
-os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
-os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave3-test-secret")
-os.environ.setdefault("ENVIRONMENT", "test")
-
 
 from modules.api_security import PERMISSION_KEYS, SYSTEM_ROLE_PERMISSIONS
 from services.analytics_events import AnalyticsEvents

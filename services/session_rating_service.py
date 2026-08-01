@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Post-booking session rating: prompt user on WhatsApp (numbered 1–5) and log analytics.
 Uses the same adapter as the rest of the bot (MontyMobile send_button_message falls back to text).
@@ -9,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from typing import Optional
+from typing import Any
 
 import config
 from services.analytics_events import analytics
@@ -20,7 +19,7 @@ SESSION_RATING_DELAY_SECONDS = float(os.getenv("SESSION_RATING_DELAY_SECONDS", "
 _rating_prompt_inflight: set[str] = set()
 
 
-def _parse_star_from_user_text(text: str) -> Optional[int]:
+def _parse_star_from_user_text(text: str) -> int | None:
     raw = (text or "").strip()
     if not raw:
         return None
@@ -57,7 +56,7 @@ def _build_rating_prompt_body(lang: str) -> str:
     )
 
 
-async def try_handle_session_rating_reply(user_id: str, user_input_text: str, adapter) -> bool:
+async def try_handle_session_rating_reply(user_id: str, user_input_text: str, adapter: Any) -> bool:
     """If user is awaiting rating prompt, parse 1–5 and log. Returns True if handled."""
     ud = config.user_data_whatsapp.get(user_id) or {}
     if not ud.get("awaiting_session_rating"):

@@ -4,83 +4,84 @@ BotDataService - Dynamic Knowledge Base Builder
 Combines existing API responses to build knowledge base dynamically
 """
 
-import os
+from __future__ import annotations
+
 import asyncio
-import httpx
-import json
 import time
-from typing import Dict, List, Optional
+from typing import Any, cast
+
+import httpx
 from dotenv import load_dotenv
+
 import api_config
 
 # Load environment variables
 load_dotenv()
+
 
 class BotDataService:
     """
     Service to build dynamic knowledge base from API endpoints
     Replaces local file loading with API-based data retrieval
     """
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         self.base_url = api_config.LINASLASER_API_BASE_URL
         self.token = api_config.LINASLASER_API_TOKEN
-        self.cache = {}
-        self.cache_timestamps = {}
+        self.cache: dict[str, Any] = {}
+        self.cache_timestamps: dict[str, float] = {}
         self.cache_ttl = 3600  # 1 hour cache
-        
+
         if not self.base_url or not self.token:
             raise ValueError("Missing API credentials: LINASLASER_API_BASE_URL or LINASLASER_API_TOKEN")
-        
+
         print(f"🤖 BotDataService initialized with API: {self.base_url}")
-    
+
     async def get_knowledge_base(self) -> str:
         """
         Build dynamic knowledge base from API endpoints
         This replaces the CORE_KNOWLEDGE_BASE loading from local file
         """
         cache_key = "knowledge_base"
-        
+
         # Check cache first
         if self._is_cache_valid(cache_key):
             print("📋 Using cached knowledge base")
-            return self.cache[cache_key]
-        
+            return cast(str, self.cache[cache_key])
+
         print("🔄 Building dynamic knowledge base from APIs...")
-        
+
         try:
             # Fetch data from all available APIs
             branches_data = await self._get_branches()
             services_data = await self._get_services()
             machines_data = await self._get_machines()
-            
+
             # Try to get clinic hours (currently broken)
             try:
                 hours_data = await self._get_clinic_hours()
             except Exception as e:
                 print(f"⚠️ Clinic hours API failed: {e}")
                 hours_data = self._get_default_hours()
-            
+
             # Build knowledge base from available data
-            knowledge_base = self._format_knowledge_base(
-                branches_data, services_data, machines_data, hours_data
-            )
-            
+            knowledge_base = self._format_knowledge_base(branches_data, services_data, machines_data, hours_data)
+
             # Cache the result
             self.cache[cache_key] = knowledge_base
             self.cache_timestamps[cache_key] = time.time()
-            
+
             print(f"✅ Dynamic knowledge base built: {len(knowledge_base)} characters")
             return knowledge_base
-            
+
         except Exception as e:
             print(f"❌ Error building knowledge base: {e}")
             # Return fallback knowledge base
             return self._get_fallback_knowledge_base()
-    
-    def _format_knowledge_base(self, branches, services, machines, hours) -> str:
+
+    def _format_knowledge_base(self, branches: Any, services: Any, machines: Any, hours: Any) -> str:
         """Format API data into knowledge base structure"""
-        
+
         kb = """<Lina_Knowledge_Base_Content>
 
 <About_Us_Details>
@@ -96,16 +97,16 @@ class BotDataService:
 
 <Services_Offered>""".format(
             num_branches=len(branches),
-            branch1=branches[0]['name'] if branches else "Beirut",
-            branch2=branches[1]['name'] if len(branches) > 1 else "Antelias"
+            branch1=branches[0]["name"] if branches else "Beirut",
+            branch2=branches[1]["name"] if len(branches) > 1 else "Antelias",
         )
-        
+
         # Add services from API
         for service in services:
             kb += f"\n- Service: {service['name']}"
-        
+
         kb += "\n- Note: All devices are from Med Art Technology.\n</Services_Offered>\n"
-        
+
         # Service-branch availability: tattoo removal and CO2 only at Beirut & Ramlet El Bayda (NOT Antelias)
         # Candela machine: ONLY at Beirut branch
         kb += """
@@ -118,39 +119,47 @@ When a customer asks about tattoo removal or CO2 laser, inform them it is only a
 When a customer asks about Candela or which branch has Candela, inform them Candela is ONLY at Beirut branch.
 </Service_Branch_Availability>
 """
-        
+
         # Add machine details (with placeholders for missing data)
         machine_specs = {
             "NEO": {
-                "sessions_light": 6, "sessions_dark": "8-9", "result_pct": "80% – 90%",
-                "interval": 45, "pain": 1, "results_after": "10–15",
-                "blonde_red": "50% – 70%"
+                "sessions_light": 6,
+                "sessions_dark": "8-9",
+                "result_pct": "80% – 90%",
+                "interval": 45,
+                "pain": 1,
+                "results_after": "10–15",
+                "blonde_red": "50% – 70%",
             },
             "Quadro": {
-                "sessions_light": 8, "sessions_dark": 11, "result_pct": "80% – 85%", 
-                "interval": 21, "pain": 2, "results_after": "10–15",
-                "blonde_red": "50% – 70%"
+                "sessions_light": 8,
+                "sessions_dark": 11,
+                "result_pct": "80% – 85%",
+                "interval": 21,
+                "pain": 2,
+                "results_after": "10–15",
+                "blonde_red": "50% – 70%",
             },
         }
-        
+
         for machine in machines:
-            machine_name = machine['name'].upper()
+            machine_name = machine["name"].upper()
             if machine_name in machine_specs:
                 specs = machine_specs[machine_name]
                 kb += f"""
 <Laser_Hair_Removal_Device_{machine_name}>
 - Device Name: {machine_name}
 - Service Type: Laser Hair Removal
-- Sessions (for light skin): {specs['sessions_light']}
-- Result Percentage: {specs['result_pct']}
-- Interval between Sessions: Every {specs['interval']} days
-- Pain Level: {specs['pain']}/10
-- Results visible after: {specs['results_after']} days
-- Sessions (for dark skin): {specs['sessions_dark']}
-- Effectiveness for Blonde or Red Hair: {specs['blonde_red']}
+- Sessions (for light skin): {specs["sessions_light"]}
+- Result Percentage: {specs["result_pct"]}
+- Interval between Sessions: Every {specs["interval"]} days
+- Pain Level: {specs["pain"]}/10
+- Results visible after: {specs["results_after"]} days
+- Sessions (for dark skin): {specs["sessions_dark"]}
+- Effectiveness for Blonde or Red Hair: {specs["blonde_red"]}
 - Effectiveness for White Hair: Not treatable
 </Laser_Hair_Removal_Device_{machine_name}>"""
-        
+
         # Add treatment instructions (hardcoded until API is available)
         kb += """
 
@@ -212,122 +221,125 @@ When a customer asks about Candela or which branch has Candela, inform them Cand
 </General_Important_Notes_for_AI>
 
 </Lina_Knowledge_Base_Content>"""
-        
+
         return kb
-    
-    async def _get_branches(self) -> List[Dict]:
+
+    async def _get_branches(self) -> list[dict]:
         """Get branches from API"""
-        return await self._make_api_request("GET", "/branches")
-    
-    async def _get_services(self) -> List[Dict]:
+        return cast(list[dict[Any, Any]], await self._make_api_request("GET", "/branches"))
+
+    async def _get_services(self) -> list[dict]:
         """Get services from API"""
-        return await self._make_api_request("GET", "/services")
-    
-    async def _get_machines(self) -> List[Dict]:
+        return cast(list[dict[Any, Any]], await self._make_api_request("GET", "/services"))
+
+    async def _get_machines(self) -> list[dict]:
         """Get machines from API"""
-        return await self._make_api_request("GET", "/machines")
-    
-    async def _get_clinic_hours(self) -> Dict:
+        return cast(list[dict[Any, Any]], await self._make_api_request("GET", "/machines"))
+
+    async def _get_clinic_hours(self) -> dict:
         """Get clinic hours from API (currently broken)"""
-        return await self._make_api_request("GET", "/clinic/hours")
-    
-    def _get_default_hours(self) -> Dict:
+        return cast(dict[Any, Any], await self._make_api_request("GET", "/clinic/hours"))
+
+    def _get_default_hours(self) -> dict:
         """Default hours when API is unavailable"""
         return {
             "monday": "9:00 AM - 8:00 PM",
             "tuesday": "9:00 AM - 8:00 PM",
-            "wednesday": "9:00 AM - 8:00 PM", 
+            "wednesday": "9:00 AM - 8:00 PM",
             "thursday": "9:00 AM - 8:00 PM",
             "friday": "9:00 AM - 8:00 PM",
             "saturday": "9:00 AM - 8:00 PM",
-            "sunday": "Closed"
+            "sunday": "Closed",
         }
-    
-    async def _make_api_request(self, method: str, endpoint: str, params: dict = None) -> any:
+
+    async def _make_api_request(self, method: str, endpoint: str, params: dict | None = None) -> Any:
         """Make authenticated API request"""
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json"
-        }
-        
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+
+        assert self.base_url is not None
         async with httpx.AsyncClient(base_url=self.base_url, timeout=30.0) as client:
             if method == "GET":
                 response = await client.get(endpoint, headers=headers, params=params)
             else:
                 response = await client.post(endpoint, headers=headers, json=params)
-            
+
             response.raise_for_status()
             data = response.json()
-            
-            if not data.get('success'):
+
+            if not data.get("success"):
                 raise Exception(f"API Error: {data.get('message', 'Unknown error')}")
-            
-            return data.get('data', [])
-    
+
+            return cast(Any, data.get("data", []))
+
     def _is_cache_valid(self, key: str) -> bool:
         """Check if cache is valid and not expired"""
         if key not in self.cache or key not in self.cache_timestamps:
             return False
-        
+
         age = time.time() - self.cache_timestamps[key]
-        return age < self.cache_ttl
-    
+        return cast(bool, age < self.cache_ttl)
+
     def _get_fallback_knowledge_base(self) -> str:
         """Fallback knowledge base if APIs fail"""
         try:
             from storage.persistent_storage import KNOWLEDGE_BASE_FILE
-            with open(KNOWLEDGE_BASE_FILE, 'r', encoding='utf-8') as f:
+
+            with open(KNOWLEDGE_BASE_FILE, encoding="utf-8") as f:
                 print("⚠️ Using fallback local knowledge base")
                 return f.read()
         except FileNotFoundError:
             print("❌ No fallback available")
             return "Knowledge base temporarily unavailable."
-    
+
     async def get_style_guide(self) -> str:
         """Get bot style guide (still from local file for now)"""
         try:
             from storage.persistent_storage import STYLE_GUIDE_FILE
-            with open(STYLE_GUIDE_FILE, 'r', encoding='utf-8') as f:
+
+            with open(STYLE_GUIDE_FILE, encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
             return "Style guide not available."
-    
+
     async def get_pricing_info(self) -> str:
         """Get pricing information (still from local file for now)"""
         try:
             from storage.persistent_storage import PRICE_LIST_FILE
-            with open(PRICE_LIST_FILE, 'r', encoding='utf-8') as f:
+
+            with open(PRICE_LIST_FILE, encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
             return "Pricing information not available."
 
+
 # Test function
-async def test_bot_data_service():
+async def test_bot_data_service() -> None:
     """Test the BotDataService"""
     print("🧪 TESTING BOTDATASERVICE")
     print("=" * 50)
-    
+
     try:
         service = BotDataService()
-        
+
         # Test knowledge base generation
         kb = await service.get_knowledge_base()
-        
+
         print(f"✅ Knowledge base generated: {len(kb)} characters")
-        print(f"📄 First 500 characters:")
+        print("📄 First 500 characters:")
         print(kb[:500] + "...")
-        
+
         # Test caching
-        print(f"\n🔄 Testing cache...")
+        print("\n🔄 Testing cache...")
         start_time = time.time()
         kb2 = await service.get_knowledge_base()
         cache_time = time.time() - start_time
-        
+
         print(f"✅ Cached response time: {cache_time:.3f} seconds")
         print(f"📊 Same content: {kb == kb2}")
-        
+
     except Exception as e:
         print(f"❌ Test failed: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(test_bot_data_service())

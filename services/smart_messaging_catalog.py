@@ -2,8 +2,9 @@
 Smart Messaging template catalog and scheduling defaults.
 """
 
+from __future__ import annotations
+
 from copy import deepcopy
-from typing import Dict, Optional
 
 # 17-day follow-up: canonical id matches Meta template name sent_17_days_after_last_session_new (3 body variables).
 TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS = 17
@@ -35,7 +36,7 @@ LEGACY_TEMPLATE_ALIASES = {
     "attended_yesterday": "session_feedback",
 }
 
-TEMPLATE_METADATA: Dict[str, Dict[str, str]] = {
+TEMPLATE_METADATA: dict[str, dict[str, str]] = {
     "reminder_24h": {
         "name": "24-Hour Reminder",
         "description": "Daily fixed-time reminder for tomorrow appointments.",
@@ -66,7 +67,7 @@ TEMPLATE_METADATA: Dict[str, Dict[str, str]] = {
     },
 }
 
-DEFAULT_TEMPLATE_SCHEDULES: Dict[str, Dict[str, object]] = {
+DEFAULT_TEMPLATE_SCHEDULES: dict[str, dict[str, object]] = {
     "reminder_24h": {
         "enabled": True,
         "sendTime": "15:00",
@@ -96,19 +97,21 @@ DEFAULT_TEMPLATE_SCHEDULES: Dict[str, Dict[str, object]] = {
 }
 
 
-def normalize_template_id(template_id: Optional[str]) -> str:
+def normalize_template_id(template_id: str | None) -> str:
     """Return canonical template ID for legacy aliases."""
     if not template_id:
         return ""
     return LEGACY_TEMPLATE_ALIASES.get(template_id, template_id)
 
 
-def get_default_schedule(template_id: str) -> Dict[str, object]:
+def get_default_schedule(template_id: str) -> dict[str, object]:
     """Get schedule defaults for a specific template."""
-    default = DEFAULT_TEMPLATE_SCHEDULES.get(template_id, {
-        "enabled": True,
-        "sendTime": "15:00",
-        "timezone": "Asia/Beirut",
-    })
+    default = DEFAULT_TEMPLATE_SCHEDULES.get(
+        template_id,
+        {
+            "enabled": True,
+            "sendTime": "15:00",
+            "timezone": "Asia/Beirut",
+        },
+    )
     return deepcopy(default)
-

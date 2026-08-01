@@ -11,10 +11,8 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
 
 from services.conversation_router import get_gender_from_message, is_human_request
-
 
 SOCIAL_CHANNELS = {"instagram", "facebook"}
 
@@ -92,13 +90,13 @@ _GREETING_ONLY_RE = re.compile(
 class SocialContactRouteResult:
     reply: str
     intent: str
-    branch: Optional[str] = None
-    gender: Optional[str] = None
-    contact_env: Optional[str] = None
+    branch: str | None = None
+    gender: str | None = None
+    contact_env: str | None = None
     tattoo_removal: bool = False
 
 
-def is_social_channel(channel: Optional[str]) -> bool:
+def is_social_channel(channel: str | None) -> bool:
     return str(channel or "").strip().lower() in SOCIAL_CHANNELS
 
 
@@ -116,7 +114,8 @@ def is_appointment_request(message: str) -> bool:
             return False
     return bool(_APPOINTMENT_RE.search(text))
 
-def detect_branch(message: str) -> Optional[str]:
+
+def detect_branch(message: str) -> str | None:
     text = message or ""
     antelias = bool(_ANTELIAS_RE.search(text))
     beirut = bool(_BEIRUT_RE.search(text))
@@ -141,7 +140,7 @@ def wa_me_url(phone: str) -> str:
     return f"https://wa.me/{phone_digits(phone)}"
 
 
-def resolve_social_whatsapp_number(env_name: str) -> Optional[str]:
+def resolve_social_whatsapp_number(env_name: str) -> str | None:
     """Env override wins; otherwise use the tracked public default for that exact key."""
     override = (os.getenv(env_name) or "").strip()
     if override:
@@ -158,7 +157,7 @@ def clear_social_contact_flow(user_data: dict) -> None:
             user_data.pop(key, None)
 
 
-def _language(language: Optional[str]) -> str:
+def _language(language: str | None) -> str:
     value = str(language or "ar").strip().lower()
     return value if value in {"ar", "en", "fr", "franco"} else "ar"
 
@@ -245,7 +244,7 @@ def _is_cancel_handoff(message: str) -> bool:
     return bool(_CANCEL_HANDOFF_RE.search(message or ""))
 
 
-def _explicit_handoff_intent(message: str) -> Optional[str]:
+def _explicit_handoff_intent(message: str) -> str | None:
     if is_human_request(message):
         return "human"
     if is_appointment_request(message) or is_tattoo_removal_request(message):
@@ -300,7 +299,7 @@ def _state_expired(state: dict) -> bool:
         return False
     stamp = state.get("updated_at") or state.get("started_at")
     try:
-        stamp_f = float(stamp)
+        stamp_f = float(stamp or 0)
     except (TypeError, ValueError):
         return True
     return (time.time() - stamp_f) > SOCIAL_CONTACT_FLOW_TTL_SECONDS
@@ -330,10 +329,10 @@ def _is_topic_change_during_handoff(message: str, state: dict) -> bool:
 def route_social_contact_request(
     message: str,
     user_data: dict,
-    known_gender: Optional[str],
-    language: Optional[str] = None,
-    force_intent: Optional[str] = None,
-) -> Optional[SocialContactRouteResult]:
+    known_gender: str | None,
+    language: str | None = None,
+    force_intent: str | None = None,
+) -> SocialContactRouteResult | None:
     """Return a deterministic WhatsApp-handoff reply only for explicit social handoff flows.
 
     ``force_intent`` (from GPT/router) cannot start a new handoff by itself. A new flow

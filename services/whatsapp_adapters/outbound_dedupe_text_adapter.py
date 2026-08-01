@@ -5,14 +5,13 @@ delivered twice within the outbound dedupe window (applies to all providers).
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
-from utils.phone_utils import phone_match_key
+from typing import Any
 
 from services.outbound_text_firestore_dedupe import (
     release_outbound_send_firestore,
     try_acquire_outbound_send_firestore,
 )
+from utils.phone_utils import phone_match_key
 
 from .base_adapter import WhatsAppAdapter
 from .outbound_text_dedupe import (
@@ -22,12 +21,13 @@ from .outbound_text_dedupe import (
 )
 
 
-class DedupeOutboundTextAdapter:
+class DedupeOutboundTextAdapter(WhatsAppAdapter):
     """Process-wide text dedupe in front of Meta, Qiscus, MontyMobile, 360dialog, etc."""
 
-    def __init__(self, inner: WhatsAppAdapter):
+    def __init__(self, inner: WhatsAppAdapter) -> None:
+        super().__init__(getattr(inner, "api_token", ""), getattr(inner, "phone_number_id", None))
         self._inner = inner
-        self.client = getattr(inner, "client", None)
+        self.client: Any = getattr(inner, "client", None)
         self.provider_name = getattr(inner, "provider_name", "unknown")
 
     def _resolve_recipient(self, to_number: str) -> str:
@@ -43,7 +43,7 @@ class DedupeOutboundTextAdapter:
             return pk
         return (resolved or "").strip()
 
-    async def send_text_message(self, to_number: str, message: str) -> Dict[str, Any]:
+    async def send_text_message(self, to_number: str, message: str) -> dict[str, Any]:
         resolved = self._resolve_recipient(to_number)
         if await should_skip_outbound_text(resolved, message):
             return {"success": True, "deduped_outbound": True}
@@ -68,5 +68,22 @@ class DedupeOutboundTextAdapter:
             if fs_doc:
                 await release_outbound_send_firestore(fs_doc, send_success)
 
-    def __getattr__(self, name: str):
-        return getattr(self._inner, name)
+    async def send_image_message(self, to_number: str, image_url: str, caption: str | None = None) -> dict[str, Any]:
+        return await self._inner.send_image_message(to_number, image_url, caption)
+
+    async def download_media(self, media_id: str) -> bytes:
+        return await self._inner.download_media(media_id)
+
+    async def set_webhook(self, webhook_url: str) -> dict[str, Any]:
+        return await self._inner.set_webhook(webhook_url)
+
+    def parse_webhook_message(self, webhook_data: dict[str, Any]) -> dict[str, Any] | None:
+        return self._inner.parse_webhook_message(webhook_data)
+
+    async def close(self) -> None:
+        await self._inner.close()
+
+    async def send_audio_message(
+        self, to_number: str, audio_url: str, audio_base64: str | None = None
+    ) -> dict[str, Any]:
+        return await self._inner.send_audio_message(to_number, audio_url, audio_base64)

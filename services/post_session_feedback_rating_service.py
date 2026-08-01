@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 After the Post Session Feedback WhatsApp template is sent, accept a 1–5 star reply
 (text or quick-reply title), log analytics, and clear awaiting state.
@@ -8,7 +7,7 @@ Separate from session_rating_service (after-booking bot prompt).
 from __future__ import annotations
 
 import datetime
-from typing import Any, Optional
+from typing import Any
 
 import config
 from config import ensure_conversation_state
@@ -21,7 +20,7 @@ _POST_SESSION_FEEDBACK_RATING_TTL_HOURS = int(
 )
 
 
-def _ctx_expired(since_iso: Optional[str]) -> bool:
+def _ctx_expired(since_iso: str | None) -> bool:
     if not since_iso:
         return False
     try:
@@ -36,10 +35,10 @@ def _ctx_expired(since_iso: Optional[str]) -> bool:
 
 
 def mark_awaiting_post_session_feedback_after_send(
-    phone: Optional[str],
-    appointment_id: Any = None,
-    reference_date: Optional[str] = None,
-    smart_message_id: Optional[str] = None,
+    phone: str | None,
+    appointment_id: Any | None = None,
+    reference_date: str | None = None,
+    smart_message_id: str | None = None,
 ) -> None:
     """Call after a real Post Session Feedback template send succeeds."""
     raw = str(phone or "").strip()
@@ -59,9 +58,7 @@ def mark_awaiting_post_session_feedback_after_send(
     }
 
 
-async def try_handle_post_session_feedback_reply(
-    user_id: str, user_input_text: str, adapter
-) -> bool:
+async def try_handle_post_session_feedback_reply(user_id: str, user_input_text: str, adapter: Any) -> bool:
     """If user is awaiting post-session star reply, parse 1–5, log, thank, return True."""
     ud = config.user_data_whatsapp.get(user_id) or {}
     if not ud.get("awaiting_post_session_feedback_rating"):

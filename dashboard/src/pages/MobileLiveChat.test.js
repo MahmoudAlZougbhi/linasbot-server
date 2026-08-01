@@ -1,9 +1,9 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import "@testing-library/jest-dom";
 
-jest.mock("./LiveChat", () => {
-  const React = require("react");
+vi.mock("./LiveChat", () => {
   return {
     __esModule: true,
     default: function MockLiveChat(props) {

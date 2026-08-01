@@ -1,27 +1,29 @@
-# -*- coding: utf-8 -*-
 """
 Media API module: Audio and media proxy endpoints
 Handles proxying external audio URLs to avoid CORS issues in the browser.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 import httpx
 from fastapi import Query, Request
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import FileResponse, Response
 
 from modules.core import app
 from services.media_service import (
-    resolve_media_file_path,
     get_media_content_type,
+    resolve_media_file_path,
 )
 from services.ssrf_guard import SSRFValidationError, validate_fetch_url
-
 
 MAX_AUDIO_BYTES = 15 * 1024 * 1024
 MAX_REDIRECTS = 3
 
 
 @app.api_route("/api/media/serve/{filename}", methods=["GET", "HEAD"])
-async def serve_media_file(filename: str, request: Request):
+async def serve_media_file(filename: str, request: Request) -> Any:
     """Serve locally stored audio/media files for WhatsApp delivery"""
     file_path = resolve_media_file_path(filename)
     if not file_path or not file_path.exists():
@@ -54,7 +56,7 @@ async def _fetch_with_ssrf_guard(url: str) -> httpx.Response:
                     raise SSRFValidationError("Redirect without Location")
                 # Absolute or relative
                 if location.startswith("/"):
-                    from urllib.parse import urlparse, urljoin
+                    from urllib.parse import urljoin
 
                     location = urljoin(current, location)
                 current = validate_fetch_url(location, allowed_schemes=("https",))
@@ -64,7 +66,7 @@ async def _fetch_with_ssrf_guard(url: str) -> httpx.Response:
 
 
 @app.get("/api/media/audio")
-async def proxy_audio(url: str = Query(..., description="The audio URL to proxy")):
+async def proxy_audio(url: str = Query(..., description="The audio URL to proxy")) -> Any:
     """
     Proxy audio from allowlisted external URLs to avoid CORS issues.
     """

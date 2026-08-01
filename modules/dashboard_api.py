@@ -1,35 +1,28 @@
-# -*- coding: utf-8 -*-
 """
 Dashboard API module: Testing and simulation endpoints
 Provides endpoints for dashboard testing of the bot functionality.
 """
 
+from __future__ import annotations
+
 import asyncio
-import datetime
 import base64
-import tempfile
-import os
+import datetime
 import io
-import json
+import os
 import re
-from typing import Dict, Any, List, Optional
+from typing import Any
 
-from fastapi import File, UploadFile, Form, Request
-import httpx
+from fastapi import File, Form, Request, UploadFile
 
-from modules.core import app, dashboard_stats, dashboard_bot_responses
-from modules.models import (
-    TestMessageRequest, 
-    TestImageRequest, 
-    TestVoiceRequest,
-    ProviderSwitchRequest
-)
 import config
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-from handlers.text_handlers import handle_message, _delayed_processing_tasks
 from handlers.photo_handlers import handle_photo_message
+from handlers.text_handlers import _delayed_processing_tasks, handle_message
 from handlers.voice_handlers import handle_voice_message
+from modules.core import app, dashboard_bot_responses, dashboard_stats
+from modules.models import ProviderSwitchRequest, TestImageRequest, TestMessageRequest, TestVoiceRequest
 from modules.whatsapp_adapters import send_whatsapp_typing_indicator
+from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 
 async def restore_user_state_from_firestore(user_id: str) -> str:
@@ -39,11 +32,12 @@ async def restore_user_state_from_firestore(user_id: str) -> str:
     This is needed for dashboard test endpoints which bypass webhook_handlers.
     """
     current_gender = config.user_gender.get(user_id)
-    restored_name = None
+    restored_name: str | None = None
 
     if current_gender not in ["male", "female"]:
         try:
             from utils.utils import get_user_state_from_firestore
+
             print(f"🔄 [Dashboard] Restoring user state from Firestore for {user_id}...")
             firestore_state = await get_user_state_from_firestore(user_id)
 
@@ -71,12 +65,15 @@ async def restore_user_state_from_firestore(user_id: str) -> str:
         except Exception as e:
             print(f"❌ [Dashboard] Error restoring user state: {e}")
             import traceback
+
             traceback.print_exc()
 
-    return restored_name
+    return restored_name or ""
 
 
-async def dashboard_send_message_capture(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+async def dashboard_send_message_capture(
+    to_number: str, message_text: str | None = None, image_url: str | None = None, audio_url: str | None = None
+) -> Any:
     """Capture bot responses for dashboard display"""
     line = None
     if message_text and str(message_text).strip():
@@ -94,12 +91,12 @@ async def dashboard_send_message_capture(to_number: str, message_text: str = Non
     return True
 
 
-def _whatsapp_id_variants(user_id: Optional[str]) -> List[str]:
+def _whatsapp_id_variants(user_id: str | None) -> list[str]:
     """E.164-style IDs may appear with or without leading +; merge for capture lookup."""
     if not user_id:
         return []
     u = str(user_id).strip()
-    out: List[str] = []
+    out: list[str] = []
     for cand in (u, u.lstrip("+")):
         if cand and cand not in out:
             out.append(cand)
@@ -116,7 +113,7 @@ def dashboard_clear_captured_for_user(user_id: str) -> None:
         dashboard_bot_responses.pop(key, None)
 
 
-def dashboard_captured_list_for_user(user_id: str) -> List[str]:
+def dashboard_captured_list_for_user(user_id: str) -> list[str]:
     for key in _whatsapp_id_variants(user_id):
         lst = dashboard_bot_responses.get(key)
         if lst:
@@ -132,7 +129,7 @@ def _dashboard_empty_capture_hint(user_id: str) -> str:
     )
 
 
-async def _await_dashboard_delayed_task(user_id: str) -> Optional[str]:
+async def _await_dashboard_delayed_task(user_id: str) -> str | None:
     """
     Wait for message-combining / GPT task. Uses asyncio.shield so client disconnect or
     upstream cancellation is less likely to cancel the bot mid-reply (empty capture).
@@ -143,7 +140,7 @@ async def _await_dashboard_delayed_task(user_id: str) -> Optional[str]:
         return "no_delayed_task_scheduled"
     print(f"DEBUG: Waiting for delayed task for user {user_id} to complete...")
     task = _delayed_processing_tasks[user_id]
-    note: Optional[str] = None
+    note: str | None = None
     try:
         await asyncio.shield(task)
         print(f"DEBUG: Delayed task completed for user {user_id}")
@@ -167,32 +164,57 @@ async def _await_dashboard_delayed_task(user_id: str) -> Optional[str]:
 
 
 @app.get("/")
-async def root():
+async def root() -> Any:
     return {"message": "Lina's Laser AI Bot is running!"}
 
 
 @app.get("/api/health")
-async def health():
+async def health() -> Any:
     """Lightweight liveness check - no dependency probes, returns immediately."""
     return {"ok": True, "role": "liveness"}
 
 
 @app.get("/api/ready")
-async def ready():
+async def ready() -> Any:
     """
-    Readiness: required dependencies without exposing secrets.
-    Authenticated (settings permission) so probe details are not public.
+    Public readiness probe: required dependencies without exposing secret values.
+    Returns boolean ok flags only (never secret contents).
     """
     import os
-    from pathlib import Path
 
-    checks = {}
+    from modules.api_security import is_production_env
+
+    checks: dict[str, Any] = {}
     overall_ok = True
+
+    # Auth signing secret: required in production (and ENVIRONMENT=test); never echo value
+    try:
+        from services.dashboard_session_service import get_auth_secret
+
+        if is_production_env() or (os.getenv("ENVIRONMENT") or "").strip().lower() == "test":
+            get_auth_secret()
+            checks["dashboard_auth_secret"] = {"ok": True, "configured": True}
+        else:
+            configured = bool((os.getenv("DASHBOARD_AUTH_SECRET") or os.getenv("AUTH_SESSION_SECRET") or "").strip())
+            checks["dashboard_auth_secret"] = {"ok": True, "configured": configured}
+    except Exception as e:
+        checks["dashboard_auth_secret"] = {"ok": False, "error": type(e).__name__}
+        overall_ok = False
 
     openai_ok = bool((os.getenv("OPENAI_API_KEY") or "").strip())
     checks["openai_api_key"] = {"ok": openai_ok}
     if not openai_ok:
         overall_ok = False
+
+    # MontyMobile outbound key required when WhatsApp provider is montymobile in production
+    provider = (os.getenv("WHATSAPP_PROVIDER") or "montymobile").strip().lower()
+    monty_configured = bool((os.getenv("MONTYMOBILE_API_KEY") or "").strip())
+    if is_production_env() and provider == "montymobile":
+        checks["montymobile_api_key"] = {"ok": monty_configured, "configured": monty_configured}
+        if not monty_configured:
+            overall_ok = False
+    else:
+        checks["montymobile_api_key"] = {"ok": True, "configured": monty_configured, "required": False}
 
     try:
         from utils.utils import get_firestore_db
@@ -228,9 +250,10 @@ async def ready():
 
 
 @app.get("/api/debug/webhook-status")
-async def webhook_status():
+async def webhook_status() -> Any:
     """Debug: webhook reachability and config (no secrets). Use when WhatsApp messages don't reach the AI."""
     from modules.webhook_handlers import get_webhook_debug_status
+
     base = (os.getenv("PUBLIC_URL") or "").strip() or "https://YOUR_SERVER"
     debug = get_webhook_debug_status()
     webhook_url = f"{base.rstrip('/')}/webhook"
@@ -243,12 +266,12 @@ async def webhook_status():
         "seconds_since_last_webhook": debug.get("seconds_since_received"),
         "last_parsed_user_id": debug.get("last_parsed_user_id"),
         "hint": "Configure this EXACT URL in MontyMobile dashboard. If Response Body is null in Monty logs, the webhook URL is wrong or the server is unreachable. Set PUBLIC_URL in .env to your domain (e.g. https://linasaibot.com).",
-        "test_flow": "POST /api/debug/simulate-webhook with body {\"phone\":\"9613000000\",\"text\":\"مرحبا\"} to test if the flow works.",
+        "test_flow": 'POST /api/debug/simulate-webhook with body {"phone":"9613000000","text":"مرحبا"} to test if the flow works.',
     }
 
 
 @app.post("/api/debug/simulate-webhook")
-async def simulate_webhook(req: Request):
+async def simulate_webhook(req: Request) -> Any:
     """
     Simulate receiving a webhook (testing only).
     Disabled in production. Requires authenticated testing permission via middleware.
@@ -269,6 +292,7 @@ async def simulate_webhook(req: Request):
         }
     try:
         from modules.webhook_handlers import process_parsed_message
+
         try:
             body = await req.json()
         except Exception:
@@ -290,37 +314,32 @@ async def simulate_webhook(req: Request):
         return {"success": True, "message": "Simulated webhook processed", "phone": phone}
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.get("/api/test")
-async def test_api():
+async def test_api() -> Any:
     """Test endpoint for dashboard health check"""
     return {
         "status": "online",
         "message": "Lina's Laser AI Bot is running!",
-        "features": [
-            "Text Chat",
-            "Voice Processing", 
-            "Image Analysis",
-            "Multi-Provider WhatsApp",
-            "Q&A Management"
-        ],
+        "features": ["Text Chat", "Voice Processing", "Image Analysis", "Multi-Provider WhatsApp", "Q&A Management"],
         "current_provider": WhatsAppFactory.get_current_provider(),
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.datetime.now().isoformat(),
     }
 
 
 @app.post("/api/switch-provider")
-async def switch_provider(request: ProviderSwitchRequest):
+async def switch_provider(request: ProviderSwitchRequest) -> Any:
     """Switch WhatsApp provider"""
     try:
-        adapter = WhatsAppFactory.switch_provider(request.provider)
+        WhatsAppFactory.switch_provider(request.provider)
         return {
             "success": True,
             "message": f"Switched to {request.provider}",
-            "current_provider": WhatsAppFactory.get_current_provider()
+            "current_provider": WhatsAppFactory.get_current_provider(),
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -330,7 +349,7 @@ async def _test_message_meta_social(
     request: TestMessageRequest,
     start_time: datetime.datetime,
     channel: str,
-):
+) -> Any:
     """Testing Lab Meta social parity path — no real Graph delivery unless explicitly requested."""
     from services.meta_messaging import MetaMessagingSettings, get_meta_messaging_settings
     from services.social_messaging_processor import process_meta_social_event
@@ -339,7 +358,9 @@ async def _test_message_meta_social(
     user_id = f"{channel}:{sender_id}"
     dashboard_clear_captured_for_user(user_id)
 
-    async def capture_send(to_number, message_text=None, image_url=None, audio_url=None):
+    async def capture_send(
+        to_number: Any, message_text: Any | None = None, image_url: Any | None = None, audio_url: Any | None = None
+    ) -> Any:
         await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
         return True
 
@@ -401,7 +422,7 @@ async def _test_message_meta_social(
 
 
 @app.post("/api/test-message")
-async def test_message(request: TestMessageRequest):
+async def test_message(request: TestMessageRequest) -> Any:
     """Send a test message through the bot.
 
     Set ``channel`` to ``instagram`` or ``facebook`` to exercise the production
@@ -413,38 +434,38 @@ async def test_message(request: TestMessageRequest):
         channel = (request.channel or "").strip().lower() or None
         if channel in {"instagram", "facebook"}:
             return await _test_message_meta_social(request, start_time, channel)
-        
+
         try:
             adapter = WhatsAppFactory.switch_provider(request.provider)
-            print(f"=== DASHBOARD TEST ===")
+            print("=== DASHBOARD TEST ===")
             print(f"Switched to provider: {request.provider}")
             print(f"Adapter type: {type(adapter).__name__}")
             print(f"Current provider: {WhatsAppFactory.get_current_provider()}")
         except Exception as e:
             return {"success": False, "error": f"Failed to switch to {request.provider}: {str(e)}"}
-        
+
         if request.provider == "qiscus":
             user_id = f"test_room_{request.phone}"
-            if hasattr(adapter, 'room_mapping'):
+            if hasattr(adapter, "room_mapping"):
                 adapter.room_mapping[request.phone] = user_id
         else:
             user_id = request.phone
-            
+
         user_name = f"Test User ({request.phone})"
-        
+
         dashboard_clear_captured_for_user(user_id)
-        
+
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
-                'user_preferred_lang': 'ar',
-                'initial_user_query_to_process': None,
-                'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None,
-                'phone_number': request.phone  # Store phone_number for Firestore saves
+                "user_preferred_lang": "ar",
+                "initial_user_query_to_process": None,
+                "awaiting_human_handover_confirmation": False,
+                "current_conversation_id": None,
+                "phone_number": request.phone,  # Store phone_number for Firestore saves
             }
         else:
             # Ensure phone_number is set even for existing user_data
-            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+            config.user_data_whatsapp[user_id]["phone_number"] = request.phone
 
         _dash_test_ud = config.user_data_whatsapp[user_id]
         _dash_test_ud["_dashboard_test_simulation"] = True
@@ -454,32 +475,37 @@ async def test_message(request: TestMessageRequest):
         if restored_name:
             user_name = restored_name
 
-        async def handle_message_dashboard(user_whatsapp_id: str, user_input_text: str, user_name: str):
+        async def handle_message_dashboard(user_whatsapp_id: str, user_input_text: str, user_name: str) -> Any:
             """Dashboard version that captures bot responses WITHOUT saving to Firebase"""
             if user_whatsapp_id not in config.user_data_whatsapp:
                 config.user_data_whatsapp[user_whatsapp_id] = {
-                    'user_preferred_lang': 'ar',
-                    'initial_user_query_to_process': None,
-                    'awaiting_human_handover_confirmation': False,
-                    'current_conversation_id': None,
-                    'phone_number': request.phone  # Store phone_number for Firestore saves
+                    "user_preferred_lang": "ar",
+                    "initial_user_query_to_process": None,
+                    "awaiting_human_handover_confirmation": False,
+                    "current_conversation_id": None,
+                    "phone_number": request.phone,  # Store phone_number for Firestore saves
                 }
 
             # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
             # config.TESTING_MODE = True
             # print(f"🧪 TESTING MODE ENABLED - Firebase saving disabled for user {user_whatsapp_id}")
 
-            async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+            async def capture_send_message(
+                to_number: str,
+                message_text: str | None = None,
+                image_url: str | None = None,
+                audio_url: str | None = None,
+            ) -> Any:
                 await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
-                
+
                 if request.provider == "qiscus":
                     try:
                         print(f"DEBUG: Testing Qiscus send with room_id: {to_number}")
-                        result = await adapter.send_text_message(to_number, message_text)
+                        result = await adapter.send_text_message(to_number, message_text or "")
                         print(f"DEBUG: Qiscus send result: {result}")
                     except Exception as e:
                         print(f"DEBUG: Qiscus send failed (expected in test): {e}")
-                
+
                 return True
 
             try:
@@ -501,8 +527,8 @@ async def test_message(request: TestMessageRequest):
         try:
             print(f"DEBUG: Processing message '{request.message}' for user {user_id}")
 
-            handle_err: Optional[str] = None
-            delayed_diag: Optional[str] = None
+            handle_err: str | None = None
+            delayed_diag: str | None = None
             try:
                 await handle_message_dashboard(user_id, request.message, user_name)
                 print(f"DEBUG: Message processing completed for user {user_id}")
@@ -510,6 +536,7 @@ async def test_message(request: TestMessageRequest):
                 handle_err = str(e)
                 print(f"DEBUG: Error in handle_message_dashboard: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             if user_id in _delayed_processing_tasks:
@@ -524,19 +551,14 @@ async def test_message(request: TestMessageRequest):
             if captured_responses:
                 bot_response = "\n\n".join(captured_responses)
                 if processing_exception:
-                    bot_response = (
-                        f"{bot_response}\n\n——\n[تشخيص السيرفر / Server diagnostic]\n{processing_exception}"
-                    )
+                    bot_response = f"{bot_response}\n\n——\n[تشخيص السيرفر / Server diagnostic]\n{processing_exception}"
             elif handle_err:
                 bot_response = (
                     f"No response captured: message handler failed before AI ran ({handle_err}). "
                     "See server logs for the full traceback."
                 )
             elif delayed_diag:
-                bot_response = (
-                    f"No response captured: delayed processing note: {delayed_diag}. "
-                    "Check server logs."
-                )
+                bot_response = f"No response captured: delayed processing note: {delayed_diag}. Check server logs."
             elif processing_exception:
                 bot_response = (
                     "No bot text was captured; delayed processing raised an error.\n\n"
@@ -550,13 +572,15 @@ async def test_message(request: TestMessageRequest):
             dashboard_stats["total_messages"] += 1
             dashboard_stats["active_users"].add(user_id)
             dashboard_stats["response_times"].append(response_time)
-            dashboard_stats["conversations"].append({
-                "user": user_name,
-                "message": request.message,
-                "bot_response": bot_response,
-                "timestamp": start_time.isoformat(),
-                "provider": request.provider
-            })
+            dashboard_stats["conversations"].append(
+                {
+                    "user": user_name,
+                    "message": request.message,
+                    "bot_response": bot_response,
+                    "timestamp": start_time.isoformat(),
+                    "provider": request.provider,
+                }
+            )
 
             return {
                 "success": True,
@@ -569,8 +593,8 @@ async def test_message(request: TestMessageRequest):
                 "provider_info": {
                     "provider": request.provider,
                     "user_id_used": user_id,
-                    "adapter_type": type(adapter).__name__
-                }
+                    "adapter_type": type(adapter).__name__,
+                },
             }
         finally:
             _dash_test_ud.pop("_dashboard_test_simulation", None)
@@ -580,49 +604,51 @@ async def test_message(request: TestMessageRequest):
 
 
 @app.post("/api/test-image")
-async def test_image(request: TestImageRequest):
+async def test_image(request: TestImageRequest) -> Any:
     """Test image analysis through the bot with image URL"""
     try:
         start_time = datetime.datetime.now()
-        
+
         try:
             adapter = WhatsAppFactory.switch_provider(request.provider)
-            print(f"=== IMAGE URL TEST ===")
+            print("=== IMAGE URL TEST ===")
             print(f"Switched to provider: {request.provider}")
             print(f"Image URL: {request.image_url}")
             print(f"Caption: {request.caption}")
         except Exception as e:
             return {"success": False, "error": f"Failed to switch to {request.provider}: {str(e)}"}
-        
+
         if request.provider == "qiscus":
             user_id = f"test_room_{request.phone}"
-            if hasattr(adapter, 'room_mapping'):
+            if hasattr(adapter, "room_mapping"):
                 adapter.room_mapping[request.phone] = user_id
         else:
             user_id = request.phone
-            
+
         user_name = f"Test User ({request.phone})"
-        
+
         dashboard_clear_captured_for_user(user_id)
-        
+
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
-                'user_preferred_lang': 'ar',
-                'initial_user_query_to_process': None,
-                'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None,
-                'phone_number': request.phone  # Store phone_number for Firestore saves
+                "user_preferred_lang": "ar",
+                "initial_user_query_to_process": None,
+                "awaiting_human_handover_confirmation": False,
+                "current_conversation_id": None,
+                "phone_number": request.phone,  # Store phone_number for Firestore saves
             }
         else:
             # Ensure phone_number is set even for existing user_data
-            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+            config.user_data_whatsapp[user_id]["phone_number"] = request.phone
 
         # Restore user state from Firestore
         restored_name = await restore_user_state_from_firestore(user_id)
         if restored_name:
             user_name = restored_name
 
-        async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+        async def capture_send_message(
+            to_number: str, message_text: str | None = None, image_url: str | None = None, audio_url: str | None = None
+        ) -> Any:
             await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
             return True
 
@@ -633,7 +659,7 @@ async def test_image(request: TestImageRequest):
                 image_url=request.image_url,
                 user_data=config.user_data_whatsapp[user_id],
                 send_message_func=capture_send_message,
-                send_action_func=send_whatsapp_typing_indicator
+                send_action_func=send_whatsapp_typing_indicator,
             )
         finally:
             # config.TESTING_MODE = False
@@ -641,25 +667,27 @@ async def test_image(request: TestImageRequest):
             pass
 
         captured_responses = dashboard_captured_list_for_user(user_id)
-        
+
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
         else:
             bot_response = _dashboard_empty_capture_hint(user_id)
-        
+
         response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
-        
+
         dashboard_stats["total_messages"] += 1
         dashboard_stats["active_users"].add(user_id)
         dashboard_stats["response_times"].append(response_time)
-        dashboard_stats["conversations"].append({
-            "user": user_name,
-            "message": f"[Image: {request.image_url}] {request.caption}",
-            "bot_response": bot_response,
-            "timestamp": start_time.isoformat(),
-            "provider": request.provider
-        })
-        
+        dashboard_stats["conversations"].append(
+            {
+                "user": user_name,
+                "message": f"[Image: {request.image_url}] {request.caption}",
+                "bot_response": bot_response,
+                "timestamp": start_time.isoformat(),
+                "provider": request.provider,
+            }
+        )
+
         return {
             "success": True,
             "message": "Test image processed",
@@ -668,21 +696,18 @@ async def test_image(request: TestImageRequest):
             "provider_info": {
                 "provider": request.provider,
                 "user_id_used": user_id,
-                "adapter_type": type(adapter).__name__
-            }
+                "adapter_type": type(adapter).__name__,
+            },
         }
-        
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/test-voice")
 async def test_voice(
-    audio: UploadFile = File(None),
-    phone: str = Form(None),
-    provider: str = Form(None),
-    voice_text: str = Form(None)
-):
+    audio: UploadFile = File(None), phone: str = Form(None), provider: str = Form(None), voice_text: str = Form(None)
+) -> Any:
     """Test voice message processing - handles both file upload and text simulation"""
     try:
         # Check if this is a file upload
@@ -695,42 +720,40 @@ async def test_voice(
             return {"success": False, "error": "Either audio file or voice_text is required"}
 
         request = TestVoiceRequest(
-            phone=phone or "96176466674",
-            voice_text=voice_text,
-            provider=provider or "montymobile"
+            phone=phone or "96176466674", voice_text=voice_text, provider=provider or "montymobile"
         )
         start_time = datetime.datetime.now()
-        
+
         try:
             adapter = WhatsAppFactory.switch_provider(request.provider)
-            print(f"=== VOICE TEST ===")
+            print("=== VOICE TEST ===")
             print(f"Switched to provider: {request.provider}")
             print(f"Voice text (simulated transcription): {request.voice_text}")
         except Exception as e:
             return {"success": False, "error": f"Failed to switch to {request.provider}: {str(e)}"}
-        
+
         if request.provider == "qiscus":
             user_id = f"test_room_{request.phone}"
-            if hasattr(adapter, 'room_mapping'):
+            if hasattr(adapter, "room_mapping"):
                 adapter.room_mapping[request.phone] = user_id
         else:
             user_id = request.phone
-            
+
         user_name = f"Test User ({request.phone})"
-        
+
         dashboard_clear_captured_for_user(user_id)
-        
+
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
-                'user_preferred_lang': 'ar',
-                'initial_user_query_to_process': None,
-                'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None,
-                'phone_number': request.phone  # Store phone_number for Firestore saves
+                "user_preferred_lang": "ar",
+                "initial_user_query_to_process": None,
+                "awaiting_human_handover_confirmation": False,
+                "current_conversation_id": None,
+                "phone_number": request.phone,  # Store phone_number for Firestore saves
             }
         else:
             # Ensure phone_number is set even for existing user_data
-            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+            config.user_data_whatsapp[user_id]["phone_number"] = request.phone
 
         # Restore user state from Firestore
         restored_name = await restore_user_state_from_firestore(user_id)
@@ -740,22 +763,27 @@ async def test_voice(
         _dash_test_ud_voice = config.user_data_whatsapp[user_id]
         _dash_test_ud_voice["_dashboard_test_simulation"] = True
 
-        async def handle_voice_dashboard(user_whatsapp_id: str, voice_text: str, user_name: str):
+        async def handle_voice_dashboard(user_whatsapp_id: str, voice_text: str, user_name: str) -> Any:
             """Dashboard version for voice testing - simulates transcription"""
             if user_whatsapp_id not in config.user_data_whatsapp:
                 config.user_data_whatsapp[user_whatsapp_id] = {
-                    'user_preferred_lang': 'ar',
-                    'initial_user_query_to_process': None,
-                    'awaiting_human_handover_confirmation': False,
-                    'current_conversation_id': None,
-                    'phone_number': request.phone  # Store phone_number for Firestore saves
+                    "user_preferred_lang": "ar",
+                    "initial_user_query_to_process": None,
+                    "awaiting_human_handover_confirmation": False,
+                    "current_conversation_id": None,
+                    "phone_number": request.phone,  # Store phone_number for Firestore saves
                 }
 
             # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
             # config.TESTING_MODE = True
             # print(f"🧪 TESTING MODE ENABLED - Firebase saving disabled for user {user_whatsapp_id}")
 
-            async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+            async def capture_send_message(
+                to_number: str,
+                message_text: str | None = None,
+                image_url: str | None = None,
+                audio_url: str | None = None,
+            ) -> Any:
                 await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
                 return True
 
@@ -774,6 +802,7 @@ async def test_voice(
             except Exception as e:
                 print(f"DEBUG: Error in handle_voice_dashboard: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         try:
@@ -785,6 +814,7 @@ async def test_voice(
             except Exception as e:
                 print(f"DEBUG: Error in handle_voice_dashboard: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             if user_id in _delayed_processing_tasks:
@@ -803,13 +833,15 @@ async def test_voice(
             dashboard_stats["total_messages"] += 1
             dashboard_stats["active_users"].add(user_id)
             dashboard_stats["response_times"].append(response_time)
-            dashboard_stats["conversations"].append({
-                "user": user_name,
-                "message": f"[Voice: {request.voice_text}]",
-                "bot_response": bot_response,
-                "timestamp": start_time.isoformat(),
-                "provider": request.provider
-            })
+            dashboard_stats["conversations"].append(
+                {
+                    "user": user_name,
+                    "message": f"[Voice: {request.voice_text}]",
+                    "bot_response": bot_response,
+                    "timestamp": start_time.isoformat(),
+                    "provider": request.provider,
+                }
+            )
 
             return {
                 "success": True,
@@ -819,8 +851,8 @@ async def test_voice(
                 "provider_info": {
                     "provider": request.provider,
                     "user_id_used": user_id,
-                    "adapter_type": type(adapter).__name__
-                }
+                    "adapter_type": type(adapter).__name__,
+                },
             }
         finally:
             _dash_test_ud_voice.pop("_dashboard_test_simulation", None)
@@ -830,14 +862,14 @@ async def test_voice(
 
 
 @app.post("/api/test-voice-text")
-async def test_voice_text(request: TestVoiceRequest):
+async def test_voice_text(request: TestVoiceRequest) -> Any:
     """Test voice message using JSON body with pre-transcribed text (simulates voice input)"""
     try:
         start_time = datetime.datetime.now()
 
         try:
             adapter = WhatsAppFactory.switch_provider(request.provider)
-            print(f"=== VOICE TEXT TEST (JSON) ===")
+            print("=== VOICE TEXT TEST (JSON) ===")
             print(f"Switched to provider: {request.provider}")
             print(f"Voice text: {request.voice_text}")
         except Exception as e:
@@ -845,7 +877,7 @@ async def test_voice_text(request: TestVoiceRequest):
 
         if request.provider == "qiscus":
             user_id = f"test_room_{request.phone}"
-            if hasattr(adapter, 'room_mapping'):
+            if hasattr(adapter, "room_mapping"):
                 adapter.room_mapping[request.phone] = user_id
         else:
             user_id = request.phone
@@ -855,15 +887,15 @@ async def test_voice_text(request: TestVoiceRequest):
 
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
-                'user_preferred_lang': 'ar',
-                'initial_user_query_to_process': None,
-                'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None,
-                'phone_number': request.phone  # Store phone_number for Firestore saves
+                "user_preferred_lang": "ar",
+                "initial_user_query_to_process": None,
+                "awaiting_human_handover_confirmation": False,
+                "current_conversation_id": None,
+                "phone_number": request.phone,  # Store phone_number for Firestore saves
             }
         else:
             # Ensure phone_number is set even for existing user_data
-            config.user_data_whatsapp[user_id]['phone_number'] = request.phone
+            config.user_data_whatsapp[user_id]["phone_number"] = request.phone
 
         # Restore user state from Firestore
         restored_name = await restore_user_state_from_firestore(user_id)
@@ -873,7 +905,13 @@ async def test_voice_text(request: TestVoiceRequest):
         _dash_test_ud_vt = config.user_data_whatsapp[user_id]
         _dash_test_ud_vt["_dashboard_test_simulation"] = True
         try:
-            async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+
+            async def capture_send_message(
+                to_number: str,
+                message_text: str | None = None,
+                image_url: str | None = None,
+                audio_url: str | None = None,
+            ) -> Any:
                 await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
                 return True
 
@@ -893,9 +931,7 @@ async def test_voice_text(request: TestVoiceRequest):
 
             captured_responses = dashboard_captured_list_for_user(user_id)
             bot_response = (
-                "\n\n".join(captured_responses)
-                if captured_responses
-                else _dashboard_empty_capture_hint(user_id)
+                "\n\n".join(captured_responses) if captured_responses else _dashboard_empty_capture_hint(user_id)
             )
 
             response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
@@ -909,8 +945,8 @@ async def test_voice_text(request: TestVoiceRequest):
                 "provider_info": {
                     "provider": request.provider,
                     "user_id_used": user_id,
-                    "adapter_type": type(adapter).__name__
-                }
+                    "adapter_type": type(adapter).__name__,
+                },
             }
         finally:
             _dash_test_ud_vt.pop("_dashboard_test_simulation", None)
@@ -921,47 +957,45 @@ async def test_voice_text(request: TestVoiceRequest):
 
 @app.post("/api/test-voice-upload")
 async def test_voice_upload(
-    audio: UploadFile = File(...),
-    phone: str = Form("96176466674"),
-    provider: str = Form("montymobile")
-):
+    audio: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("montymobile")
+) -> Any:
     """Test voice message processing with actual audio file upload"""
     try:
         start_time = datetime.datetime.now()
-        
-        print(f"=== VOICE UPLOAD TEST ===")
+
+        print("=== VOICE UPLOAD TEST ===")
         print(f"Provider: {provider}")
         print(f"Phone: {phone}")
         print(f"Audio filename: {audio.filename}")
         print(f"Audio content type: {audio.content_type}")
-        
+
         try:
             adapter = WhatsAppFactory.switch_provider(provider)
         except Exception as e:
             return {"success": False, "error": f"Failed to switch to {provider}: {str(e)}"}
-        
+
         if provider == "qiscus":
             user_id = f"test_room_{phone}"
-            if hasattr(adapter, 'room_mapping'):
+            if hasattr(adapter, "room_mapping"):
                 adapter.room_mapping[phone] = user_id
         else:
             user_id = phone
-            
+
         user_name = f"Test User ({phone})"
-        
+
         dashboard_clear_captured_for_user(user_id)
 
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
-                'user_preferred_lang': 'ar',
-                'initial_user_query_to_process': None,
-                'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None,
-                'phone_number': phone  # Store phone_number for Firestore saves
+                "user_preferred_lang": "ar",
+                "initial_user_query_to_process": None,
+                "awaiting_human_handover_confirmation": False,
+                "current_conversation_id": None,
+                "phone_number": phone,  # Store phone_number for Firestore saves
             }
         else:
             # Ensure phone_number is set even for existing user_data
-            config.user_data_whatsapp[user_id]['phone_number'] = phone
+            config.user_data_whatsapp[user_id]["phone_number"] = phone
 
         # Restore user state from Firestore (for existing customers returning after server restart)
         restored_name = await restore_user_state_from_firestore(user_id)
@@ -981,7 +1015,12 @@ async def test_voice_upload(
             # config.TESTING_MODE = True
             # print(f"🧪 TESTING MODE ENABLED - Firebase saving disabled for user {user_id}")
 
-            async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+            async def capture_send_message(
+                to_number: str,
+                message_text: str | None = None,
+                image_url: str | None = None,
+                audio_url: str | None = None,
+            ) -> Any:
                 await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
                 return True
 
@@ -994,11 +1033,12 @@ async def test_voice_upload(
                     user_data=config.user_data_whatsapp[user_id],
                     send_message_func=capture_send_message,
                     send_action_func=send_whatsapp_typing_indicator,
-                    audio_url=None  # No URL for test uploads
+                    audio_url=None,  # No URL for test uploads
                 )
             except Exception as e:
                 print(f"DEBUG: Error in test_voice_upload: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             if user_id in _delayed_processing_tasks:
@@ -1016,13 +1056,15 @@ async def test_voice_upload(
             dashboard_stats["total_messages"] += 1
             dashboard_stats["active_users"].add(user_id)
             dashboard_stats["response_times"].append(response_time)
-            dashboard_stats["conversations"].append({
-                "user": user_name,
-                "message": f"[Voice Upload: {audio.filename}]",
-                "bot_response": bot_response,
-                "timestamp": start_time.isoformat(),
-                "provider": provider
-            })
+            dashboard_stats["conversations"].append(
+                {
+                    "user": user_name,
+                    "message": f"[Voice Upload: {audio.filename}]",
+                    "bot_response": bot_response,
+                    "timestamp": start_time.isoformat(),
+                    "provider": provider,
+                }
+            )
 
             return {
                 "success": True,
@@ -1033,8 +1075,8 @@ async def test_voice_upload(
                 "provider_info": {
                     "provider": provider,
                     "user_id_used": user_id,
-                    "adapter_type": type(adapter).__name__
-                }
+                    "adapter_type": type(adapter).__name__,
+                },
             }
         finally:
             _dash_test_ud_vu.pop("_dashboard_test_simulation", None)
@@ -1042,53 +1084,52 @@ async def test_voice_upload(
     except Exception as e:
         print(f"ERROR in test_voice_upload: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/test-image-upload")
 async def test_image_upload(
-    image: UploadFile = File(...),
-    phone: str = Form("96176466674"),
-    provider: str = Form("montymobile")
-):
+    image: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("montymobile")
+) -> Any:
     """Test image analysis through the bot with file upload"""
     try:
         start_time = datetime.datetime.now()
-        
-        print(f"=== IMAGE UPLOAD TEST ===")
+
+        print("=== IMAGE UPLOAD TEST ===")
         print(f"Provider: {provider}")
         print(f"Phone: {phone}")
         print(f"Image filename: {image.filename}")
         print(f"Image content type: {image.content_type}")
-        
+
         try:
             adapter = WhatsAppFactory.switch_provider(provider)
         except Exception as e:
             return {"success": False, "error": f"Failed to switch to {provider}: {str(e)}"}
-        
+
         if provider == "qiscus":
             user_id = f"test_room_{phone}"
-            if hasattr(adapter, 'room_mapping'):
+            if hasattr(adapter, "room_mapping"):
                 adapter.room_mapping[phone] = user_id
         else:
             user_id = phone
-            
+
         user_name = f"Test User ({phone})"
-        
+
         dashboard_clear_captured_for_user(user_id)
 
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {
-                'user_preferred_lang': 'ar',
-                'initial_user_query_to_process': None,
-                'awaiting_human_handover_confirmation': False,
-                'current_conversation_id': None,
-                'phone_number': phone  # Store phone_number for Firestore saves
+                "user_preferred_lang": "ar",
+                "initial_user_query_to_process": None,
+                "awaiting_human_handover_confirmation": False,
+                "current_conversation_id": None,
+                "phone_number": phone,  # Store phone_number for Firestore saves
             }
         else:
             # Ensure phone_number is set even for existing user_data
-            config.user_data_whatsapp[user_id]['phone_number'] = phone
+            config.user_data_whatsapp[user_id]["phone_number"] = phone
 
         # Restore user state from Firestore (for existing customers returning after server restart)
         restored_name = await restore_user_state_from_firestore(user_id)
@@ -1098,7 +1139,7 @@ async def test_image_upload(
         # Read image file and convert to base64 data URL
         image_bytes = await image.read()
         print(f"DEBUG: Read {len(image_bytes)} bytes from uploaded image")
-        
+
         # Detect image format from content type or filename
         content_type = image.content_type or "image/jpeg"
         if "png" in content_type.lower():
@@ -1109,17 +1150,19 @@ async def test_image_upload(
             image_format = "webp"
         else:
             image_format = "jpeg"
-        
+
         # Convert to base64 data URL
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
         image_url = f"data:image/{image_format};base64,{base64_image}"
         print(f"DEBUG: Created base64 data URL with format: {image_format}")
-        
+
         # NOTE: TESTING_MODE disabled - messages should be saved to Firebase
         # config.TESTING_MODE = True
         # print(f"🧪 TESTING MODE ENABLED - Firebase saving disabled for user {user_id}")
 
-        async def capture_send_message(to_number: str, message_text: str = None, image_url: str = None, audio_url: str = None):
+        async def capture_send_message(
+            to_number: str, message_text: str | None = None, image_url: str | None = None, audio_url: str | None = None
+        ) -> Any:
             await dashboard_send_message_capture(to_number, message_text, image_url, audio_url)
             return True
 
@@ -1130,7 +1173,7 @@ async def test_image_upload(
                 image_url=image_url,
                 user_data=config.user_data_whatsapp[user_id],
                 send_message_func=capture_send_message,
-                send_action_func=send_whatsapp_typing_indicator
+                send_action_func=send_whatsapp_typing_indicator,
             )
         finally:
             # config.TESTING_MODE = False
@@ -1138,56 +1181,55 @@ async def test_image_upload(
             pass
 
         captured_responses = dashboard_captured_list_for_user(user_id)
-        
+
         if captured_responses:
             bot_response = "\n\n".join(captured_responses)
         else:
             bot_response = _dashboard_empty_capture_hint(user_id)
-        
+
         response_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
-        
+
         dashboard_stats["total_messages"] += 1
         dashboard_stats["active_users"].add(user_id)
         dashboard_stats["response_times"].append(response_time)
-        dashboard_stats["conversations"].append({
-            "user": user_name,
-            "message": f"[Image Upload: {image.filename}]",
-            "bot_response": bot_response,
-            "timestamp": start_time.isoformat(),
-            "provider": provider
-        })
-        
+        dashboard_stats["conversations"].append(
+            {
+                "user": user_name,
+                "message": f"[Image Upload: {image.filename}]",
+                "bot_response": bot_response,
+                "timestamp": start_time.isoformat(),
+                "provider": provider,
+            }
+        )
+
         return {
             "success": True,
             "message": "Test image processed",
             "response_time_ms": response_time,
             "bot_response": bot_response,
             "analysis": "Image analyzed successfully",
-            "provider_info": {
-                "provider": provider,
-                "user_id_used": user_id,
-                "adapter_type": type(adapter).__name__
-            }
+            "provider_info": {"provider": provider, "user_id_used": user_id, "adapter_type": type(adapter).__name__},
         }
-        
+
     except Exception as e:
         print(f"ERROR in test_image_upload: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats() -> Any:
     """Get dashboard statistics"""
     avg_response_time = 0
     if dashboard_stats["response_times"]:
         avg_response_time = sum(dashboard_stats["response_times"]) / len(dashboard_stats["response_times"])
-    
+
     return {
         "total_messages": dashboard_stats["total_messages"],
         "active_users": len(dashboard_stats["active_users"]),
         "avg_response_time": f"{avg_response_time:.0f}ms",
         "current_provider": WhatsAppFactory.get_current_provider(),
-        "recent_conversations": dashboard_stats["conversations"][-10:]
+        "recent_conversations": dashboard_stats["conversations"][-10:],
     }

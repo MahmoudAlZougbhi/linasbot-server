@@ -1,27 +1,29 @@
-# services/user_persistence_service.py
 """
 User Persistence Service
 Ensures gender and language preferences are saved and retrieved from Firestore
 Prevents bot from forgetting user preferences
 """
 
-import asyncio
-import config
-import datetime
-from typing import List, Optional, Tuple
+from __future__ import annotations
 
-from services.api_integrations import get_customer_by_phone, create_customer
+import asyncio
+import datetime
+from typing import cast
+
+import config
+from services.api_integrations import get_customer_by_phone
 from utils.phone_utils import normalize_phone
-from utils.utils import get_user_state_from_firestore, get_firestore_db
+from utils.utils import get_firestore_db, get_user_state_from_firestore
+
 
 class UserPersistenceService:
     """Manages persistent user data (gender, language) via Firestore"""
 
-    def __init__(self):
-        self._gender_cache = {}  # Cache to avoid repeated Firestore calls
-        self._language_cache = {}  # Cache for language preferences
+    def __init__(self) -> None:
+        self._gender_cache: dict[str, str] = {}  # Cache to avoid repeated Firestore calls
+        self._language_cache: dict[str, str] = {}  # Cache for language preferences
 
-    async def get_user_gender(self, user_id: str, phone: str = None) -> str:
+    async def get_user_gender(self, user_id: str, phone: str | None = None) -> str:
         """
         Get user gender from cache, Firestore, or API
         Returns: 'male', 'female', or 'unknown'
@@ -32,7 +34,7 @@ class UserPersistenceService:
 
         # Check cache
         if user_id in self._gender_cache:
-            return self._gender_cache[user_id]
+            return cast(str, self._gender_cache[user_id])
 
         # Fetch from Firestore first (primary source)
         try:
@@ -42,7 +44,7 @@ class UserPersistenceService:
                 self._gender_cache[user_id] = firestore_gender
                 config.user_gender[user_id] = firestore_gender
                 print(f"✅ Gender fetched from Firestore for {user_id}: {firestore_gender}")
-                return firestore_gender
+                return cast(str, firestore_gender)
         except Exception as e:
             print(f"⚠️ Error fetching gender from Firestore for {user_id}: {e}")
 
@@ -60,13 +62,15 @@ class UserPersistenceService:
                     self._gender_cache[user_id] = api_gender
                     config.user_gender[user_id] = api_gender
                     print(f"✅ Gender fetched from API for {user_id}: {api_gender}")
-                    return api_gender
+                    return cast(str, api_gender)
         except Exception as e:
             print(f"⚠️ Error fetching gender from API for {user_id}: {e}")
 
         return "unknown"
 
-    async def save_user_gender(self, user_id: str, gender: str, phone: str = None, name: str = None) -> bool:
+    async def save_user_gender(
+        self, user_id: str, gender: str, phone: str | None = None, name: str | None = None
+    ) -> bool:
         """
         Save user gender to Firestore and cache
         Returns: True if successful, False otherwise
@@ -91,34 +95,43 @@ class UserPersistenceService:
             db = get_firestore_db()
             if db:
                 app_id_for_firestore = "linas-ai-bot-backend"
-                user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+                user_doc_ref = (
+                    db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+                )
 
                 # ✅ Use asyncio.to_thread to prevent blocking the event loop
                 user_doc = await asyncio.to_thread(user_doc_ref.get)
                 if user_doc.exists:
                     # Update existing document - include greeting_stage for persistence
-                    await asyncio.to_thread(user_doc_ref.update, {
-                        "gender": gender,
-                        "greeting_stage": 2,  # Skip gender question on restore
-                        "last_updated": datetime.datetime.now()
-                    })
+                    await asyncio.to_thread(
+                        user_doc_ref.update,
+                        {
+                            "gender": gender,
+                            "greeting_stage": 2,  # Skip gender question on restore
+                            "last_updated": datetime.datetime.now(),
+                        },
+                    )
                 else:
                     # Create new user document
-                    await asyncio.to_thread(user_doc_ref.set, {
-                        "user_id": user_id,
-                        "gender": gender,
-                        "greeting_stage": 2,  # Skip gender question on restore
-                        "phone_full": phone or user_id,
-                        "name": name or config.user_names.get(user_id, "Unknown"),
-                        "created_at": datetime.datetime.now(),
-                        "last_updated": datetime.datetime.now()
-                    })
+                    await asyncio.to_thread(
+                        user_doc_ref.set,
+                        {
+                            "user_id": user_id,
+                            "gender": gender,
+                            "greeting_stage": 2,  # Skip gender question on restore
+                            "phone_full": phone or user_id,
+                            "name": name or config.user_names.get(user_id, "Unknown"),
+                            "created_at": datetime.datetime.now(),
+                            "last_updated": datetime.datetime.now(),
+                        },
+                    )
 
                 firestore_saved = True
                 print(f"✅ Gender saved to Firestore for {user_id}: {gender}")
         except Exception as e:
             print(f"⚠️ Error saving gender to Firestore for {user_id}: {e}")
             import traceback
+
             traceback.print_exc()
 
         # Also update the most recent conversation's customer_info (for dashboard visibility)
@@ -126,10 +139,17 @@ class UserPersistenceService:
             db = get_firestore_db()
             if db:
                 app_id_for_firestore = "linas-ai-bot-backend"
-                conversations_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                conversations_ref = (
+                    db.collection("artifacts")
+                    .document(app_id_for_firestore)
+                    .collection("users")
+                    .document(user_id)
+                    .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                )
 
                 # Get the most recent conversation - use asyncio.to_thread
                 from google.cloud.firestore import Query
+
                 recent_convs = await asyncio.to_thread(
                     lambda: list(conversations_ref.order_by("last_updated", direction=Query.DESCENDING).limit(1).get())
                 )
@@ -141,19 +161,19 @@ class UserPersistenceService:
                     customer_info["gender"] = gender
                     customer_info["greeting_stage"] = 2  # Persist greeting_stage for restore
 
-                    await asyncio.to_thread(conv_ref.update, {
-                        "customer_info": customer_info,
-                        "last_updated": datetime.datetime.now()
-                    })
+                    await asyncio.to_thread(
+                        conv_ref.update, {"customer_info": customer_info, "last_updated": datetime.datetime.now()}
+                    )
                     print(f"✅ Gender updated in conversation {conv.id} customer_info for {user_id}")
                     break
         except Exception as e:
             print(f"⚠️ Error updating conversation customer_info with gender for {user_id}: {e}")
             import traceback
+
             traceback.print_exc()
 
         return firestore_saved or True  # Return True if at least memory was updated
-    
+
     def get_user_language(self, user_id: str) -> str:
         """
         Get user's preferred language from cache
@@ -161,17 +181,17 @@ class UserPersistenceService:
         """
         # Check cache first
         if user_id in self._language_cache:
-            return self._language_cache[user_id]
-        
+            return cast(str, self._language_cache[user_id])
+
         # Check config
         user_data = config.user_data_whatsapp.get(user_id, {})
-        lang = user_data.get('user_preferred_lang', 'ar')
-        
+        lang = user_data.get("user_preferred_lang", "ar")
+
         # Cache it
         self._language_cache[user_id] = lang
-        return lang
+        return cast(str, lang)
 
-    def _phone_language_lookup_keys(self, raw_phone: str) -> List[str]:
+    def _phone_language_lookup_keys(self, raw_phone: str) -> list[str]:
         """Candidate WhatsApp user_id keys used in config.user_data_whatsapp / cache."""
         p = (raw_phone or "").strip()
         if not p:
@@ -192,7 +212,7 @@ class UserPersistenceService:
                 out.append(k)
         return out
 
-    def resolve_language_for_phone(self, raw_phone: str) -> Tuple[str, str]:
+    def resolve_language_for_phone(self, raw_phone: str) -> tuple[str, str]:
         """
         Find saved preferred language for a phone number (same keys the bot uses).
         Returns (language, source) where source is 'saved' or 'default'.
@@ -207,7 +227,7 @@ class UserPersistenceService:
         return "ar", "default"
 
     @staticmethod
-    def normalize_template_language_code(lang: Optional[str]) -> str:
+    def normalize_template_language_code(lang: str | None) -> str:
         """Map persisted / detected codes to smart_messaging template keys (ar, en, fr)."""
         s = (lang or "ar").strip().lower()
         if s == "franco":
@@ -216,7 +236,7 @@ class UserPersistenceService:
             return s
         return "ar"
 
-    async def _language_from_firestore_latest_conversation(self, user_id: str) -> Optional[str]:
+    async def _language_from_firestore_latest_conversation(self, user_id: str) -> str | None:
         """Read language from the most recently updated conversation doc for this user."""
         if not user_id:
             return None
@@ -235,9 +255,7 @@ class UserPersistenceService:
         )
         try:
             docs = await asyncio.to_thread(
-                lambda: list(
-                    conv_col.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(5).get()
-                )
+                lambda: list(conv_col.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(5).get())
             )
         except Exception as e:
             print(f"⚠️ language lookup order_by failed for {user_id}: {e}")
@@ -253,8 +271,8 @@ class UserPersistenceService:
     async def enrich_language_from_firestore_if_needed(
         self,
         raw_phone: str,
-        extra_firestore_user_ids: Optional[List[str]] = None,
-    ) -> Tuple[str, str]:
+        extra_firestore_user_ids: list[str] | None = None,
+    ) -> tuple[str, str]:
         """
         Resolve (language, source) with in-memory preference first, then Firestore conversation docs.
         source is 'saved' or 'default'.
@@ -263,7 +281,7 @@ class UserPersistenceService:
         if src == "saved" and lang:
             return self.normalize_template_language_code(lang), "saved"
 
-        candidates: List[str] = []
+        candidates: list[str] = []
         for x in extra_firestore_user_ids or []:
             xs = str(x).strip() if x else ""
             if xs and xs not in candidates:
@@ -287,7 +305,7 @@ class UserPersistenceService:
         self,
         raw_phone: str,
         *,
-        firestore_user_id: Optional[str] = None,
+        firestore_user_id: str | None = None,
         fallback_language: str = "ar",
     ) -> str:
         """Language for manual campaign text; uses fallback_language when nothing is stored."""
@@ -296,13 +314,13 @@ class UserPersistenceService:
         if src == "default":
             return self.normalize_template_language_code(fallback_language)
         return lang
-    
+
     def save_user_language(self, user_id: str, language: str) -> None:
         """
         Save user's preferred language to cache and config
         Language can change on each message based on detection
         """
-        if language not in ['ar', 'en', 'fr', 'franco']:
+        if language not in ["ar", "en", "fr", "franco"]:
             print(f"⚠️ Invalid language value: {language}")
             return
 
@@ -312,14 +330,14 @@ class UserPersistenceService:
 
         if user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[user_id] = {}
-        config.user_data_whatsapp[user_id]['user_preferred_lang'] = language
+        config.user_data_whatsapp[user_id]["user_preferred_lang"] = language
 
         if previous_lang and previous_lang != language:
             print(f"🌐 Language updated for {user_id}: {previous_lang} → {language}")
         else:
             print(f"🌐 Language set for {user_id}: {language}")
-    
-    def clear_cache(self, user_id: str = None) -> None:
+
+    def clear_cache(self, user_id: str | None = None) -> None:
         """Clear cache for a specific user or all users"""
         if user_id:
             self._gender_cache.pop(user_id, None)
@@ -327,6 +345,7 @@ class UserPersistenceService:
         else:
             self._gender_cache.clear()
             self._language_cache.clear()
+
 
 # Global instance
 user_persistence = UserPersistenceService()

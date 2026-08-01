@@ -2,13 +2,15 @@
 Persistence layer for message logs and campaign logs.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import threading
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from services.smart_messaging_catalog import normalize_template_id
 from utils.phone_utils import phone_match_key
@@ -17,17 +19,17 @@ from utils.phone_utils import phone_match_key
 class MessageLogsService:
     """Stores deduplication-safe message and campaign logs in JSON files."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         base_dir = Path(__file__).resolve().parent.parent / "data"
         self.message_logs_file = base_dir / "message_logs.json"
         self.campaign_logs_file = base_dir / "campaign_logs.json"
         self._lock = threading.Lock()
 
-    def _load_list(self, file_path: Path) -> List[Dict[str, Any]]:
+    def _load_list(self, file_path: Path) -> list[dict[str, Any]]:
         if not file_path.exists():
             return []
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
                 return data
@@ -35,7 +37,7 @@ class MessageLogsService:
         except Exception:
             return []
 
-    def _save_list(self, file_path: Path, records: List[Dict[str, Any]]) -> bool:
+    def _save_list(self, file_path: Path, records: list[dict[str, Any]]) -> bool:
         try:
             os.makedirs(file_path.parent, exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as f:
@@ -44,7 +46,7 @@ class MessageLogsService:
         except Exception:
             return False
 
-    def _normalize_customer_id(self, customer_id: Optional[Any]) -> str:
+    def _normalize_customer_id(self, customer_id: Any | None) -> str:
         if customer_id is None:
             return ""
         raw = str(customer_id).strip()
@@ -54,9 +56,9 @@ class MessageLogsService:
         self,
         customer_id: Any,
         template_type: str,
-        reference_date: Optional[str] = None,
-        appointment_id: Optional[Any] = None,
-        campaign_id: Optional[str] = None,
+        reference_date: str | None = None,
+        appointment_id: Any | None = None,
+        campaign_id: str | None = None,
     ) -> bool:
         """Check if a matching message has already been logged as sent."""
         normalized_customer = self._normalize_customer_id(customer_id)
@@ -91,12 +93,12 @@ class MessageLogsService:
         self,
         customer_id: Any,
         template_type: str,
-        sent_at: Optional[str] = None,
-        appointment_id: Optional[Any] = None,
-        campaign_id: Optional[str] = None,
-        reference_date: Optional[str] = None,
-        extra: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        sent_at: str | None = None,
+        appointment_id: Any | None = None,
+        campaign_id: str | None = None,
+        reference_date: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Append a message log entry."""
         entry = {
             "log_id": f"msg_{uuid.uuid4().hex[:12]}",
@@ -121,9 +123,9 @@ class MessageLogsService:
     def create_campaign_log(
         self,
         template_type: str,
-        filters: Dict[str, Any],
-        scheduled_for: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        filters: dict[str, Any],
+        scheduled_for: str | None = None,
+    ) -> dict[str, Any]:
         """Create a campaign log entry before execution."""
         campaign_id = f"cmp_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         entry = {
@@ -150,7 +152,7 @@ class MessageLogsService:
         sent_count: int,
         preview_count: int,
         status: str = "completed",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Update campaign log with final stats."""
         updated = None
         with self._lock:
@@ -173,30 +175,30 @@ class MessageLogsService:
 
         return updated
 
-    def get_campaign_logs(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_campaign_logs(self, limit: int = 50) -> list[dict[str, Any]]:
         with self._lock:
             logs = self._load_list(self.campaign_logs_file)
         logs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return logs[:limit]
 
-    def _parse_sent_at_utc(self, raw: Optional[str]) -> Optional[datetime]:
+    def _parse_sent_at_utc(self, raw: str | None) -> datetime | None:
         if not raw or not isinstance(raw, str):
             return None
         try:
             s = raw.strip().replace("Z", "+00:00")
             dt = datetime.fromisoformat(s)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
+            return dt.astimezone(UTC)
         except Exception:
             return None
 
     def recipient_phone_keys_for_template(
         self,
         template_id: str,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-    ) -> Tuple[Set[str], Dict[str, str], int]:
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> tuple[set[str], dict[str, str], int]:
         """
         Collect distinct recipient phone keys from message_logs for a template,
         optionally limited to sent_at calendar days (UTC) in [date_from, date_to].
@@ -206,8 +208,8 @@ class MessageLogsService:
         if not canonical:
             return set(), {}, 0
 
-        df: Optional[date] = None
-        dt_end: Optional[date] = None
+        df: date | None = None
+        dt_end: date | None = None
         if date_from:
             try:
                 df = date.fromisoformat(str(date_from).strip()[:10])
@@ -222,8 +224,8 @@ class MessageLogsService:
         with self._lock:
             logs = self._load_list(self.message_logs_file)
 
-        keys: Set[str] = set()
-        latest: Dict[str, str] = {}
+        keys: set[str] = set()
+        latest: dict[str, str] = {}
         matched = 0
 
         for entry in logs:
@@ -254,4 +256,3 @@ class MessageLogsService:
 
 
 message_logs_service = MessageLogsService()
-

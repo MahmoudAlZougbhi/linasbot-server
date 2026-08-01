@@ -2,12 +2,14 @@
 Daily fixed-time dispatcher for smart messaging templates.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import threading
 from datetime import date, datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import config
 from services.api_integrations import get_customer_appointments, send_appointment_reminders
@@ -21,11 +23,6 @@ from services.smart_messaging_catalog import (
 from services.template_schedule_service import template_schedule_service
 from services.user_persistence_service import user_persistence
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:  # pragma: no cover - Python < 3.9 fallback
-    ZoneInfo = None
-
 
 def _normalize_phone(value: Any) -> str:
     if value is None:
@@ -33,7 +30,7 @@ def _normalize_phone(value: Any) -> str:
     return str(value).replace("+", "").replace(" ", "").replace("-", "")
 
 
-def _parse_api_datetime(value: Optional[str]) -> Optional[datetime]:
+def _parse_api_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
 
@@ -53,7 +50,7 @@ def _parse_api_datetime(value: Optional[str]) -> Optional[datetime]:
     return None
 
 
-def _extract_appointments(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _extract_appointments(result: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(result, dict) or not result.get("success"):
         return []
     data = result.get("data", {})
@@ -69,23 +66,24 @@ def _extract_appointments(result: Dict[str, Any]) -> List[Dict[str, Any]]:
 class DailyTemplateDispatcher:
     """Runs template jobs once per local day at configured HH:MM."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         from storage.persistent_storage import (
-            DAILY_TEMPLATE_DISPATCH_STATE_FILE,
             APP_SETTINGS_FILE,
+            DAILY_TEMPLATE_DISPATCH_STATE_FILE,
             ensure_dirs,
         )
+
         ensure_dirs()
         self.state_file = DAILY_TEMPLATE_DISPATCH_STATE_FILE
         self.settings_file = APP_SETTINGS_FILE
         self._lock = threading.Lock()
         self.last_runs = self._load_state()
 
-    def _load_state(self) -> Dict[str, str]:
+    def _load_state(self) -> dict[str, str]:
         if not self.state_file.exists():
             return {}
         try:
-            with open(self.state_file, "r", encoding="utf-8") as f:
+            with open(self.state_file, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
                 return {str(k): str(v) for k, v in data.items()}
@@ -105,9 +103,9 @@ class DailyTemplateDispatcher:
         if not self.settings_file.exists():
             return True
         try:
-            with open(self.settings_file, "r", encoding="utf-8") as f:
+            with open(self.settings_file, encoding="utf-8") as f:
                 settings = json.load(f)
-            return settings.get("smartMessaging", {}).get("enabled", True)
+            return cast(bool, settings.get("smartMessaging", {}).get("enabled", True))
         except Exception:
             return True
 
@@ -124,7 +122,7 @@ class DailyTemplateDispatcher:
         customer_phone: str,
         template_id: str,
         reference_date: str,
-        appointment_id: Optional[Any],
+        appointment_id: Any | None,
     ) -> bool:
         target_phone = _normalize_phone(customer_phone)
         target_template = normalize_template_id(template_id)
@@ -166,7 +164,7 @@ class DailyTemplateDispatcher:
         branch_name: str,
         service_name: str,
         next_appointment_date: str = "",
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         return {
             "customer_name": customer_name or "عميلنا العزيز",
             "appointment_date": apt_datetime.strftime("%Y-%m-%d"),
@@ -182,16 +180,16 @@ class DailyTemplateDispatcher:
         self,
         customer_phone: str,
         template_id: str,
-        placeholders: Dict[str, str],
+        placeholders: dict[str, str],
         language: str,
-        service_id: Optional[int],
+        service_id: int | None,
         service_name: str,
-        customer_id: Optional[Any],
-        appointment_id: Optional[Any],
+        customer_id: Any | None,
+        appointment_id: Any | None,
         reference_date: str,
     ) -> bool:
         normalized_template = normalize_template_id(template_id)
-        metadata = {
+        metadata: dict[str, Any] = {
             "customer_id": customer_id,
             "appointment_id": appointment_id,
             "reference_date": reference_date,
@@ -214,9 +212,9 @@ class DailyTemplateDispatcher:
         *,
         template_id: str,
         reminders_date: date,
-        status: Optional[str],
+        status: str | None,
         reference_date: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         result = await send_appointment_reminders(
             date=reminders_date.strftime("%Y-%m-%d"),
             status=status,
@@ -292,8 +290,8 @@ class DailyTemplateDispatcher:
         }
 
     async def run_post_session_feedback_delayed(
-        self, local_now: datetime, schedule_cfg: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, local_now: datetime, schedule_cfg: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Post-session feedback: same calendar day as the appointment, N hours after slot time.
         Checked on every dispatcher tick (not once daily at sendTime).
@@ -308,12 +306,14 @@ class DailyTemplateDispatcher:
         today_str = today_date.strftime("%Y-%m-%d")
         yesterday_str = (today_date - timedelta(days=1)).strftime("%Y-%m-%d")
 
-        merged: List[Dict[str, Any]] = []
+        merged: list[dict[str, Any]] = []
         seen_keys: set = set()
         for day_str in (today_str, yesterday_str):
             part = await send_appointment_reminders(date=day_str, status="Done")
             for apt in _extract_appointments(part):
-                apt_details = apt.get("appointment_details", {}) if isinstance(apt.get("appointment_details"), dict) else {}
+                apt_details = (
+                    apt.get("appointment_details", {}) if isinstance(apt.get("appointment_details"), dict) else {}
+                )
                 aid = apt_details.get("id") or apt.get("appointment_id")
                 ph = apt.get("phone")
                 key = (str(aid or ""), str(ph or ""))
@@ -434,7 +434,7 @@ class DailyTemplateDispatcher:
         if not isinstance(appointments, list):
             return True
 
-        latest_done: Optional[datetime] = None
+        latest_done: datetime | None = None
         for apt in appointments:
             status = str(apt.get("status", "")).strip().lower()
             if status not in {"done", "completed"}:
@@ -455,14 +455,14 @@ class DailyTemplateDispatcher:
             return False
         return latest_done.date() == target_day
 
-    async def _run_twenty_day_followup(self, run_day: date) -> Dict[str, Any]:
+    async def _run_twenty_day_followup(self, run_day: date) -> dict[str, Any]:
         target_day = run_day - timedelta(days=TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS)
         target_str = target_day.strftime("%Y-%m-%d")
         result = await send_appointment_reminders(date=target_str, status="Done")
         appointments = _extract_appointments(result)
 
         # Keep latest appointment per phone for target day.
-        latest_by_phone: Dict[str, Tuple[datetime, Dict[str, Any]]] = {}
+        latest_by_phone: dict[str, tuple[datetime, dict[str, Any]]] = {}
         for apt in appointments:
             phone = apt.get("phone")
             apt_details = apt.get("appointment_details", {}) if isinstance(apt.get("appointment_details"), dict) else {}
@@ -480,7 +480,9 @@ class DailyTemplateDispatcher:
         skipped_not_latest = 0
 
         for _, (apt_datetime, apt) in latest_by_phone.items():
-            customer_phone = apt.get("phone")
+            customer_phone = str(apt.get("phone") or "")
+            if not customer_phone:
+                continue
             customer_name = apt.get("name", "عميلنا العزيز")
             customer_id = apt.get("user_id") or apt.get("customer_id")
             apt_details = apt.get("appointment_details", {}) if isinstance(apt.get("appointment_details"), dict) else {}
@@ -540,7 +542,7 @@ class DailyTemplateDispatcher:
             "reference_date": target_str,
         }
 
-    async def run_template(self, template_id: str, run_day: date) -> Dict[str, Any]:
+    async def run_template(self, template_id: str, run_day: date) -> dict[str, Any]:
         template_id = normalize_template_id(template_id)
         if template_id == "reminder_24h":
             target_day = run_day + timedelta(days=1)
@@ -590,7 +592,7 @@ class DailyTemplateDispatcher:
             "error": "Unsupported template for daily dispatcher",
         }
 
-    async def tick(self) -> Dict[str, Any]:
+    async def tick(self) -> dict[str, Any]:
         """
         Called on scheduler cadence (default 5 minutes).
         Runs templates whose configured HH:MM falls inside the current cadence window.
@@ -606,7 +608,7 @@ class DailyTemplateDispatcher:
         schedules = template_schedule_service.get_all_schedules()
         cadence_minutes = max(1, int(os.getenv("SMART_DISPATCHER_INTERVAL_MINUTES", "5")))
         jobs_run = []
-        due_jobs: List[Dict[str, Any]] = []
+        due_jobs: list[dict[str, Any]] = []
         templates_checked = 0
         with self._lock:
             for template_id in DAILY_TEMPLATE_IDS:
@@ -640,23 +642,27 @@ class DailyTemplateDispatcher:
                 if self.last_runs.get(template_id) == day_key:
                     continue
 
-                due_jobs.append({
-                    "template_id": template_id,
-                    "run_date": day_key,
-                    "timezone": timezone,
-                    "send_time": send_time,
-                    "run_day": local_now.date(),
-                })
+                due_jobs.append(
+                    {
+                        "template_id": template_id,
+                        "run_date": day_key,
+                        "timezone": timezone,
+                        "send_time": send_time,
+                        "run_day": local_now.date(),
+                    }
+                )
 
         for job in due_jobs:
             result = await self.run_template(job["template_id"], job["run_day"])
-            jobs_run.append({
-                "template_id": job["template_id"],
-                "run_date": job["run_date"],
-                "timezone": job["timezone"],
-                "send_time": job["send_time"],
-                "result": result,
-            })
+            jobs_run.append(
+                {
+                    "template_id": job["template_id"],
+                    "run_date": job["run_date"],
+                    "timezone": job["timezone"],
+                    "send_time": job["send_time"],
+                    "result": result,
+                }
+            )
 
         thank_you_after_session_result = None
         if self._is_smart_messaging_enabled():
@@ -689,4 +695,3 @@ class DailyTemplateDispatcher:
 
 
 daily_template_dispatcher = DailyTemplateDispatcher()
-

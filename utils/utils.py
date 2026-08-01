@@ -1,14 +1,20 @@
+from __future__ import annotations
+
 # utils.py
-import re
-import json
-import os
-import uuid
-import datetime
-import logging
 import asyncio
-from typing import Any, Optional
+import datetime
+import json
+import logging
+import os
+import re
+import uuid
 from collections import deque
-from difflib import SequenceMatcher
+from typing import Any, cast
+
+# NEW: Firebase Admin SDK Imports
+import firebase_admin
+from firebase_admin import credentials, firestore
+from openai import AsyncOpenAI
 
 import config
 from prompt_templates import (
@@ -18,45 +24,50 @@ from prompt_templates import (
     OPERATIONAL_BLOCK_TOKEN,
     QA_REFERENCE_BLOCK_TOKEN,
 )
-from utils.phone_utils import normalize_phone, is_phone_like_user_id
-from openai import AsyncOpenAI
 from services.live_chat_contracts import (
     extract_source_message_id as contract_extract_source_message_id,
+)
+from services.live_chat_contracts import (
     is_duplicate_message as contract_is_duplicate_message,
+)
+from services.live_chat_contracts import (
     normalize_message as contract_normalize_message,
+)
+from services.live_chat_contracts import (
     parse_timestamp_utc,
     utc_now,
 )
-
-# NEW: Firebase Admin SDK Imports
-import firebase_admin
-from firebase_admin import credentials, firestore
+from utils.phone_utils import is_phone_like_user_id, normalize_phone
 
 # Global Firestore DB instance
 _firestore_db = None
 _firestore_init_done = False
 
 
-def initialize_firestore():
+def initialize_firestore() -> Any:
     """
     Initializes Firebase Admin SDK and Firestore client.
     This should be called once at application startup.
     """
     import time
+
     global _firestore_db, _firestore_init_done
     t0 = time.monotonic()
 
-    def _elapsed():
+    def _elapsed() -> Any:
         return time.monotonic() - t0
 
     try:
-        print(f"[auth:Firestore] initialize_firestore ENTRY t=0.00s", flush=True)
+        print("[auth:Firestore] initialize_firestore ENTRY t=0.00s", flush=True)
 
         # Check if Firebase Admin SDK is already initialized
         if not firebase_admin._apps:
             # Get the service account key path from environment
-            service_account_key_path = os.getenv('FIRESTORE_SERVICE_ACCOUNT_KEY_PATH', 'data/firebase_data.json')
-            print(f"[auth:Firestore] step 1: key_path={service_account_key_path} exists={os.path.exists(service_account_key_path)} t={_elapsed():.3f}s", flush=True)
+            service_account_key_path = os.getenv("FIRESTORE_SERVICE_ACCOUNT_KEY_PATH", "data/firebase_data.json")
+            print(
+                f"[auth:Firestore] step 1: key_path={service_account_key_path} exists={os.path.exists(service_account_key_path)} t={_elapsed():.3f}s",
+                flush=True,
+            )
 
             if not os.path.exists(service_account_key_path):
                 print(f"❌ Firebase service account key file not found at: {service_account_key_path}")
@@ -65,12 +76,15 @@ def initialize_firestore():
                 return
 
             # Load service account to log project config (no secrets)
-            with open(service_account_key_path, 'r') as f:
+            with open(service_account_key_path) as f:
                 service_account = json.load(f)
-            project_id = service_account.get('project_id', '?')
-            storage_bucket = service_account.get('storageBucket')
-            client_email = service_account.get('client_email', '?')
-            print(f"[auth:Firestore] step 2: project_id={project_id} client_email={client_email} t={_elapsed():.3f}s", flush=True)
+            project_id = service_account.get("project_id", "?")
+            storage_bucket = service_account.get("storageBucket")
+            client_email = service_account.get("client_email", "?")
+            print(
+                f"[auth:Firestore] step 2: project_id={project_id} client_email={client_email} t={_elapsed():.3f}s",
+                flush=True,
+            )
 
             # Initialize Firebase Admin SDK with service account credentials
             cred = credentials.Certificate(service_account_key_path)
@@ -78,7 +92,7 @@ def initialize_firestore():
 
             options = {}
             if storage_bucket:
-                options['storageBucket'] = storage_bucket
+                options["storageBucket"] = storage_bucket
 
             firebase_admin.initialize_app(cred, options)
             print(f"[auth:Firestore] step 4: firebase_admin.initialize_app done t={_elapsed():.3f}s", flush=True)
@@ -90,7 +104,10 @@ def initialize_firestore():
         # Initialize Firestore client (lazy - no network until first op)
         _firestore_db = firestore.client()
         _firestore_init_done = True
-        print(f"[auth:Firestore] step 5: firestore.client() done t={_elapsed():.3f}s (first network op will happen on first query)", flush=True)
+        print(
+            f"[auth:Firestore] step 5: firestore.client() done t={_elapsed():.3f}s (first network op will happen on first query)",
+            flush=True,
+        )
         print("✅ Firestore client initialized successfully!")
 
     except Exception as e:
@@ -102,10 +119,11 @@ def initialize_firestore():
         print("   3. Or update the project ID in firebase_data.json")
         _firestore_db = None
         import traceback
+
         traceback.print_exc()
 
 
-def get_firestore_db():
+def get_firestore_db() -> Any:
     """Returns the initialized Firestore client instance."""
     if _firestore_db is None:
         print("[auth:Firestore] get_firestore_db: triggering initialize_firestore (lazy init)", flush=True)
@@ -113,12 +131,12 @@ def get_firestore_db():
     return _firestore_db
 
 
-_PHONE_ROOM_MAPPING_CACHE = {"mtime": None, "room_to_phone": {}}
+_PHONE_ROOM_MAPPING_CACHE: dict[str, Any] = {"mtime": None, "room_to_phone": {}}
 MESSAGE_DEDUPE_WINDOW_SECONDS = 20
 _log = logging.getLogger(__name__)
 
 
-def get_canonical_user_id_and_phone(user_id: str, phone_number: str = None) -> tuple:
+def get_canonical_user_id_and_phone(user_id: str, phone_number: str | None = None) -> tuple[str, str | None]:
     """
     Return (canonical_user_id, normalized_phone) for Firestore and identity.
     - If we have a real phone (from phone_number or user_id when phone-like), canonical_user_id = normalized_phone (E.164).
@@ -142,9 +160,14 @@ def _normalize_phone_digits(value: str) -> str:
     return digits
 
 
-def _is_placeholder_phone(phone_number: str) -> bool:
+def _is_placeholder_phone(phone_number: Any) -> bool:
     if phone_number is None:
         return True
+    if not isinstance(phone_number, str):
+        if isinstance(phone_number, (int, float)):
+            phone_number = str(phone_number)
+        else:
+            return True
     value = str(phone_number).strip().lower()
     return (not value) or value in {"unknown", "none", "null"} or value.startswith("room:")
 
@@ -158,7 +181,7 @@ def _clean_phone_for_lookup(phone_number: str) -> str:
     return digits
 
 
-def _load_room_to_phone_mapping() -> dict:
+def _load_room_to_phone_mapping() -> dict[str, str]:
     """
     Load room_id -> phone mapping from data/phone_to_room_mapping.json with mtime cache.
     """
@@ -176,11 +199,12 @@ def _load_room_to_phone_mapping() -> dict:
         return {}
 
     if _PHONE_ROOM_MAPPING_CACHE["mtime"] == mtime:
-        return _PHONE_ROOM_MAPPING_CACHE["room_to_phone"]
+        cached = _PHONE_ROOM_MAPPING_CACHE["room_to_phone"]
+        return dict(cached) if isinstance(cached, dict) else {}
 
     room_to_phone = {}
     try:
-        with open(mapping_path, "r", encoding="utf-8") as mapping_file:
+        with open(mapping_path, encoding="utf-8") as mapping_file:
             mapping_data = json.load(mapping_file) or {}
 
         raw_phone_to_room = mapping_data.get("phone_to_room_mapping", {})
@@ -230,9 +254,9 @@ def persist_room_to_phone_mapping(room_id: str, phone: str) -> None:
         "phone_to_room_mapping.json",
     )
     try:
-        data = {}
+        data: dict[str, Any] = {}
         if os.path.exists(mapping_path):
-            with open(mapping_path, "r", encoding="utf-8") as f:
+            with open(mapping_path, encoding="utf-8") as f:
                 data = json.load(f) or {}
         phone_to_room = dict(data.get("phone_to_room_mapping") or {})
         room_to_phone = dict(data.get("room_to_phone_mapping") or {})
@@ -256,7 +280,7 @@ def _extract_source_message_id(metadata: dict) -> str:
     return contract_extract_source_message_id(metadata)
 
 
-def _parse_timestamp_for_dedupe(timestamp) -> datetime.datetime:
+def _parse_timestamp_for_dedupe(timestamp: Any) -> datetime.datetime:
     return parse_timestamp_utc(timestamp)
 
 
@@ -273,7 +297,12 @@ def _message_to_dashboard_format(msg: dict) -> dict:
     if not msg:
         return {}
     ts = msg.get("timestamp")
-    ts_str = ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else utc_now().isoformat())
+    if isinstance(ts, datetime.datetime):
+        ts_str = ts.isoformat()
+    elif ts is not None:
+        ts_str = str(ts)
+    else:
+        ts_str = utc_now().isoformat()
     role = str(msg.get("role", "")).strip().lower()
     meta = msg.get("metadata") or {}
     handled = meta.get("handled_by")
@@ -306,12 +335,13 @@ async def _update_customer_name_from_external_after_save(
     canonical_user_id: str,
     normalized_phone: str,
     conversation_id: str,
-    conversations_collection_for_user,
-    user_doc_ref,
-):
+    conversations_collection_for_user: Any,
+    user_doc_ref: Any,
+) -> Any:
     """Update customer name from CRM in background so user message can save+broadcast first."""
     try:
         from services.customer_identity_service import resolve_customer_from_external
+
         external = await resolve_customer_from_external(normalized_phone)
         customer_name = (external.get("name") or "") if external.get("exists") else ""
         external_id = external.get("external_id")
@@ -332,31 +362,35 @@ async def _update_customer_name_from_external_after_save(
             if external_id is not None:
                 update_data["external_id"] = external_id
             await asyncio.to_thread(user_doc_ref.update, update_data)
-        _log.info("Background customer name updated for %s: name=%s", canonical_user_id, customer_name or "(phone only)")
+        _log.info(
+            "Background customer name updated for %s: name=%s", canonical_user_id, customer_name or "(phone only)"
+        )
     except Exception as e:
         _log.warning("Background customer name update failed: %s", e)
 
 
-def _invalidate_live_chat_cache():
+def _invalidate_live_chat_cache() -> None:
     try:
         from services.live_chat_service import live_chat_service
+
         live_chat_service.invalidate_cache()
     except Exception:
         pass
 
 
-def _refresh_live_chat_index_async(user_id: str, conversation_id: str):
+def _refresh_live_chat_index_async(user_id: str, conversation_id: str) -> None:
     """Fire-and-forget index refresh so new messages populate live_chat_index."""
     try:
         canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
         from services.live_chat_service import live_chat_service
+
         print(f"🔄 [index-refresh] enqueue refresh user={canonical_user_id} conv={conversation_id}")
         asyncio.create_task(live_chat_service._refresh_index_for_conversation(canonical_user_id, conversation_id))
     except Exception as e:
         print(f"⚠️ [index-refresh] enqueue failed for user={user_id} conv={conversation_id}: {e}")
 
 
-def _conversation_state_fields_changed(doc_before, update_payload: dict) -> bool:
+def _conversation_state_fields_changed(doc_before: Any, update_payload: dict) -> bool:
     """True if save payload changes fields that drive live_chat_index / dashboard tabs."""
     if doc_before is None:
         return True
@@ -371,12 +405,12 @@ def _conversation_state_fields_changed(doc_before, update_payload: dict) -> bool
 
 
 async def _resolve_conversation_doc_for_save(
-    db,
+    db: Any,
     app_id_for_firestore: str,
     conversation_id: str,
     raw_user_id: str,
     canonical_user_id: str,
-):
+) -> Any:
     """
     Find users/*/conversations/{conversation_id} across the same id variants as handover/release.
     If several duplicates exist, prefer the doc that looks released to bot (hta False / post_release cooldown)
@@ -401,7 +435,7 @@ async def _resolve_conversation_doc_for_save(
     if len(found) == 1:
         return found[0]
 
-    def _pick_score(item):
+    def _pick_score(item: Any) -> Any:
         _, snap, _ = item
         d = snap.to_dict() or {}
         hta = d.get("human_takeover_active")
@@ -421,25 +455,22 @@ async def _resolve_conversation_doc_for_save(
 async def _ensure_live_chat_index_after_save(
     canonical_user_id: str,
     conversation_id: str,
-    doc_before: dict,
+    doc_before: dict[str, Any] | None,
     update_payload: dict,
     *,
     force_await: bool = False,
-):
+) -> Any:
     """
     When takeover/state fields change, await index sync so unified tabs do not flicker
     (otherwise the UI reads stale live_chat_index until the background task finishes).
     """
     try:
         from services.live_chat_service import live_chat_service
-        must_await = force_await or _conversation_state_fields_changed(
-            doc_before or {}, update_payload or {}
-        )
+
+        must_await = force_await or _conversation_state_fields_changed(doc_before or {}, update_payload or {})
         if must_await:
             await asyncio.wait_for(
-                live_chat_service._refresh_index_for_conversation(
-                    canonical_user_id, conversation_id
-                ),
+                live_chat_service._refresh_index_for_conversation(canonical_user_id, conversation_id),
                 timeout=20.0,
             )
         else:
@@ -450,14 +481,14 @@ async def _ensure_live_chat_index_after_save(
 
 
 async def _propagate_takeover_state_to_sibling_conversation_docs(
-    db,
+    db: Any,
     app_id_for_firestore: str,
     conversation_id: str,
     raw_user_id: str,
     canonical_user_id: str,
-    primary_doc_ref,
+    primary_doc_ref: Any,
     update_payload: dict,
-):
+) -> Any:
     """
     save_conversation_message updates only one users/{variant}/conversations/{id} document.
     Duplicate docs under other id variants (phone formats) can keep human_takeover_active=True
@@ -531,18 +562,18 @@ async def _propagate_takeover_state_to_sibling_conversation_docs(
         _invalidate_live_chat_cache()
 
 
-async def _resolve_latest_conversation_id(conversations_collection_for_user) -> Optional[str]:
+async def _resolve_latest_conversation_id(conversations_collection_for_user: Any) -> str | None:
     """
     Prefer the conversation with the newest last_updated. Uses an ordered query when possible;
     if that fails (missing index, etc.), falls back to a full collection scan.
     """
     try:
-        query = conversations_collection_for_user.order_by(
-            "last_updated", direction=firestore.Query.DESCENDING
-        ).limit(1)
+        query = conversations_collection_for_user.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(
+            1
+        )
         docs = await asyncio.to_thread(lambda: list(query.stream()))
         if docs:
-            return docs[0].id
+            return str(docs[0].id)
     except Exception as q_err:
         print(f"⚠️ Could not query conversations by last_updated, scanning: {q_err}")
 
@@ -568,17 +599,17 @@ async def _resolve_latest_conversation_id(conversations_collection_for_user) -> 
             best_id = d.id
 
     if best_id:
-        return best_id
+        return str(best_id)
 
-    return max(
-        docs,
-        key=lambda d: len((d.to_dict() or {}).get("messages") or []),
-    ).id
+    return str(
+        max(
+            docs,
+            key=lambda d: len((d.to_dict() or {}).get("messages") or []),
+        ).id
+    )
 
 
-async def _latest_smart_ai_across_conversations(
-    canonical_user_id: str, within_hours: float = 72
-) -> Optional[dict]:
+async def _latest_smart_ai_across_conversations(canonical_user_id: str, within_hours: float = 72) -> dict | None:
     """Newest ai message with metadata.source == smart_message across all threads for this user."""
     db = get_firestore_db()
     if not db or not canonical_user_id:
@@ -623,7 +654,15 @@ async def _latest_smart_ai_across_conversations(
     return best
 
 
-async def save_conversation_message_to_firestore(user_id: str, role: str, text: str, conversation_id: str = None, user_name: str = None, phone_number: str = None, metadata: dict = None):
+async def save_conversation_message_to_firestore(
+    user_id: str,
+    role: str,
+    text: str,
+    conversation_id: str | None = None,
+    user_name: str | None = None,
+    phone_number: str | None = None,
+    metadata: dict | None = None,
+) -> Any:
     """
     Saves a message (user or bot) to Firestore.
     If conversation_id is provided, appends to existing conversation.
@@ -633,10 +672,10 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         user_id: The user's WhatsApp ID (could be room_id for Qiscus or phone for others)
         role: 'user' or 'ai' or 'operator'
         text: The message text
-        conversation_id: Optional conversation ID. If None, creates a new conversation.
-        user_name: Optional user name to save with the conversation
-        phone_number: Optional actual phone number (for Qiscus where user_id is room_id)
-        metadata: Optional metadata dict (e.g., operator_id, handled_by)
+        conversation_id:  conversation ID. If None, creates a new conversation.
+        user_name:  user name to save with the conversation
+        phone_number:  actual phone number (for Qiscus where user_id is room_id)
+        metadata:  metadata dict (e.g., operator_id, handled_by)
     """
     import asyncio
 
@@ -653,7 +692,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     append_turn_to_user_context_memory(user_id, role, text)
 
     # Check if we're in testing mode - skip Firebase saving for tests
-    if hasattr(config, 'TESTING_MODE') and config.TESTING_MODE:
+    if hasattr(config, "TESTING_MODE") and config.TESTING_MODE:
         print(f"🧪 TESTING MODE: Skipping Firebase save for user {user_id}, role {role}")
         return
 
@@ -668,7 +707,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     # ✅ FIX: Resolve canonical + refs FIRST (can work with phone_number=None).
     # Then resolve phone from conversation/user if not provided.
     canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id, phone_number)
-    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id)
+    user_doc_ref = (
+        db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id)
+    )
     conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
 
     # Resolve phone_number using fallback chain if not provided.
@@ -680,7 +721,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 existing_conv_ref = conversations_collection_for_user.document(conversation_id)
                 existing_conv_snap = await asyncio.to_thread(existing_conv_ref.get)
                 if existing_conv_snap.exists:
-                    existing_phone = existing_conv_snap.to_dict().get('customer_info', {}).get('phone_full')
+                    existing_phone = existing_conv_snap.to_dict().get("customer_info", {}).get("phone_full")
                     if existing_phone:
                         phone_number = existing_phone
             except Exception as e:
@@ -690,7 +731,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             try:
                 user_doc_check = await asyncio.to_thread(user_doc_ref.get)
                 if user_doc_check.exists:
-                    existing_phone = user_doc_check.to_dict().get('phone_full')
+                    existing_phone = user_doc_check.to_dict().get("phone_full")
                     if existing_phone:
                         phone_number = existing_phone
             except Exception:
@@ -702,10 +743,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 phone_number = mapped_phone
 
         if not phone_number:
-            is_likely_phone = (user_id.startswith('+961') or
-                              user_id.startswith('961') or
-                              (user_id.isdigit() and user_id.startswith('7') and len(user_id) <= 8))
-            is_likely_room_id = (user_id.isdigit() and len(user_id) >= 8 and not user_id.startswith('7'))
+            is_likely_room_id = user_id.isdigit() and len(user_id) >= 8 and not user_id.startswith("7")
 
             if is_likely_room_id or (user_id.isdigit() and len(user_id) >= 9):
                 phone_number = f"room:{user_id}"
@@ -715,12 +753,20 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         # Re-resolve canonical if we found phone (for E.164 normalization)
         if phone_number and phone_number != f"room:{user_id}":
             canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id, phone_number)
-            user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(canonical_user_id)
+            user_doc_ref = (
+                db.collection("artifacts")
+                .document(app_id_for_firestore)
+                .collection("users")
+                .document(canonical_user_id)
+            )
             conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
 
     _log.info(
         "identity raw_phone=%s normalized_phone=%s canonical_user_id=%s user_id_arg=%s",
-        phone_number, normalized_phone, canonical_user_id, user_id,
+        phone_number,
+        normalized_phone,
+        canonical_user_id,
+        user_id,
     )
 
     placeholder_phone = _is_placeholder_phone(phone_number)
@@ -733,10 +779,14 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     if normalized_phone and not defer_external_for_speed:
         try:
             from services.customer_identity_service import resolve_customer_from_external
+
             external = await resolve_customer_from_external(normalized_phone)
             _log.info(
                 "external_lookup normalized_phone=%s exists=%s name=%s external_id=%s",
-                normalized_phone, external.get("exists"), external.get("name"), external.get("external_id"),
+                normalized_phone,
+                external.get("exists"),
+                external.get("name"),
+                external.get("external_id"),
             )
             if external.get("exists") and external.get("name"):
                 customer_name = external["name"]
@@ -755,7 +805,9 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
     # Ensure the user document exists (create if it doesn't)
     # Get current gender and greeting stage for persistence (by canonical id)
     current_gender = config.user_gender.get(canonical_user_id, "") or config.user_gender.get(user_id, "")
-    current_greeting_stage = config.user_greeting_stage.get(canonical_user_id, 0) or config.user_greeting_stage.get(user_id, 0)
+    current_greeting_stage = config.user_greeting_stage.get(canonical_user_id, 0) or config.user_greeting_stage.get(
+        user_id, 0
+    )
 
     # Store E.164 for consistency when we have it
     effective_phone_full = normalized_phone if normalized_phone else phone_number
@@ -770,7 +822,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             "gender": current_gender,
             "greeting_stage": current_greeting_stage,
             "created_at": utc_now(),
-            "last_activity": utc_now()
+            "last_activity": utc_now(),
         }
         if not placeholder_phone:
             user_doc_payload["phone_full"] = effective_phone_full
@@ -783,10 +835,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         _log.info("identity created new user doc canonical_user_id=%s", canonical_user_id)
     else:
         # Update last activity and phone info
-        update_data = {
-            "last_activity": utc_now(),
-            "name": customer_name
-        }
+        update_data = {"last_activity": utc_now(), "name": customer_name}
         if not placeholder_phone:
             update_data["phone_full"] = effective_phone_full
             update_data["phone_clean"] = effective_phone_clean
@@ -800,10 +849,12 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
             update_data["greeting_stage"] = current_greeting_stage
         await asyncio.to_thread(user_doc_ref.update, update_data)
         _log.info("identity updated existing user doc canonical_user_id=%s", canonical_user_id)
-    
+
     # Prepare customer info to save (including gender for persistence)
     user_gender_value = config.user_gender.get(canonical_user_id, "") or config.user_gender.get(user_id, "")
-    user_greeting_stage_value = config.user_greeting_stage.get(canonical_user_id, 0) or config.user_greeting_stage.get(user_id, 0)
+    user_greeting_stage_value = config.user_greeting_stage.get(canonical_user_id, 0) or config.user_greeting_stage.get(
+        user_id, 0
+    )
 
     existing_user_data = user_doc.to_dict() if user_doc.exists else {}
     if placeholder_phone:
@@ -839,13 +890,15 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
         if source_message_id:
             normalized_metadata["source_message_id"] = source_message_id
 
-        payload = contract_normalize_message({
-            "role": role,
-            "text": safe_text,
-            "timestamp": utc_now(),
-            "language": detected_language,
-            "metadata": normalized_metadata,
-        })
+        payload = contract_normalize_message(
+            {
+                "role": role,
+                "text": safe_text,
+                "timestamp": utc_now(),
+                "language": detected_language,
+                "metadata": normalized_metadata,
+            }
+        )
         # Stable unique message_id: use source_message_id from webhook when available, else generate
         if source_message_id:
             payload["message_id"] = str(source_message_id)
@@ -911,9 +964,13 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 if not is_smart_source:
                     # human_takeover_active is source of truth; only infer from status when field is missing (legacy)
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
-                    if not existing_takeover and "human_takeover_active" not in doc_data and (
-                        doc_data.get("status") == "waiting_human"
-                        or doc_data.get("conversation_state") == "waiting_for_operator"
+                    if (
+                        not existing_takeover
+                        and "human_takeover_active" not in doc_data
+                        and (
+                            doc_data.get("status") == "waiting_human"
+                            or doc_data.get("conversation_state") == "waiting_for_operator"
+                        )
                     ):
                         existing_takeover = True
                     # After release: doc has post_release window — never re-open waiting from stale status fields
@@ -921,36 +978,44 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         existing_takeover = False
                     existing_operator = doc_data.get("operator_id")
                     if existing_takeover:
-                        update_payload.update({
-                            "status": "human" if existing_operator else "waiting_human",
-                            "human_takeover_active": True,
-                            "operator_id": existing_operator,
-                        })
+                        update_payload.update(
+                            {
+                                "status": "human" if existing_operator else "waiting_human",
+                                "human_takeover_active": True,
+                                "operator_id": existing_operator,
+                            }
+                        )
                     else:
-                        update_payload.update({
-                            "status": "active",
-                            "human_takeover_active": False,
-                            "operator_id": None,
-                        })
+                        update_payload.update(
+                            {
+                                "status": "active",
+                                "human_takeover_active": False,
+                                "operator_id": None,
+                            }
+                        )
                 # Canonical conversation_state for index
                 # When is_smart_source: never leave users stuck in human takeover (waiting OR stale operator) —
                 # otherwise handle_message only sends handoff/waiting lines and the AI never replies to template replies.
                 if is_smart_source:
                     if firestore_post_release_waiting_blocked(doc_data):
-                        update_payload.update({
-                            "conversation_state": "bot_active",
-                            "human_takeover_active": False,
-                            "status": "active",
-                            "operator_id": None,
-                        })
+                        update_payload.update(
+                            {
+                                "conversation_state": "bot_active",
+                                "human_takeover_active": False,
+                                "status": "active",
+                                "operator_id": None,
+                            }
+                        )
                     elif doc_data.get("human_takeover_active"):
-                        update_payload.update({
-                            "conversation_state": "bot_active",
-                            "human_takeover_active": False,
-                            "human_takeover_requested": False,
-                            "status": "active",
-                            "operator_id": None,
-                        })
+                        update_payload.update(
+                            {
+                                "conversation_state": "bot_active",
+                                "human_takeover_active": False,
+                                "human_takeover_requested": False,
+                                "status": "active",
+                                "operator_id": None,
+                            }
+                        )
                     else:
                         update_payload["conversation_state"] = _compute_conversation_state(
                             bool(doc_data.get("human_takeover_active", False)),
@@ -964,20 +1029,23 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         update_payload.get("status", "active"),
                     )
                 if role == "user" and previous_state in {"resolved", "archived"}:
-                    update_payload.update({
-                        "conversation_state": "bot_active",
-                        "status": "active",
-                        "human_takeover_active": False,
-                        "operator_id": None,
-                    })
+                    update_payload.update(
+                        {
+                            "conversation_state": "bot_active",
+                            "status": "active",
+                            "human_takeover_active": False,
+                            "operator_id": None,
+                        }
+                    )
+
                 # Transactional append: re-read messages under a transaction to avoid RMW races.
-                def _txn_append():
+                def _txn_append() -> Any:
                     from google.cloud import firestore as gcf
 
                     transaction = db.transaction()
 
                     @gcf.transactional
-                    def _run(transaction):
+                    def _run(transaction: Any) -> Any:
                         fresh_snap = doc_ref.get(transaction=transaction)
                         if not fresh_snap.exists:
                             return "missing", None, None
@@ -1004,9 +1072,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                     _invalidate_live_chat_cache()
                     return
                 if txn_status != "ok" or not txn_payload:
-                    raise RuntimeError(
-                        f"Transactional message append failed for {conversation_id}: {txn_status}"
-                    )
+                    raise RuntimeError(f"Transactional message append failed for {conversation_id}: {txn_status}")
                 if txn_doc_data is not None:
                     doc_data = txn_doc_data
                 update_payload = txn_payload
@@ -1023,55 +1089,64 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 if is_smart_source and role == "ai":
                     _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                 _invalidate_live_chat_cache()
-                await _ensure_live_chat_index_after_save(
-                    canonical_user_id, conversation_id, doc_data, update_payload
-                )
+                await _ensure_live_chat_index_after_save(canonical_user_id, conversation_id, doc_data, update_payload)
                 print(f"✅ Appended {role} message to conversation {conversation_id} (total: {len(current_messages)})")
 
                 # 📡 Broadcast SSE event for real-time dashboard updates (instant WhatsApp-like)
                 # Include smart messages so they appear in Live Chat for operators
                 try:
                     from modules.live_chat_api import broadcast_sse_event
+
                     dash_msg = _message_to_dashboard_format(message_data)
-                    _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
-                        conversation_id, role, dash_msg.get("message_id", ""))
-                    asyncio.create_task(broadcast_sse_event("new_message", {
-                        "user_id": canonical_user_id,
-                        "conversation_id": conversation_id,
-                        "role": role,
-                        "text": text[:100] + "..." if len(text) > 100 else text,
-                        "phone": customer_info.get("phone_full"),
-                        "message": dash_msg,
-                    }))
+                    _log.info(
+                        "live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
+                        conversation_id,
+                        role,
+                        dash_msg.get("message_id", ""),
+                    )
+                    asyncio.create_task(
+                        broadcast_sse_event(
+                            "new_message",
+                            {
+                                "user_id": canonical_user_id,
+                                "conversation_id": conversation_id,
+                                "role": role,
+                                "text": text[:100] + "..." if len(text) > 100 else text,
+                                "phone": customer_info.get("phone_full"),
+                                "message": dash_msg,
+                            },
+                        )
+                    )
                 except Exception as sse_err:
                     _log.exception("SSE broadcast error after save: %s", sse_err)
             else:
                 # Conversation not found - create new one
                 message_data = _build_message_data()
 
-                _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
-                    "user_id": canonical_user_id,
-                    "customer_info": customer_info,
-                    "messages": [message_data],
-                    "timestamp": utc_now(),
-                    # Smart outbound must stay visible as an active bot thread in Live Chat (not "closed"/archived).
-                    "status": "active",
-                    "sentiment": "neutral",
-                    "human_takeover_active": False,
-                    "last_updated": utc_now(),
-                    "conversation_state": "bot_active",
-                    "last_message_text": message_data.get("text", ""),
-                    "last_message_at": message_data.get("timestamp") or utc_now(),
-                    "unread_count": 0 if role != "user" else 1,
-                })
+                _, new_doc_ref = await asyncio.to_thread(
+                    conversations_collection_for_user.add,
+                    {
+                        "user_id": canonical_user_id,
+                        "customer_info": customer_info,
+                        "messages": [message_data],
+                        "timestamp": utc_now(),
+                        # Smart outbound must stay visible as an active bot thread in Live Chat (not "closed"/archived).
+                        "status": "active",
+                        "sentiment": "neutral",
+                        "human_takeover_active": False,
+                        "last_updated": utc_now(),
+                        "conversation_state": "bot_active",
+                        "last_message_text": message_data.get("text", ""),
+                        "last_message_at": message_data.get("timestamp") or utc_now(),
+                        "unread_count": 0 if role != "user" else 1,
+                    },
+                )
                 saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
                 _invalidate_live_chat_cache()
-                await _ensure_live_chat_index_after_save(
-                    canonical_user_id, saved_conv_id, None, {}
-                )
+                await _ensure_live_chat_index_after_save(canonical_user_id, saved_conv_id, None, {})
                 print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
         else:
             # No conversation_id — try to reuse latest conversation first.
@@ -1090,9 +1165,7 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
 
             # 2) Query Firestore for latest conversation (with scan fallback if order_by fails)
             if not resolved_conversation_id:
-                resolved_conversation_id = await _resolve_latest_conversation_id(
-                    conversations_collection_for_user
-                )
+                resolved_conversation_id = await _resolve_latest_conversation_id(conversations_collection_for_user)
 
             message_data = _build_message_data()
             is_smart_source = (message_data.get("metadata", {}) or {}).get("source") == "smart_message"
@@ -1156,43 +1229,55 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 if not is_smart_source:
                     # human_takeover_active is source of truth; only infer from status when field is missing (legacy)
                     existing_takeover = bool(doc_data.get("human_takeover_active", False))
-                    if not existing_takeover and "human_takeover_active" not in doc_data and (
-                        doc_data.get("status") == "waiting_human"
-                        or doc_data.get("conversation_state") == "waiting_for_operator"
+                    if (
+                        not existing_takeover
+                        and "human_takeover_active" not in doc_data
+                        and (
+                            doc_data.get("status") == "waiting_human"
+                            or doc_data.get("conversation_state") == "waiting_for_operator"
+                        )
                     ):
                         existing_takeover = True
                     if firestore_post_release_waiting_blocked(doc_data):
                         existing_takeover = False
                     existing_operator = doc_data.get("operator_id")
                     if existing_takeover:
-                        update_payload.update({
-                            "status": "human" if existing_operator else "waiting_human",
-                            "human_takeover_active": True,
-                            "operator_id": existing_operator,
-                        })
+                        update_payload.update(
+                            {
+                                "status": "human" if existing_operator else "waiting_human",
+                                "human_takeover_active": True,
+                                "operator_id": existing_operator,
+                            }
+                        )
                     else:
-                        update_payload.update({
-                            "status": "active",
-                            "human_takeover_active": False,
-                            "operator_id": None,
-                        })
+                        update_payload.update(
+                            {
+                                "status": "active",
+                                "human_takeover_active": False,
+                                "operator_id": None,
+                            }
+                        )
                 # When is_smart_source: release human takeover (waiting or assigned) so template replies are handled by AI
                 if is_smart_source:
                     if firestore_post_release_waiting_blocked(doc_data):
-                        update_payload.update({
-                            "conversation_state": "bot_active",
-                            "human_takeover_active": False,
-                            "status": "active",
-                            "operator_id": None,
-                        })
+                        update_payload.update(
+                            {
+                                "conversation_state": "bot_active",
+                                "human_takeover_active": False,
+                                "status": "active",
+                                "operator_id": None,
+                            }
+                        )
                     elif doc_data.get("human_takeover_active"):
-                        update_payload.update({
-                            "conversation_state": "bot_active",
-                            "human_takeover_active": False,
-                            "human_takeover_requested": False,
-                            "status": "active",
-                            "operator_id": None,
-                        })
+                        update_payload.update(
+                            {
+                                "conversation_state": "bot_active",
+                                "human_takeover_active": False,
+                                "human_takeover_requested": False,
+                                "status": "active",
+                                "operator_id": None,
+                            }
+                        )
                     else:
                         update_payload["conversation_state"] = _compute_conversation_state(
                             bool(doc_data.get("human_takeover_active", False)),
@@ -1206,12 +1291,14 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                         update_payload.get("status", "active"),
                     )
                 if role == "user" and prev_state in {"resolved", "archived"}:
-                    update_payload.update({
-                        "conversation_state": "bot_active",
-                        "status": "active",
-                        "human_takeover_active": False,
-                        "operator_id": None,
-                    })
+                    update_payload.update(
+                        {
+                            "conversation_state": "bot_active",
+                            "status": "active",
+                            "human_takeover_active": False,
+                            "operator_id": None,
+                        }
+                    )
                 await asyncio.to_thread(doc_ref.update, update_payload)
                 await _propagate_takeover_state_to_sibling_conversation_docs(
                     db,
@@ -1231,96 +1318,123 @@ async def save_conversation_message_to_firestore(user_id: str, role: str, text: 
                 await _ensure_live_chat_index_after_save(
                     canonical_user_id, resolved_conversation_id, doc_data, update_payload
                 )
-                print(f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {canonical_user_id} (total: {len(current_messages)})")
+                print(
+                    f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {canonical_user_id} (total: {len(current_messages)})"
+                )
 
                 # 📡 Broadcast SSE event (instant WhatsApp-like) - include smart messages for Live Chat
                 try:
                     from modules.live_chat_api import broadcast_sse_event
+
                     dash_msg = _message_to_dashboard_format(message_data)
-                    _log.info("live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
-                        resolved_conversation_id, role, dash_msg.get("message_id", ""))
-                    asyncio.create_task(broadcast_sse_event("new_message", {
-                        "user_id": canonical_user_id,
-                        "conversation_id": resolved_conversation_id,
-                        "role": role,
-                        "text": text[:100] + "..." if len(text) > 100 else text,
-                        "phone": customer_info.get("phone_full"),
-                        "message": dash_msg,
-                    }))
+                    _log.info(
+                        "live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
+                        resolved_conversation_id,
+                        role,
+                        dash_msg.get("message_id", ""),
+                    )
+                    asyncio.create_task(
+                        broadcast_sse_event(
+                            "new_message",
+                            {
+                                "user_id": canonical_user_id,
+                                "conversation_id": resolved_conversation_id,
+                                "role": role,
+                                "text": text[:100] + "..." if len(text) > 100 else text,
+                                "phone": customer_info.get("phone_full"),
+                                "message": dash_msg,
+                            },
+                        )
+                    )
                 except Exception as sse_err:
                     _log.exception("SSE broadcast error: %s", sse_err)
             else:
                 # No existing conversation found — create a new one
-                _, new_doc_ref = await asyncio.to_thread(conversations_collection_for_user.add, {
-                    "user_id": canonical_user_id,
-                    "customer_info": customer_info,
-                    "messages": [message_data],
-                    "timestamp": utc_now(),
-                    "status": "active",
-                    "sentiment": "neutral",
-                    "human_takeover_active": False,
-                    "last_updated": utc_now(),
-                    "conversation_state": "bot_active",
-                    "last_message_text": message_data.get("text", ""),
-                    "last_message_at": message_data.get("timestamp") or utc_now(),
-                    "unread_count": 0 if role != "user" else 1,
-                })
+                _, new_doc_ref = await asyncio.to_thread(
+                    conversations_collection_for_user.add,
+                    {
+                        "user_id": canonical_user_id,
+                        "customer_info": customer_info,
+                        "messages": [message_data],
+                        "timestamp": utc_now(),
+                        "status": "active",
+                        "sentiment": "neutral",
+                        "human_takeover_active": False,
+                        "last_updated": utc_now(),
+                        "conversation_state": "bot_active",
+                        "last_message_text": message_data.get("text", ""),
+                        "last_message_at": message_data.get("timestamp") or utc_now(),
+                        "unread_count": 0 if role != "user" else 1,
+                    },
+                )
                 saved_conv_id = new_doc_ref.id
                 if canonical_user_id not in config.user_data_whatsapp:
                     config.user_data_whatsapp[canonical_user_id] = {}
                 config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
                 _invalidate_live_chat_cache()
-                await _ensure_live_chat_index_after_save(
-                    canonical_user_id, saved_conv_id, None, {}
-                )
+                await _ensure_live_chat_index_after_save(canonical_user_id, saved_conv_id, None, {})
                 print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
 
                 # 📡 Broadcast SSE event for new conversation - include smart messages for Live Chat
                 try:
                     from modules.live_chat_api import broadcast_sse_event
-                    asyncio.create_task(broadcast_sse_event("new_conversation", {
-                        "user_id": canonical_user_id,
-                        "conversation_id": new_doc_ref.id,
-                        "phone": customer_info.get("phone_full"),
-                        "name": customer_name
-                    }))
+
+                    asyncio.create_task(
+                        broadcast_sse_event(
+                            "new_conversation",
+                            {
+                                "user_id": canonical_user_id,
+                                "conversation_id": new_doc_ref.id,
+                                "phone": customer_info.get("phone_full"),
+                                "name": customer_name,
+                            },
+                        )
+                    )
                 except Exception:
                     pass
 
         # Deferred: update customer name from CRM in background so user message already appeared in Live Chat
         if defer_external_for_speed and saved_conv_id and normalized_phone:
-            asyncio.create_task(_update_customer_name_from_external_after_save(
-                canonical_user_id, normalized_phone, saved_conv_id,
-                conversations_collection_for_user, user_doc_ref,
-            ))
+            asyncio.create_task(
+                _update_customer_name_from_external_after_save(
+                    canonical_user_id,
+                    normalized_phone,
+                    saved_conv_id,
+                    conversations_collection_for_user,
+                    user_doc_ref,
+                )
+            )
 
     except Exception as e:
         print(f"❌ ERROR saving conversation message to Firestore for user {user_id}: {e}")
         import traceback
+
         traceback.print_exc()
 
 
-async def update_voice_message_with_transcription(user_id: str, conversation_id: str, audio_url: str, transcribed_text: str, phone_number: str = None):
+async def update_voice_message_with_transcription(
+    user_id: str, conversation_id: str, audio_url: str, transcribed_text: str, phone_number: str | None = None
+) -> Any:
     """
     Updates a voice message in Firestore after transcription is complete.
-    
+
     This function:
     1. Finds the LAST voice message in the conversation (the one we just saved)
     2. Updates its text field with the transcribed text
     3. Ensures type="voice" and audio_url are at top level for easy dashboard access
     4. Adds transcribed=true flag
-    
+
     Args:
         user_id: The user's WhatsApp ID (room_id for Qiscus)
         conversation_id: The conversation ID to update
         audio_url: The URL of the original audio file
         transcribed_text: The transcribed text from Whisper
-        phone_number: Optional phone number for user lookup
+        phone_number:  phone number for user lookup
     """
-    if hasattr(config, 'TESTING_MODE') and config.TESTING_MODE:
-        print(f"🧪 TESTING MODE: Skipping Firebase update for voice message")
+    if hasattr(config, "TESTING_MODE") and config.TESTING_MODE:
+        print("🧪 TESTING MODE: Skipping Firebase update for voice message")
         return
-    
+
     db = get_firestore_db()
     if not db:
         print("⚠️ Firestore not initialized. Skipping voice message update.")
@@ -1330,7 +1444,14 @@ async def update_voice_message_with_transcription(user_id: str, conversation_id:
 
     try:
         # Get the conversation document
-        doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        doc_ref = (
+            db.collection("artifacts")
+            .document(app_id_for_firestore)
+            .collection("users")
+            .document(user_id)
+            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            .document(conversation_id)
+        )
         doc_snap = doc_ref.get()
 
         if not doc_snap.exists:
@@ -1338,7 +1459,7 @@ async def update_voice_message_with_transcription(user_id: str, conversation_id:
             return
 
         doc_data = doc_snap.to_dict()
-        current_messages = doc_data.get('messages', [])
+        current_messages = doc_data.get("messages", [])
 
         if not current_messages:
             print(f"⚠️ No messages found in conversation {conversation_id}")
@@ -1370,10 +1491,7 @@ async def update_voice_message_with_transcription(user_id: str, conversation_id:
         message["transcribed_at"] = utc_now()
 
         # Update conversation
-        doc_ref.update({
-            "messages": current_messages,
-            "last_updated": utc_now()
-        })
+        doc_ref.update({"messages": current_messages, "last_updated": utc_now()})
         _invalidate_live_chat_cache()
 
         print(f"✅ Updated voice message in conversation {conversation_id} with transcription")
@@ -1383,10 +1501,11 @@ async def update_voice_message_with_transcription(user_id: str, conversation_id:
     except Exception as e:
         print(f"❌ ERROR updating voice message in Firestore for user {user_id}: {e}")
         import traceback
+
         traceback.print_exc()
 
 
-def convert_webm_to_opus(base64_webm: str) -> tuple[str, str]:
+def convert_webm_to_opus(base64_webm: str) -> tuple[str, str | None]:
     """
     Convert WebM audio (base64) to OGG/Opus format (base64).
     WhatsApp requires Opus codec wrapped in OGG container (audio/ogg).
@@ -1400,19 +1519,20 @@ def convert_webm_to_opus(base64_webm: str) -> tuple[str, str]:
     try:
         import base64
         import io
-        from pydub import AudioSegment
         import time
-        
-        print(f"🔄 Converting WebM audio to Opus format...")
-        
+
+        from pydub import AudioSegment
+
+        print("🔄 Converting WebM audio to Opus format...")
+
         # Decode base64 to bytes
         webm_bytes = base64.b64decode(base64_webm)
         print(f"   📊 WebM size: {len(webm_bytes)} bytes")
-        
+
         # Load WebM audio with pydub
         webm_audio = AudioSegment.from_file(io.BytesIO(webm_bytes), format="webm")
         print(f"   ✅ WebM loaded: {len(webm_audio)}ms duration, {webm_audio.frame_rate}Hz sample rate")
-        
+
         # Export as OGG with Opus codec (WhatsApp requires Opus in OGG container)
         ogg_buffer = io.BytesIO()
         webm_audio.export(
@@ -1420,13 +1540,13 @@ def convert_webm_to_opus(base64_webm: str) -> tuple[str, str]:
             format="ogg",
             codec="libopus",
             bitrate="128k",
-            parameters=["-vbr", "on", "-compression_level", "10"]
+            parameters=["-vbr", "on", "-compression_level", "10"],
         )
         ogg_bytes = ogg_buffer.getvalue()
         print(f"   ✅ Converted to OGG/Opus: {len(ogg_bytes)} bytes")
 
         # Encode back to base64
-        base64_ogg = base64.b64encode(ogg_bytes).decode('utf-8')
+        base64_ogg = base64.b64encode(ogg_bytes).decode("utf-8")
 
         # Create new filename with .ogg extension (WhatsApp compatible)
         timestamp = int(time.time())
@@ -1434,17 +1554,20 @@ def convert_webm_to_opus(base64_webm: str) -> tuple[str, str]:
 
         print(f"   ✅ Conversion complete! New file: {file_name}")
         return base64_ogg, file_name
-        
+
     except Exception as e:
         print(f"❌ ERROR converting WebM to Opus: {e}")
         import traceback
+
         traceback.print_exc()
-        print(f"   ⚠️ Falling back to original WebM format...")
+        print("   ⚠️ Falling back to original WebM format...")
         # Fall back to original if conversion fails
         return base64_webm, None
 
 
-async def upload_base64_to_firebase_storage(base64_data: str, file_name: str, file_type: str = "audio/webm") -> str:
+async def upload_base64_to_firebase_storage(
+    base64_data: str, file_name: str, file_type: str = "audio/webm"
+) -> str | None:
     """
     Uploads base64 media to Firebase Storage and returns a public download URL.
     Firebase URLs are on Google's CDN and accessible by external services like MontyMobile.
@@ -1474,12 +1597,13 @@ async def upload_base64_to_firebase_storage(base64_data: str, file_name: str, fi
         static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "audio")
         os.makedirs(static_dir, exist_ok=True)
         local_path = os.path.join(static_dir, unique_filename)
-        with open(local_path, 'wb') as f:
+        with open(local_path, "wb") as f:
             f.write(file_bytes)
 
         # Upload to Firebase Storage with a download token for public access
         try:
             from firebase_admin import storage as fb_storage
+
             bucket = fb_storage.bucket()
             storage_path = unique_filename
             blob = bucket.blob(storage_path)
@@ -1490,7 +1614,7 @@ async def upload_base64_to_firebase_storage(base64_data: str, file_name: str, fi
             blob.upload_from_string(file_bytes, content_type=file_type)
 
             # Build Firebase Storage download URL (publicly accessible with token)
-            encoded_path = quote(storage_path, safe='')
+            encoded_path = quote(storage_path, safe="")
             firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{encoded_path}?alt=media&token={download_token}"
 
             print(f"✅ Uploaded to Firebase Storage: {storage_path}")
@@ -1500,6 +1624,7 @@ async def upload_base64_to_firebase_storage(base64_data: str, file_name: str, fi
         except Exception as e:
             print(f"⚠️ Firebase Storage upload failed: {e}")
             import traceback
+
             traceback.print_exc()
 
             # Fallback to local serve URL
@@ -1515,11 +1640,12 @@ async def upload_base64_to_firebase_storage(base64_data: str, file_name: str, fi
     except Exception as e:
         print(f"❌ ERROR saving media file: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
 
-async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, increment_by: int = 1):
+async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, increment_by: int = 1) -> None:
     """
     Updates a specific dashboard metric in Firestore.
     Metrics are stored under a 'summary' document for each user.
@@ -1530,18 +1656,27 @@ async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, i
         return
 
     # Correct path: artifacts (collection) -> {appId} (document) -> users (collection) -> {userId} (document) -> dashboardMetrics (collection) -> summary (document)
-    app_id_for_firestore = "linas-ai-bot-backend" 
-    metrics_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id).collection(config.FIRESTORE_METRICS_COLLECTION).document('summary')
+    app_id_for_firestore = "linas-ai-bot-backend"
+    metrics_doc_ref = (
+        db.collection("artifacts")
+        .document(app_id_for_firestore)
+        .collection("users")
+        .document(user_id)
+        .collection(config.FIRESTORE_METRICS_COLLECTION)
+        .document("summary")
+    )
 
     try:
         # Get the current metrics document
-        doc_snap = metrics_doc_ref.get() # Firebase Admin SDK get() is synchronous
+        doc_snap = metrics_doc_ref.get()  # Firebase Admin SDK get() is synchronous
 
         if doc_snap.exists:
             current_metrics = doc_snap.to_dict()
             current_value = current_metrics.get(metric_name, 0)
             metrics_doc_ref.update({metric_name: current_value + increment_by})
-            print(f"✅ Updated metric '{metric_name}' for user {user_id} by {increment_by}. New value: {current_value + increment_by}")
+            print(
+                f"✅ Updated metric '{metric_name}' for user {user_id} by {increment_by}. New value: {current_value + increment_by}"
+            )
         else:
             # If document doesn't exist, create it with the initial value
             metrics_doc_ref.set({metric_name: increment_by})
@@ -1550,7 +1685,9 @@ async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, i
     except Exception as e:
         print(f"❌ ERROR updating dashboard metric '{metric_name}' in Firestore for user {user_id}: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 def set_post_takeover_escalation_cooldown(user_data: dict) -> None:
     """After release from human queue, suppress AI auto handover (frustration/error paths) for a cooldown window."""
@@ -1588,11 +1725,11 @@ def iter_conversation_parent_user_ids_for_firestore(user_id: str) -> list:
     canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
     out: list = []
 
-    def add(x: str):
+    def add(x: str) -> None:
         if x and x not in out:
             out.append(x)
 
-    def add_alt_phone(c: str):
+    def add_alt_phone(c: str) -> None:
         if not c:
             return
         if c.startswith("+") or (c.isdigit() and len(str(c)) >= 10):
@@ -1630,7 +1767,7 @@ def merge_conversation_user_id_variants(*seeds: str) -> list:
 
 
 async def conversation_any_path_post_release_blocked(
-    conversation_id: str, user_id: str, request_user_id: str = None
+    conversation_id: str, user_id: str, request_user_id: str | None = None
 ) -> bool:
     """True if any duplicate conversation doc under users/* has an active post-release cooldown."""
     db = get_firestore_db()
@@ -1650,7 +1787,7 @@ async def update_conversation_on_all_existing_paths(
     conversation_id: str,
     user_id: str,
     update_payload: dict,
-    request_user_id: str = None,
+    request_user_id: str | None = None,
 ) -> int:
     """Merge-update every users/*/conversations/{conversation_id} that exists. Returns write count."""
     db = get_firestore_db()
@@ -1668,7 +1805,9 @@ async def update_conversation_on_all_existing_paths(
                 await asyncio.to_thread(ref.update, update_payload)
                 n += 1
             except Exception as ex:
-                print(f"⚠️ update_conversation_on_all_existing_paths failed users/{vid}/conversations/{conversation_id}: {ex}")
+                print(
+                    f"⚠️ update_conversation_on_all_existing_paths failed users/{vid}/conversations/{conversation_id}: {ex}"
+                )
     return n
 
 
@@ -1706,7 +1845,7 @@ def sync_post_release_cooldown_from_conv_payload(user_data: dict, conv_data: dic
         pass
 
 
-def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str):
+def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> None:
     """Clear config.user_in_human_takeover_mode for all user_id variants so release works regardless of message format."""
     variants = {v for v in (resolved_user_id, raw_user_id, canonical_user_id) if v}
     if is_phone_like_user_id(resolved_user_id or raw_user_id):
@@ -1733,11 +1872,11 @@ async def set_human_takeover_status(
     user_id: str,
     conversation_id: str,
     status: bool,
-    operator_id: str = None,
-    operator_name: str = None,
-    request_user_id: str = None,
+    operator_id: str | None = None,
+    operator_name: str | None = None,
+    request_user_id: str | None = None,
     force_waiting_queue: bool = False,
-):
+) -> Any:
     """
     Sets the human takeover status for a specific conversation in Firestore.
     This will control the AI's response for that chat.
@@ -1746,8 +1885,8 @@ async def set_human_takeover_status(
         user_id: The user's ID (room_id for Qiscus)
         conversation_id: The conversation document ID
         status: True to activate human takeover, False to release
-        operator_id: Optional operator ID who is taking over
-        operator_name: Optional operator name for display to customer
+        operator_id:  operator ID who is taking over
+        operator_name:  operator name for display to customer
         force_waiting_queue: If True, allow waiting-queue state even when post-release cooldown is active (e.g. /takeover).
     """
     import asyncio
@@ -1778,17 +1917,12 @@ async def set_human_takeover_status(
             existing.append((vid, ref, snap))
 
     if not existing:
-        raise ValueError(
-            f"Conversation not found (conv={conversation_id}, searched {len(variants)} user id variants)"
-        )
+        raise ValueError(f"Conversation not found (conv={conversation_id}, searched {len(variants)} user id variants)")
 
     resolved_user_id = existing[0][0]
 
     try:
-        update_data = {
-            "human_takeover_active": status,
-            "last_updated": utc_now()
-        }
+        update_data = {"human_takeover_active": status, "last_updated": utc_now()}
 
         if status and operator_id:
             # Taking over by an assigned operator.
@@ -1800,7 +1934,7 @@ async def set_human_takeover_status(
                 update_data["operator_name"] = operator_name
                 print(f"🔄 Setting conversation status to 'human' for operator takeover by {operator_name}")
             else:
-                print(f"🔄 Setting conversation status to 'human' for operator takeover")
+                print("🔄 Setting conversation status to 'human' for operator takeover")
         elif status:
             if not force_waiting_queue:
                 for _, _, snap in existing:
@@ -1830,12 +1964,10 @@ async def set_human_takeover_status(
             except (TypeError, ValueError):
                 _cd_mins = 45
             # Persist cooldown on the doc so any worker / next message applies AI anti-re-escalation
-            update_data["post_release_escalation_suppressed_until"] = utc_now() + datetime.timedelta(
-                minutes=_cd_mins
-            )
+            update_data["post_release_escalation_suppressed_until"] = utc_now() + datetime.timedelta(minutes=_cd_mins)
             # GPT context: only messages at/after this timestamp are sent to the AI (fresh session after operator)
             update_data["ai_context_reset_at"] = utc_now()
-            print(f"🔄 Setting conversation status to 'active' for bot release")
+            print("🔄 Setting conversation status to 'active' for bot release")
 
         if status:
             # Clear persisted cooldown when entering takeover again
@@ -1863,6 +1995,7 @@ async def set_human_takeover_status(
     except Exception as e:
         print(f"❌ ERROR setting human takeover status for conversation {conversation_id} (user {user_id}): {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -1918,8 +2051,8 @@ async def get_conversation_context_for_gpt(
     user_id: str,
     conversation_id: str,
     *,
-    window_hours: int = None,
-    alternate_user_id: str = None,
+    window_hours: int | None = None,
+    alternate_user_id: str | None = None,
 ) -> list:
     """
     Loads Firestore history for the configured time window, then prefers the in-memory transcript
@@ -1947,9 +2080,7 @@ async def get_conversation_context_for_gpt(
             }
             for msg in use
         ]
-        print(
-            f"ℹ️ GPT context: in-memory transcript ({len(use)} msgs) > Firestore ({len(fs)}); using in-memory."
-        )
+        print(f"ℹ️ GPT context: in-memory transcript ({len(use)} msgs) > Firestore ({len(fs)}); using in-memory.")
         return openai_safe
     return fs
 
@@ -1958,8 +2089,8 @@ async def get_conversation_history_from_firestore(
     user_id: str,
     conversation_id: str,
     max_messages: int = 0,
-    window_hours: int = None,
-    alternate_user_id: str = None,
+    window_hours: int | None = None,
+    alternate_user_id: str | None = None,
 ) -> list:
     """
     Fetches conversation history from Firestore for a specific conversation.
@@ -1969,9 +2100,9 @@ async def get_conversation_history_from_firestore(
     Args:
         user_id: The user's ID (room_id for Qiscus / raw WhatsApp id)
         conversation_id: The conversation document ID
-        max_messages: Optional max number of messages after time filtering (0 = no hard cap)
-        window_hours: Optional lookback window in hours (None = use config.CONTEXT_WINDOW_HOURS)
-        alternate_user_id: Optional alternate user id (e.g. canonical) to try if user_id doc not found
+        max_messages:  max number of messages after time filtering (0 = no hard cap)
+        window_hours:  lookback window in hours (None = use config.CONTEXT_WINDOW_HOURS)
+        alternate_user_id:  alternate user id (e.g. canonical) to try if user_id doc not found
 
     Returns:
         List of message dicts in OpenAI format
@@ -1992,7 +2123,9 @@ async def get_conversation_history_from_firestore(
     for uid in candidate_ids:
         if not uid:
             continue
-        conv_doc_ref = users_coll.document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        conv_doc_ref = (
+            users_coll.document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        )
         try:
             doc_snap = conv_doc_ref.get()
             if doc_snap.exists:
@@ -2007,15 +2140,12 @@ async def get_conversation_history_from_firestore(
         return []
 
     try:
-        
         conversation_data = doc_snap.to_dict()
-        messages = conversation_data.get('messages', [])
+        messages = conversation_data.get("messages", [])
 
         # Time-based memory window: include only recent messages.
         effective_window_hours = (
-            window_hours
-            if window_hours is not None
-            else int(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
+            window_hours if window_hours is not None else int(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
         )
         filtered_messages = list(messages)
         if effective_window_hours > 0:
@@ -2028,12 +2158,12 @@ async def get_conversation_history_from_firestore(
                     continue
                 msg_ts = parse_timestamp_utc(
                     ts_raw,
-                    fallback=datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc),
+                    fallback=datetime.datetime.fromtimestamp(0, tz=datetime.UTC),
                 )
                 if msg_ts >= cutoff:
                     filtered_messages.append(msg)
 
-        # Optional hard cap after time filtering.
+        #  hard cap after time filtering.
         effective_max_messages = int(max_messages or 0)
         if effective_max_messages > 0:
             selected_messages = filtered_messages[-effective_max_messages:]
@@ -2050,7 +2180,7 @@ async def get_conversation_history_from_firestore(
         if reset_raw is not None:
             try:
                 reset_at = parse_timestamp_utc(reset_raw)
-                _epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+                _epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.UTC)
                 trimmed = []
                 for msg in selected_messages:
                     ts_raw = msg.get("timestamp")
@@ -2071,44 +2201,47 @@ async def get_conversation_history_from_firestore(
         # Valid OpenAI roles: 'system', 'assistant', 'user', 'function', 'tool'
         openai_messages = []
         for msg in selected_messages:
-            original_role = msg.get('role', 'user')
+            original_role = msg.get("role", "user")
 
             # Map roles to OpenAI-compatible roles
-            if original_role == 'ai':
-                role = 'assistant'
-            elif original_role == 'operator':
+            if original_role == "ai":
+                role = "assistant"
+            elif original_role == "operator":
                 # Treat operator messages as assistant (human staff responding)
-                role = 'assistant'
-            elif original_role in ['user', 'assistant', 'system', 'function', 'tool']:
+                role = "assistant"
+            elif original_role in ["user", "assistant", "system", "function", "tool"]:
                 role = original_role
             else:
                 # Skip unknown roles to prevent API errors
                 print(f"⚠️ Skipping message with unknown role: {original_role}")
                 continue
 
-            content = msg.get('text', '')
-            meta = msg.get('metadata', {}) or {}
-            src = meta.get('source', '')
-            if src == 'smart_message':
+            content = msg.get("text", "")
+            meta = msg.get("metadata", {}) or {}
+            src = meta.get("source", "")
+            if src == "smart_message":
                 content = f"[Clinic notification we sent to user]\n{content}"
-            elif src == 'qa_database':
+            elif src == "qa_database":
                 content = f"[FAQ answer we sent to user]\n{content}"
             openai_messages.append({"role": role, "content": content})
-        
+
         print(
             f"✅ Fetched {len(openai_messages)} messages from Firestore for conversation {conversation_id} "
             f"(user={used_uid or user_id}, window={effective_window_hours}h, cap={global_cap if global_cap > 0 else 'none'})"
         )
         return openai_messages
-        
+
     except Exception as e:
         print(f"❌ ERROR fetching conversation history from Firestore: {e}")
         import traceback
+
         traceback.print_exc()
         return []
 
 
-async def get_conversation_last_ai_response_at(user_id: str, conversation_id: str, alternate_user_id: str = None):
+async def get_conversation_last_ai_response_at(
+    user_id: str, conversation_id: str, alternate_user_id: str | None = None
+) -> Any:
     """
     Returns the timestamp of the last AI response for this conversation (from Firestore).
     Used to compute show_greeting: if 12+ hours since last AI reply, show greeting again.
@@ -2122,7 +2255,14 @@ async def get_conversation_last_ai_response_at(user_id: str, conversation_id: st
     for uid in [user_id, alternate_user_id] if alternate_user_id and alternate_user_id != user_id else [user_id]:
         if not uid:
             continue
-        conv_ref = db.collection("artifacts").document(app_id).collection("users").document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        conv_ref = (
+            db.collection("artifacts")
+            .document(app_id)
+            .collection("users")
+            .document(uid)
+            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            .document(conversation_id)
+        )
         try:
             snap = await asyncio.to_thread(conv_ref.get)
             if not snap.exists:
@@ -2137,7 +2277,9 @@ async def get_conversation_last_ai_response_at(user_id: str, conversation_id: st
     return None
 
 
-async def get_last_bot_message_from_conversation(user_id: str, conversation_id: str, alternate_user_id: str = None):
+async def get_last_bot_message_from_conversation(
+    user_id: str, conversation_id: str, alternate_user_id: str | None = None
+) -> Any:
     """
     Returns the last message we sent to the user (ai or operator) with text and metadata.
     Used to give GPT context when user replies after a smart message or any notification.
@@ -2150,7 +2292,14 @@ async def get_last_bot_message_from_conversation(user_id: str, conversation_id: 
     for uid in [user_id, alternate_user_id] if alternate_user_id and alternate_user_id != user_id else [user_id]:
         if not uid:
             continue
-        conv_ref = db.collection("artifacts").document(app_id).collection("users").document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+        conv_ref = (
+            db.collection("artifacts")
+            .document(app_id)
+            .collection("users")
+            .document(uid)
+            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            .document(conversation_id)
+        )
         try:
             snap = await asyncio.to_thread(conv_ref.get)
             if not snap.exists:
@@ -2173,10 +2322,10 @@ async def get_last_bot_message_from_conversation(user_id: str, conversation_id: 
 
 async def get_last_bot_message_for_gpt_context(
     user_id: str,
-    conversation_id: Optional[str],
-    alternate_user_id: str = None,
-    within_hours: Optional[float] = None,
-) -> Optional[dict]:
+    conversation_id: str | None,
+    alternate_user_id: str | None = None,
+    within_hours: float | None = None,
+) -> dict[str, Any] | None:
     """
     Last outbound message for GPT operational context. If the smart message was saved on another
     Firestore thread (identity/query mismatch), still surface it when it is newer than the current
@@ -2184,21 +2333,15 @@ async def get_last_bot_message_for_gpt_context(
     if any (e.g. new inbound right after restart before conv is resolved).
     """
     effective_within_hours = (
-        float(within_hours)
-        if within_hours is not None
-        else float(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
+        float(within_hours) if within_hours is not None else float(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
     )
     canonical = (alternate_user_id or "").strip() or user_id
-    smart = await _latest_smart_ai_across_conversations(
-        canonical, within_hours=effective_within_hours
-    )
+    smart = await _latest_smart_ai_across_conversations(canonical, within_hours=effective_within_hours)
     if not conversation_id:
         return smart
-    cur = await get_last_bot_message_from_conversation(
-        user_id, conversation_id, alternate_user_id
-    )
+    cur = await get_last_bot_message_from_conversation(user_id, conversation_id, alternate_user_id)
 
-    def _ts(m: Optional[dict]):
+    def _ts(m: dict | None) -> Any:
         if not m:
             return None
         return parse_timestamp_utc(m.get("timestamp"), fallback=None)
@@ -2213,19 +2356,19 @@ async def get_last_bot_message_for_gpt_context(
         ct = None
 
     if smart and not cur:
-        return smart
+        return cast(dict[str, Any] | None, smart)
     if cur and not smart:
-        return cur
+        return cast(dict[str, Any] | None, cur)
     if not cur and not smart:
         return None
     if st and ct:
-        return smart if st > ct else cur
+        return cast(dict[str, Any] | None, smart if st > ct else cur)
     if st and not ct:
-        return smart
-    return cur
+        return cast(dict[str, Any] | None, smart)
+    return cast(dict[str, Any] | None, cur)
 
 
-async def save_user_name_to_firestore(user_id: str, name: str):
+async def save_user_name_to_firestore(user_id: str, name: str) -> None:
     """
     Saves/updates a user's name in Firestore.
 
@@ -2234,7 +2377,7 @@ async def save_user_name_to_firestore(user_id: str, name: str):
         name: The user's name to save
     """
     # Check if we're in testing mode - skip Firebase saving for tests
-    if hasattr(config, 'TESTING_MODE') and config.TESTING_MODE:
+    if hasattr(config, "TESTING_MODE") and config.TESTING_MODE:
         print(f"🧪 TESTING MODE: Skipping Firebase name save for user {user_id}")
         return
 
@@ -2250,23 +2393,23 @@ async def save_user_name_to_firestore(user_id: str, name: str):
         user_doc = user_doc_ref.get()
         if user_doc.exists:
             # Update existing user document with name
-            user_doc_ref.update({
-                "name": name,
-                "last_activity": datetime.datetime.now()
-            })
+            user_doc_ref.update({"name": name, "last_activity": datetime.datetime.now()})
             print(f"✅ Updated user name in Firestore for {user_id}: {name}")
         else:
             # Create new user document with name
-            user_doc_ref.set({
-                "user_id": user_id,
-                "name": name,
-                "created_at": datetime.datetime.now(),
-                "last_activity": datetime.datetime.now()
-            })
+            user_doc_ref.set(
+                {
+                    "user_id": user_id,
+                    "name": name,
+                    "created_at": datetime.datetime.now(),
+                    "last_activity": datetime.datetime.now(),
+                }
+            )
             print(f"✅ Created user document in Firestore for {user_id} with name: {name}")
     except Exception as e:
         print(f"❌ ERROR saving user name to Firestore for {user_id}: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -2301,12 +2444,14 @@ async def get_user_state_from_firestore(user_id: str) -> dict:
             conversations_ref = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
             # ✅ Use asyncio.to_thread for the query
             conversations = await asyncio.to_thread(
-                lambda: list(conversations_ref.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(1).get())
+                lambda: list(
+                    conversations_ref.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(1).get()
+                )
             )
 
             for conv in conversations:
                 conv_data = conv.to_dict()
-                customer_info = conv_data.get('customer_info', {})
+                customer_info = conv_data.get("customer_info", {})
                 if customer_info:
                     print(f"✅ Found user state in conversation customer_info: {customer_info}")
                     return {
@@ -2314,24 +2459,27 @@ async def get_user_state_from_firestore(user_id: str) -> dict:
                         "greeting_stage": customer_info.get("greeting_stage", 0),
                         "name": customer_info.get("name", ""),
                         "phone_full": customer_info.get("phone_full", ""),
-                        "phone_clean": customer_info.get("phone_clean", "")
+                        "phone_clean": customer_info.get("phone_clean", ""),
                     }
             return {}
 
         user_data = user_doc.to_dict()
-        print(f"✅ Retrieved user state from Firestore for {user_id}: gender={user_data.get('gender')}, greeting_stage={user_data.get('greeting_stage')}")
+        print(
+            f"✅ Retrieved user state from Firestore for {user_id}: gender={user_data.get('gender')}, greeting_stage={user_data.get('greeting_stage')}"
+        )
 
         return {
             "gender": user_data.get("gender", ""),
             "greeting_stage": user_data.get("greeting_stage", 0),
             "name": user_data.get("name", ""),
             "phone_full": user_data.get("phone_full", ""),
-            "phone_clean": user_data.get("phone_clean", "")
+            "phone_clean": user_data.get("phone_clean", ""),
         }
 
     except Exception as e:
         print(f"❌ ERROR retrieving user state from Firestore for {user_id}: {e}")
         import traceback
+
         traceback.print_exc()
         return {}
 
@@ -2357,7 +2505,7 @@ async def get_user_state_from_firestore(user_id: str) -> dict:
 # Initialize OpenAI client safely
 try:
     if config.OPENAI_API_KEY:
-        client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+        client: AsyncOpenAI | None = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
     else:
         client = None
         print("⚠️  WARNING: OPENAI_API_KEY not set - LLM features disabled")
@@ -2378,8 +2526,8 @@ def detect_language(text: str) -> dict:
     text = text.strip()
 
     # Count Arabic characters
-    arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))
-    text_length = len(text.replace(' ', ''))
+    arabic_chars = len(re.findall(r"[\u0600-\u06FF]", text))
+    text_length = len(text.replace(" ", ""))
 
     arabic_ratio = arabic_chars / text_length if text_length > 0 else 0
 
@@ -2389,7 +2537,7 @@ def detect_language(text: str) -> dict:
 
     # Simple French detection for common greetings/words
     text_lower = text.lower()
-    french_indicators = ['bonjour', 'merci', 'je ', 'vous', 'oui', 'non', 'comment']
+    french_indicators = ["bonjour", "merci", "je ", "vous", "oui", "non", "comment"]
     if any(word in text_lower for word in french_indicators):
         return {"language": "fr", "confidence": 0.7}
 
@@ -2397,15 +2545,18 @@ def detect_language(text: str) -> dict:
     return {"language": "en", "confidence": 0.5}
 
 
-
-def notify_human_on_whatsapp(user_name, user_gender, message_content, type_of_notification="عام"):
+def notify_human_on_whatsapp(
+    user_name: Any, user_gender: Any, message_content: Any, type_of_notification: Any = "عام"
+) -> None:
     """
     Logs a notification and (in a full WhatsApp integration) would send a WhatsApp message to admin/staff.
     The actual sending via WhatsApp API must be done by the caller (e.g., in main.py or handlers)
     which has access to the send_whatsapp_message function.
     """
     current_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{current_time_str}] NOTIFY WHATSAPP: {type_of_notification} - From: {user_name} ({user_gender}) - Message: {message_content}")
+    print(
+        f"[{current_time_str}] NOTIFY WHATSAPP: {type_of_notification} - From: {user_name} ({user_gender}) - Message: {message_content}"
+    )
     # To actually send a WhatsApp message here, main.py's send_whatsapp_message function
     # would need to be passed down or made globally accessible.
     # For now, it logs and the handler (e.g., text_handlers) will explicitly call send_whatsapp_message
@@ -2414,29 +2565,32 @@ def notify_human_on_whatsapp(user_name, user_gender, message_content, type_of_no
     print(f"Would send WhatsApp notification to {config.WHATSAPP_TO} (defined in .env).")
 
 
-def count_tokens(text):
+def count_tokens(text: Any) -> Any:
     if not text:
         return 0
     return len(text.split())
 
-def save_for_training_conversation_log(user_message, bot_response):
+
+def save_for_training_conversation_log(user_message: Any, bot_response: Any) -> None:
     log_entry = {
         "question": user_message,
         "answer": bot_response,
-        "language": detect_language(user_message)['language'],
-        "timestamp": str(datetime.datetime.now())
+        "language": detect_language(user_message)["language"],
+        "timestamp": str(datetime.datetime.now()),
     }
     try:
-        os.makedirs('data', exist_ok=True)
-        with open('data/conversation_log.jsonl', 'a', encoding='utf-8') as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+        os.makedirs("data", exist_ok=True)
+        with open("data/conversation_log.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
             f.flush()
     except Exception as e:
         print(f"❌ خطأ في حفظ سجل التدريب: {e}. قد تكون مشكلة أذونات أو مسار.")
         import traceback
+
         traceback.print_exc()
 
-async def translate_qa_pair_with_gpt(question: str, answer: str, target_languages: list):
+
+async def translate_qa_pair_with_gpt(question: str, answer: str, target_languages: list) -> Any:
     """
     Translates a question/answer pair into target languages.
     Franco answer language will remain Arabic.
@@ -2444,19 +2598,16 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
     if not question or not answer:
         return []
 
-    lang_map = {
-        "ar": "Arabic",
-        "en": "English",
-        "fr": "French",
-        "franco": "Franco Arabic"
-    }
+    lang_map = {"ar": "Arabic", "en": "English", "fr": "French", "franco": "Franco Arabic"}
 
     translations = []
 
     # Standard translations (ar, en, fr)
     standard_target_languages = [lang for lang in target_languages if lang != "franco"]
     if standard_target_languages:
-        standard_target_langs_str = ", ".join([f"'{l_code}' ({lang_map.get(l_code, l_code)})" for l_code in standard_target_languages])
+        standard_target_langs_str = ", ".join(
+            [f"'{l_code}' ({lang_map.get(l_code, l_code)})" for l_code in standard_target_languages]
+        )
 
         system_instruction_standard_translation = (
             "You are a highly accurate translator specializing in formulating questions and answers for a customer service bot. "
@@ -2466,7 +2617,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
             "**Required Example:**\n"
             "```json\n"
             "[\n"
-            "  {{\"question\": \"What laser hair removal services do you offer?\", \"answer\": \"We offer advanced laser hair removal services using the latest technology to ensure optimal results. For a free consultation, you can book an appointment.\", \"language\": \"en\"}}\n"
+            '  {{"question": "What laser hair removal services do you offer?", "answer": "We offer advanced laser hair removal services using the latest technology to ensure optimal results. For a free consultation, you can book an appointment.", "language": "en"}}\n'
             "]\n"
             "```\n"
             "Provide answers only within the specified JSON. Do not add any other text outside the JSON."
@@ -2474,24 +2625,26 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
 
         messages_standard = [
             {"role": "system", "content": system_instruction_standard_translation},
-            {"role": "user", "content": f"Original Question: {question}\nOriginal Answer: {answer}"}
+            {"role": "user", "content": f"Original Question: {question}\nOriginal Answer: {answer}"},
         ]
 
         try:
+            if client is None:
+                raise RuntimeError("OpenAI client is not configured")
             response_standard = await client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=messages_standard,
-                response_format={"type": "json_object"}
+                messages=cast(Any, messages_standard),
+                response_format={"type": "json_object"},
             )
             if not response_standard.choices:
                 raise ValueError("GPT returned no choices")
-            parsed_data_standard = json.loads(response_standard.choices[0].message.content.strip())
+            content = response_standard.choices[0].message.content or ""
+            parsed_data_standard = json.loads(content.strip())
             if isinstance(parsed_data_standard, list):
                 translations.extend(parsed_data_standard)
         except Exception as e:
             print(f"❌ ERROR in standard translation: {e}")
             pass
-
 
     # Translation to Franco Arabic (specific: Franco question, Arabic answer)
     if "franco" in target_languages:
@@ -2503,24 +2656,32 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
             "The response **MUST be in strict JSON format** (a single {{question, answer, language}} object)."
             "**Required Example:**\n"
             "```json\n"
-            "{{\"question\": \"Sho sa3at 3amal al markaz?\", \"answer\": \"ساعات عمل مركز لينا ليزر هي من 10 صباحاً لـ 6 مساءً يومياً ما عدا الأحد.\", \"language\": \"franco\"}}\n"
+            '{{"question": "Sho sa3at 3amal al markaz?", "answer": "ساعات عمل مركز لينا ليزر هي من 10 صباحاً لـ 6 مساءً يومياً ما عدا الأحد.", "language": "franco"}}\n'
             "```\n"
             "Return only the JSON. Do not add any other text outside the JSON."
         )
         messages_franco = [
             {"role": "system", "content": system_instruction_franco_translation},
-            {"role": "user", "content": f"Original Question: {question}\nOriginal Answer (Arabic): {answer}"}
+            {"role": "user", "content": f"Original Question: {question}\nOriginal Answer (Arabic): {answer}"},
         ]
         try:
+            if client is None:
+                raise RuntimeError("OpenAI client is not configured")
             response_franco = await client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=messages_franco,
-                response_format={"type": "json_object"}
+                messages=cast(Any, messages_franco),
+                response_format={"type": "json_object"},
             )
             if not response_franco.choices:
                 raise ValueError("GPT returned no choices")
-            parsed_data_franco = json.loads(response_franco.choices[0].message.content.strip())
-            if isinstance(parsed_data_franco, dict) and 'question' in parsed_data_franco and 'answer' in parsed_data_franco and 'language' in parsed_data_franco:
+            content = response_franco.choices[0].message.content or ""
+            parsed_data_franco = json.loads(content.strip())
+            if (
+                isinstance(parsed_data_franco, dict)
+                and "question" in parsed_data_franco
+                and "answer" in parsed_data_franco
+                and "language" in parsed_data_franco
+            ):
                 translations.append(parsed_data_franco)
         except Exception as e:
             print(f"❌ ERROR in franco translation: {e}")
@@ -2528,13 +2689,14 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
 
     return translations
 
+
 # NEW FUNCTION: Define API Tools in OpenAI Function Calling format
-def get_openai_tools_schema(excluded_tool_names=None):
+def get_openai_tools_schema(excluded_tool_names: Any | None = None) -> Any:
     """
     Returns the list of tools available to the OpenAI model in its required schema format.
     These definitions are based on LinasLaser AI Agent API Documentation.pdf.
     """
-    tools = [
+    tools: list[dict[str, Any]] = [
         {
             "type": "function",
             "function": {
@@ -2624,27 +2786,43 @@ def get_openai_tools_schema(excluded_tool_names=None):
                                     },
                                 },
                             },
-                            "description": "Optional. When session numbers differ per area, pass one row per id (same ids as body_part_ids). Server sends BOC body_parts as {id, session_number} per official API doc.",
+                            "description": ". When session numbers differ per area, pass one row per id (same ids as body_part_ids). Server sends BOC body_parts as {id, session_number} per official API doc.",
                         },
-                        "machine_name": {"type": "string", "description": "Device name for Laser Hair Removal Men/Women only (Neo/Quadro/Candela). Trio is no longer available. Do not use for other services."},
-                        "machine_id": {"type": "integer", "description": "Only for service_id 1 or 12 after verified from get_machines. Omit for all other services."},
+                        "machine_name": {
+                            "type": "string",
+                            "description": "Device name for Laser Hair Removal Men/Women only (Neo/Quadro/Candela). Trio is no longer available. Do not use for other services.",
+                        },
+                        "machine_id": {
+                            "type": "integer",
+                            "description": "Only for service_id 1 or 12 after verified from get_machines. Omit for all other services.",
+                        },
                         "branch_name": {"type": "string", "description": "Beirut or Antelias."},
-                        "branch_id": {"type": "integer", "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume, use live list)."},
-                        "gender": {"type": "string", "enum": ["male", "female"], "description": "Required for schedule rules if not already in session."},
+                        "branch_id": {
+                            "type": "integer",
+                            "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume, use live list).",
+                        },
+                        "gender": {
+                            "type": "string",
+                            "enum": ["male", "female"],
+                            "description": "Required for schedule rules if not already in session.",
+                        },
                         "customer_name": {
                             "type": "string",
                             "description": "Full name in Latin for new CRM customers when file does not exist.",
                         },
                         "raw_user_date_text": {
                             "type": "string",
-                            "description": "Optional: original user wording for logs (e.g. tomorrow). Not used as execution source if date+time are set.",
+                            "description": ": original user wording for logs (e.g. tomorrow). Not used as execution source if date+time are set.",
                         },
                         "raw_user_time_text": {
                             "type": "string",
-                            "description": "Optional: original user time phrase for logs. Not execution source if time/date are resolved.",
+                            "description": ": original user time phrase for logs. Not execution source if time/date are resolved.",
                         },
                         "normalized_date": {"type": "string", "description": "If resolved, e.g. YYYY-MM-DD."},
-                        "normalized_time": {"type": "string", "description": "If resolved, e.g. 15:00 or 3 PM phrasing already converted."},
+                        "normalized_time": {
+                            "type": "string",
+                            "description": "If resolved, e.g. 15:00 or 3 PM phrasing already converted.",
+                        },
                         "time": {
                             "type": "string",
                             "description": "Resolved clock time for execution when date is YYYY-MM-DD only, e.g. 09:00 or 17:30 (24h preferred).",
@@ -2656,7 +2834,7 @@ def get_openai_tools_schema(excluded_tool_names=None):
                         "calendar_day_intent": {
                             "type": "string",
                             "enum": ["today", "tomorrow"],
-                            "description": "Optional hint for debugging; do not rely on this alone for execution—send resolved date+time.",
+                            "description": " hint for debugging; do not rely on this alone for execution—send resolved date+time.",
                         },
                         "date_components": {
                             "type": "object",
@@ -2705,9 +2883,18 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number, e.g., '71 123 456'."},
-                        "service_id": {"type": "integer", "description": "Service ID: 1=Hair Men, 12=Hair Women, 2/11=CO2, 13=Tattoo, 4/5/14=Whitening. For female hair removal use 12, not 3."},
-                        "machine_id": {"type": "integer", "description": "Only for hair removal service_id 1/12. Omit for tattoo/CO2/whitening/hydrofacial/HIFU/etc."},
-                        "branch_id": {"type": "integer", "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume)."},
+                        "service_id": {
+                            "type": "integer",
+                            "description": "Service ID: 1=Hair Men, 12=Hair Women, 2/11=CO2, 13=Tattoo, 4/5/14=Whitening. For female hair removal use 12, not 3.",
+                        },
+                        "machine_id": {
+                            "type": "integer",
+                            "description": "Only for hair removal service_id 1/12. Omit for tattoo/CO2/whitening/hydrofacial/HIFU/etc.",
+                        },
+                        "branch_id": {
+                            "type": "integer",
+                            "description": "Branch id from get_branches (commonly 1=Beirut, 3=Antelias; do not assume).",
+                        },
                         "calendar_day_intent": {
                             "type": "string",
                             "enum": ["today", "tomorrow"],
@@ -2715,7 +2902,7 @@ def get_openai_tools_schema(excluded_tool_names=None):
                         },
                         "date_components": {
                             "type": "object",
-                            "description": "Optional but STRONGLY PREFERRED when the user used vague weekday phrases (الخميس الجاي، الجمعة الجاي، next Thursday…) or contradictory wording: after resolving to exactly ONE civil date using CALENDAR ANCHOR, pass year, month, day, hour (minute optional, default 0). Server builds API time from this first. If the user mentioned two different days, ask one clarification instead of guessing.",
+                            "description": " but STRONGLY PREFERRED when the user used vague weekday phrases (الخميس الجاي، الجمعة الجاي، next Thursday…) or contradictory wording: after resolving to exactly ONE civil date using CALENDAR ANCHOR, pass year, month, day, hour (minute optional, default 0). Server builds API time from this first. If the user mentioned two different days, ask one clarification instead of guessing.",
                             "properties": {
                                 "year": {"type": "integer", "description": "Gregorian year, e.g. 2026"},
                                 "month": {"type": "integer", "description": "1-12"},
@@ -2725,7 +2912,11 @@ def get_openai_tools_schema(excluded_tool_names=None):
                             },
                         },
                         # This is derived from the API Documentation PDF
-                        "date": {"type": "string", "format": "date-time", "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). Must match date_components when provided. Convert natural language using CURRENT DATE AND TIME / CALENDAR ANCHOR. For 'today'/'tomorrow' set calendar_day_intent. For next-Thursday-style phrases, prefer filling date_components."},
+                        "date": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Full appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-07-28 19:30:00'). Must match date_components when provided. Convert natural language using CURRENT DATE AND TIME / CALENDAR ANCHOR. For 'today'/'tomorrow' set calendar_day_intent. For next-Thursday-style phrases, prefer filling date_components.",
+                        },
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
                         "body_part_ids": {
                             "type": "array",
@@ -2739,15 +2930,18 @@ def get_openai_tools_schema(excluded_tool_names=None):
                                 "type": "object",
                                 "properties": {
                                     "body_part_id": {"type": "integer"},
-                                    "session_number": {"type": "integer", "description": "Use 1 for new/first-time bookings unless the user or CRM context says otherwise (2+ = follow-up session for that area)."},
+                                    "session_number": {
+                                        "type": "integer",
+                                        "description": "Use 1 for new/first-time bookings unless the user or CRM context says otherwise (2+ = follow-up session for that area).",
+                                    },
                                 },
                             },
-                            "description": "Optional; session numbers per area. Default create sends body_parts [{id, session_number}]. LINASLASER_APPOINTMENT_BODY_PART_IDS_ONLY=1 forces body_part_ids only when all sessions are 1.",
+                            "description": "; session numbers per area. Default create sends body_parts [{id, session_number}]. LINASLASER_APPOINTMENT_BODY_PART_IDS_ONLY=1 forces body_part_ids only when all sessions are 1.",
                         },
                     },
-                    "required": ["phone", "service_id", "branch_id", "date", "body_part_ids"]
-                }
-            }
+                    "required": ["phone", "service_id", "branch_id", "date", "body_part_ids"],
+                },
+            },
         },
         {
             "type": "function",
@@ -2769,7 +2963,10 @@ def get_openai_tools_schema(excluded_tool_names=None):
                             "type": "integer",
                             "description": "Numeric appointment id from CRM JSON (appointment_id / id)—the row the user chose to move or re-activate from pause.",
                         },
-                        "phone": {"type": "string", "description": "Client's phone number (without country code), e.g., '71 123 456'."},
+                        "phone": {
+                            "type": "string",
+                            "description": "Client's phone number (without country code), e.g., '71 123 456'.",
+                        },
                         "calendar_day_intent": {
                             "type": "string",
                             "enum": ["today", "tomorrow"],
@@ -2786,12 +2983,16 @@ def get_openai_tools_schema(excluded_tool_names=None):
                                 "minute": {"type": "integer"},
                             },
                         },
-                        "date": {"type": "string", "format": "date-time", "description": "New appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-11-15 16:00:00'). Must match date_components when provided. Convert natural language; if relative day, set calendar_day_intent too."},
-                        "user_code": {"type": "string", "description": "Client's unique user code (optional)."}
+                        "date": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "New appointment date and time in 'YYYY-MM-DD HH:MM:SS' format (e.g., '2025-11-15 16:00:00'). Must match date_components when provided. Convert natural language; if relative day, set calendar_day_intent too.",
+                        },
+                        "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
                     },
-                    "required": ["appointment_id", "phone", "date"]
-                }
-            }
+                    "required": ["appointment_id", "phone", "date"],
+                },
+            },
         },
         {
             "type": "function",
@@ -2820,12 +3021,12 @@ def get_openai_tools_schema(excluded_tool_names=None):
                         },
                         "user_code": {
                             "type": "string",
-                            "description": "Optional compatibility field; ignored by current backend implementation.",
-                        }
+                            "description": " compatibility field; ignored by current backend implementation.",
+                        },
                     },
-                    "required": ["appointment_id", "phone"]
-                }
-            }
+                    "required": ["appointment_id", "phone"],
+                },
+            },
         },
         {
             "type": "function",
@@ -2844,12 +3045,16 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "properties": {
                         "appointment_id": {"type": "integer", "description": "Paused appointment id to edit."},
                         "phone": {"type": "string", "description": "Client phone (local format accepted)."},
-                        "date": {"type": "string", "format": "date-time", "description": "Optional new datetime YYYY-MM-DD HH:MM:SS."},
-                        "machine_id": {"type": "integer", "description": "Optional machine id (service-dependent)."},
+                        "date": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": " new datetime YYYY-MM-DD HH:MM:SS.",
+                        },
+                        "machine_id": {"type": "integer", "description": " machine id (service-dependent)."},
                         "body_part_ids": {
                             "type": "array",
                             "items": {"type": "integer"},
-                            "description": "Optional replacement body-part ids list."
+                            "description": " replacement body-part ids list.",
                         },
                         "body_parts_with_sessions": {
                             "type": "array",
@@ -2857,20 +3062,20 @@ def get_openai_tools_schema(excluded_tool_names=None):
                                 "type": "object",
                                 "properties": {
                                     "body_part_id": {"type": "integer"},
-                                    "session_number": {"type": "integer", "description": ">=1"}
-                                }
+                                    "session_number": {"type": "integer", "description": ">=1"},
+                                },
                             },
-                            "description": "Optional per-body-part sessions. Preferred when session numbers matter."
+                            "description": " per-body-part sessions. Preferred when session numbers matter.",
                         },
                         "status": {
                             "type": "string",
-                            "description": "Optional target status (e.g. Available). If omitted, server may default to Available for paused edits."
+                            "description": " target status (e.g. Available). If omitted, server may default to Available for paused edits.",
                         },
-                        "user_code": {"type": "string", "description": "Optional user_code."}
+                        "user_code": {"type": "string", "description": " user_code."},
                     },
-                    "required": ["appointment_id", "phone"]
-                }
-            }
+                    "required": ["appointment_id", "phone"],
+                },
+            },
         },
         {
             "type": "function",
@@ -2890,16 +3095,22 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "type": "object",
                     "properties": {
                         "appointment_id": {"type": "integer", "description": "CRM appointment id to edit."},
-                        "phone": {"type": "string", "description": "Customer phone (local format); required if user_code omitted."},
+                        "phone": {
+                            "type": "string",
+                            "description": "Customer phone (local format); required if user_code omitted.",
+                        },
                         "user_code": {"type": "string", "description": "Customer code; required if phone omitted."},
-                        "service_id": {"type": "integer", "description": "Optional new service id."},
-                        "machine_id": {"type": "integer", "description": "Optional new machine id."},
-                        "branch_id": {"type": "integer", "description": "Optional new branch id."},
-                        "date": {"type": "string", "description": "Optional new datetime YYYY-MM-DD HH:MM:SS (must be future)."},
+                        "service_id": {"type": "integer", "description": " new service id."},
+                        "machine_id": {"type": "integer", "description": " new machine id."},
+                        "branch_id": {"type": "integer", "description": " new branch id."},
+                        "date": {
+                            "type": "string",
+                            "description": " new datetime YYYY-MM-DD HH:MM:SS (must be future).",
+                        },
                         "body_part_ids": {
                             "type": "array",
                             "items": {"type": "integer"},
-                            "description": "Optional; if body_parts_with_sessions omitted, builds body_parts with same session_number.",
+                            "description": "; if body_parts_with_sessions omitted, builds body_parts with same session_number.",
                         },
                         "body_parts_with_sessions": {
                             "type": "array",
@@ -2931,24 +3142,24 @@ def get_openai_tools_schema(excluded_tool_names=None):
             "function": {
                 "name": "get_branches",
                 "description": "Retrieves a list of all branches associated with the clinic.",
-                "parameters": {"type": "object", "properties": {}}
-            }
+                "parameters": {"type": "object", "properties": {}},
+            },
         },
         {
             "type": "function",
             "function": {
                 "name": "get_services",
                 "description": "Retrieves a list of all services offered by the clinic.",
-                "parameters": {"type": "object", "properties": {}}
-            }
+                "parameters": {"type": "object", "properties": {}},
+            },
         },
         {
             "type": "function",
             "function": {
                 "name": "get_machines",
                 "description": "Lists machines in the clinic. Call when booking laser hair removal (service 1 or 12) to pick the device the customer agreed to (Neo, Quadro, Candela). Trio is no longer available. For non-hair services, do not ask for or send machine_id.",
-                "parameters": {"type": "object", "properties": {}}
-            }
+                "parameters": {"type": "object", "properties": {}},
+            },
         },
         {
             "type": "function",
@@ -2962,7 +3173,7 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "type": "object",
                     "properties": {
                         "service_id": {"type": "integer", "description": "Service to quote (same as booking)."},
-                        "machine_id": {"type": "integer", "description": "Optional filter when machine is known."},
+                        "machine_id": {"type": "integer", "description": " filter when machine is known."},
                     },
                     "required": ["service_id"],
                 },
@@ -2995,20 +3206,20 @@ def get_openai_tools_schema(excluded_tool_names=None):
                         },
                         "machine_id": {
                             "type": "integer",
-                            "description": "Optional but recommended when machine is known/required for the booking; filters body parts by service+machine."
+                            "description": " but recommended when machine is known/required for the booking; filters body parts by service+machine.",
                         },
                     },
                     "required": ["service_id"],
                 },
-            }
+            },
         },
         {
             "type": "function",
             "function": {
                 "name": "get_clinic_hours",
                 "description": "Returns the clinic's working hours for each day of the week.",
-                "parameters": {"type": "object", "properties": {}}
-            }
+                "parameters": {"type": "object", "properties": {}},
+            },
         },
         {
             "type": "function",
@@ -3018,13 +3229,23 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "date": {"type": "string", "format": "date", "description": "Specific date for reminders (YYYY-MM-DD, optional)."},
-                        "phone": {"type": "string", "description": "Client's phone number (required if user_code not provided)."},
-                        "user_code": {"type": "string", "description": "Client's unique user code (required if phone is not provided)."}
+                        "date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Specific date for reminders (YYYY-MM-DD, optional).",
+                        },
+                        "phone": {
+                            "type": "string",
+                            "description": "Client's phone number (required if user_code not provided).",
+                        },
+                        "user_code": {
+                            "type": "string",
+                            "description": "Client's unique user code (required if phone is not provided).",
+                        },
                     },
-                    "required": [] # API docs state "required if other not provided"
-                }
-            }
+                    "required": [],  # API docs state "required if other not provided"
+                },
+            },
         },
         {
             "type": "function",
@@ -3042,11 +3263,11 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number."},
-                        "user_code": {"type": "string", "description": "Client's unique user code (optional)."}
+                        "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
                     },
-                    "required": ["phone"]
-                }
-            }
+                    "required": ["phone"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3056,13 +3277,23 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "phone": {"type": "string", "description": "Client's phone number (required if user_code is not provided)."},
-                        "user_code": {"type": "string", "description": "Client's unique user code (required if phone is not provided)."},
-                        "service_ids": {"type": "array", "items": {"type": "integer"}, "description": "Filter sessions by specific service IDs (e.g., service_ids[]=1&service_ids[]=2)."}
+                        "phone": {
+                            "type": "string",
+                            "description": "Client's phone number (required if user_code is not provided).",
+                        },
+                        "user_code": {
+                            "type": "string",
+                            "description": "Client's unique user code (required if phone is not provided).",
+                        },
+                        "service_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Filter sessions by specific service IDs (e.g., service_ids[]=1&service_ids[]=2).",
+                        },
                     },
-                    "required": [] # API says phone or user_code required
-                }
-            }
+                    "required": [],  # API says phone or user_code required
+                },
+            },
         },
         {
             "type": "function",
@@ -3075,13 +3306,20 @@ def get_openai_tools_schema(excluded_tool_names=None):
                         "phone": {"type": "string", "description": "Client's phone number."},
                         "from_branch_id": {"type": "integer", "description": "ID of the current branch."},
                         "to_branch_id": {"type": "integer", "description": "ID of the new branch."},
-                        "new_date": {"type": "string", "format": "date", "description": "Optional. YYYY-MM-DD when a new date must be sent with the move; omit for branch-only move if allowed by API."},
+                        "new_date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": ". YYYY-MM-DD when a new date must be sent with the move; omit for branch-only move if allowed by API.",
+                        },
                         "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
-                        "response_confirm": {"type": "string", "description": "Confirmation of the move, default 'yes'."}
+                        "response_confirm": {
+                            "type": "string",
+                            "description": "Confirmation of the move, default 'yes'.",
+                        },
                     },
-                    "required": ["phone", "from_branch_id", "to_branch_id"]
-                }
-            }
+                    "required": ["phone", "from_branch_id", "to_branch_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3092,11 +3330,11 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Client's phone number."},
-                        "user_code": {"type": "string", "description": "Client's unique user code (optional)."}
+                        "user_code": {"type": "string", "description": "Client's unique user code (optional)."},
                     },
-                    "required": ["phone"]
-                }
-            }
+                    "required": ["phone"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3106,25 +3344,27 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "date": {"type": "string", "format": "date", "description": "Filter missed appointments by a specific date (YYYY-MM-DD, optional)."}
+                        "date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Filter missed appointments by a specific date (YYYY-MM-DD, optional).",
+                        }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         },
         {
             "type": "function",
             "function": {
-                "name": "get_customer_by_phone", # NEW API Function
+                "name": "get_customer_by_phone",  # NEW API Function
                 "description": "Retrieves customer details by phone number.",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "phone": {"type": "string", "description": "Customer's phone number."}
-                    },
-                    "required": ["phone"]
-                }
-            }
+                    "properties": {"phone": {"type": "string", "description": "Customer's phone number."}},
+                    "required": ["phone"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3134,12 +3374,18 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "phone": {"type": "string", "description": "Customer's phone number (required if user_code is not provided)."},
-                        "user_code": {"type": "string", "description": "Customer's unique user code (required if phone is not provided)."}
+                        "phone": {
+                            "type": "string",
+                            "description": "Customer's phone number (required if user_code is not provided).",
+                        },
+                        "user_code": {
+                            "type": "string",
+                            "description": "Customer's unique user code (required if phone is not provided).",
+                        },
                     },
-                    "required": [] # API says phone or user_code is required
-                }
-            }
+                    "required": [],  # API says phone or user_code is required
+                },
+            },
         },
         {
             "type": "function",
@@ -3149,11 +3395,14 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "user_message": {"type": "string", "description": "The user's message or question to match against available files."}
+                        "user_message": {
+                            "type": "string",
+                            "description": "The user's message or question to match against available files.",
+                        }
                     },
-                    "required": ["user_message"]
-                }
-            }
+                    "required": ["user_message"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3165,9 +3414,9 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "properties": {
                         "appointment_id": {"type": "integer", "description": "The ID of the appointment to retrieve."}
                     },
-                    "required": ["appointment_id"]
-                }
-            }
+                    "required": ["appointment_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3196,14 +3445,14 @@ def get_openai_tools_schema(excluded_tool_names=None):
                         "system_total_known": {
                             "type": "number",
                             "description": (
-                                "Optional. Pass the CRM total from the **last** create/booking tool response if you have it, "
+                                ". Pass the CRM total from the **last** create/booking tool response if you have it, "
                                 "to avoid an extra lookup. Omit to fetch current price from get_appointment_details."
                             ),
                         },
                     },
                     "required": ["appointment_id", "agreed_price"],
                 },
-            }
+            },
         },
         {
             "type": "function",
@@ -3213,12 +3462,16 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "date": {"type": "string", "format": "date", "description": "Date to check (YYYY-MM-DD). Defaults to today if not provided."},
-                        "branch_id": {"type": "integer", "description": "Filter by branch ID (optional)."}
+                        "date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Date to check (YYYY-MM-DD). Defaults to today if not provided.",
+                        },
+                        "branch_id": {"type": "integer", "description": "Filter by branch ID (optional)."},
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         },
         {
             "type": "function",
@@ -3228,11 +3481,14 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "customer_id": {"type": "integer", "description": "Customer ID (from get_customer_by_phone data.id)."}
+                        "customer_id": {
+                            "type": "integer",
+                            "description": "Customer ID (from get_customer_by_phone data.id).",
+                        }
                     },
-                    "required": ["customer_id"]
-                }
-            }
+                    "required": ["customer_id"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3243,11 +3499,11 @@ def get_openai_tools_schema(excluded_tool_names=None):
                     "type": "object",
                     "properties": {
                         "phone": {"type": "string", "description": "Customer's phone number."},
-                        "note": {"type": "string", "description": "Note content (max 1000 characters)."}
+                        "note": {"type": "string", "description": "Note content (max 1000 characters)."},
                     },
-                    "required": ["phone", "note"]
-                }
-            }
+                    "required": ["phone", "note"],
+                },
+            },
         },
         {
             "type": "function",
@@ -3257,13 +3513,25 @@ def get_openai_tools_schema(excluded_tool_names=None):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "date": {"type": "string", "format": "date", "description": "Customers created on this date (YYYY-MM-DD)."},
-                        "from_date": {"type": "string", "format": "date", "description": "Customers created on or after this date (YYYY-MM-DD)."},
-                        "to_date": {"type": "string", "format": "date", "description": "Customers created on or before this date (YYYY-MM-DD)."}
+                        "date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Customers created on this date (YYYY-MM-DD).",
+                        },
+                        "from_date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Customers created on or after this date (YYYY-MM-DD).",
+                        },
+                        "to_date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Customers created on or before this date (YYYY-MM-DD).",
+                        },
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         },
         {
             "type": "function",
@@ -3276,32 +3544,40 @@ def get_openai_tools_schema(excluded_tool_names=None):
                         "name": {"type": "string", "description": "Full name of the customer."},
                         "phone": {"type": "string", "description": "Customer's phone number."},
                         "email": {"type": "string", "format": "email", "description": "Customer's email (optional)."},
-                        "gender": {"type": "string", "enum": ["Male", "Female"], "description": "Customer's gender (must be 'Male' or 'Female')."}, # Updated enum
-                        "branch_id": {"type": "integer", "description": "Preferred branch ID for the customer."}, # Made required
-                        "date_of_birth": {"type": "string", "format": "date", "description": "Customer's date of birth (YYYY-MM-DD, optional)."}
+                        "gender": {
+                            "type": "string",
+                            "enum": ["Male", "Female"],
+                            "description": "Customer's gender (must be 'Male' or 'Female').",
+                        },  # Updated enum
+                        "branch_id": {
+                            "type": "integer",
+                            "description": "Preferred branch ID for the customer.",
+                        },  # Made required
+                        "date_of_birth": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Customer's date of birth (YYYY-MM-DD, optional).",
+                        },
                     },
-                    "required": ["name", "phone", "gender", "branch_id"] # Updated required fields
-                }
-            }
+                    "required": ["name", "phone", "gender", "branch_id"],  # Updated required fields
+                },
+            },
         },
     ]
     excluded = {str(name).strip() for name in (excluded_tool_names or []) if str(name).strip()}
     if excluded:
-        tools = [
-            tool
-            for tool in tools
-            if str((tool.get("function") or {}).get("name") or "").strip() not in excluded
-        ]
+        tools = [tool for tool in tools if str((tool.get("function") or {}).get("name") or "").strip() not in excluded]
     return tools
 
+
 def get_system_instruction(
-    user_id,
-    response_lang,
+    user_id: Any,
+    response_lang: Any,
     qa_reference: str = "",
     include_price_list: bool = True,
-    custom_knowledge_context: str = None,
-    operational_context: str = None,
-):
+    custom_knowledge_context: str | None = None,
+    operational_context: str | None = None,
+) -> Any:
     """
     Generate system instruction for GPT.
 
@@ -3315,13 +3591,13 @@ def get_system_instruction(
     """
     _ = qa_reference  # compatibility placeholder
     user_gender_str = config.user_gender.get(user_id, "unknown")
-    
+
     gender_instruction = ""
     if user_gender_str == "male":
         gender_instruction = "The user is male. You MUST use masculine forms exclusively in all your replies (e.g., 'Hello sir', 'How can I help you', 'I saw your question', 'tell us'). Adhere strictly to masculine phrasing in every sentence, verb, noun, and adjective. Do not mix forms."
     elif user_gender_str == "female":
         gender_instruction = "The user is female. You MUST use feminine forms exclusively in all your replies (e.g., 'Hello madam', 'How can I help you', 'I saw your question', 'tell us'). Adhere strictly to feminine phrasing in every sentence, verb, noun and adjective. Do not mix forms."
-    else: # This means gender is "غير محدد" or "unknown"
+    else:  # This means gender is "غير محدد" or "unknown"
         gender_instruction = """
         **GENDER DECISION POLICY (AI-PRIMARY):**
         User's gender is UNKNOWN.
@@ -3331,7 +3607,7 @@ def get_system_instruction(
         - When the user provides gender, use action "confirm_gender" and continue naturally.
         - Use neutral wording whenever gender is still unknown.
         """
-    
+
     price_list_section = ""
     if include_price_list and config.PRICE_LIST:
         price_list_section = f"""

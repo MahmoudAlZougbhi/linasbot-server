@@ -1,26 +1,26 @@
+from __future__ import annotations
+
 # Smart Messaging Service
 # Implements requirement #11 from project specifications
-
 import asyncio
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
 import json
 import os
-from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Any, cast
 
 from services.message_logs_service import message_logs_service
 from services.smart_messaging_catalog import TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS, normalize_template_id
-
-# Preview mode blocks automatic sends. No metadata source may bypass approval.
-AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES = frozenset()
 from storage.persistent_storage import (
-    SENT_SMART_MESSAGES_FILE,
-    MESSAGE_TEMPLATES_FILE,
     APP_SETTINGS_FILE,
-    SERVICE_TEMPLATE_MAPPING_FILE,
+    MESSAGE_TEMPLATES_FILE,
     PENDING_SMART_MESSAGES_FILE,
+    SENT_SMART_MESSAGES_FILE,
+    SERVICE_TEMPLATE_MAPPING_FILE,
     ensure_dirs,
 )
+
+# Preview mode blocks automatic sends. No metadata source may bypass approval.
+AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES: frozenset[str] = frozenset()
 
 
 class SmartMessagingService:
@@ -40,17 +40,17 @@ class SmartMessagingService:
     SENT_MESSAGES_FILE = str(SENT_SMART_MESSAGES_FILE)
     QUEUE_FILE = str(PENDING_SMART_MESSAGES_FILE)
 
-    def __init__(self):
+    def __init__(self) -> None:
         ensure_dirs()
         self.templates_file = str(MESSAGE_TEMPLATES_FILE)
         self.settings_file = str(APP_SETTINGS_FILE)
         self.mapping_file = str(SERVICE_TEMPLATE_MAPPING_FILE)
         self.message_templates = self._load_templates()
-        self.scheduled_messages = {}
-        self.sent_messages_log = []
+        self.scheduled_messages: dict[str, dict[str, Any]] = {}
+        self.sent_messages_log: list[dict[str, Any]] = []
         self._load_sent_messages()
         self._load_pending_queue()
-        
+
     # ------------------------------------------------------------------
     # Persistence helpers — keep queue + sent messages across restarts
     # ------------------------------------------------------------------
@@ -71,12 +71,12 @@ class SmartMessagingService:
                 entry[key] = entry[key].isoformat()
         return entry
 
-    def _load_sent_messages(self):
+    def _load_sent_messages(self) -> None:
         """Load previously sent messages from disk into scheduled_messages dict."""
         if not os.path.exists(self.SENT_MESSAGES_FILE):
             return
         try:
-            with open(self.SENT_MESSAGES_FILE, "r", encoding="utf-8") as f:
+            with open(self.SENT_MESSAGES_FILE, encoding="utf-8") as f:
                 entries = json.load(f)
             loaded = 0
             for message_id, entry in entries.items():
@@ -86,12 +86,12 @@ class SmartMessagingService:
         except Exception as e:
             print(f"⚠️ Could not load sent messages: {e}")
 
-    def _load_pending_queue(self):
+    def _load_pending_queue(self) -> None:
         """Load non-terminal scheduled/pending/sending rows across restarts."""
         if not os.path.exists(self.QUEUE_FILE):
             return
         try:
-            with open(self.QUEUE_FILE, "r", encoding="utf-8") as f:
+            with open(self.QUEUE_FILE, encoding="utf-8") as f:
                 entries = json.load(f)
             loaded = 0
             for message_id, entry in (entries or {}).items():
@@ -108,7 +108,7 @@ class SmartMessagingService:
         except Exception as e:
             print(f"⚠️ Could not load pending smart message queue: {e}")
 
-    def _persist_sent_messages(self):
+    def _persist_sent_messages(self) -> None:
         """Save sent + pending queue so they survive restarts and multi-process reload."""
         try:
             sent_entries = {}
@@ -129,25 +129,25 @@ class SmartMessagingService:
         except Exception as e:
             print(f"⚠️ Could not persist smart messages: {e}")
 
-    def _load_templates(self) -> Dict:
+    def _load_templates(self) -> dict:
         """Load message templates from JSON file or use defaults"""
         template_file = self.templates_file
-        
+
         if os.path.exists(template_file):
             try:
-                with open(template_file, 'r', encoding='utf-8') as f:
+                with open(template_file, encoding="utf-8") as f:
                     templates_data = json.load(f)
-                
+
                 # Extract only the language templates (ar, en, fr) from each template
-                templates = {}
+                templates: dict[str, Any] = {}
                 for template_id, template_data in templates_data.items():
                     canonical_id = normalize_template_id(template_id)
 
                     current = templates.get(canonical_id, {})
                     normalized = {
-                        'ar': template_data.get('ar', ''),
-                        'en': template_data.get('en', ''),
-                        'fr': template_data.get('fr', '')
+                        "ar": template_data.get("ar", ""),
+                        "en": template_data.get("en", ""),
+                        "fr": template_data.get("fr", ""),
                     }
                     # Preserve whichever variant has richer text per language.
                     templates[canonical_id] = {
@@ -155,14 +155,14 @@ class SmartMessagingService:
                         "en": normalized["en"] or current.get("en", ""),
                         "fr": normalized["fr"] or current.get("fr", ""),
                     }
-                
+
                 print(f"✅ Loaded {len(templates)} message templates from {template_file}")
                 return templates
             except Exception as e:
                 print(f"❌ Error loading templates from file: {e}, using defaults")
         else:
             print(f"⚠️ Template file not found: {template_file}, using default templates")
-        
+
         # Return default templates if file not found or error
         return {
             "reminder_24h": {
@@ -181,7 +181,6 @@ class SmartMessagingService:
 للإلغاء: أرسل "إلغاء"
 
 نتطلع لرؤيتك! 💜""",
-
                 "en": """🔔 Appointment Reminder
 
 Hi {{customer_name}}!
@@ -197,7 +196,6 @@ To reschedule: Reply "Postpone"
 To cancel: Reply "Cancel"
 
 Looking forward to seeing you! 💜""",
-
                 "fr": """🔔 Rappel de Rendez-vous
 
 Bonjour {{customer_name}}!
@@ -212,9 +210,8 @@ Pour confirmer: Répondez "Oui"
 Pour reporter: Répondez "Reporter"
 Pour annuler: Répondez "Annuler"
 
-Au plaisir de vous voir! 💜"""
+Au plaisir de vous voir! 💜""",
             },
-            
             "thank_you_message_sent_after_session": {
                 "ar": """💜 شكراً لزيارتك!
 
@@ -230,7 +227,6 @@ Au plaisir de vous voir! 💜"""
 
 أرسل رقم النجوم لتقييمك!
 ملاحظاتك تهمنا 🙏""",
-
                 "en": """💜 Thank You for Your Visit!
 
 Dear {{customer_name}},
@@ -245,7 +241,6 @@ How was your experience?
 
 Send the number of stars for your rating!
 Your feedback matters 🙏""",
-
                 "fr": """💜 Merci de Votre Visite!
 
 Cher(e) {{customer_name}},
@@ -259,9 +254,8 @@ Comment était votre expérience?
 ⭐ À Améliorer
 
 Envoyez le nombre d'étoiles!
-Vos commentaires comptent 🙏"""
+Vos commentaires comptent 🙏""",
             },
-
             "sent_17_days_after_last_session_new": {
                 "ar": """🌟 كيف حالك؟
 
@@ -277,7 +271,6 @@ Vos commentaires comptent 🙏"""
 
 للحجز: أرسل "حجز"
 رعايتك أولويتنا 💜""",
-
                 "en": """🌟 How Are You?
 
 Dear {{customer_name}},
@@ -292,7 +285,6 @@ We'd like to check on you and remind you:
 
 To book: Reply "Book"
 Your care is our priority 💜""",
-
                 "fr": """🌟 Comment Allez-Vous?
 
 Cher(e) {{customer_name}},
@@ -306,9 +298,8 @@ Nous aimerions prendre de vos nouvelles:
 ✨ Consultation gratuite disponible
 
 Pour réserver: Répondez "Réserver"
-Votre bien-être est notre priorité 💜"""
+Votre bien-être est notre priorité 💜""",
             },
-            
             "missed_yesterday": {
                 "ar": """💙 نتمنى أن تكون بخير
 
@@ -322,7 +313,6 @@ Votre bien-être est notre priorité 💜"""
 💬 أو أرسل "موعد جديد"
 
 نحن هنا لخدمتك دائماً 💜""",
-
                 "en": """💙 Hope You're Well
 
 Dear {{customer_name}},
@@ -335,7 +325,6 @@ Would you like to reschedule?
 💬 Or reply "New appointment"
 
 We're always here for you 💜""",
-
                 "fr": """💙 Nous Espérons Que Vous Allez Bien
 
 Cher(e) {{customer_name}},
@@ -347,9 +336,8 @@ Souhaitez-vous reprogrammer?
 📱 Appelez-nous: {{phone_number}}
 💬 Ou répondez "Nouveau rendez-vous"
 
-Nous sommes toujours là pour vous 💜"""
+Nous sommes toujours là pour vous 💜""",
             },
-            
             "sent_for_pause": {
                 "ar": """🌸 مرحباً {{customer_name}}
 
@@ -365,7 +353,6 @@ Nous sommes toujours là pour vous 💜"""
 💬 يمكنك الرد على هذه الرسالة في أي وقت.
 
 نتطلع لخدمتك 💜""",
-
                 "en": """🌸 Hi {{customer_name}}
 
 We're following up on your paused appointment at Lina's Laser Center:
@@ -380,7 +367,6 @@ To book or ask anything:
 💬 You can reply to this message anytime.
 
 We're here for you 💜""",
-
                 "fr": """🌸 Bonjour {{customer_name}}
 
 Suite à votre rendez-vous en pause au Centre Laser Lina:
@@ -394,25 +380,22 @@ Pour réserver ou une question:
 📱 {{phone_number}}
 💬 Vous pouvez répondre à tout moment.
 
-Au plaisir de vous accueillir 💜"""
+Au plaisir de vous accueillir 💜""",
             },
-            
             "session_feedback": {
                 "ar": """مرحباً {{customer_name}} 🌸
 شكراً لزيارتك لنا.
 يسعدنا جداً أن نعرف رأيك بجلسك الأخيرة، لأن تقييمك يساعدنا على تحسين تجربتك دائماً.
 اضغطي على الزر بالأسفل لتقييم تجربتك معنا.""",
-
                 "en": """Hi {{customer_name}} 🌸
 Thank you for visiting us.
 We'd love to hear about your last session—your feedback helps us keep improving your experience.
 Tap the button below to rate your visit with us.""",
-
                 "fr": """Bonjour {{customer_name}} 🌸
 Merci pour votre visite.
 Nous serions ravis d'avoir votre avis sur votre dernière séance — votre retour nous aide à améliorer votre expérience.
-Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
-            }
+Appuyez sur le bouton ci-dessous pour évaluer votre visite.""",
+            },
         }
 
     def _resolve_template_key(self, template_id: str) -> str:
@@ -431,18 +414,18 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             return fallback
 
         return canonical
-    
+
     def schedule_message(
         self,
         customer_phone: str,
         message_type: str,
         send_at: datetime,
-        placeholders: Dict[str, str],
+        placeholders: dict[str, str],
         language: str = "ar",
-        service_id: int = None,
-        service_name: str = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> str:
+        service_id: int | None = None,
+        service_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str | None:
         """Schedule a message to be sent at specific time with service context"""
 
         canonical_type = normalize_template_id(message_type)
@@ -479,9 +462,9 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
         try:
             settings_file = self.settings_file
             if os.path.exists(settings_file):
-                with open(settings_file, 'r', encoding='utf-8') as f:
+                with open(settings_file, encoding="utf-8") as f:
                     settings = json.load(f)
-                return settings.get('smartMessaging', {}).get('enabled', True)
+                return cast(bool, settings.get("smartMessaging", {}).get("enabled", True))
         except Exception as e:
             print(f"Error checking smart messaging status: {e}")
         return True
@@ -491,9 +474,9 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
         try:
             settings_file = self.settings_file
             if os.path.exists(settings_file):
-                with open(settings_file, 'r', encoding='utf-8') as f:
+                with open(settings_file, encoding="utf-8") as f:
                     settings = json.load(f)
-                return settings.get('smartMessaging', {}).get('previewBeforeSend', False)
+                return cast(bool, settings.get("smartMessaging", {}).get("previewBeforeSend", False))
         except Exception as e:
             print(f"Error checking preview mode: {e}")
         return False
@@ -504,17 +487,17 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             template_id = normalize_template_id(template_id)
             mapping_file = self.mapping_file
             if os.path.exists(mapping_file):
-                with open(mapping_file, 'r', encoding='utf-8') as f:
+                with open(mapping_file, encoding="utf-8") as f:
                     mappings = json.load(f)
                 service_key = str(service_id)
-                service_mapping = mappings.get('service_mappings', {}).get(service_key, {})
-                templates = service_mapping.get('templates', {})
-                return templates.get(template_id, True)
+                service_mapping = mappings.get("service_mappings", {}).get(service_key, {})
+                templates = service_mapping.get("templates", {})
+                return cast(bool, templates.get(template_id, True))
         except Exception as e:
             print(f"Error checking service-template mapping: {e}")
         return True
 
-    def _add_to_preview_queue(self, message_id: str):
+    def _add_to_preview_queue(self, message_id: str) -> None:
         """Add scheduled message to preview queue"""
         try:
             from services.message_preview_service import message_preview_service
@@ -522,29 +505,26 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             msg_data = self.scheduled_messages.get(message_id)
             if msg_data:
                 # Update status to pending_approval
-                self.scheduled_messages[message_id]['status'] = 'pending_approval'
+                self.scheduled_messages[message_id]["status"] = "pending_approval"
 
                 # Add to preview service
-                message_preview_service.add_to_preview_queue({
-                    'message_id': message_id,
-                    'customer_phone': msg_data.get('customer_phone'),
-                    'customer_name': msg_data.get('placeholders', {}).get('customer_name', 'Unknown'),
-                    'template_id': msg_data.get('message_type'),
-                    'language': msg_data.get('language', 'ar'),
-                    'placeholders': msg_data.get('placeholders', {}),
-                    'service_id': msg_data.get('service_id'),
-                    'service_name': msg_data.get('service_name', 'Unknown Service'),
-                    'scheduled_send_time': msg_data.get('send_at')
-                })
+                message_preview_service.add_to_preview_queue(
+                    {
+                        "message_id": message_id,
+                        "customer_phone": msg_data.get("customer_phone"),
+                        "customer_name": msg_data.get("placeholders", {}).get("customer_name", "Unknown"),
+                        "template_id": msg_data.get("message_type"),
+                        "language": msg_data.get("language", "ar"),
+                        "placeholders": msg_data.get("placeholders", {}),
+                        "service_id": msg_data.get("service_id"),
+                        "service_name": msg_data.get("service_name", "Unknown Service"),
+                        "scheduled_send_time": msg_data.get("send_at"),
+                    }
+                )
         except Exception as e:
             print(f"Error adding to preview queue: {e}")
-    
-    def get_message_content(
-        self,
-        message_type: str,
-        language: str,
-        placeholders: Dict[str, str]
-    ) -> str:
+
+    def get_message_content(self, message_type: str, language: str, placeholders: dict[str, str]) -> str | None:
         """Get message content with placeholders replaced"""
 
         template_key = self._resolve_template_key(message_type)
@@ -555,14 +535,14 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             language,
             self.message_templates[template_key].get("en", ""),
         )
-        
+
         # Replace placeholders (templates use single braces: {customer_name})
         message = template
         for key, value in placeholders.items():
             placeholder = f"{{{key}}}"
             message = message.replace(placeholder, str(value))
-        
-        return message
+
+        return cast(str, message)
 
     def _release_stuck_sending_messages(self, now: datetime) -> int:
         """
@@ -583,14 +563,12 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             msg["last_error"] = "stuck_sending_recovered"
             msg["last_attempt"] = now
             released += 1
-            print(
-                f"   [RECOVER] {mid}: was stuck in 'sending' — reset to scheduled for retry"
-            )
+            print(f"   [RECOVER] {mid}: was stuck in 'sending' — reset to scheduled for retry")
         if released:
             self._persist_sent_messages()
         return released
-    
-    async def process_scheduled_messages(self) -> List[Dict]:
+
+    async def process_scheduled_messages(self) -> list[dict]:
         """
         Find all due scheduled messages and mark them as 'sending'.
         The caller is responsible for calling mark_message_sent() or
@@ -615,22 +593,22 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
                 content = message_data.get("content")
                 if not content:
                     content = self.get_message_content(
-                        message_data["message_type"],
-                        message_data["language"],
-                        message_data["placeholders"]
+                        message_data["message_type"], message_data["language"], message_data["placeholders"]
                     )
 
                 if content:
                     canonical_type = normalize_template_id(message_data["message_type"])
-                    messages_to_send.append({
-                        "phone": message_data["customer_phone"],
-                        "content": content,
-                        "type": canonical_type,
-                        "message_id": message_id,
-                        "customer_name": message_data.get("placeholders", {}).get("customer_name", "Customer"),
-                        "placeholders": dict(message_data.get("placeholders") or {}),
-                        "language": message_data.get("language") or "ar",
-                    })
+                    messages_to_send.append(
+                        {
+                            "phone": message_data["customer_phone"],
+                            "content": content,
+                            "type": canonical_type,
+                            "message_id": message_id,
+                            "customer_name": message_data.get("placeholders", {}).get("customer_name", "Customer"),
+                            "placeholders": dict(message_data.get("placeholders") or {}),
+                            "language": message_data.get("language") or "ar",
+                        }
+                    )
 
                     # Mark as 'sending' to prevent duplicate processing,
                     # but do NOT mark 'sent' yet — caller does that after
@@ -650,7 +628,7 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
 
         return messages_to_send
 
-    def mark_message_dry_run(self, message_id: str):
+    def mark_message_dry_run(self, message_id: str) -> None:
         """Mark message as dry-run (would send) – used when ENABLE_SENDING=false or local sandbox."""
         if message_id in self.scheduled_messages:
             self.scheduled_messages[message_id].pop("sending_started_at", None)
@@ -658,22 +636,26 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             self.scheduled_messages[message_id]["sent_at"] = datetime.now()
             msg_data = self.scheduled_messages[message_id]
             canonical_type = normalize_template_id(msg_data.get("message_type", ""))
-            content_preview = self.get_message_content(
-                canonical_type,
-                msg_data.get("language", "ar"),
-                msg_data.get("placeholders") or {}
-            ) or ""
-            self.sent_messages_log.append({
-                "message_id": message_id,
-                "phone": msg_data.get("customer_phone", ""),
-                "type": canonical_type,
-                "sent_at": datetime.now(),
-                "content": "(dry-run) " + (content_preview[:80] + "..." if len(content_preview) > 80 else content_preview)
-            })
+            content_preview = (
+                self.get_message_content(
+                    canonical_type, msg_data.get("language", "ar"), msg_data.get("placeholders") or {}
+                )
+                or ""
+            )
+            self.sent_messages_log.append(
+                {
+                    "message_id": message_id,
+                    "phone": msg_data.get("customer_phone", ""),
+                    "type": canonical_type,
+                    "sent_at": datetime.now(),
+                    "content": "(dry-run) "
+                    + (content_preview[:80] + "..." if len(content_preview) > 80 else content_preview),
+                }
+            )
             self._persist_sent_messages()
             print(f"   📋 Marked {message_id} as would_send (dry-run)")
 
-    def _log_reminder_sent_analytics(self, message_id: str, msg_data: Dict[str, Any]) -> None:
+    def _log_reminder_sent_analytics(self, message_id: str, msg_data: dict[str, Any]) -> None:
         """Append analytics event when reminder_24h is actually sent."""
         if not msg_data:
             return
@@ -704,7 +686,7 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
         except Exception as e:
             print(f"⚠️ log_smart_reminder_sent analytics: {e}")
 
-    def mark_message_sent(self, message_id: str):
+    def mark_message_sent(self, message_id: str) -> None:
         """Mark a single message as successfully sent (called after WhatsApp confirms)."""
         if message_id not in self.scheduled_messages:
             print(
@@ -720,18 +702,16 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
         msg_data = self.scheduled_messages[message_id]
         metadata = msg_data.get("metadata", {}) if isinstance(msg_data.get("metadata"), dict) else {}
         canonical_type = normalize_template_id(msg_data["message_type"])
-        content = self.get_message_content(
-            canonical_type,
-            msg_data["language"],
-            msg_data["placeholders"]
-        ) or ""
-        self.sent_messages_log.append({
-            "message_id": message_id,
-            "phone": msg_data["customer_phone"],
-            "type": canonical_type,
-            "sent_at": datetime.now(),
-            "content": content[:100] + "..."
-        })
+        content = self.get_message_content(canonical_type, msg_data["language"], msg_data["placeholders"]) or ""
+        self.sent_messages_log.append(
+            {
+                "message_id": message_id,
+                "phone": msg_data["customer_phone"],
+                "type": canonical_type,
+                "sent_at": datetime.now(),
+                "content": content[:100] + "...",
+            }
+        )
 
         reference_date = (
             metadata.get("reference_date")
@@ -783,7 +763,7 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
         self._log_reminder_sent_analytics(message_id, msg_data)
         self._persist_sent_messages()
 
-    def mark_message_failed(self, message_id: str, error: str = ""):
+    def mark_message_failed(self, message_id: str, error: str = "") -> None:
         """Revert a message back to 'scheduled' so it can be retried next cycle."""
         if message_id in self.scheduled_messages:
             msg = self.scheduled_messages[message_id]
@@ -792,19 +772,18 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             msg["last_error"] = error
             msg["last_attempt"] = datetime.now()
             print(f"   [RETRY] {message_id} reverted to 'scheduled' — {error}")
-    
-    def schedule_appointment_reminders(
-        self,
-        appointment_date: datetime,
-        customer_data: Dict
-    ) -> int:
+
+    def schedule_appointment_reminders(self, appointment_date: datetime, customer_data: dict) -> int:
         """Schedule all reminders for an appointment
 
         Returns:
             int: Number of messages scheduled
         """
 
-        customer_phone = customer_data.get("phone")
+        customer_phone = str(customer_data.get("phone") or "")
+        if not customer_phone:
+            return 0
+
         customer_name = customer_data.get("name", "عميلنا العزيز")
         language = customer_data.get("language", "ar")
         service_id = customer_data.get("service_id")
@@ -816,7 +795,7 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             "appointment_time": appointment_date.strftime("%H:%M"),
             "branch_name": customer_data.get("branch", "الفرع الرئيسي"),
             "service_name": service_name,
-            "phone_number": "01234567"  # Support phone
+            "phone_number": "01234567",  # Support phone
         }
         raw_aid = customer_data.get("appointment_id")
         if raw_aid is not None:
@@ -850,7 +829,7 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
                 messages_scheduled += 1
                 print(f"   ✅ reminder_24h scheduled for {reminder_24h_time}")
             else:
-                print(f"   ❌ reminder_24h FAILED (returned None)")
+                print("   ❌ reminder_24h FAILED (returned None)")
         else:
             print(f"   ⏭️ reminder_24h SKIPPED (time {reminder_24h_time} is in the past)")
 
@@ -872,7 +851,7 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
             messages_scheduled += 1
             print(f"   ✅ sent_17_days_after_last_session_new scheduled for {followup_time}")
         else:
-            print(f"   ❌ sent_17_days_after_last_session_new FAILED (returned None)")
+            print("   ❌ sent_17_days_after_last_session_new FAILED (returned None)")
 
         # NOTE: session_feedback (next day) is scheduled by daily_template_dispatcher
         # (yesterday + Done), not per-appointment here.
@@ -881,43 +860,43 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
 
         return messages_scheduled
 
-    def get_scheduled_messages_summary(self) -> Dict:
+    def get_scheduled_messages_summary(self) -> dict:
         """Get summary of scheduled messages"""
-        
-        summary = {
+
+        summary: dict[str, Any] = {
             "total": len(self.scheduled_messages),
             "scheduled": 0,
             "sent": 0,
             "would_send": 0,
             "by_type": {},
-            "next_message": None
+            "next_message": None,
         }
-        
+
         next_send_time = None
-        
+
         for message_data in self.scheduled_messages.values():
             if message_data["status"] == "scheduled":
                 summary["scheduled"] += 1
-                
+
                 # Find next message to be sent
                 if not next_send_time or message_data["send_at"] < next_send_time:
                     next_send_time = message_data["send_at"]
                     summary["next_message"] = {
                         "type": message_data["message_type"],
                         "send_at": message_data["send_at"].isoformat(),
-                        "phone": message_data["customer_phone"]
+                        "phone": message_data["customer_phone"],
                     }
             elif message_data["status"] == "would_send":
                 summary["would_send"] += 1
             else:
                 summary["sent"] += 1
-            
+
             # Count by type
             msg_type = message_data["message_type"]
             summary["by_type"][msg_type] = summary["by_type"].get(msg_type, 0) + 1
-        
+
         return summary
-    
+
     def mark_messages_sent_by_phone(self, customer_phone: str, message_type: str) -> int:
         """
         Mark all scheduled messages matching customer_phone + message_type as sent.
@@ -989,7 +968,7 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
 
         return updated
 
-    def clear_daily_messages(self) -> Dict:
+    def clear_daily_messages(self) -> dict:
         """
         Clear stale messages from previous days.
         Called at the start of each day to refresh the dashboard.
@@ -1051,16 +1030,16 @@ Appuyez sur le bouton ci-dessous pour évaluer votre visite."""
         print(f"🧹 Daily cleanup: cleared {cleared} stale messages, kept {kept}")
         return {"cleared": cleared, "kept": kept}
 
-    def cancel_scheduled_messages(self, customer_phone: str, message_type: Optional[str] = None):
+    def cancel_scheduled_messages(self, customer_phone: str, message_type: str | None = None) -> Any:
         """Cancel scheduled messages for a customer"""
-        
+
         cancelled = []
         for message_id, message_data in list(self.scheduled_messages.items()):
             if message_data["customer_phone"] == customer_phone and message_data["status"] == "scheduled":
                 if not message_type or message_data["message_type"] == message_type:
                     self.scheduled_messages[message_id]["status"] = "cancelled"
                     cancelled.append(message_id)
-        
+
         return cancelled
 
 
@@ -1070,16 +1049,16 @@ async def deliver_scheduled_smart_whatsapp(
     phone: str,
     template_id: str,
     language: str,
-    placeholders: Optional[Dict[str, Any]],
+    placeholders: dict[str, Any] | None,
     rendered_text: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Proactive smart messages must use WhatsApp-approved templates outside the 24h session window.
     When the template exists in montymobile_templates.json, send via Monty template API;
     otherwise fall back to session text (only works if the user messaged recently).
     """
     from services.montymobile_template_service import montymobile_template_service
-    from services.whatsapp_adapters.safe_send_adapter import _should_dry_run, _log_dry_run
+    from services.whatsapp_adapters.safe_send_adapter import _log_dry_run, _should_dry_run
 
     if _should_dry_run(phone):
         _log_dry_run(
@@ -1092,7 +1071,7 @@ async def deliver_scheduled_smart_whatsapp(
     canonical = normalize_template_id(template_id)
     tpl_meta = montymobile_template_service.get_template_info(canonical)
     if tpl_meta:
-        params: Dict[str, str] = {}
+        params: dict[str, str] = {}
         for k, v in (placeholders or {}).items():
             if v is None:
                 continue
@@ -1102,7 +1081,7 @@ async def deliver_scheduled_smart_whatsapp(
             template_id=canonical,
             phone_number=phone,
             language=lang,
-            parameters=params,
+            parameters=cast(dict[str, str | None], params),
         )
     return {
         "success": False,
@@ -1128,11 +1107,11 @@ message_type_names = {
 
 
 async def get_sent_smart_messages_from_firestore(
-    message_type: str = None,
-    start_date: datetime = None,
-    end_date: datetime = None,
-    limit: int = 200
-) -> List[Dict]:
+    message_type: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    limit: int = 200,
+) -> list[dict]:
     """
     Query Firestore for sent smart messages by scanning conversations.
 
@@ -1154,7 +1133,7 @@ async def get_sent_smart_messages_from_firestore(
     app_id = "linas-ai-bot-backend"
     users_collection = db.collection("artifacts").document(app_id).collection("users")
 
-    sent_messages = []
+    sent_messages: list[Any] = []
 
     try:
         # Get all users
@@ -1165,10 +1144,10 @@ async def get_sent_smart_messages_from_firestore(
                 user_id = user_doc.id
                 user_data = user_doc.to_dict() or {}
 
-                conversations_collection = users_collection.document(user_id).collection("conversations")
-                conversations_docs = await asyncio.to_thread(lambda uid=user_id: list(
-                    users_collection.document(uid).collection("conversations").stream()
-                ))
+                def _fetch_conversations(uid: str = str(user_id)) -> list[Any]:
+                    return list(users_collection.document(uid).collection("conversations").stream())
+
+                conversations_docs = await asyncio.to_thread(_fetch_conversations)
 
                 for conv_doc in conversations_docs:
                     conv_data = conv_doc.to_dict() or {}
@@ -1194,13 +1173,13 @@ async def get_sent_smart_messages_from_firestore(
                         timestamp = msg.get("timestamp")
                         msg_datetime = None
 
-                        if hasattr(timestamp, 'isoformat'):
+                        if hasattr(timestamp, "isoformat"):
                             # Firestore timestamp object
                             msg_datetime = timestamp
                         elif isinstance(timestamp, str):
                             try:
-                                msg_datetime = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                            except:
+                                msg_datetime = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                            except Exception:
                                 continue
                         else:
                             continue
@@ -1210,7 +1189,7 @@ async def get_sent_smart_messages_from_firestore(
                             # Handle timezone-aware vs naive datetime comparison
                             start_compare = start_date
                             msg_compare = msg_datetime
-                            if hasattr(msg_datetime, 'tzinfo') and msg_datetime.tzinfo is not None:
+                            if hasattr(msg_datetime, "tzinfo") and msg_datetime.tzinfo is not None:
                                 if start_date.tzinfo is None:
                                     msg_compare = msg_datetime.replace(tzinfo=None)
                             if msg_compare < start_compare:
@@ -1219,7 +1198,7 @@ async def get_sent_smart_messages_from_firestore(
                         if end_date:
                             end_compare = end_date
                             msg_compare = msg_datetime
-                            if hasattr(msg_datetime, 'tzinfo') and msg_datetime.tzinfo is not None:
+                            if hasattr(msg_datetime, "tzinfo") and msg_datetime.tzinfo is not None:
                                 if end_date.tzinfo is None:
                                     msg_compare = msg_datetime.replace(tzinfo=None)
                             if msg_compare > end_compare:
@@ -1229,20 +1208,28 @@ async def get_sent_smart_messages_from_firestore(
                         msg_type = metadata.get("type", "smart_message")
                         text_content = msg.get("text", "")
 
-                        sent_messages.append({
-                            "message_id": metadata.get("message_id", f"firestore_{conv_doc.id}_{len(sent_messages)}"),
-                            "customer_phone": customer_info.get("phone_full") or user_data.get("phone_full", ""),
-                            "customer_name": customer_info.get("name") or user_data.get("name", "Unknown"),
-                            "message_type": msg_type,
-                            "language": msg.get("language", "ar"),
-                            "status": "sent",
-                            "reason": message_type_names.get(msg_type, msg_type),
-                            "sent_at": msg_datetime.isoformat() if hasattr(msg_datetime, 'isoformat') else str(msg_datetime),
-                            "content_preview": text_content[:100] + "..." if len(text_content) > 100 else text_content,
-                            "full_content": text_content,
-                            "template_data": {},
-                            "source": "firestore"
-                        })
+                        sent_messages.append(
+                            {
+                                "message_id": metadata.get(
+                                    "message_id", f"firestore_{conv_doc.id}_{len(sent_messages)}"
+                                ),
+                                "customer_phone": customer_info.get("phone_full") or user_data.get("phone_full", ""),
+                                "customer_name": customer_info.get("name") or user_data.get("name", "Unknown"),
+                                "message_type": msg_type,
+                                "language": msg.get("language", "ar"),
+                                "status": "sent",
+                                "reason": message_type_names.get(msg_type, msg_type),
+                                "sent_at": msg_datetime.isoformat()
+                                if hasattr(msg_datetime, "isoformat")
+                                else str(msg_datetime),
+                                "content_preview": text_content[:100] + "..."
+                                if len(text_content) > 100
+                                else text_content,
+                                "full_content": text_content,
+                                "template_data": {},
+                                "source": "firestore",
+                            }
+                        )
 
             except Exception as e:
                 print(f"Error processing user {user_doc.id}: {e}")
@@ -1255,6 +1242,7 @@ async def get_sent_smart_messages_from_firestore(
     except Exception as e:
         print(f"Error querying Firestore for sent messages: {e}")
         import traceback
+
         traceback.print_exc()
         return []
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Set
+from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -18,9 +18,8 @@ from services.meta_messaging import (
 )
 from services.social_messaging_processor import process_meta_social_event
 
-
 _message_deduper = InMemoryMessageDeduper(ttl_seconds=300.0)
-_background_tasks: Set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _track_task(task: asyncio.Task) -> None:
@@ -37,7 +36,7 @@ def _track_task(task: asyncio.Task) -> None:
 
 
 @app.get("/webhook/meta-messaging")
-async def verify_meta_messaging_webhook(request: Request):
+async def verify_meta_messaging_webhook(request: Request) -> Any:
     settings = get_meta_messaging_settings()
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
@@ -50,16 +49,14 @@ async def verify_meta_messaging_webhook(request: Request):
 
 
 @app.post("/webhook/meta-messaging")
-async def receive_meta_messaging_webhook(request: Request):
+async def receive_meta_messaging_webhook(request: Request) -> Any:
     settings = get_meta_messaging_settings()
     raw_body = await request.body()
 
     # When an App Secret is configured, reject invalid signatures even if messaging
     # is still disabled so Meta credential mistakes are never treated as success.
     if settings.app_secret:
-        if not verify_meta_signature(
-            raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret
-        ):
+        if not verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     if not settings.enabled:

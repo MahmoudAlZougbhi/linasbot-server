@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 # services/gender_recognition_service.py
+from typing import cast
+
+from openai.types.chat import ChatCompletionMessageParam
+
 from services.llm_core_service import client
-import json
+
 
 async def get_gender_from_gpt(user_input: str) -> str:
     """
@@ -35,20 +41,15 @@ async def get_gender_from_gpt(user_input: str) -> str:
         "- 'كم السعر' / 'what is the price' -> unknown\n"
         "- Any question about services without explicit gender mention -> unknown\n"
     )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_input}
-    ]
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_input}]
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=10
+            model="gpt-4o-mini", messages=cast(list[ChatCompletionMessageParam], messages), max_tokens=10
         )
         if not response.choices:
             return "unknown"
-        gender_prediction = response.choices[0].message.content.strip().lower()
+        gender_prediction = (response.choices[0].message.content or "").strip().lower()
         if gender_prediction in ["male", "female"]:
             return gender_prediction
         return "unknown"

@@ -1,9 +1,26 @@
+# Production deploy runs ONLY after Quality Gates succeed on main.
+#
+# Normal path: push to main -> Quality Gates -> this workflow (workflow_run, success required).
+#
+# Emergency bypass (skip gate verification): Actions -> Deploy to Production -> Run workflow
+# with workflow_dispatch and set:
+#   EMERGENCY_DEPLOY_CONFIRM = I_UNDERSTAND_SKIPPING_GATES
+# Use only when gates are broken but production must be patched; document incident + follow-up
+# to restore green Quality Gates before the next routine deploy.
+
 name: Deploy to Production
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Quality Gates"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      EMERGENCY_DEPLOY_CONFIRM:
+        description: "Type I_UNDERSTAND_SKIPPING_GATES to bypass quality gate requirement"
+        required: true
+        type: string
 
 concurrency:
   group: production-deploy
@@ -17,14 +34,35 @@ jobs:
     name: SSH Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    if: >
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.EMERGENCY_DEPLOY_CONFIRM == 'I_UNDERSTAND_SKIPPING_GATES')
 
     steps:
+      - name: Gate source
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "Deploy authorized by successful Quality Gates on main."
+            echo "Commit: ${{ github.event.workflow_run.head_sha }}"
+          else
+            echo "::warning::EMERGENCY DEPLOY — quality gates were NOT verified for this run."
+            echo "Confirmation input matched I_UNDERSTAND_SKIPPING_GATES."
+          fi
+
       - name: Start deployment
         run: |
           echo "Starting deployment..."
           echo "Repository: $GITHUB_REPOSITORY"
-          echo "Branch: $GITHUB_REF_NAME"
-          echo "Commit: $GITHUB_SHA"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "Branch: main"
+            echo "Commit: ${{ github.event.workflow_run.head_sha }}"
+          else
+            echo "Branch: ${{ github.ref_name }}"
+            echo "Commit: $GITHUB_SHA"
+          fi
 
       - name: Deploy on production server
         uses: appleboy/ssh-action@v1.0.3

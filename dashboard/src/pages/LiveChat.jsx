@@ -44,7 +44,7 @@ import {
 } from "../utils/liveChatApi";
 import { useAuth } from "../contexts/AuthContext";
 
-const isSocialChannelUser = (userId, channel) => {
+export const isSocialChannelUser = (userId, channel) => {
   const ch = String(channel || "").toLowerCase();
   if (ch === "instagram" || ch === "facebook") return true;
   const id = String(userId || "");

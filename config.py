@@ -1,24 +1,27 @@
+from __future__ import annotations
+
 # config.py
+import datetime
 import os
+from collections import defaultdict, deque
+from typing import Any
+
 from storage.persistent_storage import (
     KNOWLEDGE_BASE_FILE,
     PRICE_LIST_FILE,
-    SYSTEM_PROMPT_TEMPLATE_FILE,
     STYLE_GUIDE_FILE,
+    SYSTEM_PROMPT_TEMPLATE_FILE,
     ensure_dirs,
 )
-from collections import defaultdict, deque
-import json
-import datetime
 
 # --- API Keys and Tokens ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # WhatsApp Meta Cloud API
 # These are fetched from your .env file
-WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN") # The access token for Meta Graph API
-WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID") # Your specific WhatsApp phone number ID
-WHATSAPP_BUSINESS_ACCOUNT_ID = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID") # Your WhatsApp Business Account ID
+WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN")  # The access token for Meta Graph API
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")  # Your specific WhatsApp phone number ID
+WHATSAPP_BUSINESS_ACCOUNT_ID = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID")  # Your WhatsApp Business Account ID
 
 # Internal API for Lina’s Laser Clinic
 LINASLASER_API_BASE_URL = os.getenv("LINASLASER_API_BASE_URL")
@@ -28,11 +31,11 @@ LINASLASER_API_TOKEN = os.getenv("LINASLASER_API_TOKEN")
 # Path to your Firebase service account key JSON file.
 # This file is downloaded from Firebase Console -> Project settings -> Service accounts.
 # Make sure to place it in the 'data' directory.
-FIRESTORE_SERVICE_ACCOUNT_KEY_PATH = "data/firebase_data.json" # تم تحديث هذا المسار بناءً على اسم ملفك الجديد
+FIRESTORE_SERVICE_ACCOUNT_KEY_PATH = "data/firebase_data.json"  # تم تحديث هذا المسار بناءً على اسم ملفك الجديد
 
 # Firestore Collection Names (NEW)
-FIRESTORE_CONVERSATIONS_COLLECTION = "conversations" # Collection for storing chat logs
-FIRESTORE_METRICS_COLLECTION = "dashboardMetrics"   # Collection for dashboard summary metrics
+FIRESTORE_CONVERSATIONS_COLLECTION = "conversations"  # Collection for storing chat logs
+FIRESTORE_METRICS_COLLECTION = "dashboardMetrics"  # Collection for dashboard summary metrics
 
 # Testing Mode Flag (NEW)
 TESTING_MODE = False  # When True, Firebase saving is disabled for testing
@@ -45,9 +48,11 @@ AI_PRIMARY_ORCHESTRATION = os.getenv("AI_PRIMARY_ORCHESTRATION", "true").strip()
 POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES = int(os.getenv("POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", "45"))
 
 # Booking: when True, chat_response may infer body_part_ids from conversation + fuzzy CRM row match (legacy path).
-BOOKING_LEGACY_INFERENCE = os.getenv(
-    "LINASLASER_BOOKING_LEGACY_INFERENCE", "false"
-).strip().lower() in ("1", "true", "yes")
+BOOKING_LEGACY_INFERENCE = os.getenv("LINASLASER_BOOKING_LEGACY_INFERENCE", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # When True, submit_booking_intent rejects execution if datetime was inferred only from raw_user_* (AI must send resolved date+time).
 BOOKING_REQUIRE_RESOLVED_DATETIME = os.getenv(
@@ -56,14 +61,16 @@ BOOKING_REQUIRE_RESOLVED_DATETIME = os.getenv(
 
 # When True (default): backend does NOT map service/branch/machine/body names to IDs — AI must send IDs from tools first.
 # Set LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES=true for legacy fuzzy resolution on the server.
-BOOKING_BACKEND_RESOLVES_NAMES = os.getenv(
-    "LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES", "false"
-).strip().lower() in ("1", "true", "yes")
+BOOKING_BACKEND_RESOLVES_NAMES = os.getenv("LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # --- Local / development environment (same APIs as prod, safe messaging) ---
 # Set APP_MODE=local or ENV=development to run locally with real APIs but controlled sending.
 APP_MODE = os.getenv("APP_MODE", "").strip().lower()  # "local" = local env
-ENV = os.getenv("ENV", "").strip().lower()            # "development" = local env
+ENV = os.getenv("ENV", "").strip().lower()  # "development" = local env
 # When False: all outbound WhatsApp is dry-run (log + "would send", no real send).
 ENABLE_SENDING = os.getenv("ENABLE_SENDING", "true").strip().lower() == "true"
 # Comma-separated list of phone numbers allowed to receive real messages in local mode (sandbox/test).
@@ -71,9 +78,11 @@ ENABLE_SENDING = os.getenv("ENABLE_SENDING", "true").strip().lower() == "true"
 _LOCAL_ALLOWED_RAW = os.getenv("LOCAL_ALLOWED_WHATSAPP_NUMBERS", "").strip()
 LOCAL_ALLOWED_WHATSAPP_NUMBERS = {n.strip() for n in _LOCAL_ALLOWED_RAW.split(",") if n.strip()}
 
-def is_local_env():
+
+def is_local_env() -> bool:
     """True when running in local/development mode (same external APIs, safe messaging)."""
     return APP_MODE == "local" or ENV == "development"
+
 
 # --- Bot Operational Settings ---
 # WhatsApp Number for Human Notifications (e.g., your admin/staff number)
@@ -85,19 +94,23 @@ TRAINER_WHATSAPP_NUMBER = os.getenv("TRAINER_WHATSAPP_NUMBER")
 FFMPEG_PATH = os.getenv("FFMPEG_PATH")
 
 # --- User State Management (DefaultDicts for easy access) ---
-user_context = defaultdict(deque) # Stores conversation history for each user
-user_gender = defaultdict(str) # Stores detected gender for each user
-user_names = defaultdict(str) # Stores first name of each user
-user_greeting_stage = defaultdict(int) # Tracks greeting stage for each user
-gender_attempts = defaultdict(int) # Counts attempts to ask for gender
-user_in_training_mode = defaultdict(bool) # Flag if user is in training mode
-user_photo_analysis_count = defaultdict(int) # Counts photo analysis per user
-user_last_bot_response_time = defaultdict(lambda: datetime.datetime.now()) # Last time bot responded to user
-user_pending_messages = defaultdict(deque) # Queue for combining rapid messages from a user
+user_context: defaultdict[str, deque[Any]] = defaultdict(deque)  # Stores conversation history for each user
+user_gender: defaultdict[str, str] = defaultdict(str)  # Stores detected gender for each user
+user_names: defaultdict[str, str] = defaultdict(str)  # Stores first name of each user
+user_greeting_stage: defaultdict[str, int] = defaultdict(int)  # Tracks greeting stage for each user
+gender_attempts: defaultdict[str, int] = defaultdict(int)  # Counts attempts to ask for gender
+user_in_training_mode: defaultdict[str, bool] = defaultdict(bool)  # Flag if user is in training mode
+user_photo_analysis_count: defaultdict[str, int] = defaultdict(int)  # Counts photo analysis per user
+user_last_bot_response_time: defaultdict[str, datetime.datetime] = defaultdict(
+    lambda: datetime.datetime.now()
+)  # Last time bot responded to user
+user_pending_messages: defaultdict[str, deque[Any]] = defaultdict(
+    deque
+)  # Queue for combining rapid messages from a user
 
 # Dictionary to store user-specific data that replaces Telegram's context.user_data
 # This will hold things like 'user_preferred_lang', 'initial_user_query_to_process', etc.
-user_data_whatsapp = defaultdict(dict)
+user_data_whatsapp: defaultdict[str, dict[str, Any]] = defaultdict(dict)
 
 # --- Conversation State Schema (AI Smart Employee Architecture) ---
 # Canonical fields for user_conversation_state (stored in user_data_whatsapp):
@@ -132,24 +145,30 @@ def get_conversation_state(user_id: str, user_data: dict) -> dict:
     return {
         "gender": user_gender.get(user_id, "unknown"),
         "awaiting_gender": user_data.get("awaiting_gender", False),
-        "awaiting_clarification": user_data.get("awaiting_clarification", False) or bool(user_data.get("pending_clarification_query")),
+        "awaiting_clarification": user_data.get("awaiting_clarification", False)
+        or bool(user_data.get("pending_clarification_query")),
         "awaiting_name": user_data.get("awaiting_name", False) or user_data.get("awaiting_name_input", False),
-        "original_question": user_data.get("original_question") or user_data.get("pending_clarification_query") or user_data.get("initial_user_query_to_process"),
+        "original_question": user_data.get("original_question")
+        or user_data.get("pending_clarification_query")
+        or user_data.get("initial_user_query_to_process"),
         "clarification_target": user_data.get("clarification_target"),
         "selected_service": user_data.get("selected_service"),
         "last_bot_question_type": user_data.get("last_bot_question_type"),
         "human_handover_active": user_in_human_takeover_mode.get(user_id, False),
     }
 
+
 # NEW: AI Takeover State for each user
-user_in_human_takeover_mode = defaultdict(bool) # Flag if a specific user's chat is taken over by human
+user_in_human_takeover_mode: defaultdict[str, bool] = defaultdict(
+    bool
+)  # Flag if a specific user's chat is taken over by human
 # Rate limit for "waiting" auto-reply when user keeps messaging while in waiting queue (seconds)
-user_last_waiting_reply_sent = defaultdict(lambda: datetime.datetime.min)
+user_last_waiting_reply_sent: defaultdict[str, datetime.datetime] = defaultdict(lambda: datetime.datetime.min)
 WAITING_REPLY_COOLDOWN_SECONDS = 60
 
 # NEW: Booking State Tracking - persists booking progress across messages
 # Tracks: service, body_area, machine, branch, date, etc.
-user_booking_state = defaultdict(dict)
+user_booking_state: defaultdict[str, dict[str, Any]] = defaultdict(dict)
 
 # Server-side booking state machine (strict collection + one confirmation before submit).
 BOOKING_FSM_ENABLED = os.getenv("LINASLASER_BOOKING_FSM", "true").strip().lower() in (
@@ -158,29 +177,33 @@ BOOKING_FSM_ENABLED = os.getenv("LINASLASER_BOOKING_FSM", "true").strip().lower(
     "yes",
 )
 # When True (default): submit_booking_intent is rejected until user confirms once in booking mode.
-BOOKING_FSM_REQUIRE_CONFIRMATION = os.getenv(
-    "LINASLASER_BOOKING_FSM_REQUIRE_CONFIRMATION", "true"
-).strip().lower() in ("1", "true", "yes")
+BOOKING_FSM_REQUIRE_CONFIRMATION = os.getenv("LINASLASER_BOOKING_FSM_REQUIRE_CONFIRMATION", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # For training handlers:
-training_stage = defaultdict(int)
-last_generated_qa_for_save = defaultdict(list)
+training_stage: defaultdict[str, int] = defaultdict(int)
+last_generated_qa_for_save: defaultdict[str, list[Any]] = defaultdict(list)
 
 
 # --- Constants and Limits ---
-MAX_PHOTO_ANALYSIS_PER_USER = 10 # Maximum number of photos a user can request analysis for
-ENFORCE_TOTAL_PHOTO_ANALYSIS_LIMIT = False # If False, do not enforce conversation-wide photo limit
-MAX_IMAGES_PER_SINGLE_MESSAGE = 10 # Hard limit per single inbound message
-MAX_TEXT_LINES_PER_SINGLE_MESSAGE = 30 # Hard limit per single inbound text message
-MAX_CONTEXT_MESSAGES = 20 # Max number of messages to keep in conversation context (increased from 15 for better booking flow)
-MAX_CONTEXT_MESSAGES_TRAINING = 10 # Max messages for training conversation context
+MAX_PHOTO_ANALYSIS_PER_USER = 10  # Maximum number of photos a user can request analysis for
+ENFORCE_TOTAL_PHOTO_ANALYSIS_LIMIT = False  # If False, do not enforce conversation-wide photo limit
+MAX_IMAGES_PER_SINGLE_MESSAGE = 10  # Hard limit per single inbound message
+MAX_TEXT_LINES_PER_SINGLE_MESSAGE = 30  # Hard limit per single inbound text message
+MAX_CONTEXT_MESSAGES = (
+    20  # Max number of messages to keep in conversation context (increased from 15 for better booking flow)
+)
+MAX_CONTEXT_MESSAGES_TRAINING = 10  # Max messages for training conversation context
 # Context window for AI memory:
 # - Include only messages from the last N hours in GPT context.
 # - If MAX_CONTEXT_MESSAGES_IN_WINDOW = 0, do not apply a hard count cap after time filtering.
 CONTEXT_WINDOW_HOURS = int(os.getenv("CONTEXT_WINDOW_HOURS", "12"))
 MAX_CONTEXT_MESSAGES_IN_WINDOW = int(os.getenv("MAX_CONTEXT_MESSAGES_IN_WINDOW", "0"))
-MAX_RELEVANT_CUSTOM_QA = 3 # Max relevant custom Q&A entries to fetch
-MAX_GENDER_ASK_ATTEMPTS = 3 # Max times bot will ask for gender before suggesting human handover
+MAX_RELEVANT_CUSTOM_QA = 3  # Max relevant custom Q&A entries to fetch
+MAX_GENDER_ASK_ATTEMPTS = 3  # Max times bot will ask for gender before suggesting human handover
 
 # Default IDs for booking (if not explicitly provided by user in conversation)
 DEFAULT_BRANCH_ID = 1
@@ -189,14 +212,14 @@ DEFAULT_MACHINE_ID = 1
 
 # Delay for combining rapid messages from a user (e.g., multiple short texts sent quickly)
 # Requirement: wait 3 seconds after the LAST message before responding.
-MESSAGE_COMBINING_DELAY = 3.0 # seconds
+MESSAGE_COMBINING_DELAY = 3.0  # seconds
 
 # --- Bot Welcome Messages (Language-specific) ---
 WELCOME_MESSAGES = {
     "ar": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
     "en": "Hello! 😊\nThis is Marwa AI Assistant – your smart AI assistant from Lina's Laser Center.\nHow are you? How can I help you today? 🧠✨\n\nYou can talk to me in any way you prefer – even with your voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nBy the way, to help and serve you better, could you please tell us if you are male or female? 👦👧",
     "fr": "Bonjour ! 😊\nC'est Marwa AI Assistant – votre assistant intelligent de Lina's Laser Center.\nComment allez-vous ? Comment puis-je vous aider aujourd'hui ? 🧠✨\n\nYou can talk to me in any way you prefer – even by voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nAu fait, afin de mieux vous aider et de vous offrir le meilleur service, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
-    "franco": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧"
+    "franco": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
 }
 
 # --- Gender Question Variations ---
@@ -207,7 +230,7 @@ GENDER_QUESTIONS = {
         "لتقديم مساعدة أكثر دقة وودية، يا ريت تحدد لنا جنسك (شب/صبية)؟ 🌟",
         "كرمال نكون على مستوى توقعاتك ونفيدك بالمعلومات الصح، هل أنتِ صبية أم أنتَ شاب؟",
         "من فضلك، لتسهيل تواصلنا وخدمتك بأريحية، ما هو جنسك (ذكر/أنثى)؟",
-        "عزيزي/عزيزتي، لمساعدتك بشكل أفضل وأكثر تخصيصاً، ما هو جنسك؟"
+        "عزيزي/عزيزتي، لمساعدتك بشكل أفضل وأكثر تخصيصاً، ما هو جنسك؟",
     ],
     "en": [
         "To help and serve you in the best way, could you please tell us if you are male or female? 👦👧",
@@ -215,7 +238,7 @@ GENDER_QUESTIONS = {
         "For more accurate and friendly assistance, kindly specify your gender (male/female)? 🌟",
         "To meet your expectations and provide correct information, are you a lady or a gentleman?",
         "Please, to facilitate our communication and serve you comfortably, what is your gender (male/female)?",
-        "Dear client, to assist you better and more personally, what is your gender?"
+        "Dear client, to assist you better and more personally, what is your gender?",
     ],
     "fr": [
         "Pour pouvoir vous aider et vous servir au mieux, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
@@ -223,7 +246,7 @@ GENDER_QUESTIONS = {
         "Pour une assistance plus précise et amicale, pourriez-vous nous indiquer votre genre (homme/femme) ? 🌟",
         "Pour répondre à vos attentes et vous fournir des informations correctes, êtes-vous une dame ou un monsieur ?",
         "S'il vous plaît, pour faciliter notre communication et vous servir confortablement, quel est votre genre (masculin/féminin) ?",
-        "Cher/Chère client(e), pour mieux vous aider et de manière plus personnalisée, quel est votre genre ?"
+        "Cher/Chère client(e), pour mieux vous aider et de manière plus personnalisée, quel est votre genre ?",
     ],
     "franco": [
         "Kermel ne2dar nsa3edak w nfeedak bi afdal shakel, mumkin tkabbirna law sama7t iza inta chab aw inti sabieh? 👦👧",
@@ -231,24 +254,60 @@ GENDER_QUESTIONS = {
         "La ta2deem mosa3adeh aktar de2a w wadoudiyeh, ya rit t7addidelna jinsak (chab/sabieh)? 🌟",
         "Kermel nkoun 3a moustawe tawako3atak w nfeedak bel ma3loumat el sa7, hal enti sabieh aw inta chab?",
         "Min fadlak, la tasheel tawsolna w khedmetak bi ari7iye, chou jinsak (zakar/ountha)?",
-        "3azizi/azati, la mosa3adetak bi shakel afdal w aktar ta5sees, chou jinsak?"
-    ]
+        "3azizi/azati, la mosa3adetak bi shakel afdal w aktar ta5sees, chou jinsak?",
+    ],
 }
 
 # --- Keywords for Training Mode Commands ---
 SAVE_KEYWORDS = [
-    "احفظ", "حفظ", "سيف", "تمام", "ok", "خلاص", "تخزين", "اعتمد", "save", "confirm", "store", "accept", "done",
-    "enregistrer", "confirmer", "sauvegarder", "c'est bon", "okey", "احفظ هذا", "احفظها"
+    "احفظ",
+    "حفظ",
+    "سيف",
+    "تمام",
+    "ok",
+    "خلاص",
+    "تخزين",
+    "اعتمد",
+    "save",
+    "confirm",
+    "store",
+    "accept",
+    "done",
+    "enregistrer",
+    "confirmer",
+    "sauvegarder",
+    "c'est bon",
+    "okey",
+    "احفظ هذا",
+    "احفظها",
 ]
 
 GENERATE_QA_KEYWORDS = [
-    "سؤال وجواب", "qa", "question answer", "صيغ سؤال وجواب", "generate qa", "cree question reponse", "questions reponses",
-    "سؤال و جواب", "اسئله واجوبه", "Q and A"
+    "سؤال وجواب",
+    "qa",
+    "question answer",
+    "صيغ سؤال وجواب",
+    "generate qa",
+    "cree question reponse",
+    "questions reponses",
+    "سؤال و جواب",
+    "اسئله واجوبه",
+    "Q and A",
 ]
 
 SUMMARIZE_QA_KEYWORDS = [
-    "لخص", "شو اتفقنا", "ملخص", "تلخيص", "summarize", "recap", "recapituler", "show summary", "give summary",
-    "kif fina n7afza", "how to save this", "comment sauvegarder ceci"
+    "لخص",
+    "شو اتفقنا",
+    "ملخص",
+    "تلخيص",
+    "summarize",
+    "recap",
+    "recapituler",
+    "show summary",
+    "give summary",
+    "kif fina n7afza",
+    "how to save this",
+    "comment sauvegarder ceci",
 ]
 
 # --- Bot Knowledge Base (Loaded from files) ---
@@ -256,10 +315,11 @@ PRICE_LIST = ""
 BOT_STYLE_GUIDE = ""
 CORE_KNOWLEDGE_BASE = ""
 SYSTEM_PROMPT_TEMPLATE = ""
-CUSTOM_TRAINING_DATA = [] # List of custom Q&A entries
-CUSTOM_TRAINING_DATA_MAP = {} # Map for quick lookup of custom Q&A by (question, language)
+CUSTOM_TRAINING_DATA: list[Any] = []  # List of custom Q&A entries
+CUSTOM_TRAINING_DATA_MAP: dict[Any, Any] = {}  # Map for quick lookup of custom Q&A by (question, language)
 
-def load_bot_assets():
+
+def load_bot_assets() -> None:
     """
     Loads static bot assets (price list, style guide, knowledge base) from persistent storage.
     """
@@ -267,7 +327,7 @@ def load_bot_assets():
 
     ensure_dirs()
     try:
-        with open(PRICE_LIST_FILE, 'r', encoding='utf-8') as f:
+        with open(PRICE_LIST_FILE, encoding="utf-8") as f:
             PRICE_LIST = f.read().strip()
         print("✅ تم تحميل قائمة الأسعار من " + str(PRICE_LIST_FILE))
     except FileNotFoundError:
@@ -278,7 +338,7 @@ def load_bot_assets():
         print(f"❌ خطأ في تحميل قائمة الأسعار: {e}")
 
     try:
-        with open(STYLE_GUIDE_FILE, 'r', encoding='utf-8') as f:
+        with open(STYLE_GUIDE_FILE, encoding="utf-8") as f:
             BOT_STYLE_GUIDE = f.read().strip()
         print("✅ تم تحميل دليل الأسلوب من " + str(STYLE_GUIDE_FILE))
     except FileNotFoundError:
@@ -289,7 +349,7 @@ def load_bot_assets():
         print(f"❌ خطأ في تحميل دليل الأسلوب: {e}")
 
     try:
-        with open(KNOWLEDGE_BASE_FILE, 'r', encoding='utf-8') as f:
+        with open(KNOWLEDGE_BASE_FILE, encoding="utf-8") as f:
             CORE_KNOWLEDGE_BASE = f.read().strip()
         print("✅ تم تحميل قاعدة المعرفة الأساسية من " + str(KNOWLEDGE_BASE_FILE))
     except FileNotFoundError:
@@ -300,7 +360,7 @@ def load_bot_assets():
         print(f"❌ خطأ في تحميل قاعدة المعرفة: {e}")
 
     try:
-        with open(SYSTEM_PROMPT_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
+        with open(SYSTEM_PROMPT_TEMPLATE_FILE, encoding="utf-8") as f:
             SYSTEM_PROMPT_TEMPLATE = f.read()
         if SYSTEM_PROMPT_TEMPLATE.strip():
             print("✅ تم تحميل قالب system prompt من " + str(SYSTEM_PROMPT_TEMPLATE_FILE))
@@ -313,7 +373,8 @@ def load_bot_assets():
         SYSTEM_PROMPT_TEMPLATE = ""
         print(f"❌ خطأ في تحميل قالب system prompt: {e}")
 
-def load_training_data():
+
+def load_training_data() -> None:
     """
     DEPRECATED: This function is no longer used.
     Q&A data is now managed through API database (qa_database_service.py)
@@ -322,10 +383,11 @@ def load_training_data():
     global CUSTOM_TRAINING_DATA, CUSTOM_TRAINING_DATA_MAP
     CUSTOM_TRAINING_DATA.clear()
     CUSTOM_TRAINING_DATA_MAP.clear()
-    
+
     print("ℹ️ load_training_data() is deprecated - Q&A now managed via API database")
     # Do NOT load conversation_log.jsonl anymore
     # All Q&A is handled by qa_database_service.py (API-based)
+
 
 # --- Initialize Bot Assets on startup ---
 load_bot_assets()

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 """Classify user replies to 24h smart reminder (confirm / postpone / cancel / defer)."""
 
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from utils.datetime_utils import detect_reschedule_intent
 
@@ -42,7 +40,7 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip().lower())
 
 
-def classify_reminder_reply_intent(text: str) -> Optional[str]:
+def classify_reminder_reply_intent(text: str) -> str | None:
     """
     Map a user message to a reminder CTA bucket, or None if not a clear reply.
 

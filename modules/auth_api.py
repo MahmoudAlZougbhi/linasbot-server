@@ -4,10 +4,11 @@ Handles authentication and user management endpoints for the dashboard.
 Sessions are server-issued HttpOnly cookies; permissions enforced server-side.
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
-import time
-from typing import Any, Dict, Optional
+from typing import Any, Literal, cast
 
 from fastapi import Request, Response
 from pydantic import BaseModel
@@ -21,7 +22,6 @@ from services.dashboard_session_service import (
 )
 from services.user_service import AuthBackendUnavailableError, user_service
 
-
 AUTH_LOGIN_TIMEOUT_SECONDS = float(os.getenv("AUTH_LOGIN_TIMEOUT_SECONDS", "12"))
 AUTH_SESSION_TIMEOUT_SECONDS = float(os.getenv("AUTH_SESSION_TIMEOUT_SECONDS", "8"))
 
@@ -34,10 +34,10 @@ def _cookie_secure() -> bool:
     return is_production_env()
 
 
-def _cookie_samesite() -> str:
+def _cookie_samesite() -> Literal["lax", "strict", "none"]:
     value = (os.getenv("DASHBOARD_COOKIE_SAMESITE") or "lax").strip().lower()
     if value in {"lax", "strict", "none"}:
-        return value.capitalize() if value != "none" else "none"
+        return cast(Literal["lax", "strict", "none"], value)
     return "lax"
 
 
@@ -81,18 +81,18 @@ class LoginRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     email: str
     password: str
-    name: Optional[str] = None
-    role: Optional[str] = "viewer"
-    permissions: Optional[Dict[str, bool]] = None
-    status: Optional[str] = "active"
+    name: str | None = None
+    role: str | None = "viewer"
+    permissions: dict[str, bool] | None = None
+    status: str | None = "active"
 
 
 class UpdateUserRequest(BaseModel):
-    name: Optional[str] = None
-    role: Optional[str] = None
-    permissions: Optional[Dict[str, bool]] = None
-    status: Optional[str] = None
-    password: Optional[str] = None
+    name: str | None = None
+    role: str | None = None
+    permissions: dict[str, bool] | None = None
+    status: str | None = None
+    password: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -100,76 +100,28 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-class BootstrapAdminRequest(BaseModel):
-    email: str
-    password: str
-    name: Optional[str] = "Admin"
-    bootstrap_token: str
-
-
 @app.on_event("startup")
-async def ensure_default_admin():
+async def ensure_auth_secret_configured() -> None:
     """
-    Explicit bootstrap only. Never creates known default credentials.
-    Enabled solely via AUTH_BOOTSTRAP_ADMIN_ON_STARTUP + AUTH_BOOTSTRAP_TOKEN
-    and never in production.
+    Fail closed when production/test cannot sign sessions.
+    First-admin provisioning is offline-only: scripts/provision_dashboard_admin.py
+    (no public HTTP bootstrap, no startup password injection).
     """
-    if is_production_env():
-        print("[auth_api] startup: production — skipping auto admin bootstrap")
-        return
-    toggle = os.getenv("AUTH_BOOTSTRAP_ADMIN_ON_STARTUP", "").strip().lower()
-    if toggle not in {"1", "true", "yes", "on"}:
-        print("[auth_api] startup: admin bootstrap disabled (set AUTH_BOOTSTRAP_ADMIN_ON_STARTUP to enable in non-prod)")
-        return
-    token = (os.getenv("AUTH_BOOTSTRAP_TOKEN") or "").strip()
-    email = (os.getenv("AUTH_BOOTSTRAP_EMAIL") or "").strip().lower()
-    password = os.getenv("AUTH_BOOTSTRAP_PASSWORD") or ""
-    if not token or not email or not password:
-        print("[auth_api] startup: bootstrap requested but AUTH_BOOTSTRAP_TOKEN/EMAIL/PASSWORD incomplete — skipped")
-        return
-    if len(password) < 12:
-        print("[auth_api] startup: bootstrap password too short — skipped")
-        return
+    from services.dashboard_session_service import require_auth_secret_configured
+
     try:
-        await asyncio.wait_for(
-            asyncio.to_thread(_bootstrap_admin_if_empty, email, password, token),
-            timeout=6.0,
-        )
-    except asyncio.TimeoutError:
-        print("Warning: bootstrap admin timed out after 6s; startup will continue.")
-    except Exception as e:
-        print(f"Warning: Could not bootstrap admin: {e}")
-
-
-def _bootstrap_admin_if_empty(email: str, password: str, token: str) -> None:
-    expected = (os.getenv("AUTH_BOOTSTRAP_TOKEN") or "").strip()
-    if not expected or token != expected:
-        raise ValueError("Invalid bootstrap token")
-    docs = list(
-        user_service.collection.limit(1).stream(
-            timeout=user_service.AUTH_QUERY_TIMEOUT_SECONDS,
-            retry=None,
-        )
+        require_auth_secret_configured()
+    except RuntimeError as exc:
+        print(f"[auth_api] FATAL: {exc}", flush=True)
+        raise
+    print(
+        "[auth_api] startup: auth secret OK — first admin via scripts/provision_dashboard_admin.py only",
+        flush=True,
     )
-    if docs:
-        print("[auth_api] bootstrap: users already exist — not creating admin")
-        return
-    user_service.create_user(
-        {
-            "email": email,
-            "password": password,
-            "name": os.getenv("AUTH_BOOTSTRAP_NAME") or "Admin",
-            "role": "admin",
-            "permissions": None,
-            "status": "active",
-        },
-        created_by="bootstrap",
-    )
-    print(f"[auth_api] bootstrap: created initial admin for {email}")
 
 
 @app.post("/api/auth/login")
-async def login(request: LoginRequest, response: Response):
+async def login(request: LoginRequest, response: Response) -> Any:
     email = (request.email or "").strip().lower()
     password = request.password or ""
 
@@ -206,7 +158,7 @@ async def login(request: LoginRequest, response: Response):
                 await asyncio.sleep((attempt + 1) * 2)
             else:
                 break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             last_error_type = "timeout"
             if attempt < max_retries - 1:
                 await asyncio.sleep((attempt + 1) * 2)
@@ -228,15 +180,25 @@ async def login(request: LoginRequest, response: Response):
 
 
 @app.post("/api/auth/logout")
-async def logout(request: Request, response: Response):
+async def logout(request: Request, response: Response) -> Any:
+    """
+    Logout requires an authenticated session; CSRF is enforced by middleware.
+    Revokes the caller's server-side session and clears cookies.
+    """
+    session = require_session(request)
     cookie = request.cookies.get(SESSION_COOKIE_NAME)
+    # Revoke the cookie-bound session (must match the authenticated principal)
+    record = session_service.get_valid_session(cookie)
+    if record is None or str(record.user_id) != str(session.user_id):
+        _clear_auth_cookies(response)
+        return {"success": False, "error": "Session mismatch"}
     session_service.revoke_session(cookie)
     _clear_auth_cookies(response)
     return {"success": True}
 
 
 @app.get("/api/auth/session")
-async def validate_own_session(request: Request):
+async def validate_own_session(request: Request) -> Any:
     """Return the authenticated caller's user profile (no user_id in path — closes IDOR)."""
     session = require_session(request)
     try:
@@ -252,7 +214,7 @@ async def validate_own_session(request: Request):
             "user": sanitized,
             "csrf_token": session.csrf_token,
         }
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {
             "success": False,
             "error": f"Session validation timeout ({AUTH_SESSION_TIMEOUT_SECONDS}s). Please retry.",
@@ -263,7 +225,7 @@ async def validate_own_session(request: Request):
 
 
 @app.get("/api/auth/session/{user_id}")
-async def validate_session_legacy(user_id: str, request: Request):
+async def validate_session_legacy(user_id: str, request: Request) -> Any:
     """
     Legacy path retained for compatibility but enforced against the cookie session.
     Callers may only request their own user_id.
@@ -275,7 +237,7 @@ async def validate_session_legacy(user_id: str, request: Request):
 
 
 @app.post("/api/auth/change-password")
-async def change_password(body: ChangePasswordRequest, request: Request, response: Response):
+async def change_password(body: ChangePasswordRequest, request: Request, response: Response) -> Any:
     session = require_session(request)
     try:
         success = user_service.change_password(
@@ -285,7 +247,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
         )
         if not success:
             return {"success": False, "error": "Failed to change password"}
-        # Invalidate all sessions for this user, then issue a fresh one
+        # Invalidate all sessions for this user, then issue a fresh one at the new epoch
         session_service.revoke_all_for_user(session.user_id)
         user = user_service.get_user_by_id(session.user_id)
         if not user:
@@ -296,6 +258,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
             email=str(user.get("email") or session.email),
             role=str(user.get("role") or session.role),
             permissions=user.get("permissions"),
+            password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
         )
         _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
         return {
@@ -310,38 +273,8 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
         return {"success": False, "error": "Failed to change password"}
 
 
-@app.post("/api/auth/bootstrap-admin")
-async def bootstrap_admin(body: BootstrapAdminRequest):
-    """
-    One-time empty-database admin provision. Disabled in production unless
-    AUTH_ALLOW_BOOTSTRAP_IN_PRODUCTION=true AND token matches (still requires empty users).
-    """
-    if is_production_env() and os.getenv("AUTH_ALLOW_BOOTSTRAP_IN_PRODUCTION", "").lower() not in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        return {"success": False, "error": "Bootstrap disabled in production"}
-    expected = (os.getenv("AUTH_BOOTSTRAP_TOKEN") or "").strip()
-    if not expected or body.bootstrap_token != expected:
-        return {"success": False, "error": "Invalid bootstrap token"}
-    if len(body.password or "") < 12:
-        return {"success": False, "error": "Password must be at least 12 characters"}
-    try:
-        await asyncio.to_thread(
-            _bootstrap_admin_if_empty,
-            (body.email or "").strip().lower(),
-            body.password,
-            body.bootstrap_token,
-        )
-        return {"success": True, "message": "Bootstrap completed or users already exist"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
 @app.get("/api/auth/users")
-async def get_users(request: Request):
+async def get_users(request: Request) -> Any:
     require_session(request)
     try:
         users = user_service.get_all_users()
@@ -352,7 +285,7 @@ async def get_users(request: Request):
 
 
 @app.post("/api/auth/users")
-async def create_user(body: CreateUserRequest, request: Request):
+async def create_user(body: CreateUserRequest, request: Request) -> Any:
     session = require_session(request)
     try:
         user = user_service.create_user(
@@ -375,10 +308,10 @@ async def create_user(body: CreateUserRequest, request: Request):
 
 
 @app.put("/api/auth/users/{user_id}")
-async def update_user(user_id: str, body: UpdateUserRequest, request: Request):
+async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -> Any:
     require_session(request)
     try:
-        updates: Dict[str, Any] = {}
+        updates: dict[str, Any] = {}
         if body.name is not None:
             updates["name"] = body.name
         if body.role is not None:
@@ -401,7 +334,7 @@ async def update_user(user_id: str, body: UpdateUserRequest, request: Request):
 
 
 @app.delete("/api/auth/users/{user_id}")
-async def delete_user(user_id: str, request: Request):
+async def delete_user(user_id: str, request: Request) -> Any:
     require_session(request)
     try:
         success = user_service.delete_user(user_id)

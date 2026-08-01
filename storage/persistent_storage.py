@@ -1,17 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 Persistent Storage - Central configuration for dashboard-managed data.
 All runtime-managed data lives under LINASBOT_DATA_ROOT (default: /opt/linasbot_data).
 This prevents data loss on deploy/rebuild when project directory is replaced.
 """
 
+from __future__ import annotations
+
 import os
 import shutil
 from pathlib import Path
 
+
 # Root for persistent data. Override with LINASBOT_DATA_ROOT env var.
 # Dev fallback: if /opt/linasbot_data not writable, use project-local linasbot_data/
-def _resolve_data_root():
+def _resolve_data_root() -> str:
     explicit = os.getenv("LINASBOT_DATA_ROOT")
     if explicit:
         return str(Path(explicit).expanduser().resolve())
@@ -23,6 +25,7 @@ def _resolve_data_root():
         proj = Path(__file__).resolve().parent.parent
         fallback = str(proj / "linasbot_data")
         return fallback
+
 
 _LINASBOT_DATA_ROOT = _resolve_data_root()
 _DATA_ROOT = Path(_LINASBOT_DATA_ROOT)
@@ -93,10 +96,18 @@ def get_smart_messaging_path(relative: str) -> Path:
     return SMART_MESSAGING_DIR / relative
 
 
-def ensure_dirs():
+def ensure_dirs() -> None:
     """Create all persistent data directories."""
-    for d in (QA_DIR, CONTENT_DIR, SETTINGS_DIR, SMART_MESSAGING_DIR, LOGS_DIR,
-              KNOWLEDGE_FILES_DIR, STYLE_FILES_DIR, PRICE_FILES_DIR):
+    for d in (
+        QA_DIR,
+        CONTENT_DIR,
+        SETTINGS_DIR,
+        SMART_MESSAGING_DIR,
+        LOGS_DIR,
+        KNOWLEDGE_FILES_DIR,
+        STYLE_FILES_DIR,
+        PRICE_FILES_DIR,
+    ):
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -144,7 +155,7 @@ def _safe_migrate_dir(legacy_dir: Path, new_dir: Path, *, overwrite_files: bool 
     return migrated
 
 
-def migrate_from_legacy():
+def migrate_from_legacy() -> bool:
     """
     Safe one-time migration: move data from project data/ to persistent dir.
     - Only migrates if legacy file exists and new file does NOT exist.
@@ -193,10 +204,18 @@ def migrate_from_legacy():
         migrated_any = True
 
     # Smart messaging
-    for fname in ("message_templates.json", "sent_smart_messages.json", "service_template_mapping.json",
-                  "message_preview_queue.json", "daily_template_dispatch_state.json", "message_queue.json",
-                  "appointment_fingerprints.json", "template_activation_status.json",
-                  "scheduled_messages_to_be_sent.json", "dry_run_messages.jsonl"):
+    for fname in (
+        "message_templates.json",
+        "sent_smart_messages.json",
+        "service_template_mapping.json",
+        "message_preview_queue.json",
+        "daily_template_dispatch_state.json",
+        "message_queue.json",
+        "appointment_fingerprints.json",
+        "template_activation_status.json",
+        "scheduled_messages_to_be_sent.json",
+        "dry_run_messages.jsonl",
+    ):
         if _safe_migrate_file(_LEGACY_DATA / fname, SMART_MESSAGING_DIR / fname):
             migrated_any = True
 

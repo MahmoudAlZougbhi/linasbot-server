@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Dynamic File-Based AI Retrieval Service
 
@@ -9,13 +8,17 @@ Two-phase flow:
 Reduces token usage by loading only relevant files.
 """
 
+from __future__ import annotations
+
 import json
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import cast
 
+from openai.types.chat import ChatCompletionMessageParam
+
+import config
 from services import content_files_service as cfs
 from services.llm_core_service import client
-import config
 
 # Knowledge/price/style file picker — keep in sync with Activity Flow labels (text_handlers_respond).
 SELECTOR_MODEL = "gpt-5.4-mini"
@@ -93,7 +96,7 @@ RESPONSE RULES:
 - When the user has answered your clarification question, you have enough info – answer their original question."""
 
 
-def _format_titles_for_prompt(titles: List[dict]) -> str:
+def _format_titles_for_prompt(titles: list[dict]) -> str:
     """Format file titles for the selector prompt."""
     if not titles:
         return "(none)"
@@ -107,7 +110,7 @@ def _format_titles_for_prompt(titles: List[dict]) -> str:
     return "\n".join(lines)
 
 
-def _get_all_titles() -> Tuple[List[dict], List[dict], List[dict]]:
+def _get_all_titles() -> tuple[list[dict], list[dict], list[dict]]:
     """Get titles for all sections."""
     k = cfs.get_titles_only("knowledge")
     p = cfs.get_titles_only("price")
@@ -125,7 +128,9 @@ def _has_any_content_files() -> bool:
 SELECTOR_CONTEXT_MESSAGES = int(getattr(config, "MAX_CONTEXT_MESSAGES", 20))
 
 
-def _format_context_for_selector(context_messages: Optional[List[dict]] = None, max_messages: Optional[int] = None, max_content_len: int = 600) -> str:
+def _format_context_for_selector(
+    context_messages: list[dict] | None = None, max_messages: int | None = None, max_content_len: int = 600
+) -> str:
     """Format last N conversation messages so selector sees the full conversation and understands the topic.
     Sends last 20 messages (SELECTOR_CONTEXT_MESSAGES) so the selector can choose files based on the whole dialogue."""
     if not context_messages:
@@ -147,15 +152,18 @@ def _format_context_for_selector(context_messages: Optional[List[dict]] = None, 
             lines.append(f"{role_label}: {content[:max_content_len]}{'...' if len(content) > max_content_len else ''}")
     if not lines:
         return "RECENT CONVERSATION (last up to 20 messages): (none)"
-    return "RECENT CONVERSATION (last up to 20 messages – use this to understand the whole dialogue and pick the right files):\n" + "\n".join(lines)
+    return (
+        "RECENT CONVERSATION (last up to 20 messages – use this to understand the whole dialogue and pick the right files):\n"
+        + "\n".join(lines)
+    )
 
 
 async def select_files_llm(
     user_message: str,
-    context_messages: Optional[List[dict]] = None,
-    user_image_base64: Optional[str] = None,
+    context_messages: list[dict] | None = None,
+    user_image_base64: str | None = None,
     user_image_format: str = "jpeg",
-) -> Dict:
+) -> dict:
     """
     Step 1: LLM selects which file IDs are needed.
     context_messages: optional list of {role, content} so selector understands the conversation topic.
@@ -184,13 +192,15 @@ async def select_files_llm(
     try:
         response = await client.chat.completions.create(
             model=SELECTOR_MODEL,
-            messages=messages,
+            messages=cast(list[ChatCompletionMessageParam], messages),
             temperature=0.1,
         )
         usage = getattr(response, "usage", None)
         prompt_tokens = usage.prompt_tokens if usage and getattr(usage, "prompt_tokens", None) is not None else 0
-        completion_tokens = usage.completion_tokens if usage and getattr(usage, "completion_tokens", None) is not None else 0
-        text = response.choices[0].message.content.strip()
+        completion_tokens = (
+            usage.completion_tokens if usage and getattr(usage, "completion_tokens", None) is not None else 0
+        )
+        text = (response.choices[0].message.content or "").strip()
         raw_response = text
         m = re.search(r"\{[\s\S]*\}", text)
         if m:
@@ -204,7 +214,13 @@ async def select_files_llm(
             }
     except Exception as e:
         print(f"⚠️ Dynamic retrieval select_files_llm error: {e}")
-    return {"files": [], "action": "fallback_to_general", "raw_response": None, "prompt_tokens": 0, "completion_tokens": 0}
+    return {
+        "files": [],
+        "action": "fallback_to_general",
+        "raw_response": None,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+    }
 
 
 def _normalize_for_match(s: str) -> str:
@@ -232,7 +248,7 @@ def _build_title_to_id_map() -> dict:
     return result
 
 
-def _load_content_by_ids(files: List[str]) -> Tuple[str, bool]:
+def _load_content_by_ids(files: list[str]) -> tuple[str, bool]:
     """Load and merge content from selected file IDs across sections.
     Selector may return titles instead of IDs - we resolve via title-to-id map.
     Returns (merged_content, has_style)."""
@@ -284,17 +300,21 @@ def _ensure_style_included(merged: str, has_style: bool) -> str:
     # Appending it here duplicates "Default Style" in custom selector context.
     if config.BOT_STYLE_GUIDE:
         return merged
-    return (merged + "\n\n--- Style ---\nBe professional, friendly, and helpful. Do not invent information.") if merged else "Be professional, friendly, and helpful. Do not invent information."
+    return (
+        (merged + "\n\n--- Style ---\nBe professional, friendly, and helpful. Do not invent information.")
+        if merged
+        else "Be professional, friendly, and helpful. Do not invent information."
+    )
 
 
 async def retrieve_and_merge(
     user_message: str,
     include_price_hint: bool = False,
     response_lang: str = "ar",
-    context_messages: Optional[List[dict]] = None,
-    user_image_base64: Optional[str] = None,
+    context_messages: list[dict] | None = None,
+    user_image_base64: str | None = None,
     user_image_format: str = "jpeg",
-) -> Tuple[str, Optional[str], str, Dict]:
+) -> tuple[str, str | None, str, dict]:
     """
     Main entry: Select files via LLM, load content, merge.
     context_messages: optional list of {role, content} so selector understands conversation topic (e.g. when user replies "eh" or "beirut").
@@ -305,7 +325,7 @@ async def retrieve_and_merge(
     - action=normal: merged_content has selected file content.
     - flow_meta: {"titles_sent": [...], "selected_files": [...], "action": ...} for Activity Flow.
     """
-    flow_meta: Dict = {"titles_sent": [], "selected_files": [], "action": "fallback_to_general"}
+    flow_meta: dict = {"titles_sent": [], "selected_files": [], "action": "fallback_to_general"}
 
     if not _has_any_content_files():
         return "", None, "fallback_to_general", flow_meta
@@ -320,7 +340,7 @@ async def retrieve_and_merge(
 
     result = await select_files_llm(
         user_message,
-        context_messages=context_messages,
+        context_messages=cast(list[dict], context_messages),
         user_image_base64=user_image_base64,
         user_image_format=user_image_format,
     )
@@ -329,7 +349,9 @@ async def retrieve_and_merge(
 
     # Selector ONLY picks files – never returns ask_clarification. If it does (legacy), treat as fallback.
     if action == "ask_clarification":
-        print("ℹ️ Selector returned ask_clarification – selector only picks files, GPT decides. Forcing fallback_to_general.")
+        print(
+            "ℹ️ Selector returned ask_clarification – selector only picks files, GPT decides. Forcing fallback_to_general."
+        )
         action = "fallback_to_general"
         result["raw_response"] = json.dumps(
             {"files": files, "action": action, "override_reason": "selector_files_only"},

@@ -3,13 +3,14 @@
 One-off backend contract checks for Agent API (appointments/create, branch/move).
 Loads .env.local / .env — does not print secrets.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-import sys
 from pathlib import Path
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
@@ -84,7 +85,7 @@ async def main() -> int:
         sv = await client.get("services", headers=_headers())
         mc = await client.get("machines", headers=_headers())
 
-        def _safe_json(resp: httpx.Response):
+        def _safe_json(resp: httpx.Response) -> Any:
             try:
                 return resp.json()
             except json.JSONDecodeError:

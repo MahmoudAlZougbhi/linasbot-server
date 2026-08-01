@@ -9,28 +9,27 @@ Run with: python tests/test_language_detection.py
 """
 
 import sys
-from typing import List, Tuple
 from dataclasses import dataclass
 
 # Import the language resolver
 from language_resolver import (
-    LanguageResolver,
-    system_language_instruction,
-    clean,
-    alpha_len,
-    tokenize,
-    mask_times,
-    looks_like_full_name,
-    arabizi_score,
-    is_arabizi,
-    french_features,
-    english_features,
     ARABIC_RE,
+    LanguageResolver,
+    alpha_len,
+    arabizi_score,
+    clean,
+    english_features,
+    french_features,
+    looks_like_full_name,
+    mask_times,
+    system_language_instruction,
+    tokenize,
 )
 
 # Try to import the service (may fail if dependencies aren't available)
 try:
     from services.language_detection_service import language_detection_service
+
     SERVICE_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import language_detection_service: {e}")
@@ -40,6 +39,7 @@ except ImportError as e:
 @dataclass
 class LanguageSample:
     """A single sample for language detection checks."""
+
     message: str
     expected_language: str
     description: str
@@ -53,7 +53,7 @@ class LanguageDetectionTester:
         self.resolver = LanguageResolver()
         self.passed = 0
         self.failed = 0
-        self.results: List[Tuple[LanguageSample, str, bool]] = []
+        self.results: list[tuple[LanguageSample, str, bool]] = []
 
     def test_case(self, test: LanguageSample, conversation_id: str = "test_conv") -> bool:
         """Run a single test case and return whether it passed."""
@@ -77,11 +77,11 @@ class LanguageDetectionTester:
             print(f"       Message: '{test.message[:50]}{'...' if len(test.message) > 50 else ''}'")
             print(f"       Expected: {test.expected_language}, Got: {detected}")
 
-    def run_category(self, category: str, tests: List[LanguageSample]):
+    def run_category(self, category: str, tests: list[LanguageSample]):
         """Run all tests in a category."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"📋 {category}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Reset resolver state for each category
         self.resolver = LanguageResolver()
@@ -93,14 +93,14 @@ class LanguageDetectionTester:
     def print_summary(self):
         """Print the overall test summary."""
         total = self.passed + self.failed
-        print(f"\n{'='*60}")
-        print(f"📊 TEST SUMMARY")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print("📊 TEST SUMMARY")
+        print(f"{'=' * 60}")
         print(f"Total: {total} | Passed: {self.passed} | Failed: {self.failed}")
-        print(f"Success Rate: {(self.passed/total)*100:.1f}%")
+        print(f"Success Rate: {(self.passed / total) * 100:.1f}%")
 
         if self.failed > 0:
-            print(f"\n❌ Failed Tests:")
+            print("\n❌ Failed Tests:")
             for test, detected, passed in self.results:
                 if not passed:
                     print(f"  - [{test.category}] {test.description}")
@@ -108,7 +108,7 @@ class LanguageDetectionTester:
                     print(f"    Expected: {test.expected_language}, Got: {detected}")
 
 
-def get_arabic_tests() -> List[LanguageSample]:
+def get_arabic_tests() -> list[LanguageSample]:
     """Tests for Arabic script detection."""
     return [
         LanguageSample("مرحبا", "ar", "Simple Arabic greeting", "Arabic"),
@@ -126,7 +126,7 @@ def get_arabic_tests() -> List[LanguageSample]:
     ]
 
 
-def get_franco_arabic_tests() -> List[LanguageSample]:
+def get_franco_arabic_tests() -> list[LanguageSample]:
     """Tests for Franco-Arabic/Arabizi detection."""
     return [
         LanguageSample("kifak", "franco", "Franco greeting 'kifak'", "Franco-Arabic"),
@@ -148,7 +148,7 @@ def get_franco_arabic_tests() -> List[LanguageSample]:
     ]
 
 
-def get_english_tests() -> List[LanguageSample]:
+def get_english_tests() -> list[LanguageSample]:
     """Tests for English detection."""
     return [
         LanguageSample("Hello, what services do you offer?", "en", "English greeting + question", "English"),
@@ -166,7 +166,7 @@ def get_english_tests() -> List[LanguageSample]:
     ]
 
 
-def get_french_tests() -> List[LanguageSample]:
+def get_french_tests() -> list[LanguageSample]:
     """Tests for French detection."""
     return [
         LanguageSample("Bonjour, quels services offrez-vous?", "fr", "French greeting + question", "French"),
@@ -184,7 +184,7 @@ def get_french_tests() -> List[LanguageSample]:
     ]
 
 
-def get_time_expression_tests() -> List[LanguageSample]:
+def get_time_expression_tests() -> list[LanguageSample]:
     """Tests to ensure time expressions don't trigger false Franco detection."""
     return [
         LanguageSample("I want appointment at 7", "en", "English with time '7'", "Time Expressions"),
@@ -199,7 +199,7 @@ def get_time_expression_tests() -> List[LanguageSample]:
     ]
 
 
-def get_full_name_tests() -> List[LanguageSample]:
+def get_full_name_tests() -> list[LanguageSample]:
     """Tests for full name detection (should preserve previous language)."""
     # Note: These require the expecting_full_name flag or heuristic detection
     return [
@@ -211,7 +211,7 @@ def get_full_name_tests() -> List[LanguageSample]:
     ]
 
 
-def get_mixed_language_tests() -> List[LanguageSample]:
+def get_mixed_language_tests() -> list[LanguageSample]:
     """Tests for mixed language inputs."""
     return [
         LanguageSample("Hello merci", "en", "English + French greeting (keep locked)", "Mixed"),
@@ -221,7 +221,7 @@ def get_mixed_language_tests() -> List[LanguageSample]:
     ]
 
 
-def get_low_signal_tests() -> List[LanguageSample]:
+def get_low_signal_tests() -> list[LanguageSample]:
     """Tests for low-signal inputs (should preserve previous language)."""
     return [
         LanguageSample("ok", "en", "Single word 'ok'", "Low Signal"),
@@ -235,7 +235,7 @@ def get_low_signal_tests() -> List[LanguageSample]:
     ]
 
 
-def get_edge_case_tests() -> List[LanguageSample]:
+def get_edge_case_tests() -> list[LanguageSample]:
     """Edge case and regression tests."""
     return [
         LanguageSample("", "en", "Empty string (keeps default)", "Edge Cases"),
@@ -250,9 +250,9 @@ def get_edge_case_tests() -> List[LanguageSample]:
 
 def test_helper_functions():
     """Test helper functions independently."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("🔧 Testing Helper Functions")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Test clean()
     assert clean("Hello  World") == "Hello World", "clean() should normalize spaces"
@@ -277,10 +277,10 @@ def test_helper_functions():
     print("  ✅ mask_times() works correctly")
 
     # Test looks_like_full_name()
-    assert looks_like_full_name("John Smith") == True, "Should detect full name"
-    assert looks_like_full_name("Jean-Pierre") == True, "Should detect hyphenated name"
-    assert looks_like_full_name("hello world how are you") == False, "Should not match long text"
-    assert looks_like_full_name("John123") == False, "Should not match name with digits"
+    assert looks_like_full_name("John Smith"), "Should detect full name"
+    assert looks_like_full_name("Jean-Pierre"), "Should detect hyphenated name"
+    assert not looks_like_full_name("hello world how are you"), "Should not match long text"
+    assert not looks_like_full_name("John123"), "Should not match name with digits"
     print("  ✅ looks_like_full_name() works correctly")
 
     # Test arabizi_score()
@@ -297,7 +297,7 @@ def test_helper_functions():
     # Test french_features()
     fr_score, fr_hits, fr_diac = french_features("Bonjour, comment ça va?")
     assert fr_score > 0, "Should score French text"
-    assert fr_diac == True, "Should detect French diacritics"
+    assert fr_diac, "Should detect French diacritics"
     print("  ✅ french_features() works correctly")
 
     # Test english_features()
@@ -316,9 +316,9 @@ def test_helper_functions():
 
 def test_conversation_persistence():
     """Test that language persists across messages in a conversation."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("🔄 Testing Conversation Persistence")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     resolver = LanguageResolver()
     conv_id = "persistence_test"
@@ -348,9 +348,9 @@ def test_conversation_persistence():
 
 def test_expecting_full_name_flag():
     """Test the expecting_full_name flag functionality."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("👤 Testing Expecting Full Name Flag")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     resolver = LanguageResolver()
     conv_id = "name_test"
@@ -380,45 +380,41 @@ def test_expecting_full_name_flag():
 def test_service_integration():
     """Test the LanguageDetectionService wrapper."""
     if not SERVICE_AVAILABLE:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("⚠️ Skipping Service Integration Tests (service not available)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         return
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("🔌 Testing Service Integration")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
-    user_data = {'current_conversation_id': 'service_test_conv'}
+    user_data = {"current_conversation_id": "service_test_conv"}
 
     # Test English detection
     result = language_detection_service.detect_language(
-        user_id="test_user_1",
-        message="Hello, I want to book an appointment",
-        user_data=user_data
+        user_id="test_user_1", message="Hello, I want to book an appointment", user_data=user_data
     )
-    assert result['detected_language'] == 'en', f"Should detect English, got {result}"
-    assert result['response_language'] == 'en', f"Response should be English"
+    assert result["detected_language"] == "en", f"Should detect English, got {result}"
+    assert result["response_language"] == "en", "Response should be English"
     print(f"  ✅ English: {result}")
 
     # Test Franco-Arabic detection
     result = language_detection_service.detect_language(
         user_id="test_user_2",
         message="kifak, bade maw3ad",
-        user_data={'current_conversation_id': 'service_test_conv_2'}
+        user_data={"current_conversation_id": "service_test_conv_2"},
     )
-    assert result['detected_language'] == 'franco', f"Should detect Franco, got {result}"
-    assert result['response_language'] == 'ar', f"Response should be Arabic for Franco"
+    assert result["detected_language"] == "franco", f"Should detect Franco, got {result}"
+    assert result["response_language"] == "ar", "Response should be Arabic for Franco"
     print(f"  ✅ Franco-Arabic: {result}")
 
     # Test Arabic detection
     result = language_detection_service.detect_language(
-        user_id="test_user_3",
-        message="مرحبا، بدي موعد",
-        user_data={'current_conversation_id': 'service_test_conv_3'}
+        user_id="test_user_3", message="مرحبا، بدي موعد", user_data={"current_conversation_id": "service_test_conv_3"}
     )
-    assert result['detected_language'] == 'ar', f"Should detect Arabic, got {result}"
-    assert result['response_language'] == 'ar', f"Response should be Arabic"
+    assert result["detected_language"] == "ar", f"Should detect Arabic, got {result}"
+    assert result["response_language"] == "ar", "Response should be Arabic"
     print(f"  ✅ Arabic: {result}")
 
     print("\n✅ Service integration tests passed!")
@@ -426,9 +422,9 @@ def test_service_integration():
 
 def main():
     """Run all tests."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧪 LANGUAGE DETECTION COMPREHENSIVE TEST SUITE")
-    print("="*60)
+    print("=" * 60)
 
     tester = LanguageDetectionTester()
 

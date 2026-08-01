@@ -1,33 +1,39 @@
-# -*- coding: utf-8 -*-
 """
 Appointment Scheduler Service
 Integrates real appointments from backend API endpoints with Smart Messaging system
 Calls send_appointment_reminders() to get appointments and populates scheduled messages
 """
 
+from __future__ import annotations
+
+import logging
 from datetime import datetime, timedelta
-from services.api_integrations import send_appointment_reminders, get_paused_appointments_between_dates, get_missed_appointments
+from typing import Any
+
+from services.api_integrations import (
+    get_paused_appointments_between_dates,
+    send_appointment_reminders,
+)
 from services.smart_messaging import smart_messaging
 from services.user_persistence_service import user_persistence
-import logging
 
 logger = logging.getLogger(__name__)
 
 
-def parse_appointment_date(date_str):
+def parse_appointment_date(date_str: Any) -> Any:
     """
     Parse appointment date from backend format
     Backend returns: "27/10/2025 05:00:00 PM"  (DD/MM/YYYY HH:MM:SS AM/PM)
     """
     if not date_str:
         return None
-    
+
     try:
         # Format from backend: "27/10/2025 05:00:00 PM"
-        return datetime.strptime(date_str, '%d/%m/%Y %I:%M:%S %p')
+        return datetime.strptime(date_str, "%d/%m/%Y %I:%M:%S %p")
     except ValueError:
         # Try other formats
-        for fmt in ['%d/%m/%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%d/%m/%Y']:
+        for fmt in ["%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%d/%m/%Y"]:
             try:
                 return datetime.strptime(date_str, fmt)
             except ValueError:
@@ -35,7 +41,7 @@ def parse_appointment_date(date_str):
         return None
 
 
-async def populate_scheduled_messages_from_appointments():
+async def populate_scheduled_messages_from_appointments() -> Any:
     """
     Fetch appointments for multiple future days via send_appointment_reminders() endpoint
     and populate smart_messaging dict with scheduled messages.
@@ -52,27 +58,27 @@ async def populate_scheduled_messages_from_appointments():
 
         logger.info("🔄 Fetching appointments for yesterday and tomorrow via backend API...")
 
-        all_appointments = []
+        all_appointments: list[Any] = []
         today = datetime.now()
 
         # Query appointments for YESTERDAY (-1) and TOMORROW (+1) only
         # Yesterday: for thank-you and feedback messages scheduled to be sent today
         # Tomorrow: for 24h reminders, same-day check-ins, etc.
         # Use asyncio.gather() to run API calls in PARALLEL
-        async def fetch_date(days_offset):
-            query_date = (today + timedelta(days=days_offset)).strftime('%Y-%m-%d')
+        async def fetch_date(days_offset: Any) -> Any:
+            query_date = (today + timedelta(days=days_offset)).strftime("%Y-%m-%d")
             logger.debug(f"  Querying: {query_date}")
 
             result = await send_appointment_reminders(date=query_date)
 
-            if not result.get('success'):
+            if not result.get("success"):
                 logger.debug(f"  ⚠️ No data for {query_date}")
                 return []
 
             # Extract appointments from nested response structure
-            response_data = result.get('data', {})
+            response_data = result.get("data", {})
             if isinstance(response_data, dict):
-                appointments = response_data.get('appointments', [])
+                appointments = response_data.get("appointments", [])
             elif isinstance(response_data, list):
                 appointments = response_data
             else:
@@ -91,10 +97,10 @@ async def populate_scheduled_messages_from_appointments():
         results = await asyncio.gather(*[fetch_date(d) for d in [-1, 0, 1]], return_exceptions=True)
 
         # Flatten results
-        for result in results:
-            if isinstance(result, list):
-                all_appointments.extend(result)
-        
+        for gather_result in results:
+            if isinstance(gather_result, list):
+                all_appointments.extend(gather_result)
+
         if not all_appointments:
             logger.info("ℹ️ No appointments found for next 7 days")
             return {
@@ -102,7 +108,7 @@ async def populate_scheduled_messages_from_appointments():
                 "message": "No appointments found",
                 "total_appointments": 0,
                 "total_messages": 0,
-                "scheduled_messages_count": len(smart_messaging.scheduled_messages)
+                "scheduled_messages_count": len(smart_messaging.scheduled_messages),
             }
 
         logger.info(f"✅ Found {len(all_appointments)} total appointments for next 7 days")
@@ -112,28 +118,27 @@ async def populate_scheduled_messages_from_appointments():
         failed_count = 0
 
         # DEBUG: Print first appointment to understand structure
-        print(f"\n{'='*80}")
-        print(f"🔍 APPOINTMENT PROCESSING DEBUG")
+        print(f"\n{'=' * 80}")
+        print("🔍 APPOINTMENT PROCESSING DEBUG")
         print(f"   Total appointments to process: {len(all_appointments)}")
         if all_appointments:
-            print(f"   First appointment sample:")
+            print("   First appointment sample:")
             print(f"   {all_appointments[0]}")
         else:
-            print(f"   ❌ Appointments list is EMPTY!")
-        print(f"{'='*80}\n")
+            print("   ❌ Appointments list is EMPTY!")
+        print(f"{'=' * 80}\n")
 
         # For each appointment, populate smart_messaging
         for idx, apt in enumerate(all_appointments):
             try:
-
                 # Extract appointment details from backend response
-                customer_phone = apt.get('phone')
-                customer_name = apt.get('name', 'عميلنا العزيز')
-                apt_details = apt.get('appointment_details', {})
-                apt_datetime_str = apt_details.get('date') if apt_details else None
-                service_name = apt_details.get('service', 'جلسة ليزر') if apt_details else 'جلسة ليزر'
-                service_id = apt_details.get('service_id') if apt_details else None
-                branch_name = apt_details.get('branch', 'الفرع الرئيسي') if apt_details else 'الفرع الرئيسي'
+                customer_phone = apt.get("phone")
+                customer_name = apt.get("name", "عميلنا العزيز")
+                apt_details = apt.get("appointment_details", {})
+                apt_datetime_str = apt_details.get("date") if apt_details else None
+                service_name = apt_details.get("service", "جلسة ليزر") if apt_details else "جلسة ليزر"
+                service_id = apt_details.get("service_id") if apt_details else None
+                branch_name = apt_details.get("branch", "الفرع الرئيسي") if apt_details else "الفرع الرئيسي"
                 appointment_id = (
                     apt.get("appointment_id")
                     or apt.get("id")
@@ -150,7 +155,7 @@ async def populate_scheduled_messages_from_appointments():
                 # DEBUG: Print first 3 successful extractions
                 if idx < 3:
                     print(f"✅ Apt {idx}: phone={customer_phone}, date={apt_datetime_str}")
-                
+
                 # Parse appointment datetime
                 apt_datetime = parse_appointment_date(apt_datetime_str)
                 if not apt_datetime:
@@ -165,30 +170,31 @@ async def populate_scheduled_messages_from_appointments():
                 # DEBUG: Print first 3 that pass all checks
                 if idx < 3:
                     print(f"🎉 Apt {idx}: PASSED ALL CHECKS, calling schedule_appointment_reminders")
-                
+
                 # Prepare customer data for smart_messaging
                 customer_data = {
-                    'phone': customer_phone,
-                    'name': customer_name,
-                    'language': user_persistence.get_user_language(customer_phone),
-                    'service': service_name,
-                    'service_id': service_id,
-                    'branch': branch_name,
-                    'appointment_id': appointment_id,
+                    "phone": customer_phone,
+                    "name": customer_name,
+                    "language": user_persistence.get_user_language(customer_phone),
+                    "service": service_name,
+                    "service_id": service_id,
+                    "branch": branch_name,
+                    "appointment_id": appointment_id,
                 }
 
                 # Call schedule_appointment_reminders - populates scheduled_messages dict
                 messages_count = smart_messaging.schedule_appointment_reminders(apt_datetime, customer_data)
                 total_messages += messages_count
                 processed_count += 1
-                
+
             except Exception as e:
                 print(f"❌ EXCEPTION processing appointment {idx}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 failed_count += 1
                 continue
-        
+
         logger.info(f"✅ Processed {processed_count} appointments, generated {total_messages} messages")
 
         # PHASE 2 (Thank-you) removed completely; no scheduling or sending.
@@ -197,23 +203,23 @@ async def populate_scheduled_messages_from_appointments():
         # PHASE 3: Fetch "Done" appointments from TODAY for feedback
         # Feedback is sent 2 hours after appointment time
         # ============================================================
-        today_str = today.strftime('%Y-%m-%d')
+        today_str = today.strftime("%Y-%m-%d")
 
-        print(f"\n{'='*80}")
-        print(f"🔍 PHASE 3: FETCHING 'DONE' APPOINTMENTS FROM TODAY FOR FEEDBACK")
+        print(f"\n{'=' * 80}")
+        print("🔍 PHASE 3: FETCHING 'DONE' APPOINTMENTS FROM TODAY FOR FEEDBACK")
         print(f"   API call: /appointments/reminders?status=Done&date={today_str}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         feedback_appointments_found = 0
         feedback_messages_scheduled = 0
 
         # Fetch Done appointments from today
-        feedback_result = await send_appointment_reminders(date=today_str, status='Done')
+        feedback_result = await send_appointment_reminders(date=today_str, status="Done")
 
-        if feedback_result.get('success'):
-            response_data = feedback_result.get('data', {})
+        if feedback_result.get("success"):
+            response_data = feedback_result.get("data", {})
             if isinstance(response_data, dict):
-                feedback_appointments = response_data.get('appointments', [])
+                feedback_appointments = response_data.get("appointments", [])
             elif isinstance(response_data, list):
                 feedback_appointments = response_data
             else:
@@ -224,12 +230,12 @@ async def populate_scheduled_messages_from_appointments():
 
             for apt in feedback_appointments:
                 try:
-                    customer_phone = apt.get('phone')
-                    customer_name = apt.get('name', 'عميلنا العزيز')
-                    apt_details = apt.get('appointment_details', {})
-                    apt_datetime_str = apt_details.get('date')
-                    service_name = apt_details.get('service', 'جلسة ليزر')
-                    branch_name = apt_details.get('branch', 'الفرع الرئيسي')
+                    customer_phone = apt.get("phone")
+                    customer_name = apt.get("name", "عميلنا العزيز")
+                    apt_details = apt.get("appointment_details", {})
+                    apt_datetime_str = apt_details.get("date")
+                    service_name = apt_details.get("service", "جلسة ليزر")
+                    branch_name = apt_details.get("branch", "الفرع الرئيسي")
 
                     if not customer_phone or not apt_datetime_str:
                         continue
@@ -250,10 +256,10 @@ async def populate_scheduled_messages_from_appointments():
                         "appointment_time": apt_datetime.strftime("%H:%M"),
                         "branch_name": branch_name,
                         "service_name": service_name,
-                        "phone_number": "01234567"
+                        "phone_number": "01234567",
                     }
 
-                    result = smart_messaging.schedule_message(
+                    schedule_id = smart_messaging.schedule_message(
                         customer_phone,
                         "thank_you_message_sent_after_session",
                         feedback_time,
@@ -264,53 +270,54 @@ async def populate_scheduled_messages_from_appointments():
                         metadata={"source": "appointment_scheduler"},
                     )
 
-                    if result:
+                    if schedule_id:
                         feedback_messages_scheduled += 1
-                        print(f"   ✅ {customer_name} ({customer_phone}) - apt {apt_datetime.strftime('%H:%M')} - feedback at {feedback_time.strftime('%H:%M')}")
+                        print(
+                            f"   ✅ {customer_name} ({customer_phone}) - apt {apt_datetime.strftime('%H:%M')} - feedback at {feedback_time.strftime('%H:%M')}"
+                        )
 
                 except Exception as e:
                     logger.debug(f"Error processing feedback appointment: {e}")
                     continue
         else:
-            print(f"   ❌ Failed to fetch Done appointments for today: {feedback_result.get('message', 'Unknown error')}")
+            print(
+                f"   ❌ Failed to fetch Done appointments for today: {feedback_result.get('message', 'Unknown error')}"
+            )
 
-        print(f"\n   📊 Phase 3 Results:")
+        print("\n   📊 Phase 3 Results:")
         print(f"   - Done appointments today: {feedback_appointments_found}")
         print(f"   - Feedback messages scheduled: {feedback_messages_scheduled}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         total_messages += feedback_messages_scheduled
 
         # Ensure this output is always visible
-        print(f"\n{'='*80}")
-        print(f"✅ APPOINTMENT POPULATION COMPLETE")
-        print(f"   📊 Statistics:")
+        print(f"\n{'=' * 80}")
+        print("✅ APPOINTMENT POPULATION COMPLETE")
+        print("   📊 Statistics:")
         print(f"   - Appointments found: {len(all_appointments)}")
         print(f"   - Processed: {processed_count}")
         print(f"   - Failed: {failed_count}")
         print(f"   - Messages scheduled: {total_messages}")
         print(f"   - Total in dict: {len(smart_messaging.scheduled_messages)}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
         return {
             "success": True,
-            "message": f"✅ Populated scheduled messages from real appointments",
+            "message": "✅ Populated scheduled messages from real appointments",
             "total_appointments": len(all_appointments),
             "processed_appointments": processed_count,
             "failed_appointments": failed_count,
             "total_messages": total_messages,
-            "scheduled_messages_count": len(smart_messaging.scheduled_messages)
+            "scheduled_messages_count": len(smart_messaging.scheduled_messages),
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Error in appointment population: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }
+        return {"success": False, "message": f"Error: {str(e)}"}
 
 
-async def populate_no_show_messages_from_missed_appointments():
+async def populate_no_show_messages_from_missed_appointments() -> Any:
     """Removed: no_show_followup template is no longer used."""
     return {
         "success": True,
@@ -320,7 +327,7 @@ async def populate_no_show_messages_from_missed_appointments():
     }
 
 
-async def populate_missed_yesterday_messages():
+async def populate_missed_yesterday_messages() -> Any:
     """
     Fetch appointments from YESTERDAY with status "Available" (not attended)
     and populate smart_messaging dict with missed yesterday follow-up messages.
@@ -330,32 +337,32 @@ async def populate_missed_yesterday_messages():
     try:
         today = datetime.now()
         yesterday = today - timedelta(days=1)
-        yesterday_str = yesterday.strftime('%Y-%m-%d')
+        yesterday_str = yesterday.strftime("%Y-%m-%d")
 
-        print(f"\n{'='*80}")
-        print(f"🔍 MISSED YESTERDAY: Fetching appointments with status=Available")
+        print(f"\n{'=' * 80}")
+        print("🔍 MISSED YESTERDAY: Fetching appointments with status=Available")
         print(f"   API call: /appointments/reminders?status=Available&date={yesterday_str}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         # Call reminders API with status=Available for yesterday
-        result = await send_appointment_reminders(date=yesterday_str, status='Available')
+        result = await send_appointment_reminders(date=yesterday_str, status="Available")
 
         all_available = []
-        if result.get('success'):
-            response_data = result.get('data', {})
+        if result.get("success"):
+            response_data = result.get("data", {})
             if isinstance(response_data, dict):
-                all_available = response_data.get('appointments', [])
+                all_available = response_data.get("appointments", [])
             elif isinstance(response_data, list):
                 all_available = response_data
 
         if not all_available:
-            print(f"   ℹ️ No appointments with status=Available found for yesterday")
+            print("   ℹ️ No appointments with status=Available found for yesterday")
             return {
                 "success": True,
                 "message": "No missed appointments found for yesterday",
                 "date": yesterday_str,
                 "total_missed": 0,
-                "total_messages": 0
+                "total_messages": 0,
             }
 
         print(f"   ✅ Found {len(all_available)} appointments with status=Available (not attended)")
@@ -381,12 +388,12 @@ async def populate_missed_yesterday_messages():
                 #     "branch": "Antelias"
                 #   }
                 # }
-                customer_phone = apt.get('phone')
-                customer_name = apt.get('name', 'عميلنا العزيز')
-                apt_details = apt.get('appointment_details', {})
-                apt_datetime_str = apt_details.get('date')
-                service_name = apt_details.get('service', 'جلسة ليزر')
-                branch_name = apt_details.get('branch', 'الفرع الرئيسي')
+                customer_phone = apt.get("phone")
+                customer_name = apt.get("name", "عميلنا العزيز")
+                apt_details = apt.get("appointment_details", {})
+                apt_datetime_str = apt_details.get("date")
+                service_name = apt_details.get("service", "جلسة ليزر")
+                branch_name = apt_details.get("branch", "الفرع الرئيسي")
 
                 if not customer_phone or not apt_datetime_str:
                     skipped_missing_data += 1
@@ -415,7 +422,7 @@ async def populate_missed_yesterday_messages():
                         "appointment_time": apt_datetime.strftime("%H:%M"),
                         "branch_name": branch_name,
                         "service_name": service_name,
-                        "phone_number": "01234567"
+                        "phone_number": "01234567",
                     },
                     user_persistence.get_user_language(customer_phone),
                     service_id=None,
@@ -434,13 +441,13 @@ async def populate_missed_yesterday_messages():
 
         total_skipped = skipped_missing_data + skipped_parse_error + skipped_past + skipped_schedule_failed
 
-        print(f"\n{'='*80}")
-        print(f"✅ MISSED YESTERDAY MESSAGES POPULATION COMPLETE")
+        print(f"\n{'=' * 80}")
+        print("✅ MISSED YESTERDAY MESSAGES POPULATION COMPLETE")
         print(f"   📅 Date: {yesterday_str}")
         print(f"   - Appointments with status=Available: {len(all_available)}")
         print(f"   - Messages scheduled: {total_messages}")
         if total_skipped > 0:
-            print(f"   ─────────────────────────────────")
+            print("   ─────────────────────────────────")
             print(f"   📋 Skip reasons ({total_skipped} total):")
             if skipped_missing_data > 0:
                 print(f"      - Missing phone/date: {skipped_missing_data}")
@@ -450,11 +457,11 @@ async def populate_missed_yesterday_messages():
                 print(f"      - Send time in past: {skipped_past}")
             if skipped_schedule_failed > 0:
                 print(f"      - Schedule failed: {skipped_schedule_failed}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
         return {
             "success": True,
-            "message": f"✅ Populated missed yesterday messages",
+            "message": "✅ Populated missed yesterday messages",
             "date": yesterday_str,
             "total_available": len(all_available),
             "total_messages": total_messages,
@@ -462,19 +469,16 @@ async def populate_missed_yesterday_messages():
                 "missing_data": skipped_missing_data,
                 "parse_error": skipped_parse_error,
                 "past": skipped_past,
-                "schedule_failed": skipped_schedule_failed
-            }
+                "schedule_failed": skipped_schedule_failed,
+            },
         }
 
     except Exception as e:
         logger.error(f"❌ Error in missed yesterday population: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }
+        return {"success": False, "message": f"Error: {str(e)}"}
 
 
-async def populate_one_month_followups():
+async def populate_one_month_followups() -> Any:
     """
     Fetch all appointments from LAST month to populate 1-month follow-up messages
     that will be sent THIS month.
@@ -492,20 +496,22 @@ async def populate_one_month_followups():
         last_of_last_month = first_of_this_month - timedelta(days=1)
         first_of_last_month = last_of_last_month.replace(day=1)
 
-        logger.info(f"🔄 Fetching appointments from {first_of_last_month.strftime('%Y-%m-%d')} to {last_of_last_month.strftime('%Y-%m-%d')} for 1-month follow-ups...")
+        logger.info(
+            f"🔄 Fetching appointments from {first_of_last_month.strftime('%Y-%m-%d')} to {last_of_last_month.strftime('%Y-%m-%d')} for 1-month follow-ups..."
+        )
 
         all_appointments = []
 
-        async def fetch_date(date):
-            query_date = date.strftime('%Y-%m-%d')
+        async def fetch_date(date: Any) -> Any:
+            query_date = date.strftime("%Y-%m-%d")
             result = await send_appointment_reminders(date=query_date)
 
-            if not result.get('success'):
+            if not result.get("success"):
                 return []
 
-            response_data = result.get('data', {})
+            response_data = result.get("data", {})
             if isinstance(response_data, dict):
-                appointments = response_data.get('appointments', [])
+                appointments = response_data.get("appointments", [])
             elif isinstance(response_data, list):
                 appointments = response_data
             else:
@@ -523,29 +529,24 @@ async def populate_one_month_followups():
         # Fetch all dates in parallel
         results = await asyncio.gather(*[fetch_date(d) for d in dates_to_fetch], return_exceptions=True)
 
-        for result in results:
-            if isinstance(result, list):
-                all_appointments.extend(result)
+        for gather_result in results:
+            if isinstance(gather_result, list):
+                all_appointments.extend(gather_result)
 
         if not all_appointments:
             logger.info("ℹ️ No appointments found for 1-month follow-ups")
-            return {
-                "success": True,
-                "message": "No appointments found",
-                "total_appointments": 0,
-                "total_messages": 0
-            }
+            return {"success": True, "message": "No appointments found", "total_appointments": 0, "total_messages": 0}
 
         logger.info(f"✅ Found {len(all_appointments)} appointments from last month")
 
         # Group by customer phone and keep only the MOST RECENT appointment per customer
-        customer_latest_apt = {}  # phone -> appointment data with parsed datetime
+        customer_latest_apt: dict[str, Any] = {}  # phone -> appointment data with parsed datetime
 
         for apt in all_appointments:
             try:
-                customer_phone = apt.get('phone')
-                apt_details = apt.get('appointment_details', {})
-                apt_datetime_str = apt_details.get('date') if apt_details else None
+                customer_phone = apt.get("phone")
+                apt_details = apt.get("appointment_details", {})
+                apt_datetime_str = apt_details.get("date") if apt_details else None
 
                 if not customer_phone or not apt_datetime_str:
                     continue
@@ -558,14 +559,17 @@ async def populate_one_month_followups():
                 phone_normalized = str(customer_phone).replace("+", "").replace(" ", "").replace("-", "")
 
                 # Check if this is more recent than existing entry for this customer
-                if phone_normalized not in customer_latest_apt or apt_datetime > customer_latest_apt[phone_normalized]['datetime']:
+                if (
+                    phone_normalized not in customer_latest_apt
+                    or apt_datetime > customer_latest_apt[phone_normalized]["datetime"]
+                ):
                     customer_latest_apt[phone_normalized] = {
-                        'phone': customer_phone,
-                        'name': apt.get('name', 'عميلنا العزيز'),
-                        'datetime': apt_datetime,
-                        'service_name': apt_details.get('service', 'جلسة ليزر') if apt_details else 'جلسة ليزر',
-                        'service_id': apt_details.get('service_id') if apt_details else None,
-                        'branch_name': apt_details.get('branch', 'الفرع الرئيسي') if apt_details else 'الفرع الرئيسي'
+                        "phone": customer_phone,
+                        "name": apt.get("name", "عميلنا العزيز"),
+                        "datetime": apt_datetime,
+                        "service_name": apt_details.get("service", "جلسة ليزر") if apt_details else "جلسة ليزر",
+                        "service_id": apt_details.get("service_id") if apt_details else None,
+                        "branch_name": apt_details.get("branch", "الفرع الرئيسي") if apt_details else "الفرع الرئيسي",
                     }
 
             except Exception as e:
@@ -579,7 +583,7 @@ async def populate_one_month_followups():
         # Schedule ONE message per customer based on their most recent appointment
         for phone_normalized, apt_data in customer_latest_apt.items():
             try:
-                apt_datetime = apt_data['datetime']
+                apt_datetime = apt_data["datetime"]
 
                 # 1-month follow-up: 30 days after most recent appointment
                 followup_time = apt_datetime + timedelta(days=17)
@@ -589,59 +593,58 @@ async def populate_one_month_followups():
                     continue
 
                 placeholders = {
-                    "customer_name": apt_data['name'],
+                    "customer_name": apt_data["name"],
                     "appointment_date": apt_datetime.strftime("%Y-%m-%d"),
                     "appointment_time": apt_datetime.strftime("%H:%M"),
-                    "branch_name": apt_data['branch_name'],
-                    "service_name": apt_data['service_name'],
-                    "phone_number": "01234567"
+                    "branch_name": apt_data["branch_name"],
+                    "service_name": apt_data["service_name"],
+                    "phone_number": "01234567",
                 }
 
                 message_id = smart_messaging.schedule_message(
-                    apt_data['phone'],
+                    apt_data["phone"],
                     "sent_17_days_after_last_session_new",
                     followup_time,
                     placeholders,
-                    user_persistence.get_user_language(apt_data['phone']),
-                    service_id=apt_data['service_id'],
-                    service_name=apt_data['service_name'],
+                    user_persistence.get_user_language(apt_data["phone"]),
+                    service_id=apt_data["service_id"],
+                    service_name=apt_data["service_name"],
                     metadata={"source": "appointment_scheduler"},
                 )
 
                 if message_id:
                     total_messages += 1
-                    print(f"   ✅ {apt_data['name']} - apt {apt_datetime.strftime('%m/%d')} → followup {followup_time.strftime('%m/%d')}")
+                    print(
+                        f"   ✅ {apt_data['name']} - apt {apt_datetime.strftime('%m/%d')} → followup {followup_time.strftime('%m/%d')}"
+                    )
 
             except Exception as e:
                 logger.debug(f"⚠️ Error scheduling 1-month for {phone_normalized}: {e}")
                 continue
 
-        print(f"\n{'='*80}")
-        print(f"✅ 1-MONTH FOLLOW-UPS POPULATION COMPLETE")
+        print(f"\n{'=' * 80}")
+        print("✅ 1-MONTH FOLLOW-UPS POPULATION COMPLETE")
         print(f"   📊 Last month: {first_of_last_month.strftime('%B %Y')}")
         print(f"   - Total appointments found: {len(all_appointments)}")
         print(f"   - Unique customers: {len(customer_latest_apt)}")
         print(f"   - Follow-ups scheduled: {total_messages}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
         return {
             "success": True,
-            "message": f"✅ Populated 1-month follow-up messages",
-            "month": first_of_last_month.strftime('%B %Y'),
+            "message": "✅ Populated 1-month follow-up messages",
+            "month": first_of_last_month.strftime("%B %Y"),
             "total_appointments": len(all_appointments),
             "unique_customers": len(customer_latest_apt),
-            "total_messages": total_messages
+            "total_messages": total_messages,
         }
 
     except Exception as e:
         logger.error(f"❌ Error in 1-month follow-ups population: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }
+        return {"success": False, "message": f"Error: {str(e)}"}
 
 
-async def populate_missed_month_messages():
+async def populate_missed_month_messages() -> Any:
     """
     Fetch all paused appointments for the current month using the
     appointments/paused/between-dates endpoint.
@@ -651,7 +654,6 @@ async def populate_missed_month_messages():
     - end_date: First day of next month (e.g., 2026-02-01)
     """
     try:
-        from dateutil.relativedelta import relativedelta
         import calendar
 
         today = datetime.now()
@@ -661,8 +663,8 @@ async def populate_missed_month_messages():
         last_day = calendar.monthrange(today.year, today.month)[1]
         last_of_month = today.replace(day=last_day)
 
-        start_date = first_of_month.strftime('%Y-%m-%d')
-        end_date = last_of_month.strftime('%Y-%m-%d')
+        start_date = first_of_month.strftime("%Y-%m-%d")
+        end_date = last_of_month.strftime("%Y-%m-%d")
 
         logger.info(f"🔄 Fetching paused appointments from {start_date} to {end_date} for missed-month messages...")
 
@@ -670,14 +672,14 @@ async def populate_missed_month_messages():
         result = await get_paused_appointments_between_dates(
             start_date=start_date,
             end_date=end_date,
-            service_id=None  # Get all services
+            service_id=None,  # Get all services
         )
 
         all_missed = []
-        if result.get('success'):
-            response_data = result.get('data', {})
+        if result.get("success"):
+            response_data = result.get("data", {})
             if isinstance(response_data, dict):
-                all_missed = response_data.get('appointments', [])
+                all_missed = response_data.get("appointments", [])
             elif isinstance(response_data, list):
                 all_missed = response_data
 
@@ -686,9 +688,9 @@ async def populate_missed_month_messages():
             return {
                 "success": True,
                 "message": "No missed appointments found",
-                "month": first_of_month.strftime('%B %Y'),
+                "month": first_of_month.strftime("%B %Y"),
                 "total_missed": 0,
-                "total_messages": 0
+                "total_messages": 0,
             }
 
         logger.info(f"✅ Found {len(all_missed)} missed appointments this month")
@@ -698,20 +700,21 @@ async def populate_missed_month_messages():
         # We need the DATE of each Done appointment to compare with missed dates
         # Only skip if Done is AFTER the missed appointment
         # ============================================================
-        customer_done_dates = {}  # phone -> list of done appointment datetimes
+        customer_done_dates: dict[str, Any] = {}  # phone -> list of done appointment datetimes
 
-        print(f"\n   🔍 Fetching Done appointments to check against missed dates...")
+        print("\n   🔍 Fetching Done appointments to check against missed dates...")
 
         # Fetch Done appointments for each day of the month (up to today)
-        async def fetch_done_for_date(date):
-            query_date = date.strftime('%Y-%m-%d')
-            done_result = await send_appointment_reminders(date=query_date, status='Done')
-            if done_result.get('success'):
-                data = done_result.get('data', {})
-                return data.get('appointments', []) if isinstance(data, dict) else data
+        async def fetch_done_for_date(date: Any) -> Any:
+            query_date = date.strftime("%Y-%m-%d")
+            done_result = await send_appointment_reminders(date=query_date, status="Done")
+            if done_result.get("success"):
+                data = done_result.get("data", {})
+                return data.get("appointments", []) if isinstance(data, dict) else data
             return []
 
         import asyncio
+
         dates_to_check = []
         current_date = first_of_month
         while current_date <= min(last_of_month, today):
@@ -723,9 +726,9 @@ async def populate_missed_month_messages():
         for done_list in done_results:
             if isinstance(done_list, list):
                 for done_apt in done_list:
-                    phone = done_apt.get('phone')
-                    apt_details = done_apt.get('appointment_details', {})
-                    done_date_str = apt_details.get('date') if apt_details else None
+                    phone = done_apt.get("phone")
+                    apt_details = done_apt.get("appointment_details", {})
+                    done_date_str = apt_details.get("date") if apt_details else None
 
                     if phone and done_date_str:
                         # Normalize phone for comparison
@@ -764,16 +767,12 @@ async def populate_missed_month_messages():
                 #   "machine": "Quadro",
                 #   "branch": "Beirut"
                 # }
-                customer_data = apt.get('customer', {})
-                customer_phone = customer_data.get('phone')
-                customer_name = customer_data.get('name', 'عميلنا العزيز')
-                customer_user_code = customer_data.get('user_code')
-
-                apt_datetime_str = apt.get('date')
-                service_name = apt.get('service', 'جلسة ليزر')
-                branch_name = apt.get('branch', 'الفرع الرئيسي')
-                appointment_id = apt.get('appointment_id')
-                machine_name = apt.get('machine')
+                customer_data = apt.get("customer", {})
+                customer_phone = customer_data.get("phone")
+                customer_name = customer_data.get("name", "عميلنا العزيز")
+                apt_datetime_str = apt.get("date")
+                service_name = apt.get("service", "جلسة ليزر")
+                branch_name = apt.get("branch", "الفرع الرئيسي")
 
                 if not customer_phone or not apt_datetime_str:
                     skipped_missing_data += 1
@@ -820,7 +819,7 @@ async def populate_missed_month_messages():
                     "appointment_time": apt_datetime.strftime("%H:%M"),
                     "branch_name": branch_name,
                     "service_name": service_name,
-                    "phone_number": "01234567"
+                    "phone_number": "01234567",
                 }
 
                 message_id = smart_messaging.schedule_message(
@@ -844,15 +843,22 @@ async def populate_missed_month_messages():
                 logger.debug(f"⚠️ Error processing missed appointment: {e}")
                 continue
 
-        total_skipped = skipped_missing_data + skipped_duplicate + skipped_parse_error + skipped_has_done + skipped_past + skipped_schedule_failed
+        total_skipped = (
+            skipped_missing_data
+            + skipped_duplicate
+            + skipped_parse_error
+            + skipped_has_done
+            + skipped_past
+            + skipped_schedule_failed
+        )
 
-        print(f"\n{'='*80}")
-        print(f"✅ MISSED-MONTH MESSAGES POPULATION COMPLETE")
+        print(f"\n{'=' * 80}")
+        print("✅ MISSED-MONTH MESSAGES POPULATION COMPLETE")
         print(f"   📊 Month: {first_of_month.strftime('%B %Y')}")
         print(f"   📅 Date range: {start_date} to {end_date}")
         print(f"   - Paused appointments found: {len(all_missed)}")
         print(f"   - Messages scheduled: {total_messages}")
-        print(f"   ─────────────────────────────────")
+        print("   ─────────────────────────────────")
         print(f"   📋 Skip reasons ({total_skipped} total):")
         if skipped_duplicate > 0:
             print(f"      - Duplicate (same customer): {skipped_duplicate}")
@@ -866,12 +872,12 @@ async def populate_missed_month_messages():
             print(f"      - Send time in past: {skipped_past}")
         if skipped_schedule_failed > 0:
             print(f"      - Schedule failed: {skipped_schedule_failed}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
         return {
             "success": True,
-            "message": f"✅ Populated missed-month messages",
-            "month": first_of_month.strftime('%B %Y'),
+            "message": "✅ Populated missed-month messages",
+            "month": first_of_month.strftime("%B %Y"),
             "start_date": start_date,
             "end_date": end_date,
             "total_missed": len(all_missed),
@@ -882,13 +888,10 @@ async def populate_missed_month_messages():
                 "missing_data": skipped_missing_data,
                 "parse_error": skipped_parse_error,
                 "past": skipped_past,
-                "schedule_failed": skipped_schedule_failed
-            }
+                "schedule_failed": skipped_schedule_failed,
+            },
         }
 
     except Exception as e:
         logger.error(f"❌ Error in missed-month population: {e}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }
+        return {"success": False, "message": f"Error: {str(e)}"}

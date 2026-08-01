@@ -3,7 +3,10 @@ Version tracking for text handlers module
 Update this file whenever you make changes to ensure you're running the latest version
 """
 
+from __future__ import annotations
+
 import datetime
+from typing import Any
 
 # Increment this with each deployment
 VERSION = "2.1.0"
@@ -29,27 +32,30 @@ v2.0.0 - 2025-01-24
 - Better organization and maintainability
 """
 
-def print_version_info():
+
+def print_version_info() -> None:
     """Print version information to console"""
     print("=" * 80)
-    print(f"🚀 TEXT HANDLERS MODULE LOADED")
+    print("🚀 TEXT HANDLERS MODULE LOADED")
     print(f"   Version: {VERSION}")
     print(f"   Build ID: {BUILD_ID}")
     print(f"   Last Modified: {LAST_MODIFIED}")
     print(f"   Loaded At: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"   Architecture: Modular (5 split files)")
+    print("   Architecture: Modular (5 split files)")
     print("=" * 80)
 
-def get_version():
+
+def get_version() -> Any:
     """Return version string"""
     return VERSION
 
-def get_build_info():
+
+def get_build_info() -> Any:
     """Return complete build information"""
     return {
         "version": VERSION,
         "build_id": BUILD_ID,
         "last_modified": LAST_MODIFIED,
         "loaded_at": datetime.datetime.now().isoformat(),
-        "changes": CHANGES
+        "changes": CHANGES,
     }

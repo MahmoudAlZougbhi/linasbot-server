@@ -9,30 +9,33 @@ Usage:
   python scripts/delete_all_conversations.py --dry-run     # report only
   python scripts/delete_all_conversations.py --confirm    # actually delete
 """
+
+from __future__ import annotations
+
 import argparse
 import os
 import sys
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.utils import get_firestore_db
 import config
-
+from utils.utils import get_firestore_db
 
 APP_ID = "linas-ai-bot-backend"
 CONVERSATIONS_COLLECTION = getattr(config, "FIRESTORE_CONVERSATIONS_COLLECTION", "conversations")
 BATCH_SIZE = 500
 
 
-def _get_users_collection(db):
+def _get_users_collection(db: Any) -> Any:
     return db.collection("artifacts").document(APP_ID).collection("users")
 
 
-def _get_index_collection(db):
+def _get_index_collection(db: Any) -> Any:
     return db.collection("artifacts").document(APP_ID).collection("live_chat_index")
 
 
-def run_delete(dry_run: bool, confirm: bool):
+def run_delete(dry_run: bool, confirm: bool) -> None:
     db = get_firestore_db()
     if not db:
         print("❌ Firestore not initialized. Ensure data/firebase_data.json exists.")
@@ -84,6 +87,7 @@ def run_delete(dry_run: bool, confirm: bool):
     if not dry_run:
         try:
             from services.live_chat_service import live_chat_service
+
             live_chat_service.invalidate_cache()
             print("\n  Cache invalidated.")
         except Exception as e:
@@ -92,7 +96,7 @@ def run_delete(dry_run: bool, confirm: bool):
     print("\nDone.")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Delete all conversations and live_chat_index")
     parser.add_argument("--dry-run", action="store_true", help="Only report, do not delete")
     parser.add_argument("--confirm", action="store_true", help="Actually perform deletion")

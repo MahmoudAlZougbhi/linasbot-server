@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
 import config
-
 from handlers.text_handlers import handle_message
 from handlers.text_handlers_firestore import _delayed_processing_tasks
 from services.meta_messaging import (
@@ -14,7 +14,6 @@ from services.meta_messaging import (
     resolve_meta_send_account_id,
 )
 from utils.utils import get_user_state_from_firestore
-
 
 SendFunc = Callable[..., Awaitable[Any]]
 
@@ -33,9 +32,9 @@ async def process_meta_social_event(
     event: dict,
     settings: MetaMessagingSettings,
     *,
-    capture_send: Optional[SendFunc] = None,
+    capture_send: SendFunc | None = None,
     simulation: bool = False,
-    combine_delay: Optional[float] = None,
+    combine_delay: float | None = None,
 ) -> None:
     """
     Process one normalized Meta IG/FB event through the canonical AI path.
@@ -83,9 +82,7 @@ async def process_meta_social_event(
 
         expire_social_contact_flows_in_user_data(user_data)
         if not config.user_names.get(user_id):
-            config.user_names[user_id] = (
-                "Instagram Customer" if channel == "instagram" else "Facebook Customer"
-            )
+            config.user_names[user_id] = "Instagram Customer" if channel == "instagram" else "Facebook Customer"
 
         if config.user_gender.get(user_id) not in {"male", "female"}:
             try:
@@ -104,10 +101,10 @@ async def process_meta_social_event(
 
         async def send_message(
             _namespaced_id: str,
-            message_text: str = None,
-            image_url: str = None,
-            audio_url: str = None,
-        ):
+            message_text: str | None = None,
+            image_url: str | None = None,
+            audio_url: str | None = None,
+        ) -> Any:
             if capture_send is not None:
                 await capture_send(_namespaced_id, message_text, image_url, audio_url)
                 return {
@@ -121,12 +118,12 @@ async def process_meta_social_event(
                 return await adapter.send_text_message(sender_id, message_text)
             return {"success": False, "error": "Only text replies are enabled for Meta social DMs"}
 
-        async def send_action(_namespaced_id: str):
+        async def send_action(_namespaced_id: str) -> Any:
             if simulation or adapter is None:
                 return {"success": True, "simulated": True}
             return await adapter.send_typing(sender_id)
 
-        handle_kwargs = {
+        handle_kwargs: dict[str, Any] = {
             "user_id": user_id,
             "user_name": config.user_names[user_id],
             "user_input_text": text,
@@ -141,7 +138,7 @@ async def process_meta_social_event(
             else:
                 handle_kwargs["message_combine_delay"] = 0.0
 
-        await handle_message(**handle_kwargs)
+        await handle_message(**cast(Any, handle_kwargs))
         await _await_delayed_processing(user_id)
     finally:
         if adapter is not None:

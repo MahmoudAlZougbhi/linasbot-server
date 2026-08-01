@@ -1,19 +1,20 @@
-# -*- coding: utf-8 -*-
 """
 QA API module: Q&A Management endpoints
 Handles CRUD operations and search for Q&A pairs in the database.
 """
 
-from typing import Optional
-from fastapi import Request
+from __future__ import annotations
+
+from typing import Any
 
 from modules.core import app
+from services.language_detection_service import language_detection_service
 from services.qa_database_service import qa_db_service
 
 
 # DEBUG: Test endpoint to verify routes are registered
 @app.get("/api/qa/test")
-async def test_qa_endpoint():
+async def test_qa_endpoint() -> Any:
     """Test endpoint to verify Q&A API is working"""
     return {
         "success": True,
@@ -26,24 +27,16 @@ async def test_qa_endpoint():
             "GET /api/qa/search",
             "POST /api/qa/test-match",
             "GET /api/qa/categories",
-            "GET /api/qa/statistics"
-        ]
+            "GET /api/qa/statistics",
+        ],
     }
 
 
 @app.get("/api/qa/list")
-async def list_qa_pairs(
-    category: Optional[str] = None,
-    language: str = "ar",
-    active_only: bool = True
-):
+async def list_qa_pairs(category: str | None = None, language: str = "ar", active_only: bool = True) -> Any:
     """List all Q&A pairs with optional filtering - FROM DATABASE"""
     try:
-        response = await qa_db_service.get_qa_pairs(
-            category=category,
-            language=language,
-            active_only=active_only
-        )
+        response = await qa_db_service.get_qa_pairs(category=category, language=language, active_only=active_only)
         return response
     except Exception as e:
         print(f"❌ Error in list_qa_pairs: {e}")
@@ -51,12 +44,12 @@ async def list_qa_pairs(
 
 
 @app.post("/api/qa/create")
-async def create_qa_pair(qa_data: dict):
+async def create_qa_pair(qa_data: dict) -> Any:
     """Create a new Q&A pair in database"""
     try:
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("🔵 DEBUG: /api/qa/create endpoint hit!")
-        print("="*80)
+        print("=" * 80)
         print(f"📥 Received qa_data type: {type(qa_data)}")
         print(f"📥 Received qa_data: {qa_data}")
         question_ar = qa_data.get("question_ar", "").strip()
@@ -71,9 +64,7 @@ async def create_qa_pair(qa_data: dict):
         # Accept compact payload shape: {question, answer, language, category, tags}
         question = qa_data.get("question", "").strip()
         answer = qa_data.get("answer", "").strip()
-        if question and answer and not any(
-            [question_ar, question_en, question_fr, question_franco]
-        ):
+        if question and answer and not any([question_ar, question_en, question_fr, question_franco]):
             detected_language = language_detection_service.normalize_training_language(
                 qa_data.get("language"),
                 default=language_detection_service.detect_training_language(question),
@@ -101,8 +92,8 @@ async def create_qa_pair(qa_data: dict):
         print(f"📥 answer_franco: {answer_franco}")
         print(f"📥 category: {qa_data.get('category', 'general')}")
         print(f"📥 tags: {qa_data.get('tags', [])}")
-        print("="*80 + "\n")
-        
+        print("=" * 80 + "\n")
+
         response = await qa_db_service.create_qa_pair(
             question_ar=question_ar,
             answer_ar=answer_ar,
@@ -113,25 +104,26 @@ async def create_qa_pair(qa_data: dict):
             question_franco=question_franco,
             answer_franco=answer_franco,
             category=qa_data.get("category", "general"),
-            tags=qa_data.get("tags", [])
+            tags=qa_data.get("tags", []),
         )
-        
-        print("\n" + "="*80)
+
+        print("\n" + "=" * 80)
         print("✅ DEBUG: Q&A creation response")
-        print("="*80)
+        print("=" * 80)
         print(f"📤 Response: {response}")
-        print("="*80 + "\n")
-        
+        print("=" * 80 + "\n")
+
         return response
     except Exception as e:
         print(f"\n❌ ERROR in create_qa_pair: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.put("/api/qa/{qa_id}")
-async def update_qa_pair(qa_id: int, updates: dict):
+async def update_qa_pair(qa_id: int, updates: dict) -> Any:
     """Update an existing Q&A pair in database"""
     try:
         response = await qa_db_service.update_qa_pair(qa_id, updates)
@@ -142,7 +134,7 @@ async def update_qa_pair(qa_id: int, updates: dict):
 
 
 @app.delete("/api/qa/{qa_id}")
-async def delete_qa_pair(qa_id: int):
+async def delete_qa_pair(qa_id: int) -> Any:
     """Delete a Q&A pair from database (soft delete)"""
     try:
         response = await qa_db_service.delete_qa_pair(qa_id)
@@ -153,11 +145,7 @@ async def delete_qa_pair(qa_id: int):
 
 
 @app.get("/api/qa/search")
-async def search_qa_pairs(
-    query: str,
-    language: str = "ar",
-    category: Optional[str] = None
-):
+async def search_qa_pairs(query: str, language: str = "ar", category: str | None = None) -> Any:
     """Search Q&A pairs in database"""
     try:
         response = await qa_db_service.search_qa_pairs(query, language)
@@ -168,42 +156,38 @@ async def search_qa_pairs(
 
 
 @app.post("/api/qa/test-match")
-async def test_qa_match(test_data: dict):
+async def test_qa_match(test_data: dict) -> Any:
     """Test if a question matches any Q&A pair in database"""
     try:
         question = test_data.get("question", "")
         language = test_data.get("language", "ar")
-        
+
         if not question:
             return {"success": False, "error": "Question is required"}
-        
+
         customer_phone = test_data.get("customer_phone")
         match_result = await qa_db_service.find_match(question, language, customer_phone=customer_phone)
-        
+
         if match_result:
             qa_pair = match_result["qa_pair"]
             answer = qa_db_service._extract_answer_for_language(qa_pair, language)
-            
+
             return {
                 "success": True,
                 "match_found": True,
                 "match_score": match_result["match_score"],
                 "qa_pair": qa_pair,
-                "answer": answer
+                "answer": answer,
             }
         else:
-            return {
-                "success": True,
-                "match_found": False,
-                "message": "No matching Q&A pair found"
-            }
+            return {"success": True, "match_found": False, "message": "No matching Q&A pair found"}
     except Exception as e:
         print(f"❌ Error in test_qa_match: {e}")
         return {"success": False, "error": str(e)}
 
 
 @app.get("/api/qa/categories")
-async def get_qa_categories():
+async def get_qa_categories() -> Any:
     """Get list of available categories from database"""
     try:
         response = await qa_db_service.get_categories()
@@ -214,7 +198,7 @@ async def get_qa_categories():
 
 
 @app.get("/api/qa/statistics")
-async def get_qa_statistics():
+async def get_qa_statistics() -> Any:
     """Get Q&A database statistics"""
     try:
         response = await qa_db_service.get_statistics()
@@ -225,22 +209,19 @@ async def get_qa_statistics():
 
 
 @app.post("/api/qa/track-usage")
-async def track_qa_usage(usage_data: dict):
+async def track_qa_usage(usage_data: dict) -> Any:
     """Track Q&A usage in database (customer_phone required for outbound tracking; else skipped)."""
     try:
         qa_id = usage_data.get("qa_id")
         customer_phone = usage_data.get("customer_phone")
         matched = usage_data.get("matched", True)
         match_score = usage_data.get("match_score", 0)
-        
+
         if not qa_id:
             return {"success": False, "error": "qa_id is required"}
-        
+
         response = await qa_db_service.track_usage(
-            qa_id=qa_id,
-            customer_phone=customer_phone,
-            matched=matched,
-            match_score=match_score
+            qa_id=qa_id, customer_phone=customer_phone, matched=matched, match_score=match_score
         )
         return response
     except Exception as e:
@@ -250,12 +231,12 @@ async def track_qa_usage(usage_data: dict):
 
 # Training mode endpoints (bridge for dashboard compatibility)
 @app.get("/api/training/list")
-async def list_training_data():
+async def list_training_data() -> Any:
     """Bridge endpoint - redirects to Q&A list"""
     return await list_qa_pairs()
 
 
 @app.post("/api/training/create")
-async def create_training_data(training_data: dict):
+async def create_training_data(training_data: dict) -> Any:
     """Bridge endpoint - redirects to Q&A create"""
     return await create_qa_pair(training_data)

@@ -1,27 +1,50 @@
+from __future__ import annotations
+
 # handlers/text_handlers_respond.py
 # Core logic for processing user input and generating bot responses
 # AI Smart Employee Architecture: router + state + operational context
+import asyncio
+import datetime
+import json
+import re
+import time
+from typing import Any
 
-from handlers.text_handlers_firestore import *
+import config
 from services.analytics_events import analytics
-from services.language_detection_service import language_detection_service
-from services.interaction_flow_logger import log_interaction
-from services.dynamic_messages_service import get_dynamic_message
+from services.api_integrations import log_report_event
+from services.chat_response_service import get_bot_chat_response
+from services.conversation_router import (
+    ASK_CLARIFICATION_TEMPLATES,
+    FALLBACK_TEMPLATES,
+    GREETING_TEMPLATES,
+    get_gender_from_message,
+)
 from services.conversation_router import (
     route as router_route,
-    is_gender_answer,
-    get_gender_from_message,
-    GREETING_TEMPLATES,
-    FALLBACK_TEMPLATES,
-    ASK_CLARIFICATION_TEMPLATES,
 )
+from services.dynamic_messages_service import get_dynamic_message
+from services.interaction_flow_logger import log_interaction
+from services.language_detection_service import language_detection_service
+from services.local_qa_service import local_qa_service
+from services.user_persistence_service import user_persistence
 from utils.datetime_utils import detect_reschedule_intent
-import time
-import re
-import json
+from utils.utils import (
+    count_tokens,
+    get_canonical_user_id_and_phone,
+    get_conversation_context_for_gpt,
+    get_conversation_last_ai_response_at,
+    get_firestore_db,
+    get_last_bot_message_for_gpt_context,
+    get_system_instruction,
+    notify_human_on_whatsapp,
+    save_conversation_message_to_firestore,
+    save_for_training_conversation_log,
+    update_dashboard_metric_in_firestore,
+)
 
 
-def _parse_tool_round_bot_returned(bot_returned: str):
+def _parse_tool_round_bot_returned(bot_returned: str) -> Any:
     if not bot_returned or not isinstance(bot_returned, str):
         return None
     try:
@@ -47,13 +70,13 @@ def _flow_meta_has_crm_booking_confirmation(flow_meta: dict) -> bool:
 
 def _booking_not_confirmed_safe_reply(lang: str) -> str:
     """User-facing text when the model tried to confirm a booking without CRM success."""
-    l = (lang or "ar").lower()
-    if l == "en":
+    lang_key = (lang or "ar").lower()
+    if lang_key == "en":
         return (
             "Your appointment is not saved in our system yet—the booking step did not complete successfully. "
             "Please do not consider it confirmed until the system confirms it; I will complete the booking next."
         )
-    if l == "fr":
+    if lang_key == "fr":
         return (
             "Votre rendez-vous n'est pas encore enregistré dans notre système — la réservation n'a pas abouti. "
             "Merci de ne pas le considérer comme confirmé tant que le système ne l'a pas validé."
@@ -370,8 +393,21 @@ BOOKING_OFFER_QUESTION_RE = re.compile(
 )
 
 AFFIRMATIVE_CONFIRMATION_TOKENS = {
-    "اه", "اي", "ايه", "نعم", "تمام", "اكيد", "أكيد",
-    "yes", "yeah", "yep", "oui", "ok", "okay", "sure", "eh",
+    "اه",
+    "اي",
+    "ايه",
+    "نعم",
+    "تمام",
+    "اكيد",
+    "أكيد",
+    "yes",
+    "yeah",
+    "yep",
+    "oui",
+    "ok",
+    "okay",
+    "sure",
+    "eh",
 }
 AFFIRMATIVE_CONFIRMATION_PHRASES = (
     "يا ريت",
@@ -564,10 +600,34 @@ def _is_plausible_extracted_customer_name(name: str, user_message: str) -> bool:
             return False
     nl = n.lower()
     for kw in (
-        "se3a", "ساعة", "saat", "hour", "book", "حجز", "appointment", "موعد",
-        "hotle", "hotel", "فندق", "coffee", "قهوة", "table", "room", "laser",
-        "ليزر", "tattoo", "price", "سعر", "دكتور", "dr.", "clinic", "عيادة",
-        "today", "tomorrow", "غدا", "بكرا",
+        "se3a",
+        "ساعة",
+        "saat",
+        "hour",
+        "book",
+        "حجز",
+        "appointment",
+        "موعد",
+        "hotle",
+        "hotel",
+        "فندق",
+        "coffee",
+        "قهوة",
+        "table",
+        "room",
+        "laser",
+        "ليزر",
+        "tattoo",
+        "price",
+        "سعر",
+        "دكتور",
+        "dr.",
+        "clinic",
+        "عيادة",
+        "today",
+        "tomorrow",
+        "غدا",
+        "بكرا",
     ):
         if kw in nl:
             return False
@@ -790,9 +850,7 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
 
     if action in BRIEF_REPLY_ACTIONS:
         looks_verbose = (
-            len(cleaned) > 320
-            or len(units) > 3
-            or bool(re.search(r"(?:^|\n)\s*(?:\d+[.)]|[0-9]+️⃣|[-*•])\s*", cleaned))
+            len(cleaned) > 320 or len(units) > 3 or bool(re.search(r"(?:^|\n)\s*(?:\d+[.)]|[0-9]+️⃣|[-*•])\s*", cleaned))
         )
         if not looks_verbose:
             return cleaned
@@ -811,11 +869,7 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
         # Prefer a follow-up question that appears AFTER the selected info sentence
         # so we preserve natural order and avoid reversed output.
         question_unit = next(
-            (
-                unit
-                for idx, unit in enumerate(units)
-                if idx > first_info_index and _looks_like_question(unit)
-            ),
+            (unit for idx, unit in enumerate(units) if idx > first_info_index and _looks_like_question(unit)),
             "",
         )
 
@@ -826,11 +880,7 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
 
         # If no trailing question exists, allow a short leading greeting question (same order).
         leading_question = next(
-            (
-                unit
-                for idx, unit in enumerate(units[:first_info_index])
-                if _looks_like_question(unit)
-            ),
+            (unit for idx, unit in enumerate(units[:first_info_index]) if _looks_like_question(unit)),
             "",
         )
         if leading_question and first_info_index <= 1:
@@ -920,7 +970,16 @@ def _reply_offers_handover_confirmation(text: str) -> bool:
     return any(p in m for p in permission_markers) and any(h in m for h in handover_markers)
 
 
-async def _process_and_respond(user_id: str, user_name: str, user_input_to_process: str, user_data: dict, send_message_func, send_action_func, user_image_base64: str = None, user_image_format: str = "jpeg"):
+async def _process_and_respond(
+    user_id: str,
+    user_name: str,
+    user_input_to_process: str,
+    user_data: dict,
+    send_message_func: Any,
+    send_action_func: Any,
+    user_image_base64: str | None = None,
+    user_image_format: str = "jpeg",
+) -> Any:
     """
     Core logic for processing user input and generating bot response.
     This function is adapted from the original `_process_and_respond`
@@ -933,21 +992,19 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     _dynamic_retrieval_flow_meta = None  # Set when dynamic retrieval is used (for Activity Flow)
 
     current_gender = config.user_gender.get(user_id, "unknown")
-    current_preferred_lang = user_data.get('user_preferred_lang', 'ar')
-    current_conversation_id = user_data.get('current_conversation_id')
+    current_preferred_lang = user_data.get("user_preferred_lang", "ar")
+    current_conversation_id = user_data.get("current_conversation_id")
+    firestore_conversation_id = str(current_conversation_id or "")
 
     # ===== PRE-GPT LANGUAGE DETECTION =====
-    is_expecting_name = user_data.get('awaiting_name_input', False)
+    is_expecting_name = user_data.get("awaiting_name_input", False)
     lang_result = language_detection_service.detect_language(
-        user_id=user_id,
-        message=user_input_to_process,
-        user_data=user_data,
-        is_expecting_name=is_expecting_name
+        user_id=user_id, message=user_input_to_process, user_data=user_data, is_expecting_name=is_expecting_name
     )
 
     # Update language variables
-    current_preferred_lang = lang_result['detected_language']
-    response_language = lang_result['response_language']
+    current_preferred_lang = lang_result["detected_language"]
+    response_language = lang_result["response_language"]
     router_reply_lang = response_language if response_language in ("ar", "en", "fr") else current_preferred_lang
 
     print(f"[_process_and_respond] 🌐 Language detected: {current_preferred_lang} → respond in: {response_language}")
@@ -1007,14 +1064,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     print(f"   - current_gender: '{current_gender}'")
     print(f"   - greeting_stage: {config.user_greeting_stage.get(user_id, 0)}")
     print(f"   - gender_attempts: {config.gender_attempts.get(user_id, 0)}")
-    
+
     # 📊 ANALYTICS: Log user's message
     analytics.log_message(
         source="user",
         msg_type="text",
         user_id=user_id,
         language=current_preferred_lang,
-        message_length=len(user_input_to_process)
+        message_length=len(user_input_to_process),
     )
 
     # AI-PRIMARY: Bot passes message to AI as-is. AI extracts language, gender, name and returns them.
@@ -1022,7 +1079,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # Check if human takeover is active (dashboard /api/test-* sets _dashboard_test_simulation to bypass and reach GPT)
     if not user_data.get("_dashboard_test_simulation") and config.user_in_human_takeover_mode.get(user_id, False):
-        print(f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI fallback guard active.")
+        print(
+            f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI fallback guard active."
+        )
         # IMPORTANT: During assigned operator takeover, AI must stay silent.
         # We only stay silent when an operator is assigned.
         # In all uncertain/error cases, prefer sending a waiting message instead of returning no response.
@@ -1037,9 +1096,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 for candidate in [canonical_user_id, user_id]:
                     if candidate and candidate not in candidate_user_ids:
                         candidate_user_ids.append(candidate)
-                    if candidate and (
-                        candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)
-                    ):
+                    if candidate and (candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)):
                         alt_candidate = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
                         if alt_candidate not in candidate_user_ids:
                             candidate_user_ids.append(alt_candidate)
@@ -1062,9 +1119,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 conv_data = None
                 if conv_id_to_check:
                     for candidate_user_id in candidate_user_ids:
-                        candidate_ref = users_coll.document(candidate_user_id).collection(
-                            config.FIRESTORE_CONVERSATIONS_COLLECTION
-                        ).document(conv_id_to_check)
+                        candidate_ref = (
+                            users_coll.document(candidate_user_id)
+                            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                            .document(conv_id_to_check)
+                        )
                         candidate_snap = await asyncio.to_thread(candidate_ref.get)
                         if candidate_snap.exists:
                             conv_data = candidate_snap.to_dict() or {}
@@ -1100,7 +1159,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
 
         if takeover_still_active and should_send_waiting:
-            waiting_msg = get_dynamic_message("waiting_queue_message", current_preferred_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+            waiting_msg = (
+                get_dynamic_message("waiting_queue_message", current_preferred_lang)
+                or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+            )
             await send_message_func(user_id, waiting_msg)
             await save_conversation_message_to_firestore(
                 user_id,
@@ -1108,7 +1170,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 waiting_msg,
                 current_conversation_id,
                 user_name,
-                user_data.get('phone_number'),
+                user_data.get("phone_number"),
                 metadata={"handled_by": "ai", "source": "waiting_queue_fallback"},
             )
             return
@@ -1169,9 +1231,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         router_action = None
 
     # Phase 12: Debugging/logging (Plan §18)
-    print(f"[_process_and_respond] 📋 ORCHESTRATION LOG:")
+    print("[_process_and_respond] 📋 ORCHESTRATION LOG:")
     print(f"   - normalized_input: '{user_input_to_process.strip()[:100]}'")
-    print(f"   - state_before: gender={conv_state.get('gender')}, awaiting_gender={conv_state.get('awaiting_gender')}, awaiting_clarification={conv_state.get('awaiting_clarification')}, original_question={bool(conv_state.get('original_question'))}")
+    print(
+        f"   - state_before: gender={conv_state.get('gender')}, awaiting_gender={conv_state.get('awaiting_gender')}, awaiting_clarification={conv_state.get('awaiting_clarification')}, original_question={bool(conv_state.get('original_question'))}"
+    )
     print(f"   - ai_primary_mode: {ai_primary_mode}")
     print(f"   - detected_action: {router_action if router_action else 'ai_decides'}")
 
@@ -1205,6 +1269,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 return
             # No explicit social handoff intent → skip dashboard takeover; continue to AI.
         else:
+
             async def _activate_ai_handover_router(escalation_reason: str, trigger_source: str) -> bool:
                 from utils.utils import (
                     conversation_any_path_post_release_blocked,
@@ -1219,7 +1284,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         if await conversation_any_path_post_release_blocked(current_conversation_id, user_id):
                             print("⚠️ router handover blocked: post-release cooldown on at least one path")
                             return False
-                        payload = {
+                        payload: dict[str, Any] = {
                             "status": "waiting_human",
                             "human_takeover_active": True,
                             "human_takeover_requested": True,
@@ -1230,9 +1295,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                             "last_updated": datetime.datetime.now(),
                             "post_release_escalation_suppressed_until": None,
                         }
-                        n = await update_conversation_on_all_existing_paths(
-                            current_conversation_id, user_id, payload
-                        )
+                        n = await update_conversation_on_all_existing_paths(current_conversation_id, user_id, payload)
                         if n > 0:
                             wrote = True
                     except Exception as e:
@@ -1241,15 +1304,25 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     return False
                 for vid in merge_conversation_user_id_variants("", user_id):
                     config.user_in_human_takeover_mode[vid] = True
-                notify_human_on_whatsapp(user_name, current_gender, user_input_to_process, type_of_notification=f"AI handover - {escalation_reason}")
+                notify_human_on_whatsapp(
+                    user_name,
+                    current_gender,
+                    user_input_to_process,
+                    type_of_notification=f"AI handover - {escalation_reason}",
+                )
                 try:
                     from services.human_takeover_notification_service import human_takeover_notification_service
+
                     await human_takeover_notification_service.notify_and_audit_handoff(
-                        user_id=user_id, user_gender=current_gender, customer_name=user_name,
-                        customer_phone=user_data.get('phone_number', 'Unknown'),
-                        escalation_reason=escalation_reason, last_message=user_input_to_process,
-                        trigger_source=trigger_source, conversation_id=current_conversation_id,
-                        extra_details={"action": "router_human_handover"}
+                        user_id=user_id,
+                        user_gender=current_gender,
+                        customer_name=user_name,
+                        customer_phone=user_data.get("phone_number", "Unknown"),
+                        escalation_reason=escalation_reason,
+                        last_message=user_input_to_process,
+                        trigger_source=trigger_source,
+                        conversation_id=current_conversation_id,
+                        extra_details={"action": "router_human_handover"},
                     )
                 except Exception as notify_error:
                     print(f"⚠️ Failed to send handoff: {notify_error}")
@@ -1257,29 +1330,62 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             router_handover_ok = await _activate_ai_handover_router("customer_requested_human", "router_human_handover")
             if router_handover_ok:
-                handoff_msg = {"ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏", "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏", "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"}
-                sent_reply = handoff_msg.get(current_preferred_lang, handoff_msg["ar"])
-                await send_message_func(user_id, sent_reply)
-                await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-                log_report_event("human_handover", user_id, current_gender, {"message": user_input_to_process, "status": "router_direct", "source": "router"})
+                handoff_msgs = {
+                    "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
+                    "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
+                    "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
+                }
+                router_sent_reply = handoff_msgs.get(current_preferred_lang, handoff_msgs["ar"])
+                await send_message_func(user_id, router_sent_reply)
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    router_sent_reply,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={"handled_by": "ai"},
+                )
+                log_report_event(
+                    "human_handover",
+                    user_id,
+                    current_gender,
+                    {"message": user_input_to_process, "status": "router_direct", "source": "router"},
+                )
                 await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
             else:
                 fb = get_dynamic_message("generic_error_message", current_preferred_lang) or "كيف فيني ساعدك؟"
                 await send_message_func(user_id, fb)
-                await save_conversation_message_to_firestore(user_id, "ai", fb, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    fb,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={"handled_by": "ai"},
+                )
             return
 
     # 2. Greeting only (Phase 7)
     if (not ai_primary_mode) and router_action == "greeting":
         if router_reply_lang in ("ar", "franco"):
             respectful_address = _build_arabic_respectful_address(current_gender, user_name)
-            greeting_msg = (
-                f"مرحباً {respectful_address}، أنا مروى، المساعد الذكي في ليناز ليزر. كيف فيني ساعدك؟"
-            )
+            greeting_msg = f"مرحباً {respectful_address}، أنا مروى، المساعد الذكي في ليناز ليزر. كيف فيني ساعدك؟"
         else:
-            greeting_msg = get_dynamic_message("router_greeting", router_reply_lang) or GREETING_TEMPLATES.get(router_reply_lang, GREETING_TEMPLATES["ar"])
+            greeting_msg = get_dynamic_message("router_greeting", router_reply_lang) or GREETING_TEMPLATES.get(
+                router_reply_lang, GREETING_TEMPLATES["ar"]
+            )
         await send_message_func(user_id, greeting_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", greeting_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_greeting"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            greeting_msg,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai", "source": "router_greeting"},
+        )
         log_interaction(
             user_id,
             user_input_to_process,
@@ -1295,9 +1401,19 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 3. Fallback (Phase 11)
     if (not ai_primary_mode) and router_action == "fallback":
-        fallback_msg = get_dynamic_message("router_fallback", router_reply_lang) or FALLBACK_TEMPLATES.get(router_reply_lang, FALLBACK_TEMPLATES["ar"])
+        fallback_msg = get_dynamic_message("router_fallback", router_reply_lang) or FALLBACK_TEMPLATES.get(
+            router_reply_lang, FALLBACK_TEMPLATES["ar"]
+        )
         await send_message_func(user_id, fallback_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", fallback_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_fallback"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            fallback_msg,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai", "source": "router_fallback"},
+        )
         log_interaction(
             user_id,
             user_input_to_process,
@@ -1313,15 +1429,24 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 4. Ask gender (Phase 8)
     if (not ai_primary_mode) and router_action == "ask_gender":
-        user_data['original_question'] = user_input_to_process
-        user_data['awaiting_gender'] = True
-        user_data['last_bot_question_type'] = 'gender'
-        user_data['initial_user_query_to_process'] = user_input_to_process  # backward compat
+        user_data["original_question"] = user_input_to_process
+        user_data["awaiting_gender"] = True
+        user_data["last_bot_question_type"] = "gender"
+        user_data["initial_user_query_to_process"] = user_input_to_process  # backward compat
         gender_questions = config.GENDER_QUESTIONS.get(router_reply_lang, config.GENDER_QUESTIONS["ar"])
         import random
+
         gender_msg = random.choice(gender_questions)
         await send_message_func(user_id, gender_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", gender_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_ask_gender"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            gender_msg,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai", "source": "router_ask_gender"},
+        )
         log_interaction(
             user_id,
             user_input_to_process,
@@ -1337,13 +1462,23 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # 5. Ask clarification (Phase 9) - use localized template
     if (not ai_primary_mode) and router_action == "ask_clarification":
-        user_data['original_question'] = user_input_to_process
-        user_data['awaiting_clarification'] = True
-        user_data['last_bot_question_type'] = 'clarification'
-        user_data['pending_clarification_query'] = user_input_to_process  # backward compat
-        clarification_msg = get_dynamic_message("router_ask_clarification", router_reply_lang) or ASK_CLARIFICATION_TEMPLATES.get(router_reply_lang, ASK_CLARIFICATION_TEMPLATES["ar"])
+        user_data["original_question"] = user_input_to_process
+        user_data["awaiting_clarification"] = True
+        user_data["last_bot_question_type"] = "clarification"
+        user_data["pending_clarification_query"] = user_input_to_process  # backward compat
+        clarification_msg = get_dynamic_message(
+            "router_ask_clarification", router_reply_lang
+        ) or ASK_CLARIFICATION_TEMPLATES.get(router_reply_lang, ASK_CLARIFICATION_TEMPLATES["ar"])
         await send_message_func(user_id, clarification_msg)
-        await save_conversation_message_to_firestore(user_id, "ai", clarification_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "source": "router_ask_clarification"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            clarification_msg,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai", "source": "router_ask_clarification"},
+        )
         log_interaction(
             user_id,
             user_input_to_process,
@@ -1360,26 +1495,37 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # 6. answer_question (resume_original_question or answer_new_question)
     # When router returns this from awaiting_gender/awaiting_clarification, we MUST use original_question
     _resume_original_question = False
-    resume_original = (not ai_primary_mode) and (conv_state.get('awaiting_gender') or conv_state.get('awaiting_clarification'))
+    resume_original = (not ai_primary_mode) and (
+        conv_state.get("awaiting_gender") or conv_state.get("awaiting_clarification")
+    )
     if resume_original:
-        orig = conv_state.get('original_question') or user_data.get('original_question') or user_data.get('pending_clarification_query') or user_data.get('initial_user_query_to_process')
+        orig = (
+            conv_state.get("original_question")
+            or user_data.get("original_question")
+            or user_data.get("pending_clarification_query")
+            or user_data.get("initial_user_query_to_process")
+        )
         if orig:
-            user_data['awaiting_gender'] = False
-            user_data['awaiting_clarification'] = False
-            user_data['pending_clarification_query'] = None
-            user_data['initial_user_query_to_process'] = None
-            if conv_state.get('awaiting_gender'):
+            user_data["awaiting_gender"] = False
+            user_data["awaiting_clarification"] = False
+            user_data["pending_clarification_query"] = None
+            user_data["initial_user_query_to_process"] = None
+            if conv_state.get("awaiting_gender"):
                 detected_g = get_gender_from_message(user_input_to_process)
-                if detected_g in ('male', 'female'):
+                if detected_g in ("male", "female"):
                     config.user_gender[user_id] = detected_g
                     config.user_greeting_stage[user_id] = 2
                     config.gender_attempts[user_id] = 0
-                    await user_persistence.save_user_gender(user_id, detected_g, phone=user_data.get('phone_number', user_id), name=user_name)
-            user_data['selected_service'] = user_input_to_process  # user's answer often is the service
+                    await user_persistence.save_user_gender(
+                        user_id, detected_g, phone=user_data.get("phone_number", user_id), name=user_name
+                    )
+            user_data["selected_service"] = user_input_to_process  # user's answer often is the service
             # Phase 4: For selector, pass combined context so retrieval fetches right knowledge
             query_to_send_to_gpt = f"Original user question: {orig}\nUser follow-up answer: {user_input_to_process}"
             _resume_original_question = True
-            print(f"[_process_and_respond] 📋 state_after (resume): awaiting_gender=False, awaiting_clarification=False, selected_service={user_input_to_process[:50]}")
+            print(
+                f"[_process_and_respond] 📋 state_after (resume): awaiting_gender=False, awaiting_clarification=False, selected_service={user_input_to_process[:50]}"
+            )
         else:
             query_to_send_to_gpt = user_input_to_process
             _resume_original_question = False
@@ -1389,9 +1535,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         _resume_original_question = False
 
     is_initial_message_for_gpt = (config.user_greeting_stage[user_id] == 1) and (current_gender == "unknown")
-    initial_user_query_to_process_original = user_data.get('initial_user_query_to_process')
+    initial_user_query_to_process_original = user_data.get("initial_user_query_to_process")
 
-    awaiting_confirmation = user_data.get('awaiting_human_handover_confirmation', False)
+    awaiting_confirmation = user_data.get("awaiting_human_handover_confirmation", False)
     awaiting_booking_offer_confirmation = bool(user_data.get("awaiting_booking_offer_confirmation", False))
 
     gpt_response_data = {}
@@ -1411,9 +1557,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             user_data["booking_offer_origin_query"] = None
             # Pass to GPT with full context – user already discussed service/branch (e.g. tattoo removal Beirut).
             # Do NOT overwrite with "لأي خدمة بتحب تحجز؟" – GPT will use discussed service + user's date/time.
-            query_to_send_to_gpt = (
-                f"[User confirmed booking. Previously discussed: {booking_origin_query}. User reply: {user_input_to_process}]"
-            )
+            query_to_send_to_gpt = f"[User confirmed booking. Previously discussed: {booking_origin_query}. User reply: {user_input_to_process}]"
             query_pre_set_from_booking_confirmation = True
             # Do NOT set gpt_response_data – let GPT proceed with submit_booking_intent (or tools) using context.
         elif booking_confirmation == "no":
@@ -1436,11 +1580,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
         conversation_history = await get_conversation_context_for_gpt(
             user_id,
-            current_conversation_id,
+            firestore_conversation_id,
             window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 12),
             alternate_user_id=canonical_user_id,
         )
-        last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
+        last_ai_response_at = (
+            await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id)
+            if current_conversation_id
+            else None
+        )
         gpt_response_data = await get_bot_chat_response(
             user_id=user_id,
             user_input=user_input_to_process,
@@ -1461,22 +1609,31 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             query_to_send_to_gpt = user_input_to_process
 
         # Restore and combine original question when user replies to clarification (legacy path)
-        pending_clarification = user_data.get('pending_clarification_query')
+        pending_clarification = user_data.get("pending_clarification_query")
         if pending_clarification:
             query_to_send_to_gpt = f"{pending_clarification}\n[User clarified: {user_input_to_process}]"
-            user_data['pending_clarification_query'] = None
-            user_data['awaiting_clarification'] = False
-            print(f"[_process_and_respond] ✅ Restored original query + clarification: '{query_to_send_to_gpt[:80]}...'")
+            user_data["pending_clarification_query"] = None
+            user_data["awaiting_clarification"] = False
+            print(
+                f"[_process_and_respond] ✅ Restored original query + clarification: '{query_to_send_to_gpt[:80]}...'"
+            )
 
         # DEBUG: Gender confirmation and original query retrieval
-        print(f"[_process_and_respond] 🔍 Gender Check:")
+        print("[_process_and_respond] 🔍 Gender Check:")
         print(f"  - current_gender: {current_gender}")
         print(f"  - greeting_stage: {config.user_greeting_stage[user_id]}")
         print(f"  - initial_query: {initial_user_query_to_process_original}")
 
-        if (not ai_primary_mode) and current_gender in ["male", "female"] and config.user_greeting_stage[user_id] == 1 and initial_user_query_to_process_original:
-            print(f"[_process_and_respond] ✅ Gender confirmed! Answering original query: '{initial_user_query_to_process_original}'")
-            user_data['initial_user_query_to_process'] = None
+        if (
+            (not ai_primary_mode)
+            and current_gender in ["male", "female"]
+            and config.user_greeting_stage[user_id] == 1
+            and initial_user_query_to_process_original
+        ):
+            print(
+                f"[_process_and_respond] ✅ Gender confirmed! Answering original query: '{initial_user_query_to_process_original}'"
+            )
+            user_data["initial_user_query_to_process"] = None
             query_to_send_to_gpt = initial_user_query_to_process_original
             config.user_greeting_stage[user_id] = 2
             is_initial_message_for_gpt = False
@@ -1493,7 +1650,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 gender_ack_message,
                 current_conversation_id,
                 user_name,
-                user_data.get('phone_number'),
+                user_data.get("phone_number"),
                 metadata={"handled_by": "ai"},
             )
 
@@ -1526,14 +1683,14 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 )
                 print("[_process_and_respond] WARN: Q&A match had empty answer after policy → generic fallback")
 
-            print(f"[_process_and_respond] ✅ Q&A MATCH FOUND!")
+            print("[_process_and_respond] ✅ Q&A MATCH FOUND!")
             if match_tier == "exact":
                 print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (exact match)")
             else:
                 print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥90% threshold)")
-            print(f"[_process_and_respond] 🎯 Returning Q&A directly")
-            print(f"[_process_and_respond] 💰 AI CREDITS SAVED: $0.02-0.05 (NO GPT-4 CALL)")
-            print(f"[_process_and_respond] ⚡ Response Time: ~100-200ms (vs 2-5s with GPT-4)")
+            print("[_process_and_respond] 🎯 Returning Q&A directly")
+            print("[_process_and_respond] 💰 AI CREDITS SAVED: $0.02-0.05 (NO GPT-4 CALL)")
+            print("[_process_and_respond] ⚡ Response Time: ~100-200ms (vs 2-5s with GPT-4)")
             print(f"[_process_and_respond] 🎯 Answer: {qa_response[:100]}...")
 
             await send_message_func(user_id, qa_response)
@@ -1543,9 +1700,12 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             if isinstance(faq_id, str) and faq_id.isdigit():
                 faq_id = int(faq_id)
             await save_conversation_message_to_firestore(
-                user_id, "ai", qa_response,
-                current_conversation_id, user_name,
-                user_data.get('phone_number'),
+                user_id,
+                "ai",
+                qa_response,
+                current_conversation_id,
+                user_name,
+                user_data.get("phone_number"),
                 metadata={
                     "source": "qa_database",
                     "handled_by": "bot",
@@ -1562,7 +1722,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                         "similarity": match_score,
                         "tier": match_result.get("tier", "direct"),
                     },
-                }
+                },
             )
             await update_dashboard_metric_in_firestore(user_id, "qa_responses_used", 1)
             config.user_greeting_stage[user_id] = 2
@@ -1570,16 +1730,38 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             flow_match_title = "Q&A Match (Exact)" if match_tier == "exact" else "Q&A Match (≥90%)"
             qa_steps = [
                 {"step": 1, "title": "User → Bot", "content": query_to_send_to_gpt},
-                {"step": 2, "title": flow_match_title, "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
+                {
+                    "step": 2,
+                    "title": flow_match_title,
+                    "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call.",
+                },
                 {"step": 3, "title": "Bot → User", "content": qa_response, "event_type": "response_sent"},
             ]
             voice_meta = user_data.pop("_voice_flow_meta", None)
             if voice_meta:
                 qa_steps = [
-                    {"step": 1, "title": "Voice received", "content": "User sent voice message.", "event_type": "voice_received", "status": "success", "message_type": "voice"},
-                    {"step": 2, "title": "Transcription completed", "content": f"Result: {voice_meta.get('transcription_length', 0)} chars. Model: {voice_meta.get('transcription_model', 'gpt-4o-transcribe')}.", "event_type": "transcription_completed", "status": "success", "duration_ms": voice_meta.get("transcription_duration_ms")},
+                    {
+                        "step": 1,
+                        "title": "Voice received",
+                        "content": "User sent voice message.",
+                        "event_type": "voice_received",
+                        "status": "success",
+                        "message_type": "voice",
+                    },
+                    {
+                        "step": 2,
+                        "title": "Transcription completed",
+                        "content": f"Result: {voice_meta.get('transcription_length', 0)} chars. Model: {voice_meta.get('transcription_model', 'gpt-4o-transcribe')}.",
+                        "event_type": "transcription_completed",
+                        "status": "success",
+                        "duration_ms": voice_meta.get("transcription_duration_ms"),
+                    },
                     {"step": 3, "title": "User → Bot", "content": query_to_send_to_gpt},
-                    {"step": 4, "title": flow_match_title, "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call."},
+                    {
+                        "step": 4,
+                        "title": flow_match_title,
+                        "content": f"Bot matched from Q&A database. Score: {match_score:.0%}. No AI call.",
+                    },
                     {"step": 5, "title": "Bot → User", "content": qa_response, "event_type": "response_sent"},
                 ]
             log_interaction(
@@ -1599,14 +1781,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             return
         else:
             if ai_primary_mode:
-                print(
-                    "[_process_and_respond] 🧠 AI-primary mode ON. "
-                    "No FAQ match >=90%, continuing AI-normal flow."
-                )
+                print("[_process_and_respond] 🧠 AI-primary mode ON. No FAQ match >=90%, continuing AI-normal flow.")
             if is_reschedule_intent:
                 print(
-                    "[_process_and_respond] 🔁 Reschedule intent detected. "
-                    "No FAQ match >=90%, continuing booking flow."
+                    "[_process_and_respond] 🔁 Reschedule intent detected. No FAQ match >=90%, continuing booking flow."
                 )
             if is_price_intent:
                 print(
@@ -1614,18 +1792,22 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "No FAQ match >=90%, continuing exact pricing flow."
                 )
             # <90% match: GPT + knowledge + style + top 3 relevant Q&A pairs
-            print(f"[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
-            print(f"[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
+            print("[_process_and_respond] ℹ️ No Q&A match found (below 90%). Proceeding with GPT-4...")
+            print("[_process_and_respond] 💡 GPT will receive top 3 relevant Q&A pairs in context")
 
             # Fetch conversation history once (same 12h window as normal context) – use for selector and for GPT.
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
             conversation_history = await get_conversation_context_for_gpt(
                 user_id,
-                current_conversation_id,
+                firestore_conversation_id,
                 window_hours=getattr(config, "CONTEXT_WINDOW_HOURS", 12),
                 alternate_user_id=canonical_user_id,
             )
-            last_ai_response_at = await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id) if current_conversation_id else None
+            last_ai_response_at = (
+                await get_conversation_last_ai_response_at(user_id, current_conversation_id, canonical_user_id)
+                if current_conversation_id
+                else None
+            )
             last_bot_msg = await get_last_bot_message_for_gpt_context(
                 user_id,
                 current_conversation_id,
@@ -1654,9 +1836,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             # ALWAYS run selector: pass query + context_messages so selector understands what the conversation is about (e.g. user "eh" / "beirut" after we asked branch).
             from services.dynamic_retrieval_service import (
-                retrieve_and_merge,
                 is_dynamic_retrieval_available,
+                retrieve_and_merge,
             )
+
             custom_context = None
             _dynamic_retrieval_flow_meta = None
             selector_query = query_to_send_to_gpt
@@ -1679,7 +1862,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None
-            if user_data.pop('just_returned_from_human_takeover', False):
+            if user_data.pop("just_returned_from_human_takeover", False):
                 takeover_ctx = (
                     "**USER JUST RETURNED FROM HUMAN TAKEOVER (CRITICAL):**\n"
                     "- A human operator just finished with this user. The conversation was released back to the bot.\n"
@@ -1688,18 +1871,20 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "- Only hand over if the user EXPLICITLY asks for a human in THIS current message.\n"
                     "- Treat this as a fresh start. Answer their current question normally."
                 )
-                operational_context = (operational_context + "\n\n" + takeover_ctx) if operational_context else takeover_ctx
+                operational_context = (
+                    (operational_context + "\n\n" + takeover_ctx) if operational_context else takeover_ctx
+                )
             if _resume_original_question:
-                orig_q = user_data.get('original_question') or conv_state.get('original_question')
+                orig_q = user_data.get("original_question") or conv_state.get("original_question")
                 ctx = (
                     f"Conversation State:\n"
                     f"- gender: {current_gender}\n"
                     f"- awaiting_gender: false\n"
                     f"- awaiting_clarification: false\n"
-                    f"- original_question: \"{orig_q or ''}\"\n"
-                    f"- selected_service: \"{user_data.get('selected_service', '')}\"\n"
-                    f"- last_bot_question_type: \"{conv_state.get('last_bot_question_type', '')}\"\n\n"
-                    f"Current User Message: \"{user_input_to_process}\"\n\n"
+                    f'- original_question: "{orig_q or ""}"\n'
+                    f'- selected_service: "{user_data.get("selected_service", "")}"\n'
+                    f'- last_bot_question_type: "{conv_state.get("last_bot_question_type", "")}"\n\n'
+                    f'Current User Message: "{user_input_to_process}"\n\n'
                     f"Task: The user previously asked a question. The bot asked for clarification or gender. "
                     f"The user has now answered. Answer the ORIGINAL question. Do not ask for clarification again."
                 )
@@ -1708,10 +1893,7 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             if last_bot_msg and last_bot_msg.get("text"):
                 last_text = (last_bot_msg.get("text") or "")[:500]
                 is_smart = (last_bot_msg.get("metadata") or {}).get("source") == "smart_message"
-                ctx = (
-                    f"Last message we sent to the user: \"{last_text}\"\n"
-                    f"Domain: clinic (ليناز ليزر). "
-                )
+                ctx = f'Last message we sent to the user: "{last_text}"\nDomain: clinic (ليناز ليزر). '
                 if is_smart:
                     ctx += "This was a clinic notification. The user might be replying to or asking about it. "
                 ctx += "Do not lose context – the user might be talking or asking about this."
@@ -1724,7 +1906,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     "- Do NOT choose action human_handover unless they clearly ask to speak to a person **in this message**.\n"
                     "- Answer their current message normally; ignore stale anger/complaints in history for escalation."
                 )
-                operational_context = (operational_context + "\n\n" + cooldown_ctx) if operational_context else cooldown_ctx
+                operational_context = (
+                    (operational_context + "\n\n" + cooldown_ctx) if operational_context else cooldown_ctx
+                )
 
             gpt_response_data = await get_bot_chat_response(
                 user_id=user_id,
@@ -1794,7 +1978,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     for uid in [canonical_user_id, user_id]:
                         if not uid:
                             continue
-                        ref = users_coll.document(uid).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(current_conversation_id)
+                        ref = (
+                            users_coll.document(uid)
+                            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                            .document(current_conversation_id)
+                        )
                         snap = await asyncio.to_thread(ref.get)
                         if snap.exists:
                             d = snap.to_dict() or {}
@@ -1804,7 +1992,10 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             except Exception as e:
                 print(f"[_process_and_respond] ⚠️ Waiting-check on error failed: {e}")
         if in_waiting:
-            bot_reply_text = get_dynamic_message("waiting_queue_message", current_preferred_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+            bot_reply_text = (
+                get_dynamic_message("waiting_queue_message", current_preferred_lang)
+                or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+            )
             action = "answer_question"
             print(f"[_process_and_respond] GPT error but user {user_id} in waiting queue → sending waiting message")
         else:
@@ -1821,11 +2012,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 # Error/API/system issue → hand over to human
                 action = "human_handover"
                 escalation_reason_from_gpt = "technical_error"
-                print(f"[_process_and_respond] GPT/system error → handing over to human. error={flow_meta.get('error')}")
+                print(
+                    f"[_process_and_respond] GPT/system error → handing over to human. error={flow_meta.get('error')}"
+                )
 
     _handover_offer_needs_confirmation = (
         bool(bot_reply_text)
-        and _reply_offers_handover_confirmation(bot_reply_text)
+        and _reply_offers_handover_confirmation(str(bot_reply_text or ""))
         and not _user_explicitly_requests_human_agent(user_input_to_process)
         and not flow_meta.get("error")
         and not flow_meta.get("booking_retry_exceeded")
@@ -1904,7 +2097,9 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 action = "human_handover"
                 escalation_reason_from_gpt = "technical_error"
                 _flow_error_reason = f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')}"
-                print(f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → handing over to human. flow_error={flow_meta.get('error', 'none')}")
+                print(
+                    f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → handing over to human. flow_error={flow_meta.get('error', 'none')}"
+                )
 
     if action == "human_handover" and _handover_offer_needs_confirmation:
         print(
@@ -1917,16 +2112,13 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     # If we had to coerce an invalid action from GPT, keep the full AI wording
     # instead of compressing it into the brief turn-by-turn format.
     if action_was_coerced:
-        bot_reply_text = _clean_reply_text(bot_reply_text)
+        bot_reply_text = _clean_reply_text(str(bot_reply_text or ""))
     # AI-PRIMARY: No turn-by-turn truncation or greeting strip. Send AI reply as-is.
 
     # Allow summary + confirmation request before submit; if the model falsely claims that booking
     # already happened or that the request was already sent to the system without CRM success,
     # treat it as an execution-path failure and hand over instead of showing the user fake progress.
-    if (
-        not _flow_meta_has_crm_booking_confirmation(flow_meta)
-        and _reply_claims_booking_done(bot_reply_text)
-    ):
+    if not _flow_meta_has_crm_booking_confirmation(flow_meta) and _reply_claims_booking_done(str(bot_reply_text or "")):
         print(
             "[_process_and_respond] BLOCKED booking claim: text claims booking/request already happened "
             "without submit_booking_intent/create_appointment success+booking_flow_state=booked"
@@ -2007,22 +2199,22 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         for candidate in [canonical_user_id, raw_user_id]:
             if candidate and candidate not in candidates:
                 candidates.append(candidate)
-            if candidate and (
-                candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)
-            ):
+            if candidate and (candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)):
                 alt_candidate = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
                 if alt_candidate not in candidates:
                     candidates.append(alt_candidate)
         return candidates
 
-    async def _resolve_conversation_doc_ref(users_coll, conversation_id: str, canonical_user_id: str):
+    async def _resolve_conversation_doc_ref(users_coll: Any, conversation_id: str, canonical_user_id: str) -> Any:
         candidate_user_ids = _build_firestore_user_candidates(canonical_user_id, user_id)
         last_ref = None
         last_snap = None
         for candidate_user_id in candidate_user_ids:
-            candidate_ref = users_coll.document(candidate_user_id).collection(
-                config.FIRESTORE_CONVERSATIONS_COLLECTION
-            ).document(conversation_id)
+            candidate_ref = (
+                users_coll.document(candidate_user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
             candidate_snap = await asyncio.to_thread(candidate_ref.get)
             last_ref = candidate_ref
             last_snap = candidate_snap
@@ -2069,20 +2261,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                             f"⚠️ _activate_ai_handover skipped: post-release cooldown (trigger={trigger_source}) conv={current_conversation_id}"
                         )
                         return False
-                n = await update_conversation_on_all_existing_paths(
-                    current_conversation_id, user_id, update_payload
-                )
+                n = await update_conversation_on_all_existing_paths(current_conversation_id, user_id, update_payload)
                 if n == 0:
-                    print(
-                        f"⚠️ Conversation {current_conversation_id} not found in Firestore on any user path"
-                    )
+                    print(f"⚠️ Conversation {current_conversation_id} not found in Firestore on any user path")
                 else:
                     wrote = True
-                    print(
-                        f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision, {n} path(s))"
-                    )
+                    print(f"✅ Conversation {current_conversation_id} set to waiting_human (AI decision, {n} path(s))")
                     try:
                         from services.live_chat_service import live_chat_service
+
                         live_chat_service.invalidate_cache()
                         await live_chat_service._refresh_index_for_conversation(
                             canonical_user_id, current_conversation_id
@@ -2099,34 +2286,32 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             config.user_in_human_takeover_mode[vid] = True
 
         notify_human_on_whatsapp(
-            user_name,
-            current_gender,
-            user_input_to_process,
-            type_of_notification=f"AI handover - {escalation_reason}"
+            user_name, current_gender, user_input_to_process, type_of_notification=f"AI handover - {escalation_reason}"
         )
 
         try:
             from services.human_takeover_notification_service import human_takeover_notification_service
+
             await human_takeover_notification_service.notify_and_audit_handoff(
                 user_id=user_id,
                 user_gender=current_gender,
                 customer_name=user_name,
-                customer_phone=user_data.get('phone_number', 'Unknown'),
+                customer_phone=user_data.get("phone_number", "Unknown"),
                 escalation_reason=escalation_reason,
                 last_message=user_input_to_process,
                 trigger_source=trigger_source,
                 conversation_id=current_conversation_id,
-                extra_details={"action": action}
+                extra_details={"action": action},
             )
         except Exception as notify_error:
             print(f"⚠️ Failed to send AI handoff template/audit: {notify_error}")
         return True
 
     # Update language from GPT's detection
-    if detected_language and detected_language in ['en', 'ar', 'fr', 'franco']:
-        previous_lang = user_data.get('user_preferred_lang', 'ar')
+    if detected_language and detected_language in ["en", "ar", "fr", "franco"]:
+        previous_lang = user_data.get("user_preferred_lang", "ar")
         if previous_lang != detected_language:
-            user_data['user_preferred_lang'] = detected_language
+            user_data["user_preferred_lang"] = detected_language
             user_persistence.save_user_language(user_id, detected_language)
             print(f"[_process_and_respond] 🌐 Language updated by GPT: {previous_lang} → {detected_language}")
         else:
@@ -2152,11 +2337,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             if db:
                 try:
                     app_id_for_firestore = "linas-ai-bot-backend"
-                    user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+                    user_doc_ref = (
+                        db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+                    )
                     user_doc_ref.update({"name": name_clean, "last_updated": datetime.datetime.now()})
                 except Exception as e:
                     print(f"⚠️ Failed to save name to Firestore: {e}")
-            log_report_event("name_saved", name_clean, current_gender, {"method": "AI Extraction", "whatsapp_id": user_id})
+            log_report_event(
+                "name_saved", name_clean, current_gender, {"method": "AI Extraction", "whatsapp_id": user_id}
+            )
             print(f"✅ Saved name '{name_clean}' from AI for user {user_id}")
             user_name = name_clean
         elif 2 <= len(name_clean) <= 50 and re.match(name_pattern, name_clean, re.UNICODE):
@@ -2170,13 +2359,21 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         log_report_event("gender_updated", user_name, detected_gender_from_gpt, {"method": "User Input Detection"})
         config.gender_attempts[user_id] = 0
         config.user_greeting_stage[user_id] = 2
-        await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name))
-    elif detected_gender_from_gpt and config.user_gender.get(user_id) == "unknown" and detected_gender_from_gpt in ["male", "female"]:
+        await user_persistence.save_user_gender(
+            user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name)
+        )
+    elif (
+        detected_gender_from_gpt
+        and config.user_gender.get(user_id) == "unknown"
+        and detected_gender_from_gpt in ["male", "female"]
+    ):
         config.user_gender[user_id] = detected_gender_from_gpt
         log_report_event("gender_updated", user_name, detected_gender_from_gpt, {"method": "GPT Detection"})
         config.gender_attempts[user_id] = 0
         config.user_greeting_stage[user_id] = 2
-        await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name))
+        await user_persistence.save_user_gender(
+            user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name)
+        )
 
     # Dashboard test capture skips falsy message_text; WhatsApp should not receive empty bodies.
     _actions_requiring_bot_text = {
@@ -2211,135 +2408,256 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
             f"(flow_meta.error={flow_meta.get('error')!r})"
         )
 
+    bot_reply_text = str(bot_reply_text or "")
+
     # Track what we send for flow logging
-    sent_reply = bot_reply_text
+    sent_reply: str = bot_reply_text
 
     # Process the action requested by GPT
     if action in ["initial_greet_and_ask_gender", "ask_gender"]:
         # AI-primary: AI decides to request gender, backend persists state and executes.
-        if not user_data.get('original_question'):
-            user_data['original_question'] = user_input_to_process
-        user_data['awaiting_gender'] = True
-        user_data['awaiting_clarification'] = False
-        user_data['last_bot_question_type'] = 'gender'
+        if not user_data.get("original_question"):
+            user_data["original_question"] = user_input_to_process
+        user_data["awaiting_gender"] = True
+        user_data["awaiting_clarification"] = False
+        user_data["last_bot_question_type"] = "gender"
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            bot_reply_text,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai"},
+        )
 
     elif action == "confirm_gender":
         # AI-primary: AI confirmed gender and decided the wording.
         if detected_gender_from_gpt and detected_gender_from_gpt in ["male", "female"]:
-            await user_persistence.save_user_gender(user_id, detected_gender_from_gpt, phone=user_data.get('phone_number', user_id), name=user_name)
+            await user_persistence.save_user_gender(
+                user_id, detected_gender_from_gpt, phone=user_data.get("phone_number", user_id), name=user_name
+            )
             print(f"✅ Saved gender '{detected_gender_from_gpt}' for user {user_id} to API")
-        user_data['awaiting_gender'] = False
-        user_data['last_bot_question_type'] = None
+        user_data["awaiting_gender"] = False
+        user_data["last_bot_question_type"] = None
         config.user_greeting_stage[user_id] = 2
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            bot_reply_text,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai"},
+        )
 
     elif action == "confirm_booking_details":
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            bot_reply_text,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai"},
+        )
         config.user_greeting_stage[user_id] = 2
 
     elif action == "human_handover_initial_ask":
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-        user_data['awaiting_human_handover_confirmation'] = True
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            bot_reply_text,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai"},
+        )
+        user_data["awaiting_human_handover_confirmation"] = True
 
     elif action == "human_handover_confirmed":
-        user_data['awaiting_human_handover_confirmation'] = False
+        user_data["awaiting_human_handover_confirmation"] = False
         handover_ok = await _activate_ai_handover(
             escalation_reason=escalation_reason_from_gpt or "customer_requested_human",
-            trigger_source="ai_handover_confirmed"
+            trigger_source="ai_handover_confirmed",
         )
         if handover_ok:
-            handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+            handoff_msg = (
+                get_dynamic_message("human_handover_message", current_preferred_lang)
+                or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+            )
             sent_reply = handoff_msg
             await send_message_func(user_id, handoff_msg)
-            await save_conversation_message_to_firestore(user_id, "ai", handoff_msg, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-            log_report_event("human_handover", user_id, current_gender, {
-                "message": user_input_to_process,
-                "status": "confirmed",
-                "source": "ai_handover_confirmed"
-            })
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                handoff_msg,
+                current_conversation_id,
+                user_name,
+                user_data.get("phone_number"),
+                metadata={"handled_by": "ai"},
+            )
+            log_report_event(
+                "human_handover",
+                user_id,
+                current_gender,
+                {"message": user_input_to_process, "status": "confirmed", "source": "ai_handover_confirmed"},
+            )
             await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
         else:
             fallback = (bot_reply_text or "").strip() or (
-                get_dynamic_message("generic_error_message", current_preferred_lang)
-                or "تمام، كيف فيني ساعدك بهاللحظة؟"
+                get_dynamic_message("generic_error_message", current_preferred_lang) or "تمام، كيف فيني ساعدك بهاللحظة؟"
             )
             sent_reply = fallback
             await send_message_func(user_id, fallback)
-            await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                fallback,
+                current_conversation_id,
+                user_name,
+                user_data.get("phone_number"),
+                metadata={"handled_by": "ai"},
+            )
 
     elif action == "return_to_normal_chat":
-        user_data['awaiting_human_handover_confirmation'] = False
+        user_data["awaiting_human_handover_confirmation"] = False
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            bot_reply_text,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai"},
+        )
 
     elif action == "human_handover":
         handover_ok = await _activate_ai_handover(
-            escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff",
-            trigger_source="ai_handover_direct"
+            escalation_reason=escalation_reason_from_gpt or "ai_decided_handoff", trigger_source="ai_handover_direct"
         )
         if handover_ok:
-            handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+            handoff_msg = (
+                get_dynamic_message("human_handover_message", current_preferred_lang)
+                or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+            )
             sent_reply = handoff_msg
             await send_message_func(user_id, handoff_msg)
-            await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-            log_report_event("human_handover", user_id, current_gender, {
-                "message": user_input_to_process,
-                "status": "direct",
-                "source": "ai_handover_direct"
-            })
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                sent_reply,
+                current_conversation_id,
+                user_name,
+                user_data.get("phone_number"),
+                metadata={"handled_by": "ai"},
+            )
+            log_report_event(
+                "human_handover",
+                user_id,
+                current_gender,
+                {"message": user_input_to_process, "status": "direct", "source": "ai_handover_direct"},
+            )
             await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
         else:
             fallback = (bot_reply_text or "").strip() or (
-                get_dynamic_message("generic_error_message", current_preferred_lang)
-                or "كيف فيني ساعدك بهاللحظة؟"
+                get_dynamic_message("generic_error_message", current_preferred_lang) or "كيف فيني ساعدك بهاللحظة؟"
             )
             sent_reply = fallback
             await send_message_func(user_id, fallback)
-            await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+            await save_conversation_message_to_firestore(
+                user_id,
+                "ai",
+                fallback,
+                current_conversation_id,
+                user_name,
+                user_data.get("phone_number"),
+                metadata={"handled_by": "ai"},
+            )
 
-    elif action in ["ask_for_details_for_booking", "ask_for_service_type", "ask_for_details", "ask_for_tattoo_photo", "ask_clarification"]:
+    elif action in [
+        "ask_for_details_for_booking",
+        "ask_for_service_type",
+        "ask_for_details",
+        "ask_for_tattoo_photo",
+        "ask_clarification",
+    ]:
         # Clarification anchor should point to the question being clarified now.
         # If we're already awaiting clarification, keep the existing anchor.
-        clarification_anchor = user_data.get('pending_clarification_query') if user_data.get('awaiting_clarification') else None
+        clarification_anchor = (
+            user_data.get("pending_clarification_query") if user_data.get("awaiting_clarification") else None
+        )
         if not clarification_anchor:
-            clarification_anchor = user_data.get('original_question') or user_input_to_process
-        user_data['original_question'] = clarification_anchor
-        user_data['awaiting_clarification'] = True
-        user_data['last_bot_question_type'] = 'clarification'
-        user_data['pending_clarification_query'] = clarification_anchor
+            clarification_anchor = user_data.get("original_question") or user_input_to_process
+        user_data["original_question"] = clarification_anchor
+        user_data["awaiting_clarification"] = True
+        user_data["last_bot_question_type"] = "clarification"
+        user_data["pending_clarification_query"] = clarification_anchor
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            bot_reply_text,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai"},
+        )
         config.user_greeting_stage[user_id] = 2
 
     elif action in ["content_moderated", "rate_limit_exceeded"]:
         # Moderation or rate limit: send the safe/limit message from the service (no GPT call).
-        user_data['awaiting_gender'] = False
-        user_data['awaiting_clarification'] = False
-        user_data['pending_clarification_query'] = None
+        user_data["awaiting_gender"] = False
+        user_data["awaiting_clarification"] = False
+        user_data["pending_clarification_query"] = None
         reply_to_send = (bot_reply_text or "").strip() or (
             get_dynamic_message("generic_error_message", current_preferred_lang)
             or "عذراً، واجهت مشكلة في فهم طلبك حالياً. الرجاء المحاولة مرة أخرى."
         )
         sent_reply = reply_to_send
         await send_message_func(user_id, reply_to_send)
-        await save_conversation_message_to_firestore(user_id, "ai", reply_to_send, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai", "action": action})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            reply_to_send,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai", "action": action},
+        )
         config.user_greeting_stage[user_id] = 2
 
-    elif action in ["answer_question", "normal_chat", "unknown_query", "provide_info", "tool_call", "check_customer_status", "confirm_appointment_reschedule"]:
-        user_data['awaiting_gender'] = False
-        user_data['awaiting_clarification'] = False
-        user_data['pending_clarification_query'] = None
+    elif action in [
+        "answer_question",
+        "normal_chat",
+        "unknown_query",
+        "provide_info",
+        "tool_call",
+        "check_customer_status",
+        "confirm_appointment_reschedule",
+    ]:
+        user_data["awaiting_gender"] = False
+        user_data["awaiting_clarification"] = False
+        user_data["pending_clarification_query"] = None
         # Clear stale carry-over so the next user intent starts fresh.
-        user_data['original_question'] = None
-        user_data['initial_user_query_to_process'] = None
-        user_data['last_bot_question_type'] = None
+        user_data["original_question"] = None
+        user_data["initial_user_query_to_process"] = None
+        user_data["last_bot_question_type"] = None
         await send_message_func(user_id, bot_reply_text)
-        await save_conversation_message_to_firestore(user_id, "ai", bot_reply_text, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            bot_reply_text,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "ai"},
+        )
         config.user_greeting_stage[user_id] = 2
 
     else:
@@ -2389,21 +2707,34 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 )
         else:
             _flow_error_reason = f"Step: Bot → User | Unexpected action: '{action}'"
-            print(f"[_process_and_respond] ERROR: Unexpected action '{action}' → handing over to human. bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}")
+            print(
+                f"[_process_and_respond] ERROR: Unexpected action '{action}' → handing over to human. bot_reply_len={len(bot_reply_text or '')} | flow_error={flow_meta.get('error', 'none')}"
+            )
             handover_ok = await _activate_ai_handover(
-                escalation_reason=escalation_reason_from_gpt or "technical_error",
-                trigger_source="unexpected_action"
+                escalation_reason=escalation_reason_from_gpt or "technical_error", trigger_source="unexpected_action"
             )
             if handover_ok:
-                handoff_msg = get_dynamic_message("human_handover_message", current_preferred_lang) or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+                handoff_msg = (
+                    get_dynamic_message("human_handover_message", current_preferred_lang)
+                    or "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏"
+                )
                 sent_reply = handoff_msg
                 await send_message_func(user_id, handoff_msg)
-                await save_conversation_message_to_firestore(user_id, "ai", sent_reply, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
-                log_report_event("human_handover", user_id, current_gender, {
-                    "message": user_input_to_process,
-                    "status": "direct",
-                    "source": "unexpected_action"
-                })
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    sent_reply,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={"handled_by": "ai"},
+                )
+                log_report_event(
+                    "human_handover",
+                    user_id,
+                    current_gender,
+                    {"message": user_input_to_process, "status": "direct", "source": "unexpected_action"},
+                )
                 await update_dashboard_metric_in_firestore(user_id, "human_handover_requests", 1)
             else:
                 fallback = (bot_reply_text or "").strip() or (
@@ -2412,15 +2743,21 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 )
                 sent_reply = fallback
                 await send_message_func(user_id, fallback)
-                await save_conversation_message_to_firestore(user_id, "ai", fallback, current_conversation_id, user_name, user_data.get('phone_number'), metadata={"handled_by": "ai"})
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    fallback,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={"handled_by": "ai"},
+                )
 
     # Keep yes/no booking-follow-up state when we explicitly ask:
     # "Would you like to book a new appointment?"
     if _looks_like_booking_offer_confirmation_question(sent_reply):
         booking_origin_query = (
-            user_data.get("original_question")
-            or user_data.get("pending_clarification_query")
-            or user_input_to_process
+            user_data.get("original_question") or user_data.get("pending_clarification_query") or user_input_to_process
         )
         user_data["awaiting_booking_offer_confirmation"] = True
         user_data["booking_offer_origin_query"] = booking_origin_query
@@ -2433,28 +2770,78 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
 
     # Flow logging for dashboard transparency
     response_time_ms = (time.time() - start_time) * 1000
-    flow_source = "rate_limit" if action == "rate_limit_exceeded" else "moderation" if action == "content_moderated" else "gpt"
+    flow_source = (
+        "rate_limit" if action == "rate_limit_exceeded" else "moderation" if action == "content_moderated" else "gpt"
+    )
     flow_steps = None
     msg_type = "text"
 
     # Build multimodal prepended steps for Activity Flow
-    def _prepend_multimodal_steps(steps_list, step_start: int) -> tuple:
+    def _prepend_multimodal_steps(steps_list: Any, step_start: int) -> tuple:
         prepended = []
         offset = 0
         voice_meta = user_data.pop("_voice_flow_meta", None)
         if voice_meta:
-            prepended.extend([
-                {"step": step_start, "title": "Voice received", "content": "User sent voice message.", "event_type": "voice_received", "status": "success", "message_type": "voice"},
-                {"step": step_start + 1, "title": "Voice downloaded/prepared", "content": f"Audio converted to MP3. Duration: {voice_meta.get('audio_duration_seconds', 0):.2f}s.", "event_type": "voice_downloaded", "status": "success", "message_type": "voice"},
-                {"step": step_start + 2, "title": "Transcription started", "content": f"Sent to {voice_meta.get('transcription_model', 'gpt-4o-transcribe')}.", "event_type": "transcription_started", "model": voice_meta.get("transcription_model"), "message_type": "voice"},
-                {"step": step_start + 3, "title": "Transcription completed", "content": f"Result: {voice_meta.get('transcription_length', 0)} chars in {voice_meta.get('transcription_duration_ms', 0):.0f}ms.", "event_type": "transcription_completed", "status": voice_meta.get("status", "success"), "duration_ms": voice_meta.get("transcription_duration_ms"), "message_type": "voice"},
-            ])
+            prepended.extend(
+                [
+                    {
+                        "step": step_start,
+                        "title": "Voice received",
+                        "content": "User sent voice message.",
+                        "event_type": "voice_received",
+                        "status": "success",
+                        "message_type": "voice",
+                    },
+                    {
+                        "step": step_start + 1,
+                        "title": "Voice downloaded/prepared",
+                        "content": f"Audio converted to MP3. Duration: {voice_meta.get('audio_duration_seconds', 0):.2f}s.",
+                        "event_type": "voice_downloaded",
+                        "status": "success",
+                        "message_type": "voice",
+                    },
+                    {
+                        "step": step_start + 2,
+                        "title": "Transcription started",
+                        "content": f"Sent to {voice_meta.get('transcription_model', 'gpt-4o-transcribe')}.",
+                        "event_type": "transcription_started",
+                        "model": voice_meta.get("transcription_model"),
+                        "message_type": "voice",
+                    },
+                    {
+                        "step": step_start + 3,
+                        "title": "Transcription completed",
+                        "content": f"Result: {voice_meta.get('transcription_length', 0)} chars in {voice_meta.get('transcription_duration_ms', 0):.0f}ms.",
+                        "event_type": "transcription_completed",
+                        "status": voice_meta.get("status", "success"),
+                        "duration_ms": voice_meta.get("transcription_duration_ms"),
+                        "message_type": "voice",
+                    },
+                ]
+            )
             offset = 4
         if user_image_base64:
-            prepended.extend([
-                {"step": step_start + offset, "title": "Image received", "content": "User sent image.", "event_type": "image_received", "status": "success", "message_type": "image"},
-                {"step": step_start + offset + 1, "title": "Image prepared", "content": f"Extracted base64, format: {user_image_format}.", "event_type": "image_prepared", "status": "success", "metadata": {"image_format": user_image_format}, "message_type": "image"},
-            ])
+            prepended.extend(
+                [
+                    {
+                        "step": step_start + offset,
+                        "title": "Image received",
+                        "content": "User sent image.",
+                        "event_type": "image_received",
+                        "status": "success",
+                        "message_type": "image",
+                    },
+                    {
+                        "step": step_start + offset + 1,
+                        "title": "Image prepared",
+                        "content": f"Extracted base64, format: {user_image_format}.",
+                        "event_type": "image_prepared",
+                        "status": "success",
+                        "metadata": {"image_format": user_image_format},
+                        "message_type": "image",
+                    },
+                ]
+            )
             offset += 2
         for s in steps_list:
             s["step"] = s["step"] + offset
@@ -2477,14 +2864,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         )
         if loaded_content_full:
             loaded_content_block += (
-                f"\n\nFull loaded content sent to AI ({len(loaded_content_full)} chars):\n"
-                f"{loaded_content_full}"
+                f"\n\nFull loaded content sent to AI ({len(loaded_content_full)} chars):\n{loaded_content_full}"
             )
-        ai_selected_str = f"AI selected from knowledge/price/style:\n  • " + "\n  • ".join(selected_titles) if selected_titles else ""
+        ai_selected_str = (
+            "AI selected from knowledge/price/style:\n  • " + "\n  • ".join(selected_titles) if selected_titles else ""
+        )
         if ai_selector_return:
             ai_selected_str += f"\n\nRaw AI response:\n{ai_selector_return}"
         elif not ai_selected_str:
-            ai_selected_str = f"Files: {', '.join(dr.get('selected_files') or [])}, action: {dr.get('action', 'normal')}"
+            ai_selected_str = (
+                f"Files: {', '.join(dr.get('selected_files') or [])}, action: {dr.get('action', 'normal')}"
+            )
         from services.dynamic_retrieval_service import (
             SELECTOR_MODEL,
             SELECTOR_MODEL_INPUT_PER_1M_USD,
@@ -2500,36 +2890,103 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         first_call = token_breakdown.get("first_gpt_call") or token_breakdown.get("single_call") or {}
         second_call = token_breakdown.get("second_gpt_call") or {}
         orchestration_model = (
-            flow_meta.get("orchestration_model")
-            or stage_models.get("planning")
-            or flow_meta.get("model")
-            or "gpt-5.1"
+            flow_meta.get("orchestration_model") or stage_models.get("planning") or flow_meta.get("model") or "gpt-5.1"
         )
-        final_model = (
-            flow_meta.get("final_response_model")
-            or stage_models.get("final_response")
-            or orchestration_model
-        )
+        final_model = flow_meta.get("final_response_model") or stage_models.get("final_response") or orchestration_model
         main_cost = flow_meta.get("cost_usd") or 0.0
         selector_cost = (sel_pt / 1_000_000 * SELECTOR_MODEL_INPUT_PER_1M_USD) + (
             sel_ct / 1_000_000 * SELECTOR_MODEL_OUTPUT_PER_1M_USD
         )
         steps = [
-            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
-            {"step": 2, "title": "Bot → AI (Selector)", "content": bot_sent_selector or "User message + file titles.", "tokens": sel_pt, "model": SELECTOR_MODEL, "cost_usd": round((sel_pt / 1_000_000 * SELECTOR_MODEL_INPUT_PER_1M_USD), 6) if sel_pt else None, "event_type": "selector_started"},
-            {"step": 3, "title": "AI → Bot (Selector)", "content": ai_selected_str or "AI returned.", "tokens": sel_ct, "model": SELECTOR_MODEL, "cost_usd": round((sel_ct / 1_000_000 * SELECTOR_MODEL_OUTPUT_PER_1M_USD), 6) if sel_ct else None, "event_type": "selector_completed", "metadata": {"selected_files": selected_titles, "selected_count": len(selected_titles)}},
-            {"step": 4, "title": "Bot loaded content", "content": loaded_content_block, "tokens": 0, "model": None, "cost_usd": None, "event_type": "retrieval_completed"},
+            {
+                "step": 1,
+                "title": "User → Bot",
+                "content": user_input_to_process,
+                "tokens": 0,
+                "model": None,
+                "cost_usd": None,
+            },
+            {
+                "step": 2,
+                "title": "Bot → AI (Selector)",
+                "content": bot_sent_selector or "User message + file titles.",
+                "tokens": sel_pt,
+                "model": SELECTOR_MODEL,
+                "cost_usd": round((sel_pt / 1_000_000 * SELECTOR_MODEL_INPUT_PER_1M_USD), 6) if sel_pt else None,
+                "event_type": "selector_started",
+            },
+            {
+                "step": 3,
+                "title": "AI → Bot (Selector)",
+                "content": ai_selected_str or "AI returned.",
+                "tokens": sel_ct,
+                "model": SELECTOR_MODEL,
+                "cost_usd": round((sel_ct / 1_000_000 * SELECTOR_MODEL_OUTPUT_PER_1M_USD), 6) if sel_ct else None,
+                "event_type": "selector_completed",
+                "metadata": {"selected_files": selected_titles, "selected_count": len(selected_titles)},
+            },
+            {
+                "step": 4,
+                "title": "Bot loaded content",
+                "content": loaded_content_block,
+                "tokens": 0,
+                "model": None,
+                "cost_usd": None,
+                "event_type": "retrieval_completed",
+            },
         ]
         cust_ctx = flow_meta.get("customer_context_sent")
         if cust_ctx:
-            steps.append({"step": 5, "title": "Bot → AI (Customer context)", "content": cust_ctx, "tokens": 0, "model": None, "cost_usd": None, "event_type": "customer_context_sent"})
-        steps.append({"step": len(steps) + 1, "title": "Bot → AI (GPT planning)", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Merged content + user query sent to GPT.", "tokens": first_call.get("prompt_tokens", pt), "model": orchestration_model, "cost_usd": round(first_call.get("input_cost_usd") or flow_meta.get("input_cost_usd") or 0, 6) if (first_call.get("input_cost_usd") is not None or flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
+            steps.append(
+                {
+                    "step": 5,
+                    "title": "Bot → AI (Customer context)",
+                    "content": cust_ctx,
+                    "tokens": 0,
+                    "model": None,
+                    "cost_usd": None,
+                    "event_type": "customer_context_sent",
+                }
+            )
+        steps.append(
+            {
+                "step": len(steps) + 1,
+                "title": "Bot → AI (GPT planning)",
+                "content": flow_meta.get("bot_sent_to_ai")
+                or flow_meta.get("ai_query_summary")
+                or "Merged content + user query sent to GPT.",
+                "tokens": first_call.get("prompt_tokens", pt),
+                "model": orchestration_model,
+                "cost_usd": round(first_call.get("input_cost_usd") or flow_meta.get("input_cost_usd") or 0, 6)
+                if (first_call.get("input_cost_usd") is not None or flow_meta.get("input_cost_usd") is not None)
+                else None,
+                "event_type": "main_ai_started",
+            }
+        )
         step_num = len(steps) + 1
         if tool_round_trips:
-            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
+            steps.append(
+                {
+                    "step": step_num,
+                    "title": "AI → Bot (requested tools)",
+                    "content": ai_first or "AI requested tool calls.",
+                    "tokens": 0,
+                    "model": None,
+                    "cost_usd": None,
+                }
+            )
             step_num += 1
             for tr in tool_round_trips:
-                steps.append({"step": step_num, "title": f"AI requested: {tr.get('ai_requested', '?')}", "content": f"Args: {tr.get('args', '{}')}", "tokens": 0, "model": None, "cost_usd": None})
+                steps.append(
+                    {
+                        "step": step_num,
+                        "title": f"AI requested: {tr.get('ai_requested', '?')}",
+                        "content": f"Args: {tr.get('args', '{}')}",
+                        "tokens": 0,
+                        "model": None,
+                        "cost_usd": None,
+                    }
+                )
                 step_num += 1
                 exec_step = {
                     "step": step_num,
@@ -2543,19 +3000,58 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     exec_step["metadata"] = {"backend_execution": tr["backend_execution"]}
                 steps.append(exec_step)
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (GPT final)", "content": ai_raw_or_error or "(no content)", "tokens": second_call.get("completion_tokens", ct), "model": final_model, "cost_usd": round(second_call.get("cost_usd") or flow_meta.get("output_cost_usd") or 0, 6) if (second_call.get("cost_usd") is not None or flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
+            steps.append(
+                {
+                    "step": step_num,
+                    "title": "AI → Bot (GPT final)",
+                    "content": ai_raw_or_error or "(no content)",
+                    "tokens": second_call.get("completion_tokens", ct),
+                    "model": final_model,
+                    "cost_usd": round(second_call.get("cost_usd") or flow_meta.get("output_cost_usd") or 0, 6)
+                    if (second_call.get("cost_usd") is not None or flow_meta.get("output_cost_usd") is not None)
+                    else None,
+                    "event_type": "main_ai_completed",
+                }
+            )
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot (GPT)", "content": ai_raw_or_error or f"GPT returned. Model: {final_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": final_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
+            steps.append(
+                {
+                    "step": step_num,
+                    "title": "AI → Bot (GPT)",
+                    "content": ai_raw_or_error
+                    or f"GPT returned. Model: {final_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms",
+                    "tokens": ct,
+                    "model": final_model,
+                    "cost_usd": round(main_cost, 6) if main_cost else None,
+                    "event_type": "main_ai_completed",
+                }
+            )
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            err_step = {"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot (GPT) | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"}
+            err_step = {
+                "step": step_num,
+                "title": "❌ Error",
+                "content": f"Step: AI → Bot (GPT) | {err_msg}",
+                "tokens": 0,
+                "model": None,
+                "cost_usd": None,
+                "event_type": "error",
+            }
             if booking_retry:
                 err_step["metadata"] = {"booking_retry": booking_retry}
             steps.append(err_step)
             step_num += 1
-        resp_step = {"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None, "event_type": "response_sent"}
+        resp_step = {
+            "step": step_num,
+            "title": "Bot → User",
+            "content": sent_reply or "(no response)",
+            "tokens": 0,
+            "model": None,
+            "cost_usd": None,
+            "event_type": "response_sent",
+        }
         if action in ("human_handover", "human_handover_confirmed"):
             resp_step["event_type"] = "handover_triggered"
             resp_step["metadata"] = {"handover": True}
@@ -2572,7 +3068,16 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         else:
             summary_parts.append(f"Main GPT ({final_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}")
         summary_parts.append(f"Total cost: ${total_cost:.6f}")
-        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0), "model": None, "cost_usd": round(total_cost, 6)})
+        steps.append(
+            {
+                "step": step_num + 1,
+                "title": "📊 Summary (usage & cost)",
+                "content": " | ".join(summary_parts),
+                "tokens": (sel_pt + sel_ct) + (pt or 0) + (ct or 0),
+                "model": None,
+                "cost_usd": round(total_cost, 6),
+            }
+        )
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     else:
         tool_round_trips = flow_meta.get("tool_round_trips") or []
@@ -2586,37 +3091,72 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         first_call = token_breakdown.get("first_gpt_call") or token_breakdown.get("single_call") or {}
         second_call = token_breakdown.get("second_gpt_call") or {}
         orchestration_model = (
-            flow_meta.get("orchestration_model")
-            or stage_models.get("planning")
-            or flow_meta.get("model")
-            or "gpt-5.1"
+            flow_meta.get("orchestration_model") or stage_models.get("planning") or flow_meta.get("model") or "gpt-5.1"
         )
-        final_model = (
-            flow_meta.get("final_response_model")
-            or stage_models.get("final_response")
-            or orchestration_model
-        )
+        final_model = flow_meta.get("final_response_model") or stage_models.get("final_response") or orchestration_model
         main_cost = flow_meta.get("cost_usd") or 0.0
         steps = [
-            {"step": 1, "title": "User → Bot", "content": user_input_to_process, "tokens": 0, "model": None, "cost_usd": None},
+            {
+                "step": 1,
+                "title": "User → Bot",
+                "content": user_input_to_process,
+                "tokens": 0,
+                "model": None,
+                "cost_usd": None,
+            },
         ]
         cust_ctx = flow_meta.get("customer_context_sent")
         if cust_ctx:
-            steps.append({"step": 2, "title": "Bot → AI (Customer context)", "content": cust_ctx, "tokens": 0, "model": None, "cost_usd": None, "event_type": "customer_context_sent"})
-        steps.append({"step": len(steps) + 1, "title": "Bot → AI", "content": flow_meta.get("bot_sent_to_ai") or flow_meta.get("ai_query_summary") or "Query + context sent to GPT.", "tokens": first_call.get("prompt_tokens", pt), "model": orchestration_model, "cost_usd": round(first_call.get("input_cost_usd") or flow_meta.get("input_cost_usd") or 0, 6) if (first_call.get("input_cost_usd") is not None or flow_meta.get("input_cost_usd") is not None) else None, "event_type": "main_ai_started"})
-        step_num = len(steps) + 1
-        if tool_round_trips:
-            steps.append({"step": step_num, "title": "AI → Bot (requested tools)", "content": ai_first or "AI requested tool calls.", "tokens": 0, "model": None, "cost_usd": None})
-            step_num += 1
-            for i, tr in enumerate(tool_round_trips):
-                steps.append({
-                    "step": step_num,
-                    "title": f"AI requested: {tr.get('ai_requested', '?')}",
-                    "content": f"Args: {tr.get('args', '{}')}",
+            steps.append(
+                {
+                    "step": 2,
+                    "title": "Bot → AI (Customer context)",
+                    "content": cust_ctx,
                     "tokens": 0,
                     "model": None,
                     "cost_usd": None,
-                })
+                    "event_type": "customer_context_sent",
+                }
+            )
+        steps.append(
+            {
+                "step": len(steps) + 1,
+                "title": "Bot → AI",
+                "content": flow_meta.get("bot_sent_to_ai")
+                or flow_meta.get("ai_query_summary")
+                or "Query + context sent to GPT.",
+                "tokens": first_call.get("prompt_tokens", pt),
+                "model": orchestration_model,
+                "cost_usd": round(first_call.get("input_cost_usd") or flow_meta.get("input_cost_usd") or 0, 6)
+                if (first_call.get("input_cost_usd") is not None or flow_meta.get("input_cost_usd") is not None)
+                else None,
+                "event_type": "main_ai_started",
+            }
+        )
+        step_num = len(steps) + 1
+        if tool_round_trips:
+            steps.append(
+                {
+                    "step": step_num,
+                    "title": "AI → Bot (requested tools)",
+                    "content": ai_first or "AI requested tool calls.",
+                    "tokens": 0,
+                    "model": None,
+                    "cost_usd": None,
+                }
+            )
+            step_num += 1
+            for _i, tr in enumerate(tool_round_trips):
+                steps.append(
+                    {
+                        "step": step_num,
+                        "title": f"AI requested: {tr.get('ai_requested', '?')}",
+                        "content": f"Args: {tr.get('args', '{}')}",
+                        "tokens": 0,
+                        "model": None,
+                        "cost_usd": None,
+                    }
+                )
                 step_num += 1
                 exec_step = {
                     "step": step_num,
@@ -2630,19 +3170,58 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                     exec_step["metadata"] = {"backend_execution": tr["backend_execution"]}
                 steps.append(exec_step)
                 step_num += 1
-            steps.append({"step": step_num, "title": "AI → Bot (final response)", "content": ai_raw_or_error or "(no content)", "tokens": second_call.get("completion_tokens", ct), "model": final_model, "cost_usd": round(second_call.get("cost_usd") or flow_meta.get("output_cost_usd") or 0, 6) if (second_call.get("cost_usd") is not None or flow_meta.get("output_cost_usd") is not None) else None, "event_type": "main_ai_completed"})
+            steps.append(
+                {
+                    "step": step_num,
+                    "title": "AI → Bot (final response)",
+                    "content": ai_raw_or_error or "(no content)",
+                    "tokens": second_call.get("completion_tokens", ct),
+                    "model": final_model,
+                    "cost_usd": round(second_call.get("cost_usd") or flow_meta.get("output_cost_usd") or 0, 6)
+                    if (second_call.get("cost_usd") is not None or flow_meta.get("output_cost_usd") is not None)
+                    else None,
+                    "event_type": "main_ai_completed",
+                }
+            )
             step_num += 1
         else:
-            steps.append({"step": step_num, "title": "AI → Bot", "content": ai_raw_or_error or f"GPT returned. Model: {final_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms", "tokens": ct, "model": final_model, "cost_usd": round(main_cost, 6) if main_cost else None, "event_type": "main_ai_completed"})
+            steps.append(
+                {
+                    "step": step_num,
+                    "title": "AI → Bot",
+                    "content": ai_raw_or_error
+                    or f"GPT returned. Model: {final_model} | Tokens: {(pt or 0) + (ct or 0)} | Time: {response_time_ms:.0f}ms",
+                    "tokens": ct,
+                    "model": final_model,
+                    "cost_usd": round(main_cost, 6) if main_cost else None,
+                    "event_type": "main_ai_completed",
+                }
+            )
             step_num += 1
         if flow_meta.get("error") or _flow_error_reason:
             err_msg = flow_meta.get("error") or _flow_error_reason or "Unknown error"
-            err_step = {"step": step_num, "title": "❌ Error", "content": f"Step: AI → Bot | {err_msg}", "tokens": 0, "model": None, "cost_usd": None, "event_type": "error"}
+            err_step = {
+                "step": step_num,
+                "title": "❌ Error",
+                "content": f"Step: AI → Bot | {err_msg}",
+                "tokens": 0,
+                "model": None,
+                "cost_usd": None,
+                "event_type": "error",
+            }
             if booking_retry:
                 err_step["metadata"] = {"booking_retry": booking_retry}
             steps.append(err_step)
             step_num += 1
-        resp_step = {"step": step_num, "title": "Bot → User", "content": sent_reply or "(no response)", "tokens": 0, "model": None, "cost_usd": None, "event_type": "response_sent"}
+        resp_step = {
+            "step": step_num,
+            "title": "Bot → User",
+            "content": sent_reply or "(no response)",
+            "tokens": 0,
+            "model": None,
+            "cost_usd": None,
+            "event_type": "response_sent",
+        }
         if action in ("human_handover", "human_handover_confirmed"):
             resp_step["event_type"] = "handover_triggered"
             resp_step["metadata"] = {"handover": True}
@@ -2654,8 +3233,20 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
                 f"Total cost: ${main_cost:.6f}",
             ]
         else:
-            summary_parts = [f"GPT ({final_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}", f"Total cost: ${main_cost:.6f}"]
-        steps.append({"step": step_num + 1, "title": "📊 Summary (usage & cost)", "content": " | ".join(summary_parts), "tokens": (pt or 0) + (ct or 0), "model": None, "cost_usd": round(main_cost, 6)})
+            summary_parts = [
+                f"GPT ({final_model}): {(pt or 0) + (ct or 0)} tokens, ${main_cost:.6f}",
+                f"Total cost: ${main_cost:.6f}",
+            ]
+        steps.append(
+            {
+                "step": step_num + 1,
+                "title": "📊 Summary (usage & cost)",
+                "content": " | ".join(summary_parts),
+                "tokens": (pt or 0) + (ct or 0),
+                "model": None,
+                "cost_usd": round(main_cost, 6),
+            }
+        )
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
     flow_error_for_log = flow_meta.get("error") or _flow_error_reason
     log_interaction(
@@ -2691,10 +3282,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
     prompt_tokens = flow_meta.get("prompt_tokens") or 0
     completion_tokens = flow_meta.get("completion_tokens") or 0
     cost = flow_meta.get("cost_usd") or 0.0
-    if cost == 0 and user_input_to_process.strip() and not user_input_to_process.lower().startswith('/start'):
-        prompt_tokens = count_tokens(get_system_instruction(user_id, current_preferred_lang) + "\n\n" + user_input_to_process)
+    if cost == 0 and user_input_to_process.strip() and not user_input_to_process.lower().startswith("/start"):
+        prompt_tokens = count_tokens(
+            get_system_instruction(user_id, current_preferred_lang) + "\n\n" + user_input_to_process
+        )
         completion_tokens = count_tokens(bot_reply_text)
-        total_tokens = prompt_tokens + completion_tokens
         fallback_model = flow_meta.get("final_response_model") or flow_meta.get("model") or "gpt-5.1"
         fallback_pricing = {
             "gpt-5.1": (1.25, 10.0),
@@ -2704,9 +3296,11 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         }
         input_per_1m, output_per_1m = fallback_pricing.get(fallback_model, fallback_pricing["gpt-5.1"])
         cost = (prompt_tokens / 1_000_000 * input_per_1m) + (completion_tokens / 1_000_000 * output_per_1m)
-        print(f"[_process_and_respond] 🔹 Prompt tokens: {prompt_tokens} | Completion: {completion_tokens} | Est. cost: ${cost:.6f}")
+        print(
+            f"[_process_and_respond] 🔹 Prompt tokens: {prompt_tokens} | Completion: {completion_tokens} | Est. cost: ${cost:.6f}"
+        )
         save_for_training_conversation_log(user_input_to_process, bot_reply_text)
-    
+
     # 📊 ANALYTICS: Log bot's response with performance metrics
     response_time_ms = (time.time() - start_time) * 1000
     analytics.log_message(
@@ -2718,21 +3312,17 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         cost_usd=cost,
         model=flow_meta.get("final_response_model") or flow_meta.get("model") or "gpt-5.1",
         response_time_ms=response_time_ms,
-        message_length=len(bot_reply_text) if bot_reply_text else 0
+        message_length=len(bot_reply_text) if bot_reply_text else 0,
     )
-    
+
     # 📊 ANALYTICS: Log gender if detected
     if detected_gender_from_gpt and detected_gender_from_gpt in ["male", "female"]:
         analytics.log_gender(user_id, detected_gender_from_gpt)
-    
+
     # 📊 ANALYTICS: Log escalation if human handover
     if action in ["human_handover", "human_handover_confirmed"]:
-        analytics.log_escalation(
-            user_id=user_id,
-            escalation_type="human_handover",
-            reason="user_requested"
-        )
-    
+        analytics.log_escalation(user_id=user_id, escalation_type="human_handover", reason="user_requested")
+
     # 📊 ANALYTICS: Detect and log service requests
     service_keywords = {
         "laser_hair_removal": ["hair removal", "إزالة الشعر", "ليزر الشعر", "شعر", "hair", "épilation"],
@@ -2740,18 +3330,15 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         "co2_laser": ["co2", "acne", "حب الشباب", "acné", "skin treatment"],
         "skin_whitening": ["whitening", "تبييض", "blanchiment", "skin lightening"],
         "botox": ["botox", "بوتوكس"],
-        "fillers": ["filler", "حشو", "remplissage"]
+        "fillers": ["filler", "حشو", "remplissage"],
     }
-    
+
     # Check user input and bot reply for service mentions
     combined_text = (user_input_to_process + " " + (bot_reply_text or "")).lower()
-    
+
     for service, keywords in service_keywords.items():
         if any(keyword.lower() in combined_text for keyword in keywords):
-            analytics.log_service_request(
-                user_id=user_id,
-                service=service
-            )
+            analytics.log_service_request(user_id=user_id, service=service)
             print(f"📊 Analytics: Detected service request - {service}")
             break  # Only log one service per message to avoid duplicates
 

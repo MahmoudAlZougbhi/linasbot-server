@@ -4,20 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-_TEST_ROOT = tempfile.mkdtemp(prefix="linas_wave4_")
-os.environ["LINASBOT_DATA_ROOT"] = _TEST_ROOT
-os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
-os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
-os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave4-test-secret")
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
-
 
 from services.durable_event_claim import (
     complete_event_claim,

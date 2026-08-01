@@ -1,10 +1,14 @@
-# -*- coding: utf-8 -*-
 """
 Chat History API module: canonical chat history endpoints.
 All handlers delegate to LiveChatService to keep a single source of truth.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from fastapi import Query
+
 from modules.core import app
 from services.live_chat_service import live_chat_service
 
@@ -15,7 +19,7 @@ async def get_chat_history_customers(
     filter_by: str = Query(default="all"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=200, ge=1, le=1000),
-):
+) -> Any:
     return await live_chat_service.get_history_customers(
         search=search,
         filter_by=filter_by,
@@ -31,7 +35,7 @@ async def get_customer_conversations(
     page_size: int = Query(default=200, ge=1, le=1000),
     status: str = Query(default="all"),
     search: str = Query(default=""),
-):
+) -> Any:
     return await live_chat_service.get_history_conversations(
         user_id=user_id,
         page=page,
@@ -49,7 +53,7 @@ async def get_conversation_messages(
     page_size: int = Query(default=1000, ge=1, le=1000),
     search: str = Query(default=""),
     sort: str = Query(default="asc"),
-):
+) -> Any:
     return await live_chat_service.get_history_messages(
         user_id=user_id,
         conversation_id=conversation_id,

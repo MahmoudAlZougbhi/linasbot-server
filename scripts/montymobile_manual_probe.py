@@ -16,16 +16,20 @@ Prerequisites:
     - Valid MontyMobile credentials in .env file
 """
 
+from __future__ import annotations
+
 import json
-import time
+import os
 import subprocess
 import sys
-import os
+import time
 from datetime import datetime
+from typing import Any
 
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     print("Note: python-dotenv not installed, using environment variables directly")
@@ -42,14 +46,14 @@ MONTYMOBILE_SOURCE_NUMBER = os.getenv("MONTYMOBILE_SOURCE_NUMBER", "96178974402"
 TEST_PHONE = "+96171412604"
 
 
-def print_header(title):
+def print_header(title: Any) -> None:
     """Print a formatted header"""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"  {title}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
 
-def print_config():
+def print_config() -> None:
     """Display current configuration"""
     print_header("MONTYMOBILE CONFIGURATION")
     print(f"  Base URL:      {MONTYMOBILE_BASE_URL}")
@@ -61,7 +65,7 @@ def print_config():
     print()
 
 
-def test_send_message_via_api(phone_number, message):
+def test_send_message_via_api(phone_number: Any, message: Any) -> Any:
     """
     Send a message directly via MontyMobile API
     This tests outbound messaging capability
@@ -74,14 +78,12 @@ def test_send_message_via_api(phone_number, message):
 
     endpoint = f"{MONTYMOBILE_BASE_URL}/notification/api/v2/WhatsappApi/send-session"
 
-    payload = {
+    payload: dict[str, Any] = {
         "tenantId": MONTYMOBILE_TENANT_ID,
         "channelId": MONTYMOBILE_API_ID,
         "receiver": phone_number.replace("+", ""),
         "messageType": "text",
-        "text": {
-            "body": message
-        }
+        "text": {"body": message},
     }
 
     print(f"  Endpoint: {endpoint}")
@@ -90,12 +92,19 @@ def test_send_message_via_api(phone_number, message):
     print()
 
     curl_command = [
-        "curl", "-X", "POST", endpoint,
-        "-H", "Content-Type: application/json",
-        "-H", f"X-API-Key: {MONTYMOBILE_API_KEY}",
-        "-d", json.dumps(payload),
-        "-w", "\nHTTP Status: %{http_code}\n",
-        "-s"
+        "curl",
+        "-X",
+        "POST",
+        endpoint,
+        "-H",
+        "Content-Type: application/json",
+        "-H",
+        f"X-API-Key: {MONTYMOBILE_API_KEY}",
+        "-d",
+        json.dumps(payload),
+        "-w",
+        "\nHTTP Status: %{http_code}\n",
+        "-s",
     ]
 
     try:
@@ -118,7 +127,7 @@ def test_send_message_via_api(phone_number, message):
         return False
 
 
-def test_webhook_simulation(phone_number, message):
+def test_webhook_simulation(phone_number: Any, message: Any) -> Any:
     """
     Simulate an incoming webhook from MontyMobile
     This tests the bot's ability to receive and process messages
@@ -128,46 +137,55 @@ def test_webhook_simulation(phone_number, message):
     timestamp_ms = int(time.time() * 1000)
 
     # MontyMobile webhook format (Meta/WhatsApp Cloud API style)
-    payload = {
+    payload: dict[str, Any] = {
         "object": "whatsapp_business_account",
-        "entry": [{
-            "id": MONTYMOBILE_TENANT_ID,
-            "changes": [{
-                "value": {
-                    "messaging_product": "whatsapp",
-                    "metadata": {
-                        "display_phone_number": MONTYMOBILE_SOURCE_NUMBER,
-                        "phone_number_id": MONTYMOBILE_API_ID
-                    },
-                    "contacts": [{
-                        "profile": {"name": "Test User"},
-                        "wa_id": phone_number.replace("+", "")
-                    }],
-                    "messages": [{
-                        "id": f"wamid.test_{timestamp_ms}",
-                        "from": phone_number.replace("+", ""),
-                        "timestamp": str(int(timestamp_ms / 1000)),
-                        "type": "text",
-                        "text": {"body": message}
-                    }]
-                },
-                "field": "messages"
-            }]
-        }]
+        "entry": [
+            {
+                "id": MONTYMOBILE_TENANT_ID,
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": {
+                                "display_phone_number": MONTYMOBILE_SOURCE_NUMBER,
+                                "phone_number_id": MONTYMOBILE_API_ID,
+                            },
+                            "contacts": [{"profile": {"name": "Test User"}, "wa_id": phone_number.replace("+", "")}],
+                            "messages": [
+                                {
+                                    "id": f"wamid.test_{timestamp_ms}",
+                                    "from": phone_number.replace("+", ""),
+                                    "timestamp": str(int(timestamp_ms / 1000)),
+                                    "type": "text",
+                                    "text": {"body": message},
+                                }
+                            ],
+                        },
+                        "field": "messages",
+                    }
+                ],
+            }
+        ],
     }
 
     print(f"  Endpoint: {BASE_URL}/webhook")
     print(f"  From: {phone_number}")
     print(f"  Message: {message}")
-    print(f"  Format: Meta/WhatsApp Cloud API")
+    print("  Format: Meta/WhatsApp Cloud API")
     print()
 
     curl_command = [
-        "curl", "-X", "POST", f"{BASE_URL}/webhook",
-        "-H", "Content-Type: application/json",
-        "-d", json.dumps(payload),
-        "-w", "\nHTTP Status: %{http_code}\n",
-        "-s"
+        "curl",
+        "-X",
+        "POST",
+        f"{BASE_URL}/webhook",
+        "-H",
+        "Content-Type: application/json",
+        "-d",
+        json.dumps(payload),
+        "-w",
+        "\nHTTP Status: %{http_code}\n",
+        "-s",
     ]
 
     try:
@@ -190,7 +208,7 @@ def test_webhook_simulation(phone_number, message):
         return False
 
 
-def test_simple_webhook(phone_number, message):
+def test_simple_webhook(phone_number: Any, message: Any) -> Any:
     """
     Simulate a simple webhook format (Qiscus-style)
     This is an alternative format that MontyMobile adapter also supports
@@ -199,27 +217,33 @@ def test_simple_webhook(phone_number, message):
 
     timestamp_ms = int(time.time() * 1000)
 
-    payload = {
+    payload: dict[str, Any] = {
         "messageId": f"test_{timestamp_ms}",
         "timestamp": timestamp_ms,
         "from": phone_number,
         "to": MONTYMOBILE_SOURCE_NUMBER,
         "text": {"body": message},
-        "type": "text"
+        "type": "text",
     }
 
     print(f"  Endpoint: {BASE_URL}/webhook")
     print(f"  From: {phone_number}")
     print(f"  Message: {message}")
-    print(f"  Format: Simple/Qiscus")
+    print("  Format: Simple/Qiscus")
     print()
 
     curl_command = [
-        "curl", "-X", "POST", f"{BASE_URL}/webhook",
-        "-H", "Content-Type: application/json",
-        "-d", json.dumps(payload),
-        "-w", "\nHTTP Status: %{http_code}\n",
-        "-s"
+        "curl",
+        "-X",
+        "POST",
+        f"{BASE_URL}/webhook",
+        "-H",
+        "Content-Type: application/json",
+        "-d",
+        json.dumps(payload),
+        "-w",
+        "\nHTTP Status: %{http_code}\n",
+        "-s",
     ]
 
     try:
@@ -237,14 +261,11 @@ def test_simple_webhook(phone_number, message):
         return False
 
 
-def test_backend_health():
+def test_backend_health() -> Any:
     """Check if the backend is running"""
     print_header("TEST: Backend Health Check")
 
-    curl_command = [
-        "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-        f"{BASE_URL}/", "--connect-timeout", "5"
-    ]
+    curl_command = ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", f"{BASE_URL}/", "--connect-timeout", "5"]
 
     try:
         result = subprocess.run(curl_command, capture_output=True, text=True, timeout=10)
@@ -257,13 +278,13 @@ def test_backend_health():
             print(f"  Backend returned HTTP {status_code}")
             return False
 
-    except Exception as e:
-        print(f"  Backend is NOT RUNNING or unreachable")
-        print(f"  Start with: ./venv/bin/python3 main.py")
+    except Exception:
+        print("  Backend is NOT RUNNING or unreachable")
+        print("  Start with: ./venv/bin/python3 main.py")
         return False
 
 
-def interactive_test():
+def interactive_test() -> None:
     """Run interactive test mode"""
     print_header("INTERACTIVE TEST MODE")
     print("  You can now send custom messages.")
@@ -272,7 +293,7 @@ def interactive_test():
     while True:
         try:
             message = input("  Enter message (or 'quit'): ").strip()
-            if message.lower() == 'quit':
+            if message.lower() == "quit":
                 break
             if message:
                 test_simple_webhook(TEST_PHONE, message)
@@ -283,7 +304,7 @@ def interactive_test():
     print("\n  Exiting interactive mode.\n")
 
 
-def run_full_test():
+def run_full_test() -> None:
     """Run the complete test suite"""
     print("\n")
     print("=" * 80)
@@ -319,21 +340,21 @@ def run_full_test():
         print("\n--- TEST 3: Direct API Message ---")
         print("  NOTE: This will send a REAL message if phone number is valid")
         confirm = input("  Send test message via API? (y/N): ").strip().lower()
-        if confirm == 'y':
+        if confirm == "y":
             test_phone = input(f"  Enter phone number [{TEST_PHONE}]: ").strip() or TEST_PHONE
             test_send_message_via_api(test_phone, "Test message from Lina's Laser Bot")
 
     # Summary
     print_header("TEST COMPLETE")
     print("  Next steps:")
-    print(f"  1. Check backend console for processing logs")
+    print("  1. Check backend console for processing logs")
     print(f"  2. Send a message from your phone to: {MONTYMOBILE_SOURCE_NUMBER}")
-    print(f"  3. Verify bot responds correctly")
-    print(f"  4. Check Live Chat dashboard: http://localhost:3000/live-chat")
+    print("  3. Verify bot responds correctly")
+    print("  4. Check Live Chat dashboard: http://localhost:3000/live-chat")
     print()
 
 
-def main():
+def main() -> None:
     """Main entry point"""
     if len(sys.argv) > 1:
         arg = sys.argv[1].lower()

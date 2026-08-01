@@ -1,15 +1,28 @@
-# -*- coding: utf-8 -*-
 """
 FAQ Translation Service - Auto-translate FAQ on save (Franco/Arabic/English/French -> AR/EN/FR + extra).
 """
 
+from __future__ import annotations
+
 import re
-from typing import Tuple, List, Optional
+from typing import Any
 
 # Franco-Arabic to Arabic character mapping (common)
 FRANCO_TO_AR = {
-    "2": "أ", "3": "ع", "5": "خ", "6": "ط", "7": "ح", "8": "ق", "9": "ص",
-    "ch": "ش", "gh": "غ", "kh": "خ", "sh": "ش", "th": "ث", "dh": "ذ", "7a": "ح",
+    "2": "أ",
+    "3": "ع",
+    "5": "خ",
+    "6": "ط",
+    "7": "ح",
+    "8": "ق",
+    "9": "ص",
+    "ch": "ش",
+    "gh": "غ",
+    "kh": "خ",
+    "sh": "ش",
+    "th": "ث",
+    "dh": "ذ",
+    "7a": "ح",
 }
 
 
@@ -45,6 +58,7 @@ def _translate_with_deep_translator(text: str, source: str, target: str) -> str:
         return text
     try:
         from deep_translator import GoogleTranslator
+
         translator = GoogleTranslator(source=source, target=target)
         result = translator.translate(text)
         return result.strip() if result else text
@@ -56,7 +70,7 @@ def _translate_with_deep_translator(text: str, source: str, target: str) -> str:
 def translate_faq_pair(
     question: str,
     answer: str,
-    extra_targets: Optional[List[str]] = None,
+    extra_targets: list[str] | None = None,
 ) -> dict:
     """
     Take question+answer in any language (Franco, AR, EN, FR) and produce structured:
@@ -64,8 +78,9 @@ def translate_faq_pair(
     + question_X, answer_X for each extra_targets (e.g. de, es, tr).
     """
     try:
-        from config import TRAINING_EXTRA_LANGUAGES
-        extra = extra_targets or TRAINING_EXTRA_LANGUAGES
+        import config as app_config
+
+        extra = extra_targets or list(getattr(app_config, "TRAINING_EXTRA_LANGUAGES", []) or [])
     except ImportError:
         extra = extra_targets or []
 
@@ -76,7 +91,7 @@ def translate_faq_pair(
     source_q = question.strip() or ""
     source_a = answer.strip() or ""
 
-    result = {
+    result: dict[str, Any] = {
         "question_ar": "",
         "answer_ar": "",
         "question_en": "",

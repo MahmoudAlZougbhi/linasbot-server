@@ -1,10 +1,11 @@
-# -*- coding: utf-8 -*-
 """
 Feedback API module: Conversation feedback endpoints
 Handles feedback collection, statistics, and wrong answer tracking.
 """
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import Any
 
 from modules.core import app
 from modules.models import FeedbackRequest
@@ -12,7 +13,7 @@ from services.conversation_feedback_service import feedback_service
 
 
 @app.post("/api/feedback/submit")
-async def submit_feedback(feedback: FeedbackRequest):
+async def submit_feedback(feedback: FeedbackRequest) -> Any:
     """Submit feedback on a bot response"""
     try:
         result = await feedback_service.submit_feedback(
@@ -24,7 +25,7 @@ async def submit_feedback(feedback: FeedbackRequest):
             correct_answer=feedback.correct_answer,
             feedback_reason=feedback.feedback_reason,
             operator_id=feedback.operator_id,
-            language=feedback.language
+            language=feedback.language,
         )
         return result
     except Exception as e:
@@ -33,7 +34,7 @@ async def submit_feedback(feedback: FeedbackRequest):
 
 
 @app.get("/api/feedback/stats")
-async def get_feedback_stats():
+async def get_feedback_stats() -> Any:
     """Get feedback statistics"""
     try:
         stats = feedback_service.get_feedback_stats()
@@ -44,7 +45,7 @@ async def get_feedback_stats():
 
 
 @app.get("/api/feedback/recent")
-async def get_recent_feedback(limit: int = 10):
+async def get_recent_feedback(limit: int = 10) -> Any:
     """Get recent feedback entries"""
     try:
         feedback = feedback_service.get_recent_feedback(limit)
@@ -55,7 +56,7 @@ async def get_recent_feedback(limit: int = 10):
 
 
 @app.get("/api/feedback/wrong-answers")
-async def get_wrong_answers(limit: int = 20):
+async def get_wrong_answers(limit: int = 20) -> Any:
     """Get recent wrong answers that need attention"""
     try:
         wrong_answers = feedback_service.get_wrong_answers(limit)

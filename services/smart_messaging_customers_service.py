@@ -4,14 +4,12 @@ All data comes from external/calendar APIs only. Uses timezone Asia/Beirut (+02:
 Counts = len(customers) so count and list can never be out of sync; no negative counts.
 """
 
+from __future__ import annotations
+
 import asyncio
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
-
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None
+from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from services.api_integrations import send_appointment_reminders
 from services.smart_messaging_catalog import (
@@ -26,12 +24,10 @@ BEIRUT_TZ = "Asia/Beirut"
 
 
 def _now_beirut() -> datetime:
-    if ZoneInfo:
-        return datetime.now(ZoneInfo(BEIRUT_TZ))
-    return datetime.now()
+    return datetime.now(ZoneInfo(BEIRUT_TZ))
 
 
-def _parse_api_datetime(value: Optional[str]) -> Optional[datetime]:
+def _parse_api_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
     s = str(value).strip()
@@ -51,7 +47,7 @@ def _parse_api_datetime(value: Optional[str]) -> Optional[datetime]:
     return None
 
 
-def _extract_appointments(result: Dict[str, Any]) -> List[Dict]:
+def _extract_appointments(result: dict[str, Any]) -> list[dict]:
     if not isinstance(result, dict) or not result.get("success"):
         return []
     data = result.get("data", {})
@@ -63,15 +59,15 @@ def _extract_appointments(result: Dict[str, Any]) -> List[Dict]:
 
 
 def _apt_to_customer_row(
-    apt: Dict,
+    apt: dict,
     category: str,
     reason: str,
-    appointment_id: Any = None,
+    appointment_id: Any | None = None,
     apt_date: str = "",
     apt_time: str = "",
     details: str = "",
     action_state: str = "pending",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build one customer row for dashboard: status, customer, reason, type, date, time, details, action."""
     apt_details = apt.get("appointment_details") or {}
     if isinstance(apt_details, dict):
@@ -116,18 +112,19 @@ async def _resolve_customer_name(phone: str, fallback_name: str) -> str:
         return fallback_name or "Unknown"
     try:
         from services.customer_identity_service import resolve_customer_from_external
+
         normalized = normalize_phone(phone)
         if not normalized:
             return fallback_name or "Unknown"
         result = await resolve_customer_from_external(normalized)
         if result.get("name"):
-            return result["name"]
+            return cast(str, result["name"])
     except Exception:
         pass
     return fallback_name or "Unknown"
 
 
-async def get_reminder_24h_customers() -> List[Dict[str, Any]]:
+async def get_reminder_24h_customers() -> list[dict[str, Any]]:
     """
     Reminders (Daily = for TOMORROW).
     Include appointments scheduled for tomorrow, status = AVAILABLE (or equivalent).
@@ -151,8 +148,12 @@ async def get_reminder_24h_customers() -> List[Dict[str, Any]]:
         if apt_date != tomorrow:
             continue
         row = _apt_to_customer_row(
-            apt, "reminder_24h", "24-Hour Reminder",
-            apt_date=apt_date, apt_time=apt_time, action_state="pending",
+            apt,
+            "reminder_24h",
+            "24-Hour Reminder",
+            apt_date=apt_date,
+            apt_time=apt_time,
+            action_state="pending",
         )
         if row.get("phone"):
             row["customer_name"] = await _resolve_customer_name(row["phone"], row["customer_name"])
@@ -160,7 +161,7 @@ async def get_reminder_24h_customers() -> List[Dict[str, Any]]:
     return rows
 
 
-async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
+async def get_post_session_feedback_customers() -> list[dict[str, Any]]:
     """
     Post-session feedback: today's appointments with status Done, where now >= slot + delayHours
     (same rule as daily_template_dispatcher.run_post_session_feedback_delayed).
@@ -177,7 +178,7 @@ async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
     today_d = now.date()
     today_str = today_d.strftime("%Y-%m-%d")
     yesterday_str = (today_d - timedelta(days=1)).strftime("%Y-%m-%d")
-    merged: List[Dict[str, Any]] = []
+    merged: list[dict[str, Any]] = []
     seen_keys: set = set()
     for day_str in (today_str, yesterday_str):
         result = await send_appointment_reminders(date=day_str, status="Done")
@@ -217,8 +218,12 @@ async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
         apt_date = apt_dt.strftime("%Y-%m-%d")
         apt_time = apt_dt.strftime("%H:%M")
         row = _apt_to_customer_row(
-            apt, "thank_you_message_sent_after_session", "thank_you_message_sent_after_session",
-            apt_date=apt_date, apt_time=apt_time, action_state="pending",
+            apt,
+            "thank_you_message_sent_after_session",
+            "thank_you_message_sent_after_session",
+            apt_date=apt_date,
+            apt_time=apt_time,
+            action_state="pending",
         )
         if row.get("phone"):
             row["customer_name"] = await _resolve_customer_name(row["phone"], row["customer_name"])
@@ -226,7 +231,7 @@ async def get_post_session_feedback_customers() -> List[Dict[str, Any]]:
     return rows
 
 
-async def get_session_feedback_customers() -> List[Dict[str, Any]]:
+async def get_session_feedback_customers() -> list[dict[str, Any]]:
     """
     Meta template session_feedback (1 var: customer_name): appointments YESTERDAY, status = DONE.
     Sent once per day at the configured schedule time (not delay-based).
@@ -248,8 +253,12 @@ async def get_session_feedback_customers() -> List[Dict[str, Any]]:
         apt_date = apt_dt.strftime("%Y-%m-%d") if apt_dt else yesterday
         apt_time = apt_dt.strftime("%H:%M") if apt_dt else ""
         row = _apt_to_customer_row(
-            apt, "session_feedback", "session_feedback",
-            apt_date=apt_date, apt_time=apt_time, action_state="pending",
+            apt,
+            "session_feedback",
+            "session_feedback",
+            apt_date=apt_date,
+            apt_time=apt_time,
+            action_state="pending",
         )
         if row.get("phone"):
             row["customer_name"] = await _resolve_customer_name(row["phone"], row["customer_name"])
@@ -257,7 +266,7 @@ async def get_session_feedback_customers() -> List[Dict[str, Any]]:
     return rows
 
 
-async def get_missed_yesterday_customers() -> List[Dict[str, Any]]:
+async def get_missed_yesterday_customers() -> list[dict[str, Any]]:
     """
     Missed Yesterday: appointment_date = YESTERDAY, status = Available (NOT Done).
     Customers who had an appointment yesterday but it was not completed.
@@ -281,8 +290,12 @@ async def get_missed_yesterday_customers() -> List[Dict[str, Any]]:
         if apt_date != yesterday:
             continue
         row = _apt_to_customer_row(
-            apt, "missed_yesterday", "Missed Yesterday",
-            apt_date=apt_date, apt_time=apt_time, action_state="pending",
+            apt,
+            "missed_yesterday",
+            "Missed Yesterday",
+            apt_date=apt_date,
+            apt_time=apt_time,
+            action_state="pending",
         )
         if row.get("phone"):
             row["customer_name"] = await _resolve_customer_name(row["phone"], row["customer_name"])
@@ -290,7 +303,7 @@ async def get_missed_yesterday_customers() -> List[Dict[str, Any]]:
     return rows
 
 
-async def get_twenty_day_followup_customers() -> List[Dict[str, Any]]:
+async def get_twenty_day_followup_customers() -> list[dict[str, Any]]:
     """
     One Month Follow Up (Meta: sent_17_days_after_last_session_new, 3 vars): appointment_date = TODAY - 17 days, status = Done.
     Include all such customers; do NOT exclude those with future appointments.
@@ -315,8 +328,12 @@ async def get_twenty_day_followup_customers() -> List[Dict[str, Any]]:
             continue
         seen_phones.add(phone)
         row = _apt_to_customer_row(
-            apt, "sent_17_days_after_last_session_new", "sent_17_days_after_last_session_new",
-            apt_date=target_day, apt_time="", action_state="pending",
+            apt,
+            "sent_17_days_after_last_session_new",
+            "sent_17_days_after_last_session_new",
+            apt_date=target_day,
+            apt_time="",
+            action_state="pending",
         )
         row["phone"] = phone
         row["customer_name"] = await _resolve_customer_name(phone, row["customer_name"])
@@ -333,7 +350,7 @@ _CATEGORY_FETCHERS = {
 }
 
 
-async def get_customers_by_category(category: str) -> List[Dict[str, Any]]:
+async def get_customers_by_category(category: str) -> list[dict[str, Any]]:
     """
     Returns list of customers for a given category (source of truth from APIs).
     category: reminder_24h | thank_you_message_sent_after_session | session_feedback | missed_yesterday | sent_17_days_after_last_session_new
@@ -345,7 +362,7 @@ async def get_customers_by_category(category: str) -> List[Dict[str, Any]]:
     return await fetcher()
 
 
-async def get_all_counts_and_customers() -> Dict[str, Any]:
+async def get_all_counts_and_customers() -> dict[str, Any]:
     """
     Single source of truth: fetch all categories in parallel and return counts + lists.
     counts[key] = len(customers[key]); never negative.
@@ -354,7 +371,7 @@ async def get_all_counts_and_customers() -> Dict[str, Any]:
     results = await asyncio.gather(*[_CATEGORY_FETCHERS[c]() for c in categories])
     counts = {}
     customers_by_category = {}
-    for cat, customers in zip(categories, results):
+    for cat, customers in zip(categories, results, strict=True):
         customers = customers or []
         counts[cat] = max(0, len(customers))
         customers_by_category[cat] = customers

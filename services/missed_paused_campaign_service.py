@@ -2,9 +2,11 @@
 Campaign service for Missed This Month (BOC paused appointments; WhatsApp Meta: sent_for_pause).
 """
 
+from __future__ import annotations
+
 import asyncio
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import config
 from services.api_integrations import get_paused_appointments_between_dates
@@ -15,7 +17,7 @@ from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from utils.phone_utils import normalize_phone
 
 
-def _parse_api_datetime(value: Optional[str]) -> Optional[datetime]:
+def _parse_api_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
 
@@ -50,7 +52,7 @@ def _as_placeholder_str(value: Any, default: str = "") -> str:
     return s
 
 
-def _format_body_areas(row: Dict[str, Any]) -> str:
+def _format_body_areas(row: dict[str, Any]) -> str:
     raw = row.get("body_parts") or row.get("body_areas") or row.get("areas")
     if not raw:
         return ""
@@ -58,7 +60,7 @@ def _format_body_areas(row: Dict[str, Any]) -> str:
         return raw.strip()
     if not isinstance(raw, list):
         return _as_placeholder_str(raw)
-    parts: List[str] = []
+    parts: list[str] = []
     for item in raw:
         if isinstance(item, dict):
             label = (
@@ -74,10 +76,12 @@ def _format_body_areas(row: Dict[str, Any]) -> str:
     return ", ".join(p for p in parts if p)
 
 
-def _paused_campaign_placeholders(recipient: Dict[str, Any], clinic_contact_phone: str) -> Dict[str, str]:
+def _paused_campaign_placeholders(recipient: dict[str, Any], clinic_contact_phone: str) -> dict[str, str]:
     """All template placeholders for sent_for_pause / paused BOC campaign (recipient + raw BOC row)."""
-    row: Dict[str, Any] = recipient.get("raw") if isinstance(recipient.get("raw"), dict) else {}
-    customer = row.get("customer") if isinstance(row.get("customer"), dict) else {}
+    row_data = recipient.get("raw")
+    row: dict[str, Any] = row_data if isinstance(row_data, dict) else {}
+    customer_data = row.get("customer")
+    customer: dict[str, Any] = customer_data if isinstance(customer_data, dict) else {}
 
     cust_phone = _as_placeholder_str(recipient.get("phone")) or _as_placeholder_str(customer.get("phone"))
 
@@ -108,14 +112,18 @@ def _paused_campaign_placeholders(recipient: Dict[str, Any], clinic_contact_phon
         "machine_id": _as_placeholder_str(row.get("machine_id")),
         "service_id": _as_placeholder_str(row.get("service_id")),
         "branch_id": _as_placeholder_str(row.get("branch_id")),
-        "appointment_status": _as_placeholder_str(row.get("status")) or _as_placeholder_str(row.get("appointment_status")),
+        "appointment_status": _as_placeholder_str(row.get("status"))
+        or _as_placeholder_str(row.get("appointment_status")),
         "appointment_notes": _as_placeholder_str(row.get("notes")) or _as_placeholder_str(row.get("note")),
-        "price": _as_placeholder_str(row.get("price")) or _as_placeholder_str(row.get("amount")) or _as_placeholder_str(row.get("total")),
+        "price": _as_placeholder_str(row.get("price"))
+        or _as_placeholder_str(row.get("amount"))
+        or _as_placeholder_str(row.get("total")),
         "currency": _as_placeholder_str(row.get("currency")),
         "body_areas": _format_body_areas(row),
         "appointment_date_raw": _as_placeholder_str(recipient.get("date_raw")) or _as_placeholder_str(row.get("date")),
         "session_number": _as_placeholder_str(row.get("session_number")) or _as_placeholder_str(row.get("session")),
-        "duration_minutes": _as_placeholder_str(row.get("duration")) or _as_placeholder_str(row.get("duration_minutes")),
+        "duration_minutes": _as_placeholder_str(row.get("duration"))
+        or _as_placeholder_str(row.get("duration_minutes")),
     }
 
 
@@ -128,8 +136,8 @@ class MissedPausedCampaignService:
         self,
         start_date: str,
         end_date: str,
-        service_ids: List[int],
-    ) -> List[Dict[str, Any]]:
+        service_ids: list[int],
+    ) -> list[dict[str, Any]]:
         requests = []
         if service_ids:
             for service_id in service_ids:
@@ -150,7 +158,7 @@ class MissedPausedCampaignService:
             )
 
         results = await asyncio.gather(*requests, return_exceptions=True)
-        rows: List[Dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
         for result in results:
             if isinstance(result, Exception):
                 continue
@@ -170,7 +178,7 @@ class MissedPausedCampaignService:
 
         return rows
 
-    def _resolve_date_range(self, filters: Dict[str, Any]) -> Dict[str, str]:
+    def _resolve_date_range(self, filters: dict[str, Any]) -> dict[str, str]:
         today = datetime.now().date()
 
         from_date = str(filters.get("from_date", "")).strip()
@@ -195,7 +203,7 @@ class MissedPausedCampaignService:
             "to_date": today.strftime("%Y-%m-%d"),
         }
 
-    def _recipient_from_row(self, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _recipient_from_row(self, row: dict[str, Any]) -> dict[str, Any] | None:
         customer = row.get("customer", {}) if isinstance(row.get("customer"), dict) else {}
         phone = customer.get("phone")
         if not phone:
@@ -229,7 +237,7 @@ class MissedPausedCampaignService:
             "raw": row,
         }
 
-    async def preview(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+    async def preview(self, filters: dict[str, Any]) -> dict[str, Any]:
         filters = dict(filters or {})
         service_ids = filters.get("service_ids") or []
         if not isinstance(service_ids, list):
@@ -248,8 +256,8 @@ class MissedPausedCampaignService:
             service_ids=normalized_service_ids,
         )
 
-        recipients: List[Dict[str, Any]] = []
-        latest_by_phone: Dict[str, Dict[str, Any]] = {}
+        recipients: list[dict[str, Any]] = []
+        latest_by_phone: dict[str, dict[str, Any]] = {}
 
         for row in rows:
             recipient = self._recipient_from_row(row)
@@ -296,11 +304,11 @@ class MissedPausedCampaignService:
 
     async def send_or_schedule(
         self,
-        filters: Dict[str, Any],
+        filters: dict[str, Any],
         send_mode: str = "send_now",
-        schedule_time: Optional[str] = None,
+        schedule_time: str | None = None,
         language: str = "ar",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         preview_result = await self.preview(filters)
         if not preview_result.get("success"):
             return preview_result
@@ -329,7 +337,7 @@ class MissedPausedCampaignService:
 
         sent_count = 0
         queued_count = 0
-        failed: List[Dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
 
         adapter = WhatsAppFactory.get_adapter() if send_mode != "schedule" else None
         contact_phone = config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX"
@@ -350,7 +358,7 @@ class MissedPausedCampaignService:
             )
 
             placeholders = _paused_campaign_placeholders(recipient, contact_phone)
-            metadata = {
+            metadata: dict[str, Any] = {
                 "campaign_id": campaign_id,
                 "customer_id": recipient.get("customer_id"),
                 "appointment_id": recipient.get("appointment_id"),
@@ -372,10 +380,12 @@ class MissedPausedCampaignService:
                 if message_id:
                     queued_count += 1
                 else:
-                    failed.append({
-                        "phone": phone,
-                        "reason": "Failed to queue message",
-                    })
+                    failed.append(
+                        {
+                            "phone": phone,
+                            "reason": "Failed to queue message",
+                        }
+                    )
                 continue
 
             content = smart_messaging.get_message_content(
@@ -384,10 +394,12 @@ class MissedPausedCampaignService:
                 placeholders=placeholders,
             )
             if not content:
-                failed.append({
-                    "phone": phone,
-                    "reason": "Template content is empty or missing",
-                })
+                failed.append(
+                    {
+                        "phone": phone,
+                        "reason": "Template content is empty or missing",
+                    }
+                )
                 continue
 
             try:
@@ -402,10 +414,12 @@ class MissedPausedCampaignService:
                     rendered_text=content,
                 )
                 if result.get("dry_run"):
-                    failed.append({
-                        "phone": phone,
-                        "reason": "dry_run (not delivered)",
-                    })
+                    failed.append(
+                        {
+                            "phone": phone,
+                            "reason": "dry_run (not delivered)",
+                        }
+                    )
                 elif result.get("success"):
                     sent_count += 1
                     message_logs_service.log_message(
@@ -421,15 +435,19 @@ class MissedPausedCampaignService:
                         },
                     )
                 else:
-                    failed.append({
-                        "phone": phone,
-                        "reason": result.get("error", "Unknown send error"),
-                    })
+                    failed.append(
+                        {
+                            "phone": phone,
+                            "reason": result.get("error", "Unknown send error"),
+                        }
+                    )
             except Exception as exc:
-                failed.append({
-                    "phone": phone,
-                    "reason": str(exc),
-                })
+                failed.append(
+                    {
+                        "phone": phone,
+                        "reason": str(exc),
+                    }
+                )
 
         final_status = "scheduled" if send_mode == "schedule" else "completed"
         message_logs_service.finalize_campaign_log(
@@ -455,4 +473,3 @@ class MissedPausedCampaignService:
 
 
 missed_paused_campaign_service = MissedPausedCampaignService()
-

@@ -14,6 +14,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 from storage.persistent_storage import LOGS_DIR, ensure_dirs
 
@@ -57,7 +58,7 @@ def _file_try_claim(namespace: str, key: str, *, ttl_seconds: float) -> bool:
         except Exception:
             pass
     tmp = path.with_suffix(".tmp")
-    payload = {
+    payload: dict[str, Any] = {
         "namespace": namespace,
         "key_prefix": (key or "")[:200],
         "created_at": now,

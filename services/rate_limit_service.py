@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 from storage.persistent_storage import _DATA_ROOT
 
@@ -28,7 +29,7 @@ class RateLimitService:
         window_start = now - window_seconds
         path = self._path(key)
         with self._lock:
-            timestamps = []
+            timestamps: list[Any] = []
             if path.exists():
                 try:
                     timestamps = json.loads(path.read_text(encoding="utf-8")).get("hits") or []

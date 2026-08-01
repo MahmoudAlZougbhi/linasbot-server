@@ -18,34 +18,41 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-      - name: Ruff lint (security/reliability + wave tests)
+      - name: Ruff lint (full backend scope)
         run: >
           ruff check
-          services/durable_event_claim.py
-          services/ssrf_guard.py
-          services/safe_path.py
-          services/rate_limit_service.py
-          modules/api_security.py
-          tests/test_wave1_security.py
-          tests/test_wave2_social_routing.py
-          tests/test_wave3_metrics.py
-          tests/test_wave4_reliability.py
-          tests/conftest.py
-      - name: Ruff format check (same scope)
+          services
+          modules
+          utils
+          handlers
+          storage
+          config.py
+          main.py
+          tests
+          scripts
+      - name: Ruff format check (full backend scope)
         run: >
           ruff format --check
-          services/durable_event_claim.py
-          services/ssrf_guard.py
-          services/safe_path.py
-          services/rate_limit_service.py
-          modules/api_security.py
-          tests/test_wave1_security.py
-          tests/test_wave2_social_routing.py
-          tests/test_wave3_metrics.py
-          tests/test_wave4_reliability.py
-          tests/conftest.py
-      - name: Mypy (strict security/reliability core)
-        run: mypy --config-file mypy.ini services/durable_event_claim.py services/ssrf_guard.py services/safe_path.py modules/api_security.py
+          services
+          modules
+          utils
+          handlers
+          storage
+          config.py
+          main.py
+          tests
+          scripts
+      - name: Mypy (services, modules, utils, handlers, storage, entrypoints, scripts)
+        run: >
+          mypy --config-file mypy.ini
+          services
+          modules
+          utils
+          handlers
+          storage
+          config.py
+          main.py
+          scripts
       - name: Backend tests
         env:
           OPENAI_API_KEY: sk-test-ci-not-real
@@ -74,15 +81,12 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
       - name: Install
         run: npm ci
-      - name: Audit (production deps; CRA transitive leftovers reported)
-        run: |
-          set -euo pipefail
-          npm audit --omit=dev --audit-level=critical || {
-            echo "Critical production vulnerabilities remain after overrides — failing gate"
-            exit 1
-          }
+      - name: Lint
+        run: npm run lint
+      - name: Audit (production deps gate)
+        run: node ../scripts/npm_audit_gate.mjs
       - name: Test
-        run: CI=true npm test -- --watchAll=false
+        run: npm test
       - name: Build
         run: npm run build
 
@@ -116,4 +120,5 @@ jobs:
           echo "Required release check: GET /api/ready must return ok=true after deploy."
           echo "Rollback artifact: previous container image tag / previous git SHA on main."
           test -f docs/AUDIT_CLOSURE_LEDGER.md
+          test -f docs/DEPLOY_AUTH_MIGRATION_CHECKLIST.md
           test -f .github/workflows/deploy.yml

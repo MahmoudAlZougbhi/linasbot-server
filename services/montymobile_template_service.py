@@ -1,20 +1,23 @@
-# services/montymobile_template_service.py
 """
 MontyMobile Template Message Service
 Handles sending WhatsApp template messages via MontyMobile API
 """
 
-import httpx
+from __future__ import annotations
+
+# services/montymobile_template_service.py
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, cast
+
+import httpx
 
 from services.smart_messaging_catalog import normalize_template_id
 from utils.phone_utils import normalize_phone
 
 # Internal IDs that map to a different key under config/templates (and thus a different Meta `name`).
-_LEGACY_TEMPLATE_CONFIG_KEYS: Dict[str, str] = {
+_LEGACY_TEMPLATE_CONFIG_KEYS: dict[str, str] = {
     "post_session_feedback": "thank_you_message_sent_after_session",
     "twenty_day_followup": "sent_17_days_after_last_session_new",
     "one_month_followup": "sent_17_days_after_last_session_new",
@@ -27,14 +30,14 @@ _LEGACY_TEMPLATE_CONFIG_KEYS: Dict[str, str] = {
 
 class MontyMobileTemplateService:
     """Service for sending WhatsApp template messages via MontyMobile"""
-    
+
     # Legacy omni-apis + /notification/... paths now return nginx 404; same stack as montymobile_adapter.
     _DEFAULT_TEMPLATE_BASE = "https://whatsapp-notification.montymobile.com"
     _DEFAULT_TEMPLATE_PATH = "/api/v2/WhatsappApi/send-whatsapp"
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Load template configuration
-        config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'montymobile_templates.json')
+        config_path = os.path.join(os.path.dirname(__file__), "..", "config", "montymobile_templates.json")
         try:
             if not os.path.exists(config_path):
                 print(f"❌ MontyMobile config not found at: {config_path}")
@@ -42,10 +45,10 @@ class MontyMobileTemplateService:
                 self.templates = {}
                 self.api_config = {}
                 return
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, encoding="utf-8") as f:
                 self.config = json.load(f)
-            self.templates = self.config.get('templates', {})
-            self.api_config = dict(self.config.get('api_config', {}) or {})
+            self.templates = self.config.get("templates", {})
+            self.api_config = dict(self.config.get("api_config", {}) or {})
             # Credentials must come from environment — never from tracked JSON
             env_key = (os.getenv("MONTYMOBILE_API_KEY") or "").strip()
             if env_key:
@@ -74,17 +77,10 @@ class MontyMobileTemplateService:
             endpoint = "/" + endpoint
         url = f"{base}{endpoint}" if base and endpoint else ""
 
-        legacy = (
-            "omni-apis.montymobile.com" in url
-            or "/notification/api/v2/" in url
-        )
+        legacy = "omni-apis.montymobile.com" in url or "/notification/api/v2/" in url
         if legacy or not url:
-            base = (
-                os.getenv("MONTYMOBILE_BASE_URL") or self._DEFAULT_TEMPLATE_BASE
-            ).strip().rstrip("/")
-            path = (
-                os.getenv("MONTYMOBILE_TEMPLATE_PATH") or self._DEFAULT_TEMPLATE_PATH
-            ).strip()
+            base = (os.getenv("MONTYMOBILE_BASE_URL") or self._DEFAULT_TEMPLATE_BASE).strip().rstrip("/")
+            path = (os.getenv("MONTYMOBILE_TEMPLATE_PATH") or self._DEFAULT_TEMPLATE_PATH).strip()
             if path and not path.startswith("/"):
                 path = "/" + path
             url = f"{base}{path}"
@@ -94,12 +90,12 @@ class MontyMobileTemplateService:
             )
         return url
 
-    def get_template_info(self, template_id: str) -> Optional[Dict]:
+    def get_template_info(self, template_id: str) -> dict | None:
         """Get template information by ID"""
         canonical = normalize_template_id(template_id)
         template = self.templates.get(canonical)
         if template:
-            return template
+            return cast(dict[Any, Any] | None, template)
 
         alt = _LEGACY_TEMPLATE_CONFIG_KEYS.get(canonical, canonical)
         return self.templates.get(alt)
@@ -119,7 +115,7 @@ class MontyMobileTemplateService:
 
     def resolve_whatsapp_language_for_template(
         self,
-        template: Dict[str, Any],
+        template: dict[str, Any],
         requested: str,
         template_id_for_log: str = "",
     ) -> str:
@@ -137,9 +133,7 @@ class MontyMobileTemplateService:
         forced = str(template.get("force_whatsapp_language") or "").strip().lower()
         if forced and forced in langs:
             if rid != forced:
-                print(
-                    f"⚠️ [{tid}] force_whatsapp_language={forced!r} overrides requested={rid!r}"
-                )
+                print(f"⚠️ [{tid}] force_whatsapp_language={forced!r} overrides requested={rid!r}")
             return forced
 
         if rid in langs:
@@ -153,13 +147,11 @@ class MontyMobileTemplateService:
                 return fb
         if langs:
             first = next(iter(langs.keys()))
-            print(
-                f"⚠️ [{tid}] WhatsApp template language {rid!r} not in config; using {first!r}"
-            )
+            print(f"⚠️ [{tid}] WhatsApp template language {rid!r} not in config; using {first!r}")
             return str(first)
         return rid
 
-    def _outbound_template_name(self, template: Dict[str, Any], canonical_id: str) -> str:
+    def _outbound_template_name(self, template: dict[str, Any], canonical_id: str) -> str:
         """
         Name sent to Monty/Meta must match WhatsApp Manager exactly for this WABA.
         Override per template: env MONTY_META_NAME_<CANONICAL> e.g. MONTY_META_NAME_SENT_FOR_PAUSE.
@@ -189,8 +181,8 @@ class MontyMobileTemplateService:
         return "unknown"
 
     def _resolve_template_header_components(
-        self, template: Dict[str, Any], template_lang: Dict[str, Any], lookup: Dict[str, str]
-    ) -> List[Dict[str, Any]]:
+        self, template: dict[str, Any], template_lang: dict[str, Any], lookup: dict[str, str | None]
+    ) -> list[dict[str, Any]]:
         """
         Build optional WhatsApp template header components. Skipped entirely when
         api_config.templates_are_text_only is True (body-only / text-only templates),
@@ -210,7 +202,7 @@ class MontyMobileTemplateService:
                 return [{"type": "header", "parameters": []}]
             return []
 
-        out: List[Dict[str, Any]] = []
+        out: list[dict[str, Any]] = []
         header_cfg = template.get("header")
         if not isinstance(header_cfg, dict):
             header_cfg = {}
@@ -220,10 +212,9 @@ class MontyMobileTemplateService:
             return out
 
         # 1) Explicit image header (per template or per-send lookup)
-        image_link = (
-            (header_cfg.get("image_link") or header_cfg.get("link") or "").strip()
-            or str(lookup.get("header_image") or lookup.get("image_url") or "").strip()
-        )
+        image_link = (header_cfg.get("image_link") or header_cfg.get("link") or "").strip() or str(
+            lookup.get("header_image") or lookup.get("image_url") or ""
+        ).strip()
         # Same-file default (always honored): not the same as "global" dashboard/env chain.
         dc = (self.api_config or {}).get("default_header_component") or {}
         if not image_link and isinstance(dc, dict):
@@ -246,9 +237,7 @@ class MontyMobileTemplateService:
                 out.append(
                     {
                         "type": "header",
-                        "parameters": [
-                            {"type": "image", "image": {"link": image_link}}
-                        ],
+                        "parameters": [{"type": "image", "image": {"link": image_link}}],
                     }
                 )
                 return out
@@ -281,8 +270,8 @@ class MontyMobileTemplateService:
         return out
 
     def _build_body_component_parameters(
-        self, template_lang: Dict[str, Any], lookup: Dict[str, Any]
-    ) -> List[Dict[str, str]]:
+        self, template_lang: dict[str, Any], lookup: dict[str, Any]
+    ) -> list[dict[str, str]]:
         """
         Build WhatsApp body `parameters` array. Meta matches by position; the array length must
         equal the template's body variable count. Prefer `parameters_count` from config when set
@@ -291,7 +280,7 @@ class MontyMobileTemplateService:
         raw_specs = template_lang.get("body_parameters")
         if not isinstance(raw_specs, list) or not raw_specs:
             raw_specs = template_lang.get("parameters") or []
-        param_specs: List[str] = [x for x in raw_specs if isinstance(x, str)]
+        param_specs: list[str] = [x for x in raw_specs if isinstance(x, str)]
 
         raw_count = template_lang.get("parameters_count")
         if raw_count is not None:
@@ -309,10 +298,10 @@ class MontyMobileTemplateService:
         elif n_body > len(param_specs):
             print(
                 f"⚠️ Monty template body: parameters_count={n_body} but only {len(param_specs)} "
-                f"named slot(s) in JSON — padding with positional keys \"1\"..\"{n_body}\" / empty strings"
+                f'named slot(s) in JSON — padding with positional keys "1".."{n_body}" / empty strings'
             )
 
-        texts: List[str] = []
+        texts: list[str] = []
         for i in range(n_body):
             if i < len(param_specs):
                 key = param_specs[i]
@@ -324,7 +313,7 @@ class MontyMobileTemplateService:
 
         return [{"type": "text", "text": t} for t in texts]
 
-    def _normalize_recipient_for_monty_template(self, raw: Optional[str]) -> Optional[str]:
+    def _normalize_recipient_for_monty_template(self, raw: str | None) -> str | None:
         """
         Monty send-whatsapp often requires a consistent MSISDN (digits, country code, no '+').
         Raw dashboard input may include spaces, missing country code, or '+' — normalize so
@@ -350,31 +339,27 @@ class MontyMobileTemplateService:
         return None
 
     def build_template_payload(
-        self,
-        template_id: str,
-        phone_number: str,
-        language: str = "ar",
-        parameters: Dict[str, str] = None
-    ) -> Optional[Dict]:
+        self, template_id: str, phone_number: str, language: str = "ar", parameters: dict[str, str | None] | None = None
+    ) -> dict | None:
         """
         Build the payload for sending a template message
-        
+
         Args:
             template_id: Template identifier (e.g., 'reminder_24h')
             phone_number: Recipient phone number
             language: Language code (ar, en, fr)
             parameters: Dictionary of parameter values
-            
+
         Returns:
             Payload dict or None if template not found
         """
         # Debug: Print what we received
-        print(f"🔍 DEBUG build_template_payload:")
+        print("🔍 DEBUG build_template_payload:")
         print(f"   template_id: {template_id} (type: {type(template_id)})")
         print(f"   phone_number (raw): {phone_number} (type: {type(phone_number)})")
         print(f"   language: {language} (type: {type(language)})")
         print(f"   parameters: {parameters}")
-        
+
         canonical_template_id = normalize_template_id(template_id)
 
         to_digits = self._normalize_recipient_for_monty_template(phone_number)
@@ -390,18 +375,18 @@ class MontyMobileTemplateService:
         if not template:
             print(f"❌ Template '{canonical_template_id}' not found")
             return None
-        
+
         # Ensure language is a string, not a dict
         if isinstance(language, dict):
             print(f"⚠️ WARNING: language is a dict: {language}")
-            print(f"   Converting to string...")
+            print("   Converting to string...")
             # Try to extract language code if it's a dict
-            if 'code' in language:
-                language = language['code']
+            if "code" in language:
+                language = language["code"]
             else:
-                language = 'ar'  # Default fallback
+                language = "ar"  # Default fallback
             print(f"   Using language: {language}")
-        
+
         language = self.resolve_whatsapp_language_for_template(
             template, language, template_id_for_log=canonical_template_id
         )
@@ -416,10 +401,10 @@ class MontyMobileTemplateService:
         # (e.g. legacy internal ids map to JSON key sent_17_days_after_last_session_new).
         outbound_name = self._outbound_template_name(template, canonical_template_id)
 
-        payload = {
+        payload: dict[str, Any] = {
             "to": to_digits,
             "type": "template",
-            "source": self.api_config['source'],
+            "source": self.api_config["source"],
             "template": {
                 "name": outbound_name,
                 "language": {"code": language},
@@ -453,21 +438,17 @@ class MontyMobileTemplateService:
             f"omit_empty_header_component={template.get('omit_empty_header_component')!r}"
         )
 
-        header_components = self._resolve_template_header_components(
-            template, template_lang, lookup
-        )
+        header_components = self._resolve_template_header_components(template, template_lang, lookup)
         payload["template"]["components"].extend(header_components)
 
         # Always add body component (Meta requires it for templates with body).
         # Use empty parameters[] when template has 0 body variables.
-        payload["template"]["components"].append(
-            {"type": "body", "parameters": param_values}
-        )
+        payload["template"]["components"].append({"type": "body", "parameters": param_values})
 
         return payload
 
     def _log_outbound_template_payload(
-        self, requested_template_id: str, canonical_id: str, payload: Dict[str, Any]
+        self, requested_template_id: str, canonical_id: str, payload: dict[str, Any]
     ) -> None:
         t = payload.get("template") or {}
         name = t.get("name")
@@ -482,23 +463,19 @@ class MontyMobileTemplateService:
             f"resolution={self._describe_template_resolution(requested_template_id, canonical_id)} "
             f"components={json.dumps(comps, ensure_ascii=False)}"
         )
-    
+
     async def send_template_message(
-        self,
-        template_id: str,
-        phone_number: str,
-        language: str = "ar",
-        parameters: Dict[str, str] = None
-    ) -> Dict:
+        self, template_id: str, phone_number: str, language: str = "ar", parameters: dict[str, str | None] | None = None
+    ) -> dict:
         """
         Send a template message via MontyMobile API
-        
+
         Args:
             template_id: Template identifier
             phone_number: Recipient phone number
             language: Language code
             parameters: Template parameter values
-            
+
         Returns:
             Response dict with success status and data
         """
@@ -523,19 +500,10 @@ class MontyMobileTemplateService:
             # When templates_are_text_only: never require or validate image headers.
             assume_hdr = bool((self.api_config or {}).get("assume_whatsapp_image_header", False))
             hcfg = (tpl_meta or {}).get("header") if tpl_meta else {}
-            header_opt_out = (
-                isinstance(hcfg, dict)
-                and str(hcfg.get("format", "")).strip().lower() == "none"
-            )
+            header_opt_out = isinstance(hcfg, dict) and str(hcfg.get("format", "")).strip().lower() == "none"
             comps = (payload.get("template") or {}).get("components") or []
             has_header = any(str(c.get("type", "")).lower() == "header" for c in comps)
-            if (
-                not self.templates_are_text_only()
-                and assume_hdr
-                and tpl_meta
-                and not header_opt_out
-                and not has_header
-            ):
+            if not self.templates_are_text_only() and assume_hdr and tpl_meta and not header_opt_out and not has_header:
                 try:
                     from services.message_preview_service import message_preview_service
 
@@ -551,7 +519,7 @@ class MontyMobileTemplateService:
                     "success": False,
                     "error": (
                         "WhatsApp template requires a HEADER (image). No header image URL was found. "
-                        "Do one of: (1) Dashboard → Smart Messaging → \"Template header image URL\" → Save; "
+                        'Do one of: (1) Dashboard → Smart Messaging → "Template header image URL" → Save; '
                         "(2) server env MONTY_TEMPLATE_HEADER_IMAGE_URL or WHATSAPP_TEMPLATE_HEADER_IMAGE_URL; "
                         "(3) file settings/template_header_image_url.txt next to app_settings.json (one HTTPS URL per line); "
                         "(4) config/montymobile_templates.json → api_config.default_header_component.image_link."
@@ -568,31 +536,27 @@ class MontyMobileTemplateService:
                     "success": False,
                     "error": "MONTYMOBILE_API_KEY is not configured",
                 }
-            headers = {
-                "Tenant": self.api_config['tenant'],
-                "api-key": api_key,
-                "Content-Type": "application/json"
-            }
-            
+            headers = {"Tenant": self.api_config["tenant"], "api-key": api_key, "Content-Type": "application/json"}
+
             # Send request (URL may override legacy montymobile_templates.json omni-apis paths)
             url = self._resolve_send_url()
-            
+
             print(f"📤 Sending template '{template_id}' to {phone_number} (lang: {language})")
             print(f"   URL: {url}")
             print(f"   Tenant: {self.api_config['tenant']}")
             print(f"   API ID: {self.api_config['api_id']}")
             print(f"   API Key: configured={bool(api_key)}")
-            
+
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, headers=headers, json=payload)
-                
+
                 print(f"   Response: {response.status_code}")
-                
+
                 if response.status_code == 200:
                     try:
                         response_data = response.json()
 
-                        def _extract_message_id(body: Dict[str, Any]) -> Optional[str]:
+                        def _extract_message_id(body: dict[str, Any]) -> str | None:
                             if not isinstance(body, dict):
                                 return None
                             data = body.get("data")
@@ -641,12 +605,12 @@ class MontyMobileTemplateService:
                                 "phone_number": phone_number,
                                 "recipient_to_monty": to_used,
                                 "language": language,
-                                "response": response_data
+                                "response": response_data,
                             }
                         else:
                             error_msg = response_data.get("message", "Unknown error")
                             print(f"❌ Template send failed: {error_msg}")
-                            
+
                             return {
                                 "success": False,
                                 "error": error_msg,
@@ -692,42 +656,37 @@ class MontyMobileTemplateService:
                         "outbound_template_name": (payload.get("template") or {}).get("name"),
                         "response_text": error_text,
                     }
-                    
+
         except httpx.TimeoutException:
-            print(f"❌ Request timeout after 30 seconds")
-            return {
-                "success": False,
-                "error": "Request timeout"
-            }
+            print("❌ Request timeout after 30 seconds")
+            return {"success": False, "error": "Request timeout"}
         except Exception as e:
             print(f"❌ Unexpected error: {e}")
             import traceback
+
             traceback.print_exc()
-            
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    def get_all_templates(self) -> Dict:
+
+            return {"success": False, "error": str(e)}
+
+    def get_all_templates(self) -> dict:
         """Get all available templates"""
         return {
             template_id: {
-                "name": template['name'],
-                "status": template['status'],
-                "category": template['category'],
-                "languages": list(template['languages'].keys()),
-                "parameters": template['languages'].get('ar', {}).get('parameters', [])
+                "name": template["name"],
+                "status": template["status"],
+                "category": template["category"],
+                "languages": list(template["languages"].keys()),
+                "parameters": template["languages"].get("ar", {}).get("parameters", []),
             }
             for template_id, template in self.templates.items()
         }
-    
+
     def is_template_approved(self, template_id: str) -> bool:
         """Check if a template is approved by WhatsApp"""
         template = self.templates.get(template_id)
         if not template:
             return False
-        return template.get('status') == 'APPROVED'
+        return cast(bool, template.get("status") == "APPROVED")
 
 
 # Global instance

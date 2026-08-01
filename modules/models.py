@@ -1,18 +1,17 @@
-# -*- coding: utf-8 -*-
 """
 Models module: Pydantic models for WhatsApp messages and requests
 Defines all request/response models for API endpoints and webhook processing.
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
-from typing import List, Optional, Union, Dict, Any
-import json
 
 
 # Base model to allow extra fields without error
 class FlexibleBaseModel(BaseModel):
     class Config:
-        extra = 'ignore'
+        extra = "ignore"
 
 
 # WhatsApp Message Content Types
@@ -23,34 +22,34 @@ class WhatsAppText(FlexibleBaseModel):
 class WhatsAppImage(FlexibleBaseModel):
     id: str
     mime_type: str
-    sha256: Optional[str] = None
+    sha256: str | None = None
 
 
 class WhatsAppAudio(FlexibleBaseModel):
     id: str
     mime_type: str
-    voice: Optional[bool] = None
+    voice: bool | None = None
 
 
 class WhatsAppVideo(FlexibleBaseModel):
     id: str
     mime_type: str
-    sha256: Optional[str] = None
+    sha256: str | None = None
 
 
 class WhatsAppDocument(FlexibleBaseModel):
     id: str
     mime_type: str
-    filename: Optional[str] = None
-    sha256: Optional[str] = None
+    filename: str | None = None
+    sha256: str | None = None
 
 
 class WhatsAppLocation(FlexibleBaseModel):
     latitude: float
     longitude: float
-    name: Optional[str] = None
-    address: Optional[str] = None
-    url: Optional[str] = None
+    name: str | None = None
+    address: str | None = None
+    url: str | None = None
 
 
 class WhatsAppButton(FlexibleBaseModel):
@@ -73,28 +72,28 @@ class WhatsAppContact(FlexibleBaseModel):
 
 
 class WhatsAppReferral(FlexibleBaseModel):
-    source_url: Optional[str] = None
-    source_type: Optional[str] = None
-    source_id: Optional[str] = None
-    headline: Optional[str] = None
-    body: Optional[str] = None
+    source_url: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    headline: str | None = None
+    body: str | None = None
 
 
 class WhatsAppMessage(FlexibleBaseModel):
-    from_: str = Field(alias='from')
+    from_: str = Field(alias="from")
     id: str
-    timestamp: Optional[str] = None  # Made optional - MontyMobile doesn't always send it
+    timestamp: str | None = None  # Made optional - MontyMobile doesn't always send it
     type: str
-    text: Optional[WhatsAppText] = None
-    image: Optional[WhatsAppImage] = None
-    audio: Optional[WhatsAppAudio] = None
-    video: Optional[WhatsAppVideo] = None
-    document: Optional[WhatsAppDocument] = None
-    location: Optional[WhatsAppLocation] = None
-    contacts: Optional[List[WhatsAppContact]] = None
-    button: Optional[WhatsAppButton] = None
-    reaction: Optional[WhatsAppReaction] = None
-    referral: Optional[WhatsAppReferral] = None
+    text: WhatsAppText | None = None
+    image: WhatsAppImage | None = None
+    audio: WhatsAppAudio | None = None
+    video: WhatsAppVideo | None = None
+    document: WhatsAppDocument | None = None
+    location: WhatsAppLocation | None = None
+    contacts: list[WhatsAppContact] | None = None
+    button: WhatsAppButton | None = None
+    reaction: WhatsAppReaction | None = None
+    referral: WhatsAppReferral | None = None
 
 
 class WhatsAppStatus(FlexibleBaseModel):
@@ -102,16 +101,16 @@ class WhatsAppStatus(FlexibleBaseModel):
     status: str
     timestamp: str
     recipient_id: str
-    conversation: Optional[dict] = None
-    pricing: Optional[dict] = None
+    conversation: dict | None = None
+    pricing: dict | None = None
 
 
 class WhatsAppChangeValue(FlexibleBaseModel):
     messaging_product: str
     metadata: dict
-    contacts: Optional[List[WhatsAppContact]] = None
-    messages: Optional[List[WhatsAppMessage]] = None
-    statuses: Optional[List[WhatsAppStatus]] = None
+    contacts: list[WhatsAppContact] | None = None
+    messages: list[WhatsAppMessage] | None = None
+    statuses: list[WhatsAppStatus] | None = None
 
 
 class WhatsAppChange(FlexibleBaseModel):
@@ -121,12 +120,12 @@ class WhatsAppChange(FlexibleBaseModel):
 
 class WhatsAppEntry(FlexibleBaseModel):
     id: str
-    changes: List[WhatsAppChange]
+    changes: list[WhatsAppChange]
 
 
 class WebhookRequest(FlexibleBaseModel):
     object: str
-    entry: List[WhatsAppEntry]
+    entry: list[WhatsAppEntry]
 
 
 # Testing API Models
@@ -136,7 +135,7 @@ class TestMessageRequest(BaseModel):
     provider: str = "meta"
     # When set to instagram|facebook, Testing Lab exercises the Meta social processor
     # (same routing/tools/handoff as production) with a capture-only send adapter.
-    channel: Optional[str] = None
+    channel: str | None = None
     simulate_external_send: bool = False
 
 
@@ -164,9 +163,9 @@ class FeedbackRequest(BaseModel):
     user_question: str
     bot_response: str
     feedback_type: str
-    correct_answer: Optional[str] = None
-    feedback_reason: Optional[str] = None
-    operator_id: Optional[str] = "operator_001"
+    correct_answer: str | None = None
+    feedback_reason: str | None = None
+    operator_id: str | None = "operator_001"
     language: str = "ar"
 
 
@@ -194,7 +193,7 @@ class SendOperatorMessageRequest(BaseModel):
     operator_id: str
     message_type: str = "text"  # "text", "voice", "image"
     # Same key within TTL suppresses a second Firestore write + WhatsApp send (double-submit / retries).
-    idempotency_key: Optional[str] = None
+    idempotency_key: str | None = None
 
 
 class OperatorStatusRequest(BaseModel):
@@ -204,6 +203,7 @@ class OperatorStatusRequest(BaseModel):
 
 class EditMessageRequest(BaseModel):
     """Request to edit a bot message content in live chat (e.g. after dislike)."""
+
     user_id: str
     conversation_id: str
     message_id: str

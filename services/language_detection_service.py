@@ -1,17 +1,16 @@
-# services/language_detection_service.py
 """
 Language Detection Service - Wraps language_resolver.py
 Detects language BEFORE GPT call on each message
 """
 
+from __future__ import annotations
+
 import json
 import re
-from typing import Dict, List, Optional
 
 from language_resolver import LanguageResolver, system_language_instruction
-from services.user_persistence_service import user_persistence
 from services.llm_core_service import client as openai_client
-
+from services.user_persistence_service import user_persistence
 
 SUPPORTED_TRAINING_LANGUAGES = {"ar", "en", "fr", "franco"}
 TRAINING_LANGUAGE_ORDER = ["ar", "en", "fr", "franco"]
@@ -65,16 +64,10 @@ FRANCO_MARKERS = (
 
 
 class LanguageDetectionService:
-    def __init__(self):
+    def __init__(self) -> None:
         self._resolver = LanguageResolver()
 
-    def detect_language(
-        self,
-        user_id: str,
-        message: str,
-        user_data: dict,
-        is_expecting_name: bool = False
-    ) -> dict:
+    def detect_language(self, user_id: str, message: str, user_data: dict, is_expecting_name: bool = False) -> dict:
         """
         Detect language from message text.
 
@@ -91,7 +84,7 @@ class LanguageDetectionService:
             - system_instruction: GPT prompt instruction for this language
             - skipped: bool (True if detection was skipped)
         """
-        conversation_id = user_data.get('current_conversation_id', user_id)
+        conversation_id = user_data.get("current_conversation_id", user_id)
 
         # Set expecting_full_name flag if needed
         if is_expecting_name:
@@ -99,28 +92,25 @@ class LanguageDetectionService:
 
         # Detect language
         detected = self._resolver.resolve(
-            conversation_id=conversation_id,
-            user_text=message,
-            accept_language=None,
-            user_lang_override=None
+            conversation_id=conversation_id, user_text=message, accept_language=None, user_lang_override=None
         )
 
         # Map franco to ar for response (user writes franco, bot responds Arabic script)
-        response_lang = 'ar' if detected == 'franco' else detected
+        response_lang = "ar" if detected == "franco" else detected
 
         # Save to user persistence
         user_persistence.save_user_language(user_id, detected)
 
         return {
-            'detected_language': detected,
-            'response_language': response_lang,
-            'system_instruction': system_language_instruction(response_lang),
-            'skipped': False
+            "detected_language": detected,
+            "response_language": response_lang,
+            "system_instruction": system_language_instruction(response_lang),
+            "skipped": False,
         }
 
     def set_expecting_name(self, user_id: str, user_data: dict, expecting: bool) -> None:
         """Set flag to ignore language detection on next message (for name input)"""
-        conversation_id = user_data.get('current_conversation_id', user_id)
+        conversation_id = user_data.get("current_conversation_id", user_id)
         self._resolver.set_expecting_full_name(conversation_id, expecting)
 
     def get_resolver(self) -> LanguageResolver:
@@ -128,7 +118,7 @@ class LanguageDetectionService:
         return self._resolver
 
     @staticmethod
-    def normalize_training_language(language: Optional[str], default: str = "ar") -> str:
+    def normalize_training_language(language: str | None, default: str = "ar") -> str:
         """
         Normalize language identifiers to project-standard codes.
         """
@@ -172,8 +162,8 @@ class LanguageDetectionService:
         self,
         question_ar: str,
         answer_ar: str,
-        target_languages: Optional[List[str]] = None,
-    ) -> Dict:
+        target_languages: list[str] | None = None,
+    ) -> dict:
         """
         Translate Arabic Q&A into EN/FR/Franco for training storage.
         """
@@ -189,14 +179,14 @@ class LanguageDetectionService:
         self,
         question: str,
         answer: str,
-        source_language: Optional[str] = None,
-        target_languages: Optional[List[str]] = None,
-    ) -> Dict:
+        source_language: str | None = None,
+        target_languages: list[str] | None = None,
+    ) -> dict:
         """
         Translate a Q&A pair from any supported source language into requested target languages.
         Supported languages: ar, en, fr, franco.
         """
-        normalized_targets: List[str] = []
+        normalized_targets: list[str] = []
         requested_targets = target_languages or TRAINING_LANGUAGE_ORDER
         for lang in requested_targets:
             normalized = self.normalize_training_language(lang, default="")
@@ -251,7 +241,7 @@ class LanguageDetectionService:
                     {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
                 ],
             )
-            content = response.choices[0].message.content.strip() if response.choices else "{}"
+            content = (response.choices[0].message.content or "").strip() if response.choices else "{}"
             parsed = json.loads(content)
         except Exception as error:
             print(f"❌ translate_training_pair failed: {error}")
@@ -262,7 +252,7 @@ class LanguageDetectionService:
                 "error": str(error),
             }
 
-        translations: Dict[str, Dict[str, str]] = {}
+        translations: dict[str, dict[str, str]] = {}
         for lang in normalized_targets:
             lang_payload = parsed.get(lang, {})
             translated_question = str(lang_payload.get("question", "")).strip()

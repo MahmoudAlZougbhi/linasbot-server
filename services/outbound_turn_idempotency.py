@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
-from typing import List, Optional
 
 from google.cloud import firestore
 
@@ -18,7 +17,7 @@ from utils.phone_utils import phone_match_key
 from utils.utils import get_canonical_user_id_and_phone, get_firestore_db
 
 
-def stable_ai_claim_identity(user_id: str, phone_number: Optional[str] = None) -> str:
+def stable_ai_claim_identity(user_id: str, phone_number: str | None = None) -> str:
     """
     Stable key for ai_turn_claims: digits-only for phone users (same person regardless of +961 vs 961
     or room→phone resolution timing), else stripped room / raw id.
@@ -30,7 +29,7 @@ def stable_ai_claim_identity(user_id: str, phone_number: Optional[str] = None) -
     return (canonical or user_id or "").strip()
 
 
-def record_inbound_mid_for_ai_turn(user_data: dict, source_message_id: Optional[str]) -> None:
+def record_inbound_mid_for_ai_turn(user_data: dict, source_message_id: str | None) -> None:
     """Append WhatsApp inbound message id(s) for this user turn (text combine, voice, image)."""
     mid = (source_message_id or "").strip()
     if not mid:
@@ -50,8 +49,8 @@ def _is_already_exists(exc: BaseException) -> bool:
 
 async def try_claim_ai_turn(
     stable_identity: str,
-    inbound_mids: List[str],
-    inbound_body_fps: Optional[List[str]] = None,
+    inbound_mids: list[str],
+    inbound_body_fps: list[str] | None = None,
 ) -> bool:
     """
     Return True if this process should run the AI turn (claim created).
@@ -65,9 +64,7 @@ async def try_claim_ai_turn(
     Multiple combined user messages (len(mids) > 1) still key only on sorted message ids.
     """
     mids = sorted({str(m).strip() for m in (inbound_mids or []) if m and str(m).strip()})
-    bfps = sorted(
-        {str(b).strip() for b in (inbound_body_fps or []) if b and str(b).strip()}
-    )
+    bfps = sorted({str(b).strip() for b in (inbound_body_fps or []) if b and str(b).strip()})
     if not mids and not bfps:
         return True
     sid = (stable_identity or "").strip()
@@ -90,14 +87,9 @@ async def try_claim_ai_turn(
     doc_id = hashlib.sha256(key_basis.encode("utf-8")).hexdigest()
     db = get_firestore_db()
     if db:
-        ref = (
-            db.collection("artifacts")
-            .document("linas-ai-bot-backend")
-            .collection("ai_turn_claims")
-            .document(doc_id)
-        )
+        ref = db.collection("artifacts").document("linas-ai-bot-backend").collection("ai_turn_claims").document(doc_id)
 
-        def _create():
+        def _create() -> None:
             ref.create(
                 {
                     "created_at": firestore.SERVER_TIMESTAMP,

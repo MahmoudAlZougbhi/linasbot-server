@@ -1,15 +1,16 @@
-# -*- coding: utf-8 -*-
 """
 Interaction Flow Logger - Tracks User ↔ Bot ↔ AI message flow for dashboard transparency.
 Enable via INTERACTION_FLOW_DEBUG=1 or config.INTERACTION_FLOW_DEBUG.
 Persists to LINASBOT_DATA_ROOT/logs/activity_flow.jsonl so data survives deploy/rebuild.
 """
 
+from __future__ import annotations
+
 import json
 import os
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 from collections import deque
+from datetime import datetime
+from typing import Any
 
 from storage.persistent_storage import ACTIVITY_FLOW_FILE, ensure_dirs
 
@@ -26,7 +27,7 @@ def _ensure_data_dir() -> None:
     ensure_dirs()
 
 
-def _tail_lines(path: str, max_lines: int, max_bytes: int = 1024 * 1024) -> List[str]:
+def _tail_lines(path: str, max_lines: int, max_bytes: int = 1024 * 1024) -> list[str]:
     """Read last max_lines from file without loading entire file (tail). max_bytes caps read size (default 1MB)."""
     if not os.path.isfile(path):
         return []
@@ -74,7 +75,7 @@ def _load_from_file() -> None:
         print(f"⚠️ Could not load activity flow from {FLOW_LOG_FILE}: {e}")
 
 
-def _append_to_file(entry: Dict[str, Any]) -> None:
+def _append_to_file(entry: dict[str, Any]) -> None:
     """Append one entry to the persistent log file."""
     _ensure_data_dir()
     try:
@@ -91,6 +92,7 @@ def is_flow_logging_enabled() -> bool:
         return True
     try:
         import config
+
         return getattr(config, "INTERACTION_FLOW_DEBUG", True)
     except Exception:
         return True  # Default on for transparency
@@ -110,29 +112,29 @@ def log_interaction(
     bot_to_user: str,
     source: str,
     *,
-    user_name: Optional[str] = None,
-    user_phone: Optional[str] = None,
-    user_gender: Optional[str] = None,
-    customer_exists: Optional[bool] = None,
-    customer_file_status: Optional[str] = None,
-    ai_query_summary: Optional[str] = None,
-    bot_sent_to_ai_full: Optional[str] = None,
-    customer_context_sent: Optional[str] = None,
-    ai_raw_response: Optional[str] = None,
-    model: Optional[str] = None,
-    tokens: Optional[int] = None,
-    prompt_tokens: Optional[int] = None,
-    completion_tokens: Optional[int] = None,
-    cost_usd: Optional[float] = None,
-    input_cost_usd: Optional[float] = None,
-    output_cost_usd: Optional[float] = None,
-    response_time_ms: Optional[float] = None,
-    qa_match_score: Optional[float] = None,
-    tool_calls: Optional[List[str]] = None,
-    flow_steps: Optional[List[Dict]] = None,
-    flow_error: Optional[str] = None,
-    token_source: Optional[str] = None,
-    message_type: Optional[str] = None,
+    user_name: str | None = None,
+    user_phone: str | None = None,
+    user_gender: str | None = None,
+    customer_exists: bool | None = None,
+    customer_file_status: str | None = None,
+    ai_query_summary: str | None = None,
+    bot_sent_to_ai_full: str | None = None,
+    customer_context_sent: str | None = None,
+    ai_raw_response: str | None = None,
+    model: str | None = None,
+    tokens: int | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    cost_usd: float | None = None,
+    input_cost_usd: float | None = None,
+    output_cost_usd: float | None = None,
+    response_time_ms: float | None = None,
+    qa_match_score: float | None = None,
+    tool_calls: list[str] | None = None,
+    flow_steps: list[dict] | None = None,
+    flow_error: str | None = None,
+    token_source: str | None = None,
+    message_type: str | None = None,
 ) -> None:
     """
     Log one interaction in the User → Bot → AI → Bot → User flow.
@@ -182,14 +184,10 @@ def log_interaction(
             else None
         ),
         "bot_sent_to_ai_full": (
-            ((bot_sent_to_ai_full or "")[:250000] if store_full_prompts else None)
-            if bot_sent_to_ai_full
-            else None
+            ((bot_sent_to_ai_full or "")[:250000] if store_full_prompts else None) if bot_sent_to_ai_full else None
         ),
         "customer_context_sent": (
-            ((customer_context_sent or "")[:50000] if store_full_prompts else None)
-            if customer_context_sent
-            else None
+            ((customer_context_sent or "")[:50000] if store_full_prompts else None) if customer_context_sent else None
         ),
         "ai_raw_response": (ai_raw_response or "")[:500] if ai_raw_response else None,
         "model": model,
@@ -212,14 +210,19 @@ def log_interaction(
     _append_to_file(entry)
 
 
-def get_recent_flows(limit: int = 50, search_phone: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_recent_flows(limit: int = 50, search_phone: str | None = None) -> list[dict[str, Any]]:
     """Get recent flow entries for dashboard. Optionally filter by phone (partial match)."""
     _load_from_file()
-    entries = list(_FLOW_BUFFER)[-limit * 3:]  # Fetch more when filtering
+    entries = list(_FLOW_BUFFER)[-limit * 3 :]  # Fetch more when filtering
     if search_phone and search_phone.strip():
         q = search_phone.strip().replace(" ", "").replace("+", "").replace("-", "")
         if q:
-            entries = [e for e in entries if q in (e.get("user_phone") or "").replace(" ", "").replace("+", "").replace("-", "") or q in (e.get("user_id") or "").replace(" ", "").replace("+", "").replace("-", "")]
+            entries = [
+                e
+                for e in entries
+                if q in (e.get("user_phone") or "").replace(" ", "").replace("+", "").replace("-", "")
+                or q in (e.get("user_id") or "").replace(" ", "").replace("+", "").replace("-", "")
+            ]
     return entries[-limit:]
 
 

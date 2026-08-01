@@ -6,15 +6,16 @@ When APP_MODE=local or ENV=development, or ENABLE_SENDING=false:
 Recipients not allowed get dry-run: log to data/dry_run_messages.jsonl and return {success: True, dry_run: True}.
 """
 
+from __future__ import annotations
+
 import json
-import os
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, cast
 
 import config
-from .base_adapter import WhatsAppAdapter
 from storage.persistent_storage import DRY_RUN_MESSAGES_FILE, ensure_dirs
+
+from .base_adapter import WhatsAppAdapter
 
 _DRY_RUN_LOG = DRY_RUN_MESSAGES_FILE
 
@@ -31,7 +32,7 @@ def _should_dry_run(to_number: str) -> bool:
     return normalized not in allowed_normalized
 
 
-def _log_dry_run(to_number: str, message_type: str, payload: Dict[str, Any]) -> None:
+def _log_dry_run(to_number: str, message_type: str, payload: dict[str, Any]) -> None:
     """Append one dry-run entry to persistent dry_run_messages.jsonl."""
     ensure_dirs()
     entry = {
@@ -51,20 +52,18 @@ def _log_dry_run(to_number: str, message_type: str, payload: Dict[str, Any]) -> 
 class SafeSendAdapter(WhatsAppAdapter):
     """Wraps a real WhatsApp adapter and enforces local/dry-run rules."""
 
-    def __init__(self, real_adapter: WhatsAppAdapter):
+    def __init__(self, real_adapter: WhatsAppAdapter) -> None:
         self._real = real_adapter
-        self.client = getattr(real_adapter, "client", None)
+        self.client: Any = getattr(real_adapter, "client", None)
         self.provider_name = getattr(real_adapter, "provider_name", "unknown")
 
-    async def send_text_message(self, to_number: str, message: str) -> Dict[str, Any]:
+    async def send_text_message(self, to_number: str, message: str) -> dict[str, Any]:
         if _should_dry_run(to_number):
             _log_dry_run(to_number, "text", {"message": message[:500]})
             return {"success": True, "dry_run": True}
         return await self._real.send_text_message(to_number, message)
 
-    async def send_image_message(
-        self, to_number: str, image_url: str, caption: str = None
-    ) -> Dict[str, Any]:
+    async def send_image_message(self, to_number: str, image_url: str, caption: str | None = None) -> dict[str, Any]:
         if _should_dry_run(to_number):
             _log_dry_run(to_number, "image", {"image_url": image_url[:200], "caption": (caption or "")[:200]})
             return {"success": True, "dry_run": True}
@@ -73,25 +72,25 @@ class SafeSendAdapter(WhatsAppAdapter):
     async def download_media(self, media_id: str) -> bytes:
         return await self._real.download_media(media_id)
 
-    async def set_webhook(self, webhook_url: str) -> Dict[str, Any]:
+    async def set_webhook(self, webhook_url: str) -> dict[str, Any]:
         return await self._real.set_webhook(webhook_url)
 
-    def parse_webhook_message(self, webhook_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def parse_webhook_message(self, webhook_data: dict[str, Any]) -> dict[str, Any] | None:
         return self._real.parse_webhook_message(webhook_data)
 
-    async def close(self):
+    async def close(self) -> None:
         if hasattr(self._real, "close") and callable(self._real.close):
             await self._real.close()
 
-    # Optional methods (MontyMobile, etc.)
+    #  methods (MontyMobile, etc.)
     async def send_audio_message(
-        self, to_number: str, audio_url: str, audio_base64: str = None
-    ) -> Dict[str, Any]:
+        self, to_number: str, audio_url: str, audio_base64: str | None = None
+    ) -> dict[str, Any]:
         if _should_dry_run(to_number):
             _log_dry_run(to_number, "audio", {"audio_url": audio_url[:200] if audio_url else "base64"})
             return {"success": True, "dry_run": True}
         if hasattr(self._real, "send_audio_message"):
-            return await self._real.send_audio_message(to_number, audio_url, audio_base64)
+            return cast(dict[str, Any], await self._real.send_audio_message(to_number, audio_url, audio_base64))
         return {"success": False, "error": "Adapter does not support send_audio_message"}
 
     async def send_template_message(
@@ -99,9 +98,9 @@ class SafeSendAdapter(WhatsAppAdapter):
         to_number: str,
         template_name: str,
         language_code: str = "en",
-        parameters: list = None,
-        **kwargs,
-    ) -> Dict[str, Any]:
+        parameters: list | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         if _should_dry_run(to_number):
             _log_dry_run(
                 to_number,
@@ -110,15 +109,16 @@ class SafeSendAdapter(WhatsAppAdapter):
             )
             return {"success": True, "dry_run": True}
         if hasattr(self._real, "send_template_message"):
-            return await self._real.send_template_message(
-                to_number, template_name, language_code, parameters, **kwargs
+            return cast(
+                dict[str, Any],
+                await self._real.send_template_message(to_number, template_name, language_code, parameters, **kwargs),
             )
         return {"success": False, "error": "Adapter does not support send_template_message"}
 
-    async def send_button_message(self, to_number: str, text: str, buttons: list) -> Dict[str, Any]:
+    async def send_button_message(self, to_number: str, text: str, buttons: list) -> dict[str, Any]:
         if _should_dry_run(to_number):
             _log_dry_run(to_number, "button_message", {"text": text[:400], "buttons": buttons})
             return {"success": True, "dry_run": True}
         if hasattr(self._real, "send_button_message"):
-            return await self._real.send_button_message(to_number, text, buttons)
+            return cast(dict[str, Any], await self._real.send_button_message(to_number, text, buttons))
         return await self.send_text_message(to_number, text)

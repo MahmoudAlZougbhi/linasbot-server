@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import Any, Optional
-
+from typing import Any
 
 BOT_FIXED_TZ = datetime.timezone(datetime.timedelta(hours=2), name="+0200")
 
@@ -218,7 +217,7 @@ def detect_existing_appointment_edit_intent(text: str) -> bool:
     )
 
 
-def detect_relative_intent(text: str) -> Optional[str]:
+def detect_relative_intent(text: str) -> str | None:
     """
     Detect explicit relative datetime intents from multilingual text.
     Returns one of: after_two_hours, tomorrow_morning, later_today, or None.
@@ -245,7 +244,7 @@ def detect_relative_intent(text: str) -> Optional[str]:
     return None
 
 
-def detect_day_reference(text: str) -> Optional[str]:
+def detect_day_reference(text: str) -> str | None:
     """Return expected day bucket from text: 'today', 'tomorrow', or None."""
     normalized = _normalize_text(text)
     if not normalized:
@@ -305,7 +304,7 @@ def detect_reschedule_intent(text: str) -> bool:
     return any(re.search(pattern, normalized, re.IGNORECASE) for pattern in _RESCHEDULE_INTENT_PATTERNS)
 
 
-def parse_datetime_flexible(date_value: str) -> Optional[datetime.datetime]:
+def parse_datetime_flexible(date_value: str) -> datetime.datetime | None:
     """
     Parse flexible date strings into aware +0200 datetime.
     Supports common GPT outputs and ISO strings with timezone offsets.
@@ -350,7 +349,7 @@ def parse_datetime_flexible(date_value: str) -> Optional[datetime.datetime]:
     return None
 
 
-def datetime_from_ai_date_components(raw: Any) -> Optional[datetime.datetime]:
+def datetime_from_ai_date_components(raw: Any) -> datetime.datetime | None:
     """
     Build a single aware datetime in BOT_FIXED_TZ from structured fields the model sends
     (year, month, day, hour, optional minute). Prefer this over a free-form `date` string when
@@ -360,7 +359,7 @@ def datetime_from_ai_date_components(raw: Any) -> Optional[datetime.datetime]:
     if not isinstance(raw, dict):
         return None
 
-    def _ci(v: Any) -> Optional[int]:
+    def _ci(v: Any) -> int | None:
         if v is None:
             return None
         try:
@@ -389,9 +388,9 @@ def datetime_from_ai_date_components(raw: Any) -> Optional[datetime.datetime]:
 
 def resolve_relative_datetime(
     text: str,
-    reference: Optional[datetime.datetime] = None,
-    forced_day_ref: Optional[str] = None,
-) -> Optional[datetime.datetime]:
+    reference: datetime.datetime | None = None,
+    forced_day_ref: str | None = None,
+) -> datetime.datetime | None:
     """Resolve supported relative phrases to a concrete +0200 datetime.
 
     forced_day_ref: when set to 'today' or 'tomorrow', overrides detect_day_reference(text).
@@ -488,7 +487,7 @@ _WEEKDAY_INTENT_PATTERNS: list[tuple[int, re.Pattern]] = [
 ]
 
 
-def detect_last_weekday_intent_from_user_text(text: str) -> Optional[int]:
+def detect_last_weekday_intent_from_user_text(text: str) -> int | None:
     """
     Return the weekday (0=Mon .. 6=Sun) of the **last** weekday phrase in user-authored text.
     Used when the model sends the wrong calendar day but the customer already named a target day
@@ -497,7 +496,7 @@ def detect_last_weekday_intent_from_user_text(text: str) -> Optional[int]:
     if not text or not str(text).strip():
         return None
     best_end = -1
-    best_wd: Optional[int] = None
+    best_wd: int | None = None
     for wd, rx in _WEEKDAY_INTENT_PATTERNS:
         for m in rx.finditer(text):
             if m.end() > best_end:
@@ -511,7 +510,7 @@ def next_future_datetime_matching_weekday(
     target_weekday: int,
     hour: int,
     minute: int,
-) -> Optional[datetime.datetime]:
+) -> datetime.datetime | None:
     """
     First datetime strictly after `reference` on `target_weekday` (Python weekday) with given hour/minute in same tz.
     """
@@ -522,32 +521,28 @@ def next_future_datetime_matching_weekday(
     for add in range(0, 15):
         d = d0 + datetime.timedelta(days=add)
         if d.weekday() == target_weekday:
-            cand = datetime.datetime(
-                d.year, d.month, d.day, hour, minute, 0, tzinfo=reference.tzinfo, microsecond=0
-            )
+            cand = datetime.datetime(d.year, d.month, d.day, hour, minute, 0, tzinfo=reference.tzinfo, microsecond=0)
             if cand > reference:
                 return cand
     return None
 
 
-def format_clinic_calendar_anchor(reference: Optional[datetime.datetime] = None) -> str:
+def format_clinic_calendar_anchor(reference: datetime.datetime | None = None) -> str:
     """
     Single unambiguous line for the AI: English weekday + ISO date for today and tomorrow in bot TZ (+02:00).
     """
     now = to_bot_tz(reference) if reference is not None else now_in_bot_tz()
     tomorrow = now + datetime.timedelta(days=1)
     return (
-        f'Today ({now.strftime("%A")}) = {now.strftime("%Y-%m-%d")}; '
-        f'Tomorrow ({tomorrow.strftime("%A")}) = {tomorrow.strftime("%Y-%m-%d")} '
+        f"Today ({now.strftime('%A')}) = {now.strftime('%Y-%m-%d')}; "
+        f"Tomorrow ({tomorrow.strftime('%A')}) = {tomorrow.strftime('%Y-%m-%d')} "
         f'(clinic clock, fixed UTC+02:00). For Franco: "el yom" / "lyom" / "اليوم" = Today; '
         f'"bokra" / "بكرا" = Tomorrow.'
     )
 
 
 def align_datetime_to_day_reference(
-    candidate: datetime.datetime,
-    text: str,
-    reference: Optional[datetime.datetime] = None
+    candidate: datetime.datetime, text: str, reference: datetime.datetime | None = None
 ) -> datetime.datetime:
     """
     Align a parsed datetime with user's day reference (today/tomorrow) when present.

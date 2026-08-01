@@ -14,16 +14,15 @@ import os
 import re
 import time
 import unicodedata
-from typing import Dict, Optional, Set
 
 from utils.phone_utils import phone_match_key
 
 # Same user can legitimately get two different messages within seconds; identical body is the bug.
 WINDOW_SEC = float(os.getenv("OUTBOUND_TEXT_DEDUPE_WINDOW_SEC", "90"))
 
-_cache: Dict[str, float] = {}
-_inflight: Set[str] = set()
-_lock: Optional[asyncio.Lock] = None
+_cache: dict[str, float] = {}
+_inflight: set[str] = set()
+_lock: asyncio.Lock | None = None
 
 
 def _get_lock() -> asyncio.Lock:
@@ -64,7 +63,7 @@ def _body_key(message: str) -> str:
     return normalize_text_body_for_dedupe(message)
 
 
-def outbound_fingerprint(recipient: str, message: str, phone_hint: Optional[str] = None) -> str:
+def outbound_fingerprint(recipient: str, message: str, phone_hint: str | None = None) -> str:
     """
     Same key as should_skip_outbound_text uses after optional phone hint (canonical number).
     Use for per-handler duplicate suppression aligned with global dedupe.

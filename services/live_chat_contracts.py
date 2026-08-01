@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any
 
-
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 SOURCE_MESSAGE_ID_KEYS = (
     "source_message_id",
     "message_id",
@@ -23,7 +23,7 @@ def utc_now() -> datetime.datetime:
 def parse_timestamp_utc(
     timestamp: Any,
     *,
-    fallback: Optional[datetime.datetime] = None,
+    fallback: datetime.datetime | None = None,
 ) -> datetime.datetime:
     """Parse mixed timestamp values into UTC-aware datetimes."""
     fallback_ts = fallback or utc_now()
@@ -59,7 +59,7 @@ def parse_timestamp_utc(
     return dt.astimezone(UTC)
 
 
-def isoformat_utc(timestamp: Any, *, fallback: Optional[datetime.datetime] = None) -> str:
+def isoformat_utc(timestamp: Any, *, fallback: datetime.datetime | None = None) -> str:
     """Return ISO8601 string for a mixed timestamp value."""
     return parse_timestamp_utc(timestamp, fallback=fallback).isoformat()
 
@@ -75,7 +75,7 @@ def extract_source_message_id(metadata: Any) -> str:
     return ""
 
 
-def normalize_message_metadata(metadata: Any) -> Dict[str, Any]:
+def normalize_message_metadata(metadata: Any) -> dict[str, Any]:
     """Normalize metadata and preserve canonical source id field."""
     normalized = dict(metadata or {}) if isinstance(metadata, dict) else {}
     source_message_id = extract_source_message_id(normalized)
@@ -84,7 +84,7 @@ def normalize_message_metadata(metadata: Any) -> Dict[str, Any]:
     return normalized
 
 
-def normalize_message(message: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_message(message: dict[str, Any]) -> dict[str, Any]:
     """Normalize one message payload while preserving backward compatibility."""
     payload = dict(message or {})
     metadata = normalize_message_metadata(payload.get("metadata"))
@@ -99,7 +99,7 @@ def normalize_message(message: Dict[str, Any]) -> Dict[str, Any]:
 
     msg_type = str(payload.get("type") or metadata.get("type") or "text").strip().lower() or "text"
 
-    normalized: Dict[str, Any] = {
+    normalized: dict[str, Any] = {
         "role": role,
         "text": safe_text,
         "timestamp": timestamp,
@@ -127,7 +127,7 @@ def normalize_message(message: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-def _build_message_signature(message: Dict[str, Any]) -> Tuple[str, str, str, str]:
+def _build_message_signature(message: dict[str, Any]) -> tuple[str, str, str, str]:
     metadata = message.get("metadata", {}) or {}
     role = str(message.get("role", "")).strip().lower()
     msg_type = str(message.get("type") or metadata.get("type") or "text").strip().lower()
@@ -137,8 +137,8 @@ def _build_message_signature(message: Dict[str, Any]) -> Tuple[str, str, str, st
 
 
 def is_duplicate_message(
-    existing_messages: Iterable[Dict[str, Any]],
-    new_message: Dict[str, Any],
+    existing_messages: Iterable[dict[str, Any]],
+    new_message: dict[str, Any],
     *,
     dedupe_window_seconds: int = 20,
 ) -> bool:
@@ -173,9 +173,9 @@ def is_duplicate_message(
     return False
 
 
-def dedupe_messages(messages: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def dedupe_messages(messages: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Stable message dedupe used by all read paths."""
-    deduped: List[Dict[str, Any]] = []
+    deduped: list[dict[str, Any]] = []
     seen_source_ids = set()
     seen_signatures = set()
 
@@ -200,8 +200,8 @@ def dedupe_messages(messages: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def normalize_conversation_document(
     conversation_id: str,
     user_id: str,
-    payload: Dict[str, Any],
-) -> Dict[str, Any]:
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     """Normalize a raw conversation document while keeping contract fields."""
     data = dict(payload or {})
     normalized_messages = dedupe_messages(data.get("messages", []))

@@ -1,7 +1,8 @@
 """
 Deny-by-default API authentication, CSRF, rate limits, and RBAC.
 
-Public exceptions are intentionally minimal: health + auth login/logout bootstrap.
+Public exceptions are intentionally minimal: health/ready + auth login only.
+Logout requires a session + CSRF (not public). First-admin provisioning is offline CLI only.
 Provider webhooks live outside /api/* and are handled separately.
 """
 
@@ -93,8 +94,6 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("GET", "/api/health"),
     ("GET", "/api/ready"),
     ("POST", "/api/auth/login"),
-    ("POST", "/api/auth/logout"),
-    ("POST", "/api/auth/bootstrap-admin"),
 }
 
 # Prefix public (rare)

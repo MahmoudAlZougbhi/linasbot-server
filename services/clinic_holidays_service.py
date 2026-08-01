@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Branch holiday / closure calendar for AI context (Settings → Clinic).
 Used to block booking on specific dates per branch and to drive seasonal greetings.
@@ -7,13 +6,13 @@ Used to block booking on specific dates per branch and to drive seasonal greetin
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import config
 from services.settings_service import settings_service
 
 
-def _parse_iso_date(s: Optional[str]) -> Optional[datetime.date]:
+def _parse_iso_date(s: str | None) -> datetime.date | None:
     if not s or not str(s).strip():
         return None
     try:
@@ -22,7 +21,7 @@ def _parse_iso_date(s: Optional[str]) -> Optional[datetime.date]:
         return None
 
 
-def get_branch_holidays_config() -> List[Dict[str, Any]]:
+def get_branch_holidays_config() -> list[dict[str, Any]]:
     clinic = settings_service.settings.get("clinic") or {}
     raw = clinic.get("branchHolidays")
     if not isinstance(raw, list):
@@ -38,11 +37,11 @@ def build_clinic_holiday_block_for_prompt(user_id: str, current_local_time: date
     if not entries:
         return ""
 
-    branch_id: Optional[int] = None
+    branch_id: int | None = None
     try:
         st = config.user_booking_state.get(user_id) or {}
         if st.get("branch_id") is not None:
-            branch_id = int(st.get("branch_id"))
+            branch_id = int(st.get("branch_id") or 0)
     except (TypeError, ValueError):
         branch_id = None
     if branch_id is None:
@@ -53,7 +52,7 @@ def build_clinic_holiday_block_for_prompt(user_id: str, current_local_time: date
             branch_id = None
 
     today = current_local_time.date()
-    lines: List[str] = [
+    lines: list[str] = [
         "**🎉 BRANCH HOLIDAYS / CLOSURES (from dashboard Settings — MANDATORY):**\n",
         f"- **Context branch_id for this user** (booking context): {branch_id if branch_id is not None else 'unknown — infer from conversation or tools'}\n",
         "- **Matching rule**: A row applies to a booking at branch B if `branchId` is empty/null **or** `branchId == B` (Beirut=1, Antelias=2 unless your CRM differs).\n",

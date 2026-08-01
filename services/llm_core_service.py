@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 # services/llm_core_service.py
 from openai import AsyncOpenAI
+
 import config
 
 # تهيئة عميل OpenAI
