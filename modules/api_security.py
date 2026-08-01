@@ -30,7 +30,6 @@ from services.rate_limit_service import rate_limit_service
 PERMISSION_KEYS = {
     "dashboard",
     "liveChat",
-    "chatHistory",
     "training",
     "testing",
     "analytics",
@@ -46,7 +45,6 @@ SYSTEM_ROLE_PERMISSIONS: Dict[str, Dict[str, bool]] = {
     "operator": {
         "dashboard": True,
         "liveChat": True,
-        "chatHistory": True,
         "training": False,
         "testing": False,
         "analytics": True,
@@ -59,7 +57,6 @@ SYSTEM_ROLE_PERMISSIONS: Dict[str, Dict[str, bool]] = {
     "viewer": {
         "dashboard": True,
         "liveChat": False,
-        "chatHistory": True,
         "training": False,
         "testing": False,
         "analytics": True,

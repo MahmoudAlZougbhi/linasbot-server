@@ -20,8 +20,8 @@ import {
   ArrowPathIcon,
   BellAlertIcon,
 } from "@heroicons/react/24/outline";
+import { authFetch } from "../utils/authFetch";
 import {
-import { authFetch } from '../utils/authFetch';
   LineChart,
   Line,
   BarChart,
@@ -42,6 +42,7 @@ const Analytics = () => {
   const [timeRange, setTimeRange] = useState(7);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
   useEffect(() => {
     fetchAnalytics();
@@ -61,14 +62,20 @@ const Analytics = () => {
       );
       const result = await response.json();
 
+      if (!response.ok) {
+        setFetchError(`Analytics request failed (${response.status})`);
+        setAnalyticsData(null);
+        return;
+      }
       if (result.success && result.data) {
+        setFetchError(null);
         setAnalyticsData(result.data);
       } else {
-        console.error("Failed to fetch analytics:", result.error);
+        setFetchError(result.error || 'Failed to load analytics');
         setAnalyticsData(null);
       }
     } catch (error) {
-      console.error("Error fetching analytics:", error);
+      setFetchError(error.message || 'Failed to load analytics');
       setAnalyticsData(null);
     } finally {
       setLoading(false);
@@ -147,6 +154,24 @@ const Analytics = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary-600 mx-auto mb-4"></div>
           <p className="text-slate-600 font-medium">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError && !analyticsData) {
+    return (
+      <div className="flex items-center justify-center h-screen px-6">
+        <div className="text-center max-w-md">
+          <p className="text-lg font-semibold text-slate-900 mb-2">Unable to load analytics</p>
+          <p className="text-sm text-slate-600 mb-4">{fetchError}</p>
+          <button
+            type="button"
+            onClick={fetchAnalytics}
+            className="px-4 py-2 rounded-xl bg-primary-600 text-white text-sm font-medium"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );

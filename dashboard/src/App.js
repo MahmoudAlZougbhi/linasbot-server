@@ -20,9 +20,9 @@ import LiveChat from './pages/LiveChat';
 import MobileLiveChat from './pages/MobileLiveChat';
 import SmartMessaging from './pages/SmartMessaging';
 import Analytics from './pages/Analytics';
+import NotFound from './pages/NotFound';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
-import Register from './pages/Register';
 
 // Contexts
 import { AuthProvider } from './contexts/AuthContext';
@@ -101,12 +101,11 @@ function AppContent() {
                   <Route path="/content-managers" element={<ContentManagers />} />
                   <Route path="/activity-flow" element={<ActivityFlow />} />
                   <Route path="/live-chat" element={<LiveChat />} />
-                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/analytics" element={<Navigate to="/" replace />} />
                   <Route path="/smart-messaging" element={<SmartMessaging />} />
                   <Route path="/settings" element={<Settings />} />
 
-                  {/* Catch all - redirect to dashboard */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </motion.div>
             </main>
@@ -163,7 +162,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            {/* Public self-registration removed — accounts are admin-provisioned */}
 
             <Route
               path="/mobile/live-chat"

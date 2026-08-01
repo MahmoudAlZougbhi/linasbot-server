@@ -3,11 +3,16 @@ Settings API Module
 Handles application settings endpoints for the dashboard
 """
 
+import os
 from fastapi import HTTPException
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from modules.core import app
 from services.settings_service import settings_service
+
+
+def _env_configured(*names: str) -> bool:
+    return any(bool((os.getenv(n) or "").strip()) for n in names)
 
 
 @app.get("/api/settings")
@@ -25,6 +30,58 @@ async def get_settings():
             "success": False,
             "error": str(e)
         }
+
+
+@app.get("/api/settings/integrations")
+async def get_integration_status():
+    """
+    Redacted integration readiness for the dashboard.
+    Never returns secret values — only configured / missing flags.
+    """
+    try:
+        integrations: List[Dict[str, Any]] = [
+            {
+                "name": "OpenAI",
+                "service": "Chat / Whisper",
+                "configured": _env_configured("OPENAI_API_KEY"),
+                "notes": "Required for AI replies",
+            },
+            {
+                "name": "Meta Instagram / Facebook",
+                "service": "Social messaging webhooks",
+                "configured": _env_configured(
+                    "META_APP_SECRET",
+                    "META_PAGE_ACCESS_TOKEN",
+                    "FACEBOOK_PAGE_ACCESS_TOKEN",
+                    "INSTAGRAM_PAGE_ACCESS_TOKEN",
+                ),
+                "notes": "Inbound AI channels only",
+            },
+            {
+                "name": "WhatsApp provider (outbound handoff / CRM)",
+                "service": "MontyMobile / Dialog / Cloud",
+                "configured": _env_configured(
+                    "MONTYMOBILE_API_KEY",
+                    "DIALOG360_API_KEY",
+                    "WHATSAPP_TOKEN",
+                    "META_WHATSAPP_TOKEN",
+                ),
+                "notes": "Not an inbound AI channel",
+            },
+            {
+                "name": "Firebase",
+                "service": "Conversations / Live Chat store",
+                "configured": _env_configured(
+                    "GOOGLE_APPLICATION_CREDENTIALS",
+                    "FIREBASE_CREDENTIALS_PATH",
+                )
+                or os.path.exists("firebase_data.json"),
+                "notes": "Path presence only; credentials never returned",
+            },
+        ]
+        return {"success": True, "integrations": integrations}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/settings/{category}")

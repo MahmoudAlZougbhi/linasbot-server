@@ -128,7 +128,7 @@ export const canAccessPath = (user, path) => {
  * Get the first accessible path for a user
  */
 export const getDefaultPath = (user) => {
-  const paths = ['/', '/live-chat', '/chat-history', '/training', '/testing', '/analytics', '/smart-messaging', '/settings'];
+  const paths = ['/', '/live-chat', '/training', '/testing', '/smart-messaging', '/settings', '/content-managers', '/activity-flow'];
 
   for (const path of paths) {
     if (canAccessPath(user, path)) {

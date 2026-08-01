@@ -113,6 +113,7 @@ const SmartMessaging = () => {
 
   // NEW: Lazy loading state
   const [messageCounts, setMessageCounts] = useState({});
+  const [countsError, setCountsError] = useState(null);
   const [loadingCategory, setLoadingCategory] = useState(null);
   const [loadedCategories, setLoadedCategories] = useState(new Set());
   // Customer list from source-of-truth API (per category)
@@ -1121,8 +1122,12 @@ const SmartMessaging = () => {
       // ✅ LAZY LOADING: Fetch only counts initially (fast)
       if (countsResult?.success) {
         setMessageCounts(countsResult.counts || {});
-      } else if (countsResult) {
-        console.warn("Failed to fetch message counts:", countsResult.error);
+        setCountsError(null);
+      } else {
+        setMessageCounts({});
+        setCountsError(
+          (countsResult && countsResult.error) || "Failed to load Smart Messaging counts"
+        );
       }
 
       // Clear messages and customer lists - loaded when category is selected
@@ -1430,14 +1435,24 @@ const SmartMessaging = () => {
 
   const pageNumbers = getPageNumbers();
 
-  // ✅ Counts from API (source of truth); never show negative
+  // Counts from API only; on failure show "—" (never fail-open to zeros)
+  const countOrDash = (n) => (countsError ? "—" : Math.max(0, Number(n) || 0));
   const messageTypesCounts = {
-    all: Math.max(0, Object.values(messageCounts).reduce((sum, count) => sum + (Number(count) || 0), 0)),
-    reminder_24h: Math.max(0, Number(messageCounts.reminder_24h) || 0),
-    thank_you_message_sent_after_session: Math.max(0, Number(messageCounts.thank_you_message_sent_after_session) || 0),
-    session_feedback: Math.max(0, Number(messageCounts.session_feedback) || 0),
-    sent_17_days_after_last_session_new: Math.max(0, Number(messageCounts.sent_17_days_after_last_session_new) || 0),
-    missed_yesterday: Math.max(0, Number(messageCounts.missed_yesterday) || 0),
+    all: countsError
+      ? "—"
+      : Math.max(
+          0,
+          Object.values(messageCounts).reduce((sum, count) => sum + (Number(count) || 0), 0)
+        ),
+    reminder_24h: countOrDash(messageCounts.reminder_24h),
+    thank_you_message_sent_after_session: countOrDash(
+      messageCounts.thank_you_message_sent_after_session
+    ),
+    session_feedback: countOrDash(messageCounts.session_feedback),
+    sent_17_days_after_last_session_new: countOrDash(
+      messageCounts.sent_17_days_after_last_session_new
+    ),
+    missed_yesterday: countOrDash(messageCounts.missed_yesterday),
   };
 
   const getMessageTypeInfo = (type) => {
@@ -1882,6 +1897,18 @@ const SmartMessaging = () => {
 
             {/* Message Type Filter (Colored Buttons) */}
             <div className="mb-4">
+              {countsError ? (
+                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  Counts unavailable: {countsError}. Figures below are not shown as zeros from a failed load.
+                  <button
+                    type="button"
+                    className="ml-2 underline font-medium"
+                    onClick={() => window.location.reload()}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : null}
               <p className="text-xs font-semibold text-slate-700 mb-3">
                 FILTER BY MESSAGE TYPE:
               </p>

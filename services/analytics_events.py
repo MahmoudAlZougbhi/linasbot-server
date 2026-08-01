@@ -81,9 +81,20 @@ class AnalyticsEvents:
     
     # ==================== EVENT LOGGING METHODS ====================
     
-    def log_message(self, source: str, msg_type: str, user_id: str, language: str = "ar", 
-                   sentiment: str = "neutral", tokens: int = 0, cost_usd: float = 0.0, 
-                   model: str = None, response_time_ms: float = None, message_length: int = 0):
+    def log_message(
+        self,
+        source: str,
+        msg_type: str,
+        user_id: str,
+        language: str = "ar",
+        sentiment: Optional[str] = None,
+        tokens: int = 0,
+        cost_usd: float = 0.0,
+        model: str = None,
+        response_time_ms: float = None,
+        message_length: int = 0,
+        sentiment_detected: bool = False,
+    ):
         """
         Log a message event
         
@@ -92,26 +103,31 @@ class AnalyticsEvents:
             msg_type: "text" | "voice" | "image"
             user_id: User identifier
             language: "ar" | "en" | "fr" | "franco"
-            sentiment: "positive" | "neutral" | "negative"
+            sentiment: "positive" | "neutral" | "negative" when actually computed
             tokens: Number of tokens used (for bot messages)
             cost_usd: Cost in USD (for bot messages)
             model: AI model used (e.g., "gpt-5-mini", "whisper-1")
             response_time_ms: Response time in milliseconds (for bot messages)
             message_length: Length of message in characters
+            sentiment_detected: True only when sentiment was computed from a real detector
         """
-        self._append_event({
+        payload: Dict[str, Any] = {
             "type": "message",
             "source": source,
             "msg_type": msg_type,
             "user_id": user_id,
             "language": language,
-            "sentiment": sentiment,
             "tokens": tokens,
             "cost_usd": cost_usd,
             "model": model,
             "response_time_ms": response_time_ms,
-            "message_length": message_length
-        })
+            "message_length": message_length,
+        }
+        if sentiment is not None:
+            payload["sentiment"] = sentiment
+            if sentiment_detected:
+                payload["sentiment_detected"] = True
+        self._append_event(payload)
     
     def log_conversation_start(self, user_id: str, conversation_id: str, is_new_user: bool = False):
         """Log when a new conversation starts"""
@@ -890,18 +906,25 @@ class AnalyticsEvents:
                 if event_type == "message":
                     stats["overview"]["total_messages"] += 1
                     stats["messages"]["by_type"][event.get("msg_type", "text")] += 1
-                    stats["messages"]["by_source"][event.get("source", "user")] += 1
-                    stats["messages"]["by_language"][event.get("language", "ar")] += 1
+                    source = event.get("source", "user")
+                    stats["messages"]["by_source"][source] += 1
+                    # Language demographics count user messages only (not bot echoes)
+                    if source == "user":
+                        stats["messages"]["by_language"][event.get("language", "ar")] += 1
                     
+                    # Only count explicitly labeled sentiments (ignore placeholder "neutral" defaults)
                     sentiment = event.get("sentiment")
-                    if sentiment:
+                    if sentiment and sentiment in {"positive", "negative"}:
                         stats["sentiment"][sentiment] += 1
+                    elif sentiment == "neutral" and event.get("sentiment_detected") is True:
+                        stats["sentiment"]["neutral"] += 1
                     
                     # Time-based
                     if date_key:
                         stats["messages"]["daily"][date_key]["total"] += 1
                         stats["messages"]["daily"][date_key][event.get("msg_type", "text")] += 1
-                        stats["messages"]["daily"][date_key][event.get("language", "ar")] += 1
+                        if source == "user":
+                            stats["messages"]["daily"][date_key][event.get("language", "ar")] += 1
                     if hour_key:
                         stats["messages"]["hourly"][hour_key] += 1
                     
@@ -1006,11 +1029,23 @@ class AnalyticsEvents:
                 
                 elif event_type == "feedback":
                     stats["feedback"]["total"] += 1
-                    feedback_type = event.get("feedback_type")
-                    
-                    if feedback_type == "good":
+                    feedback_type = str(event.get("feedback_type") or "").strip().lower()
+                    like_types = {"good", "like", "likes", "positive", "up", "thumbs_up", "👍"}
+                    dislike_types = {
+                        "wrong",
+                        "bad",
+                        "dislike",
+                        "dislikes",
+                        "negative",
+                        "down",
+                        "thumbs_down",
+                        "inappropriate",
+                        "unclear",
+                        "👎",
+                    }
+                    if feedback_type in like_types:
                         stats["feedback"]["likes"] += 1
-                    else:
+                    elif feedback_type in dislike_types or feedback_type:
                         stats["feedback"]["dislikes"] += 1
                         reason = event.get("reason", feedback_type)
                         if reason:

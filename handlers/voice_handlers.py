@@ -182,7 +182,6 @@ async def handle_voice_message(user_id: str, user_name: str, audio_data_bytes: i
             msg_type="voice",
             user_id=user_id,
             language=user_data.get('user_preferred_lang', 'ar'),
-            sentiment="neutral",
             tokens=0,  # Whisper doesn't report tokens
             cost_usd=whisper_cost,
             model="gpt-4o-transcribe",

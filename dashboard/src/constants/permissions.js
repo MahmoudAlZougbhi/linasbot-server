@@ -12,12 +12,6 @@ export const FEATURES = {
     name: 'Live Chat',
     description: 'Monitor and participate in live conversations'
   },
-  CHAT_HISTORY: {
-    key: 'chatHistory',
-    path: '/chat-history',
-    name: 'Chat History',
-    description: 'View past conversation records'
-  },
   TRAINING: {
     key: 'training',
     path: '/training',
@@ -32,7 +26,7 @@ export const FEATURES = {
   },
   ANALYTICS: {
     key: 'analytics',
-    path: '/analytics',
+    path: '/',
     name: 'Analytics',
     description: 'View analytics and reports'
   },
@@ -53,6 +47,18 @@ export const FEATURES = {
     path: null,
     name: 'User Management',
     description: 'Manage users and permissions'
+  },
+  CONTENT_MANAGERS: {
+    key: 'contentManagers',
+    path: '/content-managers',
+    name: 'Content Managers',
+    description: 'Manage content files and knowledge content UI'
+  },
+  ACTIVITY_FLOW: {
+    key: 'activityFlow',
+    path: '/activity-flow',
+    name: 'Interaction Logs',
+    description: 'Read-only observability of user ↔ bot ↔ AI turns'
   }
 };
 
@@ -61,10 +67,9 @@ export const PATH_TO_PERMISSION = {
   '/': 'dashboard',
   '/live-chat': 'liveChat',
   '/mobile/live-chat': 'liveChat',
-  '/chat-history': 'chatHistory',
   '/training': 'training',
   '/testing': 'testing',
-  '/analytics': 'analytics',
+  '/analytics': 'dashboard',
   '/smart-messaging': 'smartMessaging',
   '/settings': 'settings',
   '/content-managers': 'contentManagers',
@@ -82,7 +87,6 @@ export const SYSTEM_ROLES = {
     permissions: {
       dashboard: true,
       liveChat: true,
-      chatHistory: true,
       training: true,
       testing: true,
       analytics: true,
@@ -101,7 +105,6 @@ export const SYSTEM_ROLES = {
     permissions: {
       dashboard: true,
       liveChat: true,
-      chatHistory: true,
       training: false,
       testing: false,
       analytics: true,
@@ -120,7 +123,6 @@ export const SYSTEM_ROLES = {
     permissions: {
       dashboard: true,
       liveChat: false,
-      chatHistory: true,
       training: false,
       testing: false,
       analytics: true,
@@ -137,7 +139,6 @@ export const SYSTEM_ROLES = {
 export const DEFAULT_PERMISSIONS = {
   dashboard: false,
   liveChat: false,
-  chatHistory: false,
   training: false,
   testing: false,
   analytics: false,

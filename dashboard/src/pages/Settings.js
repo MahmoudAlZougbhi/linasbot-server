@@ -47,6 +47,8 @@ const Settings = () => {
   /** Branch holidays / closures for AI (pause booking + greetings) — saved under settings.clinic */
   const [branchHolidays, setBranchHolidays] = useState([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [integrations, setIntegrations] = useState([]);
+  const [integrationsError, setIntegrationsError] = useState(null);
 
   // Load settings from API on mount and when page is shown/refreshed
   useEffect(() => {
@@ -78,7 +80,24 @@ const Settings = () => {
         setSettingsLoaded(true);
       }
     };
+    const loadIntegrations = async () => {
+      try {
+        const res = await authFetch('/api/settings/integrations');
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          setIntegrations([]);
+          setIntegrationsError(data.error || `Failed to load integrations (${res.status})`);
+          return;
+        }
+        setIntegrations(data.integrations || []);
+        setIntegrationsError(null);
+      } catch (e) {
+        setIntegrations([]);
+        setIntegrationsError(e.message || 'Failed to load integrations');
+      }
+    };
     loadSettings();
+    loadIntegrations();
   }, []);
 
   // Check if user can manage users
@@ -87,7 +106,7 @@ const Settings = () => {
   const tabs = [
     { id: 'general', name: 'General', icon: Cog6ToothIcon, color: 'from-blue-500 to-cyan-500' },
     { id: 'security', name: 'Security', icon: LockClosedIcon, color: 'from-red-500 to-pink-500' },
-    { id: 'api', name: 'API Keys', icon: KeyIcon, color: 'from-green-500 to-emerald-500' },
+    { id: 'api', name: 'Integrations', icon: KeyIcon, color: 'from-green-500 to-emerald-500' },
     { id: 'languages', name: 'Languages', icon: GlobeAltIcon, color: 'from-purple-500 to-pink-500' },
     { id: 'notifications', name: 'Notifications', icon: BellIcon, color: 'from-orange-500 to-red-500' },
     { id: 'clinic', name: 'Clinic calendar', icon: CalendarDaysIcon, color: 'from-teal-500 to-cyan-500' },
@@ -100,13 +119,6 @@ const Settings = () => {
     { code: 'en', name: 'English', flag: '🇺🇸', enabled: true },
     { code: 'fr', name: 'French', flag: '🇫🇷', enabled: true },
     { code: 'franco', name: 'Franco-Arabic', flag: '🔤', enabled: true },
-  ];
-
-  const apiKeys = [
-    { name: 'OpenAI API', key: 'sk-proj-dZNp...', status: 'active', service: 'GPT-4 & Whisper' },
-    { name: '360Dialog', key: 'rqwWBA_sandbox', status: 'active', service: 'WhatsApp Sandbox' },
-    { name: 'Meta WhatsApp', key: 'EAAZAXQ...', status: 'inactive', service: 'WhatsApp Cloud API' },
-    { name: 'Firebase', key: 'firebase_data.json', status: 'active', service: 'Database & Auth' },
   ];
 
   const handleSaveSettings = async () => {
@@ -211,11 +223,23 @@ const Settings = () => {
     ]);
   };
 
-  const handleTestAPI = (apiName) => {
-    toast.loading(`Testing ${apiName}...`, { duration: 2000 });
-    setTimeout(() => {
-      toast.success(`${apiName} connection successful!`);
-    }, 2000);
+  const handleTestAPI = async (apiName) => {
+    const toastId = toast.loading(`Checking ${apiName}...`);
+    try {
+      const res = await authFetch('/api/health');
+      if (!res.ok) {
+        toast.error(`${apiName}: health check failed (${res.status})`, { id: toastId });
+        return;
+      }
+      const data = await res.json();
+      if (data?.ok) {
+        toast.success(`${apiName}: backend health OK (secrets not exposed)`, { id: toastId });
+      } else {
+        toast.error(`${apiName}: backend reported not ready`, { id: toastId });
+      }
+    } catch (e) {
+      toast.error(`${apiName}: ${e.message || 'connection failed'}`, { id: toastId });
+    }
   };
 
   const handleChangePassword = async (e) => {
@@ -554,11 +578,17 @@ const Settings = () => {
           <div className="card">
             <h2 className="text-xl font-bold text-slate-800 font-display mb-6 flex items-center">
               <KeyIcon className="w-6 h-6 mr-2 text-green-600" />
-              API Keys & Integrations
+              Integration status (secrets are never displayed)
             </h2>
 
+            {integrationsError ? (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {integrationsError}
+              </div>
+            ) : null}
+
             <div className="space-y-4">
-              {apiKeys.map((api, index) => (
+              {integrations.map((api, index) => (
                 <motion.div
                   key={api.name}
                   initial={{ opacity: 0, y: 20 }}
@@ -569,34 +599,34 @@ const Settings = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className={`p-2 rounded-lg ${
-                        api.status === 'active' ? 'bg-green-100' : 'bg-slate-100'
+                        api.configured ? 'bg-green-100' : 'bg-slate-100'
                       }`}>
                         <ServerIcon className={`w-5 h-5 ${
-                          api.status === 'active' ? 'text-green-600' : 'text-slate-400'
+                          api.configured ? 'text-green-600' : 'text-slate-400'
                         }`} />
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-800">{api.name}</h3>
                         <p className="text-sm text-slate-600">{api.service}</p>
-                        <p className="text-xs text-slate-500 font-mono">{api.key}</p>
+                        <p className="text-xs text-slate-500">{api.notes}</p>
                       </div>
                     </div>
 
                     <div className="flex items-center space-x-3">
                       <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                        api.status === 'active'
+                        api.configured
                           ? 'bg-green-100 text-green-700'
-                          : 'bg-slate-100 text-slate-600'
+                          : 'bg-amber-100 text-amber-700'
                       }`}>
-                        {api.status === 'active' ? (
+                        {api.configured ? (
                           <>
                             <CheckCircleIcon className="w-3 h-3 inline mr-1" />
-                            Active
+                            Configured
                           </>
                         ) : (
                           <>
                             <ExclamationTriangleIcon className="w-3 h-3 inline mr-1" />
-                            Inactive
+                            Missing env
                           </>
                         )}
                       </span>
@@ -605,7 +635,7 @@ const Settings = () => {
                         onClick={() => handleTestAPI(api.name)}
                         className="btn-ghost text-sm px-3 py-1"
                       >
-                        Test
+                        Health check
                       </button>
                     </div>
                   </div>
@@ -619,8 +649,8 @@ const Settings = () => {
                 <div>
                   <h4 className="font-medium text-blue-800">Security Note</h4>
                   <p className="text-sm text-blue-700 mt-1">
-                    API keys are securely stored and encrypted. Only partial keys are displayed for security.
-                    Test connections regularly to ensure optimal performance.
+                    Secrets are never displayed in the dashboard. Status reflects whether
+                    required environment variables are present on the server.
                   </p>
                 </div>
               </div>
@@ -662,15 +692,7 @@ const Settings = () => {
                         {lang.enabled ? 'Enabled' : 'Disabled'}
                       </span>
 
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={lang.enabled}
-                          onChange={() => {}}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                      </label>
+                      <span className="text-xs text-slate-500">Managed by bot language detection</span>
                     </div>
                   </div>
                 </motion.div>

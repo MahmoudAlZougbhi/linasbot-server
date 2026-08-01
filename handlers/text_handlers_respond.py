@@ -1014,7 +1014,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         msg_type="text",
         user_id=user_id,
         language=current_preferred_lang,
-        sentiment="neutral",
         message_length=len(user_input_to_process)
     )
 
@@ -2715,7 +2714,6 @@ async def _process_and_respond(user_id: str, user_name: str, user_input_to_proce
         msg_type="text",
         user_id=user_id,
         language=current_preferred_lang,
-        sentiment="neutral",  # Could be enhanced with sentiment detection
         tokens=prompt_tokens + completion_tokens,
         cost_usd=cost,
         model=flow_meta.get("final_response_model") or flow_meta.get("model") or "gpt-5.1",

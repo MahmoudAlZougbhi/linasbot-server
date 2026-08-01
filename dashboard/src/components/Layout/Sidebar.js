@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -20,6 +20,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { hasPermission } from "../../utils/permissions";
 import { buildDisplayLabel } from "../../utils/buildInfo";
+import { authFetch } from "../../utils/authFetch";
 
 // Navigation items with permission keys
 const navigationItems = [
@@ -43,14 +44,14 @@ const navigationItems = [
     href: "/content-managers",
     icon: FolderIcon,
     badge: "New",
-    permissionKey: "training",
+    permissionKey: "contentManagers",
   },
   {
-    name: "Activity Flow",
+    name: "Interaction Logs",
     href: "/activity-flow",
     icon: ArrowPathRoundedSquareIcon,
     badge: "New",
-    permissionKey: "analytics",
+    permissionKey: "activityFlow",
   },
   {
     name: "Live Chat",
@@ -81,6 +82,48 @@ const downloadItems = [
 
 const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const { user } = useAuth();
+  const [healthState, setHealthState] = useState({
+    status: "unknown",
+    detail: "Checking…",
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await authFetch("/api/health");
+        if (!res.ok) {
+          if (!cancelled) {
+            setHealthState({ status: "down", detail: `HTTP ${res.status}` });
+          }
+          return;
+        }
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.ok) {
+          setHealthState({ status: "ok", detail: "Ready" });
+        } else {
+          setHealthState({
+            status: "degraded",
+            detail: data?.status || data?.detail || "Not ready",
+          });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setHealthState({
+            status: "down",
+            detail: e?.message || "Unreachable",
+          });
+        }
+      }
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   // Filter navigation items based on user permissions
   const navigation = useMemo(() => {
@@ -293,15 +336,31 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
               className="glass rounded-xl p-4 bg-gradient-to-r from-primary-50 to-secondary-50"
             >
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg flex items-center justify-center">
-                  <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                    healthState.status === "ok"
+                      ? "bg-gradient-to-br from-green-400 to-emerald-500"
+                      : healthState.status === "degraded"
+                        ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                        : "bg-gradient-to-br from-slate-400 to-slate-500"
+                  }`}
+                >
+                  <div className="w-3 h-3 bg-white rounded-full"></div>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-700">
-                    System Status
+                    System health
                   </p>
-                  <p className="text-xs text-green-600 font-medium">
-                    All Systems Online
+                  <p
+                    className={`text-xs font-medium ${
+                      healthState.status === "ok"
+                        ? "text-green-600"
+                        : healthState.status === "degraded"
+                          ? "text-amber-600"
+                          : "text-slate-600"
+                    }`}
+                  >
+                    {healthState.detail}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
                     Build {buildDisplayLabel}

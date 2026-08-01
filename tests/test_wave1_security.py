@@ -19,6 +19,7 @@ os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
 os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave1-test-secret")
 os.environ.setdefault("ENVIRONMENT", "test")
+os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
 os.environ["DISABLE_API_DOCS"] = "true"
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 

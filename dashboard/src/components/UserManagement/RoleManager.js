@@ -23,13 +23,14 @@ import PermissionMatrix from './PermissionMatrix';
 const PERMISSION_LABELS = {
   dashboard: 'Dashboard',
   liveChat: 'Live Chat',
-  chatHistory: 'Chat History',
   training: 'AI Training',
   testing: 'Testing Lab',
   analytics: 'Analytics',
   smartMessaging: 'Smart Messaging',
   settings: 'Settings',
-  userManagement: 'User Management'
+  userManagement: 'User Management',
+  contentManagers: 'Content Managers',
+  activityFlow: 'Interaction Logs',
 };
 
 const RoleManager = () => {

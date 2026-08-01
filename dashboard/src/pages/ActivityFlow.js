@@ -390,7 +390,8 @@ const ActivityFlow = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Activity Flow</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Interaction Logs</h1>
+        <p className="text-sm text-slate-500 mt-1">Read-only observability of user ↔ bot ↔ AI turns (not a workflow engine).</p>
         <p className="text-slate-600 mt-1">
           See what happens between the user, bot, and AI — what the user asked, what the bot sent to the AI, what the AI returned, and what the bot sent to the user.
         </p>

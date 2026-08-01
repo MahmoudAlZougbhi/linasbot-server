@@ -203,30 +203,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-slate-300 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-700">
-                  Remember me
-                </label>
-              </div>
-              <div className="text-sm">
-                <button
-                  type="button"
-                  onClick={() => setError('Please contact an admin to reset your password.')}
-                  className="font-medium text-primary-600 hover:text-primary-500"
-                >
-                  Forgot password?
-                </button>
-              </div>
-            </div>
-
             {/* Submit Button */}
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -256,16 +232,7 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Register Link */}
-          <div className="text-center">
-            <p className="text-sm text-slate-600">
-              Don't have an account?{' '}
-              <Link to="/register" className="font-medium text-primary-600 hover:text-primary-500">
-                Create one now
-              </Link>
-            </p>
-          </div>
-
+          
         </motion.div>
 
         {/* Footer */}

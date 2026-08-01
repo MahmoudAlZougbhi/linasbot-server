@@ -48,3 +48,27 @@ Tests: `tests/test_wave1_security.py` — 20 passed.
 | Contact matrix | CLOSED | tests assert exact wa.me numbers |
 
 Tests: `tests/test_wave2_social_routing.py` + wave1 — 31 passed.
+
+
+## Wave 3 — Metrics / UI honesty / RBAC UX
+
+| ID | Status | Evidence |
+|---|---|---|
+| V2-MET-001 fake neutral sentiment | CLOSED | No default `sentiment="neutral"` logging; aggregate ignores unlabeled neutral |
+| V2-MET-002 satisfaction mapping | CLOSED | like/dislike type sets in `analytics_events.py` |
+| V2-MET-003 analytics errors as zeros | CLOSED | Analytics UI error+retry; aggregate returns `success:false` |
+| V2-MET-004 Smart Messaging counts fail-open | CLOSED | `countsError` + dash display |
+| V2-UI-001 client-only RBAC gaps | CLOSED | contentManagers/activityFlow in FE+BE; chatHistory removed |
+| V2-UI-002 Live Chat mock / operator | CLOSED | mock fabrication removed; operator from session |
+| Dead Register | CLOSED | route removed; `Register.js` deleted |
+| Orphan Chat History | CLOSED | route/permission removed; page deleted |
+| Fake API-key test | CLOSED | redacted `/api/settings/integrations` + health check |
+| Dead language toggles | CLOSED | read-only language list |
+| Fake All Systems Online | CLOSED | Sidebar polls `/api/health` |
+| Duplicate /analytics | CLOSED | redirects to `/` |
+| Ungated APK | CLOSED (W1) | session + liveChat permission |
+| Activity Flow naming | CLOSED | Interaction Logs |
+| Catch-all 404 | CLOSED | `NotFound.js` |
+| Forgot-password fake | CLOSED | removed from Login |
+
+Tests: `tests/test_wave3_metrics.py` (+ waves 1–2) — 38+ passed with `OPENAI_API_KEY` set for app import.

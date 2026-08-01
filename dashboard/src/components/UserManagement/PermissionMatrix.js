@@ -28,13 +28,6 @@ const PERMISSION_CONFIG = [
     color: 'green'
   },
   {
-    key: 'chatHistory',
-    name: 'Chat History',
-    description: 'View past conversation records',
-    icon: ClockIcon,
-    color: 'amber'
-  },
-  {
     key: 'training',
     name: 'AI Training',
     description: 'Train and configure the AI bot',
@@ -75,6 +68,20 @@ const PERMISSION_CONFIG = [
     description: 'Manage users and permissions',
     icon: UsersIcon,
     color: 'red'
+  },
+  {
+    key: 'contentManagers',
+    name: 'Content Managers',
+    description: 'Manage content manager screens',
+    icon: AcademicCapIcon,
+    color: 'amber'
+  },
+  {
+    key: 'activityFlow',
+    name: 'Interaction Logs',
+    description: 'Read-only observability logs',
+    icon: ClockIcon,
+    color: 'slate'
   }
 ];
 
