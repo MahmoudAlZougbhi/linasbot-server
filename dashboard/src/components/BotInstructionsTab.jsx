@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   DocumentTextIcon,
@@ -22,21 +22,11 @@ const BotInstructionsTab = () => {
   const [instructions, setInstructions] = useState("");
   const [originalInstructions, setOriginalInstructions] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
-  const [stats, setStats] = useState(null);
-  const [backups, setBackups] = useState([]);
-  const [lastModified, setLastModified] = useState(null);
+  const [stats, setStats] = useState(/** @type {FileStatsRecord | null} */ (null));
+  const [backups, setBackups] = useState(/** @type {TrainingBackupRecord[]} */ ([]));
+  const [lastModified, setLastModified] = useState(/** @type {string | null} */ (null));
 
-  useEffect(() => {
-    loadInstructions();
-    loadStats();
-    loadBackups();
-  }, []);
-
-  useEffect(() => {
-    setHasChanges(instructions !== originalInstructions);
-  }, [instructions, originalInstructions]);
-
-  const loadInstructions = async () => {
+  const loadInstructions = useCallback(async () => {
     try {
       const response = await getInstructions();
       if (response.success) {
@@ -47,9 +37,9 @@ const BotInstructionsTab = () => {
     } catch (error) {
       console.error("Failed to load instructions:", error);
     }
-  };
+  }, [getInstructions]);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const response = await getInstructionsStats();
       if (response.success) {
@@ -58,9 +48,9 @@ const BotInstructionsTab = () => {
     } catch (error) {
       console.error("Failed to load stats:", error);
     }
-  };
+  }, [getInstructionsStats]);
 
-  const loadBackups = async () => {
+  const loadBackups = useCallback(async () => {
     try {
       const response = await getInstructionsBackups();
       if (response.success) {
@@ -69,7 +59,17 @@ const BotInstructionsTab = () => {
     } catch (error) {
       console.error("Failed to load backups:", error);
     }
-  };
+  }, [getInstructionsBackups]);
+
+  useEffect(() => {
+    loadInstructions();
+    loadStats();
+    loadBackups();
+  }, [loadInstructions, loadStats, loadBackups]);
+
+  useEffect(() => {
+    setHasChanges(instructions !== originalInstructions);
+  }, [instructions, originalInstructions]);
 
   const handleSave = async () => {
     if (!instructions.trim()) {
@@ -90,6 +90,7 @@ const BotInstructionsTab = () => {
     }
   };
 
+  /** @param {string} filename */
   const handleRestore = async (filename) => {
     if (!window.confirm(`Restore instructions from backup: ${filename}?`)) {
       return;
@@ -113,12 +114,14 @@ const BotInstructionsTab = () => {
     }
   };
 
+  /** @param {string | null | undefined} dateString */
   const formatDate = (dateString) => {
     if (!dateString) return "Unknown";
     const date = new Date(dateString);
     return date.toLocaleString();
   };
 
+  /** @param {number | null | undefined} bytes */
   const formatFileSize = (bytes) => {
     if (!bytes) return "0 B";
     const k = 1024;
@@ -223,7 +226,7 @@ const BotInstructionsTab = () => {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">
               <strong>💡 How it works:</strong> These instructions guide the
-              AI's behavior in every customer conversation. The bot reads these
+              AI{"'"}s behavior in every customer conversation. The bot reads these
               guidelines before responding to ensure consistent, professional
               interactions.
             </p>
@@ -298,7 +301,7 @@ const BotInstructionsTab = () => {
                   </p>
                 </div>
                 <button
-                  onClick={() => handleRestore(backup.filename)}
+                  onClick={() => handleRestore(backup.filename || "")}
                   disabled={loading}
                   className="text-sm px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
                 >

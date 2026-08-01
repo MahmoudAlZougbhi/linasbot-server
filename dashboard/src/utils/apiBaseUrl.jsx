@@ -2,6 +2,7 @@
  * True if REACT_APP_API_URL points at loopback (browser would call the visitor's machine, not your server).
  * Production builds must not bake http://localhost:8003 — nginx proxies /api on the real domain.
  */
+/** @param {string | undefined | null} url */
 function isApiBaseLoopbackOnly(url) {
   if (!url || typeof url !== "string") return false;
   try {
@@ -70,7 +71,7 @@ export const getApiBaseUrl = () => {
   return "";
 };
 
-/** Absolute or same-origin URL for an API path (must start with /). */
+/** Absolute or same-origin URL for an API path (must start with /). @param {string} path */
 export const apiUrl = (path) => {
   const p = path.startsWith("/") ? path : `/${path}`;
   const base = getApiBaseUrl();

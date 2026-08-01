@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -6,8 +5,9 @@ import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import MobileLiveChat from "./pages/MobileLiveChat";
 
 vi.mock("./pages/LiveChat", () => ({
-  default: ({ mobile }) => (
-    <div data-testid="live-chat" data-mobile={mobile ? "true" : "false"}>
+  /** @param {{ mobile?: boolean }} props */
+  default: (props) => (
+    <div data-testid="live-chat" data-mobile={props.mobile ? "true" : "false"}>
       LiveChat
     </div>
   ),

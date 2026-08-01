@@ -14,24 +14,15 @@ import {
 export const usePermissionsHook = () => {
   const { user } = useAuth();
 
-  /**
-   * Check if current user can access a specific path
-   */
-  const hasAccessToPath = useCallback((path) => {
+  const hasAccessToPath = useCallback((/** @type {string} */ path) => {
     return canAccessPath(user, path);
   }, [user]);
 
-  /**
-   * Get the first accessible path for current user
-   */
   const getFirstAccessiblePath = useCallback(() => {
     return getDefaultPath(user);
   }, [user]);
 
-  /**
-   * Check if current user has a specific permission
-   */
-  const checkPermission = useCallback((feature) => {
+  const checkPermission = useCallback((/** @type {string} */ feature) => {
     return hasPermission(user, feature);
   }, [user]);
 

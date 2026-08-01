@@ -5,6 +5,9 @@ import json
 import re
 from typing import Any, cast
 
+from openai.types.chat import ChatCompletionMessageParam
+from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
+
 import config  # نحتاج config هنا للوصول إلى BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE, PRICE_LIST
 
 # from services.openai_service import client # <--- استبدلها
@@ -84,19 +87,24 @@ async def process_training_request_with_gpt(
         messages.append({"role": "user", "content": training_instruction_text})
 
     try:
-        completion_args = {
-            "model": "gpt-4o-mini",
-            "messages": messages,
-            "max_tokens": 2000,
-        }
+        typed_messages = cast(list[ChatCompletionMessageParam], messages)
         if is_qa_generation_request or is_summary_qa_request:
-            completion_args["response_format"] = {"type": "json_object"}
-
-        response = await client.chat.completions.create(**cast(Any, completion_args))
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=typed_messages,
+                max_tokens=2000,
+                response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),
+            )
+        else:
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=typed_messages,
+                max_tokens=2000,
+            )
 
         if not response.choices:
             raise ValueError("GPT returned no choices for training response")
-        gpt_raw_response = response.choices[0].message.content.strip()
+        gpt_raw_response = (response.choices[0].message.content or "").strip()
         print(f"GPT Raw Training Response: {gpt_raw_response}")
 
         json_match = re.search(r"```json\n(.*?)```", gpt_raw_response, re.DOTALL)

@@ -8,8 +8,8 @@ const TIMEZONE = process.env.REACT_APP_TIMEZONE || 'Asia/Beirut';
 
 /**
  * Format timestamp to localized date and time
- * @param {string|Date} timestamp - ISO timestamp or Date object
- * @param {object} options - Formatting options
+ * @param {string|Date|number|null|undefined} timestamp - ISO timestamp or Date object
+ * @param {DisplayDateTimeOptions} [options] - Formatting options
  * @returns {string} Formatted date and time string
  */
 export const formatDateTime = (timestamp, options = {}) => {
@@ -31,6 +31,7 @@ export const formatDateTime = (timestamp, options = {}) => {
       return 'Invalid date';
     }
 
+    /** @type {Intl.DateTimeFormatOptions} */
     const formatOptions = {
       timeZone: TIMEZONE,
     };
@@ -69,6 +70,8 @@ export const formatDateTime = (timestamp, options = {}) => {
 
 /**
  * Normalize timestamp to Date - handles ISO string, epoch ms/seconds, Firestore {seconds}
+ * @param {string|Date|number|{ seconds?: number }|null|undefined} timestamp
+ * @returns {Date | null}
  */
 const toDate = (timestamp) => {
   if (!timestamp) return null;
@@ -82,7 +85,7 @@ const toDate = (timestamp) => {
     const d = new Date(timestamp);
     return isNaN(d.getTime()) ? null : d;
   }
-  if (timestamp && typeof timestamp.seconds === 'number') {
+  if (timestamp && typeof timestamp === 'object' && typeof timestamp.seconds === 'number') {
     const d = new Date(timestamp.seconds * 1000);
     return isNaN(d.getTime()) ? null : d;
   }
@@ -130,6 +133,7 @@ export const formatCompactDateTime = (timestamp) => {
       return 'Invalid date';
     }
 
+    /** @type {Intl.DateTimeFormatOptions} */
     const options = {
       timeZone: TIMEZONE,
       month: 'short',
@@ -163,16 +167,17 @@ export const formatFullDateTime = (timestamp) => {
 
 /**
  * Get relative time (e.g., "2 minutes ago", "1 hour ago")
- * @param {string|Date} timestamp - ISO timestamp or Date object
+ * @param {string|Date|number|null|undefined} timestamp - ISO timestamp or Date object
  * @returns {string} Relative time string
  */
 export const getRelativeTime = (timestamp) => {
   if (!timestamp) return '';
   
   try {
-    const date = new Date(timestamp);
+    const date = toDate(timestamp);
+    if (!date) return '';
     const now = new Date();
-    const diffMs = now - date;
+    const diffMs = now.getTime() - date.getTime();
     const diffSec = Math.floor(diffMs / 1000);
     const diffMin = Math.floor(diffSec / 60);
     const diffHour = Math.floor(diffMin / 60);
@@ -197,11 +202,13 @@ export const getRelativeTime = (timestamp) => {
 
 /**
  * Check if timestamp is today (in app timezone Asia/Beirut)
+ * @param {string|Date|number|null|undefined} timestamp
  */
 export const isToday = (timestamp) => {
   const date = toDate(timestamp);
   if (!date) return false;
   try {
+    /** @type {Intl.DateTimeFormatOptions} */
     const opts = { timeZone: TIMEZONE, day: 'numeric', month: 'numeric', year: 'numeric' };
     const dateStr = new Intl.DateTimeFormat('en-CA', opts).format(date);
     const todayStr = new Intl.DateTimeFormat('en-CA', opts).format(new Date());
@@ -242,8 +249,8 @@ export const getTimezoneName = () => {
 
 /**
  * Convert UTC timestamp to local timezone
- * @param {string|Date} utcTimestamp - UTC timestamp
- * @returns {Date} Date object in local timezone
+ * @param {string|Date|null|undefined} utcTimestamp - UTC timestamp
+ * @returns {Date | null} Date object in local timezone
  */
 export const utcToLocal = (utcTimestamp) => {
   if (!utcTimestamp) return null;

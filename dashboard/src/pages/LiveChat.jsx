@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   ChatBubbleLeftRightIcon,
@@ -43,7 +43,13 @@ import {
   markConversationRead as markConversationReadApi,
 } from "../utils/liveChatApi";
 import { useAuth } from "../contexts/AuthContext";
+import { errorMessage, getAxiosErrorCode, isAxiosLikeError } from "../utils/apiValidate";
 
+/**
+ * @param {unknown} userId
+ * @param {unknown} channel
+ * @returns {boolean}
+ */
 export const isSocialChannelUser = (userId, channel) => {
   const ch = String(channel || "").toLowerCase();
   if (ch === "instagram" || ch === "facebook") return true;
@@ -51,24 +57,99 @@ export const isSocialChannelUser = (userId, channel) => {
   return id.startsWith("instagram:") || id.startsWith("facebook:");
 };
 
+const CHAT_LIST_PAGE_SIZE = 30;
+const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min - avoid refetch when switching back to same conv
+
+/**
+ * @param {unknown} value
+ * @returns {LiveChatConversation[]}
+ */
+const asConversationList = (value) =>
+  Array.isArray(value) ? /** @type {LiveChatConversation[]} */ (value) : [];
+
+/**
+ * @param {unknown} value
+ * @returns {QueueItem[]}
+ */
+const asQueueList = (value) => (Array.isArray(value) ? /** @type {QueueItem[]} */ (value) : []);
+
+/**
+ * @param {unknown} value
+ * @returns {LiveChatMessage[]}
+ */
+const asMessageList = (value) => (Array.isArray(value) ? /** @type {LiveChatMessage[]} */ (value) : []);
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+const asText = (value) => (typeof value === "string" ? value : "");
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+const asTimestampMs = (value) => {
+  if (!value) return 0;
+  const parsed = new Date(/** @type {string | number | Date} */ (value)).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+/**
+ * @param {LiveChatConversation | null | undefined} conv
+ * @returns {conv is LiveChatConversation}
+ */
+const isConversation = (conv) => Boolean(conv);
+
+/**
+ * @param {LiveChatMessage} message
+ * @returns {string}
+ */
+const messageBody = (message) => asText(message.content) || asText(message.text);
+
+/**
+ * Upstream 504 / client abort — both mean "server busy, retry later".
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+const isGatewayTimeout = (error) => {
+  if (getAxiosErrorCode(error) === "ECONNABORTED") return true;
+  if (!isAxiosLikeError(error)) return false;
+  return error.response?.status === 504;
+};
+
+/**
+ * `last_message` arrives either as a preview object or as a raw string from the index.
+ * @param {LiveChatMessage | string | null | undefined} value
+ * @returns {string | undefined}
+ */
+const lastMessageContent = (value) => {
+  if (value == null) return undefined;
+  if (typeof value === "string") return value;
+  return typeof value.content === "string" ? value.content : undefined;
+};
+
+/**
+ * @param {{ mobile?: boolean }} props
+ */
 const LiveChat = ({ mobile = false }) => {
   const [searchParams] = useSearchParams();
   const { user: authUser } = useAuth();
   const operatorId = authUser?.id || authUser?.email || "unknown-operator";
-  const [activeConversations, setActiveConversations] = useState([]);
-  const [selectedConversation, setSelectedConversation] = useState(null);
-  const [waitingQueue, setWaitingQueue] = useState([]);
+  const [activeConversations, setActiveConversations] = useState(/** @type {LiveChatConversation[]} */ ([]));
+  const [selectedConversation, setSelectedConversation] = useState(/** @type {SelectedConversation | null} */ (null));
+  const [waitingQueue, setWaitingQueue] = useState(/** @type {QueueItem[]} */ ([]));
   const [messageInput, setMessageInput] = useState("");
   const { operatorStatus } = useOperatorStatus();
   const [isLoading, setIsLoading] = useState(true);
   const [useMockData, setUseMockData] = useState(false);
-  const [feedbackModal, setFeedbackModal] = useState(null);
-  const [editMessageModal, setEditMessageModal] = useState(null);
-  const [faqCorrectionModal, setFaqCorrectionModal] = useState(null);
+  const [feedbackModal, setFeedbackModal] = useState(/** @type {LiveChatMessageModalState | null} */ (null));
+  const [editMessageModal, setEditMessageModal] = useState(/** @type {LiveChatMessageModalState | null} */ (null));
+  const [faqCorrectionModal, setFaqCorrectionModal] = useState(/** @type {LiveChatMessageModalState | null} */ (null));
 
   // ✅ Auto-refresh state (Solution 1 + 4: Smart refresh with badges)
-  const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
-  const [newConversationIds, setNewConversationIds] = useState(new Set()); // Track new conversations
+  const [lastRefreshTime, setLastRefreshTime] = useState(/** @type {Date | null} */ (new Date()));
+  const [newConversationIds, setNewConversationIds] = useState(/** @type {Set<string>} */ (new Set())); // Track new conversations
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // ✅ Send button race condition state
@@ -87,17 +168,28 @@ const LiveChat = ({ mobile = false }) => {
   /** Smart Messaging send log → show only chats for customers who received this template in the date range */
   const [templateSendFilterId, setTemplateSendFilterId] = useState("");
   const [templateSendFilterActive, setTemplateSendFilterActive] = useState(false);
-  const [templateSendFilterChats, setTemplateSendFilterChats] = useState([]);
-  const [templateSendFilterMeta, setTemplateSendFilterMeta] = useState(null);
+  const [templateSendFilterChats, setTemplateSendFilterChats] = useState(/** @type {LiveChatConversation[]} */ ([]));
+  const [templateSendFilterMeta, setTemplateSendFilterMeta] = useState(/** @type {TemplateSendFilterMeta | null} */ (null));
   const [templateSendFilterLoading, setTemplateSendFilterLoading] = useState(false);
-  const [messagingTemplates, setMessagingTemplates] = useState({});
+  const [messagingTemplates, setMessagingTemplates] = useState(
+    /** @type {Record<string, SmartMessageTemplate | undefined>} */ ({})
+  );
   const waitingSearchTerm = debouncedSearch.trim().toLowerCase();
-  const normalizeUserIdentity = React.useCallback(
+  const normalizeUserIdentity = useCallback(
+    /**
+     * @param {unknown} value
+     * @returns {string}
+     */
     (value) => String(value || "").trim().replace(/^\+/, ""),
     []
   );
   /** Format phone for display: +9613000000 → +961 3 000 000 */
-  const formatPhoneForDisplay = React.useCallback((phone) => {
+  const formatPhoneForDisplay = useCallback(
+    /**
+     * @param {string | undefined} phone
+     * @returns {string}
+     */
+    (phone) => {
     const s = String(phone || "").trim();
     if (!s || s === "Unknown") return s;
     const digits = s.replace(/\D/g, "");
@@ -107,10 +199,11 @@ const LiveChat = ({ mobile = false }) => {
     }
     if (s.startsWith("+")) return s;
     return s;
-  }, []);
-  const CHAT_LIST_PAGE_SIZE = 30;
-  const [chatPage, setChatPage] = useState(1);
-  const [nextCursor, setNextCursor] = useState(null);
+    },
+    []
+  );
+  const [, setChatPage] = useState(1);
+  const [nextCursor, setNextCursor] = useState(/** @type {string | null} */ (null));
   const [hasMoreChats, setHasMoreChats] = useState(false);
   const [loadingMoreChats, setLoadingMoreChats] = useState(false);
   const [rebuildingIndex, setRebuildingIndex] = useState(false);
@@ -121,15 +214,19 @@ const LiveChat = ({ mobile = false }) => {
   const [mobileFilterSheetOpen, setMobileFilterSheetOpen] = useState(false);
   const isMobileView = Boolean(mobile);
 
-  const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min - avoid refetch when switching back to same conv
-
   // Split handover: 1) waiting (no operator yet) 2) with operator (handover done, chatting)
-  const userRequestedReasons = React.useMemo(
+  const userRequestedReasons = useMemo(
     () => ["user_request", "customer_requested_human"],
     []
   );
 
-  const normalizeConversationStatus = React.useCallback((status, conversationState) => {
+  const normalizeConversationStatus = useCallback(
+    /**
+     * @param {string | undefined} status
+     * @param {string | undefined} conversationState
+     * @returns {string}
+     */
+    (status, conversationState) => {
     const raw = String(status || conversationState || "").toLowerCase();
     if (["human", "assigned_to_operator", "assigned"].includes(raw)) return "human";
     if (["waiting_human", "waiting_for_operator", "waiting", "pending"].includes(raw)) {
@@ -137,10 +234,17 @@ const LiveChat = ({ mobile = false }) => {
     }
     if (["closed", "resolved", "archived"].includes(raw)) return "closed";
     return "bot";
-  }, []);
+    },
+    []
+  );
 
-  const normalizeIncomingConversation = React.useCallback((conv) => {
-    if (!conv || typeof conv !== "object") return conv;
+  const normalizeIncomingConversation = useCallback(
+    /**
+     * @param {LiveChatConversation | null | undefined} conv
+     * @returns {LiveChatConversation | null}
+     */
+    (conv) => {
+    if (!conv || typeof conv !== "object") return null;
     const hta = conv.human_takeover_active;
     let postReleaseCooldownActive = false;
     const supUntil = conv.post_release_escalation_suppressed_until;
@@ -166,17 +270,20 @@ const LiveChat = ({ mobile = false }) => {
       }
     }
 
-    const lastActivity = conv.last_activity || conv.last_message_at || null;
-    const hasLastMessageObject = conv.last_message && typeof conv.last_message === "object";
-    const normalizedLastMessage = hasLastMessageObject
-      ? conv.last_message
-      : (conv.last_message_text || conv.last_message)
-        ? {
-            content: conv.last_message_text ?? conv.last_message ?? "",
-            timestamp: lastActivity,
-            is_user: false,
-          }
-        : null;
+    const lastActivity = conv.last_activity || conv.last_message_at || undefined;
+    const rawLastMessage = conv.last_message;
+    const previewText = conv.last_message_text ?? lastMessageContent(rawLastMessage) ?? "";
+    /** @type {LiveChatMessage | null} */
+    const normalizedLastMessage =
+      rawLastMessage && typeof rawLastMessage === "object"
+        ? rawLastMessage
+        : previewText
+          ? {
+              content: previewText,
+              timestamp: lastActivity,
+              is_user: false,
+            }
+          : null;
 
     // Safety net: if backend status is temporarily stale but last bot message is a clear
     // handover/waiting phrase and no operator is assigned yet, surface it as waiting_human.
@@ -190,7 +297,7 @@ const LiveChat = ({ mobile = false }) => {
       const lastText = String(
         (normalizedLastMessage && normalizedLastMessage.content) ||
           conv.last_message_text ||
-          conv.last_message ||
+          lastMessageContent(conv.last_message) ||
           ""
       ).toLowerCase();
       const waitingMarkers = [
@@ -220,12 +327,18 @@ const LiveChat = ({ mobile = false }) => {
     };
   }, [normalizeConversationStatus]);
 
+  /**
+   * @param {QueueItem[] | null | undefined} queue
+   * @param {LiveChatConversation[] | null | undefined} activeList
+   * @returns {QueueItem[]}
+   */
   const mergeActiveWaitingIntoQueue = (queue, activeList) => {
     const activeWaiting = (activeList || []).filter((conv) => conv.status === "waiting_human");
     if (!activeWaiting.length) return queue ?? [];
     const queueKeys = new Set(
       (queue || []).map((item) => `${item.user_id}_${item.conversation_id}`)
     );
+    /** @type {QueueItem[]} */
     const merged = [...(queue || [])];
     activeWaiting.forEach((conv) => {
       const key = `${conv.user_id}_${conv.conversation_id}`;
@@ -237,7 +350,7 @@ const LiveChat = ({ mobile = false }) => {
         user_phone: conv.user_phone,
         wait_time_seconds: 0,
         message_count: conv.message_count || 0,
-        last_message: conv.last_message?.content ?? conv.last_message ?? "",
+        last_message: lastMessageContent(conv.last_message) ?? "",
         reason: "user_request",
         sentiment: conv.sentiment || "neutral",
         language: conv.language || "ar",
@@ -247,8 +360,14 @@ const LiveChat = ({ mobile = false }) => {
     return merged;
   };
 
-  const mergeMissingActiveChats = React.useCallback((incoming, existing) => {
-    if (!Array.isArray(incoming)) return incoming || [];
+  const mergeMissingActiveChats = useCallback(
+    /**
+     * @param {LiveChatConversation[]} incoming
+     * @param {LiveChatConversation[] | null | undefined} existing
+     * @returns {LiveChatConversation[]}
+     */
+    (incoming, existing) => {
+    if (!Array.isArray(incoming)) return [];
     const existingList = existing || [];
     // Only preserve assigned-operator rows across pagination gaps. Stale waiting_human from a prior
     // render must not be re-injected when the conv drops off page 1 after release-to-bot (shows as "back on waiting").
@@ -258,11 +377,20 @@ const LiveChat = ({ mobile = false }) => {
     const missing = keep.filter((conv) => !incomingKeys.has(`${conv.user_id}_${conv.conversation_id}`));
     if (!missing.length) return incoming;
     return [...missing, ...incoming];
-  }, []);
+    },
+    []
+  );
 
-  const applyServerConversations = React.useCallback((incoming) => {
+  const applyServerConversations = useCallback(
+    /**
+     * @param {LiveChatConversation[] | unknown} incoming
+     * @returns {void}
+     */
+    (incoming) => {
     if (!Array.isArray(incoming)) return;
-    const normalizedIncoming = incoming.map(normalizeIncomingConversation).filter(Boolean);
+    const normalizedIncoming = asConversationList(incoming)
+      .map(normalizeIncomingConversation)
+      .filter(isConversation);
     if (normalizedIncoming.length === 0) {
       if (activeConversationsRef.current?.length || cachedActiveConversationsRef.current?.length) {
         return;
@@ -273,14 +401,16 @@ const LiveChat = ({ mobile = false }) => {
       : cachedActiveConversationsRef.current;
     const merged = mergeMissingActiveChats(normalizedIncoming, baseline);
     setActiveConversations(merged);
-  }, [mergeMissingActiveChats, normalizeIncomingConversation]);
+    },
+    [mergeMissingActiveChats, normalizeIncomingConversation]
+  );
 
-  const effectiveWaitingQueue = React.useMemo(
+  const effectiveWaitingQueue = useMemo(
     () => mergeActiveWaitingIntoQueue(waitingQueue, activeConversations),
     [waitingQueue, activeConversations]
   );
 
-  const filteredWaitingQueue = React.useMemo(() => {
+  const filteredWaitingQueue = useMemo(() => {
     if (!waitingSearchTerm) return effectiveWaitingQueue;
     return effectiveWaitingQueue.filter((item) => {
       const name = (item.user_name || "").toLowerCase();
@@ -289,20 +419,19 @@ const LiveChat = ({ mobile = false }) => {
     });
   }, [effectiveWaitingQueue, waitingSearchTerm]);
 
-  const aiInitiatedHandover = React.useMemo(
-    () => filteredWaitingQueue.filter((item) => !userRequestedReasons.includes((item.reason || "").toLowerCase())),
-    [filteredWaitingQueue, userRequestedReasons]
-  );
-  const userRequestedHandover = React.useMemo(
-    () => filteredWaitingQueue.filter((item) => userRequestedReasons.includes((item.reason || "").toLowerCase())),
-    [filteredWaitingQueue, userRequestedReasons]
-  );
   // Conversations where handover was done and we're talking with them (operator assigned)
-  const withOperator = React.useMemo(
+  const withOperator = useMemo(
     () => {
+      /**
+       * @param {LiveChatConversation | null | undefined} conv
+       * @returns {number}
+       */
       const getLastTs = (conv) => {
-        const ts = conv?.last_activity || conv?.last_message?.timestamp;
-        return ts ? new Date(ts).getTime() : 0;
+        const lastMessage = conv?.last_message;
+        const ts =
+          conv?.last_activity ||
+          (lastMessage && typeof lastMessage === "object" ? lastMessage.timestamp : undefined);
+        return asTimestampMs(ts);
       };
       return activeConversations
         .filter((c) => {
@@ -315,7 +444,7 @@ const LiveChat = ({ mobile = false }) => {
     [activeConversations]
   );
 
-  const filteredWithOperator = React.useMemo(() => {
+  const filteredWithOperator = useMemo(() => {
     if (!waitingSearchTerm) return withOperator;
     return withOperator.filter((conv) => {
       const name = (conv.user_name || "").toLowerCase();
@@ -324,7 +453,7 @@ const LiveChat = ({ mobile = false }) => {
     });
   }, [withOperator, waitingSearchTerm]);
   // Only bot conversations (exclude waiting_human + with operator) - shown below, release to bot moves here
-  const botConversations = React.useMemo(() => {
+  const botConversations = useMemo(() => {
     const usersWithHumanOrWaiting = new Set(
       activeConversations
         .filter((c) => c.status === "human" || c.status === "waiting_human")
@@ -342,11 +471,11 @@ const LiveChat = ({ mobile = false }) => {
   const templateSendFilterViewActive =
     templateSendFilterActive && Boolean(templateSendFilterId);
 
-  const botConversationsForList = React.useMemo(() => {
+  const botConversationsForList = useMemo(() => {
     if (!templateSendFilterViewActive) return botConversations;
     return (templateSendFilterChats || [])
       .map((c) => normalizeIncomingConversation(c))
-      .filter(Boolean);
+      .filter(isConversation);
   }, [
     templateSendFilterViewActive,
     templateSendFilterChats,
@@ -354,20 +483,30 @@ const LiveChat = ({ mobile = false }) => {
     normalizeIncomingConversation,
   ]);
 
-  const templateSendFilterLabel = React.useMemo(() => {
+  const templateSendFilterLabel = useMemo(() => {
     if (!templateSendFilterId) return "";
     const t = messagingTemplates[templateSendFilterId];
     return t?.name ? String(t.name) : templateSendFilterId;
   }, [templateSendFilterId, messagingTemplates]);
 
-  const getConversationLastTs = React.useCallback((conv) => {
-    const ts = conv?.last_activity || conv?.last_message?.timestamp;
-    return ts ? new Date(ts).getTime() : 0;
-  }, []);
+  const getConversationLastTs = useCallback(
+    /**
+     * @param {LiveChatConversation | null | undefined} conv
+     * @returns {number}
+     */
+    (conv) => {
+    const lastMessage = conv?.last_message;
+    const ts =
+      conv?.last_activity ||
+      (lastMessage && typeof lastMessage === "object" ? lastMessage.timestamp : undefined);
+    return asTimestampMs(ts);
+    },
+    []
+  );
 
   const isBotDateFilterActive = Boolean(botDateFrom || botDateTo);
 
-  const filteredBotConversations = React.useMemo(() => {
+  const filteredBotConversations = useMemo(() => {
     if (templateSendFilterViewActive) {
       return botConversationsForList;
     }
@@ -391,37 +530,51 @@ const LiveChat = ({ mobile = false }) => {
     getConversationLastTs,
   ]);
 
-  const formatConversationListDate = React.useCallback((conv) => {
+  const formatConversationListDate = useCallback(
+    /**
+     * @param {LiveChatConversation} conv
+     * @returns {string}
+     */
+    (conv) => {
     const lastTs = getConversationLastTs(conv);
     if (!lastTs) return "No date";
     return new Date(lastTs).toLocaleDateString();
-  }, [getConversationLastTs]);
+    },
+    [getConversationLastTs]
+  );
 
-  const liveBotConversations = React.useMemo(() => {
-    const now = Date.now();
-    const enriched = filteredBotConversations.map((conv) => {
+  const enrichWithRecency = useCallback(
+    /**
+     * @param {LiveChatConversation} conv
+     * @returns {LiveChatListConversation}
+     */
+    (conv) => {
       const lastTs = getConversationLastTs(conv);
-      const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
-      return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
-    });
-    return enriched
-      .filter((conv) => conv._isLive)
-      .sort((a, b) => b._lastTs - a._lastTs);
-  }, [filteredBotConversations, getConversationLastTs]);
+      const isRecent = lastTs > 0 && Date.now() - lastTs <= 15 * 60 * 1000;
+      return { ...conv, _lastTs: lastTs, _isLive: Boolean(conv.is_live) || isRecent };
+    },
+    [getConversationLastTs]
+  );
 
-  const historyBotConversations = React.useMemo(() => {
-    const now = Date.now();
-    return filteredBotConversations
-      .map((conv) => {
-        const lastTs = getConversationLastTs(conv);
-        const isRecent = lastTs > 0 && now - lastTs <= 15 * 60 * 1000;
-        return { ...conv, _lastTs: lastTs, _isLive: conv.is_live || isRecent };
-      })
-      .filter((conv) => !conv._isLive)
-      .sort((a, b) => b._lastTs - a._lastTs);
-  }, [filteredBotConversations, getConversationLastTs]);
+  const liveBotConversations = useMemo(
+    () =>
+      filteredBotConversations
+        .map(enrichWithRecency)
+        .filter((conv) => conv._isLive)
+        .sort((a, b) => b._lastTs - a._lastTs),
+    [filteredBotConversations, enrichWithRecency]
+  );
 
-  const mobileVisibleConversations = React.useMemo(() => {
+  const historyBotConversations = useMemo(
+    () =>
+      filteredBotConversations
+        .map(enrichWithRecency)
+        .filter((conv) => !conv._isLive)
+        .sort((a, b) => b._lastTs - a._lastTs),
+    [filteredBotConversations, enrichWithRecency]
+  );
+
+  const mobileVisibleConversations = useMemo(() => {
     if (mobileListSection === "mine") return filteredWithOperator;
     if (mobileListSection === "bot") return [...liveBotConversations, ...historyBotConversations];
     return filteredWaitingQueue;
@@ -435,24 +588,39 @@ const LiveChat = ({ mobile = false }) => {
 
   // Read count per waiting conversation for unread badge: key = `${user_id}_${conversation_id}`
   // Local state for optimistic UI; API unread_count is source of truth (persists across refresh)
-  const [readMessageCountByConv, setReadMessageCountByConv] = useState({});
-  const markConversationRead = React.useCallback((userId, conversationId, messageCount) => {
+  const [readMessageCountByConv, setReadMessageCountByConv] = useState(/** @type {Record<string, number>} */ ({}));
+  const markConversationRead = useCallback(
+    /**
+     * @param {string} userId
+     * @param {string} conversationId
+     * @param {number} messageCount
+     * @returns {void}
+     */
+    (userId, conversationId, messageCount) => {
     const key = `${userId}_${conversationId}`;
     setReadMessageCountByConv((prev) => ({ ...prev, [key]: messageCount }));
     // Persist to backend so unread stays 0 after refresh/update
-    markConversationReadApi({ userId, conversationId }).catch((err) =>
-      console.warn("[LiveChat] mark-read API failed:", err)
+    markConversationReadApi({ userId, conversationId }).catch((/** @type {unknown} */ err) =>
+      console.warn("[LiveChat] mark-read API failed:", errorMessage(err))
     );
-  }, []);
+    },
+    []
+  );
   const markWaitingConversationRead = markConversationRead;
 
-  // Merge selected conversation into waiting queue when refetching so it doesn't disappear from the list
+  /**
+   * Merge selected conversation into waiting queue when refetching so it doesn't disappear from the list
+   * @param {QueueItem[] | null | undefined} newQueue
+   * @param {import('react').MutableRefObject<SelectedConversation | null>} selectedRef
+   * @returns {QueueItem[]}
+   */
   const mergeSelectedIntoWaitingQueue = (newQueue, selectedRef) => {
     const selected = selectedRef?.current;
     if (!selected?.conversation || selected.conversation.status !== "waiting_human") return newQueue ?? [];
     const c = selected.conversation;
     const inQueue = (newQueue ?? []).some((q) => q.conversation_id === c.conversation_id && q.user_id === c.user_id);
     if (inQueue) return newQueue ?? [];
+    /** @type {QueueItem} */
     const synthetic = {
       conversation_id: c.conversation_id,
       user_id: c.user_id,
@@ -461,13 +629,17 @@ const LiveChat = ({ mobile = false }) => {
       wait_time_seconds: 0,
       message_count: c.message_count || 0,
       unread_count: c.unread_count,
-      last_message: c.last_message?.content ?? "",
+      last_message: lastMessageContent(c.last_message) ?? "",
       reason: "user_request",
       sentiment: c.sentiment || "neutral",
     };
     return [synthetic, ...(newQueue ?? [])];
   };
 
+  /**
+   * @param {{ success?: boolean; queue?: QueueItem[] } | null | undefined} queueResponse
+   * @returns {void}
+   */
   const applyWaitingQueue = (queueResponse) => {
     const incoming = queueResponse?.queue;
     if (!Array.isArray(incoming)) return;
@@ -477,26 +649,27 @@ const LiveChat = ({ mobile = false }) => {
     setWaitingQueue(mergeSelectedIntoWaitingQueue(incoming, selectedConversationRef));
   };
 
-  const messagesContainerRef = useRef(null);
-  const messagesEndRef = useRef(null);
-  const selectedConversationRef = useRef(null);
-  const activeConversationsRef = useRef([]); // ✅ Ref to track current conversations (fixes stale closure)
-  const waitingQueueRef = useRef([]);
-  const cachedActiveConversationsRef = useRef([]);
-  const cachedWaitingQueueRef = useRef([]);
+  const messagesContainerRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const messagesEndRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const selectedConversationRef = useRef(/** @type {SelectedConversation | null} */ (null));
+  // ✅ Ref to track current conversations (fixes stale closure)
+  const activeConversationsRef = useRef(/** @type {LiveChatConversation[]} */ ([]));
+  const waitingQueueRef = useRef(/** @type {QueueItem[]} */ ([]));
+  const cachedActiveConversationsRef = useRef(/** @type {LiveChatConversation[]} */ ([]));
+  const cachedWaitingQueueRef = useRef(/** @type {QueueItem[]} */ ([]));
   const useMockDataRef = useRef(false); // ✅ Ref to track mock data status (fixes stale closure)
   const debouncedSearchRef = useRef("");
   const isMountedRef = useRef(true); // ✅ Prevent setState after unmount (fixes slow-down on repeated opens)
-  const previousConversationIdRef = useRef(null);
+  const previousConversationIdRef = useRef(/** @type {string | null} */ (null));
   const previousMessageCountRef = useRef(0);
-  const forceBottomOnOpenRef = useRef(null);
-  const messageCacheRef = useRef(new Map());
+  const forceBottomOnOpenRef = useRef(/** @type {string | null} */ (null));
+  const messageCacheRef = useRef(/** @type {Map<string, LiveChatMessageCacheEntry>} */ (new Map()));
   const hasMoreMessagesRef = useRef(true);
   const autoLoadedPagesRef = useRef(1);
-  const botListRef = useRef(null);
-  const botLoadMoreSentinelRef = useRef(null);
-  const botListScrollThrottleRef = useRef(null);
-  const botFloatingScrollRef = useRef(null);
+  const botListRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const botLoadMoreSentinelRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const botListScrollThrottleRef = useRef(false);
+  const botFloatingScrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const loadMoreInProgressRef = useRef(false);
   const loadMoreCooldownUntilRef = useRef(0);
 
@@ -575,9 +748,9 @@ const LiveChat = ({ mobile = false }) => {
     const cachedQueue = sessionStorage.getItem("liveChatWaitingQueue");
     if (cachedChats) {
       try {
-        const parsed = JSON.parse(cachedChats);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized = parsed.map(normalizeIncomingConversation).filter(Boolean);
+        const parsed = asConversationList(JSON.parse(cachedChats));
+        if (parsed.length > 0) {
+          const normalized = parsed.map(normalizeIncomingConversation).filter(isConversation);
           setActiveConversations(normalized);
           activeConversationsRef.current = normalized;
           cachedActiveConversationsRef.current = normalized;
@@ -588,8 +761,8 @@ const LiveChat = ({ mobile = false }) => {
     }
     if (cachedQueue) {
       try {
-        const parsed = JSON.parse(cachedQueue);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        const parsed = asQueueList(JSON.parse(cachedQueue));
+        if (parsed.length > 0) {
           setWaitingQueue(parsed);
           waitingQueueRef.current = parsed;
           cachedWaitingQueueRef.current = parsed;
@@ -630,7 +803,6 @@ const LiveChat = ({ mobile = false }) => {
     getChatsByTemplateSendLog,
     getLiveConversations,
     getWaitingQueue,
-    getLiveChatStatus,
     rebuildLiveChatIndex,
     simulateWebhook,
     getConversationMessages,
@@ -646,14 +818,14 @@ const LiveChat = ({ mobile = false }) => {
     (async () => {
       const r = await getSmartMessagingTemplates();
       if (cancelled || !r?.success || !r.templates) return;
-      setMessagingTemplates(r.templates);
+      setMessagingTemplates(/** @type {Record<string, SmartMessageTemplate | undefined>} */ (r.templates));
     })();
     return () => {
       cancelled = true;
     };
   }, [getSmartMessagingTemplates]);
 
-  const applyTemplateSendFilter = React.useCallback(async () => {
+  const applyTemplateSendFilter = useCallback(async () => {
     if (!templateSendFilterId) {
       toast.error("Choose a template");
       return;
@@ -669,7 +841,7 @@ const LiveChat = ({ mobile = false }) => {
         toast.error(r?.error || "Filter failed");
         return;
       }
-      setTemplateSendFilterChats(Array.isArray(r.chats) ? r.chats : []);
+      setTemplateSendFilterChats(asConversationList(r.chats));
       setTemplateSendFilterMeta({
         log_entries_matched: r.log_entries_matched,
         distinct_recipients: r.distinct_recipients,
@@ -686,7 +858,7 @@ const LiveChat = ({ mobile = false }) => {
           : "No conversations matched in the index scan — try wider dates or Rebuild index"
       );
     } catch (e) {
-      toast.error(e?.message || "Filter failed");
+      toast.error(errorMessage(e) || "Filter failed");
     } finally {
       setTemplateSendFilterLoading(false);
     }
@@ -697,7 +869,7 @@ const LiveChat = ({ mobile = false }) => {
     getChatsByTemplateSendLog,
   ]);
 
-  const clearTemplateSendFilter = React.useCallback(() => {
+  const clearTemplateSendFilter = useCallback(() => {
     setTemplateSendFilterActive(false);
     setTemplateSendFilterChats([]);
     setTemplateSendFilterMeta(null);
@@ -708,27 +880,56 @@ const LiveChat = ({ mobile = false }) => {
     updateOperatorStatus(operatorId, operatorStatus).catch(() => {
       // Keep UI responsive even if status update endpoint is temporarily unavailable.
     });
-  }, [operatorStatus, updateOperatorStatus]);
+  }, [operatorStatus, operatorId, updateOperatorStatus]);
 
   // Fetch conversation messages: use same axios as list (getUnifiedChats) so request hits same origin
-  const fetchConversationMessages = React.useCallback(
-    (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) =>
-      getConversationMessages(userId, conversationId, days, before, day_window, limit),
+  const fetchConversationMessages = useCallback(
+    /**
+     * @param {string} userId
+     * @param {string} conversationId
+     * @param {number} [days]
+     * @param {string | null} [before]
+     * @param {number} [day_window]
+     * @param {number} [limit]
+     * @returns {Promise<{ messages: LiveChatMessage[]; hasMore: boolean }>}
+     */
+    async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
+      const result = await getConversationMessages(
+        userId,
+        conversationId,
+        days,
+        before,
+        day_window,
+        limit
+      );
+      return {
+        messages: asMessageList(result?.messages),
+        hasMore: Boolean(result?.hasMore),
+      };
+    },
     [getConversationMessages]
   );
 
   const SESSION_RECENT_OP_KEY = "live_chat_recent_op";
   const RECENT_OP_TTL_MS = 120000;
 
-  const getRecentOpFromSession = React.useCallback((cacheKey) => {
+  const getRecentOpFromSession = useCallback(
+    /**
+     * @param {string} cacheKey
+     * @returns {LiveChatMessage[]}
+     */
+    (cacheKey) => {
     try {
       const raw = sessionStorage.getItem(SESSION_RECENT_OP_KEY);
       if (!raw) return [];
-      const arr = JSON.parse(raw) || [];
+      const parsed = JSON.parse(raw);
+      /** @type {RecentOperatorSessionEntry[]} */
+      const arr = Array.isArray(parsed) ? parsed : [];
       const now = Date.now();
       const parts = (cacheKey || "").split("_");
+      const head = parts[0] ?? "";
       const altKey = parts.length >= 2
-        ? `${parts[0].startsWith("+") ? parts[0].slice(1) : `+${parts[0]}`}_${parts.slice(1).join("_")}`
+        ? `${head.startsWith("+") ? head.slice(1) : `+${head}`}_${parts.slice(1).join("_")}`
         : "";
       return arr.filter((e) => {
         if (!e?.cacheKey || now - (e.ts || 0) > RECENT_OP_TTL_MS) return false;
@@ -737,38 +938,62 @@ const LiveChat = ({ mobile = false }) => {
     } catch {
       return [];
     }
-  }, []);
+    },
+    []
+  );
 
-  const saveOperatorMessageToSession = React.useCallback((userId, convId, message) => {
+  const saveOperatorMessageToSession = useCallback(
+    /**
+     * @param {string} userId
+     * @param {string} convId
+     * @param {LiveChatMessage} message
+     * @returns {void}
+     */
+    (userId, convId, message) => {
     if (!userId || !convId || !message) return;
     const isOp = message.role === "operator" || message.is_user === false;
     if (!isOp) return;
     try {
       const cacheKey = `${userId}_${convId}`;
       const raw = sessionStorage.getItem(SESSION_RECENT_OP_KEY);
-      const arr = (raw ? JSON.parse(raw) : []).filter((e) => e?.ts && Date.now() - e.ts < RECENT_OP_TTL_MS);
+      const parsed = raw ? JSON.parse(raw) : [];
+      /** @type {RecentOperatorSessionEntry[]} */
+      const arr = (Array.isArray(parsed) ? parsed : []).filter(
+        (/** @type {RecentOperatorSessionEntry} */ e) => e?.ts && Date.now() - e.ts < RECENT_OP_TTL_MS
+      );
       const entry = arr.find((e) => e.cacheKey === cacheKey);
+      /** @type {LiveChatMessage} */
       const msg = { ...message, role: "operator", is_user: false };
       if (entry) {
         const exists = (entry.messages || []).some(
-          (m) => String(m.content || m.text || "").trim() === String(msg.content || msg.text || "").trim()
+          (m) => messageBody(m).trim() === messageBody(msg).trim()
         );
         if (!exists) entry.messages = [...(entry.messages || []), msg];
       } else {
         arr.push({ cacheKey, ts: Date.now(), messages: [msg] });
       }
       sessionStorage.setItem(SESSION_RECENT_OP_KEY, JSON.stringify(arr.slice(-20)));
-    } catch {}
-  }, []);
+    } catch {
+      // sessionStorage may be unavailable
+    }
+    },
+    []
+  );
 
   // Merge API messages with recently sent operator messages from cache + sessionStorage (prevents disappearing on refresh)
-  const mergeWithRecentOperatorMessages = React.useCallback((apiMessages, cacheKey) => {
+  const mergeWithRecentOperatorMessages = useCallback(
+    /**
+     * @param {LiveChatMessage[]} apiMessages
+     * @param {string} cacheKey
+     * @returns {LiveChatMessage[]}
+     */
+    (apiMessages, cacheKey) => {
     const cache = messageCacheRef.current;
     let cached = cache?.get(cacheKey)?.messages || [];
     if (!cached.length && cacheKey) {
       const parts = cacheKey.split("_");
       if (parts.length >= 2) {
-        const userId = parts[0];
+        const userId = parts[0] ?? "";
         const rest = parts.slice(1).join("_");
         const altUserId = userId.startsWith("+") ? userId.slice(1) : `+${userId}`;
         const altKey = `${altUserId}_${rest}`;
@@ -783,31 +1008,38 @@ const LiveChat = ({ mobile = false }) => {
     const RECENT_MS = 120000;
     const recentOperator = cached.filter((m) => {
       const isOp = m.is_user === false || m.role === "operator";
-      const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+      const ts = asTimestampMs(m.timestamp);
       return isOp && now - ts < RECENT_MS;
     });
     const apiKeys = new Set(
-      api.map((m) => `${String(m.content || m.text || "").trim()}|${(m.timestamp || "").slice(0, 19)}`)
+      api.map((m) => `${messageBody(m).trim()}|${asText(m.timestamp).slice(0, 19)}`)
     );
     const toAdd = recentOperator.filter((m) => {
-      const key = `${String(m.content || m.text || "").trim()}|${(m.timestamp || "").slice(0, 19)}`;
+      const key = `${messageBody(m).trim()}|${asText(m.timestamp).slice(0, 19)}`;
       if (apiKeys.has(key)) return false;
-      const mTs = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+      const mTs = asTimestampMs(m.timestamp);
       const inApi = api.some(
         (a) =>
-          String(a.content || a.text || "").trim() === String(m.content || m.text || "").trim() &&
-          Math.abs((a.timestamp ? new Date(a.timestamp).getTime() : 0) - mTs) < 60000
+          messageBody(a).trim() === messageBody(m).trim() &&
+          Math.abs(asTimestampMs(a.timestamp) - mTs) < 60000
       );
       return !inApi;
     });
     if (toAdd.length === 0) return api;
     const combined = [...api, ...toAdd].sort(
-      (a, b) => new Date(a?.timestamp || 0).getTime() - new Date(b?.timestamp || 0).getTime()
+      (a, b) => asTimestampMs(a?.timestamp) - asTimestampMs(b?.timestamp)
     );
     return combined;
-  }, []);
+    },
+    [getRecentOpFromSession]
+  );
 
-  const buildPreviewHistory = React.useCallback((conversation) => {
+  const buildPreviewHistory = useCallback(
+    /**
+     * @param {LiveChatConversation | null | undefined} conversation
+     * @returns {LiveChatMessage[]}
+     */
+    (conversation) => {
     const preview = conversation?.last_message;
     if (!preview || typeof preview !== "object") return [];
     const text = String(preview.content ?? preview.text ?? "").trim();
@@ -829,9 +1061,16 @@ const LiveChat = ({ mobile = false }) => {
         handled_by: preview.is_user ? "human" : "ai",
       },
     ];
-  }, []);
+    },
+    []
+  );
 
-  const getConversationUnreadCount = React.useCallback((conversation) => {
+  const getConversationUnreadCount = useCallback(
+    /**
+     * @param {QueueItem | LiveChatConversation | null | undefined} conversation
+     * @returns {number}
+     */
+    (conversation) => {
     if (!conversation) return 0;
     const readKey = `${conversation.user_id}_${conversation.conversation_id}`;
     const readCount = readMessageCountByConv[readKey] ?? 0;
@@ -839,9 +1078,16 @@ const LiveChat = ({ mobile = false }) => {
     if (readCount > 0 && readCount >= msgCount) return 0;
     if (typeof conversation.unread_count === "number") return conversation.unread_count;
     return Math.max(0, msgCount - readCount);
-  }, [readMessageCountByConv]);
+    },
+    [readMessageCountByConv]
+  );
 
-  const buildConversationFromQueueItem = React.useCallback((item) => {
+  const buildConversationFromQueueItem = useCallback(
+    /**
+     * @param {QueueItem} item
+     * @returns {LiveChatConversation}
+     */
+    (item) => {
     return activeConversations.find(
       (c) =>
         c.conversation_id === item.conversation_id &&
@@ -855,46 +1101,70 @@ const LiveChat = ({ mobile = false }) => {
       language: item.language || "ar",
       sentiment: item.sentiment,
       message_count: item.message_count || 0,
-      last_message: item.last_message ? { content: item.last_message } : null,
+      last_message: item.last_message ? { content: lastMessageContent(item.last_message) } : null,
       is_new_customer: item.is_new_customer,
       wait_time_seconds: item.wait_time_seconds,
       reason: item.reason,
       unread_count: item.unread_count,
     };
-  }, [activeConversations]);
+    },
+    [activeConversations]
+  );
 
-  const selectConversation = React.useCallback((conv) => {
+  const selectConversation = useCallback(
+    /**
+     * @param {LiveChatConversation} conv
+     * @returns {void}
+     */
+    (conv) => {
     const cacheKey = `${conv.user_id}_${conv.conversation_id}`;
     const cached = messageCacheRef.current.get(cacheKey);
-    const hasCachedMessages = cached?.messages?.length > 0;
-    const knownCount = Math.max(conv?.message_count || 0, cached?.messages?.length || 0);
+    const cachedMessages = cached?.messages ?? [];
+    const hasCachedMessages = cachedMessages.length > 0;
+    const knownCount = Math.max(conv?.message_count || 0, cachedMessages.length);
     markConversationRead(conv.user_id, conv.conversation_id, knownCount);
     setSelectedConversation({
       conversation: conv,
-      history: hasCachedMessages ? cached.messages : [],
+      history: hasCachedMessages ? cachedMessages : [],
     });
     if (hasCachedMessages) {
-      setHasMoreMessages(cached.hasMore ?? !cached?.isPartial);
+      setHasMoreMessages(cached?.hasMore ?? !cached?.isPartial);
       setMessagesLoading(false);
     } else {
       // No cached history: show loader, then render full fetched history in one pass.
       setHasMoreMessages(false);
       setMessagesLoading(true);
     }
-  }, [markConversationRead]);
+    },
+    [markConversationRead]
+  );
 
-  const openConversation = React.useCallback((conv) => {
+  const openConversation = useCallback(
+    /**
+     * @param {LiveChatConversation} conv
+     * @returns {void}
+     */
+    (conv) => {
     if (isMobileView && !selectedConversationRef.current?.conversation) {
       window.history.pushState({ mobileLiveChatOpen: true }, "");
     }
     setMobileDetailsOpen(false);
     selectConversation(conv);
-  }, [isMobileView, selectConversation]);
+    },
+    [isMobileView, selectConversation]
+  );
 
-  const openWaitingConversation = React.useCallback((item) => {
+  const openWaitingConversation = useCallback(
+    /**
+     * @param {QueueItem} item
+     * @returns {void}
+     */
+    (item) => {
     markWaitingConversationRead(item.user_id, item.conversation_id, item.message_count || 0);
     openConversation(buildConversationFromQueueItem(item));
-  }, [buildConversationFromQueueItem, markWaitingConversationRead, openConversation]);
+    },
+    [buildConversationFromQueueItem, markWaitingConversationRead, openConversation]
+  );
 
   useEffect(() => {
     if (!selectedConversation?.conversation) return;
@@ -902,14 +1172,20 @@ const LiveChat = ({ mobile = false }) => {
     const count = Math.max(c.message_count || 0, selectedConversation.history?.length || 0);
     markConversationRead(c.user_id, c.conversation_id, count);
   }, [
+    selectedConversation?.conversation,
     selectedConversation?.conversation?.conversation_id,
     selectedConversation?.history?.length,
     markConversationRead,
   ]);
 
+  /**
+   * @param {LiveChatMessage} newMessage
+   * @returns {void}
+   */
   const appendMessageToSelectedConversation = (newMessage) => {
     setSelectedConversation((previous) => {
       if (!previous) return previous;
+      /** @type {SelectedConversation} */
       const updated = {
         ...previous,
         history: [...(previous.history || []), newMessage],
@@ -927,7 +1203,13 @@ const LiveChat = ({ mobile = false }) => {
     });
   };
 
-  // Update chat list locally (move to top + update last_message) without calling /unified-chats
+  /**
+   * Update chat list locally (move to top + update last_message) without calling /unified-chats
+   * @param {string | undefined} conversationId
+   * @param {string | undefined} userId
+   * @param {LiveChatMessage} message
+   * @returns {void}
+   */
   const updateChatListLocally = (conversationId, userId, message) => {
     setActiveConversations((prev) => {
       let idx = -1;
@@ -937,9 +1219,10 @@ const LiveChat = ({ mobile = false }) => {
         // Fallback only when conversation ID is unavailable.
         idx = prev.findIndex((c) => c.user_id === userId);
       }
-      if (idx < 0) return prev;
-      const conv = prev[idx];
+      const conv = idx >= 0 ? prev[idx] : undefined;
+      if (!conv) return prev;
       const ts = message?.timestamp || new Date().toISOString();
+      /** @type {LiveChatConversation} */
       const updated = {
         ...conv,
         last_message: {
@@ -1039,7 +1322,7 @@ const LiveChat = ({ mobile = false }) => {
           chatsResponse = await getUnifiedChats(debouncedSearch, 1, CHAT_LIST_PAGE_SIZE);
           if (!isMountedRef.current) return;
         } catch (err) {
-          if (err?.response?.status === 504 || err?.code === "ECONNABORTED") {
+          if (isGatewayTimeout(err)) {
             try {
               const fallback = await getLiveConversations(debouncedSearch);
               chatsResponse = fallback.success && fallback.conversations
@@ -1050,7 +1333,7 @@ const LiveChat = ({ mobile = false }) => {
               } else {
                 throw new Error("Fallback failed");
               }
-            } catch (fallbackErr) {
+            } catch {
               toast.error("Server is busy. Data will refresh when available.");
               return;
             }
@@ -1059,7 +1342,7 @@ const LiveChat = ({ mobile = false }) => {
           }
         }
         if (chatsResponse?.success && isMountedRef.current) {
-          const chats = chatsResponse.chats || chatsResponse.conversations || [];
+          const chats = asConversationList(chatsResponse.chats ?? chatsResponse.conversations);
           applyServerConversations(chats);
           setChatPage(1);
           setNextCursor(chatsResponse.next_cursor ?? null);
@@ -1073,7 +1356,7 @@ const LiveChat = ({ mobile = false }) => {
               (c) => c.conversation_id === currentSelection.conversation.conversation_id
             );
             if (updatedConv && isMountedRef.current) {
-              setSelectedConversation((prev) => ({ ...prev, conversation: updatedConv }));
+              setSelectedConversation((prev) => (prev ? { ...prev, conversation: updatedConv } : prev));
             }
           }
         } else if (isMountedRef.current && !activeConversations.length) {
@@ -1093,8 +1376,7 @@ const LiveChat = ({ mobile = false }) => {
       } catch (error) {
         if (!isMountedRef.current) return;
         console.error("Error fetching live chat data:", error);
-        const is504OrTimeout = error?.response?.status === 504 || error?.code === "ECONNABORTED";
-        if (is504OrTimeout) {
+        if (isGatewayTimeout(error)) {
           toast.error("Server is busy. Will retry automatically.");
         } else if (!activeConversations.length) {
           /* mock fallback removed — show empty/error honestly */ setUseMockData(false);
@@ -1139,18 +1421,18 @@ const LiveChat = ({ mobile = false }) => {
     if (debouncedSearch.trim() || useMockData) return;
     const t = setTimeout(async () => {
       if (!isMountedRef.current) return;
-      if (activeConversationsRef.current?.length > 0) return;
+      if (activeConversationsRef.current.length > 0) return;
       setIsLoading(true);
       try {
         let r = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
-        if (!r?.success || !(r?.chats?.length > 0)) {
+        if (!r?.success || asConversationList(r?.chats).length === 0) {
           const fallback = await getLiveConversations("");
           if (fallback?.success && Array.isArray(fallback.conversations) && fallback.conversations.length > 0) {
             r = { success: true, chats: fallback.conversations, has_more: false };
           }
         }
         if (!isMountedRef.current) return;
-        if (r?.success && r?.chats?.length > 0) {
+        if (r?.success && asConversationList(r?.chats).length > 0) {
           applyServerConversations(r.chats);
           setNextCursor(r.next_cursor ?? null);
           setHasMoreChats(r.has_more ?? false);
@@ -1198,15 +1480,16 @@ const LiveChat = ({ mobile = false }) => {
     }, 12000);
     const cacheKey = `${selectedConversationUserId}_${selectedConversationId}`;
     const cached = messageCacheRef.current.get(cacheKey);
-    const cacheAge = cached ? Date.now() - cached.cachedAt : Infinity;
+    const cachedMessages = cached?.messages ?? [];
+    const cacheAge = cached?.cachedAt ? Date.now() - cached.cachedAt : Infinity;
     const cacheFresh = cached && !cached.isPartial && cacheAge < MESSAGE_CACHE_TTL_MS;
 
-    if (cached?.messages?.length) {
+    if (cachedMessages.length) {
       setSelectedConversation((prev) => {
         if (!prev || prev.conversation?.conversation_id !== selectedConversationId) return prev;
-        return { ...prev, history: cached.messages };
+        return { ...prev, history: cachedMessages };
       });
-      setHasMoreMessages(cached.hasMore);
+      setHasMoreMessages(Boolean(cached?.hasMore));
     }
 
     if (cacheFresh) {
@@ -1217,7 +1500,7 @@ const LiveChat = ({ mobile = false }) => {
     }
 
     const fetchMessages = async () => {
-      setMessagesLoading(!cached?.messages?.length);
+      setMessagesLoading(cachedMessages.length === 0);
       try {
         const { messages, hasMore } = await fetchConversationMessages(
           selectedConversationUserId,
@@ -1257,7 +1540,10 @@ const LiveChat = ({ mobile = false }) => {
             return { ...prev, history: fallbackPreview };
           });
           setHasMoreMessages(false);
-          const msg = error?.name === "AbortError" ? "Loading messages timed out - try again" : (error?.message || "Failed to load messages. Try again.");
+          const msg =
+            error instanceof Error && error.name === "AbortError"
+              ? "Loading messages timed out - try again"
+              : errorMessage(error) || "Failed to load messages. Try again.";
           toast.error(hasAnyFallback ? `${msg} Showing latest available message.` : msg);
         }
       } finally {
@@ -1276,7 +1562,7 @@ const LiveChat = ({ mobile = false }) => {
   }, [selectedConversationId, selectedConversationUserId, useMockData, fetchConversationMessages, mergeWithRecentOperatorMessages, buildPreviewHistory]);
 
   // Failsafe: if messages stay loading >26s (e.g. request hung), clear loading and notify
-  const messagesLoadingStartRef = useRef(null);
+  const messagesLoadingStartRef = useRef(/** @type {number | null} */ (null));
   useEffect(() => {
     if (!messagesLoading) {
       messagesLoadingStartRef.current = null;
@@ -1294,15 +1580,7 @@ const LiveChat = ({ mobile = false }) => {
     return () => clearTimeout(t);
   }, [messagesLoading]);
 
-  // Load mock data fallback
-  const loadMockData = () => {
-    // Mock conversation fabrication removed — failures must surface honestly.
-    setUseMockData(false);
-    setActiveConversations((prev) => prev || []);
-    setWaitingQueue((prev) => prev || []);
-  };
-
-  const loadMoreChats = React.useCallback(async () => {
+  const loadMoreChats = useCallback(async () => {
     if (templateSendFilterActive && templateSendFilterId) return;
     if (loadingMoreChats || !hasMoreChats || loadMoreInProgressRef.current) return;
     if (Date.now() < loadMoreCooldownUntilRef.current) return;
@@ -1310,14 +1588,14 @@ const LiveChat = ({ mobile = false }) => {
     loadMoreInProgressRef.current = true;
     setLoadingMoreChats(true);
     try {
+      /** @type {string | null} */
       let cursor = nextCursor;
+      /** @type {boolean} */
       let hasMore = hasMoreChats;
       let pagesFetched = 0;
       let totalAdded = 0;
       const seenKeys = new Set(
-        (activeConversationsRef.current || []).map(
-          (c) => `${c.user_id}_${c.conversation_id}`
-        )
+        activeConversationsRef.current.map((c) => `${c.user_id}_${c.conversation_id}`)
       );
 
       // Fetch up to 3 pages in one go to skip duplicate-only pages.
@@ -1331,9 +1609,9 @@ const LiveChat = ({ mobile = false }) => {
         pagesFetched += 1;
         if (!chatsResponse?.success) break;
 
-        const normalized = (chatsResponse.chats || [])
+        const normalized = asConversationList(chatsResponse.chats)
           .map(normalizeIncomingConversation)
-          .filter(Boolean);
+          .filter(isConversation);
         const deduped = normalized.filter((c) => {
           const key = `${c.user_id}_${c.conversation_id}`;
           if (seenKeys.has(key)) return false;
@@ -1370,13 +1648,16 @@ const LiveChat = ({ mobile = false }) => {
     nextCursor,
     getUnifiedChats,
     debouncedSearch,
-    CHAT_LIST_PAGE_SIZE,
     normalizeIncomingConversation,
     templateSendFilterActive,
     templateSendFilterId,
   ]);
 
-  const handleBotListScroll = React.useCallback(
+  const handleBotListScroll = useCallback(
+    /**
+     * @param {import('react').UIEvent<HTMLDivElement>} event
+     * @returns {void}
+     */
     (event) => {
       const el = event.currentTarget;
       if (templateSendFilterActive && templateSendFilterId) return;
@@ -1470,7 +1751,7 @@ const LiveChat = ({ mobile = false }) => {
       }
 
       if (chatsResponse?.success && chatsResponse.chats) {
-        let chats = chatsResponse.chats;
+        let chats = asConversationList(chatsResponse.chats);
         const selected = selectedConversationRef.current?.conversation;
         if (selected) {
           const alreadyInList = chats.some(
@@ -1482,7 +1763,7 @@ const LiveChat = ({ mobile = false }) => {
         }
 
         const previousIds = new Set(
-          (activeConversationsRef.current || []).map((c) => c.conversation_id)
+          activeConversationsRef.current.map((c) => c.conversation_id)
         );
         const newIds = new Set(
           chats.filter((c) => !previousIds.has(c.conversation_id)).map((c) => c.conversation_id)
@@ -1518,7 +1799,7 @@ const LiveChat = ({ mobile = false }) => {
       }
     } catch (error) {
       console.error("Error refreshing conversations:", error);
-      if (error.code === "ECONNABORTED") {
+      if (getAxiosErrorCode(error) === "ECONNABORTED") {
         toast.error("Request timeout - server may be busy. Try again.");
       } else {
         toast.error("Failed to refresh conversations");
@@ -1528,10 +1809,12 @@ const LiveChat = ({ mobile = false }) => {
     }
   };
 
-  // ✅ Format last refresh time as relative time (e.g., "2 seconds ago")
+  /**
+   * ✅ Format last refresh time as relative time (e.g., "2 seconds ago")
+   * @returns {string}
+   */
   const formatLastRefreshTime = () => {
-    const now = new Date();
-    const diff = Math.floor((now - lastRefreshTime) / 1000); // seconds
+    const diff = Math.floor((Date.now() - (lastRefreshTime?.getTime() ?? Date.now())) / 1000); // seconds
 
     if (diff < 60) return `${diff}s ago`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
@@ -1581,7 +1864,7 @@ const LiveChat = ({ mobile = false }) => {
               isPartial: false,
             });
           }
-          return { ...prev, history: deduped };
+          return prev ? { ...prev, history: deduped } : prev;
         });
       }
       setHasMoreMessages(hasMore);
@@ -1607,10 +1890,7 @@ const LiveChat = ({ mobile = false }) => {
         30
       );
       const merged = mergeWithRecentOperatorMessages(messages || [], key);
-      setSelectedConversation((prev) => ({
-        ...prev,
-        history: merged,
-      }));
+      setSelectedConversation((prev) => (prev ? { ...prev, history: merged } : prev));
       setHasMoreMessages(hasMore);
       messageCacheRef.current.set(key, {
         messages: merged,
@@ -1682,6 +1962,11 @@ const LiveChat = ({ mobile = false }) => {
     }
   }, [selectedConversation?.conversation?.conversation_id, selectedConversation?.history?.length]);
 
+  /**
+   * @param {string} conversationId
+   * @param {string} userId
+   * @returns {Promise<void>}
+   */
   const handleTakeOver = async (conversationId, userId) => {
     console.log("🔄 handleTakeOver called with:", { conversationId, userId });
 
@@ -1719,6 +2004,7 @@ const LiveChat = ({ mobile = false }) => {
             selectedConversation.conversation.conversation_id === conversationId
             ? selectedConversation.conversation
             : null;
+          /** @type {LiveChatConversation} */
           const newEntry = {
             ...(fallback || {
               conversation_id: conversationId,
@@ -1739,14 +2025,18 @@ const LiveChat = ({ mobile = false }) => {
         if (
           selectedConversation?.conversation?.conversation_id === conversationId
         ) {
-          setSelectedConversation((prev) => ({
-            ...prev,
-            conversation: {
-              ...prev.conversation,
-              status: "human",
-              operator_id: operatorId,
-            },
-          }));
+          setSelectedConversation((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  conversation: {
+                    ...prev.conversation,
+                    status: "human",
+                    operator_id: operatorId,
+                  },
+                }
+              : prev
+          );
         }
         // Remove from waiting queue (match by both user_id and conversation_id)
         setWaitingQueue((prev) =>
@@ -1761,12 +2051,17 @@ const LiveChat = ({ mobile = false }) => {
       }
     } catch (error) {
       console.error("❌ Error taking over conversation:", error);
-      toast.error(`Error: ${error.message || "Unknown error"}`);
+      toast.error(`Error: ${errorMessage(error) || "Unknown error"}`);
     }
   };
 
   const [isReleasing, setIsReleasing] = useState(false);
   const releasingRef = useRef(false);
+  /**
+   * @param {string} conversationId
+   * @param {string} userId
+   * @returns {Promise<void>}
+   */
   const handleReleaseToBot = async (conversationId, userId) => {
     if (releasingRef.current || isReleasing) return;
     releasingRef.current = true;
@@ -1802,17 +2097,21 @@ const LiveChat = ({ mobile = false }) => {
         if (
           selectedConversation?.conversation?.conversation_id === conversationId
         ) {
-          setSelectedConversation((prev) => ({
-            ...prev,
-            conversation: {
-              ...prev.conversation,
-              status: "bot",
-              operator_id: null,
-              human_takeover_active: false,
-              post_release_escalation_suppressed_until: postRelUntil,
-              conversation_state: "bot_active",
-            },
-          }));
+          setSelectedConversation((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  conversation: {
+                    ...prev.conversation,
+                    status: "bot",
+                    operator_id: null,
+                    human_takeover_active: false,
+                    post_release_escalation_suppressed_until: postRelUntil,
+                    conversation_state: "bot_active",
+                  },
+                }
+              : prev
+          );
         }
       } else {
         const errMsg = result?.error ? `Failed to release: ${result.error}` : "Failed to release conversation";
@@ -1827,6 +2126,11 @@ const LiveChat = ({ mobile = false }) => {
     }
   };
 
+  /**
+   * @param {string} conversationId
+   * @param {string} userId
+   * @returns {Promise<void>}
+   */
   const handleEndConversation = async (conversationId, userId) => {
     try {
       const result = await endLiveChatConversation({
@@ -1856,7 +2160,7 @@ const LiveChat = ({ mobile = false }) => {
     }
   };
 
-  const sendingRef = React.useRef(false);
+  const sendingRef = useRef(false);
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedConversation || isSending || sendingRef.current) return;
     if (isSocialChannelUser(selectedConversation.conversation?.user_id, selectedConversation.conversation?.channel)) {
@@ -1953,8 +2257,14 @@ const LiveChat = ({ mobile = false }) => {
       sendingRef.current = false;
     }
   };
-  // Feedback handlers
+  /**
+   * Feedback handlers
+   * @param {LiveChatMessage} message
+   * @param {string} feedbackType
+   * @returns {void}
+   */
   const handleFeedback = (message, feedbackType) => {
+    if (!selectedConversation) return;
     if (feedbackType === "good") {
       // Submit positive feedback immediately
       submitFeedback({
@@ -1978,21 +2288,32 @@ const LiveChat = ({ mobile = false }) => {
     }
   };
 
+  /**
+   * @param {LiveChatMessage} botMessage
+   * @returns {string}
+   */
   const getPreviousUserMessage = (botMessage) => {
-    const messages = selectedConversation.history || [];
+    const messages = selectedConversation?.history || [];
     const botIndex = messages.findIndex((m) => m === botMessage);
 
     // Find the previous user message
     for (let i = botIndex - 1; i >= 0; i--) {
-      if (messages[i].is_user) {
-        return messages[i].content;
+      const candidate = messages[i];
+      if (candidate?.is_user) {
+        return asText(candidate.content);
       }
     }
 
     return "Unknown question";
   };
 
+  /**
+   * @param {string} correctAnswer
+   * @param {string} feedbackReason
+   * @returns {Promise<void>}
+   */
   const submitCorrection = async (correctAnswer, feedbackReason) => {
+    if (!selectedConversation || !feedbackModal) return;
     const result = await submitFeedback({
       conversation_id: selectedConversation.conversation.conversation_id,
       message_id: feedbackModal.message.id || `msg_${Date.now()}`,
@@ -2009,7 +2330,13 @@ const LiveChat = ({ mobile = false }) => {
     }
   };
 
+  /**
+   * @param {string} editedQuestion
+   * @param {string} editedAnswer
+   * @returns {Promise<void>}
+   */
   const submitLikeToFaq = async (editedQuestion, editedAnswer) => {
+    if (!selectedConversation || !feedbackModal) return;
     const result = await submitFeedback({
       conversation_id: selectedConversation.conversation.conversation_id,
       message_id: feedbackModal.message.id || `msg_${Date.now()}`,
@@ -2034,7 +2361,7 @@ const LiveChat = ({ mobile = false }) => {
     }
   }, [editMessageModal]);
 
-  const [faqContext, setFaqContext] = useState(null);
+  const [faqContext, setFaqContext] = useState(/** @type {LiveChatFaqContext | null} */ (null));
   const [faqEditAnswer, setFaqEditAnswer] = useState("");
   const [faqContextLoading, setFaqContextLoading] = useState(false);
   const [faqSubmitting, setFaqSubmitting] = useState(false);
@@ -2054,7 +2381,7 @@ const LiveChat = ({ mobile = false }) => {
     setFaqEditAnswer(msg.content || "");
     const userId = selectedConversation.conversation.user_id;
     const conversationId = selectedConversation.conversation.conversation_id;
-    const messageId = msg.message_id || msg.id;
+    const messageId = msg.message_id || msg.id || "";
     fetchFaqMatchContext({ userId, conversationId, messageId })
       .then((res) => {
         if (res.success && res.faq_match) {
@@ -2079,13 +2406,13 @@ const LiveChat = ({ mobile = false }) => {
     setFaqSubmitting(true);
     try {
       const res = await faqUpdateAnswer({
-        faqId: faqContext.faq_match.faq_id,
+        faqId: faqContext.faq_match.faq_id ?? "",
         newAnswerText: newAnswer,
         updatedBy: operatorId,
         source: "live_chat_dislike",
       });
       if (res.success) {
-        const messageId = faqCorrectionModal.message.message_id || faqCorrectionModal.message.id;
+        const messageId = faqCorrectionModal.message.message_id || faqCorrectionModal.message.id || "";
         await editLiveChatMessage({
           userId: selectedConversation.conversation.user_id,
           conversationId: selectedConversation.conversation.conversation_id,
@@ -2106,7 +2433,7 @@ const LiveChat = ({ mobile = false }) => {
       } else {
         toast.error(res.error || "Update failed");
       }
-    } catch (e) {
+    } catch {
       toast.error("Update failed");
     } finally {
       setFaqSubmitting(false);
@@ -2139,7 +2466,7 @@ const LiveChat = ({ mobile = false }) => {
       } else {
         toast.error(res.error || "Failed to add");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to add");
     } finally {
       setFaqSubmitting(false);
@@ -2154,7 +2481,7 @@ const LiveChat = ({ mobile = false }) => {
       return;
     }
     const msg = editMessageModal.message;
-    const messageId = msg.message_id || msg.id;
+    const messageId = msg.message_id || msg.id || "";
     setIsSubmittingEdit(true);
     try {
       const result = await editLiveChatMessage({
@@ -2180,7 +2507,7 @@ const LiveChat = ({ mobile = false }) => {
       } else {
         toast.error(result.error || "Update failed");
       }
-    } catch (err) {
+    } catch {
       toast.error("Update failed");
     } finally {
       setIsSubmittingEdit(false);
@@ -2259,7 +2586,7 @@ const LiveChat = ({ mobile = false }) => {
               Correct reply from FAQ
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              View the original FAQ question that matched the user's message, the match score, and edit the answer. Save Change = update the same question in all languages. Save New = save the user's question with the answer as a new FAQ entry in all languages without changing the original.
+              View the original FAQ question that matched the user{"'"}s message, the match score, and edit the answer. Save Change = update the same question in all languages. Save New = save the user{"'"}s question with the answer as a new FAQ entry in all languages without changing the original.
             </p>
             {faqContextLoading ? (
               <p className="text-slate-500 text-sm">Loading match context...</p>
@@ -2267,13 +2594,13 @@ const LiveChat = ({ mobile = false }) => {
               <>
                 <div className="space-y-3 mb-4 text-sm">
                   <div>
-                    <span className="font-medium text-slate-600">Original FAQ question that matched the user's message:</span>
+                    <span className="font-medium text-slate-600">Original FAQ question that matched the user{"'"}s message:</span>
                     <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
                       {faqContext.faq_match.stored_question || "—"}
                     </p>
                   </div>
                   <div>
-                    <span className="font-medium text-slate-600">User's question:</span>
+                    <span className="font-medium text-slate-600">User{"'"}s question:</span>
                     <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
                       {faqContext.faq_match.user_question || "—"}
                     </p>
@@ -2323,7 +2650,9 @@ const LiveChat = ({ mobile = false }) => {
                     className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
                     disabled={faqSubmitting || !(faqEditAnswer || "").trim()}
                   >
-                    {faqSubmitting ? "..." : "Save New — Save user's question + answer as new FAQ in all languages (original unchanged)"}
+                    {faqSubmitting
+                      ? "..."
+                      : "Save New — Save user\u2019s question + answer as new FAQ in all languages (original unchanged)"}
                   </button>
                 </div>
               </>
@@ -2335,7 +2664,7 @@ const LiveChat = ({ mobile = false }) => {
                     <p className="mt-1 p-2 bg-slate-100 rounded border border-slate-200 text-slate-500 italic">—</p>
                   </div>
                   <div>
-                    <span className="font-medium text-slate-600">User's question:</span>
+                    <span className="font-medium text-slate-600">User{"'"}s question:</span>
                     <p className="mt-1 p-2 bg-slate-50 rounded border border-slate-200 text-slate-800">
                       {getPreviousUserMessage(faqCorrectionModal.message) || "—"}
                     </p>
@@ -2434,6 +2763,7 @@ const LiveChat = ({ mobile = false }) => {
           imageInputRef={imageInputRef}
           handleImageSelect={handleImageSelect}
           isRecording={isRecording}
+          recordingTime={recordingTime}
           stopRecording={stopRecording}
           startRecording={startRecording}
           formatRecordingTime={formatRecordingTime}
@@ -2663,7 +2993,7 @@ const LiveChat = ({ mobile = false }) => {
                         toast.error(r?.error || "Rebuild failed");
                       }
                     } catch (e) {
-                      toast.error(e?.message || "Rebuild failed");
+                      toast.error(errorMessage(e) || "Rebuild failed");
                     } finally {
                       setRebuildingIndex(false);
                     }
@@ -2690,7 +3020,7 @@ const LiveChat = ({ mobile = false }) => {
                         toast.error(r?.error || "Simulate failed");
                       }
                     } catch (e) {
-                      toast.error(e?.message || "Simulate failed");
+                      toast.error(errorMessage(e) || "Simulate failed");
                     }
                   }}
                   className="text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700"
@@ -2760,16 +3090,16 @@ const LiveChat = ({ mobile = false }) => {
                               <SentimentIndicator sentiment={conv.sentiment} />
                             </div>
                             <div className="mb-2"><StatusBadge status={conv.status} /></div>
-                            {(conv.last_message?.content ?? conv.last_message_text) && (
+                            {(lastMessageContent(conv.last_message) ?? conv.last_message_text) && (
                               <p className="text-xs text-slate-600 truncate mb-1">
-                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
+                                {lastMessageContent(conv.last_message) ?? conv.last_message_text ?? ""}
                               </p>
                             )}
                             <div className="flex items-center justify-between text-xs text-slate-500">
                               <span>{(conv.message_count ?? 0)} messages</span>
                               <span>
                                 {(conv.duration_seconds || 0) > 0
-                                  ? `${Math.floor(conv.duration_seconds / 60)}m • `
+                                  ? `${Math.floor((conv.duration_seconds ?? 0) / 60)}m • `
                                   : ""}
                                 {formatConversationListDate(conv)}
                               </span>
@@ -2820,16 +3150,16 @@ const LiveChat = ({ mobile = false }) => {
                               <SentimentIndicator sentiment={conv.sentiment} />
                             </div>
                             <div className="mb-2"><StatusBadge status={conv.status} /></div>
-                            {(conv.last_message?.content ?? conv.last_message_text) && (
+                            {(lastMessageContent(conv.last_message) ?? conv.last_message_text) && (
                               <p className="text-xs text-slate-600 truncate mb-1">
-                                {conv.last_message?.content ?? conv.last_message_text ?? ""}
+                                {lastMessageContent(conv.last_message) ?? conv.last_message_text ?? ""}
                               </p>
                             )}
                             <div className="flex items-center justify-between text-xs text-slate-500">
                               <span>{(conv.message_count ?? 0)} messages</span>
                               <span>
                                 {(conv.duration_seconds || 0) > 0
-                                  ? `${Math.floor(conv.duration_seconds / 60)}m • `
+                                  ? `${Math.floor((conv.duration_seconds ?? 0) / 60)}m • `
                                   : ""}
                                 {formatConversationListDate(conv)}
                               </span>
@@ -3075,7 +3405,7 @@ const LiveChat = ({ mobile = false }) => {
                       </button>
                     )}
                     <div className="w-10 h-10 bg-gradient-to-r from-primary-400 to-secondary-400 rounded-full flex items-center justify-center text-white font-bold">
-                      {selectedConversation.conversation.user_name.charAt(0)}
+                      {(selectedConversation.conversation.user_name || "?").charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -3258,7 +3588,8 @@ const LiveChat = ({ mobile = false }) => {
                                     alt="Attachment"
                                     className="rounded-lg max-w-full h-auto object-cover"
                                     onError={(e) => {
-                                      e.target.src =
+                                      const img = /** @type {HTMLImageElement} */ (e.currentTarget);
+                                      img.src =
                                         "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23e5e7eb' width='100' height='100'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3EImage unavailable%3C/text%3E%3C/svg%3E";
                                     }}
                                   />
@@ -3320,7 +3651,7 @@ const LiveChat = ({ mobile = false }) => {
                         </div>
                         <div className="flex items-center space-x-2 mt-1 px-2">
                           <span className="text-xs text-slate-400">
-                            {formatMessageTime(msg.timestamp)}
+                            {formatMessageTime(msg.timestamp || "")}
                           </span>
                           {!msg.is_user && msg.handled_by && (
                             <>
@@ -3376,7 +3707,7 @@ const LiveChat = ({ mobile = false }) => {
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <img
-                            src={selectedImage.preview}
+                            src={typeof selectedImage.preview === "string" ? selectedImage.preview : undefined}
                             alt={selectedImage.name || "Selected image"}
                             className="w-12 h-12 rounded object-cover"
                           />
@@ -3615,7 +3946,17 @@ const LiveChat = ({ mobile = false }) => {
                                 language: item.language || "ar",
                                 sentiment: item.sentiment,
                                 message_count: item.message_count || 0,
-                                last_message: item.last_message ? { content: item.last_message } : null,
+                                last_message:
+                                  typeof item.last_message === "string"
+                                    ? item.last_message
+                                    : item.last_message && typeof item.last_message === "object"
+                                      ? {
+                                          content:
+                                            typeof item.last_message.content === "string"
+                                              ? item.last_message.content
+                                              : "",
+                                        }
+                                      : null,
                               };
                               selectConversation(conv);
                             }}
@@ -3630,7 +3971,7 @@ const LiveChat = ({ mobile = false }) => {
                               )}
                             </div>
                             <div className="flex items-center justify-between mt-0.5">
-                              <span className="text-slate-500">{Math.floor(item.wait_time_seconds / 60)}m</span>
+                              <span className="text-slate-500">{Math.floor((item.wait_time_seconds || 0) / 60)}m</span>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -3727,7 +4068,7 @@ const LiveChat = ({ mobile = false }) => {
                   <div>
                     <p className="text-xs text-slate-500">Language</p>
                     <p className="font-medium text-slate-800">
-                      {selectedConversation.conversation.language.toUpperCase()}
+                      {(selectedConversation.conversation.language || "").toUpperCase()}
                     </p>
                   </div>
                   <div>
@@ -3764,11 +4105,11 @@ const LiveChat = ({ mobile = false }) => {
                   <div className="flex justify-between">
                     <span className="text-sm text-slate-600">Duration</span>
                     <span className="font-medium text-slate-800">
-                      {Math.floor(
-                        selectedConversation.conversation.duration_seconds / 60
-                      )}
-                      m{" "}
-                      {selectedConversation.conversation.duration_seconds % 60}s
+                      {(() => {
+                        const durationSeconds =
+                          Number(selectedConversation.conversation.duration_seconds) || 0;
+                        return `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s`;
+                      })()}
                     </span>
                   </div>
                   <div className="flex justify-between">

@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import {
   HomeIcon,
@@ -97,7 +96,9 @@ const colorClasses = {
   red: 'bg-red-100 text-red-600'
 };
 
+/** @param {{ permissions: Record<string, boolean>; onChange: (key: string, value: boolean) => void; disabled?: boolean }} props */
 const PermissionMatrix = ({ permissions, onChange, disabled = false }) => {
+  /** @param {string} key */
   const handleToggle = (key) => {
     if (disabled) return;
     onChange(key, !permissions[key]);
@@ -127,7 +128,7 @@ const PermissionMatrix = ({ permissions, onChange, disabled = false }) => {
             }`}
           >
             <div className="flex items-center space-x-3">
-              <div className={`p-2 rounded-lg ${colorClasses[perm.color]}`}>
+              <div className={`p-2 rounded-lg ${colorClasses[/** @type {keyof typeof colorClasses} */ (perm.color)] || colorClasses.slate}`}>
                 <IconComponent className="w-4 h-4" />
               </div>
               <div>

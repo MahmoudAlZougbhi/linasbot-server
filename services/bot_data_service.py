@@ -269,7 +269,8 @@ When a customer asks about Candela or which branch has Candela, inform them Cand
             if not data.get("success"):
                 raise Exception(f"API Error: {data.get('message', 'Unknown error')}")
 
-            return cast(Any, data.get("data", []))
+            payload = data.get("data", [])
+            return payload
 
     def _is_cache_valid(self, key: str) -> bool:
         """Check if cache is valid and not expired"""

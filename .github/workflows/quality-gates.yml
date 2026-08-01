@@ -81,8 +81,10 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
       - name: Install
         run: npm ci
-      - name: Lint
+      - name: Lint (0 errors, 0 warnings)
         run: npm run lint
+      - name: Typecheck (checkJs / JSDoc strict)
+        run: npm run typecheck
       - name: Audit (production deps gate)
         run: node ../scripts/npm_audit_gate.mjs
       - name: Test

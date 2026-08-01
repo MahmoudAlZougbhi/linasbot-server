@@ -1,6 +1,7 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { getApiAbsoluteBaseUrl } from "../../utils/apiBaseUrl";
 
+/** @param {string | null | undefined} url */
 const getProxiedAudioUrl = (url) => {
   if (!url) return url;
 
@@ -19,6 +20,7 @@ const getProxiedAudioUrl = (url) => {
   return `${baseURL}/api/media/audio?url=${encodeURIComponent(url)}`;
 };
 
+/** @param {number} time */
 const formatTime = (time) => {
   if (Number.isNaN(time)) return "0:00";
   const minutes = Math.floor(time / 60);
@@ -26,13 +28,14 @@ const formatTime = (time) => {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
+/** @param {{ audioUrl: string; isUserMessage?: boolean }} props */
 const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [error, setError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const audioRef = useRef(null);
+  const audioRef = useRef(/** @type {HTMLAudioElement | null} */ (null));
   const proxiedAudioUrl = getProxiedAudioUrl(audioUrl);
 
   const handlePlayPause = () => {
@@ -41,7 +44,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play().catch((playError) => {
+      audioRef.current.play().catch((/** @type {unknown} */ playError) => {
         console.error("Audio play error:", playError);
         setError(true);
       });
@@ -49,6 +52,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
     setIsPlaying(!isPlaying);
   };
 
+  /** @param {import('react').ChangeEvent<HTMLInputElement>} event */
   const handleProgressChange = (event) => {
     const newTime = parseFloat(event.target.value);
     if (!audioRef.current) return;
@@ -122,7 +126,7 @@ const ModernAudioPlayer = ({ audioUrl, isUserMessage = false }) => {
 
       <audio
         ref={audioRef}
-        src={proxiedAudioUrl}
+        src={proxiedAudioUrl || undefined}
         onLoadedMetadata={() => {
           if (audioRef.current) setDuration(audioRef.current.duration);
         }}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DocumentTextIcon,
@@ -14,7 +14,6 @@ import {
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
-import toast from "react-hot-toast";
 
 // Icon mapping for different file types
 const FILE_ICONS = {
@@ -58,7 +57,8 @@ const FILE_HELP_TEXT = {
     "List your service prices here. The bot will reference this when customers ask about pricing. Format: one service per line with price.",
 };
 
-const TrainingFileEditor = ({ fileId, title, description }) => {
+/** @param {{ fileId: keyof typeof FILE_ICONS | string; title: string; description?: string }} props */
+const TrainingFileEditor = ({ fileId, title, description: _description }) => {
   const {
     getTrainingFile,
     updateTrainingFile,
@@ -71,27 +71,66 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
-  const [stats, setStats] = useState(null);
-  const [backups, setBackups] = useState([]);
-  const [lastModified, setLastModified] = useState(null);
+  const [stats, setStats] = useState(/** @type {FileStatsRecord | null} */ (null));
+  const [backups, setBackups] = useState(/** @type {TrainingBackupRecord[]} */ ([]));
+  const [lastModified, setLastModified] = useState(/** @type {string | null} */ (null));
   const [isLoading, setIsLoading] = useState(true);
 
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-  const textareaRef = useRef(null);
-  const searchInputRef = useRef(null);
+  const textareaRef = useRef(/** @type {HTMLTextAreaElement | null} */ (null));
+  const searchInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
-  const Icon = FILE_ICONS[fileId] || DocumentTextIcon;
-  const colors = FILE_COLORS[fileId] || FILE_COLORS.knowledge_base;
-  const helpText = FILE_HELP_TEXT[fileId] || "";
+  const fileKey = /** @type {keyof typeof FILE_ICONS} */ (fileId);
+  const Icon = FILE_ICONS[fileKey] || DocumentTextIcon;
+  const colors = FILE_COLORS[fileKey] || FILE_COLORS.knowledge_base;
+  const helpText = FILE_HELP_TEXT[fileKey] || "";
+
+  const loadFile = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await getTrainingFile(fileId);
+      if (response.success) {
+        setContent(response.content || "");
+        setOriginalContent(response.content || "");
+        setLastModified(response.last_modified);
+      }
+    } catch {
+      console.error(`Failed to load ${fileId}:`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fileId, getTrainingFile]);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const response = await getTrainingFileStats(fileId);
+      if (response.success) {
+        setStats(response.stats);
+      }
+    } catch {
+      console.error(`Failed to load stats for ${fileId}:`);
+    }
+  }, [fileId, getTrainingFileStats]);
+
+  const loadBackups = useCallback(async () => {
+    try {
+      const response = await getTrainingFileBackups(fileId);
+      if (response.success) {
+        setBackups(response.backups);
+      }
+    } catch {
+      console.error(`Failed to load backups for ${fileId}:`);
+    }
+  }, [fileId, getTrainingFileBackups]);
 
   useEffect(() => {
     loadFile();
     loadStats();
     loadBackups();
-  }, [fileId]);
+  }, [loadFile, loadStats, loadBackups]);
 
   useEffect(() => {
     setHasChanges(content !== originalContent);
@@ -138,7 +177,7 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
   }, [isSearchOpen]);
 
   // Navigate to a specific match in the textarea
-  const navigateToMatch = (matchIndex) => {
+  const navigateToMatch = useCallback((/** @type {number} */ matchIndex) => {
     if (searchResults.length === 0 || !textareaRef.current) return;
 
     const match = searchResults[matchIndex];
@@ -154,19 +193,19 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
     textarea.scrollTop = Math.max(0, scrollPosition);
 
     setCurrentMatchIndex(matchIndex);
-  };
+  }, [searchResults, searchQuery]);
 
-  const goToNextMatch = () => {
+  const goToNextMatch = useCallback(() => {
     if (searchResults.length === 0) return;
     const nextIndex = (currentMatchIndex + 1) % searchResults.length;
     navigateToMatch(nextIndex);
-  };
+  }, [searchResults.length, currentMatchIndex, navigateToMatch]);
 
-  const goToPrevMatch = () => {
+  const goToPrevMatch = useCallback(() => {
     if (searchResults.length === 0) return;
     const prevIndex = (currentMatchIndex - 1 + searchResults.length) % searchResults.length;
     navigateToMatch(prevIndex);
-  };
+  }, [searchResults.length, currentMatchIndex, navigateToMatch]);
 
   const toggleSearch = () => {
     setIsSearchOpen(!isSearchOpen);
@@ -177,6 +216,7 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
 
   // Keyboard shortcut for search (Ctrl+F or Cmd+F)
   useEffect(() => {
+    /** @param {KeyboardEvent} e */
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
@@ -199,45 +239,7 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isSearchOpen, searchResults.length, currentMatchIndex]);
-
-  const loadFile = async () => {
-    try {
-      setIsLoading(true);
-      const response = await getTrainingFile(fileId);
-      if (response.success) {
-        setContent(response.content || "");
-        setOriginalContent(response.content || "");
-        setLastModified(response.last_modified);
-      }
-    } catch (error) {
-      console.error(`Failed to load ${fileId}:`, error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadStats = async () => {
-    try {
-      const response = await getTrainingFileStats(fileId);
-      if (response.success) {
-        setStats(response.stats);
-      }
-    } catch (error) {
-      console.error(`Failed to load stats for ${fileId}:`, error);
-    }
-  };
-
-  const loadBackups = async () => {
-    try {
-      const response = await getTrainingFileBackups(fileId);
-      if (response.success) {
-        setBackups(response.backups || []);
-      }
-    } catch (error) {
-      console.error(`Failed to load backups for ${fileId}:`, error);
-    }
-  };
+  }, [isSearchOpen, searchResults.length, goToNextMatch, goToPrevMatch]);
 
   const handleSave = async () => {
     try {
@@ -253,6 +255,7 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
     }
   };
 
+  /** @param {string} filename */
   const handleRestore = async (filename) => {
     if (!window.confirm(`Restore ${title} from backup: ${filename}?`)) {
       return;
@@ -276,12 +279,14 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
     }
   };
 
+  /** @param {string | null | undefined} dateString */
   const formatDate = (dateString) => {
     if (!dateString) return "Unknown";
     const date = new Date(dateString);
     return date.toLocaleString();
   };
 
+  /** @param {number | null | undefined} bytes */
   const formatFileSize = (bytes) => {
     if (!bytes) return "0 B";
     const k = 1024;
@@ -580,7 +585,7 @@ const TrainingFileEditor = ({ fileId, title, description }) => {
                   </p>
                 </div>
                 <button
-                  onClick={() => handleRestore(backup.filename)}
+                  onClick={() => handleRestore(backup.filename || "")}
                   disabled={loading}
                   className="text-sm px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
                 >

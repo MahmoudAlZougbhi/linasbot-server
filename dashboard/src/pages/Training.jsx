@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AcademicCapIcon,
@@ -10,9 +10,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   SparklesIcon,
-  ClockIcon,
-  ArrowPathIcon,
-  CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
@@ -28,9 +25,10 @@ const Training = () => {
   } = useApi();
 
   const [activeTab, setActiveTab] = useState("add");
-  const [trainingEntries, setTrainingEntries] = useState([]);
+  const [trainingEntries, setTrainingEntries] = useState(/** @type {TrainingQAPair[]} */ ([]));
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredEntries, setFilteredEntries] = useState([]);
+  const [filteredEntries, setFilteredEntries] = useState(/** @type {TrainingQAPair[]} */ ([]));
+  /** @type {[TrainingStatistics, import('react').Dispatch<import('react').SetStateAction<TrainingStatistics>>]} */
   const [statistics, setStatistics] = useState({
     total: 0,
     by_language: {},
@@ -44,13 +42,13 @@ const Training = () => {
   const [selectedLanguage, setSelectedLanguage] = useState("ar");
 
   // Edit mode state
-  const [editingEntry, setEditingEntry] = useState(null);
+  const [editingEntry, setEditingEntry] = useState(/** @type {TrainingQAPair | null} */ (null));
   const [editQuestion, setEditQuestion] = useState("");
   const [editAnswer, setEditAnswer] = useState("");
   const [editCategory, setEditCategory] = useState("general");
 
   // Delete confirmation modal state
-  const [deleteConfirmEntry, setDeleteConfirmEntry] = useState(null);
+  const [deleteConfirmEntry, setDeleteConfirmEntry] = useState(/** @type {TrainingQAPair | null} */ (null));
 
   const tabs = [
     {
@@ -83,28 +81,7 @@ const Training = () => {
     { value: "franco", label: "Franco", flag: "🔤" },
   ];
 
-  useEffect(() => {
-    loadStatistics();
-  }, []);
-
-  useEffect(() => {
-    loadTrainingData(selectedLanguage);
-  }, [selectedLanguage]);
-
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const filtered = trainingEntries.filter(
-        (entry) =>
-          entry.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          entry.answer.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredEntries(filtered);
-    } else {
-      setFilteredEntries(trainingEntries);
-    }
-  }, [searchQuery, trainingEntries]);
-
-  const loadTrainingData = async (language = selectedLanguage) => {
+  const loadTrainingData = useCallback(async (language = selectedLanguage) => {
     try {
       console.log("🔄 Loading Q&A pairs from local file...");
       const response = await getLocalQAPairs({ language });
@@ -118,23 +95,44 @@ const Training = () => {
         console.log("⚠️ No data or success=false");
         setTrainingEntries([]);
       }
-    } catch (error) {
-      console.error("❌ Failed to load Q&A data:", error);
+    } catch {
+      console.error("❌ Failed to load Q&A data:");
       toast.error("Failed to load training data");
       setTrainingEntries([]);
     }
-  };
+  }, [getLocalQAPairs, selectedLanguage]);
 
-  const loadStatistics = async () => {
+  const loadStatistics = useCallback(async () => {
     try {
       const response = await getLocalQAStatistics();
       if (response.success && response.statistics) {
         setStatistics(response.statistics);
       }
-    } catch (error) {
-      console.error("Failed to load statistics:", error);
+    } catch {
+      console.error("Failed to load statistics:");
     }
-  };
+  }, [getLocalQAStatistics]);
+
+  useEffect(() => {
+    loadStatistics();
+  }, [loadStatistics]);
+
+  useEffect(() => {
+    loadTrainingData(selectedLanguage);
+  }, [loadTrainingData, selectedLanguage]);
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const filtered = trainingEntries.filter(
+        (entry) =>
+          entry.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          entry.answer.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredEntries(filtered);
+    } else {
+      setFilteredEntries(trainingEntries);
+    }
+  }, [searchQuery, trainingEntries]);
 
   const handleAddTraining = async () => {
     if (!newQuestion.trim() || !newAnswer.trim()) {
@@ -209,6 +207,7 @@ const Training = () => {
     }
   };
 
+  /** @param {TrainingQAPair} entry @param {import('react').MouseEvent} [e] */
   const handleEditEntry = (entry, e) => {
     if (e) {
       e.preventDefault();
@@ -233,6 +232,8 @@ const Training = () => {
       toast.error("Please fill in both question and answer");
       return;
     }
+
+    if (!editingEntry) return;
 
     try {
       console.log("💾 Saving edited Q&A pair:", editingEntry.id);
@@ -266,7 +267,9 @@ const Training = () => {
     }
   };
 
+  /** @param {string} lang */
   const getLanguageFlag = (lang) => {
+    /** @type {Record<string, string>} */
     const flags = {
       ar: "🇸🇦",
       en: "🇺🇸",
@@ -767,7 +770,7 @@ const Training = () => {
                           <div className="flex-1 space-y-3">
                             <div className="flex items-center space-x-2">
                               <span className="text-lg">
-                                {getLanguageFlag(entry.language)}
+                                {getLanguageFlag(entry.language ?? "")}
                               </span>
                               <span className="text-xs font-medium text-slate-500">
                                 {entry.language?.toUpperCase()}

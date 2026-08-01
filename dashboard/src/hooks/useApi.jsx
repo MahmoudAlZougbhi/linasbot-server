@@ -4,6 +4,18 @@ import toast from "react-hot-toast";
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
 import { normalizeConversationMessages } from "../utils/liveChatApi";
 import { getCsrfToken } from "../utils/csrf";
+import {
+  errorMessage,
+  getAxiosErrorCode,
+  getAxiosResponseDetail,
+  isAxiosLikeError,
+  isPlainObject,
+} from "../utils/apiValidate";
+
+/** @param {string} message */
+const toastInfo = (message) => {
+  toast(message, { icon: "ℹ️" });
+};
 
 // Create axios instance with default config
 const api = axios.create({
@@ -36,8 +48,9 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    const code = isAxiosLikeError(error) ? error.code : undefined;
     // Handle network errors gracefully (silent)
-    if (error.code === "ERR_NETWORK") {
+    if (code === "ERR_NETWORK") {
       // Silent - no console logs for network errors
       if (process.env.NODE_ENV === "development") {
         return Promise.reject(error);
@@ -45,17 +58,17 @@ api.interceptors.response.use(
     }
 
     // Handle timeout errors gracefully (silent)
-    if (error.code === "ECONNABORTED") {
+    if (code === "ECONNABORTED") {
       // Silent - no console logs for timeout errors
       return Promise.reject(error);
     }
 
     // 504 Gateway Timeout - let the calling component show a friendly message
-    if (error.response?.status === 504) {
+    if (isAxiosLikeError(error) && error.response?.status === 504) {
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401) {
+    if (isAxiosLikeError(error) && error.response?.status === 401) {
       localStorage.removeItem("auth_session");
       localStorage.removeItem("csrf_token");
       if (!window.location.pathname.startsWith("/login")) {
@@ -64,11 +77,18 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    const responseData =
+      isAxiosLikeError(error) && isPlainObject(error.response?.data)
+        ? error.response.data
+        : undefined;
     const message =
-      error.response?.data?.message || error.message || "An error occurred";
+      (typeof responseData?.message === "string" ? responseData.message : undefined) ||
+      (isAxiosLikeError(error) ? error.message : undefined) ||
+      errorMessage(error) ||
+      "An error occurred";
 
     // Only show toast for non-network and non-timeout errors
-    if (error.code !== "ERR_NETWORK" && error.code !== "ECONNABORTED") {
+    if (code !== "ERR_NETWORK" && code !== "ECONNABORTED") {
       toast.error(message);
     }
 
@@ -79,13 +99,13 @@ api.interceptors.response.use(
 export const useApi = () => {
   const [loading, setLoading] = useState(false);
   const [currentProvider, setCurrentProvider] = useState("meta");
-  const [botStatus, setBotStatus] = useState({
+  const [botStatus, setBotStatus] = useState(/** @type {BotStatus} */ ({
     status: "unknown",
     uptime: 0,
     responseTime: 0,
     features: [],
     currentProvider: "meta",
-  });
+  }));
 
   // Fetch bot status
   const fetchBotStatus = useCallback(async () => {
@@ -104,23 +124,24 @@ export const useApi = () => {
       });
       return response.data;
     } catch (error) {
+      const code = getAxiosErrorCode(error);
       // Set offline status but don't throw error for network/timeout issues
       setBotStatus({
-        status: error.code === "ECONNABORTED" ? "slow" : "offline",
+        status: code === "ECONNABORTED" ? "slow" : "offline",
         uptime: 0,
         responseTime: 0,
         features: [],
       });
 
       // Only throw non-network and non-timeout errors
-      if (error.code !== "ERR_NETWORK" && error.code !== "ECONNABORTED") {
+      if (code !== "ERR_NETWORK" && code !== "ECONNABORTED") {
         throw error;
       }
 
       // Return mock data for network/timeout errors
       return {
-        status: error.code === "ECONNABORTED" ? "slow" : "offline",
-        message: error.code === "ECONNABORTED"
+        status: code === "ECONNABORTED" ? "slow" : "offline",
+        message: code === "ECONNABORTED"
           ? "Backend is slow but running"
           : "Backend not available - using mock data",
         features: [
@@ -137,6 +158,11 @@ export const useApi = () => {
 
   // Test text message
   const testTextMessage = useCallback(
+    /**
+     * @param {string} message
+     * @param {string} [language]
+     * @param {string} [userPhone]
+     */
     async (message, language = "auto", userPhone = "") => {
       try {
         setLoading(true);
@@ -149,9 +175,10 @@ export const useApi = () => {
         toast.success("Text message processed successfully!");
         return response.data;
       } catch (error) {
+        const code = getAxiosErrorCode(error);
         // Handle network error with mock response
-        if (error.code === "ERR_NETWORK") {
-          toast.info("Backend offline - showing mock response");
+        if (code === "ERR_NETWORK") {
+          toastInfo("Backend offline - showing mock response");
           return {
             success: true,
             input: message,
@@ -174,6 +201,11 @@ export const useApi = () => {
 
   // Test voice transcription
   const testVoiceTranscription = useCallback(
+    /**
+     * @param {File | Blob} audioFile
+     * @param {string} provider
+     * @param {string} userPhone
+     */
     async (audioFile, provider, userPhone) => {
       try {
         setLoading(true);
@@ -181,7 +213,7 @@ export const useApi = () => {
         formData.append("audio", audioFile);
         formData.append("phone", userPhone || "123456789");
         formData.append("provider", provider || currentProvider);
-        formData.append("timestamp", Date.now());
+        formData.append("timestamp", String(Date.now()));
 
         const response = await api.post("/api/test-voice", formData, {
           headers: {
@@ -191,8 +223,6 @@ export const useApi = () => {
 
         toast.success("Voice message processed!");
         return response.data;
-      } catch (error) {
-        throw error;
       } finally {
         setLoading(false);
       }
@@ -202,6 +232,11 @@ export const useApi = () => {
 
   // Test image analysis (file upload)
   const testImageAnalysis = useCallback(
+    /**
+     * @param {File | Blob} imageFile
+     * @param {string} provider
+     * @param {string} userPhone
+     */
     async (imageFile, provider, userPhone) => {
       try {
         setLoading(true);
@@ -220,9 +255,10 @@ export const useApi = () => {
         toast.success("Image analysis completed!");
         return response.data;
       } catch (error) {
+        const code = getAxiosErrorCode(error);
         // Handle network error with mock response
-        if (error.code === "ERR_NETWORK") {
-          toast.info("Backend offline - showing mock response");
+        if (code === "ERR_NETWORK") {
+          toastInfo("Backend offline - showing mock response");
           return {
             success: true,
             bot_response:
@@ -241,6 +277,12 @@ export const useApi = () => {
 
   // Test image analysis with URL (new endpoint)
   const testImageWithUrl = useCallback(
+    /**
+     * @param {string} imageUrl
+     * @param {string} [caption]
+     * @param {string} [provider]
+     * @param {string} [userPhone]
+     */
     async (
       imageUrl,
       caption = "",
@@ -258,9 +300,10 @@ export const useApi = () => {
         toast.success("Image analysis completed!");
         return response.data;
       } catch (error) {
+        const code = getAxiosErrorCode(error);
         // Handle network error with mock response
-        if (error.code === "ERR_NETWORK") {
-          toast.info("Backend offline - showing mock response");
+        if (code === "ERR_NETWORK") {
+          toastInfo("Backend offline - showing mock response");
           return {
             success: true,
             bot_response: `Mock image analysis from ${provider}: This appears to be a tattoo. ${
@@ -280,6 +323,11 @@ export const useApi = () => {
 
   // Test voice message with text (new endpoint)
   const testVoiceWithText = useCallback(
+    /**
+     * @param {string} voiceText
+     * @param {string} [provider]
+     * @param {string} [userPhone]
+     */
     async (voiceText, provider = currentProvider, userPhone = "") => {
       try {
         setLoading(true);
@@ -291,9 +339,10 @@ export const useApi = () => {
         toast.success("Voice message processed!");
         return response.data;
       } catch (error) {
+        const code = getAxiosErrorCode(error);
         // Handle network error with mock response
-        if (error.code === "ERR_NETWORK") {
-          toast.info("Backend offline - showing mock response");
+        if (code === "ERR_NETWORK") {
+          toastInfo("Backend offline - showing mock response");
           return {
             success: true,
             bot_response: `Mock voice response from ${provider}: I heard you say "${voiceText}". Here's my response...`,
@@ -311,6 +360,11 @@ export const useApi = () => {
 
   // Training functions
   const addTrainingData = useCallback(
+    /**
+     * @param {string} question
+     * @param {string} answer
+     * @param {string} [language]
+     */
     async (question, answer, language = "ar") => {
       try {
         setLoading(true);
@@ -323,8 +377,6 @@ export const useApi = () => {
 
         toast.success("Training data added successfully!");
         return response.data;
-      } catch (error) {
-        throw error;
       } finally {
         setLoading(false);
       }
@@ -337,28 +389,24 @@ export const useApi = () => {
       setLoading(true);
       const response = await api.get("/api/training/list");
       return response.data;
-    } catch (error) {
-      throw error;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const deleteTrainingData = useCallback(async (id) => {
+  const deleteTrainingData = useCallback(async (/** @type {string} */ id) => {
     try {
       setLoading(true);
       const response = await api.delete(`/api/training/${id}`);
       toast.success("Training data deleted successfully!");
       return response.data;
-    } catch (error) {
-      throw error;
     } finally {
       setLoading(false);
     }
   }, []);
 
   // Search training data
-  const searchTrainingData = useCallback(async (query) => {
+  const searchTrainingData = useCallback(async (/** @type {string} */ query) => {
     try {
       setLoading(true);
       const response = await api.post("/api/training/search", {
@@ -366,15 +414,13 @@ export const useApi = () => {
         timestamp: Date.now(),
       });
       return response.data;
-    } catch (error) {
-      throw error;
     } finally {
       setLoading(false);
     }
   }, []);
 
   // Provider switching
-  const switchProvider = useCallback(async (provider) => {
+  const switchProvider = useCallback(async (/** @type {string} */ provider) => {
     try {
       setLoading(true);
       const response = await api.post("/api/switch-provider", {
@@ -390,14 +436,15 @@ export const useApi = () => {
       toast.success(`Switched to ${provider}`);
       return response.data;
     } catch (error) {
+      const code = getAxiosErrorCode(error);
       // Handle network error gracefully
-      if (error.code === "ERR_NETWORK") {
+      if (code === "ERR_NETWORK") {
         setCurrentProvider(provider);
         setBotStatus((prev) => ({
           ...prev,
           currentProvider: provider,
         }));
-        toast.info(`Switched to ${provider} (offline mode)`);
+        toastInfo(`Switched to ${provider} (offline mode)`);
         return { success: true, provider };
       }
       throw error;
@@ -408,9 +455,16 @@ export const useApi = () => {
 
   // Test message with provider (optional channel=instagram|facebook for Meta parity)
   const testMessageWithProvider = useCallback(
+    /**
+     * @param {string} message
+     * @param {string} [provider]
+     * @param {string} [userPhone]
+     * @param {"instagram" | "facebook" | null} [channel]
+     */
     async (message, provider = currentProvider, userPhone = "", channel = null) => {
       try {
         setLoading(true);
+        /** @type {TestMessagePayload} */
         const payload = {
           phone: userPhone || "123456789",
           message,
@@ -428,8 +482,9 @@ export const useApi = () => {
         }
         return data;
       } catch (error) {
+        const code = getAxiosErrorCode(error);
         // Never fake a green bot reply when the backend is offline
-        if (error.code === "ERR_NETWORK") {
+        if (code === "ERR_NETWORK") {
           toast.error("Backend offline — cannot run Testing Lab");
           return {
             success: false,
@@ -448,6 +503,11 @@ export const useApi = () => {
 
   // Test webhook simulation (full webhook flow)
   const testWebhookSimulation = useCallback(
+    /**
+     * @param {string} message
+     * @param {string} [provider]
+     * @param {string} [userPhone]
+     */
     async (message, provider = currentProvider, userPhone = "") => {
       try {
         setLoading(true);
@@ -459,9 +519,10 @@ export const useApi = () => {
         toast.success("Webhook simulation completed!");
         return response.data;
       } catch (error) {
+        const code = getAxiosErrorCode(error);
         // Handle network error with mock response
-        if (error.code === "ERR_NETWORK") {
-          toast.info("Backend offline - showing mock response");
+        if (code === "ERR_NETWORK") {
+          toastInfo("Backend offline - showing mock response");
           return {
             success: true,
             bot_response: `Mock webhook response from ${provider}: ${message}`,
@@ -480,7 +541,14 @@ export const useApi = () => {
 
   // Live Chat API functions - WhatsApp-style: unified chats (live + history)
   // cursor: use for Load More (backend uses cursor-based pagination, not page offset)
-  const getUnifiedChats = useCallback(async (search = "", page = 1, pageSize = 30, cursor = null) => {
+  const getUnifiedChats = useCallback(
+    /**
+     * @param {string} [search]
+     * @param {number} [page]
+     * @param {number} [pageSize]
+     * @param {string | null} [cursor]
+     */
+    async (search = "", page = 1, pageSize = 30, cursor = null) => {
     try {
       const params = new URLSearchParams();
       if (search && search.trim()) params.append("search", search.trim());
@@ -512,26 +580,30 @@ export const useApi = () => {
         next_cursor: data.next_cursor || null,
       };
     } catch (error) {
-      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
-        return { success: false, chats: [], total: 0, has_more: false, error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline" };
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK" || code === "ECONNABORTED") {
+        return { success: false, chats: [], total: 0, has_more: false, error: code === "ECONNABORTED" ? "Request timeout" : "Backend offline" };
       }
       throw error;
     }
-  }, []);
+    },
+    []
+  );
 
   const getSmartMessagingTemplates = useCallback(async () => {
     try {
       const response = await api.get("/api/smart-messaging/templates", { timeout: 20000 });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK" || code === "ECONNABORTED") {
         return { success: false, templates: {}, error: "Backend offline" };
       }
-      return { success: false, templates: {}, error: error.message };
+      return { success: false, templates: {}, error: errorMessage(error) };
     }
   }, []);
 
-  const getChatsByTemplateSendLog = useCallback(async (templateId, dateFrom = "", dateTo = "") => {
+  const getChatsByTemplateSendLog = useCallback(async (/** @type {string} */ templateId, dateFrom = "", dateTo = "") => {
     try {
       const params = new URLSearchParams();
       params.append("template_id", String(templateId || "").trim());
@@ -542,11 +614,12 @@ export const useApi = () => {
       });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK" || code === "ECONNABORTED") {
         return {
           success: false,
           chats: [],
-          error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline",
+          error: code === "ECONNABORTED" ? "Request timeout" : "Backend offline",
         };
       }
       throw error;
@@ -564,8 +637,9 @@ export const useApi = () => {
       });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
-        return { success: false, conversations: [], error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline" };
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK" || code === "ECONNABORTED") {
+        return { success: false, conversations: [], error: code === "ECONNABORTED" ? "Request timeout" : "Backend offline" };
       }
       throw error;
     }
@@ -578,11 +652,12 @@ export const useApi = () => {
       });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK" || code === "ECONNABORTED") {
         return {
           success: false,
           queue: [],
-          error: error.code === "ECONNABORTED" ? "Request timeout" : "Backend offline",
+          error: code === "ECONNABORTED" ? "Request timeout" : "Backend offline",
         };
       }
       throw error;
@@ -593,31 +668,31 @@ export const useApi = () => {
     try {
       const response = await api.get("/api/live-chat/status", { timeout: 5000 });
       return response.data;
-    } catch (e) {
+    } catch {
       return { success: false, index_count: 0, users_count: 0 };
     }
   }, []);
 
   const rebuildLiveChatIndex = useCallback(async () => {
-    try {
-      const response = await api.post("/api/live-chat/rebuild-index", null, { timeout: 60000 });
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await api.post("/api/live-chat/rebuild-index", null, { timeout: 60000 });
+    return response.data;
   }, []);
 
   const simulateWebhook = useCallback(async (phone = "9613000000", text = "Hello") => {
-    try {
-      const response = await api.post("/api/debug/simulate-webhook", { phone, text }, { timeout: 15000 });
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await api.post("/api/debug/simulate-webhook", { phone, text }, { timeout: 15000 });
+    return response.data;
   }, []);
 
   /** Same axios as getUnifiedChats – use for loading conversation messages so request goes to same origin. */
   const getConversationMessages = useCallback(
+    /**
+     * @param {string} userId
+     * @param {string} conversationId
+     * @param {number} [days]
+     * @param {string | null} [before]
+     * @param {number} [day_window]
+     * @param {number} [limit]
+     */
     async (userId, conversationId, days = 0, before = null, day_window = 0, limit = 50) => {
       try {
         const params = new URLSearchParams();
@@ -638,10 +713,11 @@ export const useApi = () => {
           : [];
         return { messages, hasMore: data.has_more ?? false };
       } catch (error) {
-        if (error.code === "ERR_NETWORK") {
+        const code = getAxiosErrorCode(error);
+        if (code === "ERR_NETWORK") {
           throw new Error("Backend offline – cannot load messages");
         }
-        if (error.code === "ECONNABORTED") {
+        if (code === "ECONNABORTED") {
           throw new Error("Loading messages timed out - try again");
         }
         throw error;
@@ -651,6 +727,11 @@ export const useApi = () => {
   );
 
   const takeoverConversation = useCallback(
+    /**
+     * @param {string} conversationId
+     * @param {string} userId
+     * @param {string} operatorId
+     */
     async (conversationId, userId, operatorId) => {
       try {
         setLoading(true);
@@ -666,16 +747,17 @@ export const useApi = () => {
         return response.data;
       } catch (error) {
         console.error("❌ Takeover error:", error);
-        if (error.code === "ERR_NETWORK") {
+        const code = getAxiosErrorCode(error);
+        if (code === "ERR_NETWORK") {
           toast.error("Backend offline - cannot take over conversation");
           return { success: false, error: "Backend offline" };
         }
-        if (error.code === "ECONNABORTED") {
+        if (code === "ECONNABORTED") {
           toast.error("Takeover timed out - please try again");
           return { success: false, error: "timeout of 60000ms exceeded" };
         }
         // Show actual error message from server
-        const errorMsg = error.response?.data?.detail || error.response?.data?.error || error.message || "Unknown error";
+        const errorMsg = getAxiosResponseDetail(error) || errorMessage(error) || "Unknown error";
         toast.error(`Takeover failed: ${errorMsg}`);
         return { success: false, error: errorMsg };
       } finally {
@@ -685,7 +767,7 @@ export const useApi = () => {
     []
   );
 
-  const releaseConversation = useCallback(async (conversationId, userId) => {
+  const releaseConversation = useCallback(async (/** @type {string} */ conversationId, /** @type {string} */ userId) => {
     try {
       setLoading(true);
       const response = await api.post("/api/live-chat/release", {
@@ -697,11 +779,12 @@ export const useApi = () => {
       // Toast shown by caller (LiveChat) to avoid duplicates
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK") {
         toast.error("Backend offline - cannot release conversation");
         return { success: false, error: "Backend offline" };
       }
-      if (error.code === "ECONNABORTED") {
+      if (code === "ECONNABORTED") {
         toast.error("Release timed out - please try again");
         return { success: false, error: "timeout" };
       }
@@ -712,6 +795,14 @@ export const useApi = () => {
   }, []);
 
   const sendOperatorMessage = useCallback(
+    /**
+     * @param {string} conversationId
+     * @param {string} userId
+     * @param {string} message
+     * @param {string} operatorId
+     * @param {string} [messageType]
+     * @param {string | null} [idempotencyKey]
+     */
     async (
       conversationId,
       userId,
@@ -740,11 +831,12 @@ export const useApi = () => {
         // Toast: callers (e.g. LiveChat) show context-specific success to avoid double toasts
         return response.data;
       } catch (error) {
-        if (error.code === "ERR_NETWORK") {
+        const code = getAxiosErrorCode(error);
+        if (code === "ERR_NETWORK") {
           toast.error("Backend offline - cannot send message");
           return { success: false, error: "Backend offline" };
         }
-        if (error.code === "ECONNABORTED") {
+        if (code === "ECONNABORTED") {
           toast.error("Message send timed out - please try again");
           return { success: false, error: "timeout" };
         }
@@ -756,7 +848,7 @@ export const useApi = () => {
     []
   );
 
-  const updateOperatorStatus = useCallback(async (operatorId, status) => {
+  const updateOperatorStatus = useCallback(async (/** @type {string} */ operatorId, /** @type {string} */ status) => {
     try {
       const response = await api.post("/api/live-chat/operator-status", {
         operator_id: operatorId,
@@ -764,7 +856,8 @@ export const useApi = () => {
       });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
       throw error;
@@ -776,7 +869,8 @@ export const useApi = () => {
       const response = await api.get("/api/live-chat/metrics");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
       throw error;
@@ -784,7 +878,7 @@ export const useApi = () => {
   }, []);
 
   // ✨ NEW: Q&A Management Functions
-  const getQAPairs = useCallback(async (filters = {}) => {
+  const getQAPairs = useCallback(async (/** @type {QAFilters} */ filters = {}) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -792,12 +886,13 @@ export const useApi = () => {
       if (filters.language) params.append("language", filters.language);
       if (filters.query) params.append("query", filters.query);
       if (filters.active_only !== undefined)
-        params.append("active_only", filters.active_only);
+        params.append("active_only", String(filters.active_only));
 
       const response = await api.get(`/api/qa/list?${params}`);
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      const code = getAxiosErrorCode(error);
+      if (code === "ERR_NETWORK") {
         console.log("Backend offline - Q&A using mock data");
         return {
           success: false,
@@ -812,14 +907,14 @@ export const useApi = () => {
     }
   }, []);
 
-  const createQAPair = useCallback(async (qaData) => {
+  const createQAPair = useCallback(async (/** @type {Record<string, unknown>} */ qaData) => {
     try {
       setLoading(true);
       const response = await api.post("/api/qa/create", qaData);
       toast.success("Q&A pair created successfully!");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot create Q&A pair");
         return { success: false, error: "Backend offline" };
       }
@@ -829,14 +924,14 @@ export const useApi = () => {
     }
   }, []);
 
-  const updateQAPair = useCallback(async (qaId, updates) => {
+  const updateQAPair = useCallback(async (/** @type {string} */ qaId, /** @type {Record<string, unknown>} */ updates) => {
     try {
       setLoading(true);
       const response = await api.put(`/api/qa/${qaId}`, updates);
       toast.success("Q&A pair updated successfully!");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot update Q&A pair");
         return { success: false, error: "Backend offline" };
       }
@@ -846,14 +941,14 @@ export const useApi = () => {
     }
   }, []);
 
-  const deleteQAPair = useCallback(async (qaId) => {
+  const deleteQAPair = useCallback(async (/** @type {string} */ qaId) => {
     try {
       setLoading(true);
       const response = await api.delete(`/api/qa/${qaId}`);
       toast.success("Q&A pair deleted successfully!");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot delete Q&A pair");
         return { success: false, error: "Backend offline" };
       }
@@ -863,7 +958,7 @@ export const useApi = () => {
     }
   }, []);
 
-  const testQAMatch = useCallback(async (question, language = "ar") => {
+  const testQAMatch = useCallback(async (/** @type {string} */ question, language = "ar") => {
     try {
       setLoading(true);
       const response = await api.post("/api/qa/test-match", {
@@ -872,7 +967,7 @@ export const useApi = () => {
       });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot test Q&A match");
         return { success: false, error: "Backend offline" };
       }
@@ -887,7 +982,7 @@ export const useApi = () => {
       const response = await api.get("/api/qa/statistics");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return {
           success: false,
           error: "Backend offline",
@@ -908,7 +1003,7 @@ export const useApi = () => {
       const response = await api.get("/api/qa/categories");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return {
           success: false,
           categories: [
@@ -925,6 +1020,11 @@ export const useApi = () => {
   }, []);
 
   const rewriteAnswer = useCallback(
+    /**
+     * @param {string} answer
+     * @param {string} [language]
+     * @param {string} [context]
+     */
     async (answer, language = "ar", context = "beauty/laser center") => {
       try {
         setLoading(true);
@@ -935,7 +1035,7 @@ export const useApi = () => {
         });
         return response.data;
       } catch (error) {
-        if (error.code === "ERR_NETWORK") {
+        if (getAxiosErrorCode(error) === "ERR_NETWORK") {
           toast.error("Backend offline - cannot rewrite answer");
           return {
             success: false,
@@ -953,6 +1053,11 @@ export const useApi = () => {
   );
 
   const translateQAPair = useCallback(
+    /**
+     * @param {string} question
+     * @param {string} answer
+     * @param {string} [sourceLanguage]
+     */
     async (question, answer, sourceLanguage = "ar") => {
       try {
         setLoading(true);
@@ -963,7 +1068,7 @@ export const useApi = () => {
         });
         return response.data;
       } catch (error) {
-        if (error.code === "ERR_NETWORK") {
+        if (getAxiosErrorCode(error) === "ERR_NETWORK") {
           toast.error("Backend offline - cannot translate Q&A pair");
           return { success: false, error: "Backend offline" };
         }
@@ -976,7 +1081,7 @@ export const useApi = () => {
   );
 
   // ✨ NEW: Local Q&A Management Functions (JSON file-based)
-  const getLocalQAPairs = useCallback(async (filters = {}) => {
+  const getLocalQAPairs = useCallback(async (/** @type {QAFilters} */ filters = {}) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -988,7 +1093,7 @@ export const useApi = () => {
       const response = await api.get(endpoint);
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         console.log("Backend offline - Local Q&A using mock data");
         return {
           success: false,
@@ -1002,7 +1107,7 @@ export const useApi = () => {
     }
   }, []);
 
-  const createLocalQAPair = useCallback(async (qaData) => {
+  const createLocalQAPair = useCallback(async (/** @type {Record<string, unknown>} */ qaData) => {
     try {
       setLoading(true);
       const response = await api.post("/api/local-qa/create", qaData);
@@ -1011,7 +1116,7 @@ export const useApi = () => {
       }
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot save Q&A pair");
         return { success: false, error: "Backend offline" };
       }
@@ -1021,7 +1126,7 @@ export const useApi = () => {
     }
   }, []);
 
-  const updateLocalQAPair = useCallback(async (qaId, updates) => {
+  const updateLocalQAPair = useCallback(async (/** @type {string} */ qaId, /** @type {Record<string, unknown>} */ updates) => {
     try {
       setLoading(true);
       const response = await api.put(`/api/local-qa/${qaId}`, updates);
@@ -1030,7 +1135,7 @@ export const useApi = () => {
       }
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot update Q&A pair");
         return { success: false, error: "Backend offline" };
       }
@@ -1040,7 +1145,7 @@ export const useApi = () => {
     }
   }, []);
 
-  const deleteLocalQAPair = useCallback(async (qaId) => {
+  const deleteLocalQAPair = useCallback(async (/** @type {string} */ qaId) => {
     try {
       setLoading(true);
       const response = await api.delete(`/api/local-qa/${qaId}`);
@@ -1049,7 +1154,7 @@ export const useApi = () => {
       }
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot delete Q&A pair");
         return { success: false, error: "Backend offline" };
       }
@@ -1064,7 +1169,7 @@ export const useApi = () => {
       const response = await api.get("/api/local-qa/statistics");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return {
           success: false,
           error: "Backend offline",
@@ -1080,7 +1185,7 @@ export const useApi = () => {
   }, []);
 
   // ✨ NEW: Feedback functions
-  const submitFeedback = useCallback(async (feedbackData) => {
+  const submitFeedback = useCallback(async (/** @type {Record<string, unknown>} */ feedbackData) => {
     try {
       setLoading(true);
       const response = await api.post("/api/feedback/submit", feedbackData);
@@ -1099,12 +1204,12 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error submitting feedback:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot submit feedback");
         return { success: false, error: "Backend offline" };
       }
       toast.error("Failed to submit feedback");
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     } finally {
       setLoading(false);
     }
@@ -1116,7 +1221,7 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error getting feedback stats:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return {
           success: false,
           error: "Backend offline",
@@ -1130,7 +1235,7 @@ export const useApi = () => {
           },
         };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
@@ -1142,10 +1247,10 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error getting wrong answers:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline", wrong_answers: [] };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
@@ -1156,30 +1261,30 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error getting training files:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline", files: [] };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
-  const getTrainingFile = useCallback(async (fileId) => {
+  const getTrainingFile = useCallback(async (/** @type {string} */ fileId) => {
     try {
       setLoading(true);
       const response = await api.get(`/api/training-files/${fileId}`);
       return response.data;
     } catch (error) {
       console.error(`Error getting training file ${fileId}:`, error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const updateTrainingFile = useCallback(async (fileId, content) => {
+  const updateTrainingFile = useCallback(async (/** @type {string} */ fileId, /** @type {string} */ content) => {
     try {
       setLoading(true);
       const response = await api.post(`/api/training-files/${fileId}`, {
@@ -1191,31 +1296,31 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error(`Error updating training file ${fileId}:`, error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot update file");
         return { success: false, error: "Backend offline" };
       }
       toast.error("Failed to update file");
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const getTrainingFileBackups = useCallback(async (fileId) => {
+  const getTrainingFileBackups = useCallback(async (/** @type {string} */ fileId) => {
     try {
       const response = await api.get(`/api/training-files/${fileId}/backups`);
       return response.data;
     } catch (error) {
       console.error(`Error getting backups for ${fileId}:`, error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline", backups: [] };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
-  const restoreTrainingFileBackup = useCallback(async (fileId, filename) => {
+  const restoreTrainingFileBackup = useCallback(async (/** @type {string} */ fileId, /** @type {string} */ filename) => {
     try {
       setLoading(true);
       const response = await api.post(`/api/training-files/${fileId}/restore`, {
@@ -1227,31 +1332,31 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error(`Error restoring backup for ${fileId}:`, error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot restore backup");
         return { success: false, error: "Backend offline" };
       }
       toast.error("Failed to restore backup");
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const getTrainingFileStats = useCallback(async (fileId) => {
+  const getTrainingFileStats = useCallback(async (/** @type {string} */ fileId) => {
     try {
       const response = await api.get(`/api/training-files/${fileId}/stats`);
       return response.data;
     } catch (error) {
       console.error(`Error getting stats for ${fileId}:`, error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return {
           success: false,
           error: "Backend offline",
           stats: { lines: 0, words: 0, characters: 0, file_size: 0 },
         };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
@@ -1263,17 +1368,17 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error getting instructions:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot load instructions");
         return { success: false, error: "Backend offline" };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const updateInstructions = useCallback(async (instructions) => {
+  const updateInstructions = useCallback(async (/** @type {string} */ instructions) => {
     try {
       setLoading(true);
       const response = await api.post("/api/instructions/update", {
@@ -1287,12 +1392,12 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error updating instructions:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot update instructions");
         return { success: false, error: "Backend offline" };
       }
       toast.error("Failed to update instructions");
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     } finally {
       setLoading(false);
     }
@@ -1304,14 +1409,14 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error getting backups:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline", backups: [] };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
-  const restoreInstructionsBackup = useCallback(async (filename) => {
+  const restoreInstructionsBackup = useCallback(async (/** @type {string} */ filename) => {
     try {
       setLoading(true);
       const response = await api.post("/api/instructions/restore", {
@@ -1323,12 +1428,12 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error restoring backup:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         toast.error("Backend offline - cannot restore backup");
         return { success: false, error: "Backend offline" };
       }
       toast.error("Failed to restore backup");
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     } finally {
       setLoading(false);
     }
@@ -1340,7 +1445,7 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error getting instructions stats:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return {
           success: false,
           error: "Backend offline",
@@ -1352,14 +1457,14 @@ export const useApi = () => {
           },
         };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
   // Activity Flow API (User ↔ Bot ↔ AI transparency)
   const getFlowLogs = useCallback(async (limit = 50, search = "") => {
     try {
-      const params = new URLSearchParams({ limit });
+      const params = new URLSearchParams({ limit: String(limit) });
       if (search && search.trim()) params.set("search", search.trim());
       const response = await api.get(`/api/flow/logs?${params.toString()}`, {
         timeout: 12000,
@@ -1367,76 +1472,76 @@ export const useApi = () => {
       return response.data;
     } catch (error) {
       console.error("Error getting flow logs:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline", data: [], count: 0 };
       }
-      return { success: false, error: error.message, data: [], count: 0 };
+      return { success: false, error: errorMessage(error), data: [], count: 0 };
     }
   }, []);
 
   // Content Files API (Knowledge, Price, Style managers - dynamic retrieval)
-  const getContentFilesList = useCallback(async (section) => {
+  const getContentFilesList = useCallback(async (/** @type {string} */ section) => {
     try {
       const response = await api.get(`/api/content-files/${section}/list`);
       return response.data;
     } catch (error) {
       console.error("Error getting content files list:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline", data: [], count: 0 };
       }
-      return { success: false, error: error.message, data: [], count: 0 };
+      return { success: false, error: errorMessage(error), data: [], count: 0 };
     }
   }, []);
 
-  const getContentFile = useCallback(async (section, fileId) => {
+  const getContentFile = useCallback(async (/** @type {string} */ section, /** @type {string} */ fileId) => {
     try {
       const response = await api.get(`/api/content-files/${section}/${fileId}`);
       return response.data;
     } catch (error) {
       console.error("Error getting content file:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   }, []);
 
-  const createContentFile = useCallback(async (section, payload) => {
+  const createContentFile = useCallback(async (/** @type {string} */ section, /** @type {Record<string, unknown>} */ payload) => {
     try {
       const response = await api.post(`/api/content-files/${section}/create`, payload);
       return response.data;
     } catch (error) {
       console.error("Error creating content file:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
-      return { success: false, error: error.response?.data?.detail || error.message };
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
     }
   }, []);
 
-  const updateContentFile = useCallback(async (section, fileId, payload) => {
+  const updateContentFile = useCallback(async (/** @type {string} */ section, /** @type {string} */ fileId, /** @type {Record<string, unknown>} */ payload) => {
     try {
       const response = await api.put(`/api/content-files/${section}/${fileId}`, payload);
       return response.data;
     } catch (error) {
       console.error("Error updating content file:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
-      return { success: false, error: error.response?.data?.detail || error.message };
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
     }
   }, []);
 
-  const deleteContentFile = useCallback(async (section, fileId) => {
+  const deleteContentFile = useCallback(async (/** @type {string} */ section, /** @type {string} */ fileId) => {
     try {
       const response = await api.delete(`/api/content-files/${section}/${fileId}`);
       return response.data;
     } catch (error) {
       console.error("Error deleting content file:", error);
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
-      return { success: false, error: error.response?.data?.detail || error.message };
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
     }
   }, []);
 
@@ -1445,22 +1550,22 @@ export const useApi = () => {
       const response = await api.get("/api/content-files/dynamic-messages");
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline", data: {} };
       }
-      return { success: false, error: error.response?.data?.detail || error.message, data: {} };
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error), data: {} };
     }
   }, []);
 
-  const updateDynamicMessages = useCallback(async (data) => {
+  const updateDynamicMessages = useCallback(async (/** @type {Record<string, unknown>} */ data) => {
     try {
       const response = await api.put("/api/content-files/dynamic-messages", { data });
       return response.data;
     } catch (error) {
-      if (error.code === "ERR_NETWORK") {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
       }
-      return { success: false, error: error.response?.data?.detail || error.message };
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
     }
   }, []);
 

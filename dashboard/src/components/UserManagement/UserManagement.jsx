@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { motion } from 'framer-motion';
 import {
   UsersIcon,
@@ -7,17 +7,18 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { errorMessage } from '../../utils/apiValidate';
 import UserList from './UserList';
 import UserForm from './UserForm';
 import RoleManager from './RoleManager';
 
 const UserManagement = () => {
   const { getUsers, createUser, updateUser, deleteUser, user: currentUser } = useAuth();
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(/** @type {DashboardUser[]} */ ([]));
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('users');
   const [showUserForm, setShowUserForm] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingUser, setEditingUser] = useState(/** @type {DashboardUser | null} */ (null));
 
   // Load users on mount
   useEffect(() => {
@@ -29,14 +30,15 @@ const UserManagement = () => {
     try {
       setLoading(true);
       const userList = await getUsers();
-      setUsers(userList);
-    } catch (error) {
+      setUsers(Array.isArray(userList) ? /** @type {DashboardUser[]} */ (userList) : []);
+    } catch {
       toast.error('Failed to load users');
     } finally {
       setLoading(false);
     }
   };
 
+  /** @param {Record<string, unknown>} userData */
   const handleCreateUser = async (userData) => {
     try {
       await createUser(userData);
@@ -44,11 +46,12 @@ const UserManagement = () => {
       setShowUserForm(false);
       loadUsers();
     } catch (error) {
-      toast.error(error.message || 'Failed to create user');
+      toast.error(errorMessage(error) || 'Failed to create user');
       throw error;
     }
   };
 
+  /** @param {string} userId @param {Record<string, unknown>} updates */
   const handleUpdateUser = async (userId, updates) => {
     try {
       await updateUser(userId, updates);
@@ -57,11 +60,12 @@ const UserManagement = () => {
       setEditingUser(null);
       loadUsers();
     } catch (error) {
-      toast.error(error.message || 'Failed to update user');
+      toast.error(errorMessage(error) || 'Failed to update user');
       throw error;
     }
   };
 
+  /** @param {string} userId */
   const handleDeleteUser = async (userId) => {
     if (!window.confirm('Are you sure you want to delete this user?')) {
       return;
@@ -72,10 +76,11 @@ const UserManagement = () => {
       toast.success('User deleted successfully');
       loadUsers();
     } catch (error) {
-      toast.error(error.message || 'Failed to delete user');
+      toast.error(errorMessage(error) || 'Failed to delete user');
     }
   };
 
+  /** @param {DashboardUser} user */
   const handleEditUser = (user) => {
     setEditingUser(user);
     setShowUserForm(true);
@@ -162,7 +167,7 @@ const UserManagement = () => {
         <UserForm
           user={editingUser}
           onSubmit={editingUser ?
-            (data) => handleUpdateUser(editingUser.id, data) :
+            (/** @type {Record<string, unknown>} */ data) => handleUpdateUser(editingUser.id, data) :
             handleCreateUser
           }
           onClose={handleCloseForm}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   XMarkIcon,
@@ -13,6 +13,7 @@ import { SYSTEM_ROLES, DEFAULT_PERMISSIONS } from '../../constants/permissions';
 import { getCustomRoles, resolveUserPermissions } from '../../utils/permissions';
 import PermissionMatrix from './PermissionMatrix';
 
+/** @param {{ user?: DashboardUser | null; onSubmit: (data: Record<string, unknown>) => Promise<void>; onClose: () => void }} props */
 const UserForm = ({ user, onSubmit, onClose }) => {
   const isEditing = !!user;
   const allRoles = { ...SYSTEM_ROLES, ...getCustomRoles() };
@@ -29,7 +30,7 @@ const UserForm = ({ user, onSubmit, onClose }) => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
 
   // Initialize form with user data if editing
   useEffect(() => {
@@ -61,6 +62,7 @@ const UserForm = ({ user, onSubmit, onClose }) => {
   }, [formData.role, formData.useCustomPermissions]);
 
   const validateForm = () => {
+    /** @type {Record<string, string>} */
     const newErrors = {};
 
     if (!formData.name.trim()) {
@@ -83,6 +85,7 @@ const UserForm = ({ user, onSubmit, onClose }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  /** @param {import('react').FormEvent<HTMLFormElement>} e */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -90,6 +93,7 @@ const UserForm = ({ user, onSubmit, onClose }) => {
 
     setSubmitting(true);
     try {
+      /** @type {Record<string, unknown>} */
       const submitData = {
         name: formData.name,
         email: formData.email,
@@ -104,13 +108,14 @@ const UserForm = ({ user, onSubmit, onClose }) => {
       }
 
       await onSubmit(submitData);
-    } catch (error) {
+    } catch {
       // Error handling is done in parent
     } finally {
       setSubmitting(false);
     }
   };
 
+  /** @param {string} key @param {boolean} value */
   const handlePermissionChange = (key, value) => {
     setFormData(prev => ({
       ...prev,

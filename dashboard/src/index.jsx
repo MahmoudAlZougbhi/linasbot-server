@@ -1,4 +1,4 @@
-import React from 'react';
+import { StrictMode } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
@@ -23,21 +23,33 @@ if (process.env.NODE_ENV === 'development') {
 
   // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
-    if (
-      event.reason?.code === 'ERR_NETWORK' || 
-      event.reason?.message?.includes('Network Error')
-    ) {
+    const reason = event.reason;
+    const code =
+      typeof reason === 'object' && reason && 'code' in reason
+        ? String(/** @type {{ code?: unknown }} */ (reason).code)
+        : '';
+    const message =
+      reason instanceof Error
+        ? reason.message
+        : typeof reason === 'object' && reason && 'message' in reason
+          ? String(/** @type {{ message?: unknown }} */ (reason).message)
+          : '';
+    if (code === 'ERR_NETWORK' || message.includes('Network Error')) {
       event.preventDefault();
       console.log('Network request failed - backend not available');
     }
   });
 }
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
+const rootEl = document.getElementById('root');
+if (!rootEl) {
+  throw new Error('Root element #root not found');
+}
+const root = ReactDOM.createRoot(rootEl);
 root.render(
-  <React.StrictMode>
+  <StrictMode>
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
-  </React.StrictMode>
+  </StrictMode>
 );

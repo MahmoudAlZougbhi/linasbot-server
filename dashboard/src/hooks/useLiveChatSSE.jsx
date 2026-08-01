@@ -7,6 +7,40 @@ const FALLBACK_POLL_INTERVAL_MS = 30000;
 const SSE_STALE_THRESHOLD_MS = 90000;
 const HEARTBEAT_WATCHDOG_INTERVAL_MS = 30000;
 
+/**
+ * @param {{
+ *   enabled: boolean;
+ *   isMountedRef: import('react').MutableRefObject<boolean>;
+ *   useMockDataRef: import('react').MutableRefObject<boolean>;
+ *   activeConversationsRef: import('react').MutableRefObject<LiveChatConversation[] | null | undefined>;
+ *   selectedConversationRef: import('react').MutableRefObject<SelectedConversation | null | undefined>;
+ *   debouncedSearchRef: import('react').MutableRefObject<string>;
+ *   getUnifiedChats: (search: string, page: number, pageSize: number) => Promise<{ success?: boolean; chats?: LiveChatConversation[]; has_more?: boolean }>;
+ *   getWaitingQueue?: () => Promise<{ success?: boolean; queue?: QueueItem[] }>;
+ *   applyWaitingQueue?: (response: { success?: boolean; queue?: QueueItem[] }) => void;
+ *   chatListPageSize?: number;
+ *   fetchConversationMessages: (
+ *     userId: string,
+ *     conversationId: string,
+ *     days?: number,
+ *     before?: string | null,
+ *     day_window?: number,
+ *     limit?: number
+ *   ) => Promise<{ messages?: LiveChatMessage[] }>;
+ *   setActiveConversations: import('react').Dispatch<import('react').SetStateAction<LiveChatConversation[]>> | ((conversations: LiveChatConversation[]) => void);
+ *   setNewConversationIds: import('react').Dispatch<import('react').SetStateAction<Set<string>>>;
+ *   setLastRefreshTime: import('react').Dispatch<import('react').SetStateAction<Date | null>>;
+ *   setIsRefreshing: import('react').Dispatch<import('react').SetStateAction<boolean>>;
+ *   setSelectedConversation: import('react').Dispatch<import('react').SetStateAction<SelectedConversation | null>>;
+ *   updateChatListLocally?: (convId: string | undefined, userId: string | undefined, message: LiveChatMessage) => void;
+ *   messageCacheRef?: import('react').MutableRefObject<Map<string, { messages: LiveChatMessage[]; hasMore?: boolean; cachedAt?: number; isPartial?: boolean }>>;
+ *   hasMoreMessagesRef?: import('react').MutableRefObject<boolean>;
+ *   setIsLoading?: import('react').Dispatch<import('react').SetStateAction<boolean>>;
+ *   setHasMoreChats?: import('react').Dispatch<import('react').SetStateAction<boolean>>;
+ *   setChatPage?: import('react').Dispatch<import('react').SetStateAction<number>>;
+ *   onOperatorMessageCached?: (userId: string, convId: string, message: LiveChatMessage) => void;
+ * }} params
+ */
 export const useLiveChatSSE = ({
   enabled,
   isMountedRef,
@@ -37,15 +71,20 @@ export const useLiveChatSSE = ({
       return undefined;
     }
 
+    /** @type {EventSource | null} */
     let eventSource = null;
+    /** @type {ReturnType<typeof setTimeout> | null} */
     let reconnectTimeout = null;
+    /** @type {ReturnType<typeof setInterval> | null} */
     let fallbackInterval = null;
+    /** @type {ReturnType<typeof setTimeout> | null} */
     let clearNewBadgeTimeout = null;
     let reconnectAttempt = 0;
     let handlingNewMessageEvent = false;
     let lastRefreshAt = 0;
     let debouncedRefreshScheduled = false;
     let lastEventAt = Date.now();
+    /** @type {ReturnType<typeof setInterval> | null} */
     let heartbeatWatchdog = null;
     let refreshingFallback = false;
 
@@ -56,6 +95,7 @@ export const useLiveChatSSE = ({
       clearNewBadgeTimeout = setTimeout(() => setNewConversationIds(new Set()), 10000);
     };
 
+    /** @param {LiveChatMessage[]} [fetchedMessages] @param {LiveChatMessage[]} [currentHistory] */
     const mergeFetchedWithRecentLocal = (fetchedMessages = [], currentHistory = []) => {
       const fetched = Array.isArray(fetchedMessages) ? fetchedMessages : [];
       const current = Array.isArray(currentHistory) ? currentHistory : [];
@@ -85,6 +125,14 @@ export const useLiveChatSSE = ({
       );
     };
 
+    /**
+     * @param {{
+     *   preferredConversations?: LiveChatConversation[] | null;
+     *   announceNewIds?: Set<string> | null;
+     *   total?: number | null;
+     *   hasMore?: boolean | null;
+     * }} [options]
+     */
     const refreshChats = async ({
       preferredConversations = null,
       announceNewIds = null,
@@ -93,7 +141,9 @@ export const useLiveChatSSE = ({
     } = {}) => {
       if (!isMountedRef.current) return null;
       const searchTerm = debouncedSearchRef.current;
+      /** @type {LiveChatConversation[] | null} */
       let conversations = null;
+      /** @type {boolean | null} */
       let hasMoreValue = hasMore;
       // Use SSE payload when no search - single Firestore scan on open (no duplicate API call)
       if (!searchTerm && preferredConversations != null && Array.isArray(preferredConversations)) {
@@ -113,7 +163,7 @@ export const useLiveChatSSE = ({
       const selected = selectedConversationRef.current;
       if (selected?.conversation) {
         const alreadyInList = conversations.some(
-          (c) => c.conversation_id === selected.conversation.conversation_id && c.user_id === selected.conversation.user_id
+          (/** @type {LiveChatConversation} */ c) => c.conversation_id === selected.conversation.conversation_id && c.user_id === selected.conversation.user_id
         );
         if (!alreadyInList) {
           conversations = [selected.conversation, ...conversations];
@@ -121,12 +171,12 @@ export const useLiveChatSSE = ({
       }
 
       const previousIds = new Set(
-        (activeConversationsRef.current || []).map((conversation) => conversation.conversation_id)
+        (activeConversationsRef.current || []).map((/** @type {LiveChatConversation} */ conversation) => conversation.conversation_id)
       );
       const calculatedNewIds = new Set(
         conversations
-          .filter((conversation) => !previousIds.has(conversation.conversation_id))
-          .map((conversation) => conversation.conversation_id)
+          .filter((/** @type {LiveChatConversation} */ conversation) => !previousIds.has(conversation.conversation_id))
+          .map((/** @type {LiveChatConversation} */ conversation) => conversation.conversation_id)
       );
 
       const newIds = announceNewIds || calculatedNewIds;
@@ -141,7 +191,7 @@ export const useLiveChatSSE = ({
       if (hasMoreValue != null && setHasMoreChats) setHasMoreChats(hasMoreValue);
       if (getWaitingQueue && applyWaitingQueue) {
         getWaitingQueue()
-          .then((queueResponse) => {
+          .then((/** @type {{ success?: boolean; queue?: QueueItem[] }} */ queueResponse) => {
             if (!isMountedRef.current) return;
             if (queueResponse?.success && queueResponse?.queue) {
               applyWaitingQueue(queueResponse);
@@ -180,7 +230,7 @@ export const useLiveChatSSE = ({
             isPartial: true,
           });
         }
-        setSelectedConversation((previous) => {
+        setSelectedConversation((/** @type {SelectedConversation | null} */ previous) => {
           if (!previous) return previous;
           return { ...previous, history: mergedMessages };
         });
@@ -189,6 +239,7 @@ export const useLiveChatSSE = ({
       }
     };
 
+    /** @param {Record<string, unknown>} eventData */
     const refreshSelectedConversationIfMatched = async (eventData) => {
       const selected = selectedConversationRef.current;
       if (!selected || !isMountedRef.current) return;
@@ -223,7 +274,7 @@ export const useLiveChatSSE = ({
             isPartial: true,
           });
         }
-        setSelectedConversation((previous) => {
+        setSelectedConversation((/** @type {SelectedConversation | null} */ previous) => {
           if (!previous) return previous;
           return { ...previous, history: mergedMessages };
         });
@@ -238,7 +289,7 @@ export const useLiveChatSSE = ({
         if (!isMountedRef.current || useMockDataRef.current) return;
         try {
           await refreshChats();
-        } catch (error) {
+        } catch {
           // Keep fallback silent to avoid noisy toasts during transient outages.
         }
       }, FALLBACK_POLL_INTERVAL_MS);
@@ -310,10 +361,10 @@ export const useLiveChatSSE = ({
             ((convId && selected.conversation?.conversation_id === convId) ||
               (userId && selected.conversation?.user_id === userId));
           if (isMatch && message && typeof message === "object" && message.timestamp) {
-            setSelectedConversation((prev) => {
+            setSelectedConversation((/** @type {SelectedConversation | null} */ prev) => {
               if (!prev || !prev.history) return prev;
               const content = String(message.content || message.text || "").trim();
-              const exists = prev.history.some((m) => {
+              const exists = prev.history.some((/** @type {LiveChatMessage} */ m) => {
                 if (msgId && m.message_id) return m.message_id === msgId;
                 // Dedupe operator messages: same content within 15s (handles race with manual append)
                 if (content && String(m.content || m.text || "").trim() === content) {
@@ -361,7 +412,7 @@ export const useLiveChatSSE = ({
             if (existing?.messages?.length) {
               const content = String(message.content || message.text || "").trim();
               const msgId = message?.message_id;
-              const exists = existing.messages.some((m) => {
+              const exists = existing.messages.some((/** @type {LiveChatMessage} */ m) => {
                 if (msgId && m.message_id) return m.message_id === msgId;
                 if (content && String(m.content || m.text || "").trim() === content) {
                   const mTs = m.timestamp ? new Date(m.timestamp).getTime() : 0;
@@ -438,7 +489,7 @@ export const useLiveChatSSE = ({
               if (!prev || !prev.history) return prev;
               return {
                 ...prev,
-                history: prev.history.map((m) =>
+                history: prev.history.map((/** @type {LiveChatMessage} */ m) =>
                   (m.message_id || m.id) === msgId
                     ? { ...m, content: message.content ?? message.text, text: message.text ?? message.content }
                     : m
@@ -467,7 +518,7 @@ export const useLiveChatSSE = ({
               ? activeConversationsRef.current
               : [];
             const exists = previous.some(
-              (c) => c.conversation_id === convId && c.user_id === userId
+              (/** @type {LiveChatConversation} */ c) => c.conversation_id === convId && c.user_id === userId
             );
             if (!exists) {
               const newEntry = {
@@ -485,7 +536,7 @@ export const useLiveChatSSE = ({
               setActiveConversations(nextConversations);
               activeConversationsRef.current = nextConversations;
             }
-            setNewConversationIds((prev) => new Set([...prev, convId]));
+            setNewConversationIds((/** @type {Set<string>} */ prev) => new Set([...prev, convId]));
             setLastRefreshTime(new Date());
           }
         } catch (error) {
@@ -549,6 +600,11 @@ export const useLiveChatSSE = ({
       stopFallbackPolling();
     };
   }, [
+    applyWaitingQueue,
+    getWaitingQueue,
+    hasMoreMessagesRef,
+    messageCacheRef,
+    onOperatorMessageCached,
     activeConversationsRef,
     chatListPageSize,
     debouncedSearchRef,

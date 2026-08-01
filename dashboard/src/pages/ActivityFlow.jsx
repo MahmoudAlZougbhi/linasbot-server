@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowPathIcon,
@@ -13,6 +13,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 
+const DEFAULT_MSG_TYPE = { label: "Text", color: "bg-slate-100 text-slate-600", icon: "💬" };
+const DEFAULT_GENDER_META = { label: "Gender: Unknown", color: "bg-slate-100 text-slate-600" };
+const DEFAULT_FILE_STATUS_META = { label: "File Status: Unknown", color: "bg-slate-100 text-slate-600" };
+
+/** @type {Record<string, { label: string; color: string; icon: string }>} */
 const SOURCE_LABELS = {
   gpt: { label: "GPT", color: "bg-violet-100 text-violet-700", icon: "🤖" },
   qa_database: { label: "Q&A DB", color: "bg-emerald-100 text-emerald-700", icon: "📚" },
@@ -21,18 +26,21 @@ const SOURCE_LABELS = {
   moderation: { label: "Moderation", color: "bg-rose-100 text-rose-700", icon: "🛡" },
 };
 
+/** @type {Record<string, { label: string; color: string; icon: string }>} */
 const MESSAGE_TYPE_LABELS = {
   text: { label: "Text", color: "bg-slate-100 text-slate-600", icon: "💬" },
   voice: { label: "Voice", color: "bg-blue-100 text-blue-700", icon: "🎤" },
   image: { label: "Image", color: "bg-pink-100 text-pink-700", icon: "🖼" },
 };
 
+/** @type {Record<string, { label: string; color: string }>} */
 const GENDER_META = {
   male: { label: "Male", color: "bg-sky-100 text-sky-700" },
   female: { label: "Female", color: "bg-pink-100 text-pink-700" },
   unknown: { label: "Gender: Unknown", color: "bg-slate-100 text-slate-600" },
 };
 
+/** @type {Record<string, { label: string; color: string }>} */
 const FILE_STATUS_META = {
   existing_file: { label: "Has File", color: "bg-emerald-100 text-emerald-700" },
   new_customer: { label: "New Customer", color: "bg-amber-100 text-amber-700" },
@@ -40,6 +48,21 @@ const FILE_STATUS_META = {
 };
 
 /** Step block for the flow breakdown - supports long content with scroll */
+/**
+ * @param {{
+ *   step: number,
+ *   title: string,
+ *   content: import('react').ReactNode,
+ *   tokens?: number,
+ *   isMaxTokens?: boolean,
+ *   model?: string,
+ *   costUsd?: number,
+ *   eventType?: string,
+ *   status?: string,
+ *   durationMs?: number,
+ *   metadata?: Record<string, unknown>,
+ * }} props
+ */
 const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd, eventType, status, durationMs, metadata }) => {
   const str = typeof content === "string" ? content : String(content ?? "");
   const isJsonLike = str.trim().startsWith("{") || str.trim().startsWith("[");
@@ -108,8 +131,11 @@ const FlowStep = ({ step, title, content, tokens, isMaxTokens, model, costUsd, e
   );
 };
 
+/**
+ * @param {{ entry: ActivityFlowEntry, isExpanded: boolean, onToggle: () => void }} props
+ */
 const FlowCard = ({ entry, isExpanded, onToggle }) => {
-  const cardRef = useRef(null);
+  const cardRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   useEffect(() => {
     if (!isExpanded) return;
     const t = setTimeout(() => {
@@ -122,19 +148,19 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
     return () => clearTimeout(t);
   }, [isExpanded]);
 
-  const meta = SOURCE_LABELS[entry.source] || { label: entry.source, color: "bg-slate-100 text-slate-700", icon: "?" };
-  const msgTypeMeta = MESSAGE_TYPE_LABELS[entry.message_type] || MESSAGE_TYPE_LABELS.text;
+  const sourceKey = typeof entry.source === "string" ? entry.source : "";
+  const messageTypeKey = typeof entry.message_type === "string" ? entry.message_type : "text";
+  const meta = SOURCE_LABELS[sourceKey] || { label: String(entry.source ?? ""), color: "bg-slate-100 text-slate-700", icon: "?" };
+  const msgTypeMeta = MESSAGE_TYPE_LABELS[messageTypeKey] ?? MESSAGE_TYPE_LABELS.text ?? DEFAULT_MSG_TYPE;
   const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
   const genderKey = (entry.user_gender || "unknown").toLowerCase();
-  const genderMeta = GENDER_META[genderKey] || GENDER_META.unknown;
+  const genderMeta = GENDER_META[genderKey] ?? GENDER_META.unknown ?? DEFAULT_GENDER_META;
   const fileStatusKey = (entry.customer_file_status || "unknown").toLowerCase();
-  const fileStatusMeta = FILE_STATUS_META[fileStatusKey] || FILE_STATUS_META.unknown;
+  const fileStatusMeta = FILE_STATUS_META[fileStatusKey] ?? FILE_STATUS_META.unknown ?? DEFAULT_FILE_STATUS_META;
   const displayName = entry.user_name || "Unknown";
   const displayPhone = entry.user_phone || entry.user_phone_masked || entry.user_id || entry.user_id_masked || "...";
 
   const isGptFlow = entry.source === "gpt";
-  const hasAiDetails = isGptFlow && (entry.ai_query_summary || entry.ai_raw_response || entry.tool_calls?.length);
-
   return (
     <div ref={cardRef} className="scroll-mt-24">
     <motion.div
@@ -217,16 +243,17 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
               <ListBulletIcon className="w-4 h-4" /> {entry.flow_steps?.length ? "Step-by-step flow" : "Detailed interaction flow (English)"}
             </p>
 
-            {entry.flow_steps?.length > 0 ? (
+            {entry.flow_steps && entry.flow_steps.length > 0 ? (
               <div className="overflow-x-auto overflow-y-visible touch-pan-x">
                 <div className="grid gap-4 min-w-0">
                   {(() => {
-                    const maxT = Math.max(0, ...(entry.flow_steps || []).map((s) => (s.tokens != null ? s.tokens : 0)));
-                    return (entry.flow_steps || []).map((s) => (
+                    const steps = entry.flow_steps ?? [];
+                    const maxT = Math.max(0, ...steps.map((/** @type {FlowStepData} */ s) => (s.tokens != null ? s.tokens : 0)));
+                    return steps.map((/** @type {FlowStepData} */ s) => (
                       <FlowStep
-                        key={s.step}
-                        step={s.step}
-                        title={s.title}
+                        key={s.step ?? 0}
+                        step={s.step ?? 0}
+                        title={s.title ?? ""}
                         content={typeof s.content === "string" ? s.content : String(s.content ?? "")}
                         tokens={s.tokens}
                         isMaxTokens={s.tokens != null && s.tokens > 0 && s.tokens === maxT}
@@ -281,10 +308,10 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                         {entry.tokens != null && <span>• Tokens: {entry.tokens} </span>}
                         {entry.response_time_ms != null && <span>• Response time: {Math.round(entry.response_time_ms)}ms </span>}
                         {entry.qa_match_score != null && <span>• Q&A match: {(entry.qa_match_score * 100).toFixed(0)}% </span>}
-                        {entry.tool_calls?.length > 0 && (
+                        {entry.tool_calls && entry.tool_calls.length > 0 && (
                           <span>• AI requested tools: <code className="bg-violet-100 px-1 rounded">{entry.tool_calls.join(", ")}</code></span>
                         )}
-                        {!entry.model && !entry.tokens && !entry.tool_calls?.length && "(No metadata)"}
+                        {!entry.model && !entry.tokens && !(entry.tool_calls && entry.tool_calls.length > 0) && "(No metadata)"}
                       </span>
                     }
                   />
@@ -341,14 +368,15 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
 };
 
 /** Stable key per entry so auto-refresh doesn't collapse the expanded card */
+/** @param {ActivityFlowEntry} entry */
 const getEntryKey = (entry) =>
   [entry.timestamp, entry.user_id || "", entry.user_phone || ""].filter(Boolean).join("|");
 
 const ActivityFlow = () => {
   const { getFlowLogs } = useApi();
-  const [flows, setFlows] = useState([]);
+  const [flows, setFlows] = useState(/** @type {ActivityFlowEntry[]} */ ([]));
   const [loading, setLoading] = useState(true);
-  const [expandedKey, setExpandedKey] = useState(null);
+  const [expandedKey, setExpandedKey] = useState(/** @type {string | null} */ (null));
   const [limit, setLimit] = useState(15);
   const [searchPhone, setSearchPhone] = useState("");
 
@@ -357,18 +385,18 @@ const ActivityFlow = () => {
       if (!isRefresh) setLoading(true);
       const res = await getFlowLogs(limit, searchPhone);
       if (res.success && res.data) {
-        setFlows(res.data.slice().reverse());
+        setFlows(/** @type {ActivityFlowEntry[]} */ (Array.isArray(res.data) ? res.data.slice().reverse() : []));
       } else {
         setFlows([]);
       }
-    } catch (e) {
+    } catch {
       setFlows([]);
     } finally {
       setLoading(false);
     }
   }, [getFlowLogs, limit, searchPhone]);
 
-  const fetchFlowsRef = React.useRef(fetchFlows);
+  const fetchFlowsRef = useRef(fetchFlows);
   fetchFlowsRef.current = fetchFlows;
 
   // Initial load only; no auto-refresh (user can click Refresh)
@@ -377,7 +405,7 @@ const ActivityFlow = () => {
   }, []);
 
   // Refetch when search or limit changes (debounced); skip on initial mount
-  const didMount = React.useRef(false);
+  const didMount = useRef(false);
   useEffect(() => {
     if (!didMount.current) {
       didMount.current = true;

@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ContentManagers from "./ContentManagers";
@@ -6,16 +5,18 @@ import { expectAccessibleControls } from "../testHelpers/a11ySmoke";
 
 vi.mock("framer-motion", () => ({
   motion: {
-    div: ({ children, ...props }) => {
-      const { initial, animate, exit, transition, whileHover, whileTap, layout, ...rest } = props;
-      return <div {...rest}>{children}</div>;
+    div: (/** @type {{ children?: import('react').ReactNode } & Record<string, unknown>} */ { children, ...props }) => {
+      for (const key of ["initial", "animate", "exit", "transition", "whileHover", "whileTap", "layout"]) {
+        delete props[key];
+      }
+      return <div {...props}>{children}</div>;
     },
   },
-  AnimatePresence: ({ children }) => <>{children}</>,
+  AnimatePresence: (/** @type {{ children?: import('react').ReactNode }} */ { children }) => <>{children}</>,
 }));
 
 vi.mock("../components/ContentFilesPanel", () => ({
-  default: ({ sectionName }) => <div>content-panel:{sectionName}</div>,
+  default: (/** @type {{ sectionName: string }} */ { sectionName }) => <div>content-panel:{sectionName}</div>,
 }));
 vi.mock("../components/SystemPromptKnowledgeStylePanel", () => ({
   default: () => <div>system-prompt-panel</div>,

@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,16 +46,18 @@ function renderAuth(initialRoute = "/") {
   );
 }
 
+/** @param {(...args: unknown[]) => Promise<unknown>} impl */
+function mockFetch(impl) {
+  global.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (vi.fn(impl)));
+}
+
 describe("AuthContext", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ success: false, error: "no session" }),
-      }))
-    );
+    mockFetch(async () => ({
+      ok: true,
+      json: async () => ({ success: false, error: "no session" }),
+    }));
   });
 
   afterEach(() => {
@@ -86,7 +87,7 @@ describe("AuthContext", () => {
         timestamp: new Date().toISOString(),
       })
     );
-    global.fetch = vi.fn(async () => ({
+    mockFetch(async () => ({
       ok: true,
       json: async () => ({ success: false, error: "Session expired" }),
     }));
@@ -99,9 +100,9 @@ describe("AuthContext", () => {
   });
 
   it("logs in with credentials include and stores csrf token", async () => {
-    global.fetch = vi.fn(async (url, options) => {
+    mockFetch(async (url, options) => {
       if (String(url).includes("/login")) {
-        expect(options.credentials).toBe("include");
+        expect(/** @type {RequestInit} */ (options).credentials).toBe("include");
         return {
           ok: true,
           json: async () => ({
@@ -135,7 +136,7 @@ describe("AuthContext", () => {
   });
 
   it("surfaces login failure for forbidden credentials", async () => {
-    global.fetch = vi.fn(async () => ({
+    mockFetch(async () => ({
       ok: true,
       json: async () => ({ success: false, error: "Invalid email or password" }),
     }));
@@ -167,7 +168,7 @@ describe("AuthContext", () => {
     );
     localStorage.setItem("csrf_token", "tok");
 
-    global.fetch = vi.fn(async (url) => {
+    mockFetch(async (url) => {
       if (String(url).includes("/session")) {
         return {
           ok: true,

@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState } from "react";
 
-const OperatorStatusContext = createContext(null);
+/** @type {import('react').Context<OperatorStatusContextValue | null>} */
+const OperatorStatusContext = createContext(/** @type {OperatorStatusContextValue | null} */ (null));
 
+/** @param {{ children: import('react').ReactNode }} props */
 export const OperatorStatusProvider = ({ children }) => {
   const [operatorStatus, setOperatorStatus] = useState('available');
   return (
@@ -13,5 +15,10 @@ export const OperatorStatusProvider = ({ children }) => {
 
 export const useOperatorStatus = () => {
   const ctx = useContext(OperatorStatusContext);
-  return ctx || { operatorStatus: 'available', setOperatorStatus: () => {} };
+  /** @type {OperatorStatusContextValue} */
+  const fallback = {
+    operatorStatus: 'available',
+    setOperatorStatus: () => {},
+  };
+  return ctx || fallback;
 };

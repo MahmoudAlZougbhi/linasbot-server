@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 
@@ -38,7 +37,7 @@ const LoadingScreen = () => {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="text-4xl font-bold gradient-text font-display mb-2"
           >
-            Lina's AI Dashboard
+            Lina{"'"}s AI Dashboard
           </motion.h1>
           
           <motion.p

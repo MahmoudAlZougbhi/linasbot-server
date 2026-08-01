@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   EnvelopeIcon, 
@@ -9,6 +9,7 @@ import {
   EyeSlashIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
+import { errorMessage } from '../utils/apiValidate';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -16,12 +17,13 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login } = /** @type {AuthContextValue} */ (useAuth());
   const location = useLocation();
   const redirectTo = location.state?.from
     ? `${location.state.from.pathname || ''}${location.state.from.search || ''}`
     : '/';
 
+  /** @param {string} message */
   const isConnectionError = (message) => {
     const value = (message || '').toLowerCase();
     return (
@@ -38,13 +40,14 @@ const Login = () => {
     try {
       await login(email, password, redirectTo);
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      setError(errorMessage(err) || 'Login failed. Please try again.');
       console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  /** @param {import('react').FormEvent<HTMLFormElement>} e */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -97,7 +100,7 @@ const Login = () => {
           <h1 className="text-4xl font-bold gradient-text font-display mb-2">
             Welcome Back
           </h1>
-          <p className="text-slate-600">Login to Lina's AI Dashboard</p>
+          <p className="text-slate-600">Login to Lina{"'"}s AI Dashboard</p>
         </motion.div>
 
         {/* Login Card */}
@@ -123,10 +126,10 @@ const Login = () => {
 
                     <div className="rounded-lg border border-red-200 bg-white/80 p-2 text-[11px] leading-relaxed">
                       <p className="font-semibold">Terminal 1 - backend</p>
-                      <code className="block">cd "/Users/mahmoudalzougbhi/linas ai bot"</code>
+                      <code className="block">{'cd "/Users/mahmoudalzougbhi/linas ai bot"'}</code>
                       <code className="block">.venv/bin/python main.py</code>
                       <p className="mt-2 font-semibold">Terminal 2 - dashboard (dev)</p>
-                      <code className="block">cd "/Users/mahmoudalzougbhi/linas ai bot/dashboard"</code>
+                      <code className="block">{'cd "/Users/mahmoudalzougbhi/linas ai bot/dashboard"'}</code>
                       <code className="block">npm start</code>
                     </div>
 
@@ -243,7 +246,7 @@ const Login = () => {
           className="text-center mt-8"
         >
           <p className="text-sm text-slate-500">
-            © 2024 Lina's Laser Center. All rights reserved.
+            © 2024 Lina{"'"}s Laser Center. All rights reserved.
           </p>
         </motion.div>
       </motion.div>

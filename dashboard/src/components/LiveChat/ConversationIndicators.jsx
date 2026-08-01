@@ -1,4 +1,3 @@
-import React from "react";
 import { CheckCircleIcon, ClockIcon, UserIcon, SparklesIcon } from "@heroicons/react/24/outline";
 
 const statusBadges = {
@@ -35,8 +34,9 @@ const sentimentIndicators = {
   negative: { color: "text-red-500", emoji: "😟" },
 };
 
+/** @param {{ status?: keyof typeof statusBadges | string }} props */
 export const StatusBadge = ({ status }) => {
-  const badge = statusBadges[status] || statusBadges.bot;
+  const badge = statusBadges[/** @type {keyof typeof statusBadges} */ (status)] || statusBadges.bot;
   const Icon = badge.icon;
   return (
     <span
@@ -48,8 +48,9 @@ export const StatusBadge = ({ status }) => {
   );
 };
 
+/** @param {{ sentiment?: keyof typeof sentimentIndicators | string }} props */
 export const SentimentIndicator = ({ sentiment }) => {
-  const indicator = sentimentIndicators[sentiment] || sentimentIndicators.neutral;
+  const indicator = sentimentIndicators[/** @type {keyof typeof sentimentIndicators} */ (sentiment)] || sentimentIndicators.neutral;
   return (
     <span className={`text-lg ${indicator.color}`} title={sentiment}>
       {indicator.emoji}
@@ -57,6 +58,7 @@ export const SentimentIndicator = ({ sentiment }) => {
   );
 };
 
+/** @param {{ isNew?: boolean }} props */
 export const NewCustomerBadge = ({ isNew }) => {
   if (!isNew) return null;
   return (

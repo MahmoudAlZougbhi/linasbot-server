@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 /**
  * Modal for "Like" on AI answers: edit question + answer, save to FAQ in 4 languages.
+ * @param {{ message: LiveChatMessage; userQuestion?: string; onClose: () => void; onSubmit: (question: string, answer: string) => Promise<void> }} props
  */
 const LikeFeedbackModal = ({ message, userQuestion, onClose, onSubmit }) => {
   const [question, setQuestion] = useState(userQuestion || '');

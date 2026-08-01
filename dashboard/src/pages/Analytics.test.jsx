@@ -1,12 +1,11 @@
-import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Analytics from "./Analytics";
 import { expectAccessibleControls } from "../testHelpers/a11ySmoke";
 
 const authFetchMock = vi.fn();
 vi.mock("../utils/authFetch", () => ({
-  authFetch: (...args) => authFetchMock(...args),
+  authFetch: (/** @type {unknown[]} */ ...args) => authFetchMock(...args),
 }));
 
 describe("Analytics", () => {

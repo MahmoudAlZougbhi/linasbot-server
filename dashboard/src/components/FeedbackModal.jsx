@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
-const FeedbackModal = ({ message, conversation, onClose, onSubmit }) => {
+/** @param {{ message: LiveChatMessage; conversation?: LiveChatConversation; onClose: () => void; onSubmit: (correctAnswer: string, feedbackReason: string) => Promise<void> }} props */
+const FeedbackModal = ({ message, conversation: _conversation, onClose, onSubmit }) => {
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [feedbackReason, setFeedbackReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,13 +31,13 @@ const FeedbackModal = ({ message, conversation, onClose, onSubmit }) => {
       >
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
           <span className="text-2xl mr-2">✏️</span>
-          Correct the Bot's Answer
+          Correct the Bot{"'"}s Answer
         </h3>
         
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Bot's Answer (Wrong):
+              Bot{"'"}s Answer (Wrong):
             </label>
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-slate-700 max-h-32 overflow-y-auto">
               {message.content}
@@ -71,7 +72,7 @@ const FeedbackModal = ({ message, conversation, onClose, onSubmit }) => {
               <option value="incorrect_info">Incorrect Information</option>
               <option value="wrong_language">Wrong Language</option>
               <option value="inappropriate_tone">Inappropriate Tone</option>
-              <option value="didnt_understand">Didn't Understand Question</option>
+              <option value="didnt_understand">Didn{"'"}t Understand Question</option>
               <option value="outdated_info">Outdated Information</option>
               <option value="missing_info">Missing Information</option>
               <option value="other">Other</option>

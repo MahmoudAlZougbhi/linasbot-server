@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShieldCheckIcon,
@@ -34,9 +34,9 @@ const PERMISSION_LABELS = {
 };
 
 const RoleManager = () => {
-  const [customRoles, setCustomRoles] = useState({});
+  const [customRoles, setCustomRoles] = useState(/** @type {Record<string, RoleData>} */ ({}));
   const [showRoleForm, setShowRoleForm] = useState(false);
-  const [editingRole, setEditingRole] = useState(null);
+  const [editingRole, setEditingRole] = useState(/** @type {RoleData | null} */ (null));
 
   useEffect(() => {
     loadCustomRoles();
@@ -46,17 +46,19 @@ const RoleManager = () => {
     setCustomRoles(getCustomRoles());
   };
 
+  /** @param {{ name: string; description?: string; permissions?: Record<string, boolean> }} roleData */
   const handleCreateRole = (roleData) => {
     try {
       createCustomRole(roleData);
       toast.success('Role created successfully');
       setShowRoleForm(false);
       loadCustomRoles();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create role');
     }
   };
 
+  /** @param {string} roleId @param {Partial<RoleData>} updates */
   const handleUpdateRole = (roleId, updates) => {
     try {
       updateCustomRole(roleId, updates);
@@ -64,11 +66,12 @@ const RoleManager = () => {
       setShowRoleForm(false);
       setEditingRole(null);
       loadCustomRoles();
-    } catch (error) {
+    } catch {
       toast.error('Failed to update role');
     }
   };
 
+  /** @param {string} roleId */
   const handleDeleteRole = (roleId) => {
     if (!window.confirm('Are you sure you want to delete this role?')) {
       return;
@@ -78,12 +81,18 @@ const RoleManager = () => {
       deleteCustomRole(roleId);
       toast.success('Role deleted successfully');
       loadCustomRoles();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete role');
     }
   };
 
-  const RoleCard = ({ role, isSystem }) => (
+  /** @param {{ role: RoleData; isSystem: boolean }} props */
+  const RoleCard = ({ role, isSystem }) => {
+    /** @type {Record<string, boolean>} */
+    const rolePermissions = role.permissions && !Array.isArray(role.permissions)
+      ? role.permissions
+      : {};
+    return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -106,7 +115,7 @@ const RoleManager = () => {
                 </span>
               )}
             </h4>
-            <p className="text-sm text-slate-500">{role.description}</p>
+            <p className="text-sm text-slate-500">{String(role.description || "")}</p>
           </div>
         </div>
 
@@ -139,22 +148,23 @@ const RoleManager = () => {
           <span
             key={key}
             className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${
-              role.permissions[key]
+              rolePermissions[key]
                 ? 'bg-green-100 text-green-700'
                 : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {role.permissions[key] ? (
+            {rolePermissions[key] ? (
               <CheckCircleIcon className="w-3 h-3 mr-1" />
             ) : (
               <XCircleIcon className="w-3 h-3 mr-1" />
             )}
-            {PERMISSION_LABELS[key]}
+            {PERMISSION_LABELS[/** @type {keyof typeof PERMISSION_LABELS} */ (key)]}
           </span>
         ))}
       </div>
     </motion.div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -216,8 +226,8 @@ const RoleManager = () => {
           <RoleFormModal
             role={editingRole}
             onSubmit={editingRole
-              ? (data) => handleUpdateRole(editingRole.id, data)
-              : handleCreateRole
+              ? (/** @type {Partial<RoleData>} */ data) => handleUpdateRole(editingRole.id, data)
+              : (/** @type {Partial<RoleData>} */ data) => handleCreateRole(/** @type {{ name: string; description?: string; permissions?: Record<string, boolean> }} */ (data))
             }
             onClose={() => {
               setShowRoleForm(false);
@@ -230,14 +240,18 @@ const RoleManager = () => {
   );
 };
 
+/** @param {{ role?: RoleData | null; onSubmit: (data: Partial<RoleData>) => void; onClose: () => void }} props */
 const RoleFormModal = ({ role, onSubmit, onClose }) => {
   const isEditing = !!role;
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(/** @type {{ name: string; description: string; permissions: Record<string, boolean> }} */ ({
     name: role?.name || '',
     description: role?.description || '',
-    permissions: role?.permissions || { ...DEFAULT_PERMISSIONS }
-  });
+    permissions: (role?.permissions && !Array.isArray(role.permissions)
+      ? role.permissions
+      : { ...DEFAULT_PERMISSIONS })
+  }));
 
+  /** @param {import('react').FormEvent<HTMLFormElement>} e */
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -249,6 +263,7 @@ const RoleFormModal = ({ role, onSubmit, onClose }) => {
     onSubmit(formData);
   };
 
+  /** @param {string} key @param {boolean} value */
   const handlePermissionChange = (key, value) => {
     setFormData(prev => ({
       ...prev,

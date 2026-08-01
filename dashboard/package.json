@@ -19,6 +19,9 @@
     "@eslint/js": "^9.39.5",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.13.10",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.4.16",
@@ -30,6 +33,7 @@
     "jsdom": "^30.0.1",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.0",
+    "typescript": "^5.8.3",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"
   },
@@ -41,7 +45,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p jsconfig.json --noEmit"
   },
   "browserslist": {
     "production": [

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
@@ -53,7 +53,7 @@ const SystemPromptKnowledgeStylePanel = () => {
       } else {
         toast.error(styleRes?.error || "Failed to load style guide");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to load system prompt sources");
     } finally {
       setRefreshing(false);

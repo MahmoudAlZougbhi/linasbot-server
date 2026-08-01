@@ -1,19 +1,39 @@
-import React from 'react';
+import { Component } from 'react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-class ErrorBoundary extends React.Component {
+/**
+ * @typedef {object} ErrorBoundaryProps
+ * @property {import('react').ReactNode} children
+ */
+
+/**
+ * @typedef {object} ErrorBoundaryState
+ * @property {boolean} hasError
+ * @property {Error | null} error
+ */
+
+/** @extends {Component<ErrorBoundaryProps, ErrorBoundaryState>} */
+class ErrorBoundary extends Component {
+  /** @param {ErrorBoundaryProps} props */
   constructor(props) {
     super(props);
+    /** @type {ErrorBoundaryState} */
     this.state = { hasError: false, error: null };
   }
 
+  /**
+   * @param {Error} error
+   * @returns {ErrorBoundaryState}
+   */
   static getDerivedStateFromError(error) {
-    // Update state so the next render will show the fallback UI
     return { hasError: true, error };
   }
 
+  /**
+   * @param {Error} error
+   * @param {import('react').ErrorInfo} errorInfo
+   */
   componentDidCatch(error, errorInfo) {
-    // Log error to console in development
     if (process.env.NODE_ENV === 'development') {
       console.log('Error caught by boundary:', error, errorInfo);
     }
@@ -21,14 +41,14 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      // Check if it's a network error
-      if (this.state.error?.code === 'ERR_NETWORK' || 
-          this.state.error?.message?.includes('Network Error')) {
-        // Don't show error UI for network errors, just render children
+      const err = this.state.error;
+      const isNetworkError =
+        (err && 'code' in err && err.code === 'ERR_NETWORK') ||
+        err?.message?.includes('Network Error');
+      if (isNetworkError) {
         return this.props.children;
       }
 
-      // Show error UI for other errors
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
           <div className="text-center p-8">

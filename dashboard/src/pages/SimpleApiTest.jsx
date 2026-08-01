@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { errorMessage } from '../utils/apiValidate';
 
 // Simple API test page with visible debug info
 const SimpleApiTest = () => {
-  const [debugInfo, setDebugInfo] = useState([]);
+  const [debugInfo, setDebugInfo] = useState(/** @type {DebugLogEntry[]} */ ([]));
   const [testing, setTesting] = useState(false);
 
+  /** @param {string} message @param {'info' | 'success' | 'error'} [type] */
   const addDebug = (message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
     setDebugInfo(prev => [...prev, { message, type, timestamp }]);
@@ -46,7 +48,7 @@ const SimpleApiTest = () => {
         addDebug(`📦 JSON data: ${JSON.stringify(json, null, 2)}`, 'success');
       } catch (e) {
         addDebug('❌ Response is NOT JSON', 'error');
-        addDebug(`🔍 Parse error: ${e.message}`, 'error');
+        addDebug(`🔍 Parse error: ${errorMessage(e)}`, 'error');
         
         if (text.includes('<!DOCTYPE') || text.includes('<html')) {
           addDebug('🌐 Response is HTML (endpoint might not exist)', 'error');
@@ -54,10 +56,11 @@ const SimpleApiTest = () => {
       }
       
     } catch (error) {
-      addDebug(`💥 Fetch failed: ${error.message}`, 'error');
-      addDebug(`📛 Error type: ${error.name}`, 'error');
+      const errMsg = errorMessage(error);
+      addDebug(`💥 Fetch failed: ${errMsg}`, 'error');
+      addDebug(`📛 Error type: ${error instanceof Error ? error.name : 'Error'}`, 'error');
       
-      if (error.message.includes('Failed to fetch')) {
+      if (errMsg.includes('Failed to fetch')) {
         addDebug('🚫 This is likely a CORS or network error', 'error');
         addDebug('💡 Possible causes:', 'error');
         addDebug('   1. Proxy not configured', 'error');
@@ -97,9 +100,10 @@ const SimpleApiTest = () => {
       addDebug(`📄 Response: ${text.substring(0, 200)}`, 'info');
       
     } catch (error) {
-      addDebug(`💥 Fetch failed: ${error.message}`, 'error');
+      const errMsg = errorMessage(error);
+      addDebug(`💥 Fetch failed: ${errMsg}`, 'error');
       
-      if (error.message.includes('Failed to fetch')) {
+      if (errMsg.includes('Failed to fetch')) {
         addDebug('🚫 CORS Error - This is expected!', 'error');
         addDebug('✅ This means the API exists but blocks browser requests', 'success');
         addDebug('💡 The proxy should fix this', 'info');
@@ -165,7 +169,7 @@ const SimpleApiTest = () => {
       <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <h3 className="font-bold text-yellow-800 mb-2">📝 Instructions:</h3>
         <ol className="list-decimal list-inside space-y-1 text-sm text-yellow-700">
-          <li>Click "Test /agent/health (with proxy)" button</li>
+          <li>Click {"\"Test /agent/health (with proxy)\""} button</li>
           <li>Watch the debug output above</li>
           <li>Also open DevTools (F12) → Network tab</li>
           <li>Look for the request to /agent/health</li>
@@ -176,8 +180,8 @@ const SimpleApiTest = () => {
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <h3 className="font-bold text-blue-800 mb-2">🔍 What to Look For:</h3>
         <ul className="list-disc list-inside space-y-1 text-sm text-blue-700">
-          <li><strong>If proxy works:</strong> You'll see JSON response or 401/404 error</li>
-          <li><strong>If proxy doesn't work:</strong> You'll see HTML or "Failed to fetch"</li>
+          <li><strong>If proxy works:</strong> You{"'"}ll see JSON response or 401/404 error</li>
+          <li><strong>If proxy doesn{"'"}t work:</strong> You{"'"}ll see HTML or {"\"Failed to fetch\""}</li>
           <li><strong>If CORS error:</strong> The full URL test will fail, but proxy test should work</li>
         </ul>
       </div>

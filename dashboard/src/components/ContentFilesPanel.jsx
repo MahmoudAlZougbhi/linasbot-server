@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PlusIcon,
@@ -9,6 +9,7 @@ import {
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 
+/** @param {{ section: string; sectionName: string; icon: import('react').ComponentType<{ className?: string }> }} props */
 const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
   const {
     getContentFilesList,
@@ -18,8 +19,8 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
     deleteContentFile,
   } = useApi();
 
-  const [files, setFiles] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [files, setFiles] = useState(/** @type {ContentFileRecord[]} */ ([]));
+  const [selectedFile, setSelectedFile] = useState(/** @type {ContentFileRecord | null} */ (null));
   const [fileContent, setFileContent] = useState("");
   /** Editable metadata (full file loaded via getContentFile includes these) */
   const [editTitle, setEditTitle] = useState("");
@@ -28,7 +29,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
   const [editAudience, setEditAudience] = useState("general");
   const [editPriority, setEditPriority] = useState("3");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(/** @type {ContentFileRecord | null} */ (null));
   const [loading, setLoading] = useState(false);
 
   // Create form
@@ -39,7 +40,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
   const [newAudience, setNewAudience] = useState("");
   const [newPriority, setNewPriority] = useState("");
 
-  const loadFiles = async () => {
+  const loadFiles = useCallback(async () => {
     try {
       const res = await getContentFilesList(section);
       if (res.success && res.data) {
@@ -51,12 +52,13 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
       console.error("Failed to load files:", e);
       setFiles([]);
     }
-  };
+  }, [section, getContentFilesList]);
 
   useEffect(() => {
     loadFiles();
-  }, [section]);
+  }, [loadFiles]);
 
+  /** @param {ContentFileRecord} data */
   const applyFileToEditor = (data) => {
     setSelectedFile(data);
     setFileContent(data.content || "");
@@ -68,18 +70,19 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
     setEditAudience(["men", "women", "general"].includes(aud) ? aud : "general");
     const p = data.priority;
     setEditPriority(
-      p !== undefined && p !== null && String(p).trim() !== "" ? String(Math.min(5, Math.max(1, parseInt(p, 10) || 3))) : "3"
+      p !== undefined && p !== null && String(p).trim() !== "" ? String(Math.min(5, Math.max(1, parseInt(String(p), 10) || 3))) : "3"
     );
   };
 
+  /** @param {ContentFileRecord} file */
   const handleSelectFile = async (file) => {
     try {
       setLoading(true);
-      const res = await getContentFile(section, file.id);
+      const res = await getContentFile(section, file.id || '');
       if (res.success && res.data) {
         applyFileToEditor(res.data);
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to load file");
     } finally {
       setLoading(false);
@@ -101,7 +104,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
             .filter(Boolean)
         : [];
       const prio = parseInt(editPriority, 10);
-      const res = await updateContentFile(section, selectedFile.id, {
+      const res = await updateContentFile(section, selectedFile.id || '', {
         title: editTitle.trim(),
         content: fileContent,
         tags,
@@ -125,7 +128,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
       } else {
         toast.error(res.error || "Update failed");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to update");
     } finally {
       setLoading(false);
@@ -140,6 +143,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
     try {
       setLoading(true);
       const tags = newTags ? newTags.split(",").map((t) => t.trim()).filter(Boolean) : [];
+      /** @type {ContentFileRecord} */
       const payload = {
         title: newTitle.trim(),
         content: newContent,
@@ -162,7 +166,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
       } else {
         toast.error(res.error || "Create failed");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to create");
     } finally {
       setLoading(false);
@@ -173,7 +177,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
     if (!showDeleteConfirm) return;
     try {
       setLoading(true);
-      const res = await deleteContentFile(section, showDeleteConfirm.id);
+      const res = await deleteContentFile(section, showDeleteConfirm.id || '');
       if (res.success) {
         setShowDeleteConfirm(null);
         if (selectedFile?.id === showDeleteConfirm.id) {
@@ -185,7 +189,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
       } else {
         toast.error(res.error || "Delete failed");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete");
     } finally {
       setLoading(false);
@@ -233,7 +237,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
                     .join(" · ")}
                   {f.language ? ` · ${f.language}` : ""}
                 </p>
-                {f.tags?.length > 0 && (
+                {Array.isArray(f.tags) && f.tags.length > 0 && (
                   <p className="text-xs text-slate-500 truncate">{f.tags.join(", ")}</p>
                 )}
               </div>
@@ -460,7 +464,7 @@ const ContentFilesPanel = ({ section, sectionName, icon: Icon }) => {
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
             >
-              <p className="text-slate-700 mb-4">Delete &quot;{showDeleteConfirm.title}&quot;?</p>
+              <p className="text-slate-700 mb-4">Delete &quot;{String(showDeleteConfirm.title || "Untitled")}&quot;?</p>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
                 <button onClick={handleDelete} disabled={loading} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">Delete</button>

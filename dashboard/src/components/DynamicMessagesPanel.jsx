@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApi } from "../hooks/useApi";
 import { CheckCircleIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
@@ -7,8 +7,8 @@ const LANGS = ["ar", "en", "fr", "franco"];
 
 const DynamicMessagesPanel = () => {
   const { loading, getDynamicMessages, updateDynamicMessages } = useApi();
-  const [data, setData] = useState({});
-  const [originalData, setOriginalData] = useState({});
+  const [data, setData] = useState(/** @type {Record<string, DynamicMessageEntry>} */ ({}));
+  const [originalData, setOriginalData] = useState(/** @type {Record<string, DynamicMessageEntry>} */ ({}));
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
@@ -33,6 +33,7 @@ const DynamicMessagesPanel = () => {
     [data, originalData]
   );
 
+  /** @param {string} key @param {string} field @param {string} value */
   const updateField = (key, field, value) => {
     setData((prev) => ({
       ...prev,
@@ -43,6 +44,7 @@ const DynamicMessagesPanel = () => {
     }));
   };
 
+  /** @param {string} key @param {string} lang @param {string} value */
   const updateMessage = (key, lang, value) => {
     setData((prev) => ({
       ...prev,

@@ -1,16 +1,32 @@
 import { getApiAbsoluteBaseUrl } from "./apiBaseUrl";
 import { csrfHeaders } from "./csrf";
 
-const liveChatFetch = (url, options = {}) =>
-  fetch(url, {
+/** @param {string} url @param {RequestInit} [options] */
+const liveChatFetch = (url, options = {}) => {
+  /** @type {Record<string, string>} */
+  const headers = {};
+  if (options.headers) {
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else if (Array.isArray(options.headers)) {
+      options.headers.forEach(([key, value]) => {
+        headers[key] = value;
+      });
+    } else {
+      Object.assign(headers, options.headers);
+    }
+  }
+  Object.assign(headers, csrfHeaders());
+  return fetch(url, {
     credentials: "include",
     ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...csrfHeaders(),
-    },
+    headers,
   });
+};
 
+/** @param {LiveChatMessage[]} [messages] */
 export const normalizeConversationMessages = (messages = []) =>
   [...messages].sort((left, right) => {
     const leftTs = new Date(left?.timestamp || 0).getTime();
@@ -18,6 +34,17 @@ export const normalizeConversationMessages = (messages = []) =>
     return leftTs - rightTs;
   });
 
+/**
+ * @param {{
+ *   userId: string;
+ *   conversationId: string;
+ *   days?: number;
+ *   before?: string | null;
+ *   day_window?: number;
+ *   limit?: number;
+ *   timeoutMs?: number;
+ * }} params
+ */
 export const fetchLiveChatConversationMessages = async ({
   userId,
   conversationId,
@@ -56,7 +83,7 @@ export const fetchLiveChatConversationMessages = async ({
       has_more: data?.has_more ?? false,
     };
   } catch (err) {
-    if (err.name === "AbortError") throw err;
+    if (err instanceof Error && err.name === "AbortError") throw err;
     console.error("[liveChatApi] fetch messages error:", err);
     throw err;
   } finally {
@@ -64,6 +91,7 @@ export const fetchLiveChatConversationMessages = async ({
   }
 };
 
+/** @param {{ conversationId: string; userId: string; operatorId?: string }} params */
 export const endLiveChatConversation = async ({
   conversationId,
   userId,
@@ -88,6 +116,7 @@ export const endLiveChatConversation = async ({
 /**
  * Mark conversation as read when operator opens it. Persists unread_count=0 in Firestore.
  */
+/** @param {{ userId: string; conversationId: string }} params */
 export const markConversationRead = async ({ userId, conversationId }) => {
   const baseURL = getApiAbsoluteBaseUrl();
   const response = await liveChatFetch(`${baseURL}/api/live-chat/mark-read`, {
@@ -104,6 +133,14 @@ export const markConversationRead = async ({ userId, conversationId }) => {
 /**
  * Edit a bot message's content in live chat (after dislike).
  * Updates the message in Firestore and returns the updated message.
+ */
+/**
+ * @param {{
+ *   userId: string;
+ *   conversationId: string;
+ *   messageId: string;
+ *   newContent: string;
+ * }} params
  */
 export const editLiveChatMessage = async ({
   userId,
@@ -130,6 +167,7 @@ export const editLiveChatMessage = async ({
 /**
  * Get FAQ match context for a message (for FAQ Correction modal).
  */
+/** @param {{ userId: string; conversationId: string; messageId: string }} params */
 export const fetchFaqMatchContext = async ({ userId, conversationId, messageId }) => {
   const baseURL = getApiAbsoluteBaseUrl();
   const params = new URLSearchParams({ user_id: userId, conversation_id: conversationId, message_id: messageId });
@@ -140,6 +178,7 @@ export const fetchFaqMatchContext = async ({ userId, conversationId, messageId }
 /**
  * Update existing FAQ entry's answer (Save Change in FAQ Correction).
  */
+/** @param {{ faqId: string; newAnswerText: string; updatedBy?: string; source?: string }} params */
 export const faqUpdateAnswer = async ({ faqId, newAnswerText, updatedBy = "operator", source = "live_chat_dislike" }) => {
   const baseURL = getApiAbsoluteBaseUrl();
   const response = await liveChatFetch(`${baseURL}/api/faq/update-answer`, {
@@ -157,6 +196,17 @@ export const faqUpdateAnswer = async ({ faqId, newAnswerText, updatedBy = "opera
 
 /**
  * Create new FAQ entry from Live Chat (Save New in FAQ Correction).
+ */
+/**
+ * @param {{
+ *   questionText: string;
+ *   questionLanguage: string;
+ *   answerText: string;
+ *   createdBy?: string;
+ *   source?: string;
+ *   relatedFaqId?: string;
+ *   matchSimilarity?: number;
+ * }} params
  */
 export const faqCreateFromLivechat = async ({
   questionText,

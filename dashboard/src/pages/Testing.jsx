@@ -1,4 +1,4 @@
-import React, {
+import {
   useState,
   useCallback,
   useEffect,
@@ -22,22 +22,28 @@ import {
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 import { authFetch } from '../utils/authFetch';
+import { errorMessage, recordOrEmpty, metricString } from "../utils/apiValidate";
 
 const TESTING_CHAT_STORAGE_KEY = "testing_chat_sessions_v1";
 const DEFAULT_TEST_PHONE = "123456789";
 const MAX_CHAT_MESSAGES = 200;
 
+/** @returns {Record<string, TestingChatMessage[]>} */
 const safelyParseStoredChatSessions = () => {
   if (typeof window === "undefined") return {};
   try {
     const storedSessions = localStorage.getItem(TESTING_CHAT_STORAGE_KEY);
     const parsed = storedSessions ? JSON.parse(storedSessions) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (error) {
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return /** @type {Record<string, TestingChatMessage[]>} */ (parsed);
+    }
+    return {};
+  } catch {
     return {};
   }
 };
 
+/** @param {string} output */
 const splitBotOutputIntoMessages = (output) => {
   const normalizedOutput =
     typeof output === "string" ? output : "Test response received";
@@ -66,7 +72,7 @@ const Testing = () => {
   const [messageTab, setMessageTab] = useState("text");
   const [textInput, setTextInput] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState("auto");
-  const [testResults, setTestResults] = useState([]);
+  const [testResults, setTestResults] = useState(/** @type {TestingTestResult[]} */ ([]));
   const [userPhone, setUserPhone] = useState("");
   const [userType, setUserType] = useState("customer");
   const [imageUrl, setImageUrl] = useState(
@@ -77,15 +83,13 @@ const Testing = () => {
     "Hello, I want to know laser hair removal prices for the face"
   );
   const [resultsView, setResultsView] = useState("chat");
-  const [chatSessions, setChatSessions] = useState(
-    safelyParseStoredChatSessions
-  );
-  const chatEndRef = useRef(null);
+  const [chatSessions, setChatSessions] = useState(/** @type {Record<string, TestingChatMessage[]>} */ (safelyParseStoredChatSessions()));
+  const chatEndRef = useRef(/** @type {HTMLDivElement | null} */ (null));
 
   // Hardcoded provider - MontyMobile (default for WhatsApp-style lab)
   const selectedProvider = "montymobile";
   // Meta social parity: when set, backend uses process_meta_social_event (capture-only)
-  const [socialChannel, setSocialChannel] = useState("");
+  const [socialChannel, setSocialChannel] = useState(/** @type {"" | "instagram" | "facebook"} */ (""));
 
   const resolvedPhone = useMemo(() => {
     const normalizedPhone = (userPhone || "").trim();
@@ -109,7 +113,7 @@ const Testing = () => {
         TESTING_CHAT_STORAGE_KEY,
         JSON.stringify(chatSessions)
       );
-    } catch (error) {
+    } catch {
       // Ignore persistence errors so testing UI keeps working.
     }
   }, [chatSessions]);
@@ -120,7 +124,7 @@ const Testing = () => {
   }, [activeChatMessages, resultsView]);
 
   const appendToChat = useCallback(
-    (entries, phoneOverride = resolvedPhone) => {
+    (/** @type {Array<{ role?: string, type?: string, content?: string, timestamp?: string, success?: boolean }>} */ entries, phoneOverride = resolvedPhone) => {
       const normalizedPhone =
         (phoneOverride || DEFAULT_TEST_PHONE).trim() || DEFAULT_TEST_PHONE;
       const chatKey = `${selectedProvider}:${normalizedPhone}`;
@@ -135,7 +139,7 @@ const Testing = () => {
               .slice(2, 8)}`,
             role: entry.role || "assistant",
             type: entry.type || "text",
-            content: entry.content,
+            content: String(entry.content),
             timestamp: entry.timestamp || new Date().toLocaleTimeString(),
             success: entry.success !== false,
           }));
@@ -153,7 +157,7 @@ const Testing = () => {
   );
 
   const appendBotOutputToChat = useCallback(
-    (output, type = "text", phoneOverride = resolvedPhone, success = true) => {
+    (/** @type {string} */ output, type = "text", phoneOverride = resolvedPhone, success = true) => {
       const responseChunks = splitBotOutputIntoMessages(output);
       appendToChat(
         responseChunks.map((content) => ({
@@ -245,15 +249,16 @@ const Testing = () => {
         [{ role: "user", type: "text", content: outgoingMessage }],
         phoneForTest
       );
-      const result = await testMessageWithProvider(
+      const result = /** @type {ApiResult & Record<string, unknown>} */ (await testMessageWithProvider(
         outgoingMessage,
         selectedProvider,
         phoneForTest,
-        socialChannel || null
-      );
+        socialChannel === "instagram" || socialChannel === "facebook" ? socialChannel : null
+      ));
       const responseTime = Date.now() - startTime;
-      const outputText =
-        result.bot_response || result.response || "Test response received";
+      const outputText = String(
+        result.bot_response ?? result.response ?? "Test response received"
+      );
 
       appendBotOutputToChat(
         outputText,
@@ -262,16 +267,17 @@ const Testing = () => {
         result.success !== false
       );
 
+      /** @type {TestingTestResult} */
       const testResult = {
         id: Date.now(),
         type: "text",
         input: outgoingMessage,
         language: selectedLanguage,
         output: outputText,
-        responseTime: result.response_time_ms || responseTime,
+        responseTime: typeof result.response_time_ms === "number" ? result.response_time_ms : responseTime,
         timestamp: new Date().toLocaleTimeString(),
         success: result.success !== false,
-        mode: result.mode,
+        mode: typeof result.mode === "string" ? result.mode : undefined,
         userType: userType,
         userPhone: phoneForTest,
         provider: selectedProvider,
@@ -284,15 +290,16 @@ const Testing = () => {
         setTextInput("");
       }
     } catch (error) {
-      const errorMessage = error.message || "Failed to process message";
-      appendBotOutputToChat(errorMessage, "text", phoneForTest, false);
+      const errMsg = errorMessage(error) || "Failed to process message";
+      appendBotOutputToChat(errMsg, "text", phoneForTest, false);
 
+      /** @type {TestingTestResult} */
       const testResult = {
         id: Date.now(),
         type: "text",
         input: outgoingMessage,
         language: selectedLanguage,
-        output: errorMessage,
+        output: errMsg,
         responseTime: 0,
         timestamp: new Date().toLocaleTimeString(),
         success: false,
@@ -305,7 +312,7 @@ const Testing = () => {
 
   // Voice file dropzone
   const onVoiceDrop = useCallback(
-    async (acceptedFiles) => {
+    async (/** @type {File[]} */ acceptedFiles) => {
       const file = acceptedFiles[0];
       if (!file) return;
       const phoneForTest = resolvedPhone;
@@ -316,16 +323,17 @@ const Testing = () => {
           [{ role: "user", type: "voice", content: `[Voice File] ${file.name}` }],
           phoneForTest
         );
-        const result = await testVoiceTranscription(
+        const result = /** @type {ApiResult & Record<string, unknown>} */ (await testVoiceTranscription(
           file,
           selectedProvider,
           phoneForTest
-        );
+        ));
         const responseTime = Date.now() - startTime;
-        const outputText =
-          result.bot_response ||
-          result.transcription ||
-          "Voice message processed successfully";
+        const outputText = String(
+          result.bot_response ??
+          result.transcription ??
+          "Voice message processed successfully"
+        );
 
         appendBotOutputToChat(
           outputText,
@@ -334,32 +342,34 @@ const Testing = () => {
           result.success !== false
         );
 
+        const providerInfo = recordOrEmpty(result.provider_info);
+        /** @type {TestingTestResult} */
         const testResult = {
           id: Date.now(),
           type: "voice",
           input: file.name,
           output: outputText,
-          responseTime: result.response_time_ms || responseTime,
+          responseTime: typeof result.response_time_ms === "number" ? result.response_time_ms : responseTime,
           timestamp: new Date().toLocaleTimeString(),
           success: result.success !== false,
           metadata: {
             fileSize: file.size,
-            duration: result.duration || "Unknown",
-            detectedLanguage: result.language || "Unknown",
+            duration: result.duration ?? "Unknown",
+            detectedLanguage: result.language ?? "Unknown",
           },
-          provider: result.provider_info?.provider || "montymobile",
+          provider: metricString(providerInfo.provider) || "montymobile",
         };
 
         setTestResults((prev) => [testResult, ...prev]);
       } catch (error) {
-        const errorMessage = error.message || "Voice processing failed";
-        appendBotOutputToChat(errorMessage, "voice", phoneForTest, false);
+        const errMsg = errorMessage(error) || "Voice processing failed";
+        appendBotOutputToChat(errMsg, "voice", phoneForTest, false);
 
         const testResult = {
           id: Date.now(),
           type: "voice",
           input: file.name,
-          output: errorMessage,
+          output: errMsg,
           responseTime: 0,
           timestamp: new Date().toLocaleTimeString(),
           success: false,
@@ -378,7 +388,7 @@ const Testing = () => {
 
   // Image file dropzone
   const onImageDrop = useCallback(
-    async (acceptedFiles) => {
+    async (/** @type {File[]} */ acceptedFiles) => {
       const file = acceptedFiles[0];
       if (!file) return;
       const phoneForTest = resolvedPhone;
@@ -389,14 +399,15 @@ const Testing = () => {
           [{ role: "user", type: "image", content: `[Image File] ${file.name}` }],
           phoneForTest
         );
-        const result = await testImageAnalysis(
+        const result = /** @type {ApiResult & Record<string, unknown>} */ (await testImageAnalysis(
           file,
           selectedProvider,
           phoneForTest
-        );
+        ));
         const responseTime = Date.now() - startTime;
-        const outputText =
-          result.bot_response || result.analysis || "Image analyzed successfully";
+        const outputText = String(
+          result.bot_response ?? result.analysis ?? "Image analyzed successfully"
+        );
 
         appendBotOutputToChat(
           outputText,
@@ -405,6 +416,7 @@ const Testing = () => {
           result.success !== false
         );
 
+        /** @type {TestingTestResult} */
         const testResult = {
           id: Date.now(),
           type: "image",
@@ -415,21 +427,21 @@ const Testing = () => {
           success: result.success !== false,
           metadata: {
             fileSize: file.size,
-            dimensions: result.dimensions || "Unknown",
-            detectedObjects: result.objects || [],
+            dimensions: result.dimensions ?? "Unknown",
+            detectedObjects: result.objects ?? [],
           },
         };
 
         setTestResults((prev) => [testResult, ...prev]);
       } catch (error) {
-        const errorMessage = error.message || "Image analysis failed";
-        appendBotOutputToChat(errorMessage, "image", phoneForTest, false);
+        const errMsg = errorMessage(error) || "Image analysis failed";
+        appendBotOutputToChat(errMsg, "image", phoneForTest, false);
 
         const testResult = {
           id: Date.now(),
           type: "image",
           input: file.name,
-          output: errorMessage,
+          output: errMsg,
           responseTime: 0,
           timestamp: new Date().toLocaleTimeString(),
           success: false,
@@ -488,7 +500,7 @@ const Testing = () => {
           AI Testing Laboratory
         </h1>
         <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-          Test your bot's capabilities with text, voice, and image inputs.
+          Test your bot{"'"}s capabilities with text, voice, and image inputs.
           Perfect your AI before going live.
         </p>
       </motion.div>
@@ -648,7 +660,12 @@ const Testing = () => {
                               </label>
                               <select
                                 value={socialChannel}
-                                onChange={(e) => setSocialChannel(e.target.value)}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setSocialChannel(
+                                    value === "instagram" || value === "facebook" ? value : ""
+                                  );
+                                }}
                                 className="input-field w-full text-sm"
                               >
                                 <option value="">WhatsApp-style lab (legacy)</option>
@@ -664,7 +681,7 @@ const Testing = () => {
                           </div>
                           {userType === "admin" && (
                             <div className="mt-2 text-xs text-purple-600">
-                              💡 Try typing "training" to activate training
+                              💡 Try typing {"\"training\""} to activate training
                               mode!
                             </div>
                           )}
@@ -795,18 +812,19 @@ const Testing = () => {
                                   );
                                 }
                               } catch (error) {
+                                const errMsg = errorMessage(error);
                                 const testResult = {
                                   id: Date.now(),
                                   type: "firebase",
                                   input: "Firebase Connection Test",
-                                  output: `❌ Network error: ${error.message}`,
+                                  output: `❌ Network error: ${errMsg}`,
                                   responseTime: 0,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
                                 };
                                 setTestResults((prev) => [testResult, ...prev]);
                                 toast.error(
-                                  `Firebase test error: ${error.message}`
+                                  `Firebase test error: ${errMsg}`
                                 );
                               }
                             }}
@@ -891,10 +909,10 @@ const Testing = () => {
                                   setTextInput("");
                                 }
                               } catch (error) {
-                                const errorMessage =
-                                  error.message || "Webhook simulation failed";
+                                const errMsg =
+                                  errorMessage(error) || "Webhook simulation failed";
                                 appendBotOutputToChat(
-                                  errorMessage,
+                                  errMsg,
                                   "webhook",
                                   phoneForTest,
                                   false
@@ -905,7 +923,7 @@ const Testing = () => {
                                   type: "webhook",
                                   input: outgoingMessage,
                                   language: selectedLanguage,
-                                  output: errorMessage,
+                                  output: errMsg,
                                   responseTime: 0,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
@@ -1031,11 +1049,11 @@ const Testing = () => {
 
                                 setTestResults((prev) => [testResult, ...prev]);
                               } catch (error) {
-                                const errorMessage =
-                                  error.message ||
+                                const errMsg =
+                                  errorMessage(error) ||
                                   "Voice text processing failed";
                                 appendBotOutputToChat(
-                                  errorMessage,
+                                  errMsg,
                                   "voice-text",
                                   phoneForTest,
                                   false
@@ -1045,7 +1063,7 @@ const Testing = () => {
                                   id: Date.now(),
                                   type: "voice-text",
                                   input: `[Voice: ${outgoingVoiceText}]`,
-                                  output: errorMessage,
+                                  output: errMsg,
                                   responseTime: 0,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
@@ -1213,10 +1231,10 @@ const Testing = () => {
 
                                 setTestResults((prev) => [testResult, ...prev]);
                               } catch (error) {
-                                const errorMessage =
-                                  error.message || "Image URL test failed";
+                                const errMsg =
+                                  errorMessage(error) || "Image URL test failed";
                                 appendBotOutputToChat(
-                                  errorMessage,
+                                  errMsg,
                                   "image-url",
                                   phoneForTest,
                                   false
@@ -1226,7 +1244,7 @@ const Testing = () => {
                                   id: Date.now(),
                                   type: "image-url",
                                   input: imagePrompt,
-                                  output: errorMessage,
+                                  output: errMsg,
                                   responseTime: 0,
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
@@ -1496,16 +1514,15 @@ const Testing = () => {
 
                                 {result.metadata && (
                                   <div className="text-xs text-slate-500 space-y-1">
-                                    {result.metadata.fileSize && (
+                                    {typeof result.metadata.fileSize === "number" && (
                                       <p>
                                         Size:{" "}
-                                        {(
-                                          result.metadata.fileSize / 1024
-                                        ).toFixed(1)}
+                                        {(result.metadata.fileSize / 1024).toFixed(1)}
                                         KB
                                       </p>
                                     )}
-                                    {result.metadata.detectedLanguage && (
+                                    {typeof result.metadata.detectedLanguage === "string" &&
+                                      result.metadata.detectedLanguage && (
                                       <p>
                                         Language:{" "}
                                         {result.metadata.detectedLanguage}
@@ -1545,14 +1562,14 @@ const Testing = () => {
 
 // API Testing Panel Component
 const APITestingPanel = () => {
-  const [apiResults, setApiResults] = useState([]);
+  const [apiResults, setApiResults] = useState(/** @type {ApiTestResult[]} */ ([]));
   const [testingAll, setTestingAll] = useState(false);
-  const [testingEndpoint, setTestingEndpoint] = useState(null);
+  const [testingEndpoint, setTestingEndpoint] = useState(/** @type {string | null} */ (null));
 
   // Use relative URL to go through Apache proxy
   const API_BASE_URL = process.env.REACT_APP_API_URL || "";
 
-  // Define all API endpoints organized by category
+  /** @type {Record<string, ApiEndpointDefinition[]>} */
   const apiEndpoints = {
     "System & Health": [
       {
@@ -1940,6 +1957,7 @@ const APITestingPanel = () => {
     ],
   };
 
+  /** @param {ApiEndpointDefinition} endpoint */
   const testEndpoint = async (endpoint) => {
     setTestingEndpoint(endpoint.id);
     const startTime = Date.now();
@@ -1953,10 +1971,15 @@ const APITestingPanel = () => {
         endpoint.params &&
         Object.keys(endpoint.params).length > 0
       ) {
-        const queryString = new URLSearchParams(endpoint.params).toString();
+        const queryString = new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(endpoint.params).map(([key, value]) => [key, String(value)])
+          )
+        ).toString();
         url += `?${queryString}`;
       }
 
+      /** @type {RequestInit & { headers: Record<string, string> }} */
       const options = {
         method: endpoint.method,
         headers: {
@@ -1967,7 +1990,7 @@ const APITestingPanel = () => {
       // Add auth token if required
       if (endpoint.requiresAuth) {
         const token = localStorage.getItem("api_token") || "YOUR_API_TOKEN";
-        options.headers["Authorization"] = `Bearer ${token}`;
+        options.headers.Authorization = `Bearer ${token}`;
       }
 
       // Add body for POST requests
@@ -1979,6 +2002,7 @@ const APITestingPanel = () => {
       const data = await response.json();
       const responseTime = Date.now() - startTime;
 
+      /** @type {ApiTestResult} */
       const result = {
         id: Date.now(),
         endpoint: endpoint.name,
@@ -1994,12 +2018,14 @@ const APITestingPanel = () => {
       setApiResults((prev) => [result, ...prev]);
 
       if (response.ok) {
-        toast.success(`�� ${endpoint.name} - Success`);
+        toast.success(`✅ ${endpoint.name} - Success`);
       } else {
         toast.error(`❌ ${endpoint.name} - ${response.status}`);
       }
     } catch (error) {
       const responseTime = Date.now() - startTime;
+      const errMsg = errorMessage(error);
+      /** @type {ApiTestResult} */
       const result = {
         id: Date.now(),
         endpoint: endpoint.name,
@@ -2007,13 +2033,13 @@ const APITestingPanel = () => {
         url: `${API_BASE_URL}${endpoint.endpoint}`,
         status: 0,
         success: false,
-        data: { error: error.message },
+        data: { error: errMsg },
         responseTime: responseTime,
         timestamp: new Date().toLocaleTimeString(),
       };
 
       setApiResults((prev) => [result, ...prev]);
-      toast.error(`❌ ${endpoint.name} - ${error.message}`);
+      toast.error(`❌ ${endpoint.name} - ${errMsg}`);
     } finally {
       setTestingEndpoint(null);
     }
@@ -2024,7 +2050,9 @@ const APITestingPanel = () => {
     setApiResults([]);
 
     for (const category of Object.keys(apiEndpoints)) {
-      for (const endpoint of apiEndpoints[category]) {
+      const categoryEndpoints = apiEndpoints[category];
+      if (!categoryEndpoints) continue;
+      for (const endpoint of categoryEndpoints) {
         await testEndpoint(endpoint);
         // Small delay between requests
         await new Promise((resolve) => setTimeout(resolve, 500));

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
+/** @param {Blob} blob */
 const blobToBase64 = (blob) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -17,21 +18,35 @@ const blobToBase64 = (blob) =>
     reader.readAsDataURL(blob);
   });
 
+/**
+ * @param {{
+ *   selectedConversation: SelectedConversation | null;
+ *   sendOperatorMessage: (
+ *     conversationId: string,
+ *     userId: string,
+ *     message: string,
+ *     operatorId: string,
+ *     messageType?: string,
+ *     idempotencyKey?: string | null
+ *   ) => Promise<{ success?: boolean }>;
+ *   onAppendMessage?: (message: LiveChatMessage) => void;
+ * }} params
+ */
 export const useLiveChatMediaComposer = ({
   selectedConversation,
   sendOperatorMessage,
-  onAppendMessage,
+  onAppendMessage: _onAppendMessage,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [recordedAudio, setRecordedAudio] = useState(null);
+  const [recordedAudio, setRecordedAudio] = useState(/** @type {{ blob: Blob; url: string } | null} */ (null));
   const [recordingTime, setRecordingTime] = useState(0);
   const [isSendingVoice, setIsSendingVoice] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(/** @type {{ file: File; preview: string | ArrayBuffer | null; name: string } | null} */ (null));
 
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const recordingIntervalRef = useRef(null);
-  const imageInputRef = useRef(null);
+  const mediaRecorderRef = useRef(/** @type {MediaRecorder | null} */ (null));
+  const audioChunksRef = useRef(/** @type {Blob[]} */ ([]));
+  const recordingIntervalRef = useRef(/** @type {ReturnType<typeof setInterval> | null} */ (null));
+  const imageInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const sendingVoiceRef = useRef(false);
   const sendingImageRef = useRef(false);
 
@@ -45,7 +60,7 @@ export const useLiveChatMediaComposer = ({
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current.stream.getTracks().forEach((/** @type {MediaStreamTrack} */ track) => track.stop());
       setIsRecording(false);
       clearRecordingInterval();
     }
@@ -56,7 +71,7 @@ export const useLiveChatMediaComposer = ({
       clearRecordingInterval();
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+        mediaRecorderRef.current.stream.getTracks().forEach((/** @type {MediaStreamTrack} */ track) => track.stop());
       }
       if (recordedAudio?.url?.startsWith("blob:")) {
         URL.revokeObjectURL(recordedAudio.url);
@@ -150,6 +165,7 @@ export const useLiveChatMediaComposer = ({
     }
   };
 
+  /** @param {import('react').ChangeEvent<HTMLInputElement>} event */
   const handleImageSelect = (event) => {
     const file = event.target.files?.[0];
     if (!file || !file.type.startsWith("image/")) {
@@ -161,7 +177,7 @@ export const useLiveChatMediaComposer = ({
     reader.onload = (readerEvent) => {
       setSelectedImage({
         file,
-        preview: readerEvent.target?.result,
+        preview: typeof readerEvent.target?.result === 'string' ? readerEvent.target.result : null,
         name: file.name,
       });
     };
@@ -211,6 +227,7 @@ export const useLiveChatMediaComposer = ({
     }
   };
 
+  /** @param {number} seconds */
   const formatRecordingTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;

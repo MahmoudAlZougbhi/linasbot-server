@@ -1,9 +1,9 @@
-import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { canAccessPath, getDefaultPath } from '../../utils/permissions';
 import LoadingScreen from '../Common/LoadingScreen';
 
+/** @param {{ children: import('react').ReactNode; requiredPermission?: string }} props */
 const ProtectedRoute = ({ children, requiredPermission }) => {
   const { user, loading } = useAuth();
   const location = useLocation();

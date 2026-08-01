@@ -25,6 +25,7 @@ export const getCustomRoles = () => {
 
 /**
  * Save custom roles to localStorage
+ * @param {Record<string, RoleData>} roles
  */
 export const saveCustomRoles = (roles) => {
   try {
@@ -36,6 +37,7 @@ export const saveCustomRoles = (roles) => {
 
 /**
  * Create a new custom role
+ * @param {{ name: string; description?: string; permissions?: Record<string, boolean> }} roleData
  */
 export const createCustomRole = (roleData) => {
   const customRoles = getCustomRoles();
@@ -54,6 +56,8 @@ export const createCustomRole = (roleData) => {
 
 /**
  * Update a custom role
+ * @param {string} roleId
+ * @param {Partial<RoleData>} updates
  */
 export const updateCustomRole = (roleId, updates) => {
   const customRoles = getCustomRoles();
@@ -67,6 +71,7 @@ export const updateCustomRole = (roleId, updates) => {
 
 /**
  * Delete a custom role
+ * @param {string} roleId
  */
 export const deleteCustomRole = (roleId) => {
   const customRoles = getCustomRoles();
@@ -81,6 +86,7 @@ export const deleteCustomRole = (roleId) => {
 /**
  * Resolve user's effective permissions
  * If user has custom permissions, use those; otherwise use role defaults
+ * @param {AuthUser | DashboardUser | null | undefined} user
  */
 export const resolveUserPermissions = (user) => {
   if (!user) {
@@ -94,7 +100,7 @@ export const resolveUserPermissions = (user) => {
 
   // Otherwise, get permissions from role
   const roles = getRoles();
-  const role = roles[user.role];
+  const role = user.role ? roles[user.role] : undefined;
 
   if (role) {
     return { ...role.permissions };
@@ -106,6 +112,8 @@ export const resolveUserPermissions = (user) => {
 
 /**
  * Check if user has a specific permission
+ * @param {AuthUser | DashboardUser | null | undefined} user
+ * @param {string} feature
  */
 export const hasPermission = (user, feature) => {
   const permissions = resolveUserPermissions(user);
@@ -114,9 +122,13 @@ export const hasPermission = (user, feature) => {
 
 /**
  * Check if user can access a specific path
+ * @param {AuthUser | DashboardUser | null | undefined} user
+ * @param {string} path
  */
 export const canAccessPath = (user, path) => {
-  const permissionKey = PATH_TO_PERMISSION[path];
+  /** @type {Record<string, string>} */
+  const pathMap = PATH_TO_PERMISSION;
+  const permissionKey = pathMap[path];
   if (!permissionKey) {
     // If path is not in the map, allow access (public or unknown route)
     return true;
@@ -126,6 +138,7 @@ export const canAccessPath = (user, path) => {
 
 /**
  * Get the first accessible path for a user
+ * @param {AuthUser | DashboardUser | null | undefined} user
  */
 export const getDefaultPath = (user) => {
   const paths = ['/', '/live-chat', '/training', '/testing', '/smart-messaging', '/settings', '/content-managers', '/activity-flow'];
@@ -151,7 +164,7 @@ export const migrateUsers = () => {
     const users = JSON.parse(stored);
     let migrated = false;
 
-    const updatedUsers = users.map(user => {
+    const updatedUsers = users.map((/** @type {Record<string, unknown>} */ user) => {
       // Skip if already migrated
       if (user.status !== undefined) {
         return user;
@@ -183,6 +196,7 @@ export const migrateUsers = () => {
 
 /**
  * Check if user can manage other users
+ * @param {AuthUser | DashboardUser | null | undefined} user
  */
 export const canManageUsers = (user) => {
   return hasPermission(user, 'userManagement');
@@ -190,10 +204,14 @@ export const canManageUsers = (user) => {
 
 /**
  * Get accessible navigation items for a user
+ * @param {AuthUser | DashboardUser | null | undefined} user
+ * @param {Array<{ href: string; [key: string]: unknown }>} navigationItems
  */
 export const getAccessibleNavigation = (user, navigationItems) => {
+  /** @type {Record<string, string>} */
+  const pathMap = PATH_TO_PERMISSION;
   return navigationItems.filter(item => {
-    const permissionKey = PATH_TO_PERMISSION[item.href];
+    const permissionKey = pathMap[item.href];
     if (!permissionKey) return true;
     return hasPermission(user, permissionKey);
   });

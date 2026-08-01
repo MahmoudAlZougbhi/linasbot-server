@@ -1,68 +1,86 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { resolveUserPermissions } from '../utils/permissions';
 import { csrfHeaders } from '../utils/csrf';
+import { errorMessage } from '../utils/apiValidate';
 
-const AuthContext = createContext({});
+/** @type {import('react').Context<AuthContextValue | null>} */
+const AuthContext = createContext(/** @type {AuthContextValue | null} */ (null));
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+  return context;
+};
 
 // API base - fixed relative path (same as last working commit d9a0000)
 const API_BASE = '/api/auth';
 const SESSION_VALIDATE_MIN_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
-const withAuthFetch = (options = {}) => ({
-  credentials: 'include',
-  ...options,
-  headers: {
-    ...(options.headers || {}),
-    ...csrfHeaders(),
-  },
-});
+/** @param {RequestInit} [options] @returns {RequestInit} */
+const withAuthFetch = (options = {}) => {
+  const headers = new Headers(options.headers || {});
+  const csrf = csrfHeaders();
+  Object.entries(csrf).forEach(([key, value]) => {
+    if (typeof value === 'string') headers.set(key, value);
+  });
+  return {
+    credentials: 'include',
+    ...options,
+    headers,
+  };
+};
 
+/**
+ * @param {unknown} user
+ * @returns {AuthUser | null}
+ */
+const buildUserData = (user) => {
+  if (!user || typeof user !== 'object') {
+    console.warn('[AuthContext] buildUserData called with invalid user:', user);
+    return null;
+  }
+  const record = /** @type {Record<string, unknown>} */ (user);
+  const email = typeof record.email === 'string' ? record.email : '';
+  const name =
+    (typeof record.name === 'string' && record.name) ||
+    (email ? (email.split('@')[0] ?? 'user') : 'user');
+  const permissions = resolveUserPermissions(/** @type {AuthUser} */ (/** @type {unknown} */ (record)));
+  return {
+    id: typeof record.id === 'string' ? record.id : undefined,
+    email,
+    name,
+    role: typeof record.role === 'string' ? record.role : 'admin',
+    permissions: /** @type {AuthUser['permissions']} */ (record.permissions ?? null),
+    resolvedPermissions: permissions,
+    status: typeof record.status === 'string' ? record.status : 'active',
+    lastLogin: typeof record.lastLogin === 'string' ? record.lastLogin : null,
+    createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
+  };
+};
+
+/** @param {{ children: import('react').ReactNode }} props */
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(/** @type {AuthUser | null} */ (null));
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Check for existing session on mount
-  useEffect(() => {
-    let cancelled = false;
-    const safetyTimeout = setTimeout(() => {
-      if (!cancelled) {
-        setLoading(false);
-        cancelled = true;
-      }
-    }, 5000); // Never block more than 5s - show login if backend unreachable
-
-    checkSession()
-      .finally(() => {
-        if (!cancelled) {
-          clearTimeout(safetyTimeout);
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      clearTimeout(safetyTimeout);
-    };
-  }, []);
-
-  const checkSession = async () => {
+  const checkSession = useCallback(async () => {
     try {
       const session = localStorage.getItem('auth_session');
       if (session) {
         const sessionData = JSON.parse(session);
         const sessionTime = new Date(sessionData.timestamp);
         const now = new Date();
-        const hoursDiff = (now - sessionTime) / (1000 * 60 * 60);
+        const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
         const lastValidatedAt = sessionData.lastValidatedAt
           ? new Date(sessionData.lastValidatedAt)
           : null;
         const validatedRecently = lastValidatedAt
-          ? (now - lastValidatedAt) < SESSION_VALIDATE_MIN_INTERVAL_MS
+          ? (now.getTime() - lastValidatedAt.getTime()) < SESSION_VALIDATE_MIN_INTERVAL_MS
           : false;
 
         // Check if session is less than 24 hours old
@@ -139,7 +157,7 @@ export const AuthProvider = ({ children }) => {
           const sessionData = JSON.parse(session);
           const sessionTime = new Date(sessionData.timestamp);
           const now = new Date();
-          const hoursDiff = (now - sessionTime) / (1000 * 60 * 60);
+          const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
           if (hoursDiff < 24 && sessionData.user?.id) {
             const cachedUser = buildUserData(sessionData.user);
             if (cachedUser) {
@@ -149,37 +167,45 @@ export const AuthProvider = ({ children }) => {
             }
           }
         }
-      } catch (cacheErr) {
+      } catch {
         // Ignore fallback parse errors and clear invalid session below.
       }
       localStorage.removeItem('auth_session');
     }
-  };
+  }, []);
 
-  const buildUserData = (user) => {
-    if (!user || typeof user !== 'object') {
-      console.warn('[AuthContext] buildUserData called with invalid user:', user);
-      return null;
-    }
-    const email = user.email ?? '';
-    const name = user.name || (email ? email.split('@')[0] : 'user');
-    const permissions = resolveUserPermissions(user);
-    return {
-      id: user.id,
-      email,
-      name,
-      role: user.role || 'admin',
-      permissions: user.permissions,
-      resolvedPermissions: permissions,
-      status: user.status || 'active',
-      lastLogin: user.lastLogin,
-      createdAt: user.createdAt
+  // Check for existing session on mount
+  useEffect(() => {
+    let cancelled = false;
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false);
+        cancelled = true;
+      }
+    }, 5000); // Never block more than 5s - show login if backend unreachable
+
+    checkSession()
+      .finally(() => {
+        if (!cancelled) {
+          clearTimeout(safetyTimeout);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimeout);
     };
-  };
+  }, [checkSession]);
 
   const TRANSIENT_AUTH_ERROR = 'Authentication service temporarily unavailable';
 
-  const login = async (email, password, redirectTo = '/', retryCount = 0) => {
+  const login = async (
+    /** @type {string} */ email,
+    /** @type {string} */ password,
+    /** @type {string} */ redirectTo = '/',
+    /** @type {number} */ retryCount = 0
+  ) => {
     const maxRetries = 2;
     try {
       const controller = new AbortController();
@@ -240,10 +266,10 @@ export const AuthProvider = ({ children }) => {
 
       return userData;
     } catch (error) {
-      console.error('[AuthContext] login failed:', error.message, error);
-      const msg = error.name === 'AbortError'
+      const msg = error instanceof Error && error.name === 'AbortError'
         ? 'Connection timed out. Is the backend running on port 8003?'
-        : (error.message || 'Login failed');
+        : (errorMessage(error) || 'Login failed');
+      console.error('[AuthContext] login failed:', msg, error);
       toast.error(msg);
       throw new Error(msg);
     }
@@ -267,7 +293,10 @@ export const AuthProvider = ({ children }) => {
     toast.success('Logged out successfully');
   };
 
-  const changePassword = async (currentPassword, newPassword) => {
+  const changePassword = async (
+    /** @type {string} */ currentPassword,
+    /** @type {string} */ newPassword
+  ) => {
     try {
       if (!user) throw new Error('Not authenticated');
 
@@ -291,7 +320,7 @@ export const AuthProvider = ({ children }) => {
       toast.success('Password changed successfully');
       return true;
     } catch (error) {
-      toast.error(error.message || 'Failed to change password');
+      toast.error(errorMessage(error) || 'Failed to change password');
       throw error;
     }
   };
@@ -322,7 +351,7 @@ export const AuthProvider = ({ children }) => {
   /**
    * Create a new user
    */
-  const createUser = async (userData) => {
+  const createUser = async (/** @type {Record<string, unknown>} */ userData) => {
     if (!user) throw new Error('Not authenticated');
 
     // Check if current user can manage users
@@ -330,38 +359,39 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Permission denied');
     }
 
-    try {
-      const response = await fetch(`${API_BASE}/users?created_by=${user.id}`, withAuthFetch({
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: userData.email,
-          password: userData.password,
-          name: userData.name || userData.email.split('@')[0],
-          role: userData.role || 'viewer',
-          permissions: userData.permissions || null,
-          status: userData.status || 'active'
-        })
-      }));
+    const response = await fetch(`${API_BASE}/users?created_by=${user.id}`, withAuthFetch({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: typeof userData.email === 'string' ? userData.email : '',
+        password: typeof userData.password === 'string' ? userData.password : '',
+        name: typeof userData.name === 'string'
+          ? userData.name
+          : (typeof userData.email === 'string' ? userData.email.split('@')[0] : 'user'),
+        role: typeof userData.role === 'string' ? userData.role : 'viewer',
+        permissions: userData.permissions ?? null,
+        status: typeof userData.status === 'string' ? userData.status : 'active'
+      })
+    }));
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to create user');
-      }
-
-      return data.user;
-    } catch (error) {
-      throw error;
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to create user');
     }
+
+    return data.user;
   };
 
   /**
    * Update a user
    */
-  const updateUser = async (userId, updates) => {
+  const updateUser = async (
+    /** @type {string} */ userId,
+    /** @type {Record<string, unknown>} */ updates
+  ) => {
     if (!user) throw new Error('Not authenticated');
 
     // Check if current user can manage users
@@ -369,45 +399,41 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Permission denied');
     }
 
-    try {
-      const response = await fetch(`${API_BASE}/users/${userId}`, withAuthFetch({
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updates)
-      }));
+    const response = await fetch(`${API_BASE}/users/${userId}`, withAuthFetch({
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updates)
+    }));
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to update user');
-      }
-
-      // If updating current user, refresh session
-      if (userId === user.id && data.user) {
-        const updatedUserData = buildUserData(data.user);
-        if (!updatedUserData) return data.user;
-        setUser(updatedUserData);
-
-        const session = {
-          user: updatedUserData,
-          timestamp: new Date().toISOString(),
-          lastValidatedAt: new Date().toISOString()
-        };
-        localStorage.setItem('auth_session', JSON.stringify(session));
-      }
-
-      return data.user;
-    } catch (error) {
-      throw error;
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to update user');
     }
+
+    // If updating current user, refresh session
+    if (userId === user.id && data.user) {
+      const updatedUserData = buildUserData(data.user);
+      if (!updatedUserData) return data.user;
+      setUser(updatedUserData);
+
+      const session = {
+        user: updatedUserData,
+        timestamp: new Date().toISOString(),
+        lastValidatedAt: new Date().toISOString()
+      };
+      localStorage.setItem('auth_session', JSON.stringify(session));
+    }
+
+    return data.user;
   };
 
   /**
    * Delete a user
    */
-  const deleteUser = async (userId) => {
+  const deleteUser = async (/** @type {string} */ userId) => {
     if (!user) throw new Error('Not authenticated');
 
     // Check if current user can manage users
@@ -420,21 +446,17 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Cannot delete your own account');
     }
 
-    try {
-      const response = await fetch(`${API_BASE}/users/${userId}`, withAuthFetch({
-        method: 'DELETE'
-      }));
+    const response = await fetch(`${API_BASE}/users/${userId}`, withAuthFetch({
+      method: 'DELETE'
+    }));
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to delete user');
-      }
-
-      return true;
-    } catch (error) {
-      throw error;
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to delete user');
     }
+
+    return true;
   };
 
   /**

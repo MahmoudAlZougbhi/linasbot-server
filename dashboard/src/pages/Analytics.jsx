@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -21,9 +21,8 @@ import {
   BellAlertIcon,
 } from "@heroicons/react/24/outline";
 import { authFetch } from "../utils/authFetch";
+import { errorMessage, recordOrEmpty, recordArray, metricNumber, metricRows, metricRecord, metricString, metricStringArray } from "../utils/apiValidate";
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   PieChart,
@@ -40,15 +39,11 @@ import {
 
 const Analytics = () => {
   const [timeRange, setTimeRange] = useState(7);
-  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsData, setAnalyticsData] = useState(/** @type {Record<string, unknown> | null} */ (null));
   const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState(null);
+  const [fetchError, setFetchError] = useState(/** @type {string | null} */ (null));
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [timeRange]);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       const baseURL =
@@ -75,12 +70,16 @@ const Analytics = () => {
         setAnalyticsData(null);
       }
     } catch (error) {
-      setFetchError(error.message || 'Failed to load analytics');
+      setFetchError(errorMessage(error) || 'Failed to load analytics');
       setAnalyticsData(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
   const COLORS = {
     primary: "#8b5cf6",
@@ -93,9 +92,12 @@ const Analytics = () => {
 
   const CHART_COLORS = ["#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b"];
 
-  /** Full token count with commas — avoids "3947.0K" misread as 3947 tokens. */
+  /** @param {number | string | null | undefined} n */
   const formatTokensFull = (n) => (Number(n) || 0).toLocaleString("en-US");
 
+  /**
+   * @param {{ icon: import('react').ComponentType<{ className?: string }>, title: string, value: import('react').ReactNode, subtitle?: string, color: string }} props
+   */
   const StatCard = ({ icon: Icon, title, value, subtitle, color }) => (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -127,6 +129,9 @@ const Analytics = () => {
     </motion.div>
   );
 
+  /**
+   * @param {{ title: string, icon: import('react').ComponentType<{ className?: string }>, children: import('react').ReactNode, subtitle?: string }} props
+   */
   const ChartCard = ({ title, icon: Icon, children, subtitle }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -177,37 +182,57 @@ const Analytics = () => {
     );
   }
 
-  const overview = analyticsData?.overview || {};
-  const daily = analyticsData?.daily_summaries || [];
-  const hourly = analyticsData?.hourly_distribution || {};
-  const demographics = analyticsData?.demographics || {};
-  const sentiment = analyticsData?.sentiment_distribution || {};
-  const services = analyticsData?.services || {};
-  const appointments = analyticsData?.appointments || {};
-  const satisfaction = analyticsData?.satisfaction || {};
-  const sessionRatings = analyticsData?.session_ratings || {};
-  const pauseCleared = analyticsData?.pause_cleared_resumes || {};
-  const smartReminders = analyticsData?.smart_reminders || {};
-  const appointmentReschedulesDetail = analyticsData?.appointment_reschedules_detail || {};
-  const escalations = analyticsData?.escalations || {};
-  const performance = analyticsData?.performance || {};
-  const tokens = analyticsData?.token_usage || {};
-  const conversions = analyticsData?.conversions || {};
-  const newClients = analyticsData?.new_clients || {};
-  const servicesDiscussedToday = analyticsData?.services_discussed_today || {};
-  const bookedCount = newClients.booked_count ?? 0;
-  const notBookedCount = newClients.not_booked_count ?? 0;
+  /** @type {Record<string, unknown>} */
+  const overview = recordOrEmpty(analyticsData?.overview);
+  /** @type {Record<string, unknown>[]} */
+  const daily = recordArray(analyticsData?.daily_summaries);
+  /** @type {Record<string, unknown>} */
+  const hourly = recordOrEmpty(analyticsData?.hourly_distribution);
+  /** @type {Record<string, unknown>} */
+  const demographics = recordOrEmpty(analyticsData?.demographics);
+  /** @type {Record<string, unknown>} */
+  const sentiment = recordOrEmpty(analyticsData?.sentiment_distribution);
+  /** @type {Record<string, unknown>} */
+  const services = recordOrEmpty(analyticsData?.services);
+  /** @type {Record<string, unknown>} */
+  const appointments = recordOrEmpty(analyticsData?.appointments);
+  /** @type {Record<string, unknown>} */
+  const satisfaction = recordOrEmpty(analyticsData?.satisfaction);
+  /** @type {Record<string, unknown>} */
+  const sessionRatings = recordOrEmpty(analyticsData?.session_ratings);
+  /** @type {Record<string, unknown>} */
+  const pauseCleared = recordOrEmpty(analyticsData?.pause_cleared_resumes);
+  /** @type {Record<string, unknown>} */
+  const smartReminders = recordOrEmpty(analyticsData?.smart_reminders);
+  /** @type {Record<string, unknown>} */
+  const appointmentReschedulesDetail = recordOrEmpty(analyticsData?.appointment_reschedules_detail);
+  /** @type {Record<string, unknown>} */
+  const escalations = recordOrEmpty(analyticsData?.escalations);
+  /** @type {Record<string, unknown>} */
+  const performance = recordOrEmpty(analyticsData?.performance);
+  /** @type {Record<string, unknown>} */
+  const tokens = recordOrEmpty(analyticsData?.token_usage);
+  /** @type {Record<string, unknown>} */
+  const conversions = recordOrEmpty(analyticsData?.conversions);
+  /** @type {Record<string, unknown>} */
+  const newClients = recordOrEmpty(analyticsData?.new_clients);
+  /** @type {Record<string, unknown>} */
+  const servicesDiscussedToday = recordOrEmpty(analyticsData?.services_discussed_today);
+  const bookedCount = metricNumber(newClients.booked_count);
+  const notBookedCount = metricNumber(newClients.not_booked_count);
   const askedNotBookedCount =
-    conversions.new_clients_asked_not_booked ?? newClients.asked_not_booked_count ?? 0;
+    metricNumber(conversions.new_clients_asked_not_booked) || metricNumber(newClients.asked_not_booked_count);
 
-  const timeRangeMeta = analyticsData?.time_range || {};
+  /** @type {Record<string, unknown>} */
+  const timeRangeMeta = recordOrEmpty(analyticsData?.time_range);
   const peakHoursPeriodLabel = (() => {
-    const s = timeRangeMeta.start_date;
-    const e = timeRangeMeta.end_date;
+    const s = typeof timeRangeMeta.start_date === "string" ? timeRangeMeta.start_date : null;
+    const e = typeof timeRangeMeta.end_date === "string" ? timeRangeMeta.end_date : null;
     if (!s || !e) return null;
     try {
       const ds = new Date(s);
       const de = new Date(e);
+      /** @type {Intl.DateTimeFormatOptions} */
       const o = { day: "numeric", month: "short", year: "numeric" };
       return `${ds.toLocaleDateString("en-GB", o)} – ${de.toLocaleDateString("en-GB", o)}`;
     } catch {
@@ -226,12 +251,29 @@ const Analytics = () => {
   })();
 
   const sentimentRows = [
-    { name: "Positive", value: sentiment.positive || 0, color: COLORS.success },
-    { name: "Neutral", value: sentiment.neutral || 0, color: COLORS.warning },
-    { name: "Negative", value: sentiment.negative || 0, color: COLORS.danger },
+    { name: "Positive", value: metricNumber(sentiment.positive), color: COLORS.success },
+    { name: "Neutral", value: metricNumber(sentiment.neutral), color: COLORS.warning },
+    { name: "Negative", value: metricNumber(sentiment.negative), color: COLORS.danger },
   ];
   const sentimentTotal = sentimentRows.reduce((sum, r) => sum + r.value, 0);
   const sentimentPieData = sentimentRows.filter((r) => r.value > 0);
+
+  /** @param {Record<string, unknown>} row @param {string} field */
+  const formatRowWhen = (row, field) => {
+    const raw = metricString(row[field]);
+    if (!raw) return "—";
+    try {
+      return new Date(raw).toLocaleString();
+    } catch {
+      return raw;
+    }
+  };
+
+  /** @param {unknown} stars */
+  const formatRatingStars = (stars) => {
+    if (stars == null || metricString(stars) === "") return "—";
+    return `${metricString(stars)} / 5`;
+  };
 
   return (
     <div className="space-y-8 pb-8">
@@ -276,37 +318,37 @@ const Analytics = () => {
         <StatCard
           icon={ChatBubbleLeftRightIcon}
           title="Total Messages"
-          value={overview.total_messages?.toLocaleString() || "0"}
-          subtitle={`${overview.avg_messages_per_day || 0} per day`}
+          value={metricNumber(overview.total_messages).toLocaleString()}
+          subtitle={`${metricNumber(overview.avg_messages_per_day)} per day`}
           color="from-blue-500 to-cyan-500"
         />
         <StatCard
           icon={UsersIcon}
           title="Active Users"
-          value={overview.total_users?.toLocaleString() || "0"}
-          subtitle={`${overview.new_users || 0} new users`}
+          value={metricNumber(overview.total_users).toLocaleString()}
+          subtitle={`${metricNumber(overview.new_users)} new users`}
           color="from-purple-500 to-pink-500"
         />
         <StatCard
           icon={GlobeAltIcon}
           title="Total clients (all time)"
-          value={(overview.lifetime_unique_users ?? 0).toLocaleString()}
+          value={metricNumber(overview.lifetime_unique_users).toLocaleString()}
           subtitle="Unique users ever recorded in analytics (all-time)"
           color="from-green-500 to-emerald-500"
         />
         <StatCard
           icon={ArrowPathIcon}
           title="Pause → Available"
-          value={(pauseCleared.unique_users ?? 0).toLocaleString()}
-          subtitle={`${pauseCleared.total ?? 0} resume events in selected range (Paused → Available)`}
+          value={metricNumber(pauseCleared.unique_users).toLocaleString()}
+          subtitle={`${metricNumber(pauseCleared.total)} resume events in selected range (Paused → Available)`}
           color="from-teal-500 to-cyan-500"
         />
         <StatCard
           icon={CurrencyDollarIcon}
           title="AI Cost"
-          value={`$${tokens.total_cost_usd?.toFixed(2) || "0.00"}`}
-          subtitle={`${formatTokensFull(tokens.total_tokens)} tokens · ${
-            tokens.source === "openai_api" ? "✓ Real (OpenAI billing)" : "≈ Est. (from message logs)"
+          value={`$${metricNumber(tokens.total_cost_usd).toFixed(2)}`}
+          subtitle={`${formatTokensFull(metricNumber(tokens.total_tokens))} tokens · ${
+            metricString(tokens.source) === "openai_api" ? "✓ Real (OpenAI billing)" : "≈ Est. (from message logs)"
           }`}
           color="from-orange-500 to-red-500"
         />
@@ -318,7 +360,7 @@ const Analytics = () => {
         subtitle="Recent events in range · Rating = latest star rating logged for that user in range"
         icon={ArrowPathIcon}
       >
-        {(pauseCleared.recent || []).length === 0 ? (
+        {metricRows(pauseCleared.recent).length === 0 ? (
           <p className="text-sm text-slate-500">
             No pause→available rows in this range.
           </p>
@@ -337,27 +379,22 @@ const Analytics = () => {
                 </tr>
               </thead>
               <tbody>
-                {(pauseCleared.recent || []).map((row, idx) => {
-                  const searchQ = row.live_chat_search || "";
+                {metricRows(pauseCleared.recent).map((row, idx) => {
+                  const searchQ = metricString(row.live_chat_search);
                   const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
-                  let whenLabel = "—";
-                  try {
-                    if (row.at) whenLabel = new Date(row.at).toLocaleString();
-                  } catch {
-                    whenLabel = row.at || "—";
-                  }
+                  const whenLabel = formatRowWhen(row, "at");
                   const stars = row.last_session_rating_stars;
                   return (
                     <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{whenLabel}</td>
-                      <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-800">{row.appointment_id ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">{metricString(row.phone_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{metricString(row.user_id_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{row.appointment_id != null ? metricString(row.appointment_id) : "—"}</td>
                       <td className="px-3 py-2 text-slate-700 capitalize">
-                        {(row.service || "—").replace(/_/g, " ")}
+                        {metricString(row.service).replace(/_/g, " ") || "—"}
                       </td>
                       <td className="px-3 py-2 font-medium text-amber-700">
-                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
+                        {formatRatingStars(stars)}
                       </td>
                       <td className="px-3 py-2">
                         <Link
@@ -379,10 +416,10 @@ const Analytics = () => {
       {/* Smart reminder — no classified reply */}
       <ChartCard
         title="24h reminder — no classified reply"
-        subtitle={`Reminder sent but no classified reply yet (yes / postpone / cancel / talk later) · ${smartReminders.no_reply_to_reminder?.count ?? 0} sends · ${smartReminders.no_reply_to_reminder?.unique_users ?? 0} unique users`}
+        subtitle={`Reminder sent but no classified reply yet (yes / postpone / cancel / talk later) · ${metricNumber(metricRecord(smartReminders.no_reply_to_reminder).count)} sends · ${metricNumber(metricRecord(smartReminders.no_reply_to_reminder).unique_users)} unique users`}
         icon={BellAlertIcon}
       >
-        {(smartReminders.no_response_recent || []).length === 0 ? (
+        {metricRows(smartReminders.no_response_recent).length === 0 ? (
           <p className="text-sm text-slate-500">
             No reminder sends without a classified reply in this range (or no reminder events logged yet).
           </p>
@@ -401,27 +438,21 @@ const Analytics = () => {
                 </tr>
               </thead>
               <tbody>
-                {(smartReminders.no_response_recent || []).map((row, idx) => {
-                  const searchQ = row.live_chat_search || "";
+                {metricRows(smartReminders.no_response_recent).map((row, idx) => {
+                  const searchQ = metricString(row.live_chat_search);
                   const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
-                  let sentLabel = "—";
-                  try {
-                    if (row.sent_at) sentLabel = new Date(row.sent_at).toLocaleString();
-                  } catch {
-                    sentLabel = row.sent_at || "—";
-                  }
-                  let apptWhen = "—";
-                  if (row.appointment_at) apptWhen = String(row.appointment_at);
+                  const sentLabel = formatRowWhen(row, "sent_at");
+                  const apptWhen = metricString(row.appointment_at) || "—";
                   const stars = row.last_session_rating_stars;
                   return (
                     <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{sentLabel}</td>
                       <td className="px-3 py-2 text-slate-600">{apptWhen}</td>
-                      <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-800">{row.appointment_id ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">{metricString(row.phone_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{metricString(row.user_id_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{row.appointment_id != null ? metricString(row.appointment_id) : "—"}</td>
                       <td className="px-3 py-2 font-medium text-amber-700">
-                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
+                        {formatRatingStars(stars)}
                       </td>
                       <td className="px-3 py-2">
                         <Link
@@ -443,10 +474,10 @@ const Analytics = () => {
       {/* Smart reminder — classified replies */}
       <ChartCard
         title="Reminder replies (auto-classified)"
-        subtitle={`Total classified replies: ${smartReminders.replies_total ?? 0} · ${Object.entries(smartReminders.reply_intents || {}).map(([k, v]) => `${k}=${v}`).join(" · ") || "—"}`}
+        subtitle={`Total classified replies: ${metricNumber(smartReminders.replies_total)} · ${Object.entries(metricRecord(smartReminders.reply_intents)).map(([k, v]) => `${k}=${v}`).join(" · ") || "—"}`}
         icon={ChatBubbleLeftRightIcon}
       >
-        {(smartReminders.reminder_replies_recent || []).length === 0 ? (
+        {metricRows(smartReminders.reminder_replies_recent).length === 0 ? (
           <p className="text-sm text-slate-500">
             No classified reminder replies in this range.
           </p>
@@ -465,15 +496,11 @@ const Analytics = () => {
                 </tr>
               </thead>
               <tbody>
-                {(smartReminders.reminder_replies_recent || []).map((row, idx) => {
-                  const searchQ = row.live_chat_search || "";
+                {metricRows(smartReminders.reminder_replies_recent).map((row, idx) => {
+                  const searchQ = metricString(row.live_chat_search);
                   const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
-                  let whenLabel = "—";
-                  try {
-                    if (row.at) whenLabel = new Date(row.at).toLocaleString();
-                  } catch {
-                    whenLabel = row.at || "—";
-                  }
+                  const whenLabel = formatRowWhen(row, "at");
+                  /** @type {Record<string, string>} */
                   const intentLabel = {
                     confirm: "Confirm",
                     postpone: "Postpone",
@@ -481,18 +508,19 @@ const Analytics = () => {
                     defer: "Talk later",
                     other: "Other",
                   };
+                  const intentKey = metricString(row.intent);
                   const stars = row.last_session_rating_stars;
                   return (
                     <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{whenLabel}</td>
                       <td className="px-3 py-2 font-medium text-rose-700">
-                        {intentLabel[row.intent] || row.intent || "—"}
+                        {intentLabel[intentKey] || intentKey || "—"}
                       </td>
-                      <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-800">{row.appointment_id ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">{metricString(row.phone_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{metricString(row.user_id_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{row.appointment_id != null ? metricString(row.appointment_id) : "—"}</td>
                       <td className="px-3 py-2 font-medium text-amber-700">
-                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
+                        {formatRatingStars(stars)}
                       </td>
                       <td className="px-3 py-2">
                         <Link
@@ -514,10 +542,10 @@ const Analytics = () => {
       {/* CRM reschedule (update_appointment_date) */}
       <ChartCard
         title="CRM reschedule (update appointment)"
-        subtitle={`Latest reschedules logged in range · Total events: ${appointmentReschedulesDetail.total ?? 0}`}
+        subtitle={`Latest reschedules logged in range · Total events: ${metricNumber(appointmentReschedulesDetail.total)}`}
         icon={CalendarIcon}
       >
-        {(appointmentReschedulesDetail.recent || []).length === 0 ? (
+        {metricRows(appointmentReschedulesDetail.recent).length === 0 ? (
           <p className="text-sm text-slate-500">
             No CRM reschedule events in this range.
           </p>
@@ -536,27 +564,22 @@ const Analytics = () => {
                 </tr>
               </thead>
               <tbody>
-                {(appointmentReschedulesDetail.recent || []).map((row, idx) => {
-                  const searchQ = row.live_chat_search || "";
+                {metricRows(appointmentReschedulesDetail.recent).map((row, idx) => {
+                  const searchQ = metricString(row.live_chat_search);
                   const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
-                  let whenLabel = "—";
-                  try {
-                    if (row.at) whenLabel = new Date(row.at).toLocaleString();
-                  } catch {
-                    whenLabel = row.at || "—";
-                  }
+                  const whenLabel = formatRowWhen(row, "at");
                   const stars = row.last_session_rating_stars;
                   return (
                     <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/80">
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{whenLabel}</td>
-                      <td className="px-3 py-2 font-mono text-slate-800">{row.phone_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-600">{row.user_id_masked || "—"}</td>
-                      <td className="px-3 py-2 text-slate-800">{row.appointment_id ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">{metricString(row.phone_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{metricString(row.user_id_masked) || "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{row.appointment_id != null ? metricString(row.appointment_id) : "—"}</td>
                       <td className="px-3 py-2 text-slate-700 capitalize">
-                        {(row.service || "—").replace(/_/g, " ")}
+                        {metricString(row.service).replace(/_/g, " ") || "—"}
                       </td>
                       <td className="px-3 py-2 font-medium text-amber-700">
-                        {stars != null && stars !== "" ? `${stars} / 5` : "—"}
+                        {formatRatingStars(stars)}
                       </td>
                       <td className="px-3 py-2">
                         <Link
@@ -589,7 +612,7 @@ const Analytics = () => {
           <StatCard
             icon={CalendarIcon}
             title="New Clients Booked"
-            value={conversions.new_clients_booked ?? newClients.booked_count ?? 0}
+            value={metricNumber(conversions.new_clients_booked) || metricNumber(newClients.booked_count)}
             subtitle="First-time clients who completed booking"
             color="from-green-500 to-emerald-500"
           />
@@ -603,32 +626,32 @@ const Analytics = () => {
           <StatCard
             icon={SparklesIcon}
             title="Services Discussed Today"
-            value={servicesDiscussedToday.total_mentions ?? 0}
-            subtitle={`${servicesDiscussedToday.unique_clients ?? 0} unique clients`}
+            value={metricNumber(servicesDiscussedToday.total_mentions)}
+            subtitle={`${metricNumber(servicesDiscussedToday.unique_clients)} unique clients`}
             color="from-purple-500 to-pink-500"
           />
           <StatCard
             icon={ChartBarIcon}
             title="Total New Clients"
-            value={newClients.total_new_clients ?? 0}
+            value={metricNumber(newClients.total_new_clients)}
             subtitle={`${bookedCount} booked · ${notBookedCount} not booked`}
             color="from-blue-500 to-cyan-500"
           />
         </div>
 
         {/* Services Discussed Today */}
-        {servicesDiscussedToday.by_service?.length > 0 && (
+        {metricRows(servicesDiscussedToday.by_service).length > 0 && (
           <ChartCard title="Services Discussed Today" icon={SparklesIcon}>
             <div className="space-y-3">
-              {servicesDiscussedToday.by_service.map((item, index) => (
+              {metricRows(servicesDiscussedToday.by_service).map((item, index) => (
                 <div key={index} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg">
                   <span className="text-sm font-medium text-slate-700 capitalize">
-                    {item.service?.replace(/_/g, " ")}
+                    {metricString(item.service).replace(/_/g, " ")}
                   </span>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-slate-500">{item.mentions} mentions</span>
+                    <span className="text-sm text-slate-500">{metricNumber(item.mentions)} mentions</span>
                     <span className="text-sm font-bold text-primary-600">
-                      {item.unique_clients} clients
+                      {metricNumber(item.unique_clients)} clients
                     </span>
                   </div>
                 </div>
@@ -641,12 +664,12 @@ const Analytics = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ChartCard title="Who Booked (New Clients)" icon={CalendarIcon}>
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {(newClients.booked_details || []).length === 0 ? (
+              {metricRows(newClients.booked_details).length === 0 ? (
                 <p className="text-sm text-slate-500">No new client bookings in this period.</p>
               ) : (
-                (newClients.booked_details || []).map((item, index) => {
+                metricRows(newClients.booked_details).map((item, index) => {
                   const searchQ =
-                    item.live_chat_search ||
+                    metricString(item.live_chat_search) ||
                     String(item.phone_display || item.user_id || "").replace(/\D/g, "") ||
                     String(item.user_id || "");
                   const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
@@ -675,33 +698,33 @@ const Analytics = () => {
                       </Link>
                     </div>
                     <p className="text-sm font-mono text-slate-700 break-all">
-                      {item.phone_display ?? item.user_id ?? "—"}
+                      {metricString(item.phone_display) || metricString(item.user_id) || "—"}
                     </p>
-                    {(item.discussed_services || []).length > 0 && (
+                    {metricStringArray(item.discussed_services).length > 0 && (
                       <p className="text-xs text-slate-600">
                         <span className="font-medium text-slate-700">Discussed: </span>
-                        {(item.discussed_services || []).join(", ").replace(/_/g, " ")}
+                        {metricStringArray(item.discussed_services).join(", ").replace(/_/g, " ")}
                       </p>
                     )}
-                    {(item.booked_services || []).length > 0 && (
+                    {metricStringArray(item.booked_services).length > 0 && (
                       <p className="text-xs text-green-800 font-medium">
-                        Booked: {(item.booked_services || []).join(", ").replace(/_/g, " ")}
+                        Booked: {metricStringArray(item.booked_services).join(", ").replace(/_/g, " ")}
                       </p>
                     )}
-                    {(!(item.discussed_services || []).length && !(item.booked_services || []).length) && (
+                    {!metricStringArray(item.discussed_services).length && !metricStringArray(item.booked_services).length && (
                       <p className="text-xs text-green-700">
-                        Services: {(item.services || []).join(", ").replace(/_/g, " ") || "—"}
+                        Services: {metricStringArray(item.services).join(", ").replace(/_/g, " ") || "—"}
                       </p>
                     )}
-                    {(item.services_pricing || []).length > 0 && (
+                    {metricRows(item.services_pricing).length > 0 && (
                       <ul className="text-xs text-slate-600 border-t border-green-100/80 pt-2 space-y-1">
-                        {(item.services_pricing || []).map((sp, i) => (
+                        {metricRows(item.services_pricing).map((sp, i) => (
                           <li key={i}>
                             <span className="text-slate-700 capitalize">
                               {String(sp.service || "").replace(/_/g, " ")}
                             </span>
                             <span className="text-slate-500"> — </span>
-                            <span className="italic">{sp.price_hint}</span>
+                            <span className="italic">{metricString(sp.price_hint)}</span>
                           </li>
                         ))}
                       </ul>
@@ -714,12 +737,12 @@ const Analytics = () => {
           </ChartCard>
           <ChartCard title="Who Asked But Did Not Book (New Clients)" icon={UsersIcon}>
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {(newClients.asked_not_booked_details || []).length === 0 ? (
+              {metricRows(newClients.asked_not_booked_details).length === 0 ? (
                 <p className="text-sm text-slate-500">No new clients in this category.</p>
               ) : (
-                (newClients.asked_not_booked_details || []).map((item, index) => {
+                metricRows(newClients.asked_not_booked_details).map((item, index) => {
                   const searchQ =
-                    item.live_chat_search ||
+                    metricString(item.live_chat_search) ||
                     String(item.phone_display || item.user_id || "").replace(/\D/g, "") ||
                     String(item.user_id || "");
                   const chatTo = `/live-chat?search=${encodeURIComponent(searchQ)}`;
@@ -748,21 +771,21 @@ const Analytics = () => {
                       </Link>
                     </div>
                     <p className="text-sm font-mono text-slate-700 break-all">
-                      {item.phone_display ?? item.user_id ?? "—"}
+                      {metricString(item.phone_display) || metricString(item.user_id) || "—"}
                     </p>
                     <p className="text-xs text-amber-800">
                       <span className="font-medium">Inquired about: </span>
-                      {(item.discussed_services || item.services || []).join(", ").replace(/_/g, " ") || "—"}
+                      {(metricStringArray(item.discussed_services).length ? metricStringArray(item.discussed_services) : metricStringArray(item.services)).join(", ").replace(/_/g, " ") || "—"}
                     </p>
-                    {(item.services_pricing || []).length > 0 && (
+                    {metricRows(item.services_pricing).length > 0 && (
                       <ul className="text-xs text-slate-600 border-t border-amber-100/80 pt-2 space-y-1">
-                        {(item.services_pricing || []).map((sp, i) => (
+                        {metricRows(item.services_pricing).map((sp, i) => (
                           <li key={i}>
                             <span className="text-slate-700 capitalize">
-                              {String(sp.service || "").replace(/_/g, " ")}
+                              {metricString(sp.service).replace(/_/g, " ")}
                             </span>
                             <span className="text-slate-500"> — </span>
-                            <span className="italic">{sp.price_hint}</span>
+                            <span className="italic">{metricString(sp.price_hint)}</span>
                           </li>
                         ))}
                       </ul>
@@ -881,10 +904,10 @@ const Analytics = () => {
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
-                data={Object.entries(demographics.languages?.counts || {}).map(
+                data={Object.entries(metricRecord(metricRecord(demographics.languages).counts)).map(
                   ([lang, count]) => ({
                     name: lang.toUpperCase(),
-                    value: count,
+                    value: metricNumber(count),
                   })
                 )}
                 cx="50%"
@@ -896,7 +919,7 @@ const Analytics = () => {
                 outerRadius={80}
                 dataKey="value"
               >
-                {Object.keys(demographics.languages?.counts || {}).map(
+                {Object.keys(metricRecord(metricRecord(demographics.languages).counts)).map(
                   (entry, index) => (
                     <Cell
                       key={`cell-${index}`}
@@ -914,10 +937,10 @@ const Analytics = () => {
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
-                data={Object.entries(demographics.genders?.counts || {}).map(
+                data={Object.entries(metricRecord(metricRecord(demographics.genders).counts)).map(
                   ([gender, count]) => ({
                     name: gender.charAt(0).toUpperCase() + gender.slice(1),
-                    value: count,
+                    value: metricNumber(count),
                   })
                 )}
                 cx="50%"
@@ -950,7 +973,7 @@ const Analytics = () => {
                     </span>
                   </div>
                   <span className="text-lg font-bold text-slate-900">
-                    {daily.reduce((sum, d) => sum + d.text_messages, 0)}
+                    {daily.reduce((sum, d) => sum + metricNumber(d.text_messages), 0)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -961,7 +984,7 @@ const Analytics = () => {
                     </span>
                   </div>
                   <span className="text-lg font-bold text-slate-900">
-                    {daily.reduce((sum, d) => sum + d.voice_messages, 0)}
+                    {daily.reduce((sum, d) => sum + metricNumber(d.voice_messages), 0)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -972,7 +995,7 @@ const Analytics = () => {
                     </span>
                   </div>
                   <span className="text-lg font-bold text-slate-900">
-                    {daily.reduce((sum, d) => sum + d.image_messages, 0)}
+                    {daily.reduce((sum, d) => sum + metricNumber(d.image_messages), 0)}
                   </span>
                 </div>
               </>
@@ -1054,28 +1077,28 @@ const Analytics = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="Most Requested Services" icon={SparklesIcon}>
           <div className="space-y-3">
-            {(services.most_requested || []).length === 0 ? (
+            {metricRows(services.most_requested).length === 0 ? (
               <p className="text-sm text-slate-500">No service requests in this period.</p>
             ) : (
-              services.most_requested.slice(0, 5).map((service, index) => (
+              metricRows(services.most_requested).slice(0, 5).map((service, index) => (
                 <div key={index} className="space-y-2">
                   <div className="flex justify-between items-center gap-2">
                     <span className="text-sm font-medium text-slate-700 lowercase">
-                      {service.name}
+                      {metricString(service.name)}
                     </span>
                     <div className="flex items-center space-x-2 shrink-0">
                       <span className="text-sm text-slate-500">
-                        {service.count} requests
+                        {metricNumber(service.count)} requests
                       </span>
                       <span className="text-sm font-bold text-primary-600">
-                        {service.percentage}%
+                        {metricNumber(service.percentage)}%
                       </span>
                     </div>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-2">
                     <div
                       className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, service.percentage)}%` }}
+                      style={{ width: `${Math.min(100, metricNumber(service.percentage))}%` }}
                     />
                   </div>
                 </div>
@@ -1086,28 +1109,28 @@ const Analytics = () => {
 
         <ChartCard title="Most Booked Services" icon={SparklesIcon}>
           <div className="space-y-3">
-            {(services.most_booked || []).length === 0 ? (
+            {metricRows(services.most_booked).length === 0 ? (
               <p className="text-sm text-slate-500">No completed bookings in this period.</p>
             ) : (
-              services.most_booked.slice(0, 5).map((service, index) => (
+              metricRows(services.most_booked).slice(0, 5).map((service, index) => (
                 <div key={index} className="space-y-2">
                   <div className="flex justify-between items-center gap-2">
                     <span className="text-sm font-medium text-slate-700 lowercase">
-                      {service.name}
+                      {metricString(service.name)}
                     </span>
                     <div className="flex items-center space-x-2 shrink-0">
                       <span className="text-sm text-slate-500">
-                        {service.count} bookings
+                        {metricNumber(service.count)} bookings
                       </span>
                       <span className="text-sm font-bold text-primary-600">
-                        {service.percentage}%
+                        {metricNumber(service.percentage)}%
                       </span>
                     </div>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-2">
                     <div
                       className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, service.percentage)}%` }}
+                      style={{ width: `${Math.min(100, metricNumber(service.percentage))}%` }}
                     />
                   </div>
                 </div>
@@ -1126,7 +1149,7 @@ const Analytics = () => {
                   Total Booked
                 </span>
                 <span className="text-2xl font-bold text-blue-600">
-                  {appointments.total_booked || 0}
+                  {metricNumber(appointments.total_booked)}
                 </span>
               </div>
             </div>
@@ -1145,46 +1168,46 @@ const Analytics = () => {
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-2xl font-bold text-violet-700 block">
-                    {escalations.human_handover_unique_users ?? 0}
+                    {metricNumber(escalations.human_handover_unique_users)}
                   </span>
                   <span className="text-[11px] text-violet-600">
-                    {escalations.human_handover || 0} events
+                    {metricNumber(escalations.human_handover)} events
                   </span>
                 </div>
               </div>
             </div>
             <p className="text-[11px] text-slate-500 leading-snug">
               Percentages below are share of all appointment events in range (
-              {appointments.appointment_events_total ?? "—"} total: requested + booked +
+              {metricNumber(appointments.appointment_events_total) || "—"} total: requested + booked +
               confirmed + rescheduled + cancelled). Not “% of booked only” — avoids {'>'}100%
               when reschedules ≠ bookings.
             </p>
             <div className="grid grid-cols-3 gap-3">
               <div className="p-3 bg-green-50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-green-600">
-                  {appointments.confirmed || 0}
+                  {metricNumber(appointments.confirmed)}
                 </p>
                 <p className="text-xs text-green-700 mt-1">Confirmed</p>
                 <p className="text-xs text-green-600 font-medium">
-                  {appointments.confirmation_rate || 0}%
+                  {metricNumber(appointments.confirmation_rate)}%
                 </p>
               </div>
               <div className="p-3 bg-orange-50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-orange-600">
-                  {appointments.rescheduled || 0}
+                  {metricNumber(appointments.rescheduled)}
                 </p>
                 <p className="text-xs text-orange-700 mt-1">Rescheduled</p>
                 <p className="text-xs text-orange-600 font-medium">
-                  {appointments.reschedule_rate || 0}%
+                  {metricNumber(appointments.reschedule_rate)}%
                 </p>
               </div>
               <div className="p-3 bg-red-50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-red-600">
-                  {appointments.cancelled || 0}
+                  {metricNumber(appointments.cancelled)}
                 </p>
                 <p className="text-xs text-red-700 mt-1">Cancelled</p>
                 <p className="text-xs text-red-600 font-medium">
-                  {appointments.cancellation_rate || 0}%
+                  {metricNumber(appointments.cancellation_rate)}%
                 </p>
               </div>
             </div>
@@ -1201,12 +1224,12 @@ const Analytics = () => {
                 Satisfaction Rate
               </span>
               <span className="text-3xl font-bold text-green-600">
-                {satisfaction.satisfaction_rate || 0}%
+                {metricNumber(satisfaction.satisfaction_rate)}%
               </span>
             </div>
             <div className="flex items-center justify-between text-sm text-green-700">
-              <span>👍 {satisfaction.likes || 0} Likes</span>
-              <span>👎 {satisfaction.dislikes || 0} Dislikes</span>
+              <span>👍 {metricNumber(satisfaction.likes)} Likes</span>
+              <span>👎 {metricNumber(satisfaction.dislikes)} Dislikes</span>
             </div>
           </div>
           <div>
@@ -1214,7 +1237,7 @@ const Analytics = () => {
               Feedback Reasons
             </h4>
             <div className="space-y-2">
-              {Object.entries(satisfaction.dislike_reasons || {}).map(
+              {Object.entries(metricRecord(satisfaction.dislike_reasons)).map(
                 ([reason, count]) => (
                   <div
                     key={reason}
@@ -1224,7 +1247,7 @@ const Analytics = () => {
                       {reason.replace("_", " ")}
                     </span>
                     <span className="text-sm font-medium text-slate-800">
-                      {count}
+                      {metricNumber(count)}
                     </span>
                   </div>
                 )
@@ -1245,13 +1268,13 @@ const Analytics = () => {
                   Average
                 </span>
                 <span className="text-xs text-amber-800">
-                  {sessionRatings.total_ratings || 0} ratings ·{" "}
-                  {sessionRatings.unique_raters ?? 0} users
+                  {metricNumber(sessionRatings.total_ratings)} ratings ·{" "}
+                  {metricNumber(sessionRatings.unique_raters)} users
                 </span>
               </div>
               <span className="text-3xl font-bold text-amber-700">
                 {sessionRatings.average_stars != null
-                  ? Number(sessionRatings.average_stars).toFixed(2)
+                  ? metricNumber(sessionRatings.average_stars).toFixed(2)
                   : "—"}{" "}
                 <span className="text-lg">/ 5</span>
               </span>
@@ -1259,12 +1282,11 @@ const Analytics = () => {
           </div>
           <div className="space-y-3">
             {[5, 4, 3, 2, 1].map((star) => {
-              const byStar = sessionRatings.by_star || {};
-              const count = Number(byStar[String(star)] ?? byStar[star] ?? 0);
-              const pct = Number(
-                sessionRatings.percentages?.[String(star)] ??
-                  sessionRatings.percentages?.[star] ??
-                  0
+              const byStar = metricRecord(sessionRatings.by_star);
+              const percentages = metricRecord(sessionRatings.percentages);
+              const count = metricNumber(byStar[String(star)] ?? byStar[star]);
+              const pct = metricNumber(
+                percentages[String(star)] ?? percentages[star]
               );
               return (
                 <div key={star} className="flex items-center gap-3">
@@ -1294,7 +1316,7 @@ const Analytics = () => {
                   Total Escalations
                 </span>
                 <span className="text-2xl font-bold text-red-600">
-                  {escalations.total_escalations || 0}
+                  {metricNumber(escalations.total_escalations)}
                 </span>
               </div>
             </div>
@@ -1307,13 +1329,13 @@ const Analytics = () => {
                       Human handover
                     </span>
                     <span className="text-[10px] text-orange-700">
-                      {escalations.human_handover || 0} events
+                      {metricNumber(escalations.human_handover)} events
                     </span>
                   </div>
                 </div>
                 <div className="text-right">
                   <span className="text-lg font-bold text-orange-600 block">
-                    {escalations.human_handover_unique_users ?? 0}
+                    {metricNumber(escalations.human_handover_unique_users)}
                   </span>
                   <span className="text-[10px] text-orange-700">unique users</span>
                 </div>
@@ -1326,7 +1348,7 @@ const Analytics = () => {
                   </span>
                 </div>
                 <span className="text-lg font-bold text-red-600">
-                  {escalations.complaints || 0}
+                  {metricNumber(escalations.complaints)}
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
@@ -1337,7 +1359,7 @@ const Analytics = () => {
                   </span>
                 </div>
                 <span className="text-lg font-bold text-yellow-600">
-                  {escalations.technical_issues || 0}
+                  {metricNumber(escalations.technical_issues)}
                 </span>
               </div>
             </div>
@@ -1352,25 +1374,25 @@ const Analytics = () => {
             <div className="p-4 bg-slate-50 rounded-xl">
               <p className="text-sm text-slate-600 mb-1">Avg Response</p>
               <p className="text-2xl font-bold text-slate-900">
-                {Math.round(performance.avg_response_time_ms || 0)}ms
+                {Math.round(metricNumber(performance.avg_response_time_ms))}ms
               </p>
             </div>
             <div className="p-4 bg-green-50 rounded-xl">
               <p className="text-sm text-green-600 mb-1">Min Response</p>
               <p className="text-2xl font-bold text-green-800">
-                {Math.round(performance.min_response_time_ms || 0)}ms
+                {Math.round(metricNumber(performance.min_response_time_ms))}ms
               </p>
             </div>
             <div className="p-4 bg-orange-50 rounded-xl">
               <p className="text-sm text-orange-600 mb-1">P95 Response</p>
               <p className="text-2xl font-bold text-orange-800">
-                {Math.round(performance.p95_response_time_ms || 0)}ms
+                {Math.round(metricNumber(performance.p95_response_time_ms))}ms
               </p>
             </div>
             <div className="p-4 bg-red-50 rounded-xl">
               <p className="text-sm text-red-600 mb-1">Max Response</p>
               <p className="text-2xl font-bold text-red-800">
-                {Math.round(performance.max_response_time_ms || 0)}ms
+                {Math.round(metricNumber(performance.max_response_time_ms))}ms
               </p>
             </div>
           </div>
@@ -1384,7 +1406,7 @@ const Analytics = () => {
                   Total Inquiries
                 </span>
                 <span className="text-sm font-bold text-slate-800">
-                  {conversions.total_inquiries || 0}
+                  {metricNumber(conversions.total_inquiries)}
                 </span>
               </div>
               <div className="w-full bg-slate-200 rounded-full h-8">
@@ -1399,15 +1421,15 @@ const Analytics = () => {
                   Appointments Booked
                 </span>
                 <span className="text-sm font-bold text-slate-800">
-                  {conversions.total_appointments || 0}
+                  {metricNumber(conversions.total_appointments)}
                 </span>
               </div>
               <div className="w-full bg-slate-200 rounded-full h-8">
                 <div
                   className="bg-gradient-to-r from-green-500 to-emerald-500 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium"
-                  style={{ width: `${conversions.conversion_rate || 0}%` }}
+                  style={{ width: `${metricNumber(conversions.conversion_rate)}%` }}
                 >
-                  {conversions.conversion_rate || 0}%
+                  {metricNumber(conversions.conversion_rate)}%
                 </div>
               </div>
             </div>
@@ -1417,7 +1439,7 @@ const Analytics = () => {
                   Conversion Rate
                 </span>
                 <span className="text-2xl font-bold text-green-600">
-                  {conversions.conversion_rate || 0}%
+                  {metricNumber(conversions.conversion_rate)}%
                 </span>
               </div>
             </div>

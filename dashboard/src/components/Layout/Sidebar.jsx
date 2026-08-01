@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -9,7 +9,6 @@ import {
   ChatBubbleLeftRightIcon,
   ArrowDownTrayIcon,
   ArrowPathRoundedSquareIcon,
-  ClockIcon,
   BellIcon,
   Cog6ToothIcon,
   XMarkIcon,
@@ -80,6 +79,7 @@ const downloadItems = [
   },
 ];
 
+/** @param {{ collapsed: boolean; onToggleCollapse: () => void; onClose?: () => void }} props */
 const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const { user } = useAuth();
   const [healthState, setHealthState] = useState({
@@ -112,7 +112,7 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
         if (!cancelled) {
           setHealthState({
             status: "down",
-            detail: e?.message || "Unreachable",
+            detail: e instanceof Error ? e.message : "Unreachable",
           });
         }
       }
@@ -179,7 +179,7 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
               {!collapsed && (
                 <div>
                   <h1 className="text-xl font-bold gradient-text font-display">
-                    Lina's AI
+                    Lina{"'"}s AI
                   </h1>
                   <p className="text-sm text-slate-500">Laser Center Bot</p>
                 </div>

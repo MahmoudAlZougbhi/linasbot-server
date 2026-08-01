@@ -15,6 +15,7 @@ from typing import Any, cast
 import firebase_admin
 from firebase_admin import credentials, firestore
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 import config
 from prompt_templates import (
@@ -2633,7 +2634,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
                 raise RuntimeError("OpenAI client is not configured")
             response_standard = await client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=cast(Any, messages_standard),
+                messages=cast(list[ChatCompletionMessageParam], messages_standard),
                 response_format={"type": "json_object"},
             )
             if not response_standard.choices:
@@ -2669,7 +2670,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
                 raise RuntimeError("OpenAI client is not configured")
             response_franco = await client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=cast(Any, messages_franco),
+                messages=cast(list[ChatCompletionMessageParam], messages_franco),
                 response_format={"type": "json_object"},
             )
             if not response_franco.choices:

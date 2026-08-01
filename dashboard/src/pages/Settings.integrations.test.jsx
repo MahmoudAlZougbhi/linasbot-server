@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Settings from "./Settings";
@@ -8,7 +7,7 @@ const authFetchMock = vi.fn();
 const mockUseAuth = vi.fn();
 
 vi.mock("../utils/authFetch", () => ({
-  authFetch: (...args) => authFetchMock(...args),
+  authFetch: (/** @type {unknown[]} */ ...args) => authFetchMock(...args),
 }));
 
 vi.mock("../contexts/AuthContext", () => ({

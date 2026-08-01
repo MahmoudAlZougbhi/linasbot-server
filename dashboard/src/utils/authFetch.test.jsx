@@ -2,9 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import authFetch from "./authFetch";
 
 describe("authFetch", () => {
+  /** @param {(...args: unknown[]) => Promise<unknown>} impl */
+  const mockFetch = (impl) => {
+    global.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (vi.fn(impl)));
+  };
+
   beforeEach(() => {
     localStorage.setItem("csrf_token", "test-csrf");
-    global.fetch = vi.fn(async () => ({
+    mockFetch(async () => ({
       ok: true,
       json: async () => ({ success: true }),
     }));

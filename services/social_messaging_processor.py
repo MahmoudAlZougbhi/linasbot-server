@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any
 
 import config
 from handlers.text_handlers import handle_message
@@ -123,22 +123,21 @@ async def process_meta_social_event(
                 return {"success": True, "simulated": True}
             return await adapter.send_typing(sender_id)
 
-        handle_kwargs: dict[str, Any] = {
-            "user_id": user_id,
-            "user_name": config.user_names[user_id],
-            "user_input_text": text,
-            "user_data": user_data,
-            "send_message_func": send_message,
-            "send_action_func": send_action,
-        }
+        skip_firestore_save = bool(simulation)
+        message_combine_delay: float | None = None
         if simulation:
-            handle_kwargs["skip_firestore_save"] = True
-            if combine_delay is not None:
-                handle_kwargs["message_combine_delay"] = combine_delay
-            else:
-                handle_kwargs["message_combine_delay"] = 0.0
+            message_combine_delay = 0.0 if combine_delay is None else float(combine_delay)
 
-        await handle_message(**cast(Any, handle_kwargs))
+        await handle_message(
+            user_id=user_id,
+            user_name=config.user_names[user_id],
+            user_input_text=text,
+            user_data=user_data,
+            send_message_func=send_message,
+            send_action_func=send_action,
+            skip_firestore_save=skip_firestore_save,
+            message_combine_delay=message_combine_delay,
+        )
         await _await_delayed_processing(user_id)
     finally:
         if adapter is not None:

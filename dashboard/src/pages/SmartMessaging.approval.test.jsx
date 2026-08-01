@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SmartMessaging from "./SmartMessaging";
@@ -7,7 +6,7 @@ import { expectAccessibleControls } from "../testHelpers/a11ySmoke";
 const authFetchMock = vi.fn();
 
 vi.mock("../utils/authFetch", () => ({
-  authFetch: (...args) => authFetchMock(...args),
+  authFetch: (/** @type {unknown[]} */ ...args) => authFetchMock(...args),
 }));
 
 vi.mock("react-hot-toast", () => ({
@@ -19,6 +18,7 @@ vi.mock("react-hot-toast", () => ({
   },
 }));
 
+/** @param {unknown} body @param {boolean} [ok] @param {number} [status] */
 function jsonResponse(body, ok = true, status = 200) {
   return {
     ok,

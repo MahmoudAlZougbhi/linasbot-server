@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpenIcon,
@@ -21,7 +21,11 @@ const SECTIONS = [
 
 const ContentManagers = () => {
   const [activeSection, setActiveSection] = useState("knowledge");
-  const section = SECTIONS.find((s) => s.id === activeSection);
+  const defaultSection = SECTIONS[0];
+  if (!defaultSection) {
+    throw new Error("ContentManagers requires at least one section");
+  }
+  const section = SECTIONS.find((s) => s.id === activeSection) ?? defaultSection;
 
   return (
     <div className="space-y-6">

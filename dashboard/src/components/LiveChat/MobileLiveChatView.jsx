@@ -1,4 +1,3 @@
-import React from "react";
 import {
   ArrowRightIcon,
   ChartBarIcon,
@@ -17,6 +16,74 @@ import {
 } from "./ConversationIndicators";
 import { formatMessageTime } from "../../utils/dateUtils";
 
+/** @param {LiveChatMessage | string | null | undefined} lastMessage */
+const previewLastMessage = (lastMessage) => {
+  if (!lastMessage) return "";
+  if (typeof lastMessage === "string") return lastMessage;
+  return String(lastMessage.content || lastMessage.text || "");
+};
+
+/**
+ * @param {{
+ *   formatLastRefreshTime: () => string;
+ *   handleManualRefresh: () => void;
+ *   isRefreshing: boolean;
+ *   setMobileFilterSheetOpen: (open: boolean) => void;
+ *   liveSearchQuery: string;
+ *   setLiveSearchQuery: (value: string) => void;
+ *   mobileListSection: string;
+ *   setMobileListSection: (section: string) => void;
+ *   filteredWaitingQueue: QueueItem[];
+ *   filteredWithOperator: LiveChatConversation[];
+ *   filteredBotConversations: LiveChatConversation[];
+ *   mobileVisibleConversations: Array<QueueItem | LiveChatConversation>;
+ *   isLoading: boolean;
+ *   buildConversationFromQueueItem: (entry: QueueItem) => LiveChatConversation;
+ *   getConversationUnreadCount: (entry: QueueItem | LiveChatConversation) => number;
+ *   formatPhoneForDisplay: (phone: string | undefined) => string;
+ *   formatConversationListDate: (conv: LiveChatConversation) => string;
+ *   openWaitingConversation: (entry: QueueItem) => void;
+ *   openConversation: (conv: LiveChatConversation) => void;
+ *   mobileFilterSheetOpen: boolean;
+ *   botDateFrom: string;
+ *   setBotDateFrom: (value: string) => void;
+ *   botDateTo: string;
+ *   setBotDateTo: (value: string) => void;
+ *   hasMoreChats: boolean;
+ *   loadingMoreChats: boolean;
+ *   loadMoreChats: () => void;
+ *   selectedConversation: SelectedConversation | null;
+ *   setSelectedConversation: import('react').Dispatch<import('react').SetStateAction<SelectedConversation | null>>;
+ *   reloadSelectedConversationMessages: () => void;
+ *   messagesContainerRef: import('react').RefObject<HTMLDivElement>;
+ *   messagesLoading: boolean;
+ *   messagesEndRef: import('react').RefObject<HTMLDivElement>;
+ *   handleFeedback: (message: LiveChatMessage, type: string) => void;
+ *   mobileDetailsOpen: boolean;
+ *   setMobileDetailsOpen: (open: boolean) => void;
+ *   handleTakeOver: (conversationId: string, userId: string) => void;
+ *   handleReleaseToBot: (conversationId: string, userId: string) => void;
+ *   handleEndConversation: (conversationId: string, userId: string) => void;
+ *   selectedImage: { file: File; preview: string | ArrayBuffer | null; name: string } | null;
+ *   discardImage: () => void;
+ *   sendImageMessage: () => void;
+ *   recordedAudio: { blob: Blob; url: string } | null;
+ *   discardRecording: () => void;
+ *   sendVoiceMessage: () => void;
+ *   isSendingVoice: boolean;
+ *   imageInputRef: import('react').RefObject<HTMLInputElement>;
+ *   handleImageSelect: (event: import('react').ChangeEvent<HTMLInputElement>) => void;
+ *   isRecording: boolean;
+ *   recordingTime: number;
+ *   stopRecording: () => void;
+ *   startRecording: () => void;
+ *   formatRecordingTime: (seconds: number) => string;
+ *   messageInput: string;
+ *   setMessageInput: (value: string) => void;
+ *   handleSendMessage: () => void;
+ *   isSending: boolean;
+ * }} props
+ */
 const MobileLiveChatView = ({
   formatLastRefreshTime,
   handleManualRefresh,
@@ -159,16 +226,15 @@ const MobileLiveChatView = ({
                 No conversations in this section.
               </div>
             ) : (
-              mobileVisibleConversations.map((entry) => {
+              mobileVisibleConversations.map((/** @type {QueueItem | LiveChatConversation} */ entry) => {
                 const isQueueItem = mobileListSection === "queue";
-                const conv = isQueueItem ? buildConversationFromQueueItem(entry) : entry;
+                /** @type {LiveChatConversation} */
+                const conv = isQueueItem
+                  ? buildConversationFromQueueItem(/** @type {QueueItem} */ (entry))
+                  : /** @type {LiveChatConversation} */ (entry);
                 const unreadCount = getConversationUnreadCount(isQueueItem ? conv : entry);
-                const lastPreview = String(
-                  conv?.last_message?.content ||
-                    conv?.last_message?.text ||
-                    entry?.last_message ||
-                    ""
-                ).trim();
+                const lastPreview = previewLastMessage(conv.last_message || (isQueueItem ? entry.last_message : null)).trim();
+                const queueEntry = /** @type {QueueItem} */ (entry);
 
                 return (
                   <button
@@ -181,12 +247,12 @@ const MobileLiveChatView = ({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="font-semibold truncate">{conv.user_name || conv.user_id}</p>
-                          <NewCustomerBadge isNew={conv.is_new_customer} />
+                          <p className="font-semibold truncate">{String(conv.user_name || conv.user_id)}</p>
+                          <NewCustomerBadge isNew={Boolean(conv.is_new_customer)} />
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                          <StatusBadge status={conv.status} />
-                          {!isQueueItem && <SentimentIndicator sentiment={conv.sentiment} />}
+                          <StatusBadge status={String(conv.status || "bot")} />
+                          {!isQueueItem && <SentimentIndicator sentiment={String(conv.sentiment || "neutral")} />}
                         </div>
                         <p className="text-xs text-slate-500 mt-2 truncate">
                           {lastPreview ||
@@ -197,7 +263,7 @@ const MobileLiveChatView = ({
                       <div className="text-right flex-shrink-0">
                         <p className="text-[11px] text-slate-500">
                           {isQueueItem
-                            ? `${Math.floor((entry.wait_time_seconds || 0) / 60)}m`
+                            ? `${Math.floor((Number(queueEntry.wait_time_seconds) || 0) / 60)}m`
                             : formatConversationListDate(conv)}
                         </p>
                         {unreadCount > 0 && (
@@ -289,11 +355,11 @@ const MobileLiveChatView = ({
               className="min-w-0 flex-1 text-left"
             >
               <div className="flex items-center gap-2">
-                <p className="font-semibold truncate">{currentConversation.user_name}</p>
-                <NewCustomerBadge isNew={currentConversation.is_new_customer} />
+                <p className="font-semibold truncate">{String(currentConversation.user_name || currentConversation.user_id)}</p>
+                <NewCustomerBadge isNew={Boolean(currentConversation.is_new_customer)} />
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                <StatusBadge status={currentConversation.status} />
+                <StatusBadge status={String(currentConversation.status || "bot")} />
                 <span>
                   {formatPhoneForDisplay(
                     currentConversation.user_phone || currentConversation.phone_number || ""
@@ -329,7 +395,7 @@ const MobileLiveChatView = ({
               </div>
             )}
 
-            {currentHistory.map((msg, index) => {
+            {currentHistory.map((/** @type {LiveChatMessage} */ msg, /** @type {number} */ index) => {
               const messageText = msg.content || msg.text || "";
               const isVoiceMessage =
                 msg.type === "voice" ||
@@ -359,7 +425,7 @@ const MobileLiveChatView = ({
                       {isImageMessage ? (
                         msg.image_url ? (
                           <img
-                            src={msg.image_url}
+                            src={String(msg.image_url)}
                             alt="Attachment"
                             className="rounded-xl max-w-full h-auto object-cover"
                           />
@@ -370,8 +436,8 @@ const MobileLiveChatView = ({
                         <div className="flex flex-col gap-2">
                           {msg.audio_url ? (
                             <ModernAudioPlayer
-                              audioUrl={msg.audio_url}
-                              isUserMessage={msg.is_user}
+                              audioUrl={String(msg.audio_url)}
+                              isUserMessage={Boolean(msg.is_user)}
                             />
                           ) : (
                             <p className="text-sm">Voice message</p>
@@ -388,9 +454,9 @@ const MobileLiveChatView = ({
                     </div>
                     <div className="flex items-center gap-2 mt-1 px-2">
                       <span className="text-[11px] text-slate-400">
-                        {formatMessageTime(msg.timestamp)}
+                        {formatMessageTime(String(msg.timestamp || ""))}
                       </span>
-                      {!msg.is_user && msg.handled_by && (
+                      {!msg.is_user && msg.handled_by != null && (
                         <>
                           <span className="text-[11px] text-slate-500">
                             {msg.handled_by === "ai"
@@ -438,7 +504,7 @@ const MobileLiveChatView = ({
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <img
-                        src={selectedImage.preview}
+                        src={typeof selectedImage.preview === "string" ? selectedImage.preview : ""}
                         alt={selectedImage.name || "Selected image"}
                         className="w-12 h-12 rounded-xl object-cover"
                       />
@@ -575,7 +641,7 @@ const MobileLiveChatView = ({
                 <div className="w-12 h-1.5 rounded-full bg-slate-300 mx-auto mb-4" />
                 <div className="space-y-4">
                   <div>
-                    <h3 className="font-semibold text-base">{currentConversation.user_name}</h3>
+                    <h3 className="font-semibold text-base">{String(currentConversation.user_name || currentConversation.user_id)}</h3>
                     <p className="text-sm text-slate-500">
                       {formatPhoneForDisplay(
                         currentConversation.user_phone || currentConversation.phone_number || ""
@@ -593,7 +659,7 @@ const MobileLiveChatView = ({
                     <div className="rounded-2xl bg-slate-50 p-3">
                       <p className="text-xs text-slate-500">Gender</p>
                       <p className="font-medium capitalize">
-                        {currentConversation.gender || "Unknown"}
+                        {String(currentConversation.gender || "Unknown")}
                       </p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-3">
@@ -605,7 +671,7 @@ const MobileLiveChatView = ({
                     <div className="rounded-2xl bg-slate-50 p-3">
                       <p className="text-xs text-slate-500">Status</p>
                       <div className="mt-1">
-                        <StatusBadge status={currentConversation.status} />
+                        <StatusBadge status={String(currentConversation.status || "bot")} />
                       </div>
                     </div>
                   </div>
@@ -614,10 +680,10 @@ const MobileLiveChatView = ({
                     <div>
                       <p className="text-xs text-slate-500">Sentiment</p>
                       <p className="font-medium capitalize">
-                        {currentConversation.sentiment || "neutral"}
+                        {String(currentConversation.sentiment || "neutral")}
                       </p>
                     </div>
-                    <SentimentIndicator sentiment={currentConversation.sentiment} />
+                    <SentimentIndicator sentiment={String(currentConversation.sentiment || "neutral")} />
                   </div>
 
                   <div className="space-y-2">

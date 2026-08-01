@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import Testing from "./Testing";
@@ -31,9 +30,13 @@ describe("Testing Lab social parity", () => {
     expect(screen.getByText("Channel (parity)")).toBeInTheDocument();
     const selects = screen.getAllByRole("combobox");
     const paritySelect = selects.find((el) =>
-      Array.from(el.options).some((opt) => opt.textContent.includes("Instagram"))
+      el instanceof HTMLSelectElement &&
+      Array.from(el.options).some((opt) => opt.textContent?.includes("Instagram"))
     );
     expect(paritySelect).toBeTruthy();
+    if (!(paritySelect instanceof HTMLSelectElement)) {
+      throw new Error("Expected parity channel select");
+    }
     expect(screen.getByRole("option", { name: /Instagram \(Meta social parity\)/i })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Facebook \(Meta social parity\)/i })).toBeInTheDocument();
 

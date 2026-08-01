@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Bars3Icon,
   BellIcon,
-  UserCircleIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   KeyIcon,
@@ -16,12 +15,13 @@ import { useOperatorStatus } from '../../contexts/OperatorStatusContext';
 import { buildDisplayLabel } from '../../utils/buildInfo';
 import { getTimezoneName } from '../../utils/dateUtils';
 
-const Header = ({ onMenuClick, botStatus }) => {
+/** @param {{ onMenuClick: () => void; botStatus?: unknown }} props */
+const Header = ({ onMenuClick, botStatus: _botStatus }) => {
   const { operatorStatus, setOperatorStatus } = useOperatorStatus();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const dropdownRef = useRef(null);
-  const notificationsRef = useRef(null);
+  const dropdownRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const notificationsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const appTimezone = getTimezoneName();
@@ -52,11 +52,14 @@ const Header = ({ onMenuClick, botStatus }) => {
 
   // Close dropdowns when clicking outside
   useEffect(() => {
+    /** @param {MouseEvent} event */
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setShowDropdown(false);
       }
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+      if (notificationsRef.current && !notificationsRef.current.contains(target)) {
         setShowNotifications(false);
       }
     };

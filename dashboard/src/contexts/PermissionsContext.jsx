@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useEffect } from 'react';
+import { createContext, useContext, useMemo, useEffect } from "react";
 import { useAuth } from './AuthContext';
 import {
   resolveUserPermissions,
@@ -10,10 +10,18 @@ import {
   migrateUsers
 } from '../utils/permissions';
 
-const PermissionsContext = createContext({});
+/** @type {import('react').Context<PermissionsContextValue | null>} */
+const PermissionsContext = createContext(/** @type {PermissionsContextValue | null} */ (null));
 
-export const usePermissions = () => useContext(PermissionsContext);
+export const usePermissions = () => {
+  const context = useContext(PermissionsContext);
+  if (!context) {
+    throw new Error('usePermissions must be used within PermissionsProvider');
+  }
+  return context;
+};
 
+/** @param {{ children: import('react').ReactNode }} props */
 export const PermissionsProvider = ({ children }) => {
   const { user } = useAuth();
 
@@ -34,6 +42,7 @@ export const PermissionsProvider = ({ children }) => {
 
   /**
    * Check if current user has a specific permission
+   * @param {string} feature
    */
   const hasPermission = (feature) => {
     return checkPermission(user, feature);
@@ -48,6 +57,7 @@ export const PermissionsProvider = ({ children }) => {
 
   /**
    * Check if current user can access a path
+   * @param {string} path
    */
   const hasAccessToPath = (path) => {
     return canAccessPath(user, path);

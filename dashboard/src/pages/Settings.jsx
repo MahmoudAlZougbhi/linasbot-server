@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { motion } from 'framer-motion';
 import {
   Cog6ToothIcon,
@@ -19,9 +19,10 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import UserManagement from '../components/UserManagement/UserManagement';
 import { authFetch } from '../utils/authFetch';
+import { errorMessage } from '../utils/apiValidate';
 
 const Settings = () => {
-  const { user, changePassword } = useAuth();
+  const { user, changePassword } = /** @type {AuthContextValue} */ (useAuth());
   const [activeTab, setActiveTab] = useState('general');
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -33,7 +34,7 @@ const Settings = () => {
     new: false,
     confirm: false
   });
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState(/** @type {SettingsFormState} */ ({
     botName: 'Lina\'s Laser Bot',
     defaultLanguage: 'ar',
     responseTimeout: 5,
@@ -43,12 +44,11 @@ const Settings = () => {
     notificationsEnabled: true,
     emailAlerts: true,
     humanTakeoverNotifyMobiles: '',
-  });
+  }));
   /** Branch holidays / closures for AI (pause booking + greetings) — saved under settings.clinic */
-  const [branchHolidays, setBranchHolidays] = useState([]);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [integrations, setIntegrations] = useState([]);
-  const [integrationsError, setIntegrationsError] = useState(null);
+  const [branchHolidays, setBranchHolidays] = useState(/** @type {BranchHolidayRow[]} */ ([]));
+  const [integrations, setIntegrations] = useState(/** @type {IntegrationStatus[]} */ ([]));
+  const [integrationsError, setIntegrationsError] = useState(/** @type {string | null} */ (null));
 
   // Load settings from API on mount and when page is shown/refreshed
   useEffect(() => {
@@ -76,8 +76,6 @@ const Settings = () => {
         }
       } catch (e) {
         console.error('Error loading settings:', e);
-      } finally {
-        setSettingsLoaded(true);
       }
     };
     const loadIntegrations = async () => {
@@ -93,7 +91,7 @@ const Settings = () => {
         setIntegrationsError(null);
       } catch (e) {
         setIntegrations([]);
-        setIntegrationsError(e.message || 'Failed to load integrations');
+        setIntegrationsError(errorMessage(e) || 'Failed to load integrations');
       }
     };
     loadSettings();
@@ -177,7 +175,7 @@ const Settings = () => {
       const normalized = branchHolidays.map((row) => {
         let bid = row.branchId;
         if (bid === '' || bid === null || bid === undefined) bid = null;
-        else bid = parseInt(bid, 10);
+        else bid = parseInt(String(bid), 10);
         const start = (row.startDate || '').trim();
         const end = (row.endDate || '').trim() || start;
         return {
@@ -223,6 +221,7 @@ const Settings = () => {
     ]);
   };
 
+  /** @param {string} apiName */
   const handleTestAPI = async (apiName) => {
     const toastId = toast.loading(`Checking ${apiName}...`);
     try {
@@ -238,10 +237,11 @@ const Settings = () => {
         toast.error(`${apiName}: backend reported not ready`, { id: toastId });
       }
     } catch (e) {
-      toast.error(`${apiName}: ${e.message || 'connection failed'}`, { id: toastId });
+      toast.error(`${apiName}: ${errorMessage(e) || 'connection failed'}`, { id: toastId });
     }
   };
 
+  /** @param {import('react').FormEvent<HTMLFormElement>} e */
   const handleChangePassword = async (e) => {
     e.preventDefault();
 
@@ -264,7 +264,7 @@ const Settings = () => {
       });
       toast.success('Password changed successfully!');
     } catch (error) {
-      toast.error(error.message || 'Failed to change password');
+      toast.error(errorMessage(error) || 'Failed to change password');
     }
   };
 
@@ -393,7 +393,7 @@ const Settings = () => {
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={settings[feature.key]}
+                        checked={settings[/** @type {'enableVoice' | 'enableImages' | 'enableTraining'} */ (feature.key)]}
                         onChange={(e) => setSettings({...settings, [feature.key]: e.target.checked})}
                         className="sr-only peer"
                       />
@@ -888,7 +888,7 @@ const Settings = () => {
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={settings[setting.key]}
+                      checked={settings[/** @type {'notificationsEnabled' | 'emailAlerts'} */ (setting.key)]}
                       onChange={(e) => setSettings({...settings, [setting.key]: e.target.checked})}
                       className="sr-only peer"
                     />
@@ -912,7 +912,7 @@ const Settings = () => {
                     value={settings.humanTakeoverNotifyMobiles}
                     onChange={(e) => setSettings({...settings, humanTakeoverNotifyMobiles: e.target.value})}
                     className="input-field w-full resize-none"
-                    rows="3"
+                    rows={3}
                     placeholder="e.g., +1234567890, +9876543210, +1122334455"
                   />
                   <p className="text-xs text-slate-500 mt-2">

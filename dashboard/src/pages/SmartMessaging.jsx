@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -26,11 +26,13 @@ import {
 import toast from "react-hot-toast";
 import { apiUrl } from "../utils/apiBaseUrl";
 import { authFetch } from '../utils/authFetch';
+import { errorMessage } from "../utils/apiValidate";
 
 /**
  * Titles shown on template cards, test-template dropdown, and mappings table.
  * Matches WhatsApp/Meta template names from config/montymobile_templates.json
  * (missed_yesterday → outbound name sent_day_after_missed_appointment).
+ * @type {Record<string, { title: string; subtitle: string }>}
  */
 const SYSTEM_TEMPLATE_LABELS = {
   reminder_24h: {
@@ -65,10 +67,18 @@ const SYSTEM_TEMPLATE_LABELS = {
   },
 };
 
+/**
+ * @param {string} templateId
+ * @returns {{ title: string; subtitle: string } | null}
+ */
 function getSystemTemplateLabel(templateId) {
   return SYSTEM_TEMPLATE_LABELS[templateId] || null;
 }
 
+/**
+ * @param {string} templateId
+ * @param {SmartMessageTemplate | undefined} templateData
+ */
 function getTemplateCardDisplay(templateId, templateData) {
   const sys = getSystemTemplateLabel(templateId);
   if (sys) {
@@ -80,12 +90,17 @@ function getTemplateCardDisplay(templateId, templateData) {
   };
 }
 
+/**
+ * @param {string} templateId
+ * @param {{ name?: string } | undefined} templateData
+ */
 function getTemplateSelectLabel(templateId, templateData) {
   const sys = getSystemTemplateLabel(templateId);
   if (sys) return sys.title;
   return (templateData && templateData.name) || templateId;
 }
 
+/** @param {Date} d */
 const localISODate = (d) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -95,16 +110,22 @@ const localISODate = (d) => {
 
 const SmartMessaging = () => {
   const [activeTab, setActiveTab] = useState("sent");
-  const [sentMessages, setSentMessages] = useState([]);
-  const [messageTemplates, setMessageTemplates] = useState({});
-  const [schedulerStatus, setSchedulerStatus] = useState(null);
+  const [sentMessages, setSentMessages] = useState(/** @type {SmartQueueMessage[]} */ ([]));
+  const [messageTemplates, setMessageTemplates] = useState(
+    /** @type {Record<string, SmartMessageTemplate>} */ ({})
+  );
+  const [schedulerStatus, setSchedulerStatus] = useState(
+    /** @type {SmartSchedulerStatus | null} */ (null)
+  );
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [editedTemplates, setEditedTemplates] = useState({});
-  const [savingTemplate, setSavingTemplate] = useState(null);
-  const [selectedLanguage, setSelectedLanguage] = useState("ar");
-  const [templateSchedules, setTemplateSchedules] = useState({});
-  const [savingTemplateSchedule, setSavingTemplateSchedule] = useState(null);
+  const [savingTemplate, setSavingTemplate] = useState(/** @type {string | null} */ (null));
+  const [templateSchedules, setTemplateSchedules] = useState(
+    /** @type {Record<string, SmartTemplateScheduleConfig>} */ ({})
+  );
+  const [savingTemplateSchedule, setSavingTemplateSchedule] = useState(
+    /** @type {string | null} */ (null)
+  );
 
   // NEW: Filter and pagination state
   const [selectedMessageType, setSelectedMessageType] = useState("all");
@@ -112,25 +133,34 @@ const SmartMessaging = () => {
   const RECORDS_PER_PAGE = 20;
 
   // NEW: Lazy loading state
-  const [messageCounts, setMessageCounts] = useState({});
-  const [countsError, setCountsError] = useState(null);
-  const [loadingCategory, setLoadingCategory] = useState(null);
-  const [loadedCategories, setLoadedCategories] = useState(new Set());
+  const [messageCounts, setMessageCounts] = useState(/** @type {Record<string, number>} */ ({}));
+  const [countsError, setCountsError] = useState(/** @type {string | null} */ (null));
+  const [loadingCategory, setLoadingCategory] = useState(/** @type {string | null} */ (null));
+  const [loadedCategories, setLoadedCategories] = useState(/** @type {Set<string>} */ (new Set()));
   // Customer list from source-of-truth API (per category)
-  const [categoryCustomers, setCategoryCustomers] = useState({});
+  const [categoryCustomers, setCategoryCustomers] = useState(
+    /** @type {Record<string, SmartCategoryCustomerRow[]>} */ ({})
+  );
 
   // NEW: Smart Messages control states
   const [smartMessagingEnabled, setSmartMessagingEnabled] = useState(true);
-  const [previewBeforeSend, setPreviewBeforeSend] = useState(true);
-  const [pendingMessages, setPendingMessages] = useState([]);
-  const [selectedPendingMessages, setSelectedPendingMessages] = useState([]);
-  const [serviceMappings, setServiceMappings] = useState({});
-  const [availableServices, setAvailableServices] = useState([]);
-  const [availableTemplates, setAvailableTemplates] = useState([]);
+  const [serviceMappings, setServiceMappings] = useState(
+    /** @type {Record<string, SmartServiceMapping>} */ ({})
+  );
+  const [availableServices, setAvailableServices] = useState(
+    /** @type {SmartMessagingService[]} */ ([])
+  );
+  const [availableTemplates, setAvailableTemplates] = useState(
+    /** @type {SmartMessagingTemplateOption[]} */ ([])
+  );
 
   // NEW: Edit modals state
-  const [editingScheduledMessage, setEditingScheduledMessage] = useState(null);
-  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [editingScheduledMessage, setEditingScheduledMessage] = useState(
+    /** @type {SmartEditingScheduledMessage | null} */ (null)
+  );
+  const [editingTemplate, setEditingTemplate] = useState(
+    /** @type {SmartEditingTemplate | null} */ (null)
+  );
   const [showCreateTemplateModal, setShowCreateTemplateModal] = useState(false);
   const [newTemplate, setNewTemplate] = useState({
     id: "",
@@ -141,7 +171,9 @@ const SmartMessaging = () => {
     fr: ""
   });
   const [savingScheduledEdit, setSavingScheduledEdit] = useState(false);
-  const [viewingMessage, setViewingMessage] = useState(null);
+  const [viewingMessage, setViewingMessage] = useState(
+    /** @type {SmartViewingMessage | null} */ (null)
+  );
   const [viewingMessageEdit, setViewingMessageEdit] = useState({ content: "", sendTime: "" });
   const [savingViewEdit, setSavingViewEdit] = useState(false);
   const [collectingCounts, setCollectingCounts] = useState(false);
@@ -151,11 +183,15 @@ const SmartMessaging = () => {
   const [testTemplateId, setTestTemplateId] = useState("");
   const [testLangMode, setTestLangMode] = useState("auto");
   const [testSendLoading, setTestSendLoading] = useState(false);
-  const [testLangPreview, setTestLangPreview] = useState(null);
+  const [testLangPreview, setTestLangPreview] = useState(
+    /** @type {SmartTestLangPreview | null} */ (null)
+  );
   const [templateHeaderImageUrl, setTemplateHeaderImageUrl] = useState("");
   const [savingHeaderUrl, setSavingHeaderUrl] = useState(false);
 
-  const [sessionStarRatings, setSessionStarRatings] = useState([]);
+  const [sessionStarRatings, setSessionStarRatings] = useState(
+    /** @type {SmartSessionStarRating[]} */ ([])
+  );
   const [sessionStarRatingsLoading, setSessionStarRatingsLoading] = useState(false);
   const [sessionRatingsTick, setSessionRatingsTick] = useState(0);
 
@@ -166,12 +202,16 @@ const SmartMessaging = () => {
     return localISODate(d);
   });
   const [pausedToDate, setPausedToDate] = useState(() => localISODate(new Date()));
-  const [pausedServiceIds, setPausedServiceIds] = useState([]);
+  const [pausedServiceIds, setPausedServiceIds] = useState(/** @type {number[]} */ ([]));
   const [pausedPreviewLoading, setPausedPreviewLoading] = useState(false);
   const [pausedSendLoading, setPausedSendLoading] = useState(false);
-  const [pausedRecipients, setPausedRecipients] = useState([]);
-  const [pausedCampaignError, setPausedCampaignError] = useState(null);
-  const [pausedPlaceholdersHelp, setPausedPlaceholdersHelp] = useState(null);
+  const [pausedRecipients, setPausedRecipients] = useState(
+    /** @type {SmartPausedCampaignRecipient[]} */ ([])
+  );
+  const [pausedCampaignError, setPausedCampaignError] = useState(/** @type {string | null} */ (null));
+  const [pausedPlaceholdersHelp, setPausedPlaceholdersHelp] = useState(
+    /** @type {string | null} */ (null)
+  );
 
   // Manual WhatsApp leads: chatted in Firestore, no BOC customer file, no appointments (whatsapp_lead_no_booking)
   const [leadFromDate, setLeadFromDate] = useState(() => {
@@ -180,21 +220,18 @@ const SmartMessaging = () => {
     return localISODate(d);
   });
   const [leadToDate, setLeadToDate] = useState(() => localISODate(new Date()));
-  const [leadServiceIds, setLeadServiceIds] = useState([]);
+  const [leadServiceIds, setLeadServiceIds] = useState(/** @type {number[]} */ ([]));
   const [leadPreviewLoading, setLeadPreviewLoading] = useState(false);
   const [leadSendLoading, setLeadSendLoading] = useState(false);
-  const [leadRecipients, setLeadRecipients] = useState([]);
-  const [leadCampaignError, setLeadCampaignError] = useState(null);
+  const [leadRecipients, setLeadRecipients] = useState(
+    /** @type {SmartLeadCampaignRecipient[]} */ ([])
+  );
+  const [leadCampaignError, setLeadCampaignError] = useState(/** @type {string | null} */ (null));
 
-  // Fetch real data from API
-  useEffect(() => {
-    fetchSmartMessagingData();
-    fetchSmartMessagingSettings();
-    fetchPendingMessages();
-    fetchServiceMappings();
-    fetchTemplateSchedules();
-  }, []);
+  const messageTemplatesRef = useRef(messageTemplates);
+  messageTemplatesRef.current = messageTemplates;
 
+  // Fetch real data from API — mount effect added after fetch callbacks below
   useEffect(() => {
     if (activeTab !== "sessionRatings") return;
     let cancelled = false;
@@ -225,8 +262,9 @@ const SmartMessaging = () => {
 
   useEffect(() => {
     const ids = Object.keys(messageTemplates || {}).sort();
-    if (ids.length === 0) return;
-    setTestTemplateId((prev) => (prev && messageTemplates[prev] ? prev : ids[0]));
+    const firstId = ids[0];
+    if (!firstId) return;
+    setTestTemplateId((prev) => (prev && messageTemplates[prev] ? prev : firstId));
   }, [messageTemplates]);
 
   const fetchTestLangPreview = async () => {
@@ -285,7 +323,7 @@ const SmartMessaging = () => {
       console.error(e);
       setPausedRecipients([]);
       setPausedPlaceholdersHelp(null);
-      toast.error("Preview failed");
+      toast.error(`Preview failed: ${errorMessage(e)}`);
     } finally {
       setPausedPreviewLoading(false);
     }
@@ -334,7 +372,7 @@ const SmartMessaging = () => {
       }
     } catch (e) {
       console.error(e);
-      toast.error("Send failed");
+      toast.error(`Send failed: ${errorMessage(e)}`);
     } finally {
       setPausedSendLoading(false);
     }
@@ -371,7 +409,7 @@ const SmartMessaging = () => {
     } catch (e) {
       console.error(e);
       setLeadRecipients([]);
-      toast.error("Preview failed");
+      toast.error(`Preview failed: ${errorMessage(e)}`);
     } finally {
       setLeadPreviewLoading(false);
     }
@@ -420,7 +458,7 @@ const SmartMessaging = () => {
       }
     } catch (e) {
       console.error(e);
-      toast.error("Send failed");
+      toast.error(`Send failed: ${errorMessage(e)}`);
     } finally {
       setLeadSendLoading(false);
     }
@@ -433,10 +471,10 @@ const SmartMessaging = () => {
     }
     setTestSendLoading(true);
     try {
-      const payload = {
+      const payload = /** @type {{ phone_number: string; template_id: string; language?: string; header_image_url?: string }} */ ({
         phone_number: testPhone.trim(),
         template_id: testTemplateId,
-      };
+      });
       if (testLangMode !== "auto") {
         payload.language = testLangMode;
       }
@@ -538,35 +576,21 @@ const SmartMessaging = () => {
   };
 
   // Fetch smart messaging settings (global toggle, preview mode)
-  const fetchSmartMessagingSettings = async () => {
+  const fetchSmartMessagingSettings = useCallback(async () => {
     try {
       const response = await authFetch(apiUrl("/api/smart-messaging/settings"));
       const result = await response.json();
       if (result.success) {
         setSmartMessagingEnabled(result.settings?.enabled ?? true);
-        setPreviewBeforeSend(result.settings?.previewBeforeSend ?? true);
         setTemplateHeaderImageUrl(result.settings?.templateHeaderImageUrl ?? "");
       }
     } catch (error) {
       console.error("Error fetching smart messaging settings:", error);
     }
-  };
-
-  // Fetch pending approval messages
-  const fetchPendingMessages = async () => {
-    try {
-      const response = await authFetch(apiUrl("/api/smart-messaging/preview-queue?status=pending_approval"));
-      const result = await response.json();
-      if (result.success) {
-        setPendingMessages(result.messages || []);
-      }
-    } catch (error) {
-      console.error("Error fetching pending messages:", error);
-    }
-  };
+  }, []);
 
   // Fetch service-template mappings
-  const fetchServiceMappings = async () => {
+  const fetchServiceMappings = useCallback(async () => {
     try {
       const [mappingsResponse, servicesResponse] = await Promise.all([
         authFetch(apiUrl("/api/smart-messaging/service-mappings")),
@@ -586,9 +610,9 @@ const SmartMessaging = () => {
     } catch (error) {
       console.error("Error fetching service mappings:", error);
     }
-  };
+  }, []);
 
-  const fetchTemplateSchedules = async () => {
+  const fetchTemplateSchedules = useCallback(async () => {
     try {
       const response = await authFetch(apiUrl("/api/smart-messaging/template-schedules"));
       const result = await response.json();
@@ -598,7 +622,7 @@ const SmartMessaging = () => {
     } catch (error) {
       console.error("Error fetching template schedules:", error);
     }
-  };
+  }, []);
 
   // Toggle smart messaging on/off
   const handleToggleSmartMessaging = async () => {
@@ -621,114 +645,10 @@ const SmartMessaging = () => {
     }
   };
 
-  // Toggle preview before send setting
-  const handleTogglePreviewBeforeSend = async () => {
-    try {
-      const response = await authFetch(apiUrl("/api/smart-messaging/settings"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ previewBeforeSend: !previewBeforeSend })
-      });
-      const result = await response.json();
-      if (result.success) {
-        setPreviewBeforeSend(!previewBeforeSend);
-        toast.success(previewBeforeSend ? "Preview mode disabled" : "Preview mode enabled");
-      } else {
-        toast.error("Failed to update setting");
-      }
-    } catch (error) {
-      console.error("Error updating preview setting:", error);
-      toast.error("Failed to update setting");
-    }
-  };
-
-  // Approve a pending message
-  const handleApproveMessage = async (messageId) => {
-    try {
-      const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/approve`), {
-        method: "POST"
-      });
-      const result = await response.json();
-      if (result.success) {
-        toast.success("Message approved!");
-        fetchPendingMessages();
-      } else {
-        toast.error("Failed to approve message");
-      }
-    } catch (error) {
-      console.error("Error approving message:", error);
-      toast.error("Failed to approve message");
-    }
-  };
-
-  // Reject a pending message
-  const handleRejectMessage = async (messageId) => {
-    try {
-      const response = await authFetch(apiUrl(`/api/smart-messaging/preview-queue/${messageId}/reject`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "Manually rejected" })
-      });
-      const result = await response.json();
-      if (result.success) {
-        toast.success("Message rejected");
-        fetchPendingMessages();
-      } else {
-        toast.error("Failed to reject message");
-      }
-    } catch (error) {
-      console.error("Error rejecting message:", error);
-      toast.error("Failed to reject message");
-    }
-  };
-
-  // Batch approve selected messages
-  const handleBatchApprove = async () => {
-    if (selectedPendingMessages.length === 0) return;
-    try {
-      const response = await authFetch(apiUrl("/api/smart-messaging/preview-queue/batch-approve"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message_ids: selectedPendingMessages })
-      });
-      const result = await response.json();
-      if (result.success) {
-        toast.success(`Approved ${result.total_approved} messages`);
-        setSelectedPendingMessages([]);
-        fetchPendingMessages();
-      } else {
-        toast.error("Failed to batch approve");
-      }
-    } catch (error) {
-      console.error("Error batch approving:", error);
-      toast.error("Failed to batch approve");
-    }
-  };
-
-  // Batch reject selected messages
-  const handleBatchReject = async () => {
-    if (selectedPendingMessages.length === 0) return;
-    try {
-      const response = await authFetch(apiUrl("/api/smart-messaging/preview-queue/batch-reject"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message_ids: selectedPendingMessages, reason: "Batch rejected" })
-      });
-      const result = await response.json();
-      if (result.success) {
-        toast.success(`Rejected ${result.total_rejected} messages`);
-        setSelectedPendingMessages([]);
-        fetchPendingMessages();
-      } else {
-        toast.error("Failed to batch reject");
-      }
-    } catch (error) {
-      console.error("Error batch rejecting:", error);
-      toast.error("Failed to batch reject");
-    }
-  };
-
-  // Toggle template for a service
+  /**
+   * @param {number} serviceId
+   * @param {string} templateId
+   */
   const handleToggleServiceTemplate = async (serviceId, templateId) => {
     const currentValue = serviceMappings[serviceId]?.templates?.[templateId] ?? true;
     const newMappings = { ...serviceMappings };
@@ -736,10 +656,11 @@ const SmartMessaging = () => {
     if (!newMappings[serviceId]) {
       newMappings[serviceId] = { templates: {} };
     }
-    if (!newMappings[serviceId].templates) {
-      newMappings[serviceId].templates = {};
+    const mapping = newMappings[serviceId];
+    if (!mapping.templates) {
+      mapping.templates = {};
     }
-    newMappings[serviceId].templates[templateId] = !currentValue;
+    mapping.templates[templateId] = !currentValue;
     setServiceMappings(newMappings);
   };
 
@@ -762,6 +683,11 @@ const SmartMessaging = () => {
     }
   };
 
+  /**
+   * @param {string} templateId
+   * @param {string} field
+   * @param {string | number | boolean} value
+   */
   const handleTemplateScheduleChange = (templateId, field, value) => {
     setTemplateSchedules((prev) => ({
       ...prev,
@@ -772,17 +698,18 @@ const SmartMessaging = () => {
     }));
   };
 
+  /** @param {string} templateId */
   const handleSaveTemplateSchedule = async (templateId) => {
     const schedule = templateSchedules[templateId];
     if (!schedule) return;
 
     setSavingTemplateSchedule(templateId);
     try {
-      const payload = {
+      const payload = /** @type {{ enabled: boolean; sendTime: string; timezone: string; delayHours?: number }} */ ({
         enabled: !!schedule.enabled,
         sendTime: schedule.sendTime || "15:00",
         timezone: schedule.timezone || "Asia/Beirut",
-      };
+      });
       if (templateId === "thank_you_message_sent_after_session" && schedule.delayHours != null) {
         const n = Number(schedule.delayHours);
         if (!Number.isNaN(n)) {
@@ -810,6 +737,7 @@ const SmartMessaging = () => {
   };
 
   // View a message's full content (Eye icon) - for scheduled messages also allows inline edit
+  /** @param {SmartQueueMessage} message */
   const handleViewMessage = async (message) => {
     let fullContent = message.full_content || message.content_preview || "";
 
@@ -826,7 +754,6 @@ const SmartMessaging = () => {
       }
     }
 
-    const isScheduled = message.status === "scheduled" || message.status === "pending_approval";
     setViewingMessage({ ...message, fullContent });
     setViewingMessageEdit({
       content: fullContent,
@@ -865,6 +792,7 @@ const SmartMessaging = () => {
   };
 
   // Edit a scheduled message - use full_content if available, otherwise fetch
+  /** @param {SmartQueueMessage} message */
   const handleEditScheduledMessage = async (message) => {
     // First, try to use full_content from the message object (already loaded)
     let fullContent = message.full_content || message.content_preview || "";
@@ -922,6 +850,7 @@ const SmartMessaging = () => {
   };
 
   // Cancel a scheduled message
+  /** @param {string | undefined} messageId */
   const handleCancelScheduledMessage = async (messageId) => {
     if (!window.confirm("Are you sure you want to cancel this scheduled message?")) return;
 
@@ -946,13 +875,14 @@ const SmartMessaging = () => {
   };
 
   // Open template editor
+  /** @param {string} templateId */
   const handleEditTemplate = (templateId) => {
     const template = messageTemplates[templateId];
     if (template) {
       setEditingTemplate({
         id: templateId,
-        name: template.name,
-        description: template.description,
+        name: template.name || "",
+        description: template.description || "",
         ar: template.ar || "",
         en: template.en || "",
         fr: template.fr || ""
@@ -1046,6 +976,7 @@ const SmartMessaging = () => {
   };
 
   // Delete a custom template
+  /** @param {string} templateId */
   const handleDeleteTemplate = async (templateId) => {
     if (!window.confirm(`Are you sure you want to delete the template "${messageTemplates[templateId]?.name}"?`)) {
       return;
@@ -1069,34 +1000,17 @@ const SmartMessaging = () => {
     }
   };
 
-  // Toggle select all pending messages
-  const handleSelectAllPending = () => {
-    if (selectedPendingMessages.length === pendingMessages.length) {
-      setSelectedPendingMessages([]);
-    } else {
-      setSelectedPendingMessages(pendingMessages.map(m => m.message_id));
-    }
-  };
-
-  // Toggle select single pending message
-  const handleToggleSelectPending = (messageId) => {
-    if (selectedPendingMessages.includes(messageId)) {
-      setSelectedPendingMessages(selectedPendingMessages.filter(id => id !== messageId));
-    } else {
-      setSelectedPendingMessages([...selectedPendingMessages, messageId]);
-    }
-  };
-
-  const fetchSmartMessagingData = async () => {
+  const fetchSmartMessagingData = useCallback(async () => {
     // Only full-page spinner on first load; refetches after edits would hide the whole
     // page (including "Send test template") and feel like sends "stopped working".
     const showFullPageLoader =
-      !messageTemplates || Object.keys(messageTemplates).length === 0;
+      !messageTemplatesRef.current || Object.keys(messageTemplatesRef.current).length === 0;
     try {
       if (showFullPageLoader) {
         setLoading(true);
       }
 
+      /** @param {string} path */
       const fetchJsonSafely = async (path) => {
         try {
           const response = await authFetch(apiUrl(path));
@@ -1138,12 +1052,6 @@ const SmartMessaging = () => {
       // Fetch templates
       if (templatesResult?.success) {
         setMessageTemplates(templatesResult.templates);
-        // Initialize edited templates with current values
-        setEditedTemplates(
-          JSON.parse(JSON.stringify(templatesResult.templates))
-        );
-        // selectedLanguage is now a single string, not per-template
-        // Already initialized to "ar" in useState
       } else if (templatesResult) {
         console.warn("Failed to fetch templates:", templatesResult.error);
       }
@@ -1157,7 +1065,19 @@ const SmartMessaging = () => {
         setLoading(false);
       }
     }
-  };
+  }, [fetchTemplateSchedules]);
+
+  useEffect(() => {
+    fetchSmartMessagingData();
+    fetchSmartMessagingSettings();
+    fetchServiceMappings();
+    fetchTemplateSchedules();
+  }, [
+    fetchSmartMessagingData,
+    fetchSmartMessagingSettings,
+    fetchServiceMappings,
+    fetchTemplateSchedules,
+  ]);
 
   // Collect scheduled messages from appointments API, then refresh counts
   const handleCollectAndRefresh = async () => {
@@ -1182,6 +1102,7 @@ const SmartMessaging = () => {
   };
 
   // ✅ Fetch customer list from source-of-truth API (counts match this list)
+  /** @param {string} category */
   const fetchMessagesForCategory = async (category) => {
     if (category === "all") {
       setCategoryCustomers(prev => ({ ...prev, all: [] }));
@@ -1219,59 +1140,18 @@ const SmartMessaging = () => {
   };
 
   // ✅ LAZY LOADING: Handle category selection
+  /** @param {string} category */
   const handleCategorySelect = (category) => {
     setSelectedMessageType(category);
     setCurrentPage(1);
     fetchMessagesForCategory(category);
   };
 
-  const handleTemplateChange = (templateId, language, value) => {
-    setEditedTemplates((prev) => ({
-      ...prev,
-      [templateId]: {
-        ...prev[templateId],
-        [language]: value,
-      },
-    }));
-  };
-
-  const handleSaveTemplate = async (templateId) => {
-    try {
-      setSavingTemplate(templateId);
-
-      const response = await authFetch(apiUrl(`/api/smart-messaging/templates/${templateId}`), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ar: editedTemplates[templateId].ar,
-          en: editedTemplates[templateId].en,
-          fr: editedTemplates[templateId].fr,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast.success("Template saved successfully!");
-        // Update the original templates
-        setMessageTemplates((prev) => ({
-          ...prev,
-          [templateId]: { ...editedTemplates[templateId] },
-        }));
-      } else {
-        toast.error(`Failed to save template: ${result.error}`);
-      }
-    } catch (error) {
-      console.error("Error saving template:", error);
-      toast.error("Failed to save template");
-    } finally {
-      setSavingTemplate(null);
-    }
-  };
-
-  // Date-range filter helper based on message type
+  /**
+   * Date-range filter helper based on message type.
+   * @param {SmartQueueMessage} message
+   * @param {string} messageType
+   */
   const isMessageInDateRange = (message, messageType) => {
     const now = new Date();
     // Use local date components (not toISOString which converts to UTC)
@@ -1289,15 +1169,18 @@ const SmartMessaging = () => {
     const appointmentDate = message.template_data?.appointment_date || null;
 
     // Get send time as Date object (used for 24h reminder)
-    const sendTime = new Date(message.send_at || message.sent_at || message.created_at || message.scheduled_at);
+    const sendTime = new Date(
+      message.send_at || message.sent_at || message.created_at || message.scheduled_at || 0
+    );
 
     switch (messageType) {
-      case "reminder_24h":
+      case "reminder_24h": {
         // Show messages where send_at is within ±24h from now
         if (isNaN(sendTime.getTime())) return true;
         const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         return sendTime >= past24h && sendTime <= next24h;
+      }
       case "thank_you_message_sent_after_session":
         // Show messages scheduled for today only
         if (!sendDateStr) return true;
@@ -1310,6 +1193,7 @@ const SmartMessaging = () => {
         return appointmentDate === yesterdayStr || sendDateStr === yesterdayStr;
       case "sent_17_days_after_last_session_new":
         // Show 17-day followups scheduled within current month
+        if (!sendDateStr) return true;
         return sendDateStr >= startOfMonthStr && sendDateStr < startOfNextMonthStr;
       default:
         return true;
@@ -1330,7 +1214,7 @@ const SmartMessaging = () => {
       // Filter by date range based on message type
       // For "all" tab: apply each message's own category date filter
       // For specific tab: apply that category's date filter
-      const typeToCheck = selectedMessageType === "all" ? message.message_type : selectedMessageType;
+      const typeToCheck = selectedMessageType === "all" ? message.message_type || "" : selectedMessageType;
       if (!isMessageInDateRange(message, typeToCheck)) {
         return false;
       }
@@ -1363,18 +1247,25 @@ const SmartMessaging = () => {
     ? (categoryCustomers[selectedMessageType] || [])
     : [];
   const tableRows = customersForTable.length > 0
-    ? customersForTable.map((row, idx) => ({
-        message_id: row.appointment_id ? `cust_${row.appointment_id}_${idx}` : `cust_${row.phone}_${idx}`,
-        customer_name: row.customer_name,
-        customer_phone: row.phone,
-        reason: row.reason,
-        message_type: row.type,
-        status: row.action_state === "pending" ? "scheduled" : row.action_state,
-        date: row.date,
-        time: row.time,
-        details: row.details,
-        template_data: { appointment_date: row.date },
-      }))
+    ? customersForTable.map(
+        /**
+         * @param {SmartCategoryCustomerRow} row
+         * @param {number} idx
+         * @returns {SmartQueueMessage}
+         */
+        (row, idx) => ({
+          message_id: row.appointment_id ? `cust_${row.appointment_id}_${idx}` : `cust_${row.phone}_${idx}`,
+          customer_name: row.customer_name,
+          customer_phone: row.phone,
+          reason: row.reason,
+          message_type: row.type,
+          status: row.action_state === "pending" ? "scheduled" : row.action_state,
+          date: row.date,
+          time: row.time,
+          details: row.details,
+          template_data: { appointment_date: row.date },
+        })
+      )
     : allFilteredMessages;
 
   // Pagination
@@ -1385,6 +1276,7 @@ const SmartMessaging = () => {
 
   // Smart pagination: Generate page numbers based on current page
   const getPageNumbers = () => {
+    /** @type {Array<number | "...">} */
     const pages = [];
     const N = totalPages;
     const n = currentPage;
@@ -1436,6 +1328,7 @@ const SmartMessaging = () => {
   const pageNumbers = getPageNumbers();
 
   // Counts from API only; on failure show "—" (never fail-open to zeros)
+  /** @param {number | undefined} n */
   const countOrDash = (n) => (countsError ? "—" : Math.max(0, Number(n) || 0));
   const messageTypesCounts = {
     all: countsError
@@ -1455,7 +1348,9 @@ const SmartMessaging = () => {
     missed_yesterday: countOrDash(messageCounts.missed_yesterday),
   };
 
+  /** @param {string | undefined} type */
   const getMessageTypeInfo = (type) => {
+    /** @type {Record<string, { name: string; color: string; icon: typeof ClockIcon }>} */
     const types = {
       reminder_24h: {
         name: "reminder_24h",
@@ -1484,14 +1379,16 @@ const SmartMessaging = () => {
       },
     };
     // Return default info for custom templates
-    return types[type] || {
-      name: type ? type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) : "Custom",
+    return types[type || ""] || {
+      name: type ? type.replace(/_/g, " ").replace(/\b\w/g, (/** @type {string} */ l) => l.toUpperCase()) : "Custom",
       color: "bg-violet-100 text-violet-700",
       icon: EnvelopeIcon,
     };
   };
 
+  /** @param {string} templateId */
   const getTemplateIcon = (templateId) => {
+    /** @type {Record<string, typeof ClockIcon>} */
     const icons = {
       reminder_24h: ClockIcon,
       thank_you_message_sent_after_session: CheckCircleIcon,
@@ -1503,7 +1400,9 @@ const SmartMessaging = () => {
     return icons[templateId] || EnvelopeIcon;
   };
 
+  /** @param {string} templateId */
   const getTemplateColor = (templateId) => {
+    /** @type {Record<string, string>} */
     const colors = {
       reminder_24h: "from-blue-500 to-cyan-500",
       thank_you_message_sent_after_session: "from-green-500 to-emerald-500",
@@ -2092,7 +1991,7 @@ const SmartMessaging = () => {
                   {loadingCategory ? (
                     <tr>
                       <td
-                        colSpan="7"
+                        colSpan={7}
                         className="py-8 text-center text-slate-500"
                       >
                         <div className="flex items-center justify-center gap-2">
@@ -2104,7 +2003,7 @@ const SmartMessaging = () => {
                   ) : filteredMessages.length === 0 ? (
                     <tr>
                       <td
-                        colSpan="7"
+                        colSpan={7}
                         className="py-8 text-center text-slate-500"
                       >
                         {searchQuery
@@ -2313,7 +2212,9 @@ const SmartMessaging = () => {
                       return (
                         <button
                           key={page}
-                          onClick={() => setCurrentPage(page)}
+                          onClick={() => {
+                            if (typeof page === "number") setCurrentPage(page);
+                          }}
                           className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
                             currentPage === page
                               ? "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg ring-2 ring-offset-2 ring-primary-300"

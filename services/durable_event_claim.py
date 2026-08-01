@@ -127,24 +127,30 @@ async def try_claim_event(
     ns = (namespace or "default").strip() or "default"
     coll = (firestore_collection or ns).strip()
 
+    # Capture SERVER_TIMESTAMP in the import scope so the except path never needs
+    # an unbound/None module assignment (avoids type: ignore on failed imports).
+    server_timestamp: object | None = None
+    db = None
     try:
         from google.cloud import firestore
 
         from utils.utils import get_firestore_db
 
         db = get_firestore_db()
+        server_timestamp = firestore.SERVER_TIMESTAMP
     except Exception:
         db = None
-        firestore = None  # type: ignore
+        server_timestamp = None
 
-    if db is not None and firestore is not None:
+    if db is not None and server_timestamp is not None:
         doc_id = hashlib.sha256(f"{ns}\0{mid}".encode()).hexdigest()
         ref = db.collection("artifacts").document("linas-ai-bot-backend").collection(coll).document(doc_id)
+        created_at_marker = server_timestamp
 
         def _create() -> None:
             ref.create(
                 {
-                    "created_at": firestore.SERVER_TIMESTAMP,
+                    "created_at": created_at_marker,
                     "namespace": ns[:64],
                     "key_prefix": mid[:200],
                     "status": "claimed",

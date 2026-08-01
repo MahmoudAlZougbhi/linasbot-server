@@ -8,6 +8,9 @@ import re
 from collections.abc import Iterator
 from typing import Any, cast
 
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
+from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
+
 import config
 from prompt_templates import CUSTOMER_STATUS_TOKEN
 
@@ -3607,10 +3610,10 @@ async def get_bot_chat_response(
         final_response_model_used = selected_model
         response = await client.chat.completions.create(
             model=selected_model,
-            messages=cast(Any, messages),
+            messages=cast(list[ChatCompletionMessageParam], messages),
             temperature=0.7,
             tools=cast(
-                Any,
+                list[ChatCompletionToolParam],
                 get_openai_tools_schema(
                     excluded_tool_names={
                         "update_customer_profile",
@@ -3641,7 +3644,7 @@ async def get_bot_chat_response(
                 ),
             ),
             tool_choice="auto",
-            response_format=cast(Any, {"type": "json_object"}),
+            response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),
         )
 
         if not response.choices:
@@ -5590,8 +5593,8 @@ async def get_bot_chat_response(
             )
             second_response = await client.chat.completions.create(
                 model=FINAL_RESPONSE_MODEL,
-                messages=cast(Any, messages),
-                response_format=cast(Any, {"type": "json_object"}),
+                messages=cast(list[ChatCompletionMessageParam], messages),
+                response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),
             )
             final_response_model_used = FINAL_RESPONSE_MODEL
             if not second_response.choices:

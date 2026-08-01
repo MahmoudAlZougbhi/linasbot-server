@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import {
   PencilIcon,
@@ -11,34 +10,41 @@ import {
 import { SYSTEM_ROLES } from '../../constants/permissions';
 import { getCustomRoles } from '../../utils/permissions';
 
+/** @param {{ users: DashboardUser[]; currentUserId?: string; loading: boolean; onEdit: (user: DashboardUser) => void; onDelete: (userId: string) => void }} props */
 const UserList = ({ users, currentUserId, loading, onEdit, onDelete }) => {
   const allRoles = { ...SYSTEM_ROLES, ...getCustomRoles() };
 
+  /** @param {string} roleId */
   const getRoleName = (roleId) => {
     return allRoles[roleId]?.name || roleId;
   };
 
+  /** @param {'active' | 'inactive' | 'suspended' | string | undefined} status */
   const getStatusBadge = (status) => {
+    /** @type {Record<string, string>} */
     const styles = {
       active: 'bg-green-100 text-green-700',
       inactive: 'bg-slate-100 text-slate-600',
       suspended: 'bg-red-100 text-red-700'
     };
 
+    /** @type {Record<string, import('react').ReactNode>} */
     const icons = {
       active: <CheckCircleIcon className="w-3 h-3 mr-1" />,
       inactive: <XCircleIcon className="w-3 h-3 mr-1" />,
       suspended: <XCircleIcon className="w-3 h-3 mr-1" />
     };
 
+    const statusKey = status && status in styles ? status : 'inactive';
     return (
-      <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${styles[status] || styles.inactive}`}>
-        {icons[status]}
-        {status?.charAt(0).toUpperCase() + status?.slice(1)}
+      <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${styles[statusKey]}`}>
+        {icons[statusKey]}
+        {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Inactive'}
       </span>
     );
   };
 
+  /** @param {string | null | undefined} dateString */
   const formatDate = (dateString) => {
     if (!dateString) return 'Never';
     const date = new Date(dateString);
@@ -113,11 +119,11 @@ const UserList = ({ users, currentUserId, loading, onEdit, onDelete }) => {
                     ? 'bg-blue-100 text-blue-700'
                     : 'bg-slate-100 text-slate-700'
                 }`}>
-                  {getRoleName(user.role)}
+                  {getRoleName(user.role || 'viewer')}
                 </span>
-                {user.permissions && (
+                {user.permissions ? (
                   <span className="ml-2 text-xs text-amber-600">Custom</span>
-                )}
+                ) : null}
               </td>
               <td className="py-4 px-4">
                 {getStatusBadge(user.status)}

@@ -1,13 +1,25 @@
 #!/usr/bin/env node
 /**
  * Production dependency audit gate.
- * Fails on high/critical findings except documented false-positive GHSA entries
- * that are already patched per the official advisory but still mis-ranged by npm.
+ *
+ * Allowed exception (narrow):
+ *   Advisory: GHSA-qwww-vcr4-c8h2 (React Router RSC Mode CSRF)
+ *   Packages: react-router, react-router-dom
+ *   Versions: exactly installed >=7.18.2 (patched Declarative Mode) OR >=8.3.0
+ *   Architecture proof: dashboard/src/App.jsx must use Declarative Mode and must
+ *     NOT contain RSC APIs. package.json must pin react-router-dom to a patched version.
+ *
+ * This is NOT a general high-severity bypass. Any other high/critical finding fails.
+ * Exception auto-invalidates if version drops below patched floor or App.jsx uses RSC.
  */
 import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+const ADVISORY_ID = "GHSA-qwww-vcr4-c8h2";
+const PATCHED_FLOOR_7 = "7.18.2";
+const PATCHED_FLOOR_8 = "8.3.0";
 
 const root = new URL("../dashboard", import.meta.url).pathname;
 const require = createRequire(join(root, "package.json"));
@@ -30,6 +42,33 @@ function cmp(a, b) {
   return 0;
 }
 
+function isPatchedRouterVersion(ver) {
+  if (!ver) return false;
+  if (cmp(ver, "8.0.0") >= 0) return cmp(ver, PATCHED_FLOOR_8) >= 0;
+  return cmp(ver, PATCHED_FLOOR_7) >= 0;
+}
+
+function packageJsonPinsPatchedRouter() {
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const pinned = String(pkg.dependencies?.["react-router-dom"] || "");
+  // Accept exact "7.18.2" or ">=7.18.2" style pins; reject ranges that allow unpatched.
+  if (!pinned) return false;
+  if (pinned === PATCHED_FLOOR_7 || pinned === PATCHED_FLOOR_8) return true;
+  if (pinned.startsWith("^") || pinned.startsWith("~")) {
+    const base = pinned.slice(1);
+    return isPatchedRouterVersion(base);
+  }
+  return isPatchedRouterVersion(pinned.replace(/^[^0-9]*/, ""));
+}
+
+function appIsDeclarativeNonRsc() {
+  const appSrc = readFileSync(join(root, "src/App.jsx"), "utf8");
+  const usesBrowserRouter = /BrowserRouter|HashRouter|MemoryRouter/.test(appSrc);
+  const usesRsc =
+    /unstable_RSC|createFromReadableStream|react-server-dom|RSCPayload/i.test(appSrc);
+  return usesBrowserRouter && !usesRsc;
+}
+
 let report;
 try {
   report = JSON.parse(
@@ -48,52 +87,86 @@ try {
 const vulns = report.vulnerabilities || {};
 const allow = [];
 const block = [];
+const architectureOk = appIsDeclarativeNonRsc();
+const pinOk = packageJsonPinsPatchedRouter();
+const routerVer = versionOf("react-router-dom") || versionOf("react-router");
+const routerExceptionEligible =
+  isPatchedRouterVersion(routerVer) && architectureOk && pinOk;
+
+/**
+ * True when this finding is exactly GHSA-qwww-vcr4-c8h2 on react-router /
+ * react-router-dom (direct advisory entry or npm's "via react-router" edge).
+ */
+function isGhsaQwwwRouterFinding(name, via) {
+  const isRouterPkg = name === "react-router" || name === "react-router-dom";
+  if (!isRouterPkg) return false;
+  const viaBlob = JSON.stringify(via);
+  if (
+    viaBlob.includes(ADVISORY_ID) ||
+    /RSC Mode CSRF/i.test(viaBlob) ||
+    via.some(
+      (x) =>
+        typeof x === "object" &&
+        x &&
+        (String(x.source || "").includes(ADVISORY_ID) ||
+          String(x.url || "").includes(ADVISORY_ID) ||
+          /RSC Mode CSRF/i.test(String(x.title || "")))
+    )
+  ) {
+    return true;
+  }
+  // react-router-dom often reports only via: ["react-router"] with no advisory object.
+  // Allow that edge only when the dependency chain is exclusively react-router and
+  // the installed react-router package itself carries this advisory (or is clean).
+  if (
+    name === "react-router-dom" &&
+    via.length > 0 &&
+    via.every((x) => x === "react-router")
+  ) {
+    const parent = vulns["react-router"];
+    if (!parent) return routerExceptionEligible;
+    const parentVia = Array.isArray(parent.via) ? parent.via : [];
+    return isGhsaQwwwRouterFinding("react-router", parentVia);
+  }
+  return false;
+}
 
 for (const [name, v] of Object.entries(vulns)) {
   const sev = v.severity;
   if (!["high", "critical"].includes(sev)) continue;
-  const via = Array.isArray(v.via) ? v.via : [];
-  const ghsa = via
-    .map((x) => (typeof x === "object" ? x.source || x.url || "" : String(x)))
-    .join(" ");
-  const isRscCsrf =
-    /GHSA-qwww-vcr4-c8h2/i.test(ghsa) ||
-    /RSC Mode CSRF/i.test(JSON.stringify(via));
 
-  if (isRscCsrf || (name === "react-router" || name === "react-router-dom")) {
-    const ver = versionOf(name);
-    const depVer = versionOf("react-router");
-    const effective = ver || depVer;
-    // Official advisory patched versions: >=7.18.2 and >=8.3.0
-    // npm still flags react-router-dom purely because it depends on react-router@7.18.2
-    // even though 7.18.2 is the patched release (advisory range in npm DB is stale).
-    const patched =
-      effective && (cmp(effective, "7.18.2") >= 0 || (cmp(effective, "8.0.0") >= 0 && cmp(effective, "8.3.0") >= 0));
-    if (patched && (name === "react-router" || name === "react-router-dom") && (isRscCsrf || /react-router/.test(ghsa) || name === "react-router-dom")) {
-      const pkg = readFileSync(join(root, "package.json"), "utf8");
-      const appSrc = readFileSync(join(root, "src/App.jsx"), "utf8");
-      const usesRsc =
-        /unstable_RSC|createFromReadableStream|RouterProvider.*hydration|react-server-dom/i.test(appSrc);
-      if (!usesRsc) {
-        allow.push({
-          name,
-          sev,
-          ver: effective,
-          reason:
-            "GHSA-qwww-vcr4-c8h2: installed react-router@>=7.18.2 is the patched Declarative Mode release; npm advisory range incorrectly includes it. App does not use RSC APIs.",
-          packageJsonOk: pkg.includes('"react-router-dom"'),
-          exploitability: "RSC Mode CSRF only; not applicable to Declarative Mode SPA",
-        });
-        continue;
-      }
-    }
+  const via = Array.isArray(v.via) ? v.via : [];
+  const viaBlob = JSON.stringify(via);
+
+  if (isGhsaQwwwRouterFinding(name, via) && routerExceptionEligible) {
+    allow.push({
+      advisory: ADVISORY_ID,
+      name,
+      severity: sev,
+      installed: versionOf(name) || routerVer,
+      packageJsonPinOk: pinOk,
+      declarativeNonRsc: architectureOk,
+      evidence:
+        "Exception limited to GHSA-qwww-vcr4-c8h2. Patched Declarative floor is react-router(-dom) >=7.18.2 (or >=8.3.0). npm advisory range still mis-lists 7.18.2. App.jsx uses BrowserRouter/HashRouter/MemoryRouter and has no RSC APIs. Auto-invalidates if pin/version drops or App.jsx adopts RSC.",
+    });
+    continue;
   }
-  block.push({ name, sev, range: v.range, via: ghsa.slice(0, 200) });
+
+  block.push({
+    name,
+    sev,
+    range: v.range,
+    via: viaBlob.slice(0, 240),
+  });
 }
 
 const meta = report.metadata?.vulnerabilities || {};
 console.log("npm audit severity counts:", JSON.stringify(meta));
 console.log("allowed documented findings:", JSON.stringify(allow, null, 2));
+if (!architectureOk) {
+  console.error("Architecture proof failed: App.jsx must be Declarative non-RSC");
+  process.exit(1);
+}
 if (block.length) {
   console.error("blocking findings:", JSON.stringify(block, null, 2));
   process.exit(1);

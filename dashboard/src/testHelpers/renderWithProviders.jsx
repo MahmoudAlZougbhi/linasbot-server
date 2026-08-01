@@ -1,8 +1,11 @@
-import React from "react";
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
+/**
+ * @param {import('react').ReactElement} ui
+ * @param {{ route?: string } & Record<string, unknown>} [options]
+ */
 export function renderWithRouter(ui, { route = "/", ...options } = {}) {
   return render(
     <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>,
@@ -10,6 +13,10 @@ export function renderWithRouter(ui, { route = "/", ...options } = {}) {
   );
 }
 
+/**
+ * @param {Partial<AuthUser>} [overrides]
+ * @returns {AuthUser}
+ */
 export function makeAuthUser(overrides = {}) {
   return {
     id: "user-1",
@@ -34,6 +41,9 @@ export function makeAuthUser(overrides = {}) {
   };
 }
 
+/**
+ * @param {Record<string, { ok?: boolean, status?: number, body?: unknown } | ((url: RequestInfo | URL, options?: RequestInit) => unknown)>} responsesByUrl
+ */
 export function mockFetchJson(responsesByUrl) {
   return vi.fn(async (url, options = {}) => {
     const key = Object.keys(responsesByUrl).find((k) => String(url).includes(k));
@@ -45,6 +55,20 @@ export function mockFetchJson(responsesByUrl) {
       };
     }
     const spec = responsesByUrl[key];
+    if (!spec) {
+      return {
+        ok: false,
+        status: 404,
+        json: async () => ({ success: false, error: `Unmocked fetch: ${url}` }),
+      };
+    }
+    if (spec === undefined) {
+      return {
+        ok: false,
+        status: 404,
+        json: async () => ({ success: false, error: `Unmocked fetch: ${url}` }),
+      };
+    }
     if (typeof spec === "function") {
       return spec(url, options);
     }
