@@ -105,8 +105,15 @@ def parse_meta_messaging_events(
     payload: Dict[str, Any],
     instagram_account_id: str = "",
 ) -> List[Dict[str, Any]]:
-    """Parse Messenger Platform webhook payloads into normalized inbound events."""
+    """Parse Messenger Platform webhook payloads into normalized inbound events.
+
+    Only Facebook Page (`object=page`) and Instagram (`object=instagram`) events are
+    accepted. WhatsApp Cloud / other Meta objects yield an empty list so they cannot
+    invoke the social AI pipeline.
+    """
     payload_object = str(payload.get("object") or "").strip().lower()
+    if payload_object in {"whatsapp_business_account", "whatsapp"}:
+        return []
     if payload_object not in {"page", "instagram"}:
         return []
 

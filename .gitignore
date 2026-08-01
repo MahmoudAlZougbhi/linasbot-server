@@ -118,6 +118,7 @@ __pycache__/
 *.so
 venv/
 .venv/
+.venv-meta-test/
 ENV/
 .python-version
 

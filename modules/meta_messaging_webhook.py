@@ -54,25 +54,57 @@ async def receive_meta_messaging_webhook(request: Request):
     settings = get_meta_messaging_settings()
     raw_body = await request.body()
 
+    # When an App Secret is configured, reject invalid signatures even if messaging
+    # is still disabled so Meta credential mistakes are never treated as success.
+    if settings.app_secret:
+        if not verify_meta_signature(
+            raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret
+        ):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     if not settings.enabled:
         return JSONResponse({"status": "disabled"})
-    if not settings.app_secret or not settings.page_access_token:
+    if not settings.app_secret or not settings.page_access_token or not settings.page_id:
         raise HTTPException(status_code=503, detail="Meta messaging credentials are incomplete")
-    if not verify_meta_signature(
-        raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret
-    ):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     try:
         payload = json.loads(raw_body)
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
+    payload_object = str(payload.get("object") or "").strip().lower()
+    # Meta WhatsApp Cloud events must never enter the social AI pipeline.
+    if payload_object == "whatsapp_business_account" or payload_object == "whatsapp":
+        return JSONResponse(
+            {
+                "status": "ignored",
+                "reason": "whatsapp_inbound_not_supported",
+                "accepted": 0,
+            }
+        )
+    if payload_object not in {"page", "instagram"}:
+        return JSONResponse(
+            {
+                "status": "ignored",
+                "reason": "unsupported_object",
+                "object": payload_object,
+                "accepted": 0,
+            }
+        )
+
     events = parse_meta_messaging_events(payload, settings.instagram_account_id)
     accepted = 0
+    duplicates = 0
     for event in events:
         if not _message_deduper.claim(event["message_id"]):
+            duplicates += 1
             continue
         _track_task(asyncio.create_task(process_meta_social_event(event, settings)))
         accepted += 1
-    return JSONResponse({"status": "received", "accepted": accepted})
+    return JSONResponse(
+        {
+            "status": "received",
+            "accepted": accepted,
+            "duplicates": duplicates,
+        }
+    )
