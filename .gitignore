@@ -158,3 +158,10 @@ backend.log
 # Claude Code
 #-------------------------
 .claude/
+
+.cm_testdata/
+linasbot_data/tenants/
+dashboard/build/
+
+.venv
+.venv/

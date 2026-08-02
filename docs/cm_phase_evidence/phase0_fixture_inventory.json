@@ -1,0 +1,32 @@
+{
+  "root": "/Users/alzoughbi/linasbot-server-cm-control-plane/tests/fixtures/cm_migration",
+  "created_at": "2026-08-02T16:59:53.790815+00:00",
+  "file_count": 5,
+  "files": [
+    {
+      "rel": "legacy/knowledge_base.txt",
+      "size": 50,
+      "sha256": "b73b12e5207f220667e21e3583576bde6a9d63238284410353fe46969736a873"
+    },
+    {
+      "rel": "legacy/knowledge_files/sample_prep.json",
+      "size": 153,
+      "sha256": "157e7f5a8571c14b295effe74b61a7dbcea067a35ab3803ba7ec3b620cc97daf"
+    },
+    {
+      "rel": "legacy/price_list.txt",
+      "size": 62,
+      "sha256": "adbd58c1c73bcd101d416f406c7aa6fa224053e4d7d9997fbbd8689e8c91d28e"
+    },
+    {
+      "rel": "legacy/qa_pairs.jsonl",
+      "size": 574,
+      "sha256": "3d9b9af20eb3ec723b0945a2f8ce50a7f48ab49189739722eb44ac176570f431"
+    },
+    {
+      "rel": "manifest.json",
+      "size": 108,
+      "sha256": "7955d1bf8230a443e6d3979154a1f53d70ba5d7c0055cf79476676dd5561176c"
+    }
+  ]
+}
