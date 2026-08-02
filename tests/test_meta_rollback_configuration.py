@@ -29,6 +29,15 @@ def test_new_app_apply_disables_rollback_mode_and_rejects_retired_app() -> None:
     assert 'updates["META_SOCIAL_NEW_APP_REQUIRED"] = "true"' in source
 
 
+def test_new_app_apply_proves_signed_whatsapp_is_handoff_only() -> None:
+    source = (ROOT / "scripts" / "prod_apply_meta_social_secrets.sh").read_text(encoding="utf-8")
+    assert "local_whatsapp_unsigned_http" in source
+    assert "local_whatsapp_signed_http" in source
+    assert "hmac.new(secret, body, hashlib.sha256)" in source
+    assert 'signed[1].get("reason") != "whatsapp_inbound_ai_disabled"' in source
+    assert 'signed[1].get("accepted") != 0' in source
+
+
 def test_new_app_apply_uses_candidate_environment_and_cutover_lock() -> None:
     source = (ROOT / ".github" / "workflows" / "meta-social-secrets-apply.yml").read_text(encoding="utf-8")
     assert "environment: meta-social-cutover" in source

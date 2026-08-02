@@ -230,16 +230,57 @@ echo "local_invalid_sig_http=$POST_CODE"
 echo "local_invalid_sig_body=$POST_BODY"
 test "$POST_CODE" = "401"
 
-# Existing WhatsApp provider webhook must not invoke AI.
-WA_CODE="$(curl -sS -o /tmp/wa_inbound_body -w '%{http_code}' --max-time 10 \
-  -X POST "http://127.0.0.1:8003/webhook" \
-  -H 'Content-Type: application/json' \
-  -d '{"object":"whatsapp_business_account","entry":[]}' || true)"
-WA_BODY="$(cat /tmp/wa_inbound_body 2>/dev/null || true)"
-echo "local_whatsapp_inbound_http=$WA_CODE"
-echo "local_whatsapp_inbound_body=$WA_BODY"
-test "$WA_CODE" = "200"
-printf '%s' "$WA_BODY" | grep -q 'whatsapp_inbound_ai_disabled'
+# Existing WhatsApp provider webhook must reject unsigned traffic, then accept
+# a correctly signed probe only to return the explicit handoff-only policy.
+python3 - <<'PY'
+import hashlib
+import hmac
+import json
+import os
+import urllib.error
+import urllib.request
+
+body = b'{"object":"whatsapp_business_account","entry":[]}'
+secret = os.environ["META_APP_SECRET"].encode("utf-8")
+signature = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
+
+
+def call(signature_header: str | None) -> tuple[int, dict[str, object]]:
+    headers = {"Content-Type": "application/json"}
+    if signature_header:
+        headers["X-Hub-Signature-256"] = signature_header
+    request = urllib.request.Request(
+        "http://127.0.0.1:8003/webhook",
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            raw = response.read(4096)
+            return response.status, json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        raw = exc.read(4096)
+        try:
+            payload = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            payload = {}
+        return exc.code, payload
+
+
+unsigned = call(None)
+signed = call(signature)
+print(f"local_whatsapp_unsigned_http={unsigned[0]}")
+print(f"local_whatsapp_signed_http={signed[0]}")
+print(f"local_whatsapp_signed_reason={signed[1].get('reason', 'missing')}")
+if unsigned[0] != 401:
+    raise SystemExit("unsigned WhatsApp inbound was not rejected")
+if signed[0] != 200:
+    raise SystemExit("signed WhatsApp policy probe did not return 200")
+if signed[1].get("reason") != "whatsapp_inbound_ai_disabled" or signed[1].get("accepted") != 0:
+    raise SystemExit("signed WhatsApp probe did not remain handoff-only")
+print("whatsapp_inbound_ai_disabled=true")
+PY
 
 echo "api_health=$(curl -sS --max-time 10 https://www.linasaibot.com/api/health || true)"
 echo "[meta-apply] SUCCESS"
