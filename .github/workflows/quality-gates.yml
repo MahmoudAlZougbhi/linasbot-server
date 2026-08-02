@@ -97,8 +97,9 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Content Management browser smoke
         env:
-          # Use Playwright-managed Chromium on CI (not system Chrome).
+          # Explicitly select Playwright-managed Chromium installed above.
           CM_PW_CHANNEL: bundled
+          CI: true
         run: npm run test:e2e:cm
 
   secret-scan:
