@@ -54,6 +54,12 @@ export const FEATURES = {
     name: 'Content Managers',
     description: 'Manage content files and knowledge content UI'
   },
+  CONTENT_PUBLISH: {
+    key: 'contentPublish',
+    path: null,
+    name: 'Content Publish',
+    description: 'Publish and rollback Content Management versions'
+  },
   ACTIVITY_FLOW: {
     key: 'activityFlow',
     path: '/activity-flow',
@@ -94,6 +100,7 @@ export const SYSTEM_ROLES = {
       settings: true,
       userManagement: true,
       contentManagers: true,
+      contentPublish: true,
       activityFlow: true
     }
   },
@@ -112,6 +119,7 @@ export const SYSTEM_ROLES = {
       settings: false,
       userManagement: false,
       contentManagers: false,
+      contentPublish: false,
       activityFlow: true
     }
   },
@@ -130,6 +138,7 @@ export const SYSTEM_ROLES = {
       settings: false,
       userManagement: false,
       contentManagers: false,
+      contentPublish: false,
       activityFlow: true
     }
   }
@@ -146,6 +155,7 @@ export const DEFAULT_PERMISSIONS = {
   settings: false,
   userManagement: false,
   contentManagers: false,
+  contentPublish: false,
   activityFlow: false
 };
 
