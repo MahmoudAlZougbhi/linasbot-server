@@ -210,24 +210,40 @@ print(
 
 env_prod = (values.get("ENVIRONMENT") or values.get("ENV") or "").strip().lower()
 print(f"[preflight] environment_marker={env_prod or 'unset'}")
-
-# Soft signal: whether running service already exposes firestore-related keys.
+env_ok = env_prod in {"production", "prod"}
+print(f"[preflight] environment_production_ok={env_ok}")
 print(f"[preflight] auth_secret_source_ok={dash_ok or auth_alias_ok}")
 
-if not all(required) or not firebase_ok:
+if not all(required) or not firebase_ok or not env_ok:
     raise SystemExit("[preflight] REQUIRED_CONFIG_MISSING")
 print("[preflight] required_config_ok=true")
 PY
 
-python3 - <<'PY'
-from pathlib import Path
-import json
-import os
+# Activate app venv before Firestore admin probe / dry-run (system python lacks deps).
+cd "$APP_DIR"
+if [ -f venv/bin/activate ]; then
+  # shellcheck disable=SC1091
+  source venv/bin/activate
+fi
+export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+PYTHON_BIN="$APP_DIR/venv/bin/python3"
+if [ ! -x "$PYTHON_BIN" ]; then
+  PYTHON_BIN="$(command -v python3)"
+fi
+echo "[preflight] python_bin=$PYTHON_BIN"
 
-for env_path in (
-    Path("/opt/linasbot/.env"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/.env"),
-):
+"$PYTHON_BIN" - <<'PY'
+from pathlib import Path
+import os
+import sys
+
+APP_DIR = "/opt/linasbot"
+if Path("/opt/linasbot/linaslaserbot-2.7.22/main.py").exists():
+    APP_DIR = "/opt/linasbot/linaslaserbot-2.7.22"
+sys.path.insert(0, APP_DIR)
+os.chdir(APP_DIR)
+
+for env_path in (Path("/opt/linasbot/.env"), Path(APP_DIR) / ".env"):
     if not env_path.exists():
         continue
     for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -236,59 +252,48 @@ for env_path in (
         k, v = line.split("=", 1)
         os.environ.setdefault(k.strip(), v.strip().strip("'").strip('"'))
 
-count = 0
-source = "none"
-candidates = [
-    Path("/opt/linasbot/data/dashboard_users.json"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/data/dashboard_users.json"),
-    Path("/opt/linasbot_data/dashboard_users.json"),
-    Path("/opt/linasbot/data/users.json"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/data/users.json"),
-]
-for root in (Path("/opt/linasbot/data"), Path("/opt/linasbot_data"), Path("/opt/linasbot/linaslaserbot-2.7.22/data")):
-    if root.exists():
-        for p in root.rglob("*user*.json"):
-            if p.is_file() and p not in candidates:
-                candidates.append(p)
+from utils.utils import get_firestore_db
 
-for p in candidates:
-    if not p.exists():
-        continue
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except Exception as e:
-        print(f"[preflight] admin_file_error path={p} type={type(e).__name__}")
-        continue
-    users = data.get("users") if isinstance(data, dict) else data
-    if isinstance(users, list) and users:
-        count = len(users)
-        source = f"file:{p}"
-        break
-    if isinstance(users, dict) and users:
-        count = len(users)
-        source = f"file:{p}"
-        break
+db = get_firestore_db()
+if not db:
+    raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS firestore_unavailable")
 
-print(f"[preflight] dashboard_users count={count} source={source}")
-if count < 1:
+coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
+docs = list(coll.stream())
+roles = {}
+active = 0
+owners = 0
+for doc in docs:
+    data = doc.to_dict() or {}
+    role = str(data.get("role") or "unknown")
+    roles[role] = roles.get(role, 0) + 1
+    status = str(data.get("status") or "").lower()
+    if status in {"", "active"}:
+        active += 1
+    if role in {"owner", "admin"} and status in {"", "active"}:
+        owners += 1
+
+print(
+    f"[preflight] dashboard_users count={len(docs)} active={active} "
+    f"owners_or_admins={owners} roles={roles} "
+    f"source=firestore:artifacts/linas-ai-bot-backend/dashboard_users"
+)
+if owners < 1 and active < 1:
     raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS")
 print("[preflight] existing_admin_retained=true (hashes unchanged by deploy; no default account created)")
 PY
 
-cd "$APP_DIR"
-if [ -f venv/bin/activate ]; then
-  # shellcheck disable=SC1091
-  source venv/bin/activate
-fi
-export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
-
 if [ -f scripts/backfill_live_chat_index.py ]; then
   echo "[preflight] starting live_chat_index dry-run"
-  python3 scripts/backfill_live_chat_index.py --dry-run
+  "$PYTHON_BIN" scripts/backfill_live_chat_index.py --dry-run
   echo "[preflight] dry_run_backfill_exit=0"
 else
   echo "[preflight] backfill_script_missing_on_current_deploy=true"
   echo "[preflight] NOTE: dry-run will be executed after release deploy when script is present"
 fi
 
+if [ -f scripts/prod_verify_webhook_challenge.sh ]; then
+  echo "[preflight] starting webhook challenge verify"
+  bash scripts/prod_verify_webhook_challenge.sh
+fi
 echo "[preflight] COMPLETE_OK"
