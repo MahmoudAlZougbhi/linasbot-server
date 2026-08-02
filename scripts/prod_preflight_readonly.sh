@@ -292,4 +292,8 @@ else
   echo "[preflight] NOTE: dry-run will be executed after release deploy when script is present"
 fi
 
+if [ -f scripts/prod_verify_webhook_challenge.sh ]; then
+  echo "[preflight] starting webhook challenge verify"
+  bash scripts/prod_verify_webhook_challenge.sh
+fi
 echo "[preflight] COMPLETE_OK"
