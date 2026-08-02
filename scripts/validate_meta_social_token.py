@@ -110,14 +110,13 @@ def main() -> None:
         }
     )
     debug_payload = _request_json(f"{base}/debug_token?{debug_query}")
-    profile_payload = _request_json(f"{base}/me?fields=id", bearer=page_token)
     page_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}?fields=id,instagram_business_account{{id}}",
         bearer=page_token,
     )
     checks = validate_payloads(
         debug_payload,
-        profile_payload,
+        page_payload,
         page_payload,
         expected_app_id=app_id,
     )
