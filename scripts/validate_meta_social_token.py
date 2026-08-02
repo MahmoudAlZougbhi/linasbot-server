@@ -32,14 +32,12 @@ def _mapping(value: object) -> dict[str, object]:
     return cast(dict[str, object], value) if isinstance(value, dict) else {}
 
 
-def validate_payloads(
+def validate_debug_payload(
     debug_payload: dict[str, object],
-    profile_payload: dict[str, object],
-    page_payload: dict[str, object],
     *,
     expected_app_id: str,
 ) -> dict[str, bool]:
-    """Return boolean-only checks or fail without rendering any credential."""
+    """Validate token metadata before making any Page data request."""
 
     if not expected_app_id.isdigit() or expected_app_id == RETIRED_APP_ID:
         raise MetaTokenValidationError("New App ID is missing, malformed, or belongs to the retired app")
@@ -56,19 +54,39 @@ def validate_payloads(
             if isinstance(raw_targets, list):
                 target_ids.update(str(target) for target in raw_targets)
 
-    instagram = _mapping(page_payload.get("instagram_business_account"))
     checks = {
         "token_valid": data.get("is_valid") is True,
         "token_app_id_match": str(data.get("app_id") or "") == expected_app_id,
         "token_type_is_page": str(data.get("type") or "").upper() == "PAGE",
-        "token_profile_is_target_page": str(profile_payload.get("id") or "") == EXPECTED_PAGE_ID,
-        "page_query_is_target_page": str(page_payload.get("id") or "") == EXPECTED_PAGE_ID,
-        "instagram_relationship_match": str(instagram.get("id") or "") == EXPECTED_INSTAGRAM_ID,
         "required_scopes_present": REQUIRED_SCOPES.issubset(scopes),
         "granular_targets_present": EXPECTED_PAGE_ID in target_ids,
         "granular_targets_allowlisted": bool(target_ids)
         and target_ids.issubset({EXPECTED_PAGE_ID, EXPECTED_INSTAGRAM_ID}),
     }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        raise MetaTokenValidationError(f"Meta Page token debug validation failed checks={failed}")
+    return checks
+
+
+def validate_payloads(
+    debug_payload: dict[str, object],
+    profile_payload: dict[str, object],
+    page_payload: dict[str, object],
+    *,
+    expected_app_id: str,
+) -> dict[str, bool]:
+    """Return boolean-only checks or fail without rendering any credential."""
+
+    checks = validate_debug_payload(debug_payload, expected_app_id=expected_app_id)
+    instagram = _mapping(page_payload.get("instagram_business_account"))
+    checks.update(
+        {
+            "token_profile_is_target_page": str(profile_payload.get("id") or "") == EXPECTED_PAGE_ID,
+            "page_query_is_target_page": str(page_payload.get("id") or "") == EXPECTED_PAGE_ID,
+            "instagram_relationship_match": str(instagram.get("id") or "") == EXPECTED_INSTAGRAM_ID,
+        }
+    )
     if not all(checks.values()):
         failed = sorted(key for key, value in checks.items() if not value)
         raise MetaTokenValidationError(f"Meta Page token validation failed checks={failed}")
@@ -110,6 +128,7 @@ def main() -> None:
         }
     )
     debug_payload = _request_json(f"{base}/debug_token?{debug_query}")
+    validate_debug_payload(debug_payload, expected_app_id=app_id)
     page_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}?fields=id,instagram_business_account{{id}}",
         bearer=page_token,
