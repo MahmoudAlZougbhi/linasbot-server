@@ -1,16 +1,12 @@
-name: Meta Social Secrets Apply
+name: Meta Social Atomic Cutover
 
 on:
   workflow_dispatch:
     inputs:
-      enable_messaging:
-        description: "Set META_SOCIAL_MESSAGING_ENABLED=true only if readiness is complete"
+      cutover_confirmation:
+        description: "Type CUTOVER_VERIFIED_META_APP"
         required: true
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
+        type: string
 
 concurrency:
   group: meta-social-cutover
@@ -20,13 +16,14 @@ permissions:
   contents: read
 
 jobs:
-  apply:
-    name: Apply Meta secrets on production
+  cutover:
+    name: Atomically cut over verified Meta app
+    if: inputs.cutover_confirmation == 'CUTOVER_VERIFIED_META_APP'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment: meta-social-cutover
     steps:
-      - name: Apply secrets via SSH
+      - name: Cut over Page subscription and production credentials
         uses: appleboy/ssh-action@v1.2.0
         env:
           META_APP_ID: ${{ secrets.META_APP_ID }}
@@ -36,16 +33,16 @@ jobs:
           META_INSTAGRAM_ACCOUNT_ID: ${{ secrets.META_INSTAGRAM_ACCOUNT_ID }}
           META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
           META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
-          APPLY_ENABLE_MESSAGING: ${{ inputs.enable_messaging }}
+          META_ROLLBACK_ENCRYPTION_KEY: ${{ secrets.META_ROLLBACK_ENCRYPTION_KEY }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script_stop: true
-          command_timeout: 10m
-          envs: META_APP_ID,META_APP_SECRET,META_PAGE_ID,META_PAGE_ACCESS_TOKEN,META_INSTAGRAM_ACCOUNT_ID,META_WEBHOOK_VERIFY_TOKEN,META_GRAPH_API_VERSION,APPLY_ENABLE_MESSAGING
+          command_timeout: 15m
+          envs: META_APP_ID,META_APP_SECRET,META_PAGE_ID,META_PAGE_ACCESS_TOKEN,META_INSTAGRAM_ACCOUNT_ID,META_WEBHOOK_VERIFY_TOKEN,META_GRAPH_API_VERSION,META_ROLLBACK_ENCRYPTION_KEY
           script: |
             set -e
-            test -f /opt/linasbot/scripts/prod_apply_meta_social_secrets.sh
-            sudo -E bash /opt/linasbot/scripts/prod_apply_meta_social_secrets.sh
+            test -f /opt/linasbot/scripts/prod_cutover_meta_social.sh
+            sudo -E bash /opt/linasbot/scripts/prod_cutover_meta_social.sh
