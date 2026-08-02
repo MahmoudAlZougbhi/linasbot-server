@@ -58,11 +58,11 @@ def validate_debug_payload(
         "token_valid": data.get("is_valid") is True,
         "token_app_id_match": str(data.get("app_id") or "") == expected_app_id,
         "token_type_is_page": str(data.get("type") or "").upper() == "PAGE",
-        "required_scopes_present": REQUIRED_SCOPES.issubset(scopes),
         "granular_targets_present": EXPECTED_PAGE_ID in target_ids,
         "granular_targets_allowlisted": bool(target_ids)
         and target_ids.issubset({EXPECTED_PAGE_ID, EXPECTED_INSTAGRAM_ID}),
     }
+    checks.update({f"scope_{scope}_present": scope in scopes for scope in sorted(REQUIRED_SCOPES)})
     if not all(checks.values()):
         failed = sorted(key for key, value in checks.items() if not value)
         raise MetaTokenValidationError(f"Meta Page token debug validation failed checks={failed}")
