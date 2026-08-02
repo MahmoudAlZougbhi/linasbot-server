@@ -35,7 +35,26 @@ if os.path.exists(DASHBOARD_BUILD_PATH):
     # Mount static files (js, css, etc.)
     app.mount("/static", StaticFiles(directory=os.path.join(DASHBOARD_BUILD_PATH, "static")), name="static")
 
-# Import all modules to register routes and events
+# Import all modules to register routes and events (must run before SPA catch-all).
+import modules.analytics_api  # noqa: E402, F401
+import modules.auth_api  # noqa: E402, F401
+import modules.chat_history_api  # noqa: E402, F401
+import modules.content_files_api  # noqa: E402, F401
+import modules.dashboard_api  # noqa: E402, F401
+import modules.event_handlers  # noqa: E402, F401
+import modules.feedback_api  # noqa: E402, F401
+import modules.flow_api  # noqa: E402, F401
+import modules.instructions_api  # noqa: E402, F401
+import modules.live_chat_api  # noqa: E402, F401
+import modules.local_qa_api  # noqa: E402, F401
+import modules.media_api  # noqa: E402, F401
+import modules.meta_messaging_webhook  # noqa: E402, F401
+import modules.qa_api  # noqa: E402, F401
+import modules.settings_api  # noqa: E402, F401
+import modules.smart_messaging_api  # noqa: E402, F401
+import modules.training_files_api  # noqa: E402, F401
+import modules.webhook_handlers  # noqa: E402, F401
+import modules.whatsapp_adapters  # noqa: E402, F401
 
 
 @app.get("/downloads/live-chat-android.apk")
