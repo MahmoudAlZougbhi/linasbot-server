@@ -58,6 +58,7 @@ def validate_debug_payload(
         "token_valid": data.get("is_valid") is True,
         "token_app_id_match": str(data.get("app_id") or "") == expected_app_id,
         "token_type_is_page": str(data.get("type") or "").upper() == "PAGE",
+        "token_has_no_expiry": data.get("expires_at") == 0,
         "granular_targets_present": EXPECTED_PAGE_ID in target_ids,
         "granular_targets_allowlisted": bool(target_ids)
         and target_ids.issubset({EXPECTED_PAGE_ID, EXPECTED_INSTAGRAM_ID}),

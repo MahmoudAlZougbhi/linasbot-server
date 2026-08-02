@@ -12,6 +12,7 @@ def _valid_payloads() -> tuple[dict[str, object], dict[str, object], dict[str, o
                 "is_valid": True,
                 "app_id": "999000111222333",
                 "type": "PAGE",
+                "expires_at": 0,
                 "scopes": [
                     "pages_messaging",
                     "pages_manage_metadata",
@@ -46,7 +47,10 @@ def test_exact_page_instagram_app_scopes_and_targets_pass() -> None:
     assert all(checks.values())
 
 
-@pytest.mark.parametrize("failure", ["old_app", "wrong_page", "wrong_instagram", "extra_target", "missing_scope"])
+@pytest.mark.parametrize(
+    "failure",
+    ["old_app", "wrong_page", "wrong_instagram", "extra_target", "missing_scope", "expiring_token"],
+)
 def test_unexpected_token_identity_or_access_fails(failure: str) -> None:
     debug, profile, page = _valid_payloads()
     app_id = "999000111222333"
@@ -62,6 +66,10 @@ def test_unexpected_token_identity_or_access_fails(failure: str) -> None:
         granular = data["granular_scopes"]
         assert isinstance(granular, list)
         granular.append({"scope": "pages_messaging", "target_ids": ["999999999999999"]})
+    elif failure == "expiring_token":
+        data = debug["data"]
+        assert isinstance(data, dict)
+        data["expires_at"] = 1_800_000_000
     else:
         data = debug["data"]
         assert isinstance(data, dict)
