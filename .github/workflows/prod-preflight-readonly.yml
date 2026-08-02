@@ -1,0 +1,32 @@
+# Read-only production preflight. Does not deploy, rotate, or write secrets.
+name: Prod Preflight Readonly
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: prod-preflight-readonly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Read-only production preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Run on-server read-only preflight
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -e
+            test -f /opt/linasbot/scripts/prod_preflight_readonly.sh
+            sudo bash /opt/linasbot/scripts/prod_preflight_readonly.sh
