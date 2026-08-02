@@ -3,7 +3,7 @@ name: Quality Gates
 on:
   pull_request:
   push:
-    branches: [main, fix/**]
+    branches: [main, fix/**, feat/**]
 
 jobs:
   backend:
