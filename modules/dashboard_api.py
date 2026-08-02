@@ -206,6 +206,22 @@ async def ready() -> Any:
     if not openai_ok:
         overall_ok = False
 
+    from services.meta_messaging import get_meta_messaging_readiness, get_meta_messaging_settings
+
+    meta_settings = get_meta_messaging_settings()
+    meta_ok, meta_checks = get_meta_messaging_readiness(meta_settings)
+    checks["meta_social_messaging"] = {
+        "ok": meta_ok if meta_settings.enabled else True,
+        "enabled": meta_settings.enabled,
+        **meta_checks,
+    }
+    if meta_settings.enabled and not meta_ok:
+        overall_ok = False
+
+    # Product invariant: WhatsApp is never an inbound AI channel for this Meta
+    # social integration. This readiness signal is intentionally configuration-free.
+    checks["whatsapp_inbound_ai"] = {"ok": True, "enabled": False}
+
     # MontyMobile outbound key required when WhatsApp provider is montymobile in production
     provider = (os.getenv("WHATSAPP_PROVIDER") or "montymobile").strip().lower()
     monty_configured = bool((os.getenv("MONTYMOBILE_API_KEY") or "").strip())

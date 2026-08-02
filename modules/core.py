@@ -15,9 +15,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import FFMPEG_PATH, WHATSAPP_PHONE_NUMBER_ID
 from modules.env_bootstrap import ENV_LOADED as _ENV_LOADED  # load .env before config
+from services.sensitive_request_logging import install_sensitive_query_log_filter
 
 if not _ENV_LOADED:
     raise RuntimeError("env bootstrap did not run")
+
+# Uvicorn access logging is disabled at startup because its default request-line
+# formatter includes raw query strings. This filter additionally protects
+# application logs if code ever logs a request URL explicitly.
+install_sensitive_query_log_filter()
 
 # Try to import pydub, handle gracefully if it fails
 try:

@@ -53,11 +53,12 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     settings = get_meta_messaging_settings()
     raw_body = await request.body()
 
-    # When an App Secret is configured, reject invalid signatures even if messaging
-    # is still disabled so Meta credential mistakes are never treated as success.
-    if settings.app_secret:
-        if not verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    # Never acknowledge an unauthenticated POST as valid. A missing server-side
+    # secret is a readiness failure; a missing/wrong request signature is 401.
+    if not settings.app_secret:
+        raise HTTPException(status_code=503, detail="Meta App Secret is not configured")
+    if not verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     if not settings.enabled:
         return JSONResponse({"status": "disabled"})

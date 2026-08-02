@@ -39,6 +39,35 @@ def get_meta_messaging_settings() -> MetaMessagingSettings:
     )
 
 
+def get_meta_messaging_readiness(settings: MetaMessagingSettings | None = None) -> tuple[bool, dict[str, bool]]:
+    """Return boolean-only readiness for the strictly allowlisted social integration."""
+
+    current = settings or get_meta_messaging_settings()
+    app_id = (os.getenv("META_APP_ID") or "").strip()
+    rollback_active = (os.getenv("META_SOCIAL_ROLLBACK_ACTIVE") or "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    new_app_required = (os.getenv("META_SOCIAL_NEW_APP_REQUIRED") or "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    retired_app_allowed = not new_app_required or rollback_active
+    checks = {
+        "app_id_configured": bool(app_id),
+        "app_id_allowed_for_mode": bool(app_id and (app_id != "1784792718776344" or retired_app_allowed)),
+        "app_secret_configured": bool(current.app_secret),
+        "page_access_token_configured": bool(current.page_access_token),
+        "verify_token_configured": bool(current.verify_token),
+        "page_id_allowlisted": current.page_id == "378696005334409",
+        "instagram_id_allowlisted": current.instagram_account_id == "17841413184256533",
+        "graph_api_version_allowlisted": current.graph_api_version == "v24.0",
+    }
+    return all(checks.values()), checks
+
+
 def resolve_meta_send_account_id(
     channel: str,
     event: dict[str, Any],
@@ -160,6 +189,11 @@ def parse_meta_messaging_events(
             sender_id = str((item.get("sender") or {}).get("id") or "").strip()
             recipient_id = str((item.get("recipient") or {}).get("id") or entry_id).strip()
             if not sender_id:
+                continue
+            # Defense in depth: reject account-originated/self deliveries even if
+            # Meta omits is_echo on a malformed or unexpected event.
+            configured_accounts = {value for value in (page_id, instagram_account_id, entry_id) if value}
+            if sender_id in configured_accounts:
                 continue
 
             text = str(message_dict.get("text") or postback.get("title") or postback.get("payload") or "").strip()

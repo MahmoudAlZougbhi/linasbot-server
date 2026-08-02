@@ -10,12 +10,12 @@ fi
 
 SECRET_LEN="${#DASHBOARD_AUTH_SECRET}"
 if [ "$SECRET_LEN" -lt 32 ]; then
-  echo "[dashboard-auth-apply] refusing DASHBOARD_AUTH_SECRET: length_too_short len=${SECRET_LEN}" >&2
+  echo "[dashboard-auth-apply] refusing DASHBOARD_AUTH_SECRET: length_too_short" >&2
   exit 1
 fi
 
 python3 - <<'PY'
-import hashlib
+import hmac
 import os
 import re
 from pathlib import Path
@@ -58,7 +58,6 @@ def upsert(path: Path, updates: dict) -> None:
     os.chmod(path, 0o600)
 
 updates = {KEY: value, ENV_KEY: "production"}
-fp = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 paths = [Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")]
 updated = 0
 for path in paths:
@@ -68,26 +67,25 @@ for path in paths:
     upsert(path, updates)
     text = path.read_text()
     present = False
-    file_fp = ""
+    file_value = ""
     env_ok = False
     for line in text.splitlines():
         if line.startswith(KEY + "="):
             present = bool(line.split("=", 1)[1].strip())
-            file_fp = hashlib.sha256(line.split("=", 1)[1].strip().encode("utf-8")).hexdigest()[:16]
+            file_value = line.split("=", 1)[1].strip()
         if line.startswith(ENV_KEY + "=") and line.split("=", 1)[1].strip() == "production":
             env_ok = True
     print(
         f"[dashboard-auth-apply] updated={path} secret_present={present} "
-        f"fp_match={file_fp == fp} environment_production={env_ok}"
+        f"secret_match={hmac.compare_digest(file_value, value)} environment_production={env_ok}"
     )
-    if not present or file_fp != fp or not env_ok:
+    if not present or not hmac.compare_digest(file_value, value) or not env_ok:
         raise SystemExit(f"[dashboard-auth-apply] verify failed for {path}")
     updated += 1
 
 if updated < 1:
     raise SystemExit("[dashboard-auth-apply] no .env paths updated")
-print(f"[dashboard-auth-apply] secret_fp={fp}")
-print(f"[dashboard-auth-apply] secret_len={len(value)}")
+print("[dashboard-auth-apply] secret_validated=true")
 print("[dashboard-auth-apply] environment=production")
 PY
 
@@ -96,7 +94,7 @@ sleep 6
 systemctl is-active linasbot
 
 python3 - <<'PY'
-import hashlib
+import hmac
 import subprocess
 from pathlib import Path
 
@@ -130,13 +128,11 @@ if not loaded:
     raise SystemExit("[dashboard-auth-apply] running process missing DASHBOARD_AUTH_SECRET")
 if env_val != "production":
     raise SystemExit(f"[dashboard-auth-apply] running process ENVIRONMENT not production (got_marker_set={bool(env_val)})")
-exp_fp = hashlib.sha256(expected.encode("utf-8")).hexdigest()[:16]
-got_fp = hashlib.sha256(loaded.encode("utf-8")).hexdigest()[:16]
 print(f"[dashboard-auth-apply] process_pid={pid}")
 print(f"[dashboard-auth-apply] process_secret_present=true")
-print(f"[dashboard-auth-apply] process_fp_match={exp_fp == got_fp}")
+print(f"[dashboard-auth-apply] process_secret_match={hmac.compare_digest(expected, loaded)}")
 print(f"[dashboard-auth-apply] process_environment_production=true")
-if exp_fp != got_fp:
+if not hmac.compare_digest(expected, loaded):
     raise SystemExit("[dashboard-auth-apply] running process secret fingerprint mismatch")
 PY
 
