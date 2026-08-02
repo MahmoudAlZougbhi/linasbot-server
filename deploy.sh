@@ -156,6 +156,20 @@ if [ -f "$REPO_ROOT/deploy/nginx-linasaibot.conf" ]; then
       /etc/nginx/conf.d/linasbot-privacy-log.conf
     cp "$REPO_ROOT/deploy/nginx-linasaibot.conf" /etc/nginx/sites-available/linasaibot
     ln -sf /etc/nginx/sites-available/linasaibot /etc/nginx/sites-enabled/linasaibot 2>/dev/null || true
+    # Canonical enabled name is linasaibot. Disable any other enabled vhost that
+    # also claims linasaibot.com so nginx never serves two competing server blocks.
+    for enabled_vhost in /etc/nginx/sites-enabled/*; do
+      [ -e "$enabled_vhost" ] || continue
+      base_name="$(basename "$enabled_vhost")"
+      if [ "$base_name" = "linasaibot" ]; then
+        continue
+      fi
+      if grep -qE 'server_name[^;]*(^|[[:space:]])(www\.)?linasaibot\.com([[:space:];]|$)' \
+        "$enabled_vhost" 2>/dev/null; then
+        echo -e "${YELLOW}Disabling duplicate linasaibot.com vhost: ${enabled_vhost}${NC}"
+        rm -f "$enabled_vhost"
+      fi
+    done
     TARGET_VHOST_COUNT="$(
       { grep -lE 'server_name[^;]*(^|[[:space:]])(www\.)?linasaibot\.com([[:space:];]|$)' \
         /etc/nginx/sites-enabled/* 2>/dev/null || true; } | wc -l | tr -d '[:space:]'
