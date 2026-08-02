@@ -16,6 +16,9 @@ os.environ.setdefault("LINASLASER_API_TOKEN", "pytest-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "pytest-dashboard-secret")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
 os.environ.setdefault("ENVIRONMENT", "test")
+# Hash embeddings are test-harness only (rejected when CM_RUNTIME_MODE=published or
+# outside ENVIRONMENT=test). Published-mode tests override to openai + a mocked transport.
+os.environ.setdefault("CM_EMBEDDING_PROVIDER", "hash")
 os.environ.setdefault("DISABLE_API_DOCS", "true")
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 

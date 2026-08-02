@@ -12,35 +12,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from handlers.text_handlers_respond import _handle_published_cm_runtime
-from services.cm.embeddings import embedding_pin
-from services.cm.schemas import PublishedPointer, default_section_payload
-from services.cm.version_store import write_published_pointer, write_version_content
 from services.local_qa_service import local_qa_service
+from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
 
-def _base_sections() -> dict[str, dict]:
-    from services.cm.constants import CM_SECTIONS
-
-    return {section: default_section_payload(section) for section in CM_SECTIONS}
-
-
-async def _publish_fixture(tenant_id: str, overrides: dict[str, dict] | None = None) -> None:
-    sections = _base_sections()
-    if overrides:
-        sections.update(overrides)
-    version_id = f"v_{tenant_id}"
-    checksums = write_version_content(tenant_id, version_id, sections)
-    pin = embedding_pin()
-    pointer = PublishedPointer(
-        content_version_id=version_id,
-        index_version_id=None,
-        checksums=checksums,
-        embedding_provider=pin.provider,
-        embedding_model=pin.model,
-        embedding_version=pin.version,
-        embedding_dimensions=pin.dimensions,
-    )
-    write_published_pointer(tenant_id, pointer)
+@pytest.fixture(autouse=True)
+def _openai_published_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_mocked_openai_embeddings(monkeypatch, published_mode=True)
 
 
 @pytest.mark.asyncio
@@ -58,7 +36,7 @@ async def test_no_published_version_returns_honest_failure_not_exception() -> No
 @pytest.mark.asyncio
 async def test_restricted_topic_short_circuits_without_calling_generate_answer() -> None:
     tenant_id = "cm_handler_test_restricted"
-    await _publish_fixture(tenant_id)
+    await publish_test_content(tenant_id)
 
     with patch("services.cm.answer_generation.generate_answer", new_callable=AsyncMock) as mock_gen:
         reply, metadata = await _handle_published_cm_runtime(
@@ -75,7 +53,7 @@ async def test_restricted_topic_short_circuits_without_calling_generate_answer()
 @pytest.mark.asyncio
 async def test_faq_hit_short_circuits_without_calling_generate_answer() -> None:
     tenant_id = "cm_handler_test_faq"
-    await _publish_fixture(tenant_id)
+    await publish_test_content(tenant_id)
 
     original_pairs = list(local_qa_service.qa_pairs)
     local_qa_service.qa_pairs.append(
@@ -107,7 +85,7 @@ async def test_faq_hit_short_circuits_without_calling_generate_answer() -> None:
 @pytest.mark.asyncio
 async def test_packet_ready_calls_generate_answer_and_validates() -> None:
     tenant_id = "cm_handler_test_packet"
-    await _publish_fixture(tenant_id)
+    await publish_test_content(tenant_id)
 
     with patch(
         "services.cm.answer_generation.generate_answer",
@@ -127,7 +105,7 @@ async def test_packet_ready_calls_generate_answer_and_validates() -> None:
 @pytest.mark.asyncio
 async def test_packet_ready_validation_failure_returns_dynamic_message_and_no_regen_success() -> None:
     tenant_id = "cm_handler_test_packet_invalid"
-    await _publish_fixture(tenant_id)
+    await publish_test_content(tenant_id)
 
     bad_reply = "Our price is $999 for that."
 

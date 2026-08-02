@@ -1,9 +1,10 @@
 """Configurable embedding provider for the CM semantic index (plan D11 / Phase 5).
 
-``CM_EMBEDDING_PROVIDER=hash`` gives a dependency-free, fully deterministic embedder for
-tests/dev. The default ``openai`` provider uses the existing OpenAI-compatible client.
-Provider/model/version/dimensions are always pinned so index/version manifests can prove
-which embedding produced them (plan §13.3 referential integrity / D11).
+Production / published-mode semantic retrieval uses a real OpenAI-compatible embedding
+model (default ``text-embedding-3-small``). Deterministic ``hash`` embeddings exist only
+for automated tests (``ENVIRONMENT=test`` / ``PYTEST_CURRENT_TEST``) and are rejected when
+``CM_RUNTIME_MODE=published`` or outside the test harness — never silently swapped for
+keyword, filename, lexical, or legacy content fallbacks.
 """
 
 from __future__ import annotations
@@ -11,15 +12,81 @@ from __future__ import annotations
 import hashlib
 import os
 from dataclasses import dataclass
+from typing import Final
 
 HASH_EMBEDDING_DIMENSIONS = 64
 OPENAI_EMBEDDING_MODEL_DEFAULT = "text-embedding-3-small"
 OPENAI_EMBEDDING_DIMENSIONS_DEFAULT = 1536
 EMBEDDING_MANIFEST_VERSION = "1"
 
+# Real semantic providers permitted for published / non-test index build & search.
+PRODUCTION_EMBEDDING_PROVIDERS: Final[frozenset[str]] = frozenset({"openai"})
+TEST_ONLY_EMBEDDING_PROVIDERS: Final[frozenset[str]] = frozenset({"hash"})
+
+
+class HashEmbeddingForbiddenError(RuntimeError):
+    """Raised when hash/test embeddings are requested outside the allowed test harness,
+    or under ``CM_RUNTIME_MODE=published``."""
+
+    code: str = "HASH_EMBEDDING_FORBIDDEN"
+
+
+class PublishedEmbeddingError(RuntimeError):
+    """Raised when a published index/pointer uses a non-production embedding provider."""
+
+    code: str = "PUBLISHED_EMBEDDING_INVALID"
+
 
 def embedding_provider_name() -> str:
-    return (os.getenv("CM_EMBEDDING_PROVIDER") or "openai").strip().lower()
+    return (os.getenv("CM_EMBEDDING_PROVIDER") or "openai").strip().lower() or "openai"
+
+
+def hash_embeddings_allowed() -> bool:
+    """Hash embeddings are permitted only when ENVIRONMENT is the test harness.
+
+    ``ENVIRONMENT=test`` is set by ``tests/conftest.py``. Production and staging must
+    never set that value, so hash cannot be selected accidentally outside tests.
+    """
+    env = (os.getenv("ENVIRONMENT") or "").strip().lower()
+    return env in {"test", "testing"}
+
+
+def assert_embedding_provider_allowed(provider: str | None = None) -> str:
+    """Resolve and enforce provider policy. Returns the normalized provider name."""
+    from services.cm.constants import cm_runtime_mode
+
+    resolved = (provider or embedding_provider_name()).strip().lower() or "openai"
+    if resolved in TEST_ONLY_EMBEDDING_PROVIDERS:
+        if cm_runtime_mode() == "published":
+            raise HashEmbeddingForbiddenError(
+                "CM_EMBEDDING_PROVIDER=hash is forbidden when CM_RUNTIME_MODE=published. "
+                "Published mode requires a real semantic embedding provider "
+                f"(one of: {sorted(PRODUCTION_EMBEDDING_PROVIDERS)})."
+            )
+        if not hash_embeddings_allowed():
+            raise HashEmbeddingForbiddenError(
+                "CM_EMBEDDING_PROVIDER=hash is test-only. "
+                "Set ENVIRONMENT=test for unit tests, or use the default openai provider."
+            )
+        return resolved
+    if resolved not in PRODUCTION_EMBEDDING_PROVIDERS:
+        raise HashEmbeddingForbiddenError(
+            f"Unsupported CM_EMBEDDING_PROVIDER={resolved!r}. "
+            f"Allowed production providers: {sorted(PRODUCTION_EMBEDDING_PROVIDERS)}; "
+            f"test-only: {sorted(TEST_ONLY_EMBEDDING_PROVIDERS)}."
+        )
+    return resolved
+
+
+def assert_published_embedding_pin(provider: str, *, context: str) -> None:
+    """Fail honestly if a published pointer/index was built with a test/hash embedding."""
+    normalized = (provider or "").strip().lower()
+    if normalized not in PRODUCTION_EMBEDDING_PROVIDERS:
+        raise PublishedEmbeddingError(
+            f"Published {context} uses embedding provider {normalized!r}, which is not a "
+            f"production semantic provider ({sorted(PRODUCTION_EMBEDDING_PROVIDERS)}). "
+            "Refusing silent fallback to keywords, lexical matching, or legacy content."
+        )
 
 
 @dataclass(frozen=True)
@@ -40,7 +107,7 @@ class EmbeddingPinInfo:
 
 def embedding_pin() -> EmbeddingPinInfo:
     """Pin provider/model/version/dimensions for the currently configured provider."""
-    provider = embedding_provider_name()
+    provider = assert_embedding_provider_allowed()
     if provider == "hash":
         return EmbeddingPinInfo(
             provider="hash",
@@ -60,7 +127,7 @@ def embedding_pin() -> EmbeddingPinInfo:
 
 
 def _hash_embed_one(text: str, dimensions: int = HASH_EMBEDDING_DIMENSIONS) -> list[float]:
-    """Deterministic bag-of-tokens hash embedding (no network, no randomness)."""
+    """Deterministic bag-of-tokens hash embedding (no network, no randomness). Test-only."""
     normalized = (text or "").strip().lower()
     vector = [0.0] * dimensions
     if not normalized:
@@ -81,7 +148,7 @@ async def embed_texts(texts: list[str], *, provider: str | None = None) -> list[
     """Embed a batch of texts using the configured (or explicitly overridden) provider."""
     if not texts:
         return []
-    resolved_provider = (provider or embedding_provider_name()).strip().lower()
+    resolved_provider = assert_embedding_provider_allowed(provider)
     if resolved_provider == "hash":
         return [_hash_embed_one(text) for text in texts]
     return await _openai_embed_texts(texts)

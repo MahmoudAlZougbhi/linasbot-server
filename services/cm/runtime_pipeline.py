@@ -18,6 +18,7 @@ from typing import Any
 
 from services.cm.answer_packet import build_answer_packet
 from services.cm.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
+from services.cm.embeddings import HashEmbeddingForbiddenError, PublishedEmbeddingError, assert_published_embedding_pin
 from services.cm.query_interpreter import BOOKING_INTENT_RE, HUMAN_INTENT_RE, InterpretedQuery, interpret_query
 from services.cm.response_validator import ValidationResult, validate_response
 from services.cm.schemas import AnswerChunk, AnswerFact, AnswerPacket, HandoffPolicy, RestrictedPolicy, ServicesSection
@@ -100,6 +101,11 @@ async def prepare_response(
     except PublishedVersionError as exc:
         return PipelineOutcome(stop=True, reason="no_published_version", error=str(exc))
 
+    try:
+        assert_published_embedding_pin(pointer.embedding_provider, context="pointer")
+    except PublishedEmbeddingError as exc:
+        return PipelineOutcome(stop=True, reason="invalid_published_embedding", error=str(exc))
+
     restricted_policy = RestrictedPolicy.model_validate(sections.get("restricted") or {})
     handoff_policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
     services_section = ServicesSection.model_validate(sections.get("services") or {})
@@ -141,11 +147,20 @@ async def prepare_response(
         )
 
     index_id = pointer.index_version_id
-    semantic_hits: list[dict[str, Any]] = []
-    if index_id:
-        semantic_hits = await _safe_semantic_search(
+    if not index_id:
+        return PipelineOutcome(
+            stop=True,
+            reason="index_unavailable",
+            error="Published pointer has no index_version_id; refusing silent legacy/keyword fallback.",
+        )
+
+    try:
+        semantic_hits = await semantic_search(
             tenant_id=tenant_id, index_id=index_id, query=message, kind="faq", language=detected_language, top_k=1
         )
+    except (FileNotFoundError, ValueError, KeyError, HashEmbeddingForbiddenError, PublishedEmbeddingError) as exc:
+        return PipelineOutcome(stop=True, reason="index_unavailable", error=str(exc))
+
     if semantic_hits and float(semantic_hits[0].get("score") or 0) >= SEMANTIC_FAQ_MIN_SCORE:
         top = semantic_hits[0]
         answer = str((top.get("metadata") or {}).get("answer") or "")
@@ -170,15 +185,15 @@ async def prepare_response(
 
     # Step 12 — Bounded semantic narrative chunks (Knowledge/Care only; never restricted-only FAQ).
     chunks: list[AnswerChunk] = []
-    if index_id:
+    try:
         for kind in ("knowledge", "care"):
-            hits = await _safe_semantic_search(
-                tenant_id=tenant_id, index_id=index_id, query=message, kind=kind, top_k=2
-            )
+            hits = await semantic_search(tenant_id=tenant_id, index_id=index_id, query=message, kind=kind, top_k=2)
             for hit in hits:
                 chunks.append(
                     AnswerChunk(source_id=hit["source_id"], text=str(hit.get("text") or ""), score=hit.get("score"))
                 )
+    except (FileNotFoundError, ValueError, KeyError, HashEmbeddingForbiddenError, PublishedEmbeddingError) as exc:
+        return PipelineOutcome(stop=True, reason="index_unavailable", error=str(exc))
 
     # Step 13 — Assemble the grounded packet for the caller's existing large-AI pipeline.
     packet = build_answer_packet(
@@ -199,13 +214,6 @@ async def prepare_response(
         reason="packet_ready",
         metadata={"restricted_topic_active_ids": sorted(restricted_ids)},
     )
-
-
-async def _safe_semantic_search(**kwargs: Any) -> list[dict[str, Any]]:
-    try:
-        return await semantic_search(**kwargs)
-    except (FileNotFoundError, ValueError, KeyError):
-        return []
 
 
 @dataclass

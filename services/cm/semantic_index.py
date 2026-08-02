@@ -10,7 +10,13 @@ import uuid
 from typing import Any
 
 from services.cm.atomic_io import atomic_write_json, read_json, read_json_object
-from services.cm.embeddings import cosine_similarity, embed_texts, embedding_pin
+from services.cm.constants import cm_runtime_mode
+from services.cm.embeddings import (
+    assert_published_embedding_pin,
+    cosine_similarity,
+    embed_texts,
+    embedding_pin,
+)
 from services.cm.paths import indexes_dir
 from services.cm.schemas import CareSection, FaqSection, KnowledgeSection
 
@@ -111,7 +117,10 @@ def load_index(tenant_id: str, index_id: str) -> tuple[dict[str, Any], list[dict
     index_root = indexes_dir(tenant_id) / index_id
     manifest = read_json_object(index_root / INDEX_MANIFEST_FILE)
     rows = read_json(index_root / INDEX_VECTORS_FILE)
-    return manifest, list(rows) if isinstance(rows, list) else []  # type: ignore[arg-type]
+    if not isinstance(rows, list):
+        raise ValueError(f"Corrupt semantic index vectors for tenant={tenant_id!r} index={index_id!r}")
+    typed_rows: list[dict[str, Any]] = [row for row in rows if isinstance(row, dict)]
+    return manifest, typed_rows
 
 
 async def search(
@@ -124,7 +133,12 @@ async def search(
     top_k: int = 3,
 ) -> list[dict[str, Any]]:
     """Cosine top-k search, tenant + index scoped. Returns rows without raw vectors."""
-    _, rows = load_index(tenant_id, index_id)
+    manifest, rows = load_index(tenant_id, index_id)
+    if cm_runtime_mode() == "published":
+        embedding_raw = manifest.get("embedding")
+        embedding: dict[str, Any] = embedding_raw if isinstance(embedding_raw, dict) else {}
+        provider = str(embedding.get("provider") or "")
+        assert_published_embedding_pin(provider, context=f"index {index_id}")
     if not rows or not (query or "").strip():
         return []
 

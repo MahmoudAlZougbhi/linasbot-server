@@ -160,8 +160,12 @@ backend.log
 .claude/
 
 .cm_testdata/
+.cm_testdata_*/
 linasbot_data/tenants/
 dashboard/build/
+dashboard/build-e2e/
+dashboard/playwright-report/
+dashboard/test-results/
 
 .venv
 .venv/
