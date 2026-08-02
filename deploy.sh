@@ -105,8 +105,32 @@ DEPLOY_COMMIT="$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || ec
 DASH_DIR="$APP_DIR/dashboard"
 if [ -f "$DASH_DIR/package.json" ]; then
   cd "$DASH_DIR"
-  npm install --legacy-peer-deps 2>/dev/null || npm install
-  CI=false REACT_APP_DEPLOY_VERSION="$DEPLOY_VERSION" REACT_APP_DEPLOY_COMMIT="$DEPLOY_COMMIT" npm run build
+  # Vite 8 / rolldown native bindings require Node >= 22.19 (CI pin). Node 20 fails optional deps.
+  NODE_MAJOR="$(node -v 2>/dev/null | sed 's/^v//' | cut -d. -f1 || echo 0)"
+  if [ "${NODE_MAJOR:-0}" -lt 22 ]; then
+    echo "Node $(node -v 2>/dev/null || echo missing) too old for Vite dashboard build; installing Node 22..."
+    if command -v apt-get >/dev/null 2>&1; then
+      curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+      apt-get install -y nodejs
+    else
+      echo -e "${RED}Cannot upgrade Node automatically; install Node >= 22.19 and re-run.${NC}"
+      exit 1
+    fi
+  fi
+  echo "Dashboard build using Node $(node -v) / npm $(npm -v)"
+  # Clean install so platform-specific optional bindings (rolldown) are present.
+  rm -rf node_modules
+  if [ -f package-lock.json ]; then
+    npm ci --include=optional
+  else
+    npm install --include=optional --legacy-peer-deps
+  fi
+  CI=false \
+    REACT_APP_DEPLOY_VERSION="$DEPLOY_VERSION" \
+    REACT_APP_DEPLOY_COMMIT="$DEPLOY_COMMIT" \
+    VITE_DEPLOY_VERSION="$DEPLOY_VERSION" \
+    VITE_DEPLOY_COMMIT="$DEPLOY_COMMIT" \
+    npm run build
   cd "$APP_DIR"
   # Compatibility bridge: if an external web server serves /opt/linasbot/dashboard/build,
   # mirror the canonical build there so UI stays in sync.
