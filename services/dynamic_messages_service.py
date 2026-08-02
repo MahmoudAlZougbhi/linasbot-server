@@ -79,6 +79,20 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
             "franco": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
         },
     },
+    "answer_validation_failed": {
+        "label": "Answer Validation Failed (CM Runtime)",
+        "when_used": (
+            "Sent when the CM runtime pipeline's deterministic validator rejects a generated "
+            "answer twice (once, plus one constrained regeneration) — polite clarify/contact "
+            "handoff with no invented facts. See services/cm/runtime_pipeline.py."
+        ),
+        "messages": {
+            "ar": "ما قدرت أتأكد ١٠٠٪ من هالمعلومة هلق. فيك تعيد صياغة سؤالك أو تتواصل معنا مباشرة وفريقنا بيساعدك؟",
+            "en": "I couldn't fully confirm that detail right now. Could you rephrase your question, or reach out to our team directly so they can help?",
+            "fr": "Je n'ai pas pu confirmer entièrement ce détail pour le moment. Pouvez-vous reformuler votre question ou contacter directement notre équipe ?",
+            "franco": "ما قدرت أتأكد ١٠٠٪ من هالمعلومة هلق. فيك تعيد صياغة سؤالك أو تتواصل معنا مباشرة وفريقنا بيساعدك؟",
+        },
+    },
 }
 
 
