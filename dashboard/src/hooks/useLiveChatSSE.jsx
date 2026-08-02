@@ -1,0 +1,627 @@
+import { useEffect } from "react";
+import { getApiBaseUrl } from "../utils/apiBaseUrl";
+
+const FULL_REFRESH_COOLDOWN_MS = 45000; // At most one full refresh every 45s
+const FULL_REFRESH_DELAY_MS = 1500;
+const FALLBACK_POLL_INTERVAL_MS = 30000;
+const SSE_STALE_THRESHOLD_MS = 90000;
+const HEARTBEAT_WATCHDOG_INTERVAL_MS = 30000;
+
+/**
+ * @param {{
+ *   enabled: boolean;
+ *   isMountedRef: import('react').MutableRefObject<boolean>;
+ *   useMockDataRef: import('react').MutableRefObject<boolean>;
+ *   activeConversationsRef: import('react').MutableRefObject<LiveChatConversation[] | null | undefined>;
+ *   selectedConversationRef: import('react').MutableRefObject<SelectedConversation | null | undefined>;
+ *   debouncedSearchRef: import('react').MutableRefObject<string>;
+ *   getUnifiedChats: (search: string, page: number, pageSize: number) => Promise<{ success?: boolean; chats?: LiveChatConversation[]; has_more?: boolean }>;
+ *   getWaitingQueue?: () => Promise<{ success?: boolean; queue?: QueueItem[] }>;
+ *   applyWaitingQueue?: (response: { success?: boolean; queue?: QueueItem[] }) => void;
+ *   chatListPageSize?: number;
+ *   fetchConversationMessages: (
+ *     userId: string,
+ *     conversationId: string,
+ *     days?: number,
+ *     before?: string | null,
+ *     day_window?: number,
+ *     limit?: number
+ *   ) => Promise<{ messages?: LiveChatMessage[] }>;
+ *   setActiveConversations: import('react').Dispatch<import('react').SetStateAction<LiveChatConversation[]>> | ((conversations: LiveChatConversation[]) => void);
+ *   setNewConversationIds: import('react').Dispatch<import('react').SetStateAction<Set<string>>>;
+ *   setLastRefreshTime: import('react').Dispatch<import('react').SetStateAction<Date | null>>;
+ *   setIsRefreshing: import('react').Dispatch<import('react').SetStateAction<boolean>>;
+ *   setSelectedConversation: import('react').Dispatch<import('react').SetStateAction<SelectedConversation | null>>;
+ *   updateChatListLocally?: (convId: string | undefined, userId: string | undefined, message: LiveChatMessage) => void;
+ *   messageCacheRef?: import('react').MutableRefObject<Map<string, { messages: LiveChatMessage[]; hasMore?: boolean; cachedAt?: number; isPartial?: boolean }>>;
+ *   hasMoreMessagesRef?: import('react').MutableRefObject<boolean>;
+ *   setIsLoading?: import('react').Dispatch<import('react').SetStateAction<boolean>>;
+ *   setHasMoreChats?: import('react').Dispatch<import('react').SetStateAction<boolean>>;
+ *   setChatPage?: import('react').Dispatch<import('react').SetStateAction<number>>;
+ *   onOperatorMessageCached?: (userId: string, convId: string, message: LiveChatMessage) => void;
+ * }} params
+ */
+export const useLiveChatSSE = ({
+  enabled,
+  isMountedRef,
+  useMockDataRef,
+  activeConversationsRef,
+  selectedConversationRef,
+  debouncedSearchRef,
+  getUnifiedChats,
+  getWaitingQueue,
+  applyWaitingQueue,
+  chatListPageSize = 50,
+  fetchConversationMessages,
+  setActiveConversations,
+  setNewConversationIds,
+  setLastRefreshTime,
+  setIsRefreshing,
+  setSelectedConversation,
+  updateChatListLocally,
+  messageCacheRef,
+  hasMoreMessagesRef,
+  setIsLoading,
+  setHasMoreChats,
+  setChatPage,
+  onOperatorMessageCached,
+}) => {
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
+    /** @type {EventSource | null} */
+    let eventSource = null;
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let reconnectTimeout = null;
+    /** @type {ReturnType<typeof setInterval> | null} */
+    let fallbackInterval = null;
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let clearNewBadgeTimeout = null;
+    let reconnectAttempt = 0;
+    let handlingNewMessageEvent = false;
+    let lastRefreshAt = 0;
+    let debouncedRefreshScheduled = false;
+    let lastEventAt = Date.now();
+    /** @type {ReturnType<typeof setInterval> | null} */
+    let heartbeatWatchdog = null;
+    let refreshingFallback = false;
+
+    const clearNewBadgesSoon = () => {
+      if (clearNewBadgeTimeout) {
+        clearTimeout(clearNewBadgeTimeout);
+      }
+      clearNewBadgeTimeout = setTimeout(() => setNewConversationIds(new Set()), 10000);
+    };
+
+    /** @param {LiveChatMessage[]} [fetchedMessages] @param {LiveChatMessage[]} [currentHistory] */
+    const mergeFetchedWithRecentLocal = (fetchedMessages = [], currentHistory = []) => {
+      const fetched = Array.isArray(fetchedMessages) ? fetchedMessages : [];
+      const current = Array.isArray(currentHistory) ? currentHistory : [];
+      if (!current.length) return fetched;
+
+      const now = Date.now();
+      const RECENT_LOCAL_MS = 5 * 60 * 1000;
+      const fetchedIds = new Set(fetched.map((m) => m?.message_id).filter(Boolean));
+      const fetchedKeys = new Set(
+        fetched.map((m) => `${String(m?.content || m?.text || "").trim()}|${String(m?.timestamp || "").slice(0, 19)}`)
+      );
+
+      const toKeep = current.filter((m) => {
+        const isOperator = m?.role === "operator" || m?.is_user === false;
+        if (!isOperator) return false;
+        const ts = m?.timestamp ? new Date(m.timestamp).getTime() : 0;
+        if (!ts || now - ts > RECENT_LOCAL_MS) return false;
+        if (m?.message_id && fetchedIds.has(m.message_id)) return false;
+        const key = `${String(m?.content || m?.text || "").trim()}|${String(m?.timestamp || "").slice(0, 19)}`;
+        if (fetchedKeys.has(key)) return false;
+        return true;
+      });
+
+      if (!toKeep.length) return fetched;
+      return [...fetched, ...toKeep].sort(
+        (a, b) => new Date(a?.timestamp || 0).getTime() - new Date(b?.timestamp || 0).getTime()
+      );
+    };
+
+    /**
+     * @param {{
+     *   preferredConversations?: LiveChatConversation[] | null;
+     *   announceNewIds?: Set<string> | null;
+     *   total?: number | null;
+     *   hasMore?: boolean | null;
+     * }} [options]
+     */
+    const refreshChats = async ({
+      preferredConversations = null,
+      announceNewIds = null,
+      total = null,
+      hasMore = null,
+    } = {}) => {
+      if (!isMountedRef.current) return null;
+      const searchTerm = debouncedSearchRef.current;
+      /** @type {LiveChatConversation[] | null} */
+      let conversations = null;
+      /** @type {boolean | null} */
+      let hasMoreValue = hasMore;
+      // Use SSE payload when no search - single Firestore scan on open (no duplicate API call)
+      if (!searchTerm && preferredConversations != null && Array.isArray(preferredConversations)) {
+        conversations = preferredConversations;
+        if (total != null) hasMoreValue = total > conversations.length;
+      }
+      if (conversations == null) {
+        const chatsResponse = await getUnifiedChats(searchTerm, 1, chatListPageSize);
+        if (!isMountedRef.current) return null;
+        conversations =
+          chatsResponse?.success && chatsResponse?.chats ? chatsResponse.chats : preferredConversations;
+        if (chatsResponse?.success) hasMoreValue = chatsResponse.has_more ?? false;
+      }
+      if (!conversations) return null;
+
+      // Keep selected conversation in the list so it doesn't disappear from "With operator" / Active when refetching
+      const selected = selectedConversationRef.current;
+      if (selected?.conversation) {
+        const alreadyInList = conversations.some(
+          (/** @type {LiveChatConversation} */ c) => c.conversation_id === selected.conversation.conversation_id && c.user_id === selected.conversation.user_id
+        );
+        if (!alreadyInList) {
+          conversations = [selected.conversation, ...conversations];
+        }
+      }
+
+      const previousIds = new Set(
+        (activeConversationsRef.current || []).map((/** @type {LiveChatConversation} */ conversation) => conversation.conversation_id)
+      );
+      const calculatedNewIds = new Set(
+        conversations
+          .filter((/** @type {LiveChatConversation} */ conversation) => !previousIds.has(conversation.conversation_id))
+          .map((/** @type {LiveChatConversation} */ conversation) => conversation.conversation_id)
+      );
+
+      const newIds = announceNewIds || calculatedNewIds;
+      setActiveConversations(conversations);
+      setLastRefreshTime(new Date());
+      setNewConversationIds(newIds);
+      if (newIds.size > 0) {
+        clearNewBadgesSoon();
+      }
+
+      if (total != null && setIsLoading) setIsLoading(false);
+      if (hasMoreValue != null && setHasMoreChats) setHasMoreChats(hasMoreValue);
+      if (getWaitingQueue && applyWaitingQueue) {
+        getWaitingQueue()
+          .then((/** @type {{ success?: boolean; queue?: QueueItem[] }} */ queueResponse) => {
+            if (!isMountedRef.current) return;
+            if (queueResponse?.success && queueResponse?.queue) {
+              applyWaitingQueue(queueResponse);
+            }
+          })
+          .catch(() => {});
+      }
+      return conversations;
+    };
+
+    const refreshSelectedConversation = async () => {
+      if (!isMountedRef.current) return;
+      const selected = selectedConversationRef.current;
+      if (!selected?.conversation) return;
+      try {
+        const { messages } = await fetchConversationMessages(
+          selected.conversation.user_id,
+          selected.conversation.conversation_id,
+          1,
+          null,
+          0,
+          50
+        );
+        if (!isMountedRef.current || !messages?.length) return;
+        const mergedMessages = mergeFetchedWithRecentLocal(
+          messages,
+          selectedConversationRef.current?.history || []
+        );
+        if (messageCacheRef?.current) {
+          const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
+          const existing = messageCacheRef.current.get(cacheKey);
+          messageCacheRef.current.set(cacheKey, {
+            messages: mergedMessages,
+            hasMore: existing?.hasMore ?? true,
+            cachedAt: Date.now(),
+            isPartial: true,
+          });
+        }
+        setSelectedConversation((/** @type {SelectedConversation | null} */ previous) => {
+          if (!previous) return previous;
+          return { ...previous, history: mergedMessages };
+        });
+      } catch {
+        // Silent fail: user can manually refresh
+      }
+    };
+
+    /** @param {Record<string, unknown>} eventData */
+    const refreshSelectedConversationIfMatched = async (eventData) => {
+      const selected = selectedConversationRef.current;
+      if (!selected || !isMountedRef.current) return;
+
+      const hasConversationId = Boolean(eventData?.conversation_id);
+      const isSameConversation = hasConversationId
+        ? selected.conversation.conversation_id === eventData.conversation_id
+        : selected.conversation.user_id === eventData.user_id;
+      if (!isSameConversation) return;
+
+      try {
+        const { messages } = await fetchConversationMessages(
+          selected.conversation.user_id,
+          selected.conversation.conversation_id,
+          1,
+          null,
+          0,
+          50
+        );
+        if (!isMountedRef.current || !messages?.length) return;
+        const mergedMessages = mergeFetchedWithRecentLocal(
+          messages,
+          selectedConversationRef.current?.history || []
+        );
+        if (messageCacheRef?.current) {
+          const cacheKey = `${selected.conversation.user_id}_${selected.conversation.conversation_id}`;
+          const existing = messageCacheRef.current.get(cacheKey);
+          messageCacheRef.current.set(cacheKey, {
+            messages: mergedMessages,
+            hasMore: existing?.hasMore ?? true,
+            cachedAt: Date.now(),
+            isPartial: true,
+          });
+        }
+        setSelectedConversation((/** @type {SelectedConversation | null} */ previous) => {
+          if (!previous) return previous;
+          return { ...previous, history: mergedMessages };
+        });
+      } catch {
+        // Silent fail for SSE refresh - user can manually reload
+      }
+    };
+
+    const startFallbackPolling = () => {
+      if (fallbackInterval) return;
+      fallbackInterval = setInterval(async () => {
+        if (!isMountedRef.current || useMockDataRef.current) return;
+        try {
+          await refreshChats();
+        } catch {
+          // Keep fallback silent to avoid noisy toasts during transient outages.
+        }
+      }, FALLBACK_POLL_INTERVAL_MS);
+    };
+
+    const stopFallbackPolling = () => {
+      if (!fallbackInterval) return;
+      clearInterval(fallbackInterval);
+      fallbackInterval = null;
+    };
+
+    const connectSSE = () => {
+      if (useMockDataRef.current) return;
+
+      const baseUrl = getApiBaseUrl();
+      eventSource = new EventSource(`${baseUrl}/api/live-chat/events`);
+
+      eventSource.onopen = () => {
+        reconnectAttempt = 0;
+        stopFallbackPolling();
+        lastEventAt = Date.now();
+        if (process.env.NODE_ENV === "development") {
+          console.log("[SSE] connected");
+        }
+      };
+
+      eventSource.addEventListener("conversations", async (event) => {
+        if (!isMountedRef.current) return;
+        try {
+          const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
+          const conversations = Array.isArray(data.conversations) ? data.conversations : null;
+          const total = typeof data.total === "number" ? data.total : null;
+          const hasMore =
+            typeof data.has_more === "boolean"
+              ? data.has_more
+              : typeof data.hasMore === "boolean"
+                ? data.hasMore
+                : null;
+          await refreshChats({
+            preferredConversations: conversations,
+            total,
+            hasMore,
+          });
+          // List only: stop loading; do not auto-select so chat messages load only when user clicks
+          if (setIsLoading) setIsLoading(false);
+        } catch (error) {
+          console.error("SSE conversations parse error:", error);
+          if (setIsLoading) setIsLoading(false);
+        }
+      });
+
+      eventSource.addEventListener("new_message", async (event) => {
+        if (!isMountedRef.current) return;
+        if (handlingNewMessageEvent) return;
+        handlingNewMessageEvent = true;
+        try {
+          const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
+          const selected = selectedConversationRef.current;
+          const convId = data?.conversation_id;
+          const userId = data?.user_id;
+          const message = data?.message;
+
+          // 1) If message for open conversation: append immediately (no API call)
+          const msgId = message?.message_id;
+          const isMatch =
+            selected &&
+            ((convId && selected.conversation?.conversation_id === convId) ||
+              (userId && selected.conversation?.user_id === userId));
+          if (isMatch && message && typeof message === "object" && message.timestamp) {
+            setSelectedConversation((/** @type {SelectedConversation | null} */ prev) => {
+              if (!prev || !prev.history) return prev;
+              const content = String(message.content || message.text || "").trim();
+              const exists = prev.history.some((/** @type {LiveChatMessage} */ m) => {
+                if (msgId && m.message_id) return m.message_id === msgId;
+                // Dedupe operator messages: same content within 15s (handles race with manual append)
+                if (content && String(m.content || m.text || "").trim() === content) {
+                  const mTs = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+                  const msgTs = message.timestamp ? new Date(message.timestamp).getTime() : 0;
+                  if (Math.abs(mTs - msgTs) < 15000) return true;
+                }
+                return (
+                  m.timestamp === message.timestamp &&
+                  String(m.content || m.text || "") === String(message.content || message.text || "")
+                );
+              });
+              if (exists) return prev;
+              const updatedHistory = [...prev.history, message];
+              // Update message cache so switching back shows the new message
+              if (messageCacheRef?.current && prev.conversation) {
+                const cacheKey = `${prev.conversation.user_id}_${prev.conversation.conversation_id}`;
+                const existing = messageCacheRef.current.get(cacheKey);
+                messageCacheRef.current.set(cacheKey, {
+                  messages: updatedHistory,
+                  hasMore: existing?.hasMore ?? (hasMoreMessagesRef?.current ?? false),
+                  cachedAt: Date.now(),
+                  isPartial: existing?.isPartial ?? false,
+                });
+                if (onOperatorMessageCached && (message.role === "operator" || message.is_user === false)) {
+                  onOperatorMessageCached(prev.conversation.user_id, prev.conversation.conversation_id, message);
+                }
+              }
+              return { ...prev, history: updatedHistory };
+            });
+            if (process.env.NODE_ENV === "development") {
+              console.log("[SSE] new_message merged (instant append)", { convId, msgId });
+            }
+          }
+
+          // 2) Update chat list locally: move to top, update last_message + last_activity (no /unified-chats call)
+          if (updateChatListLocally && message && (convId || userId)) {
+            updateChatListLocally(convId, userId, message);
+          }
+
+          // 2b) Update message cache for this conversation when not viewing it (so switch-back shows new message)
+          if (messageCacheRef?.current && message && convId && userId) {
+            const cacheKey = `${userId}_${convId}`;
+            const existing = messageCacheRef.current.get(cacheKey);
+            if (existing?.messages?.length) {
+              const content = String(message.content || message.text || "").trim();
+              const msgId = message?.message_id;
+              const exists = existing.messages.some((/** @type {LiveChatMessage} */ m) => {
+                if (msgId && m.message_id) return m.message_id === msgId;
+                if (content && String(m.content || m.text || "").trim() === content) {
+                  const mTs = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+                  const msgTs = message.timestamp ? new Date(message.timestamp).getTime() : 0;
+                  if (Math.abs(mTs - msgTs) < 15000) return true;
+                }
+                return false;
+              });
+              if (!exists) {
+                messageCacheRef.current.set(cacheKey, {
+                  messages: [...existing.messages, message],
+                  hasMore: existing.hasMore,
+                  cachedAt: Date.now(),
+                  isPartial: existing.isPartial ?? false,
+                });
+                if (onOperatorMessageCached && (message.role === "operator" || message.is_user === false)) {
+                  onOperatorMessageCached(userId, convId, message);
+                }
+              }
+            }
+          }
+
+          // 3) Very low-frequency full refresh (safety net only; local merge is primary path)
+          const now = Date.now();
+          if (
+            !debouncedSearchRef.current &&
+            now - lastRefreshAt >= FULL_REFRESH_COOLDOWN_MS &&
+            !debouncedRefreshScheduled
+          ) {
+            debouncedRefreshScheduled = true;
+            setTimeout(async () => {
+              if (!isMountedRef.current) return;
+              debouncedRefreshScheduled = false;
+              lastRefreshAt = Date.now();
+              setIsRefreshing(true);
+              try {
+                await refreshChats();
+              } finally {
+                setIsRefreshing(false);
+              }
+            }, FULL_REFRESH_DELAY_MS);
+          }
+
+          // 4) If viewing a different conversation, fetch its messages (no full list refresh)
+          if (!isMatch || !message) {
+            await refreshSelectedConversationIfMatched(data);
+          }
+        } catch (error) {
+          debouncedRefreshScheduled = false;
+          setIsRefreshing(false);
+          console.error("SSE new_message handler error:", error);
+        } finally {
+          handlingNewMessageEvent = false;
+        }
+      });
+
+      eventSource.addEventListener("message_updated", (event) => {
+        if (!isMountedRef.current) return;
+        try {
+          const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
+          const selected = selectedConversationRef.current;
+          const convId = data?.conversation_id;
+          const message = data?.message;
+          const msgId = message?.message_id;
+          const isMatch =
+            selected &&
+            convId &&
+            selected.conversation?.conversation_id === convId &&
+            message &&
+            msgId;
+          if (isMatch) {
+            setSelectedConversation((prev) => {
+              if (!prev || !prev.history) return prev;
+              return {
+                ...prev,
+                history: prev.history.map((/** @type {LiveChatMessage} */ m) =>
+                  (m.message_id || m.id) === msgId
+                    ? { ...m, content: message.content ?? message.text, text: message.text ?? message.content }
+                    : m
+                ),
+              };
+            });
+          }
+        } catch (error) {
+          console.error("SSE message_updated handler error:", error);
+        }
+      });
+
+      eventSource.addEventListener("new_conversation", (event) => {
+        if (!isMountedRef.current) return;
+        try {
+          const data = JSON.parse(event.data || "{}");
+          lastEventAt = Date.now();
+          const convId = data?.conversation_id;
+          const userId = data?.user_id;
+          const phone = data?.phone || "";
+          const name = data?.name || "Unknown";
+          if (convId && userId) {
+            // Add new conversation locally (no /unified-chats call)
+            const now = new Date().toISOString();
+            const previous = Array.isArray(activeConversationsRef.current)
+              ? activeConversationsRef.current
+              : [];
+            const exists = previous.some(
+              (/** @type {LiveChatConversation} */ c) => c.conversation_id === convId && c.user_id === userId
+            );
+            if (!exists) {
+              const newEntry = {
+                user_id: userId,
+                conversation_id: convId,
+                user_name: name,
+                user_phone: phone,
+                last_message: { content: "", is_user: true, timestamp: now },
+                last_activity: now,
+                status: "bot",
+                is_live: true,
+              };
+              const nextConversations = [newEntry, ...previous];
+              // setActiveConversations may be either a React state setter or a custom array applier.
+              setActiveConversations(nextConversations);
+              activeConversationsRef.current = nextConversations;
+            }
+            setNewConversationIds((/** @type {Set<string>} */ prev) => new Set([...prev, convId]));
+            setLastRefreshTime(new Date());
+          }
+        } catch (error) {
+          console.error("SSE new_conversation handler error:", error);
+        }
+      });
+
+      eventSource.addEventListener("heartbeat", () => {
+        // No-op, this event is only for keep-alive.
+        lastEventAt = Date.now();
+      });
+
+      if (!heartbeatWatchdog) {
+        heartbeatWatchdog = setInterval(async () => {
+          if (!isMountedRef.current || useMockDataRef.current) return;
+          const elapsed = Date.now() - lastEventAt;
+          if (elapsed < SSE_STALE_THRESHOLD_MS || refreshingFallback) return;
+          refreshingFallback = true;
+          try {
+            // SSE is stale; do a conservative reconciliation fetch.
+            await refreshChats();
+            const selected = selectedConversationRef.current;
+            if (selected && !selected.history?.length) {
+              await refreshSelectedConversation();
+            }
+          } finally {
+            refreshingFallback = false;
+          }
+        }, HEARTBEAT_WATCHDOG_INTERVAL_MS);
+      }
+
+      eventSource.onerror = () => {
+        if (eventSource) {
+          eventSource.close();
+        }
+        startFallbackPolling();
+        reconnectAttempt += 1;
+        const reconnectDelayMs = Math.min(30000, 1000 * Math.min(reconnectAttempt, 10));
+        if (process.env.NODE_ENV === "development") {
+          console.log("[SSE] error, reconnect in", reconnectDelayMs, "ms, attempt", reconnectAttempt);
+        }
+        reconnectTimeout = setTimeout(connectSSE, reconnectDelayMs);
+      };
+    };
+
+    connectSSE();
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (heartbeatWatchdog) {
+        clearInterval(heartbeatWatchdog);
+      }
+      if (clearNewBadgeTimeout) {
+        clearTimeout(clearNewBadgeTimeout);
+      }
+      stopFallbackPolling();
+    };
+  }, [
+    applyWaitingQueue,
+    getWaitingQueue,
+    hasMoreMessagesRef,
+    messageCacheRef,
+    onOperatorMessageCached,
+    activeConversationsRef,
+    chatListPageSize,
+    debouncedSearchRef,
+    enabled,
+    fetchConversationMessages,
+    getUnifiedChats,
+    isMountedRef,
+    selectedConversationRef,
+    setActiveConversations,
+    setChatPage,
+    setHasMoreChats,
+    setIsLoading,
+    setIsRefreshing,
+    setLastRefreshTime,
+    setNewConversationIds,
+    setSelectedConversation,
+    updateChatListLocally,
+    useMockDataRef,
+  ]);
+};

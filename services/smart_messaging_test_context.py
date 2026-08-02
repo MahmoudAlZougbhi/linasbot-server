@@ -4,19 +4,17 @@ Resolve Smart Messaging *test* template placeholders from live CRM data (same ph
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import config
 from services.api_integrations import (
     check_next_appointment,
-    get_customer_by_phone,
     get_customer_appointments,
+    get_customer_by_phone,
 )
 from utils.phone_utils import normalize_phone
 
-_EXCLUDED = frozenset(
-    {"done", "completed", "cancelled", "canceled", "missed", "no_show", "noshow"}
-)
+_EXCLUDED = frozenset({"done", "completed", "cancelled", "canceled", "missed", "no_show", "noshow"})
 
 
 def _apt_status_lower(row: dict) -> str:
@@ -53,7 +51,7 @@ def _coalesce_appointment_row(row: dict) -> dict:
     return merged
 
 
-def _extract_customer_appointments_list(response_payload: dict) -> List[dict]:
+def _extract_customer_appointments_list(response_payload: dict) -> list[dict]:
     if not isinstance(response_payload, dict):
         return []
     data = response_payload.get("data")
@@ -105,12 +103,7 @@ def _customer_name_from_crm(data: Any) -> str:
 def _service_label(row: dict) -> str:
     if not isinstance(row, dict):
         return ""
-    svc = (
-        row.get("service")
-        or row.get("service_name")
-        or row.get("service_title")
-        or row.get("treatment_name")
-    )
+    svc = row.get("service") or row.get("service_name") or row.get("service_title") or row.get("treatment_name")
     if isinstance(svc, dict):
         s = str(svc.get("name") or svc.get("title") or "").strip()
         if s:
@@ -173,7 +166,7 @@ def _time_part(row: dict) -> str:
     return ""
 
 
-def _split_datetime_field(row: dict) -> Tuple[str, str]:
+def _split_datetime_field(row: dict) -> tuple[str, str]:
     """Some CRM rows only expose a single ISO datetime string."""
     for key in ("start_datetime", "datetime", "appointment_datetime", "starts_at", "start_at"):
         v = row.get(key)
@@ -194,7 +187,7 @@ def _support_phone_display() -> str:
     return (config.TRAINER_WHATSAPP_NUMBER or "").strip() or "+961 XX XXXXXX"
 
 
-def _pick_primary_and_secondary(appointments: List[dict]) -> Tuple[Optional[dict], Optional[dict]]:
+def _pick_primary_and_secondary(appointments: list[dict]) -> tuple[dict | None, dict | None]:
     ok = [r for r in appointments if isinstance(r, dict) and _row_ok(r)]
     if not ok:
         ok = [r for r in appointments if isinstance(r, dict)]
@@ -221,20 +214,20 @@ _APPOINTMENT_DRIVEN_KEYS = frozenset(
 )
 
 
-async def resolve_real_test_template_placeholders(phone_raw: str) -> Tuple[Dict[str, str], Dict[str, Any]]:
+async def resolve_real_test_template_placeholders(phone_raw: str) -> tuple[dict[str, str], dict[str, Any]]:
     """
     Build placeholder values for WhatsApp template test sends from CRM.
 
     Returns:
         (values_by_placeholder_name, meta) — meta includes has_customer, has_appointment, warnings, source.
     """
-    meta: Dict[str, Any] = {
+    meta: dict[str, Any] = {
         "source": "none",
         "warnings": [],
         "has_customer": False,
         "has_appointment": False,
     }
-    vals: Dict[str, str] = {}
+    vals: dict[str, str] = {}
 
     cust_resp = await get_customer_by_phone(phone=phone_raw)
     if isinstance(cust_resp, dict) and cust_resp.get("success") and cust_resp.get("data"):
@@ -243,8 +236,8 @@ async def resolve_real_test_template_placeholders(phone_raw: str) -> Tuple[Dict[
         if n:
             vals["customer_name"] = n
 
-    primary: Optional[dict] = None
-    secondary: Optional[dict] = None
+    primary: dict | None = None
+    secondary: dict | None = None
 
     next_resp = await check_next_appointment(phone=phone_raw)
     if isinstance(next_resp, dict) and next_resp.get("success"):
@@ -264,11 +257,7 @@ async def resolve_real_test_template_placeholders(phone_raw: str) -> Tuple[Dict[
         row = _coalesce_appointment_row(primary)
         if not vals.get("customer_name"):
             cn = str(
-                row.get("customer_name")
-                or row.get("name")
-                or primary.get("customer_name")
-                or primary.get("name")
-                or ""
+                row.get("customer_name") or row.get("name") or primary.get("customer_name") or primary.get("name") or ""
             ).strip()
             if cn:
                 vals["customer_name"] = cn
@@ -303,19 +292,15 @@ async def resolve_real_test_template_placeholders(phone_raw: str) -> Tuple[Dict[
     if meta.get("has_appointment"):
         if not str(vals.get("branch_name") or "").strip():
             vals["branch_name"] = "الفرع الرئيسي"
-            meta["warnings"].append(
-                "branch_name was empty in CRM — using default «الفرع الرئيسي» for test send."
-            )
+            meta["warnings"].append("branch_name was empty in CRM — using default «الفرع الرئيسي» for test send.")
         if not str(vals.get("service_name") or "").strip():
             vals["service_name"] = "جلسة ليزر"
-            meta["warnings"].append(
-                "service_name was empty in CRM — using default «جلسة ليزر» for test send."
-            )
+            meta["warnings"].append("service_name was empty in CRM — using default «جلسة ليزر» for test send.")
 
     return vals, meta
 
 
-def template_needs_appointment_data(template_param_names: List[str], n_body: int) -> bool:
+def template_needs_appointment_data(template_param_names: list[str], n_body: int) -> bool:
     names = set(template_param_names)
     if names & _APPOINTMENT_DRIVEN_KEYS:
         return True
@@ -326,11 +311,11 @@ def template_needs_appointment_data(template_param_names: List[str], n_body: int
 
 
 def validate_test_placeholders_for_template(
-    template_param_names: List[str],
+    template_param_names: list[str],
     n_body: int,
-    test_parameters: Dict[str, str],
-    meta: Dict[str, Any],
-) -> Optional[str]:
+    test_parameters: dict[str, str],
+    meta: dict[str, Any],
+) -> str | None:
     """
     If CRM data is insufficient for this template, return a user-facing error string.
     """

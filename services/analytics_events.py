@@ -1,45 +1,47 @@
-# -*- coding: utf-8 -*-
 """
 Analytics Events System
 Simple append-only event logging for analytics
 Each event is one line in a JSONL file
 """
 
+from __future__ import annotations
+
+import datetime
 import json
+import math
 import os
 import re
-import datetime
-import math
-from typing import Dict, Any, List, Optional
 from collections import defaultdict
+from typing import Any
 
 
 class AnalyticsEvents:
     """Handles analytics event logging and aggregation"""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         self.events_file = "data/analytics_events.jsonl"
         # Session rule used for Conversation 1/2/3 counting
         self.conversation_session_gap_minutes = 30
+        self.openai_real_costs: dict[str, Any] | None = None
         self._ensure_file_exists()
-    
-    def _ensure_file_exists(self):
+
+    def _ensure_file_exists(self) -> None:
         """Create events file if it doesn't exist"""
         if not os.path.exists(self.events_file):
             os.makedirs(os.path.dirname(self.events_file), exist_ok=True)
-            open(self.events_file, 'a').close()
-    
-    def _append_event(self, event: Dict[str, Any]):
+            open(self.events_file, "a").close()
+
+    def _append_event(self, event: dict[str, Any]) -> None:
         """Append a single event to the file"""
         try:
             event["timestamp"] = datetime.datetime.now().isoformat()
-            with open(self.events_file, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(event, ensure_ascii=False) + '\n')
+            with open(self.events_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
         except Exception as e:
             print(f"❌ Error appending event: {e}")
 
     @staticmethod
-    def _normalize_user_id(user_id: Any) -> Optional[str]:
+    def _normalize_user_id(user_id: Any) -> str | None:
         """Normalize user IDs for stable deduplication."""
         if user_id is None:
             return None
@@ -52,7 +54,7 @@ class AnalyticsEvents:
         return normalized
 
     @staticmethod
-    def _is_test_user_id(user_id: Optional[str]) -> bool:
+    def _is_test_user_id(user_id: str | None) -> bool:
         """Exclude known test/internal user IDs from new client metrics."""
         if not user_id:
             return True
@@ -60,7 +62,7 @@ class AnalyticsEvents:
         return lower in ("training", "test", "debug", "internal")
 
     @staticmethod
-    def _parse_timestamp(timestamp: Any) -> Optional[datetime.datetime]:
+    def _parse_timestamp(timestamp: Any) -> datetime.datetime | None:
         """
         Parse supported timestamp formats into naive local datetime.
         Supports ISO values with either "T" or space separators.
@@ -78,83 +80,93 @@ class AnalyticsEvents:
             return dt
         except Exception:
             return None
-    
+
     # ==================== EVENT LOGGING METHODS ====================
-    
-    def log_message(self, source: str, msg_type: str, user_id: str, language: str = "ar", 
-                   sentiment: str = "neutral", tokens: int = 0, cost_usd: float = 0.0, 
-                   model: str = None, response_time_ms: float = None, message_length: int = 0):
+
+    def log_message(
+        self,
+        source: str,
+        msg_type: str,
+        user_id: str,
+        language: str = "ar",
+        sentiment: str | None = None,
+        tokens: int = 0,
+        cost_usd: float = 0.0,
+        model: str | None = None,
+        response_time_ms: float | None = None,
+        message_length: int = 0,
+        sentiment_detected: bool = False,
+    ) -> None:
         """
         Log a message event
-        
+
         Args:
             source: "user" | "bot" | "human"
             msg_type: "text" | "voice" | "image"
             user_id: User identifier
             language: "ar" | "en" | "fr" | "franco"
-            sentiment: "positive" | "neutral" | "negative"
+            sentiment: "positive" | "neutral" | "negative" when actually computed
             tokens: Number of tokens used (for bot messages)
             cost_usd: Cost in USD (for bot messages)
             model: AI model used (e.g., "gpt-5-mini", "whisper-1")
             response_time_ms: Response time in milliseconds (for bot messages)
             message_length: Length of message in characters
+            sentiment_detected: True only when sentiment was computed from a real detector
         """
-        self._append_event({
+        payload: dict[str, Any] = {
             "type": "message",
             "source": source,
             "msg_type": msg_type,
             "user_id": user_id,
             "language": language,
-            "sentiment": sentiment,
             "tokens": tokens,
             "cost_usd": cost_usd,
             "model": model,
             "response_time_ms": response_time_ms,
-            "message_length": message_length
-        })
-    
-    def log_conversation_start(self, user_id: str, conversation_id: str, is_new_user: bool = False):
+            "message_length": message_length,
+        }
+        if sentiment is not None:
+            payload["sentiment"] = sentiment
+            if sentiment_detected:
+                payload["sentiment_detected"] = True
+        self._append_event(payload)
+
+    def log_conversation_start(self, user_id: str, conversation_id: str, is_new_user: bool = False) -> None:
         """Log when a new conversation starts"""
-        self._append_event({
-            "type": "conversation_start",
-            "user_id": user_id,
-            "conversation_id": conversation_id,
-            "is_new_user": is_new_user
-        })
-    
-    def log_gender(self, user_id: str, gender: str):
+        self._append_event(
+            {
+                "type": "conversation_start",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "is_new_user": is_new_user,
+            }
+        )
+
+    def log_gender(self, user_id: str, gender: str) -> None:
         """
         Log user gender
-        
+
         Args:
             gender: "male" | "female" | "unknown"
         """
-        self._append_event({
-            "type": "gender",
-            "user_id": user_id,
-            "gender": gender
-        })
-    
-    def log_service_request(self, user_id: str, service: str):
+        self._append_event({"type": "gender", "user_id": user_id, "gender": gender})
+
+    def log_service_request(self, user_id: str, service: str) -> None:
         """Log when user asks about a service"""
-        self._append_event({
-            "type": "service_request",
-            "user_id": user_id,
-            "service": service
-        })
-    
+        self._append_event({"type": "service_request", "user_id": user_id, "service": service})
+
     def log_appointment(
         self,
         user_id: str,
         service: str,
         status: str,
         messages_count: int = 0,
-        phone: str = None,
-        appointment_id: Any = None,
-    ):
+        phone: str | None = None,
+        appointment_id: Any | None = None,
+    ) -> None:
         """
         Log appointment event
-        
+
         Args:
             status: "requested" | "booked" | "confirmed" | "rescheduled" | "cancelled"
             messages_count: Number of messages in conversation (for conversion tracking)
@@ -165,7 +177,7 @@ class AnalyticsEvents:
                 aid = int(appointment_id)
             except (TypeError, ValueError):
                 aid = None
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "type": "appointment",
             "user_id": user_id,
             "service": service,
@@ -182,11 +194,11 @@ class AnalyticsEvents:
         self,
         user_id: str,
         template_id: str,
-        message_id: str = None,
-        appointment_id: Any = None,
-        phone: str = None,
-        appointment_at: str = None,
-    ):
+        message_id: str | None = None,
+        appointment_id: Any | None = None,
+        phone: str | None = None,
+        appointment_at: str | None = None,
+    ) -> None:
         """Log when a smart template (e.g. reminder_24h) is actually sent to the customer."""
         aid = None
         if appointment_id is not None:
@@ -194,24 +206,26 @@ class AnalyticsEvents:
                 aid = int(appointment_id)
             except (TypeError, ValueError):
                 aid = None
-        self._append_event({
-            "type": "smart_reminder_sent",
-            "user_id": user_id,
-            "template_id": (template_id or "reminder_24h"),
-            "message_id": message_id,
-            "appointment_id": aid,
-            "phone": (str(phone).strip() if phone else None),
-            "appointment_at": appointment_at,
-        })
+        self._append_event(
+            {
+                "type": "smart_reminder_sent",
+                "user_id": user_id,
+                "template_id": (template_id or "reminder_24h"),
+                "message_id": message_id,
+                "appointment_id": aid,
+                "phone": (str(phone).strip() if phone else None),
+                "appointment_at": appointment_at,
+            }
+        )
 
     def log_smart_reminder_reply(
         self,
         user_id: str,
         intent: str,
-        source_message_id: str = None,
-        appointment_id: Any = None,
-        phone: str = None,
-    ):
+        source_message_id: str | None = None,
+        appointment_id: Any | None = None,
+        phone: str | None = None,
+    ) -> None:
         """
         Log a classified reply to a smart reminder (confirm / postpone / cancel / defer).
         """
@@ -221,37 +235,34 @@ class AnalyticsEvents:
                 aid = int(appointment_id)
             except (TypeError, ValueError):
                 aid = None
-        self._append_event({
-            "type": "smart_reminder_reply",
-            "user_id": user_id,
-            "intent": str(intent or "").strip().lower()[:32],
-            "source_message_id": source_message_id,
-            "appointment_id": aid,
-            "phone": (str(phone).strip() if phone else None),
-        })
-    
-    def log_feedback(self, user_id: str, feedback_type: str, reason: str = None):
+        self._append_event(
+            {
+                "type": "smart_reminder_reply",
+                "user_id": user_id,
+                "intent": str(intent or "").strip().lower()[:32],
+                "source_message_id": source_message_id,
+                "appointment_id": aid,
+                "phone": (str(phone).strip() if phone else None),
+            }
+        )
+
+    def log_feedback(self, user_id: str, feedback_type: str, reason: str | None = None) -> None:
         """
         Log user feedback
-        
+
         Args:
             feedback_type: "good" | "wrong" | "inappropriate" | "unclear"
             reason: Optional reason for negative feedback
         """
-        self._append_event({
-            "type": "feedback",
-            "user_id": user_id,
-            "feedback_type": feedback_type,
-            "reason": reason
-        })
+        self._append_event({"type": "feedback", "user_id": user_id, "feedback_type": feedback_type, "reason": reason})
 
     def log_appointment_pause_cleared(
         self,
         user_id: str,
-        appointment_id: Any = None,
-        phone: str = None,
-        service: str = None,
-    ):
+        appointment_id: Any | None = None,
+        phone: str | None = None,
+        service: str | None = None,
+    ) -> None:
         """
         CRM cleared Paused → Available after update_appointment_date + successful resume API.
         """
@@ -261,15 +272,17 @@ class AnalyticsEvents:
                 aid = int(appointment_id)
             except (TypeError, ValueError):
                 aid = None
-        self._append_event({
-            "type": "appointment_pause_cleared",
-            "user_id": user_id,
-            "appointment_id": aid,
-            "phone": (str(phone).strip() if phone else None),
-            "service": service,
-        })
+        self._append_event(
+            {
+                "type": "appointment_pause_cleared",
+                "user_id": user_id,
+                "appointment_id": aid,
+                "phone": (str(phone).strip() if phone else None),
+                "service": service,
+            }
+        )
 
-    def log_session_rating(self, user_id: str, stars: int, conversation_id: str = None):
+    def log_session_rating(self, user_id: str, stars: int, conversation_id: str | None = None) -> None:
         """
         Post-conversation star rating (1–5), e.g. after successful booking.
 
@@ -282,41 +295,45 @@ class AnalyticsEvents:
         except (TypeError, ValueError):
             s = 0
         s = max(1, min(5, s))
-        self._append_event({
-            "type": "session_rating",
-            "user_id": user_id,
-            "stars": s,
-            "conversation_id": conversation_id,
-        })
+        self._append_event(
+            {
+                "type": "session_rating",
+                "user_id": user_id,
+                "stars": s,
+                "conversation_id": conversation_id,
+            }
+        )
 
     def log_post_session_feedback_rating(
         self,
         user_id: str,
         stars: int,
-        conversation_id: str = None,
-        appointment_id: Any = None,
-        reference_date: str = None,
-        raw_reply: str = None,
-        smart_message_id: str = None,
-    ):
+        conversation_id: str | None = None,
+        appointment_id: Any | None = None,
+        reference_date: str | None = None,
+        raw_reply: str | None = None,
+        smart_message_id: str | None = None,
+    ) -> None:
         """Star rating (1–5) after Post Session Feedback WhatsApp template (smart messaging)."""
         try:
             s = int(stars)
         except (TypeError, ValueError):
             s = 0
         s = max(1, min(5, s))
-        self._append_event({
-            "type": "post_session_feedback_rating",
-            "user_id": user_id,
-            "stars": s,
-            "conversation_id": conversation_id,
-            "appointment_id": appointment_id,
-            "reference_date": reference_date,
-            "raw_reply": (raw_reply or "")[:500] if raw_reply else None,
-            "smart_message_id": smart_message_id,
-        })
+        self._append_event(
+            {
+                "type": "post_session_feedback_rating",
+                "user_id": user_id,
+                "stars": s,
+                "conversation_id": conversation_id,
+                "appointment_id": appointment_id,
+                "reference_date": reference_date,
+                "raw_reply": (raw_reply or "")[:500] if raw_reply else None,
+                "smart_message_id": smart_message_id,
+            }
+        )
 
-    def get_post_session_feedback_ratings(self, limit: int = 200) -> List[Dict[str, Any]]:
+    def get_post_session_feedback_ratings(self, limit: int = 200) -> list[dict[str, Any]]:
         """Recent post_session_feedback_rating events (newest first)."""
         try:
             lim = max(1, min(2000, int(limit)))
@@ -324,9 +341,9 @@ class AnalyticsEvents:
             lim = 200
         if not os.path.exists(self.events_file):
             return []
-        rows: List[Dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
         try:
-            with open(self.events_file, "r", encoding="utf-8") as f:
+            with open(self.events_file, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -341,35 +358,27 @@ class AnalyticsEvents:
             return []
         rows.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
         return rows[:lim]
-    
-    def log_escalation(self, user_id: str, escalation_type: str, reason: str = None):
+
+    def log_escalation(self, user_id: str, escalation_type: str, reason: str | None = None) -> None:
         """
         Log escalation event
-        
+
         Args:
             escalation_type: "human_handover" | "complaint" | "technical_issue" | "bot_failure"
             reason: Optional reason for escalation
         """
-        self._append_event({
-            "type": "escalation",
-            "user_id": user_id,
-            "escalation_type": escalation_type,
-            "reason": reason
-        })
-    
-    def log_topic(self, user_id: str, topic: str, category: str = "general"):
+        self._append_event(
+            {"type": "escalation", "user_id": user_id, "escalation_type": escalation_type, "reason": reason}
+        )
+
+    def log_topic(self, user_id: str, topic: str, category: str = "general") -> None:
         """Log trending topic/question"""
-        self._append_event({
-            "type": "topic",
-            "user_id": user_id,
-            "topic": topic,
-            "category": category
-        })
-    
-    def _latest_session_rating_by_user(self, events: List[Dict[str, Any]]) -> Dict[str, int]:
+        self._append_event({"type": "topic", "user_id": user_id, "topic": topic, "category": category})
+
+    def _latest_session_rating_by_user(self, events: list[dict[str, Any]]) -> dict[str, int]:
         """Most recent session_rating stars per user_id within the given event list."""
-        latest_ts: Dict[str, datetime.datetime] = {}
-        latest_stars: Dict[str, int] = {}
+        latest_ts: dict[str, datetime.datetime] = {}
+        latest_stars: dict[str, int] = {}
         for event in events:
             if event.get("type") != "session_rating":
                 continue
@@ -394,7 +403,7 @@ class AnalyticsEvents:
             return int(value)
         except (TypeError, ValueError):
             return 0
-    
+
     def _safe_float(self, value: Any) -> float:
         """Parse float safely from event payloads."""
         try:
@@ -403,7 +412,7 @@ class AnalyticsEvents:
             return float(value)
         except (TypeError, ValueError):
             return 0.0
-    
+
     def _mask_user_id(self, user_id: Any) -> str:
         """Mask user id before returning examples to dashboard."""
         user = str(user_id or "")
@@ -411,7 +420,7 @@ class AnalyticsEvents:
             return user
         return f"...{user[-4:]}"
 
-    def _mask_phone_tail(self, phone: Optional[str]) -> str:
+    def _mask_phone_tail(self, phone: str | None) -> str:
         """Last 4 digits only for display."""
         if not phone:
             return ""
@@ -419,8 +428,8 @@ class AnalyticsEvents:
         if len(d) < 4:
             return "****"
         return "***" + d[-4:]
-    
-    def _build_conversation_type_metrics(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:
+
+    def _build_conversation_type_metrics(self, events: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Build Conversation 1/2/3 metrics from event logs.
 
@@ -433,7 +442,7 @@ class AnalyticsEvents:
           Conversation 3 -> appointment action detected
         """
         try:
-            events_by_user = defaultdict(list)
+            events_by_user: defaultdict[str, list[tuple[datetime.datetime, dict[str, Any]]]] = defaultdict(list)
             for event in events:
                 user_id = event.get("user_id")
                 timestamp = event.get("timestamp")
@@ -444,48 +453,52 @@ class AnalyticsEvents:
                 except Exception:
                     continue
                 events_by_user[str(user_id)].append((dt, event))
-            
+
             session_gap_seconds = self.conversation_session_gap_minutes * 60
-            sessions = []
-            
+            sessions: list[dict[str, Any]] = []
+
             for user_id, user_events in events_by_user.items():
                 user_events.sort(key=lambda item: item[0])
-                current_session = []
-                
+                current_session: list[tuple[datetime.datetime, dict[str, Any]]] = []
+
                 for dt, event in user_events:
                     if not current_session:
                         current_session = [(dt, event)]
                         continue
-                    
+
                     previous_dt = current_session[-1][0]
                     inactivity = (dt - previous_dt).total_seconds()
-                    
+
                     if inactivity > session_gap_seconds:
-                        sessions.append({
+                        sessions.append(
+                            {
+                                "user_id": user_id,
+                                "start": current_session[0][0],
+                                "end": current_session[-1][0],
+                                "events": [entry[1] for entry in current_session],
+                            }
+                        )
+                        current_session = [(dt, event)]
+                    else:
+                        current_session.append((dt, event))
+
+                if current_session:
+                    sessions.append(
+                        {
                             "user_id": user_id,
                             "start": current_session[0][0],
                             "end": current_session[-1][0],
                             "events": [entry[1] for entry in current_session],
-                        })
-                        current_session = [(dt, event)]
-                    else:
-                        current_session.append((dt, event))
-                
-                if current_session:
-                    sessions.append({
-                        "user_id": user_id,
-                        "start": current_session[0][0],
-                        "end": current_session[-1][0],
-                        "events": [entry[1] for entry in current_session],
-                    })
-            
+                        }
+                    )
+
             definitions = {
                 "conversation_1": "General conversation session with no qualification signal and no appointment event.",
                 "conversation_2": "Qualified conversation session where intent/profile is captured (service_request or gender), but no appointment event yet.",
                 "conversation_3": "Conversion conversation session that includes an appointment event (requested/booked/confirmed/rescheduled/cancelled).",
             }
-            
-            stages = {
+
+            stages: dict[str, dict[str, Any]] = {
                 "conversation_1": {
                     "id": "conversation_1",
                     "label": "Conversation 1",
@@ -529,21 +542,21 @@ class AnalyticsEvents:
                     "examples": [],
                 },
             }
-            
+
             stage_rank = {
                 "conversation_1": 1,
                 "conversation_2": 2,
                 "conversation_3": 3,
             }
-            
+
             for session in sessions:
                 session_events = session["events"]
-                
+
                 has_gender = False
                 has_service_request = False
                 has_appointment = False
                 appointment_statuses = []
-                
+
                 session_total_events = len(session_events)
                 session_message_events = 0
                 session_user_messages = 0
@@ -552,11 +565,11 @@ class AnalyticsEvents:
                 session_cost = 0.0
                 sequence_parts = []
                 unique_event_types = set()
-                
+
                 for event in session_events:
                     event_type = event.get("type", "unknown")
                     unique_event_types.add(event_type)
-                    
+
                     if event_type == "gender":
                         has_gender = True
                         sequence_parts.append("gender")
@@ -572,7 +585,7 @@ class AnalyticsEvents:
                         source = str(event.get("source", "unknown"))
                         session_message_events += 1
                         sequence_parts.append(f"message({source})")
-                        
+
                         if source == "user":
                             session_user_messages += 1
                         elif source == "bot":
@@ -581,14 +594,14 @@ class AnalyticsEvents:
                             session_cost += max(self._safe_float(event.get("cost_usd")), 0.0)
                     else:
                         sequence_parts.append(event_type)
-                
+
                 if has_appointment:
                     stage_key = "conversation_3"
                 elif has_service_request or has_gender:
                     stage_key = "conversation_2"
                 else:
                     stage_key = "conversation_1"
-                
+
                 stage = stages[stage_key]
                 stage["exclusive_count"] += 1
                 stage["total_events"] += session_total_events
@@ -597,31 +610,33 @@ class AnalyticsEvents:
                 stage["bot_messages"] += session_bot_messages
                 stage["total_tokens"] += session_tokens
                 stage["estimated_cost_usd"] += session_cost
-                
+
                 session_stage_rank = stage_rank[stage_key]
                 for funnel_key, required_rank in stage_rank.items():
                     if session_stage_rank >= required_rank:
                         stages[funnel_key]["funnel_count"] += 1
-                
+
                 if len(stage["examples"]) < 3:
                     preview_sequence = " -> ".join(sequence_parts[:8])
                     if len(sequence_parts) > 8:
                         preview_sequence += " -> ..."
-                    
-                    stage["examples"].append({
-                        "user_id_masked": self._mask_user_id(session["user_id"]),
-                        "session_start": session["start"].isoformat(),
-                        "session_end": session["end"].isoformat(),
-                        "event_types": sorted(unique_event_types),
-                        "event_sequence": preview_sequence,
-                        "appointment_statuses": sorted(set(appointment_statuses)),
-                        "bot_tokens": session_tokens,
-                        "estimated_cost_usd": round(session_cost, 6),
-                    })
-            
+
+                    stage["examples"].append(
+                        {
+                            "user_id_masked": self._mask_user_id(session["user_id"]),
+                            "session_start": session["start"].isoformat(),
+                            "session_end": session["end"].isoformat(),
+                            "event_types": sorted(unique_event_types),
+                            "event_sequence": preview_sequence,
+                            "appointment_statuses": sorted(set(appointment_statuses)),
+                            "bot_tokens": session_tokens,
+                            "estimated_cost_usd": round(session_cost, 6),
+                        }
+                    )
+
             total_sessions = len(sessions)
             estimated_total_cost = sum(stage["estimated_cost_usd"] for stage in stages.values())
-            
+
             ordered_keys = ["conversation_1", "conversation_2", "conversation_3"]
             stage_list = []
             for key in ordered_keys:
@@ -631,12 +646,14 @@ class AnalyticsEvents:
                 stage["avg_tokens_per_conversation"] = round(stage["total_tokens"] / count, 1) if count > 0 else 0
                 stage["avg_estimated_cost_usd"] = round(stage["estimated_cost_usd"] / count, 6) if count > 0 else 0
                 stage["estimated_cost_usd"] = round(stage["estimated_cost_usd"], 6)
-                stage["estimated_cost_share_pct"] = round(
-                    (stage["estimated_cost_usd"] / estimated_total_cost) * 100, 1
-                ) if estimated_total_cost > 0 else 0
+                stage["estimated_cost_share_pct"] = (
+                    round((stage["estimated_cost_usd"] / estimated_total_cost) * 100, 1)
+                    if estimated_total_cost > 0
+                    else 0
+                )
                 stage["allocated_real_cost_usd"] = None
                 stage_list.append(stage)
-            
+
             return {
                 "counting": {
                     "method": (
@@ -669,7 +686,7 @@ class AnalyticsEvents:
                     ),
                 },
             }
-            
+
         except Exception as e:
             print(f"❌ Error building conversation type metrics: {e}")
             return {
@@ -697,17 +714,17 @@ class AnalyticsEvents:
                     "note": "Unable to compute conversation stage billing from events.",
                 },
             }
-    
+
     # ==================== AGGREGATION METHODS ====================
-    
-    def get_events(self, days: Optional[int] = 7, event_type: Optional[str] = None) -> List[Dict[str, Any]]:
+
+    def get_events(self, days: int | None = 7, event_type: str | None = None) -> list[dict[str, Any]]:
         """
         Read events from file and filter by date range
-        
+
         Args:
             days: Number of days to include
             event_type: Optional filter by event type
-            
+
         Returns:
             List of events
         """
@@ -716,11 +733,11 @@ class AnalyticsEvents:
             cutoff_date = None
             if days is not None:
                 cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days)
-            
+
             if not os.path.exists(self.events_file):
                 return []
-            
-            with open(self.events_file, 'r', encoding='utf-8') as f:
+
+            with open(self.events_file, encoding="utf-8") as f:
                 for line in f:
                     try:
                         event = json.loads(line.strip())
@@ -730,28 +747,28 @@ class AnalyticsEvents:
                         normalized_user_id = self._normalize_user_id(event.get("user_id"))
                         if normalized_user_id:
                             event["user_id"] = normalized_user_id
-                        
+
                         # Filter by date
                         if cutoff_date is None or event_date >= cutoff_date:
                             # Filter by type if specified
                             if event_type is None or event.get("type") == event_type:
                                 events.append(event)
-                    except:
+                    except Exception:
                         continue
-            
+
             return events
-            
+
         except Exception as e:
             print(f"❌ Error reading events: {e}")
             return []
-    
-    def aggregate_analytics(self, days: int = 7) -> Dict[str, Any]:
+
+    def aggregate_analytics(self, days: int = 7) -> dict[str, Any]:
         """
         Aggregate all events into analytics data
-        
+
         Args:
             days: Number of days to include
-            
+
         Returns:
             Dictionary with all analytics metrics
         """
@@ -764,7 +781,7 @@ class AnalyticsEvents:
             all_events = self.get_events(days=None)
 
             # Build first-seen index from the full event history.
-            first_seen_by_user: Dict[str, datetime.datetime] = {}
+            first_seen_by_user: dict[str, datetime.datetime] = {}
             for event in all_events:
                 user_id = self._normalize_user_id(event.get("user_id"))
                 event_dt = self._parse_timestamp(event.get("timestamp"))
@@ -773,22 +790,22 @@ class AnalyticsEvents:
                 existing_first_seen = first_seen_by_user.get(user_id)
                 if existing_first_seen is None or event_dt < existing_first_seen:
                     first_seen_by_user[user_id] = event_dt
-            
+
             # Initialize counters
-            stats = {
+            stats: dict[str, Any] = {
                 "overview": {
                     "total_messages": 0,
                     "total_conversations": 0,
                     "unique_users": set(),
                     "new_users": 0,
-                    "active_user_message_users": set()
+                    "active_user_message_users": set(),
                 },
                 "messages": {
                     "by_type": defaultdict(int),
                     "by_source": defaultdict(int),
                     "by_language": defaultdict(int),
                     "daily": defaultdict(lambda: defaultdict(int)),
-                    "hourly": defaultdict(int)
+                    "hourly": defaultdict(int),
                 },
                 "sentiment": defaultdict(int),
                 "genders": defaultdict(int),
@@ -799,14 +816,9 @@ class AnalyticsEvents:
                     "confirmed": 0,
                     "rescheduled": 0,
                     "cancelled": 0,
-                    "by_service": defaultdict(lambda: defaultdict(int))
+                    "by_service": defaultdict(lambda: defaultdict(int)),
                 },
-                "feedback": {
-                    "total": 0,
-                    "likes": 0,
-                    "dislikes": 0,
-                    "reasons": defaultdict(int)
-                },
+                "feedback": {"total": 0, "likes": 0, "dislikes": 0, "reasons": defaultdict(int)},
                 "session_ratings": {
                     "by_star": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
                     "total": 0,
@@ -838,7 +850,7 @@ class AnalyticsEvents:
                     "response_times": [],
                     "total_tokens": 0,
                     "total_cost": 0.0,
-                    "by_model": defaultdict(lambda: {"tokens": 0, "cost": 0.0})
+                    "by_model": defaultdict(lambda: {"tokens": 0, "cost": 0.0}),
                 },
                 "conversions": {
                     "inquiries": 0,
@@ -846,23 +858,23 @@ class AnalyticsEvents:
                     "appointment_requests": 0,
                     "bookings": 0,
                     "messages_to_booking": [],
-                    "inquiry_users": set()
+                    "inquiry_users": set(),
                 },
                 "new_client_metrics": {
                     "all_new_users": set(),
                     "asked_users": set(),
                     "booked_users": set(),
                     "services_by_user": defaultdict(set),
-                    "booked_services_by_user": defaultdict(set)
+                    "booked_services_by_user": defaultdict(set),
                 },
                 "services_today": {
                     "date": today_date.isoformat(),
                     "mentions_by_service": defaultdict(int),
                     "users_by_service": defaultdict(set),
-                    "all_users": set()
+                    "all_users": set(),
                 },
             }
-            
+
             # Process each event
             for event in events:
                 event_type = event.get("type")
@@ -870,14 +882,14 @@ class AnalyticsEvents:
                 if user_id:
                     event["user_id"] = user_id
                 dt = self._parse_timestamp(event.get("timestamp"))
-                
+
                 # Track unique users
                 if user_id:
                     stats["overview"]["unique_users"].add(user_id)
                     first_seen = first_seen_by_user.get(user_id)
                     if first_seen and range_start <= first_seen <= now and not self._is_test_user_id(user_id):
                         stats["new_client_metrics"]["all_new_users"].add(user_id)
-                
+
                 # Parse timestamp for time-based stats
                 if dt:
                     date_key = dt.strftime("%Y-%m-%d")
@@ -885,26 +897,33 @@ class AnalyticsEvents:
                 else:
                     date_key = None
                     hour_key = None
-                
+
                 # Process by event type
                 if event_type == "message":
                     stats["overview"]["total_messages"] += 1
                     stats["messages"]["by_type"][event.get("msg_type", "text")] += 1
-                    stats["messages"]["by_source"][event.get("source", "user")] += 1
-                    stats["messages"]["by_language"][event.get("language", "ar")] += 1
-                    
+                    source = event.get("source", "user")
+                    stats["messages"]["by_source"][source] += 1
+                    # Language demographics count user messages only (not bot echoes)
+                    if source == "user":
+                        stats["messages"]["by_language"][event.get("language", "ar")] += 1
+
+                    # Only count explicitly labeled sentiments (ignore placeholder "neutral" defaults)
                     sentiment = event.get("sentiment")
-                    if sentiment:
+                    if sentiment and sentiment in {"positive", "negative"}:
                         stats["sentiment"][sentiment] += 1
-                    
+                    elif sentiment == "neutral" and event.get("sentiment_detected") is True:
+                        stats["sentiment"]["neutral"] += 1
+
                     # Time-based
                     if date_key:
                         stats["messages"]["daily"][date_key]["total"] += 1
                         stats["messages"]["daily"][date_key][event.get("msg_type", "text")] += 1
-                        stats["messages"]["daily"][date_key][event.get("language", "ar")] += 1
+                        if source == "user":
+                            stats["messages"]["daily"][date_key][event.get("language", "ar")] += 1
                     if hour_key:
                         stats["messages"]["hourly"][hour_key] += 1
-                    
+
                     # AI performance (bot messages only)
                     if event.get("source") == "bot":
                         response_time = self._safe_float(event.get("response_time_ms"))
@@ -912,46 +931,46 @@ class AnalyticsEvents:
                             stats["ai_performance"]["total_response_time"] += response_time
                             stats["ai_performance"]["response_count"] += 1
                             stats["ai_performance"]["response_times"].append(response_time)
-                            
+
                             if stats["ai_performance"]["min_response_time"] is None:
                                 stats["ai_performance"]["min_response_time"] = response_time
                             else:
                                 stats["ai_performance"]["min_response_time"] = min(
                                     stats["ai_performance"]["min_response_time"], response_time
                                 )
-                            
+
                             if stats["ai_performance"]["max_response_time"] is None:
                                 stats["ai_performance"]["max_response_time"] = response_time
                             else:
                                 stats["ai_performance"]["max_response_time"] = max(
                                     stats["ai_performance"]["max_response_time"], response_time
                                 )
-                        
+
                         tokens = max(self._safe_int(event.get("tokens")), 0)
                         cost = max(self._safe_float(event.get("cost_usd")), 0.0)
                         model = event.get("model", "unknown")
-                        
+
                         if tokens > 0:
                             stats["ai_performance"]["total_tokens"] += tokens
                             stats["ai_performance"]["by_model"][model]["tokens"] += tokens
-                        
+
                         if cost > 0:
                             stats["ai_performance"]["total_cost"] += cost
                             stats["ai_performance"]["by_model"][model]["cost"] += cost
                     elif event.get("source") == "user" and user_id:
                         stats["overview"]["active_user_message_users"].add(user_id)
                         stats["conversions"]["inquiry_users"].add(user_id)
-                
+
                 elif event_type == "conversation_start":
                     stats["overview"]["total_conversations"] += 1
                     if event.get("is_new_user"):
                         stats["overview"]["new_users"] += 1
-                
+
                 elif event_type == "gender":
                     gender = event.get("gender")
                     if gender:
                         stats["genders"][gender] += 1
-                
+
                 elif event_type == "service_request":
                     service = event.get("service")
                     if user_id:
@@ -964,26 +983,34 @@ class AnalyticsEvents:
                             if user_id:
                                 stats["services_today"]["users_by_service"][service].add(user_id)
                                 stats["services_today"]["all_users"].add(user_id)
-                    if user_id and user_id in stats["new_client_metrics"]["all_new_users"] and not self._is_test_user_id(user_id):
+                    if (
+                        user_id
+                        and user_id in stats["new_client_metrics"]["all_new_users"]
+                        and not self._is_test_user_id(user_id)
+                    ):
                         stats["new_client_metrics"]["asked_users"].add(user_id)
                         if service:
                             stats["new_client_metrics"]["services_by_user"][user_id].add(service)
-                
+
                 elif event_type == "appointment":
                     status = event.get("status")
                     service = event.get("service")
-                    
+
                     if status == "requested":
                         stats["appointments"]["requested"] += 1
                         stats["conversions"]["appointment_requests"] += 1
                     elif status == "booked":
                         stats["appointments"]["booked"] += 1
                         stats["conversions"]["bookings"] += 1
-                        
+
                         messages_count = max(self._safe_int(event.get("messages_count")), 0)
                         if messages_count > 0:
                             stats["conversions"]["messages_to_booking"].append(messages_count)
-                        if user_id and user_id in stats["new_client_metrics"]["all_new_users"] and not self._is_test_user_id(user_id):
+                        if (
+                            user_id
+                            and user_id in stats["new_client_metrics"]["all_new_users"]
+                            and not self._is_test_user_id(user_id)
+                        ):
                             stats["new_client_metrics"]["booked_users"].add(user_id)
                             if service:
                                 stats["new_client_metrics"]["booked_services_by_user"][user_id].add(service)
@@ -991,26 +1018,40 @@ class AnalyticsEvents:
                         stats["appointments"]["confirmed"] += 1
                     elif status == "rescheduled":
                         stats["appointments"]["rescheduled"] += 1
-                        stats["appointment_reschedules"].append({
-                            "user_id": user_id,
-                            "service": service,
-                            "at": event.get("timestamp"),
-                            "phone": event.get("phone"),
-                            "appointment_id": event.get("appointment_id"),
-                        })
+                        stats["appointment_reschedules"].append(
+                            {
+                                "user_id": user_id,
+                                "service": service,
+                                "at": event.get("timestamp"),
+                                "phone": event.get("phone"),
+                                "appointment_id": event.get("appointment_id"),
+                            }
+                        )
                     elif status == "cancelled":
                         stats["appointments"]["cancelled"] += 1
-                    
+
                     if service and status:
                         stats["appointments"]["by_service"][service][status] += 1
-                
+
                 elif event_type == "feedback":
                     stats["feedback"]["total"] += 1
-                    feedback_type = event.get("feedback_type")
-                    
-                    if feedback_type == "good":
+                    feedback_type = str(event.get("feedback_type") or "").strip().lower()
+                    like_types = {"good", "like", "likes", "positive", "up", "thumbs_up", "👍"}
+                    dislike_types = {
+                        "wrong",
+                        "bad",
+                        "dislike",
+                        "dislikes",
+                        "negative",
+                        "down",
+                        "thumbs_down",
+                        "inappropriate",
+                        "unclear",
+                        "👎",
+                    }
+                    if feedback_type in like_types:
                         stats["feedback"]["likes"] += 1
-                    else:
+                    elif feedback_type in dislike_types or feedback_type:
                         stats["feedback"]["dislikes"] += 1
                         reason = event.get("reason", feedback_type)
                         if reason:
@@ -1035,37 +1076,43 @@ class AnalyticsEvents:
                     if user_id:
                         pc["by_service_unique_users"][svc_key].add(user_id)
                     aid = event.get("appointment_id")
-                    pc["events"].append({
-                        "user_id": user_id,
-                        "appointment_id": aid,
-                        "phone": event.get("phone"),
-                        "service": event.get("service"),
-                        "at": event.get("timestamp"),
-                    })
+                    pc["events"].append(
+                        {
+                            "user_id": user_id,
+                            "appointment_id": aid,
+                            "phone": event.get("phone"),
+                            "service": event.get("service"),
+                            "at": event.get("timestamp"),
+                        }
+                    )
 
                 elif event_type == "smart_reminder_sent":
                     sm = stats["smart_reminders"]
-                    sm["sent"].append({
-                        "user_id": user_id,
-                        "message_id": event.get("message_id"),
-                        "template_id": event.get("template_id") or "reminder_24h",
-                        "appointment_id": event.get("appointment_id"),
-                        "phone": event.get("phone"),
-                        "appointment_at": event.get("appointment_at"),
-                        "at": event.get("timestamp"),
-                    })
+                    sm["sent"].append(
+                        {
+                            "user_id": user_id,
+                            "message_id": event.get("message_id"),
+                            "template_id": event.get("template_id") or "reminder_24h",
+                            "appointment_id": event.get("appointment_id"),
+                            "phone": event.get("phone"),
+                            "appointment_at": event.get("appointment_at"),
+                            "at": event.get("timestamp"),
+                        }
+                    )
 
                 elif event_type == "smart_reminder_reply":
                     sm = stats["smart_reminders"]
-                    sm["replies"].append({
-                        "user_id": user_id,
-                        "intent": event.get("intent"),
-                        "source_message_id": event.get("source_message_id"),
-                        "appointment_id": event.get("appointment_id"),
-                        "phone": event.get("phone"),
-                        "at": event.get("timestamp"),
-                    })
-                
+                    sm["replies"].append(
+                        {
+                            "user_id": user_id,
+                            "intent": event.get("intent"),
+                            "source_message_id": event.get("source_message_id"),
+                            "appointment_id": event.get("appointment_id"),
+                            "phone": event.get("phone"),
+                            "at": event.get("timestamp"),
+                        }
+                    )
+
                 elif event_type == "escalation":
                     stats["escalations"]["total"] += 1
                     escalation_type = event.get("escalation_type")
@@ -1073,7 +1120,7 @@ class AnalyticsEvents:
                         stats["escalations"]["by_type"][escalation_type] += 1
                     if escalation_type == "human_handover" and user_id:
                         stats["escalations"]["human_handover_users"].add(user_id)
-            
+
             # Normalize counters and fallback values.
             stats["conversions"]["inquiries"] = len(stats["conversions"]["inquiry_users"])
             if stats["overview"]["total_conversations"] == 0:
@@ -1088,7 +1135,7 @@ class AnalyticsEvents:
             stats["latest_session_rating_by_user"] = self._latest_session_rating_by_user(events)
             pc_events = stats["pause_cleared"]["events"]
 
-            def _pause_at(row: Dict[str, Any]) -> datetime.datetime:
+            def _pause_at(row: dict[str, Any]) -> datetime.datetime:
                 t = self._parse_timestamp(row.get("at"))
                 return t if t else datetime.datetime.min
 
@@ -1097,7 +1144,7 @@ class AnalyticsEvents:
 
             sm = stats.get("smart_reminders") or {"sent": [], "replies": []}
 
-            def _row_at(row: Dict[str, Any]) -> datetime.datetime:
+            def _row_at(row: dict[str, Any]) -> datetime.datetime:
                 t = self._parse_timestamp(row.get("at"))
                 return t if t else datetime.datetime.min
 
@@ -1110,22 +1157,23 @@ class AnalyticsEvents:
             ar_list = stats.get("appointment_reschedules") or []
             ar_list.sort(key=lambda row: _row_at(row), reverse=True)
             stats["appointment_reschedules"] = ar_list[:80]
-            
+
             # Build final response
             response = self._format_analytics_response(stats, days)
             if response.get("success"):
                 response["conversation_types"] = self._build_conversation_type_metrics(events)
             return response
-            
+
         except Exception as e:
             print(f"❌ Error aggregating analytics: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e)}
-    
-    def _format_analytics_response(self, stats: Dict, days: int) -> Dict[str, Any]:
+
+    def _format_analytics_response(self, stats: dict, days: int) -> dict[str, Any]:
         """Format aggregated stats into API response"""
-        
+
         # Calculate rates and percentages
         total_messages = stats["overview"]["total_messages"]
         total_conversations = stats["overview"]["total_conversations"]
@@ -1146,8 +1194,7 @@ class AnalyticsEvents:
         sr_avg = round(sr["sum_stars"] / sr_total, 2) if sr_total > 0 else 0
         sr_unique = len(sr["rated_users"])
         sr_pct = {
-            str(k): round((sr["by_star"].get(k, 0) / sr_total) * 100, 1) if sr_total > 0 else 0
-            for k in (1, 2, 3, 4, 5)
+            str(k): round((sr["by_star"].get(k, 0) / sr_total) * 100, 1) if sr_total > 0 else 0 for k in (1, 2, 3, 4, 5)
         }
         inquiries = stats["conversions"]["inquiries"]
         total_users = stats["overview"]["unique_users"]
@@ -1155,52 +1202,52 @@ class AnalyticsEvents:
         lifetime_unique_users = stats.get("lifetime_unique_users", 0)
 
         avg_messages_per_day = round((total_messages / days), 1) if days > 0 else 0
-        avg_messages_per_conversation = round((total_messages / total_conversations), 1) if total_conversations > 0 else 0
-        
+        avg_messages_per_conversation = (
+            round((total_messages / total_conversations), 1) if total_conversations > 0 else 0
+        )
+
         # Build daily summaries
         daily_summaries = []
         end_date = datetime.datetime.now()
         start_date = end_date - datetime.timedelta(days=days)
         current_date = start_date.date()
-        
+
         while current_date <= end_date.date():
             date_key = current_date.strftime("%Y-%m-%d")
             day_data = stats["messages"]["daily"].get(date_key, {})
-            
-            daily_summaries.append({
-                "date": date_key,
-                "total_messages": day_data.get("total", 0),
-                "text_messages": day_data.get("text", 0),
-                "voice_messages": day_data.get("voice", 0),
-                "image_messages": day_data.get("image", 0),
-                "language_ar": day_data.get("ar", 0),
-                "language_en": day_data.get("en", 0),
-                "language_fr": day_data.get("fr", 0),
-                "language_franco": day_data.get("franco", 0)
-            })
-            
+
+            daily_summaries.append(
+                {
+                    "date": date_key,
+                    "total_messages": day_data.get("total", 0),
+                    "text_messages": day_data.get("text", 0),
+                    "voice_messages": day_data.get("voice", 0),
+                    "image_messages": day_data.get("image", 0),
+                    "language_ar": day_data.get("ar", 0),
+                    "language_en": day_data.get("en", 0),
+                    "language_fr": day_data.get("fr", 0),
+                    "language_franco": day_data.get("franco", 0),
+                }
+            )
+
             current_date += datetime.timedelta(days=1)
-        
+
         # Calculate percentages
-        def calc_percentages(counts_dict):
+        def calc_percentages(counts_dict: dict[Any, Any]) -> dict[Any, float]:
             total = sum(counts_dict.values())
             if total == 0:
                 return {}
             return {k: round((v / total) * 100, 1) for k, v in counts_dict.items()}
-        
+
         # Build service list
         service_list = []
         total_service_requests = sum(stats["services"].values())
         for service, count in sorted(stats["services"].items(), key=lambda x: x[1], reverse=True):
             percentage = round((count / total_service_requests) * 100, 1) if total_service_requests > 0 else 0
-            service_list.append({
-                "name": service,
-                "count": count,
-                "percentage": percentage
-            })
+            service_list.append({"name": service, "count": count, "percentage": percentage})
 
         # Bookings per service (appointment events with status "booked" only)
-        booked_by_service: Dict[str, int] = {}
+        booked_by_service: dict[str, int] = {}
         for svc, status_map in stats["appointments"]["by_service"].items():
             n = int(status_map.get("booked", 0))
             if n:
@@ -1209,20 +1256,20 @@ class AnalyticsEvents:
         most_booked_list = []
         for service, count in sorted(booked_by_service.items(), key=lambda x: x[1], reverse=True):
             pct = round((count / total_booked_service_events) * 100, 1) if total_booked_service_events > 0 else 0
-            most_booked_list.append({
-                "name": service,
-                "count": count,
-                "percentage": pct
-            })
-        
+            most_booked_list.append({"name": service, "count": count, "percentage": pct})
+
         # Calculate averages
         avg_response_time = 0
         if stats["ai_performance"]["response_count"] > 0:
-            avg_response_time = stats["ai_performance"]["total_response_time"] / stats["ai_performance"]["response_count"]
-        
+            avg_response_time = (
+                stats["ai_performance"]["total_response_time"] / stats["ai_performance"]["response_count"]
+            )
+
         avg_messages_to_booking = 0
         if stats["conversions"]["messages_to_booking"]:
-            avg_messages_to_booking = sum(stats["conversions"]["messages_to_booking"]) / len(stats["conversions"]["messages_to_booking"])
+            avg_messages_to_booking = sum(stats["conversions"]["messages_to_booking"]) / len(
+                stats["conversions"]["messages_to_booking"]
+            )
 
         # Calculate p95 response time
         response_times = sorted(stats["ai_performance"]["response_times"])
@@ -1244,33 +1291,35 @@ class AnalyticsEvents:
         for user_id in new_client_booked_users_sorted:
             discussed = set(new_client_metrics["services_by_user"].get(user_id, set()))
             booked = set(new_client_metrics["booked_services_by_user"].get(user_id, set()))
-            booked_details.append({
-                "user_id": user_id,
-                "user_id_masked": self._mask_user_id(user_id),
-                "services": sorted(discussed | booked),
-                "discussed_services": sorted(discussed),
-                "booked_services": sorted(booked),
-            })
+            booked_details.append(
+                {
+                    "user_id": user_id,
+                    "user_id_masked": self._mask_user_id(user_id),
+                    "services": sorted(discussed | booked),
+                    "discussed_services": sorted(discussed),
+                    "booked_services": sorted(booked),
+                }
+            )
 
         not_booked_details = []
         for user_id in new_client_not_booked_users:
-            discussed = sorted(new_client_metrics["services_by_user"].get(user_id, set()))
-            not_booked_details.append({
-                "user_id": user_id,
-                "user_id_masked": self._mask_user_id(user_id),
-                "services": discussed
-            })
+            discussed_services = sorted(new_client_metrics["services_by_user"].get(user_id, set()))
+            not_booked_details.append(
+                {"user_id": user_id, "user_id_masked": self._mask_user_id(user_id), "services": discussed_services}
+            )
 
         asked_not_booked_details = []
         for user_id in new_client_asked_not_booked_users:
-            discussed = sorted(new_client_metrics["services_by_user"].get(user_id, set()))
-            asked_not_booked_details.append({
-                "user_id": user_id,
-                "user_id_masked": self._mask_user_id(user_id),
-                "services": discussed,
-                "discussed_services": discussed,
-                "booked_services": [],
-            })
+            discussed_services = sorted(new_client_metrics["services_by_user"].get(user_id, set()))
+            asked_not_booked_details.append(
+                {
+                    "user_id": user_id,
+                    "user_id_masked": self._mask_user_id(user_id),
+                    "services": discussed_services,
+                    "discussed_services": discussed_services,
+                    "booked_services": [],
+                }
+            )
 
         # Services discussed today
         services_today_metrics = stats["services_today"]
@@ -1280,11 +1329,13 @@ class AnalyticsEvents:
             key=lambda item: item[1],
             reverse=True,
         ):
-            services_discussed_today.append({
-                "service": service,
-                "mentions": mentions,
-                "unique_clients": len(services_today_metrics["users_by_service"].get(service, set()))
-            })
+            services_discussed_today.append(
+                {
+                    "service": service,
+                    "mentions": mentions,
+                    "unique_clients": len(services_today_metrics["users_by_service"].get(service, set())),
+                }
+            )
 
         latest_sr = stats.get("latest_session_rating_by_user") or {}
         pc_stats = stats.get("pause_cleared") or {}
@@ -1295,46 +1346,46 @@ class AnalyticsEvents:
         for svc, appt_n in sorted(bs_counts.items(), key=lambda x: (-x[1], x[0])):
             u_set = bs_u.get(svc)
             n_cust = len(u_set) if isinstance(u_set, set) else 0
-            pause_by_service.append({
-                "service": svc,
-                "appointments": appt_n,
-                "unique_customers": n_cust,
-            })
+            pause_by_service.append(
+                {
+                    "service": svc,
+                    "appointments": appt_n,
+                    "unique_customers": n_cust,
+                }
+            )
         pause_cleared_recent = []
         for row in pc_stats.get("events", []) or []:
             uid = row.get("user_id")
             phone_raw = row.get("phone") or ""
             digits = re.sub(r"\D", "", str(phone_raw))
             search_q = digits if digits else re.sub(r"\D", "", str(uid or ""))
-            pause_cleared_recent.append({
-                "user_id_masked": self._mask_user_id(uid),
-                "phone_masked": self._mask_phone_tail(str(phone_raw)) if phone_raw else "",
-                "appointment_id": row.get("appointment_id"),
-                "service": row.get("service"),
-                "at": row.get("at"),
-                "live_chat_search": search_q or str(uid or ""),
-                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
-            })
+            pause_cleared_recent.append(
+                {
+                    "user_id_masked": self._mask_user_id(uid),
+                    "phone_masked": self._mask_phone_tail(str(phone_raw)) if phone_raw else "",
+                    "appointment_id": row.get("appointment_id"),
+                    "service": row.get("service"),
+                    "at": row.get("at"),
+                    "live_chat_search": search_q or str(uid or ""),
+                    "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+                }
+            )
 
         sm_stats = stats.get("smart_reminders") or {}
         sent_rows = list(sm_stats.get("sent") or [])
         reply_rows = list(sm_stats.get("replies") or [])
 
-        def _live_chat_q(uid, phone_raw):
+        def _live_chat_q(uid: Any, phone_raw: Any) -> str:
             phone_raw = phone_raw or ""
             digits = re.sub(r"\D", "", str(phone_raw))
             if digits:
                 return digits
             return re.sub(r"\D", "", str(uid or "")) or str(uid or "")
 
-        def _sent_has_reply(sent: Dict[str, Any]) -> bool:
+        def _sent_has_reply(sent: dict[str, Any]) -> bool:
             mid = sent.get("message_id")
             if mid:
-                mids = {
-                    str(r.get("source_message_id"))
-                    for r in reply_rows
-                    if r.get("source_message_id")
-                }
+                mids = {str(r.get("source_message_id")) for r in reply_rows if r.get("source_message_id")}
                 if str(mid) in mids:
                     return True
             uid = self._normalize_user_id(sent.get("user_id"))
@@ -1378,19 +1429,21 @@ class AnalyticsEvents:
                 continue
             pr = s.get("phone") or ""
             q = _live_chat_q(uid, pr)
-            no_response_recent.append({
-                "user_id_masked": self._mask_user_id(uid),
-                "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
-                "appointment_id": s.get("appointment_id"),
-                "appointment_at": s.get("appointment_at"),
-                "sent_at": s.get("at"),
-                "live_chat_search": q or str(uid),
-                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
-            })
+            no_response_recent.append(
+                {
+                    "user_id_masked": self._mask_user_id(uid),
+                    "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
+                    "appointment_id": s.get("appointment_id"),
+                    "appointment_at": s.get("appointment_at"),
+                    "sent_at": s.get("at"),
+                    "live_chat_search": q or str(uid),
+                    "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+                }
+            )
         no_response_recent = no_response_recent[:60]
 
         reminder_reply_recent = []
-        intent_counts: Dict[str, int] = defaultdict(int)
+        intent_counts: dict[str, int] = defaultdict(int)
         for r in reply_rows:
             intent = (r.get("intent") or "other").lower()
             intent_counts[intent] += 1
@@ -1399,15 +1452,17 @@ class AnalyticsEvents:
                 continue
             pr = r.get("phone") or ""
             q = _live_chat_q(uid, pr)
-            reminder_reply_recent.append({
-                "intent": intent,
-                "user_id_masked": self._mask_user_id(uid),
-                "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
-                "appointment_id": r.get("appointment_id"),
-                "at": r.get("at"),
-                "live_chat_search": q or str(uid),
-                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
-            })
+            reminder_reply_recent.append(
+                {
+                    "intent": intent,
+                    "user_id_masked": self._mask_user_id(uid),
+                    "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
+                    "appointment_id": r.get("appointment_id"),
+                    "at": r.get("at"),
+                    "live_chat_search": q or str(uid),
+                    "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+                }
+            )
         reminder_reply_recent = reminder_reply_recent[:60]
 
         reschedule_recent = []
@@ -1417,16 +1472,18 @@ class AnalyticsEvents:
                 continue
             pr = row.get("phone") or ""
             q = _live_chat_q(uid, pr)
-            reschedule_recent.append({
-                "user_id_masked": self._mask_user_id(uid),
-                "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
-                "appointment_id": row.get("appointment_id"),
-                "service": row.get("service"),
-                "at": row.get("at"),
-                "live_chat_search": q or str(uid),
-                "last_session_rating_stars": latest_sr.get(uid) if uid else None,
-            })
-        
+            reschedule_recent.append(
+                {
+                    "user_id_masked": self._mask_user_id(uid),
+                    "phone_masked": self._mask_phone_tail(str(pr)) if pr else "",
+                    "appointment_id": row.get("appointment_id"),
+                    "service": row.get("service"),
+                    "at": row.get("at"),
+                    "live_chat_search": q or str(uid),
+                    "last_session_rating_stars": latest_sr.get(uid) if uid else None,
+                }
+            )
+
         return {
             "success": True,
             "overview": {
@@ -1437,25 +1494,22 @@ class AnalyticsEvents:
                 "returning_users": max(total_users - new_users, 0),
                 "lifetime_unique_users": lifetime_unique_users,
                 "avg_messages_per_day": avg_messages_per_day,
-                "avg_messages_per_conversation": avg_messages_per_conversation
+                "avg_messages_per_conversation": avg_messages_per_conversation,
             },
             "daily_summaries": daily_summaries,
             "hourly_distribution": dict(stats["messages"]["hourly"]),
             "demographics": {
                 "languages": {
                     "counts": dict(stats["messages"]["by_language"]),
-                    "percentages": calc_percentages(stats["messages"]["by_language"])
+                    "percentages": calc_percentages(stats["messages"]["by_language"]),
                 },
-                "genders": {
-                    "counts": dict(stats["genders"]),
-                    "percentages": calc_percentages(stats["genders"])
-                }
+                "genders": {"counts": dict(stats["genders"]), "percentages": calc_percentages(stats["genders"])},
             },
             "sentiment_distribution": dict(stats["sentiment"]),
             "services": {
                 "most_requested": service_list[:10],
                 "most_booked": most_booked_list[:10],
-                "discussed_today": services_discussed_today
+                "discussed_today": services_discussed_today,
             },
             "appointments": {
                 "total_booked": total_booked,
@@ -1464,19 +1518,13 @@ class AnalyticsEvents:
                 "rescheduled": stats["appointments"]["rescheduled"],
                 "cancelled": stats["appointments"]["cancelled"],
                 "appointment_events_total": appt_events_total,
-                "confirmation_rate": round(
-                    (stats["appointments"]["confirmed"] / appt_events_total) * 100, 1
-                )
+                "confirmation_rate": round((stats["appointments"]["confirmed"] / appt_events_total) * 100, 1)
                 if appt_events_total > 0
                 else 0,
-                "reschedule_rate": round(
-                    (stats["appointments"]["rescheduled"] / appt_events_total) * 100, 1
-                )
+                "reschedule_rate": round((stats["appointments"]["rescheduled"] / appt_events_total) * 100, 1)
                 if appt_events_total > 0
                 else 0,
-                "cancellation_rate": round(
-                    (stats["appointments"]["cancelled"] / appt_events_total) * 100, 1
-                )
+                "cancellation_rate": round((stats["appointments"]["cancelled"] / appt_events_total) * 100, 1)
                 if appt_events_total > 0
                 else 0,
             },
@@ -1484,8 +1532,10 @@ class AnalyticsEvents:
                 "total_feedback": total_feedback,
                 "likes": stats["feedback"]["likes"],
                 "dislikes": stats["feedback"]["dislikes"],
-                "satisfaction_rate": round((stats["feedback"]["likes"] / total_feedback) * 100, 1) if total_feedback > 0 else 0,
-                "dislike_reasons": dict(stats["feedback"]["reasons"])
+                "satisfaction_rate": round((stats["feedback"]["likes"] / total_feedback) * 100, 1)
+                if total_feedback > 0
+                else 0,
+                "dislike_reasons": dict(stats["feedback"]["reasons"]),
             },
             "session_ratings": {
                 "total_ratings": sr_total,
@@ -1520,29 +1570,31 @@ class AnalyticsEvents:
                 "human_handover": stats["escalations"]["by_type"].get("human_handover", 0),
                 "human_handover_unique_users": len(stats["escalations"]["human_handover_users"]),
                 "complaints": stats["escalations"]["by_type"].get("complaint", 0),
-                "technical_issues": stats["escalations"]["by_type"].get("technical_issue", 0)
+                "technical_issues": stats["escalations"]["by_type"].get("technical_issue", 0),
             },
             "performance": {
                 "avg_response_time_ms": round(avg_response_time, 0),
                 "min_response_time_ms": stats["ai_performance"]["min_response_time"] or 0,
                 "max_response_time_ms": stats["ai_performance"]["max_response_time"] or 0,
                 "p95_response_time_ms": round(p95_response_time, 0) if p95_response_time else 0,
-                "total_requests": stats["ai_performance"]["response_count"]
+                "total_requests": stats["ai_performance"]["response_count"],
             },
             "token_usage": {
                 "total_tokens": stats["ai_performance"]["total_tokens"],
                 "total_cost_usd": round(stats["ai_performance"]["total_cost"], 2),
                 "avg_daily_tokens": stats["ai_performance"]["total_tokens"] // days if days > 0 else 0,
                 "avg_daily_cost_usd": round(stats["ai_performance"]["total_cost"] / days, 2) if days > 0 else 0,
-                "model_breakdown": {k: v["tokens"] for k, v in stats["ai_performance"]["by_model"].items()}
+                "model_breakdown": {k: v["tokens"] for k, v in stats["ai_performance"]["by_model"].items()},
             },
             "conversions": {
                 "total_inquiries": inquiries,
                 "total_appointments": stats["conversions"]["bookings"],
-                "conversion_rate": round((stats["conversions"]["bookings"] / inquiries) * 100, 1) if inquiries > 0 else 0,
+                "conversion_rate": round((stats["conversions"]["bookings"] / inquiries) * 100, 1)
+                if inquiries > 0
+                else 0,
                 "avg_messages_to_booking": round(avg_messages_to_booking, 1),
                 "new_clients_booked": len(new_client_booked_users_sorted),
-                "new_clients_asked_not_booked": len(new_client_asked_not_booked_users)
+                "new_clients_asked_not_booked": len(new_client_asked_not_booked_users),
             },
             "new_clients": {
                 "total_new_clients": len(new_client_users),
@@ -1554,19 +1606,19 @@ class AnalyticsEvents:
                 "asked_not_booked_users": new_client_asked_not_booked_users,
                 "booked_details": booked_details,
                 "not_booked_details": not_booked_details,
-                "asked_not_booked_details": asked_not_booked_details
+                "asked_not_booked_details": asked_not_booked_details,
             },
             "services_discussed_today": {
                 "date": services_today_metrics["date"],
                 "total_mentions": sum(services_today_metrics["mentions_by_service"].values()),
                 "unique_clients": len(services_today_metrics["all_users"]),
-                "by_service": services_discussed_today
+                "by_service": services_discussed_today,
             },
             "time_range": {
                 "start_date": (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat(),
                 "end_date": datetime.datetime.now().isoformat(),
-                "days": days
-            }
+                "days": days,
+            },
         }
 
 

@@ -1,14 +1,26 @@
+from __future__ import annotations
+
 # handlers/text_handlers_message.py
 # Main message handler for WhatsApp text messages
 # Human handoff: AI detects intent (no keyword/regex - AI understands context)
-
 import asyncio
-from typing import Optional
+import datetime
+from collections import deque
+from typing import Any
 
-from handlers.text_handlers_firestore import *
+import config
 from handlers.text_handlers_delayed import _delayed_process_messages
+from handlers.text_handlers_firestore import _delayed_processing_tasks
+from handlers.training_handlers import handle_training_input
 from services.dynamic_messages_service import get_dynamic_message
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
+from services.sentiment_escalation_service import sentiment_service
+from utils.utils import (
+    get_canonical_user_id_and_phone,
+    get_firestore_db,
+    notify_human_on_whatsapp,
+    save_conversation_message_to_firestore,
+)
 
 GREETING_INACTIVITY_SECONDS = 43200  # 12 hours
 
@@ -53,6 +65,7 @@ def _get_session_greeting_message(user_lang: str = "ar") -> str:
     """
     try:
         from services import content_files_service as cfs
+
         titles = cfs.get_titles_only("style") or []
         greeting_candidates = []
         for t in titles:
@@ -61,7 +74,7 @@ def _get_session_greeting_message(user_lang: str = "ar") -> str:
                 greeting_candidates.append(t)
 
         # Prefer file language match first.
-        def _lang_score(t):
+        def _lang_score(t: Any) -> Any:
             lang = (t.get("language") or "").lower()
             if lang == user_lang:
                 return 2
@@ -88,6 +101,7 @@ def _get_session_greeting_message(user_lang: str = "ar") -> str:
     # Final fallback
     try:
         from services.conversation_router import GREETING_TEMPLATES
+
         return GREETING_TEMPLATES.get(user_lang, GREETING_TEMPLATES["ar"])
     except Exception:
         return "مرحباً! 😊 كيف فيني ساعدك اليوم؟"
@@ -98,11 +112,11 @@ async def handle_message(
     user_name: str,
     user_input_text: str,
     user_data: dict,
-    send_message_func,
-    send_action_func,
+    send_message_func: Any,
+    send_action_func: Any,
     skip_firestore_save: bool = False,
-    message_combine_delay: Optional[float] = None,
-):
+    message_combine_delay: float | None = None,
+) -> Any:
     """
     Main message handler for WhatsApp text messages.
     Combines rapid messages and then processes them.
@@ -113,7 +127,7 @@ async def handle_message(
     """
     user_id = str(user_id).strip()
     config.user_names[user_id] = user_name
-    
+
     # Ensure defaultdicts are initialized for this user
     if user_id not in config.user_context:
         config.user_context[user_id] = deque(maxlen=config.MAX_CONTEXT_MESSAGES)
@@ -145,7 +159,7 @@ async def handle_message(
             user_input_text=user_input_text,
             user_data=user_data,
             send_message_func=send_message_func,
-            send_action_func=send_action_func
+            send_action_func=send_action_func,
         )
         return
 
@@ -163,7 +177,7 @@ async def handle_message(
         await send_message_func(
             user_id,
             f"لطفاً خفّف طول الرسالة: الحد الأقصى للرسالة الواحدة هو {config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE} سطر. "
-            "قسّمها على أكثر من رسالة قصيرة."
+            "قسّمها على أكثر من رسالة قصيرة.",
         )
         print(
             f"[handle_message] Blocked long single message for user {user_id}: "
@@ -183,19 +197,19 @@ async def handle_message(
     # Voice handler already saved the message with type="voice" and audio_url
     if not skip_firestore_save:
         # Save user's message to Firestore immediately
-        current_conversation_id = user_data.get('current_conversation_id')
+        current_conversation_id = user_data.get("current_conversation_id")
         was_new_conversation = not current_conversation_id
-        phone_for_save = user_data.get('phone_number')
+        phone_for_save = user_data.get("phone_number")
 
         # DEBUG: Log critical info before saving user message
-        print(f"\n{'='*60}")
-        print(f"🔍 HANDLE_MESSAGE: About to save USER message")
+        print(f"\n{'=' * 60}")
+        print("🔍 HANDLE_MESSAGE: About to save USER message")
         print(f"   user_id: {user_id}")
         print(f"   current_conversation_id: {current_conversation_id}")
         print(f"   phone_number from user_data: {phone_for_save}")
         print(f"   phone_number from config: {config.user_data_whatsapp.get(user_id, {}).get('phone_number')}")
         print(f"   raw_msg preview: {raw_msg[:50] if raw_msg else 'None'}...")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         source_message_id = user_data.pop("_source_message_id", None)
         message_metadata = {"type": "text"}
@@ -219,39 +233,35 @@ async def handle_message(
         # Update local user_data with the conversation_id (might have been created)
         # Save uses canonical_user_id; we must read from both so context is available for GPT.
         canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, phone_for_save)
-        new_conv_id = (
-            config.user_data_whatsapp.get(user_id, {}).get('current_conversation_id')
-            or config.user_data_whatsapp.get(canonical_user_id, {}).get('current_conversation_id')
-        )
+        new_conv_id = config.user_data_whatsapp.get(user_id, {}).get(
+            "current_conversation_id"
+        ) or config.user_data_whatsapp.get(canonical_user_id, {}).get("current_conversation_id")
         if new_conv_id:
             if user_id not in config.user_data_whatsapp:
                 config.user_data_whatsapp[user_id] = {}
-            config.user_data_whatsapp[user_id]['current_conversation_id'] = new_conv_id
+            config.user_data_whatsapp[user_id]["current_conversation_id"] = new_conv_id
         print(f"📍 After save: conversation_id is now: {new_conv_id}")
-        user_data['current_conversation_id'] = new_conv_id
+        user_data["current_conversation_id"] = new_conv_id
     else:
-        print(f"[handle_message] INFO: Skipping Firestore save (called from voice_handler with skip_firestore_save=True)")
+        print(
+            "[handle_message] INFO: Skipping Firestore save (called from voice_handler with skip_firestore_save=True)"
+        )
         # Just ensure current_conversation_id is up-to-date (check both user_id and canonical)
-        if 'current_conversation_id' not in user_data or not user_data['current_conversation_id']:
-            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get('phone_number'))
-            user_data['current_conversation_id'] = (
-                config.user_data_whatsapp.get(user_id, {}).get('current_conversation_id')
-                or config.user_data_whatsapp.get(canonical_user_id, {}).get('current_conversation_id')
-            )
-        was_new_conversation = not user_data.get('current_conversation_id')
+        if "current_conversation_id" not in user_data or not user_data["current_conversation_id"]:
+            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
+            user_data["current_conversation_id"] = config.user_data_whatsapp.get(user_id, {}).get(
+                "current_conversation_id"
+            ) or config.user_data_whatsapp.get(canonical_user_id, {}).get("current_conversation_id")
+        was_new_conversation = not user_data.get("current_conversation_id")
 
-    current_conversation_id = user_data.get('current_conversation_id')
+    current_conversation_id = user_data.get("current_conversation_id")
 
     # Session-level greeting eligibility for this turn:
     # allowed only for truly new conversation or inactivity >= 12 hours.
     user_data["_greeting_eligible_this_turn"] = bool(
-        was_new_conversation
-        or (
-            inactivity_seconds is not None
-            and inactivity_seconds >= GREETING_INACTIVITY_SECONDS
-        )
+        was_new_conversation or (inactivity_seconds is not None and inactivity_seconds >= GREETING_INACTIVITY_SECONDS)
     )
-    
+
     # Get Firestore DB instance for sentiment and takeover checks
     db = get_firestore_db()
 
@@ -261,15 +271,13 @@ async def handle_message(
         for candidate in [canonical_user_id, raw_user_id]:
             if candidate and candidate not in candidates:
                 candidates.append(candidate)
-            if candidate and (
-                candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)
-            ):
+            if candidate and (candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)):
                 alt_candidate = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
                 if alt_candidate not in candidates:
                     candidates.append(alt_candidate)
         return candidates
 
-    async def _resolve_conversation_doc_ref(users_coll, conversation_id: str, canonical_user_id: str):
+    async def _resolve_conversation_doc_ref(users_coll: Any, conversation_id: str, canonical_user_id: str) -> Any:
         """
         Resolve conversation doc across canonical/raw/alt user paths.
         Returns (doc_ref, doc_snap, resolved_user_id).
@@ -279,9 +287,11 @@ async def handle_message(
         last_snap = None
 
         for candidate_user_id in candidate_user_ids:
-            candidate_ref = users_coll.document(candidate_user_id).collection(
-                config.FIRESTORE_CONVERSATIONS_COLLECTION
-            ).document(conversation_id)
+            candidate_ref = (
+                users_coll.document(candidate_user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
             candidate_snap = await asyncio.to_thread(candidate_ref.get)
             last_ref = candidate_ref
             last_snap = candidate_snap
@@ -294,9 +304,9 @@ async def handle_message(
         trigger_source: str,
         escalation_reason: str,
         customer_message: str,
-        escalation_score: float = None,
-        detected_issues: list = None
-    ):
+        escalation_score: float | None = None,
+        detected_issues: list | None = None,
+    ) -> Any:
         """Mark conversation as waiting_human, notify admins, and write audit event."""
         if not current_conversation_id:
             return
@@ -331,9 +341,7 @@ async def handle_message(
             update_payload["detected_issues"] = detected_issues
 
         try:
-            n = await update_conversation_on_all_existing_paths(
-                current_conversation_id, user_id, update_payload
-            )
+            n = await update_conversation_on_all_existing_paths(current_conversation_id, user_id, update_payload)
             if n == 0:
                 print(f"⚠️ Conversation {current_conversation_id} not found in Firestore on any user path")
                 return
@@ -341,6 +349,7 @@ async def handle_message(
             try:
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 from services.live_chat_service import live_chat_service
+
                 live_chat_service.invalidate_cache()
                 asyncio.create_task(
                     live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id)
@@ -357,7 +366,7 @@ async def handle_message(
         escalation_messages = {
             "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
             "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
-            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏"
+            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
         }
         calm_handover_messages = {
             "ar": "أسف/ة إنك مش راضي/ة، رح حوّلك عند واحد من موظفينا يتواصل معك 🙏",
@@ -365,13 +374,11 @@ async def handle_message(
             "fr": "Désolé que vous ne soyez pas satisfait. Je vous transfère à un de nos employés 🙏",
         }
         issues = set(detected_issues or [])
-        should_use_calm_handover = bool(
-            issues.intersection({"offensive_language", "anger_detected"})
-        )
-        escalation_msg = escalation_messages.get(user_data.get('user_preferred_lang', 'ar'), escalation_messages['ar'])
+        should_use_calm_handover = bool(issues.intersection({"offensive_language", "anger_detected"}))
+        escalation_msg = escalation_messages.get(user_data.get("user_preferred_lang", "ar"), escalation_messages["ar"])
         if should_use_calm_handover:
             escalation_msg = calm_handover_messages.get(
-                user_data.get('user_preferred_lang', 'ar'),
+                user_data.get("user_preferred_lang", "ar"),
                 calm_handover_messages["ar"],
             )
         await send_message_func(user_id, escalation_msg)
@@ -381,7 +388,7 @@ async def handle_message(
             escalation_msg,
             current_conversation_id,
             user_name,
-            user_data.get('phone_number'),
+            user_data.get("phone_number"),
             metadata={"handled_by": "ai", "source": "smart_message", "event": "auto_handover_escalation"},
         )
 
@@ -389,7 +396,7 @@ async def handle_message(
             user_name,
             config.user_gender.get(user_id, "unknown"),
             customer_message,
-            type_of_notification=f"{trigger_source} - {escalation_reason}"
+            type_of_notification=f"{trigger_source} - {escalation_reason}",
         )
 
         try:
@@ -399,15 +406,12 @@ async def handle_message(
                 user_id=user_id,
                 user_gender=config.user_gender.get(user_id, "unknown"),
                 customer_name=user_name,
-                customer_phone=user_data.get('phone_number', 'Unknown'),
+                customer_phone=user_data.get("phone_number", "Unknown"),
                 escalation_reason=escalation_reason,
                 last_message=customer_message,
                 trigger_source=trigger_source,
                 conversation_id=current_conversation_id,
-                extra_details={
-                    "escalation_score": escalation_score,
-                    "detected_issues": detected_issues or []
-                }
+                extra_details={"escalation_score": escalation_score, "detected_issues": detected_issues or []},
             )
             notification_result = notify_result.get("notification_result", {})
             if notification_result.get("success"):
@@ -417,33 +421,32 @@ async def handle_message(
         except Exception as notify_error:
             print(f"⚠️ Error sending human takeover notifications: {notify_error}")
             import traceback
+
             traceback.print_exc()
 
     # AI-primary: GPT decides when to transfer to human (handover_degree, human_handover action).
     # Sentiment is still logged for dashboard; escalation decision is delegated to GPT.
     sentiment_analysis = sentiment_service.analyze_sentiment(
-        user_id=user_id,
-        message=raw_msg,
-        language=user_data.get('user_preferred_lang', 'ar')
+        user_id=user_id, message=raw_msg, language=user_data.get("user_preferred_lang", "ar")
     )
-    
+
     # Update conversation sentiment in Firebase (for dashboard/analytics only)
-    if db and user_data.get('current_conversation_id'):
+    if db and user_data.get("current_conversation_id"):
         try:
             app_id_for_firestore = "linas-ai-bot-backend"
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
             users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
             conv_doc_ref, doc_snap, _ = await _resolve_conversation_doc_ref(
                 users_coll,
-                user_data['current_conversation_id'],
+                user_data["current_conversation_id"],
                 canonical_user_id,
             )
             if not doc_snap or not doc_snap.exists:
                 raise ValueError("Conversation not found for sentiment update")
-            await asyncio.to_thread(conv_doc_ref.update, {
-                "sentiment": sentiment_analysis["sentiment"],
-                "last_updated": datetime.datetime.now()
-            })
+            await asyncio.to_thread(
+                conv_doc_ref.update,
+                {"sentiment": sentiment_analysis["sentiment"], "last_updated": datetime.datetime.now()},
+            )
             print(f"✅ Updated conversation sentiment to: {sentiment_analysis['sentiment']}")
         except Exception as e:
             print(f"⚠️ Failed to update sentiment in Firebase: {e}")
@@ -459,12 +462,8 @@ async def handle_message(
                 from utils.utils import _resolve_latest_conversation_id
 
                 user_doc_ref = users_coll.document(canonical_user_id)
-                conversations_collection_for_user = user_doc_ref.collection(
-                    config.FIRESTORE_CONVERSATIONS_COLLECTION
-                )
-                conv_for_takeover_check = await _resolve_latest_conversation_id(
-                    conversations_collection_for_user
-                )
+                conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                conv_for_takeover_check = await _resolve_latest_conversation_id(conversations_collection_for_user)
                 if conv_for_takeover_check:
                     print(
                         f"[handle_message] INFO: Takeover sync using latest conversation "
@@ -487,17 +486,23 @@ async def handle_message(
                 if doc_snap.exists:
                     conv_data = doc_snap.to_dict()
                     from utils.utils import sync_post_release_cooldown_from_conv_payload
+
                     sync_post_release_cooldown_from_conv_payload(user_data, conv_data)
                     was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
-                    new_takeover = conv_data.get('human_takeover_active', False)
+                    new_takeover = conv_data.get("human_takeover_active", False)
                     if new_takeover:
                         config.user_in_human_takeover_mode[user_id] = True
                     else:
                         from utils.utils import _clear_takeover_flags_for_user
+
                         _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
                     if was_in_takeover and not new_takeover:
-                        user_data['just_returned_from_human_takeover'] = True
-                        from utils.utils import set_post_takeover_escalation_cooldown, is_post_takeover_escalation_cooldown
+                        user_data["just_returned_from_human_takeover"] = True
+                        from utils.utils import (
+                            is_post_takeover_escalation_cooldown,
+                            set_post_takeover_escalation_cooldown,
+                        )
+
                         if not is_post_takeover_escalation_cooldown(user_data):
                             set_post_takeover_escalation_cooldown(user_data)
                         print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")
@@ -508,34 +513,48 @@ async def handle_message(
                                 "simulation is on — skipping operator/waiting auto-reply so the AI can respond."
                             )
                         else:
-                            operator_id = conv_data.get('operator_id')
-                            user_lang = user_data.get('user_preferred_lang', 'ar')
+                            operator_id = conv_data.get("operator_id")
+                            user_lang = user_data.get("user_preferred_lang", "ar")
                             conv_id_for_save = user_data.get("current_conversation_id") or conv_for_takeover_check
 
                             if operator_id:
                                 # User has an operator — never stay silent.
                                 # Send assignment notice once, then send a short reminder on each user turn.
                                 print(f"[handle_message] INFO: User {user_id} has operator. AI will not respond.")
-                                if not user_data.get('notified_human_takeover'):
-                                    operator_name = conv_data.get('operator_name')
+                                if not user_data.get("notified_human_takeover"):
+                                    operator_name = conv_data.get("operator_name")
                                     if not operator_name:
-                                        if operator_id and '@' in str(operator_id):
-                                            operator_name = str(operator_id).split('@')[0].replace('.', ' ').replace('_', ' ').title()
+                                        if operator_id and "@" in str(operator_id):
+                                            operator_name = (
+                                                str(operator_id)
+                                                .split("@")[0]
+                                                .replace(".", " ")
+                                                .replace("_", " ")
+                                                .title()
+                                            )
                                         else:
                                             operator_name = operator_id
                                     handover_messages = {
                                         "ar": f"📞 تم تحويل المحادثة إلى {operator_name}. سيقوم بالرد عليك قريباً.",
                                         "en": f"📞 The conversation has been transferred to {operator_name}. They will respond to you shortly.",
-                                        "fr": f"📞 La conversation a été transférée à {operator_name}. Il vous répondra sous peu."
+                                        "fr": f"📞 La conversation a été transférée à {operator_name}. Il vous répondra sous peu.",
                                     }
-                                    handover_msg = handover_messages.get(user_lang, handover_messages['ar'])
+                                    handover_msg = handover_messages.get(user_lang, handover_messages["ar"])
                                     await send_message_func(user_id, handover_msg)
                                     await save_conversation_message_to_firestore(
-                                        user_id, "ai", handover_msg, conv_id_for_save,
-                                        user_name, user_data.get('phone_number'),
-                                        metadata={"handled_by": "ai", "source": "smart_message", "event": "operator_assigned_notice"},
+                                        user_id,
+                                        "ai",
+                                        handover_msg,
+                                        conv_id_for_save,
+                                        user_name,
+                                        user_data.get("phone_number"),
+                                        metadata={
+                                            "handled_by": "ai",
+                                            "source": "smart_message",
+                                            "event": "operator_assigned_notice",
+                                        },
                                     )
-                                    user_data['notified_human_takeover'] = True
+                                    user_data["notified_human_takeover"] = True
                                 else:
                                     # Operator is handling the chat — do not send a bot follow-up on every user turn
                                     # (it duplicated the human reply and looked like "two messages").
@@ -544,13 +563,26 @@ async def handle_message(
                                     )
                             else:
                                 # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
-                                print(f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply.")
-                                waiting_msg = get_dynamic_message("waiting_queue_message", user_lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+                                print(
+                                    f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply."
+                                )
+                                waiting_msg = (
+                                    get_dynamic_message("waiting_queue_message", user_lang)
+                                    or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+                                )
                                 await send_message_func(user_id, waiting_msg)
                                 await save_conversation_message_to_firestore(
-                                    user_id, "ai", waiting_msg, conv_id_for_save,
-                                    user_name, user_data.get('phone_number'),
-                                    metadata={"handled_by": "ai", "source": "smart_message", "event": "waiting_queue_autoreply"},
+                                    user_id,
+                                    "ai",
+                                    waiting_msg,
+                                    conv_id_for_save,
+                                    user_name,
+                                    user_data.get("phone_number"),
+                                    metadata={
+                                        "handled_by": "ai",
+                                        "source": "smart_message",
+                                        "event": "waiting_queue_autoreply",
+                                    },
                                 )
                             return
                 else:
@@ -577,7 +609,7 @@ async def handle_message(
                 should_greet_now = True
 
         if should_greet_now:
-            user_lang = user_data.get('user_preferred_lang', 'ar')
+            user_lang = user_data.get("user_preferred_lang", "ar")
             greeting_msg = _get_session_greeting_message(user_lang)
             await send_message_func(user_id, greeting_msg)
             await save_conversation_message_to_firestore(
@@ -586,21 +618,40 @@ async def handle_message(
                 greeting_msg,
                 current_conversation_id,
                 user_name,
-                user_data.get('phone_number'),
+                user_data.get("phone_number"),
                 metadata={"handled_by": "ai", "source": "session_greeting"},
             )
             user_data["greeting_sent_for_conversation_id"] = current_conversation_id
 
     # Check if it's the very first message after start
     if config.user_greeting_stage[user_id] == 1 and not config.user_gender.get(user_id):
-        common_greetings_only = ["hi", "hello", "مرحبا", "سلام", "اهلين", "صباح الخير", "مساء الخير", "كيفك", "كيف الحال", "kifak", "shu", "bonjour", "salut", "bade", "sheel", "shil", "ana", "ta3ite" ]
+        common_greetings_only = [
+            "hi",
+            "hello",
+            "مرحبا",
+            "سلام",
+            "اهلين",
+            "صباح الخير",
+            "مساء الخير",
+            "كيفك",
+            "كيف الحال",
+            "kifak",
+            "shu",
+            "bonjour",
+            "salut",
+            "bade",
+            "sheel",
+            "shil",
+            "ana",
+            "ta3ite",
+        ]
         is_only_greeting = any(g == raw_msg.lower().strip() for g in common_greetings_only)
 
         if not is_only_greeting:
-            if user_data['initial_user_query_to_process'] is None:
-                user_data['initial_user_query_to_process'] = raw_msg
+            if user_data["initial_user_query_to_process"] is None:
+                user_data["initial_user_query_to_process"] = raw_msg
         else:
-            user_data['initial_user_query_to_process'] = None
+            user_data["initial_user_query_to_process"] = None
 
     # Language detection is now handled BEFORE GPT call by language_detection_service
     # The LanguageResolver detects language on each message using heuristics (Arabic script, Franco-Arabic, French/English markers)

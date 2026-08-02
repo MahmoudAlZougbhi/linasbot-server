@@ -31,7 +31,9 @@
         "ar": {
           "language_code": "ar",
           "parameters_count": 1,
-          "parameters": ["customer_name"]
+          "parameters": [
+            "customer_name"
+          ]
         }
       }
     },
@@ -66,7 +68,9 @@
         "ar": {
           "language_code": "ar",
           "parameters_count": 1,
-          "parameters": ["customer_name"]
+          "parameters": [
+            "customer_name"
+          ]
         }
       }
     },
@@ -83,7 +87,9 @@
         "ar": {
           "language_code": "ar",
           "parameters_count": 1,
-          "parameters": ["customer_name"]
+          "parameters": [
+            "customer_name"
+          ]
         }
       }
     },
@@ -115,7 +121,9 @@
         "en": {
           "language_code": "en",
           "parameters_count": 1,
-          "parameters": ["customer_name"]
+          "parameters": [
+            "customer_name"
+          ]
         }
       }
     }
@@ -126,17 +134,26 @@
     "source": "96178974402",
     "api_id": "9db12f0d-3c27-4d9c-b9fd-0227aebfd81d",
     "tenant": "98df9ffe-fa84-41ee-9293-33614722d952",
-    "api_key": "f5a24c81de876f85f0d6e80e04228deab8f21f5c36e7456579614d2f8d6e5ba0",
+    "api_key": "",
     "templates_are_text_only": true,
     "send_empty_header_component": true,
     "assume_whatsapp_image_header": false,
-    "allow_global_template_header_image_url": false
+    "allow_global_template_header_image_url": false,
+    "api_key_env": "MONTYMOBILE_API_KEY"
   },
   "notes": {
     "status": "All templates are APPROVED by WhatsApp",
-    "languages_available": ["ar", "en (session_feedback only in Meta — see that block)"],
-    "languages_missing": ["fr"],
-    "next_steps": ["Add English and French versions", "Test all templates"],
+    "languages_available": [
+      "ar",
+      "en (session_feedback only in Meta — see that block)"
+    ],
+    "languages_missing": [
+      "fr"
+    ],
+    "next_steps": [
+      "Add English and French versions",
+      "Test all templates"
+    ],
     "templates_are_text_only": "true = do not send image/text VARIABLES in the header. Pair body-only Meta templates with per-template omit_empty_header_component=true.",
     "send_empty_header_component": "When true: send {\"type\":\"header\",\"parameters\":[]} for templates that do NOT set omit_empty_header_component (e.g. reminder_24h if Meta has fixed header / Monty requires it). Body-only templates in Meta must set omit_empty_header_component true or Monty returns Invalid HEADER.",
     "legacy_internal_ids": "thank_you_message_sent_after_session: Meta name = config key; legacy post_session_feedback. sent_17_days_after_last_session_new: legacy twenty_day_followup, one_month_followup. sent_for_pause (legacy missed_paused_appointment, missed_this_month). session_feedback (legacy attended_yesterday). missed_yesterday -> sent_day_after_missed_appointment. whatsapp_lead_no_booking: 0 vars.",
@@ -150,6 +167,7 @@
     "whatsapp_lead_no_booking_header": "Meta template includes a header; set omit_empty_header_component false so with templates_are_text_only + send_empty_header_component we send {\"type\":\"header\",\"parameters\":[]}. If Meta expects a variable IMAGE link instead, add template.header.format=image and template.header.image_link (HTTPS) or enable allow_global_template_header_image_url and set dashboard header URL.",
     "template_does_not_exist": "Monty/Meta: outbound name must match WhatsApp Manager exactly for the same WABA as api_id. Fix: (1) In Meta → Message templates, copy the template Name (e.g. sent_for_pause vs marketing suffix). (2) Set meta_template_name on that block in this file, OR set env MONTY_META_NAME_SENT_FOR_PAUSE / MONTY_META_NAME_SESSION_FEEDBACK=<exact Meta name> (pattern MONTY_META_NAME_<UPPERCASE_CANONICAL_ID>). (3) Re-sync templates in Monty if Meta was renamed. (4) Ensure Arabic (ar) is approved for that template if you send ar. (5) For sent_for_pause and session_feedback, include_monty_template_ids=true adds waMessageId/recordGuid to the JSON (Monty may resolve by dashboard IDs). If Monty rejects unknown fields, set include_monty_template_ids false on that block.",
     "force_whatsapp_language": "Optional per template: always send template.language.code to Meta/Monty as this value (e.g. session_feedback approved only in English in Manager).",
-    "meta_whatsapp_manager_mar_2026": "Cross-check vs Meta list: reminder_24h, thank_you_message_sent_after_session, sent_17_days_after_last_session_new (Utility, ar). sent_day_after_missed_appointment → internal missed_yesterday + meta_template_name (Marketing, ar). sent_for_pause: Meta outbound sent_for_pause_. session_feedback: Meta name session_feedback (same as internal id; add meta_template_name session_feedback_ only if Manager Name has trailing underscore). English locale only in this WABA. whatsapp_lead_no_booking (Marketing, ar). human_takeover_* not in this file."
+    "meta_whatsapp_manager_mar_2026": "Cross-check vs Meta list: reminder_24h, thank_you_message_sent_after_session, sent_17_days_after_last_session_new (Utility, ar). sent_day_after_missed_appointment → internal missed_yesterday + meta_template_name (Marketing, ar). sent_for_pause: Meta outbound sent_for_pause_. session_feedback: Meta name session_feedback (same as internal id; add meta_template_name session_feedback_ only if Manager Name has trailing underscore). English locale only in this WABA. whatsapp_lead_no_booking (Marketing, ar). human_takeover_* not in this file.",
+    "api_key": "Set MONTYMOBILE_API_KEY in environment only. Never commit real keys."
   }
 }

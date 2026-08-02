@@ -1,34 +1,38 @@
+from __future__ import annotations
+
 import datetime
 import json
 import os
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
+
+import api_config
+
 # No more telegram.Update or ContextTypes here
 # from telegram import Update
 # from telegram.ext import ContextTypes
-
 import config
-import api_config
+
 # NEW: Import Firestore utility functions
-from utils.utils import update_dashboard_metric_in_firestore, get_firestore_db
 
 # Path to the daily reports log file
-REPORT_LOG_FILE = 'data/reports_log.jsonl' 
+REPORT_LOG_FILE = "data/reports_log.jsonl"
 
 # Increase timeout to 60 seconds for slow API endpoints (especially appointment queries)
 api_client = httpx.AsyncClient(
-    base_url=api_config.LINASLASER_API_BASE_URL,
-    timeout=60.0  # 60 seconds timeout instead of default 5 seconds
+    base_url=api_config.LINASLASER_API_BASE_URL or "",
+    timeout=60.0,  # 60 seconds timeout instead of default 5 seconds
 )
 
 
 def _root_api_url(path: str) -> str:
     """Build an absolute URL at the API host root, outside /agent when needed."""
-    parts = urlsplit(api_config.LINASLASER_API_BASE_URL)
+    base_url = str(api_config.LINASLASER_API_BASE_URL or "")
+    parts = urlsplit(base_url)
     clean_path = "/" + str(path or "").lstrip("/")
-    return urlunsplit((parts.scheme, parts.netloc, clean_path, "", ""))
+    return str(urlunsplit((parts.scheme, parts.netloc, clean_path, "", "")))
 
 
 def _normalize_update_status_endpoint(path: str) -> str:
@@ -87,16 +91,11 @@ async def _post_update_status_logged(resolved_url: str, json_data: dict) -> dict
         payload_preview = json.dumps(json_data, ensure_ascii=False)
     except (TypeError, ValueError):
         payload_preview = str(json_data)
-    print(
-        f"update_appointments_status HTTP {method} final_url={resolved_url} payload={payload_preview}"
-    )
+    print(f"update_appointments_status HTTP {method} final_url={resolved_url} payload={payload_preview}")
     try:
         response = await api_client.post(resolved_url, json=json_data, headers=headers)
     except httpx.RequestError as e:
-        print(
-            f"update_appointments_status response status=(network_error) final_url={resolved_url} "
-            f"body={repr(e)}"
-        )
+        print(f"update_appointments_status response status=(network_error) final_url={resolved_url} body={repr(e)}")
         return {
             "success": False,
             "message": f"Connection error (Network Error). {e!s}",
@@ -127,7 +126,7 @@ async def _post_update_status_logged(resolved_url: str, json_data: dict) -> dict
             pass
         return {
             "success": False,
-            "message": f"API endpoint not found (404).",
+            "message": "API endpoint not found (404).",
             "status_code": 404,
             "raw_response": body_text[:500],
             **base_meta,
@@ -192,14 +191,13 @@ async def _post_update_status_logged(resolved_url: str, json_data: dict) -> dict
     return out
 
 
-async def _make_api_request(method: str, endpoint: str, params: dict = None, json_data: dict = None):
+async def _make_api_request(
+    method: str, endpoint: str, params: dict | None = None, json_data: dict | None = None
+) -> Any:
     """
     Helper function to make authenticated API requests to the LinasLaser Agent API.
     """
-    headers = {
-        "Authorization": f"Bearer {api_config.LINASLASER_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {api_config.LINASLASER_API_TOKEN}", "Content-Type": "application/json"}
 
     try:
         if method.lower() == "get":
@@ -214,28 +212,50 @@ async def _make_api_request(method: str, endpoint: str, params: dict = None, jso
             print(f"API Info: Resource not found for {endpoint} (404) - {response.text}")
             # Try to parse as JSON first, if not, return a structured error
             try:
-                return response.json() 
+                return response.json()
             except json.JSONDecodeError:
                 # If 404 response is HTML, provide a generic "Not Found" message
-                return {"success": False, "message": f"API endpoint '{endpoint}' not found on server.", "status_code": 404, "raw_response": response.text}
-        
-        response.raise_for_status() # Raise an exception for other HTTP errors (4xx or 5xx except 404)
+                return {
+                    "success": False,
+                    "message": f"API endpoint '{endpoint}' not found on server.",
+                    "status_code": 404,
+                    "raw_response": response.text,
+                }
+
+        response.raise_for_status()  # Raise an exception for other HTTP errors (4xx or 5xx except 404)
         return response.json()
     except httpx.HTTPStatusError as e:
         print(f"API HTTP Error for {endpoint}: {e.response.status_code} - {e.response.text}")
-        return {"success": False, "message": f"Connection error (HTTP Error): {e.response.status_code}. Details: {e.response.text}", "status_code": e.response.status_code}
+        return {
+            "success": False,
+            "message": f"Connection error (HTTP Error): {e.response.status_code}. Details: {e.response.text}",
+            "status_code": e.response.status_code,
+        }
     except httpx.RequestError as e:
         print(f"API Request Error for {endpoint}: {e}")
         print(f"  Error Type: {type(e).__name__}")
         print(f"  Error Details: {repr(e)}")
-        return {"success": False, "message": f"Connection error (Network Error). Please check internet connection.", "details": str(e)}
+        return {
+            "success": False,
+            "message": "Connection error (Network Error). Please check internet connection.",
+            "details": str(e),
+        }
     except json.JSONDecodeError as e:
         raw = (getattr(response, "text", None) or str(e))[:500]
         print(f"API JSON Decode Error for {endpoint}: {e} - Response: {raw}")
-        return {"success": False, "message": "Error processing system response. Invalid JSON from API.", "details": str(e), "raw_response": raw}
+        return {
+            "success": False,
+            "message": "Error processing system response. Invalid JSON from API.",
+            "details": str(e),
+            "raw_response": raw,
+        }
     except Exception as e:
         print(f"Unexpected API Error for {endpoint}: {e}")
-        return {"success": False, "message": f"An unexpected error occurred while connecting to the system: {str(e)}", "details": str(e)}
+        return {
+            "success": False,
+            "message": f"An unexpected error occurred while connecting to the system: {str(e)}",
+            "details": str(e),
+        }
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -243,35 +263,60 @@ async def _make_api_request(method: str, endpoint: str, params: dict = None, jso
 # These functions will now call the _make_api_request helper.
 # ----------------------------------------------------------------------------------------------------------------------
 
-async def get_branches():
+
+async def get_branches() -> Any:
     """Retrieves a list of all branches associated with the clinic."""
     print("API Call: get_branches")
     response = await _make_api_request("GET", "branches")
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_branches", "status": "success", "count": len(response.get("data", []))})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_branches", "status": "success", "count": len(response.get("data", []))},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_branches", "status": "failed", "error": response.get("message")})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "get_branches", "status": "failed", "error": response.get("message")}
+        )
     return response
 
-async def get_services():
+
+async def get_services() -> Any:
     """Retrieves a list of all services offered by the clinic."""
     print("API Call: get_services")
     response = await _make_api_request("GET", "services")
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_services", "status": "success", "count": len(response.get("data", []))})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_services", "status": "success", "count": len(response.get("data", []))},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_services", "status": "failed", "error": response.get("message")})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "get_services", "status": "failed", "error": response.get("message")}
+        )
     return response
 
-async def get_machines():
+
+async def get_machines() -> Any:
     """Retrieves a list of all machines available in the clinic."""
     print("API Call: get_machines")
     response = await _make_api_request("GET", "machines")
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_machines", "status": "success", "count": len(response.get("data", []))})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_machines", "status": "success", "count": len(response.get("data", []))},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_machines", "status": "failed", "error": response.get("message")})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "get_machines", "status": "failed", "error": response.get("message")}
+        )
     return response
+
 
 def _body_part_endpoint_candidates() -> list:
     """Ordered GET paths; override with LINASLASER_GET_BODY_PARTS_PATH when your host uses a different route."""
@@ -291,7 +336,7 @@ def _row_looks_like_body_part(entry: Any) -> bool:
     return entry.get("id") is not None or entry.get("body_part_id") is not None
 
 
-def _coerce_body_parts_list(raw: Any) -> Optional[list]:
+def _coerce_body_parts_list(raw: Any) -> list | None:
     """Return a list if raw is a non-empty list of body-part-like dicts, or an empty list if explicitly empty."""
     if not isinstance(raw, list):
         return None
@@ -302,7 +347,7 @@ def _coerce_body_parts_list(raw: Any) -> Optional[list]:
     return None
 
 
-def _extract_body_parts_from_service_data_response(sd: dict) -> Optional[list]:
+def _extract_body_parts_from_service_data_response(sd: dict) -> list | None:
     """
     GET service/data carries pricing + body area rows (BOC Appointment API). Same rows may appear under
     data.body_parts, areas, body_areas, top-level body_parts, or nested (e.g. under service / pricing).
@@ -344,7 +389,7 @@ def _extract_body_parts_from_service_data_response(sd: dict) -> Optional[list]:
     return None
 
 
-def _deep_scan_body_parts(obj: Any, depth: int = 0) -> Optional[list]:
+def _deep_scan_body_parts(obj: Any, depth: int = 0) -> list | None:
     """Find a body-part row list anywhere in a successful service/data JSON (odd CRM nesting)."""
     if depth > 8 or obj is None:
         return None
@@ -379,8 +424,8 @@ def _service_data_shape_hint(sd: dict) -> Any:
     return {"data_type": type(d).__name__}
 
 
-async def get_body_parts(service_id: int = None, machine_id: int = None):
-    """Returns list of body parts (id, name) for pricing/booking. Optional service_id/machine_id filters."""
+async def get_body_parts(service_id: int | None = None, machine_id: int | None = None) -> Any:
+    """Returns list of body parts (id, name) for pricing/booking.  service_id/machine_id filters."""
     print("API Call: get_body_parts")
     params = {}
     if service_id is not None:
@@ -534,7 +579,7 @@ async def get_body_parts(service_id: int = None, machine_id: int = None):
     return last
 
 
-async def get_service_data(service_id: int, machine_id: int = None):
+async def get_service_data(service_id: int, machine_id: int | None = None) -> Any:
     """
     GET service/data — price + body_parts options for a service (Appointment API doc).
     Path override: LINASLASER_SERVICE_DATA_PATH (default service/data).
@@ -571,17 +616,27 @@ async def get_service_data(service_id: int, machine_id: int = None):
     return response
 
 
-async def get_clinic_hours():
+async def get_clinic_hours() -> Any:
     """Returns the clinic's working hours for each day of the week."""
     print("API Call: get_clinic_hours")
     response = await _make_api_request("GET", "clinic/hours")
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_clinic_hours", "status": "success", "data": response.get("data")})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "get_clinic_hours", "status": "success", "data": response.get("data")}
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_clinic_hours", "status": "failed", "error": response.get("message")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_clinic_hours", "status": "failed", "error": response.get("message")},
+        )
     return response
 
-async def send_appointment_reminders(date: str = None, phone: str = None, user_code: str = None, status: str = None):
+
+async def send_appointment_reminders(
+    date: str | None = None, phone: str | None = None, user_code: str | None = None, status: str | None = None
+) -> Any:
     """
     Retrieves appointments with optional filters.
 
@@ -591,12 +646,18 @@ async def send_appointment_reminders(date: str = None, phone: str = None, user_c
         user_code: Filter by user code
         status: Filter by status (done, available, postponed, paused)
     """
-    print(f"API Call: send_appointment_reminders for date={date}, phone={phone}, user_code={user_code}, status={status}")
+    print(
+        f"API Call: send_appointment_reminders for date={date}, phone={phone}, user_code={user_code}, status={status}"
+    )
     params = {}
-    if date: params["date"] = date
-    if phone: params["phone"] = phone
-    if user_code: params["user_code"] = user_code
-    if status: params["status"] = status
+    if date:
+        params["date"] = date
+    if phone:
+        params["phone"] = phone
+    if user_code:
+        params["user_code"] = user_code
+    if status:
+        params["status"] = status
     response = await _make_api_request("GET", "appointments/reminders", params=params)
 
     # DEBUG: Log response structure for first call only
@@ -609,17 +670,32 @@ async def send_appointment_reminders(date: str = None, phone: str = None, user_c
             if isinstance(data, dict):
                 print(f"   Data keys: {list(data.keys())}")
                 if "appointments" in data and data["appointments"]:
-                    print(f"   First appointment sample: {data['appointments'][0] if data['appointments'] else 'EMPTY'}")
+                    print(
+                        f"   First appointment sample: {data['appointments'][0] if data['appointments'] else 'EMPTY'}"
+                    )
             elif isinstance(data, list) and data:
                 print(f"   First item in data list: {data[0]}")
 
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "send_appointment_reminders", "status": "success", "params": params})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "send_appointment_reminders", "status": "success", "params": params}
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "send_appointment_reminders", "status": "failed", "error": response.get("message"), "params": params})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "send_appointment_reminders",
+                "status": "failed",
+                "error": response.get("message"),
+                "params": params,
+            },
+        )
     return response
 
-async def check_next_appointment(phone: str, user_code: str = None):
+
+async def check_next_appointment(phone: str, user_code: str | None = None) -> Any:
     """Returns the next scheduled appointment for a client."""
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
@@ -628,15 +704,29 @@ async def check_next_appointment(phone: str, user_code: str = None):
 
     print(f"API Call: check_next_appointment for phone={phone_clean} (original: {phone}), user_code={user_code}")
     params = {"phone": phone_clean}
-    if user_code: params["user_code"] = user_code
+    if user_code:
+        params["user_code"] = user_code
     response = await _make_api_request("GET", "appointments/next", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "check_next_appointment", "status": "success", "phone": phone, "appointment": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "check_next_appointment", "status": "success", "phone": phone, "appointment": response.get("data")},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "check_next_appointment", "status": "failed", "error": response.get("message"), "phone": phone})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "check_next_appointment", "status": "failed", "error": response.get("message"), "phone": phone},
+        )
     return response
 
-async def get_sessions_count_by_phone(phone: str = None, user_code: str = None, service_ids: list = None):
+
+async def get_sessions_count_by_phone(
+    phone: str | None = None, user_code: str | None = None, service_ids: list | None = None
+) -> Any:
     """Returns the number of sessions a client has attended, based on their phone number or user code."""
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = None
@@ -645,26 +735,47 @@ async def get_sessions_count_by_phone(phone: str = None, user_code: str = None, 
         if phone_clean.startswith("961"):
             phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: get_sessions_count_by_phone for phone={phone_clean} (original: {phone}), user_code={user_code}, service_ids={service_ids}")
-    params = {}
-    if phone_clean: params["phone"] = phone_clean
-    if user_code: params["user_code"] = user_code
-    if service_ids: params["service_ids"] = service_ids
+    print(
+        f"API Call: get_sessions_count_by_phone for phone={phone_clean} (original: {phone}), user_code={user_code}, service_ids={service_ids}"
+    )
+    params: dict[str, Any] = {}
+    if phone_clean:
+        params["phone"] = phone_clean
+    if user_code:
+        params["user_code"] = user_code
+    if service_ids:
+        params["service_ids"] = service_ids
     response = await _make_api_request("GET", "appointments/sessions/count", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_sessions_count_by_phone", "status": "success", "phone": phone, "data": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_sessions_count_by_phone", "status": "success", "phone": phone, "data": response.get("data")},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_sessions_count_by_phone", "status": "failed", "error": response.get("message"), "phone": phone})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_sessions_count_by_phone",
+                "status": "failed",
+                "error": response.get("message"),
+                "phone": phone,
+            },
+        )
     return response
+
 
 async def move_client_branch(
     phone: str,
     from_branch_id: int,
     to_branch_id: int,
-    new_date: str = None,
-    user_code: str = None,
+    new_date: str | None = None,
+    user_code: str | None = None,
     response_confirm: str = "yes",
-):
+) -> Any:
     """Moves a client's future appointments to a different branch.
 
     `new_date` is optional: only included in the JSON payload when a non-empty
@@ -693,12 +804,23 @@ async def move_client_branch(
         json_data["user_code"] = user_code
     response = await _make_api_request("POST", "appointments/branch/move", json_data=json_data)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "move_client_branch", "status": "success", "phone": phone, "details": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "move_client_branch", "status": "success", "phone": phone, "details": response.get("data")},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "move_client_branch", "status": "failed", "error": response.get("message"), "phone": phone})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "move_client_branch", "status": "failed", "error": response.get("message"), "phone": phone},
+        )
     return response
 
-async def check_appointment_payment(phone: str, user_code: str = None):
+
+async def check_appointment_payment(phone: str, user_code: str | None = None) -> Any:
     """Checks the payment status of a client's appointments."""
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
@@ -707,82 +829,170 @@ async def check_appointment_payment(phone: str, user_code: str = None):
 
     print(f"API Call: check_appointment_payment for phone={phone_clean} (original: {phone}), user_code={user_code}")
     params = {"phone": phone_clean}
-    if user_code: params["user_code"] = user_code
+    if user_code:
+        params["user_code"] = user_code
     response = await _make_api_request("GET", "appointments/payment", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "check_appointment_payment", "status": "success", "phone": phone, "payment": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "check_appointment_payment", "status": "success", "phone": phone, "payment": response.get("data")},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "check_appointment_payment", "status": "failed", "error": response.get("message"), "phone": phone})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "check_appointment_payment", "status": "failed", "error": response.get("message"), "phone": phone},
+        )
     return response
 
-async def get_pricing_details(service_id: int, machine_id: int = None, body_part_ids: list = None, branch_id: int = None):
+
+async def get_pricing_details(
+    service_id: int, machine_id: int | None = None, body_part_ids: list | None = None, branch_id: int | None = None
+) -> Any:
     """Returns pricing details for appointments or services based on specified criteria."""
     print(f"API Call: get_pricing_details for service_id={service_id}")
-    params = {"service_id": service_id}
-    if machine_id: params["machine_id"] = machine_id
+    params: dict[str, Any] = {"service_id": service_id}
+    if machine_id:
+        params["machine_id"] = machine_id
     # Format body_part_ids as PHP-style array params (body_part_ids[]=1&body_part_ids[]=2)
     if body_part_ids:
         if isinstance(body_part_ids, list):
             params["body_part_ids[]"] = body_part_ids
         else:
             params["body_part_ids[]"] = [body_part_ids]
-    if branch_id: params["branch_id"] = branch_id
+    if branch_id:
+        params["branch_id"] = branch_id
     response = await _make_api_request("GET", "appointments/pricing", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_pricing_details", "status": "success", "service_id": service_id, "pricing": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_pricing_details",
+                "status": "success",
+                "service_id": service_id,
+                "pricing": response.get("data"),
+            },
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_pricing_details", "status": "failed", "error": response.get("message"), "service_id": service_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_pricing_details",
+                "status": "failed",
+                "error": response.get("message"),
+                "service_id": service_id,
+            },
+        )
     return response
 
-async def get_missed_appointments(date: str = None):
+
+async def get_missed_appointments(date: str | None = None) -> Any:
     """Returns a list of missed appointments for the clinic."""
     print(f"API Call: get_missed_appointments for date={date}")
     params = {}
-    if date: params["date"] = date
+    if date:
+        params["date"] = date
     response = await _make_api_request("GET", "appointments/missed", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_missed_appointments", "status": "success", "data": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_missed_appointments", "status": "success", "data": response.get("data")},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_missed_appointments", "status": "failed", "error": response.get("message"), "date": date})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_missed_appointments", "status": "failed", "error": response.get("message"), "date": date},
+        )
     return response
 
-async def get_paused_appointments_between_dates(start_date: str, end_date: str, service_id: int = None):
+
+async def get_paused_appointments_between_dates(start_date: str, end_date: str, service_id: int | None = None) -> Any:
     """
     Returns a list of paused appointments between two dates.
 
     Args:
         start_date: Required. Start date in YYYY-MM-DD format (e.g., "2026-01-01")
         end_date: Required. End date in YYYY-MM-DD format (e.g., "2026-02-01")
-        service_id: Optional. Filter by service ID
+        service_id: . Filter by service ID
 
     Returns:
         API response with paused appointments data
     """
-    print(f"API Call: get_paused_appointments_between_dates for start_date={start_date}, end_date={end_date}, service_id={service_id}")
-    params = {
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    print(
+        f"API Call: get_paused_appointments_between_dates for start_date={start_date}, end_date={end_date}, service_id={service_id}"
+    )
+    params: dict[str, Any] = {"start_date": start_date, "end_date": end_date}
     if service_id is not None:
         params["service_id"] = service_id
 
     response = await _make_api_request("GET", "appointments/paused/between-dates", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_paused_appointments_between_dates", "status": "success", "start_date": start_date, "end_date": end_date, "service_id": service_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_paused_appointments_between_dates",
+                "status": "success",
+                "start_date": start_date,
+                "end_date": end_date,
+                "service_id": service_id,
+            },
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_paused_appointments_between_dates", "status": "failed", "error": response.get("message"), "start_date": start_date, "end_date": end_date, "service_id": service_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_paused_appointments_between_dates",
+                "status": "failed",
+                "error": response.get("message"),
+                "start_date": start_date,
+                "end_date": end_date,
+                "service_id": service_id,
+            },
+        )
     return response
 
-async def get_appointment_details(appointment_id: int):
+
+async def get_appointment_details(appointment_id: int) -> Any:
     """Retrieves detailed information about a specific appointment by ID."""
     print(f"API Call: get_appointment_details for appointment_id={appointment_id}")
     params = {"appointment_id": appointment_id}
     response = await _make_api_request("GET", "appointment", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_appointment_details", "status": "success", "appointment_id": appointment_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_appointment_details", "status": "success", "appointment_id": appointment_id},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_appointment_details", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_appointment_details",
+                "status": "failed",
+                "error": response.get("message"),
+                "appointment_id": appointment_id,
+            },
+        )
     return response
+
 
 def _phone_clean_for_appointment_api(phone: str) -> str:
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
@@ -791,24 +1001,39 @@ def _phone_clean_for_appointment_api(phone: str) -> str:
     return phone_clean
 
 
-async def pause_appointment(phone: str, appointment_id: int):
+async def pause_appointment(phone: str, appointment_id: int) -> Any:
     """Pauses an appointment by updating its status to Paused."""
     phone_clean = _phone_clean_for_appointment_api(phone)
     print(f"API Call: pause_appointment for phone={phone_clean}, appointment_id={appointment_id}")
     json_data = {"phone": phone_clean, "appointment_id": appointment_id}
     response = await _make_api_request("POST", "appointments/pause", json_data=json_data)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "pause_appointment", "status": "success", "appointment_id": appointment_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "pause_appointment", "status": "success", "appointment_id": appointment_id},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "pause_appointment", "status": "failed", "error": response.get("message"), "appointment_id": appointment_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "pause_appointment",
+                "status": "failed",
+                "error": response.get("message"),
+                "appointment_id": appointment_id,
+            },
+        )
     return response
 
 
 async def update_appointments_status(
     appointment_ids: list[int],
     status_id: int,
-    date: str = None,
-):
+    date: str | None = None,
+) -> Any:
     """
     CRM: POST appointment status on host ``/api/...`` (not under ``/agent/``).
     Tries ``/api/appointments/update/status`` then ``/api/appointments/update-status`` unless
@@ -873,9 +1098,7 @@ async def update_appointments_status(
         )
         code = response.get("status_code")
         if code in (404, 405) or "not found" in msg:
-            print(
-                f"API Call: update_appointments_status — {path} HTTP {code!r}, trying next path"
-            )
+            print(f"API Call: update_appointments_status — {path} HTTP {code!r}, trying next path")
             continue
         break
     if isinstance(response, dict):
@@ -918,7 +1141,7 @@ async def update_appointments_status(
     return response
 
 
-async def resume_appointment(phone: str, appointment_id: int, endpoint: str = None):
+async def resume_appointment(phone: str, appointment_id: int, endpoint: str | None = None) -> Any:
     """
     Paused → Available: POST CRM update-status with body
     ``{"appointment_ids": [id], "appointment_id": [id], "status_id": 2}`` only (no ``date``).
@@ -936,7 +1159,12 @@ async def resume_appointment(phone: str, appointment_id: int, endpoint: str = No
             "api_call",
             "System",
             "N/A",
-            {"api": "resume_appointment", "status": "success", "appointment_id": appointment_id, "path": merged["path"]},
+            {
+                "api": "resume_appointment",
+                "status": "success",
+                "appointment_id": appointment_id,
+                "path": merged["path"],
+            },
         )
     else:
         log_report_event(
@@ -953,33 +1181,58 @@ async def resume_appointment(phone: str, appointment_id: int, endpoint: str = No
         )
     return merged
 
-async def get_clients_without_today(date: str = None, branch_id: int = None):
+
+async def get_clients_without_today(date: str | None = None, branch_id: int | None = None) -> Any:
     """Returns all active clients who do not have appointments on the given date."""
     print(f"API Call: get_clients_without_today for date={date}, branch_id={branch_id}")
-    params = {}
+    params: dict[str, Any] = {}
     if date:
         params["date"] = date
     if branch_id is not None:
         params["branch_id"] = branch_id
     response = await _make_api_request("GET", "appointments/clients/without-today", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_clients_without_today", "status": "success", "date": date})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "get_clients_without_today", "status": "success", "date": date}
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_clients_without_today", "status": "failed", "error": response.get("message")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_clients_without_today", "status": "failed", "error": response.get("message")},
+        )
     return response
 
-async def get_customer_sessions(customer_id: int):
+
+async def get_customer_sessions(customer_id: int) -> Any:
     """Returns sessions (appointments) for a customer including service, area, status, and notes."""
     print(f"API Call: get_customer_sessions for customer_id={customer_id}")
     params = {"customer_id": customer_id}
     response = await _make_api_request("GET", "customers/sessions", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_customer_sessions", "status": "success", "customer_id": customer_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_customer_sessions", "status": "success", "customer_id": customer_id},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_customer_sessions", "status": "failed", "error": response.get("message"), "customer_id": customer_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_customer_sessions",
+                "status": "failed",
+                "error": response.get("message"),
+                "customer_id": customer_id,
+            },
+        )
     return response
 
-async def add_customer_note(phone: str, note: str):
+
+async def add_customer_note(phone: str, note: str) -> Any:
     """Adds a note to the customer record by phone number."""
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
     if phone_clean.startswith("961"):
@@ -988,12 +1241,20 @@ async def add_customer_note(phone: str, note: str):
     json_data = {"phone": phone_clean, "note": note[:1000]}
     response = await _make_api_request("POST", "customers/notes/add", json_data=json_data)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "add_customer_note", "status": "success", "phone": phone_clean})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "add_customer_note", "status": "success", "phone": phone_clean}
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "add_customer_note", "status": "failed", "error": response.get("message"), "phone": phone_clean})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "add_customer_note", "status": "failed", "error": response.get("message"), "phone": phone_clean},
+        )
     return response
 
-async def get_all_customers(date: str = None, from_date: str = None, to_date: str = None):
+
+async def get_all_customers(date: str | None = None, from_date: str | None = None, to_date: str | None = None) -> Any:
     """Returns all customers. Can filter by date, from_date, or to_date (creation date)."""
     print(f"API Call: get_all_customers date={date} from={from_date} to={to_date}")
     params = {}
@@ -1005,14 +1266,26 @@ async def get_all_customers(date: str = None, from_date: str = None, to_date: st
         params["to"] = to_date
     response = await _make_api_request("GET", "customers/all", params=params)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_all_customers", "status": "success", "count": len(response.get("data", []))})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_all_customers", "status": "success", "count": len(response.get("data", []))},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_all_customers", "status": "failed", "error": response.get("message")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "get_all_customers", "status": "failed", "error": response.get("message")},
+        )
     return response
 
-async def get_customer_by_phone(phone: str):
+
+async def get_customer_by_phone(phone: str) -> Any:
     """Retrieves customer details by phone number. Accepts any format; normalizes to E.164 then API local format."""
     from utils.phone_utils import normalize_phone
+
     normalized = normalize_phone(phone)
     if normalized and normalized.startswith("+961"):
         phone_clean = normalized[4:]  # strip "+961"
@@ -1022,34 +1295,68 @@ async def get_customer_by_phone(phone: str):
             phone_clean = phone_clean[3:]
     print(f"API Call: get_customer_by_phone for phone={phone_clean}")
     params = {"phone": phone_clean}
-    response = await _make_api_request("GET", "customers/by-phone", params=params) # Assuming this endpoint exists
+    response = await _make_api_request("GET", "customers/by-phone", params=params)  # Assuming this endpoint exists
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_customer_by_phone", "status": "success", "phone": phone_clean, "customer": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_customer_by_phone",
+                "status": "success",
+                "phone": phone_clean,
+                "customer": response.get("data"),
+            },
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_customer_by_phone", "status": "failed", "error": response.get("message"), "phone": phone_clean})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_customer_by_phone",
+                "status": "failed",
+                "error": response.get("message"),
+                "phone": phone_clean,
+            },
+        )
     return response
 
-async def get_customer_appointments(phone: str):
+
+async def get_customer_appointments(phone: str) -> Any:
     """Retrieves all appointments for a customer by phone number (no country code)."""
     print(f"API Call: get_customer_appointments for phone={phone}")
-    
+
     # Remove country code if present (e.g., +961 -> empty, keep only digits)
     phone_clean = phone.replace("+", "").replace(" ", "")
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
-    
+
     params = {"phone": phone_clean}
     response = await _make_api_request("GET", "appointments/customer", params=params)
-    
+
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "get_customer_appointments", "status": "success", "phone": phone_clean})
+        log_report_event(
+            "api_call", "System", "N/A", {"api": "get_customer_appointments", "status": "success", "phone": phone_clean}
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "get_customer_appointments", "status": "failed", "error": response.get("message"), "phone": phone_clean})
-    
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "get_customer_appointments",
+                "status": "failed",
+                "error": response.get("message"),
+                "phone": phone_clean,
+            },
+        )
+
     return response
 
-def _clean_body_part_ids_for_api(raw: list) -> list:
-    out = []
+
+def _clean_body_part_ids_for_api(raw: list | None) -> list[int]:
+    out: list[int] = []
     for bid in raw or []:
         try:
             i = int(bid)
@@ -1078,16 +1385,21 @@ def _body_part_session_row(body_part_id: int, session_number: int = 1) -> dict:
     return {"id": pid, "session_number": sn}
 
 
-def _clean_body_parts_with_sessions_for_api(raw: Any) -> list:
+def _clean_body_parts_with_sessions_for_api(raw: Any) -> list[Any]:
     """Normalize list items to BOC body_parts rows (default key **id** per API doc)."""
-    out = []
+    out: list[Any] = []
     if not isinstance(raw, list) or not raw:
         return out
     for item in raw:
         if not isinstance(item, dict):
             continue
+        raw_id = item.get("body_part_id")
+        if raw_id is None:
+            raw_id = item.get("id")
+        if raw_id is None:
+            continue
         try:
-            pid = int(item.get("body_part_id") or item.get("id"))
+            pid = int(raw_id)
         except (TypeError, ValueError):
             continue
         if pid <= 0:
@@ -1100,7 +1412,17 @@ def _clean_body_parts_with_sessions_for_api(raw: Any) -> list:
     return out
 
 
-async def create_appointment(phone: str, service_id: int, branch_id: int, date: str, machine_id: Optional[int] = None, user_code: str = None, body_part_ids: list = None, body_parts_with_sessions: list = None, **kwargs):
+async def create_appointment(
+    phone: str,
+    service_id: int,
+    branch_id: int,
+    date: str,
+    machine_id: int | None = None,
+    user_code: str | None = None,
+    body_part_ids: list | None = None,
+    body_parts_with_sessions: list | None = None,
+    **kwargs: Any,
+) -> Any:
     """
     POST appointments/create.
 
@@ -1116,13 +1438,10 @@ async def create_appointment(phone: str, service_id: int, branch_id: int, date: 
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: create_appointment for phone={phone_clean} (original: {phone}), service={service_id}, date={date}")
-    json_data = {
-        "phone": phone_clean,
-        "service_id": service_id,
-        "branch_id": branch_id,
-        "date": date
-    }
+    print(
+        f"API Call: create_appointment for phone={phone_clean} (original: {phone}), service={service_id}, date={date}"
+    )
+    json_data = {"phone": phone_clean, "service_id": service_id, "branch_id": branch_id, "date": date}
     if machine_id is not None:
         json_data["machine_id"] = machine_id
     if user_code:
@@ -1149,19 +1468,12 @@ async def create_appointment(phone: str, service_id: int, branch_id: int, date: 
     use_body_parts = False
     if cleaned_bps:
         non_one = any(int(x.get("session_number", 1)) != 1 for x in cleaned_bps)
-        prefer_parts = (
-            not ids_only
-            or force_sessions_env
-            or legacy_env
-            or non_one
-        )
+        prefer_parts = not ids_only or force_sessions_env or legacy_env or non_one
         if prefer_parts:
             json_data["body_parts"] = cleaned_bps
             use_body_parts = True
         else:
-            json_data["body_part_ids"] = [
-                int(x.get("id") or x.get("body_part_id")) for x in cleaned_bps
-            ]
+            json_data["body_part_ids"] = [int(x.get("id") or x.get("body_part_id")) for x in cleaned_bps]
     elif legacy_env and ids_from_arg:
         json_data["body_parts"] = [_body_part_session_row(bid, 1) for bid in ids_from_arg]
         use_body_parts = True
@@ -1176,12 +1488,23 @@ async def create_appointment(phone: str, service_id: int, branch_id: int, date: 
 
     response = await _make_api_request("POST", "appointments/create", json_data=json_data)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "create_appointment", "status": "success", "phone": phone, "appointment": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "create_appointment", "status": "success", "phone": phone, "appointment": response.get("data")},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "create_appointment", "status": "failed", "error": response.get("message"), "phone": phone})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "create_appointment", "status": "failed", "error": response.get("message"), "phone": phone},
+        )
     return response
 
-def _safe_float_amount(v) -> Optional[float]:
+
+def _safe_float_amount(v: Any) -> float | None:
     try:
         if v is None or v == "":
             return None
@@ -1190,7 +1513,7 @@ def _safe_float_amount(v) -> Optional[float]:
         return None
 
 
-def extract_appointment_total_from_api_payload(payload: Any) -> Optional[float]:
+def extract_appointment_total_from_api_payload(payload: Any) -> float | None:
     """
     Best-effort total from get_appointment_details / create_appointment response shapes.
     """
@@ -1220,7 +1543,7 @@ def extract_appointment_total_from_api_payload(payload: Any) -> Optional[float]:
     return None
 
 
-async def add_appointment_discount(appointment_id: int, discount_amount: float):
+async def add_appointment_discount(appointment_id: int, discount_amount: float) -> Any:
     """
     POST appointments/discount/add — applies a discount so CRM total can match an agreed price.
 
@@ -1240,7 +1563,9 @@ async def add_appointment_discount(appointment_id: int, discount_amount: float):
         "appointment_id": aid,
         "discount_amount": round(damount, 4),
     }
-    print(f"API Call: add_appointment_discount for appointment_id={aid}, discount_amount={json_data['discount_amount']}")
+    print(
+        f"API Call: add_appointment_discount for appointment_id={aid}, discount_amount={json_data['discount_amount']}"
+    )
     response = await _make_api_request("POST", "appointments/discount/add", json_data=json_data)
     if response.get("success"):
         log_report_event(
@@ -1267,8 +1592,8 @@ async def add_appointment_discount(appointment_id: int, discount_amount: float):
 async def sync_appointment_agreed_price(
     appointment_id: int,
     agreed_price: float,
-    system_total_known: Optional[float] = None,
-):
+    system_total_known: float | None = None,
+) -> dict[str, Any]:
     """
     Compare CRM appointment total to the price the assistant agreed with the customer.
     If CRM total is higher, calls add_appointment_discount with (crm_total - agreed_price).
@@ -1359,25 +1684,34 @@ async def sync_appointment_agreed_price(
     return merged
 
 
-async def update_appointment_date(appointment_id: int, phone: str, date: str, user_code: str = None):
+async def update_appointment_date(appointment_id: int, phone: str, date: str, user_code: str | None = None) -> Any:
     """Updates the date/time of an existing appointment."""
     phone_clean = _phone_clean_for_appointment_api(phone)
 
-    print(f"API Call: update_appointment_date for appointment_id={appointment_id}, phone={phone_clean} (original: {phone}), date={date}")
-    json_data = {
-        "appointment_id": appointment_id,
-        "phone": phone_clean,
-        "date": date
-    }
+    print(
+        f"API Call: update_appointment_date for appointment_id={appointment_id}, phone={phone_clean} (original: {phone}), date={date}"
+    )
+    json_data = {"appointment_id": appointment_id, "phone": phone_clean, "date": date}
     if user_code:
         json_data["user_code"] = user_code
-    # Optional: same-request hint for CRMs that clear pause when this field is present (confirm with Agent API spec).
+    # : same-request hint for CRMs that clear pause when this field is present (confirm with Agent API spec).
     if os.getenv("LINASLASER_UPDATE_DATE_SET_STATUS_AVAILABLE", "").lower() in ("1", "true", "yes"):
         json_data["status"] = "Available"
 
     response = await _make_api_request("POST", "appointments/update/date", json_data=json_data)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "update_appointment_date", "status": "success", "phone": phone, "appointment_id": appointment_id, "new_date": date})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "update_appointment_date",
+                "status": "success",
+                "phone": phone,
+                "appointment_id": appointment_id,
+                "new_date": date,
+            },
+        )
         # After reschedule: Paused→Available via CRM POST /api/appointments/update-status (see resume_appointment).
         resume_resp = await resume_appointment(phone, appointment_id)
         response = dict(response)
@@ -1392,27 +1726,38 @@ async def update_appointment_date(appointment_id: int, phone: str, date: str, us
                 "path": resume_resp.get("path"),
             }
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "update_appointment_date", "status": "failed", "error": response.get("message"), "phone": phone, "appointment_id": appointment_id})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "update_appointment_date",
+                "status": "failed",
+                "error": response.get("message"),
+                "phone": phone,
+                "appointment_id": appointment_id,
+            },
+        )
     return response
 
 
 async def edit_appointment(
     appointment_id: int,
-    phone: str = None,
-    user_code: str = None,
-    service_id: int = None,
-    machine_id: int = None,
-    branch_id: int = None,
-    date: str = None,
-    body_part_ids: list = None,
-    body_parts_with_sessions: list = None,
-    session_number: int = None,
-    discount_percentage: float = None,
-    discount_amount: float = None,
-    total_cost_after_discount: float = None,
-    hidden: bool = None,
-    **kwargs,
-):
+    phone: str | None = None,
+    user_code: str | None = None,
+    service_id: int | None = None,
+    machine_id: int | None = None,
+    branch_id: int | None = None,
+    date: str | None = None,
+    body_part_ids: list | None = None,
+    body_parts_with_sessions: list | None = None,
+    session_number: int | None = None,
+    discount_percentage: float | None = None,
+    discount_amount: float | None = None,
+    total_cost_after_discount: float | None = None,
+    hidden: bool | None = None,
+    **kwargs: Any,
+) -> Any:
     """
     POST appointments/edit — full appointment update (BOC doc).
     Either phone OR user_code required. Prefer body_parts OR root session_number, not both unnecessarily.
@@ -1490,10 +1835,7 @@ async def edit_appointment(
     if hidden is not None:
         json_data["hidden"] = bool(hidden)
 
-    print(
-        f"API Call: edit_appointment path={path} appointment_id={appointment_id} "
-        f"keys={list(json_data.keys())}"
-    )
+    print(f"API Call: edit_appointment path={path} appointment_id={appointment_id} keys={list(json_data.keys())}")
     response = await _make_api_request("POST", path, json_data=json_data)
     if response.get("success"):
         log_report_event(
@@ -1521,23 +1863,20 @@ async def edit_appointment(
 async def update_paused_appointment(
     appointment_id: int,
     phone: str,
-    date: str = None,
-    machine_id: int = None,
-    body_part_ids: list = None,
-    body_parts_with_sessions: list = None,
-    status: str = None,
-    user_code: str = None,
-):
+    date: str | None = None,
+    machine_id: int | None = None,
+    body_part_ids: list | None = None,
+    body_parts_with_sessions: list | None = None,
+    status: str | None = None,
+    user_code: str | None = None,
+) -> Any:
     """
     Updates paused appointment details (date, machine, body parts, sessions, status).
     Intended for paused-row editing workflows where the AI prepares a full JSON patch.
     """
     phone_clean = _phone_clean_for_appointment_api(phone)
     path = (os.getenv("LINASLASER_UPDATE_PAUSED_APPOINTMENT_PATH") or "appointments/edit").strip().lstrip("/")
-    print(
-        "API Call: update_paused_appointment "
-        f"appointment_id={appointment_id}, phone={phone_clean}, path={path}"
-    )
+    print(f"API Call: update_paused_appointment appointment_id={appointment_id}, phone={phone_clean}, path={path}")
 
     json_data: dict = {
         "appointment_id": int(appointment_id),
@@ -1560,9 +1899,11 @@ async def update_paused_appointment(
         json_data["body_parts"] = [_body_part_session_row(bid, 1) for bid in clean_ids]
 
     status_raw = (status or "").strip()
-    default_set_available = os.getenv(
-        "LINASLASER_UPDATE_PAUSED_DEFAULT_STATUS_AVAILABLE", "true"
-    ).lower() in ("1", "true", "yes")
+    default_set_available = os.getenv("LINASLASER_UPDATE_PAUSED_DEFAULT_STATUS_AVAILABLE", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     if status_raw:
         json_data["status"] = status_raw
     elif default_set_available:
@@ -1618,7 +1959,8 @@ async def update_paused_appointment(
         )
     return response
 
-async def check_customer_gender(phone: str = None, user_code: str = None):
+
+async def check_customer_gender(phone: str | None = None, user_code: str | None = None) -> Any:
     """Returns the gender of a customer based on the provided identifier."""
     # Clean phone number to match API expected format (without + prefix and country code)
     phone_clean = None
@@ -1632,19 +1974,42 @@ async def check_customer_gender(phone: str = None, user_code: str = None):
     # NEW: Ensure either phone or user_code is provided for the API call
     if phone_clean:
         params["phone"] = phone_clean
-    elif user_code: # Prioritize user_code if phone is not provided and user_code is.
+    elif user_code:  # Prioritize user_code if phone is not provided and user_code is.
         params["user_code"] = user_code
-    else: # If neither is provided, return an error as per API docs
+    else:  # If neither is provided, return an error as per API docs
         return {"success": False, "message": "Either phone or user_code must be provided."}
-        
+
     response = await _make_api_request("GET", "customers/gender", params=params)
-    if response.get("success"): # Check if the API itself returned success
-        log_report_event("api_call", "System", "N/A", {"api": "check_customer_gender", "status": "success", "phone": phone, "gender": response.get("data", {}).get("gender")})
-    else: # API returned success:false or a non-200 status (other than 404 handled above)
-        log_report_event("api_call", "System", "N/A", {"api": "check_customer_gender", "status": "failed", "error": response.get("message"), "phone": phone})
+    if response.get("success"):  # Check if the API itself returned success
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {
+                "api": "check_customer_gender",
+                "status": "success",
+                "phone": phone,
+                "gender": response.get("data", {}).get("gender"),
+            },
+        )
+    else:  # API returned success:false or a non-200 status (other than 404 handled above)
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "check_customer_gender", "status": "failed", "error": response.get("message"), "phone": phone},
+        )
     return response
 
-async def create_customer(name: str, phone: str, gender: str, email: str = None, branch_id: int = None, date_of_birth: str = None):
+
+async def create_customer(
+    name: str,
+    phone: str,
+    gender: str,
+    email: str | None = None,
+    branch_id: int | None = None,
+    date_of_birth: str | None = None,
+) -> Any:
     """Creates a new customer record within the clinic's database (POST customers/create).
 
     `branch_id` is required by the Agent API; callers may omit it only to mean
@@ -1653,10 +2018,14 @@ async def create_customer(name: str, phone: str, gender: str, email: str = None,
     """
     # Resolve branch: explicit arg wins, else clinic default from config
     resolved_branch = branch_id if branch_id is not None else getattr(config, "DEFAULT_BRANCH_ID", None)
-    try:
-        resolved_branch_int = int(resolved_branch)
-    except (TypeError, ValueError):
+    resolved_branch_int: int | None
+    if resolved_branch is None:
         resolved_branch_int = None
+    else:
+        try:
+            resolved_branch_int = int(resolved_branch)
+        except (TypeError, ValueError):
+            resolved_branch_int = None
     # Known clinic branches in bot reference (expand if API adds branches)
     if resolved_branch_int not in (1, 2):
         return {
@@ -1675,7 +2044,9 @@ async def create_customer(name: str, phone: str, gender: str, email: str = None,
             for uid, data in config.user_data_whatsapp.items():
                 if "phone_number" in data and data["phone_number"]:
                     if str(uid) == str(phone):  # room_id matches phone variable
-                        print(f"⚠️ create_customer: Detected invalid phone={phone}, using actual phone {data['phone_number']}")
+                        print(
+                            f"⚠️ create_customer: Detected invalid phone={phone}, using actual phone {data['phone_number']}"
+                        )
                         phone_clean = str(data["phone_number"]).replace("+", "").replace(" ", "").replace("-", "")
                         if phone_clean.startswith("961"):
                             phone_clean = phone_clean[3:]
@@ -1700,12 +2071,23 @@ async def create_customer(name: str, phone: str, gender: str, email: str = None,
         json_data["date_of_birth"] = date_of_birth
     response = await _make_api_request("POST", "customers/create", json_data=json_data)
     if response.get("success"):
-        log_report_event("api_call", "System", "N/A", {"api": "create_customer", "status": "success", "phone": phone, "customer": response.get("data")})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "create_customer", "status": "success", "phone": phone, "customer": response.get("data")},
+        )
     else:
-        log_report_event("api_call", "System", "N/A", {"api": "create_customer", "status": "failed", "error": response.get("message"), "phone": phone})
+        log_report_event(
+            "api_call",
+            "System",
+            "N/A",
+            {"api": "create_customer", "status": "failed", "error": response.get("message"), "phone": phone},
+        )
     return response
 
-async def update_customer_gender(customer_id: int, gender: str):
+
+async def update_customer_gender(customer_id: int, gender: str) -> Any:
     """
     DEPRECATED: The external API does not support updating customer gender (returns 404).
     Gender is now persisted via Firestore in user_persistence_service.py.
@@ -1713,7 +2095,7 @@ async def update_customer_gender(customer_id: int, gender: str):
     Use user_persistence.save_user_gender() instead.
     """
     print(f"⚠️ DEPRECATED: update_customer_gender called for customer_id={customer_id}, gender={gender}")
-    print(f"⚠️ External API does not support gender updates. Use Firestore via user_persistence.save_user_gender()")
+    print("⚠️ External API does not support gender updates. Use Firestore via user_persistence.save_user_gender()")
 
     # Return a mock success to prevent errors in legacy code
     # Gender is actually saved via Firestore in user_persistence_service.py
@@ -1721,22 +2103,22 @@ async def update_customer_gender(customer_id: int, gender: str):
 
 
 # Modified log_report_event to accept user_id and update Firestore metrics
-def log_report_event(event_type: str, user_id: str, user_gender: str, details: dict = None):
-    user_name = config.user_names.get(user_id, "N/A") # Get user_name from config
+def log_report_event(event_type: str, user_id: str, user_gender: str, details: dict | None = None) -> None:
+    user_name = config.user_names.get(user_id, "N/A")  # Get user_name from config
     event_data = {
         "timestamp": datetime.datetime.now().isoformat(),
         "type": event_type,
-        "user_id": user_id, # Log user_id for better tracking
+        "user_id": user_id,  # Log user_id for better tracking
         "user_name": user_name,
         "user_gender": user_gender,
-        "details": details if details else {}
+        "details": details if details else {},
     }
     try:
-        os.makedirs('data', exist_ok=True)
-        with open(REPORT_LOG_FILE, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(event_data, ensure_ascii=False) + '\n')
+        os.makedirs("data", exist_ok=True)
+        with open(REPORT_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event_data, ensure_ascii=False) + "\n")
             f.flush()
-        
+
         # NEW: Update Firestore metrics based on event type
         # We need to make this an async call, but log_report_event is not async.
         # This will be handled by calling update_dashboard_metric_in_firestore from the handlers
@@ -1748,25 +2130,26 @@ def log_report_event(event_type: str, user_id: str, user_gender: str, details: d
         # Let's assume for now the dashboard metrics will be updated by the handlers directly
         # when specific events (like new user, human handover, etc.) occur.
         # So, for now, this function only logs to the file.
-        pass # No direct Firestore update here to avoid async issues in a sync function
+        pass  # No direct Firestore update here to avoid async issues in a sync function
 
     except Exception as e:
         print(f"❌ ERROR logging report event: {e}")
 
+
 # Refactored generate_daily_report_command to return string and accept send_message_func
-async def generate_daily_report_command(user_id: str, send_message_func):
+async def generate_daily_report_command(user_id: str, send_message_func: Any) -> Any:
     """
     Generates a daily report of bot interactions and returns it as a string.
     This function is now platform-agnostic and relies on send_message_func to send the report.
     """
-    if user_id != config.TRAINER_WHATSAPP_NUMBER: # Use WhatsApp number for trainer ID check
+    if user_id != config.TRAINER_WHATSAPP_NUMBER:  # Use WhatsApp number for trainer ID check
         await send_message_func(user_id, "ليس لديك صلاحية لطلب التقرير اليومي.")
-        return "" # Return empty string if not authorized
+        return ""  # Return empty string if not authorized
 
     # The calling function (in main.py or handlers) already sends "جارٍ توليد التقرير اليومي..."
     # So we don't send it here.
 
-    report_data = {
+    report_data: dict[str, Any] = {
         "new_users": {"male": 0, "female": 0, "unspecified": 0},
         "appointments_booked": {"male": 0, "female": 0, "unspecified": 0, "details": []},
         "appointments_rescheduled": {"male": 0, "female": 0, "unspecified": 0, "details": []},
@@ -1775,13 +2158,13 @@ async def generate_daily_report_command(user_id: str, send_message_func):
         "human_handover_requests": {"male": 0, "female": 0, "unspecified": 0, "details": []},
         "missed_appointments": {"male": 0, "female": 0, "unspecified": 0, "details": []},
         "total_interactions": 0,
-        "api_calls": {"success": 0, "failed": 0, "details": []}
+        "api_calls": {"success": 0, "failed": 0, "details": []},
     }
 
     today_str = datetime.date.today().isoformat()
     try:
         if os.path.exists(REPORT_LOG_FILE):
-            with open(REPORT_LOG_FILE, 'r', encoding='utf-8') as f:
+            with open(REPORT_LOG_FILE, encoding="utf-8") as f:
                 for line in f:
                     try:
                         event = json.loads(line)
@@ -1789,7 +2172,7 @@ async def generate_daily_report_command(user_id: str, send_message_func):
                             report_data["total_interactions"] += 1
                             user_gender = event.get("user_gender", "unspecified")
                             event_type = event["type"]
-                            event_user_name = event.get("user_name", "N/A") # Get name from event log
+                            event_user_name = event.get("user_name", "N/A")  # Get name from event log
 
                             if event_type == "new_user":
                                 report_data["new_users"][user_gender] += 1
@@ -1824,7 +2207,7 @@ async def generate_daily_report_command(user_id: str, send_message_func):
                                     f"{event_user_name} ({user_gender}): {event['details'].get('date')} {event['details'].get('time')}"
                                 )
                             elif event_type == "api_call":
-                                if event['details'].get('status') == 'success':
+                                if event["details"].get("status") == "success":
                                     report_data["api_calls"]["success"] += 1
                                 else:
                                     report_data["api_calls"]["failed"] += 1
@@ -1838,60 +2221,73 @@ async def generate_daily_report_command(user_id: str, send_message_func):
     except Exception as e:
         return f"حدث خطأ أثناء توليد التقرير: {str(e)}"
 
-    appointments_booked_details_str = "\n  ".join(report_data['appointments_booked']['details']) if report_data['appointments_booked']['details'] else "N/A"
-    appointments_rescheduled_details_str = "\n  ".join(report_data['appointments_rescheduled']['details']) if report_data['appointments_rescheduled']['details'] else "N/A"
-    human_handover_requests_details_str = "\n  ".join(report_data['human_handover_requests']['details']) if report_data['human_handover_requests']['details'] else "N/A"
-    burn_reports_details_str = "\n  ".join(report_data['burn_reports']['details']) if report_data['burn_reports']['details'] else "N/A"
-    missed_appointments_details_str = "\n  ".join(report_data['missed_appointments']['details']) if report_data['missed_appointments']['details'] else "N/A"
-    complaints_details_str = "\n  ".join(report_data['complaints']['details']) if report_data['complaints']['details'] else "N/A"
-    api_calls_details_str = "\n  ".join(report_data['api_calls']['details']) if report_data['api_calls']['details'] else "N/A"
-
+    appointments_booked_details_str = (
+        "\n  ".join(report_data["appointments_booked"]["details"])
+        if report_data["appointments_booked"]["details"]
+        else "N/A"
+    )
+    appointments_rescheduled_details_str = (
+        "\n  ".join(report_data["appointments_rescheduled"]["details"])
+        if report_data["appointments_rescheduled"]["details"]
+        else "N/A"
+    )
+    human_handover_requests_details_str = (
+        "\n  ".join(report_data["human_handover_requests"]["details"])
+        if report_data["human_handover_requests"]["details"]
+        else "N/A"
+    )
+    burn_reports_details_str = (
+        "\n  ".join(report_data["burn_reports"]["details"]) if report_data["burn_reports"]["details"] else "N/A"
+    )
+    missed_appointments_details_str = (
+        "\n  ".join(report_data["missed_appointments"]["details"])
+        if report_data["missed_appointments"]["details"]
+        else "N/A"
+    )
+    complaints_details_str = (
+        "\n  ".join(report_data["complaints"]["details"]) if report_data["complaints"]["details"] else "N/A"
+    )
+    api_calls_details_str = (
+        "\n  ".join(report_data["api_calls"]["details"]) if report_data["api_calls"]["details"] else "N/A"
+    )
 
     report_message = (
-        f"📊 *Daily Bot Report - {today_str}*\n" # Using * for bold as WhatsApp might not support **
+        f"📊 *Daily Bot Report - {today_str}*\n"  # Using * for bold as WhatsApp might not support **
         f"*Total Interactions:* {report_data['total_interactions']}\n\n"
-        
         f"👥 *New Users:*\n"
         f"  - Male: {report_data['new_users']['male']}\n"
         f"  - Female: {report_data['new_users']['female']}\n"
         f"  - Unspecified: {report_data['new_users']['unspecified']}\n\n"
-        
         f"📝 *Appointments Booked:*\n"
         f"  - Male: {report_data['appointments_booked']['male']}\n"
         f"  - Female: {report_data['appointments_booked']['female']}\n"
         f"  - Unspecified: {report_data['appointments_booked']['unspecified']}\n"
         f"  {appointments_booked_details_str}\n\n"
-        
         f"🔄 *Appointments Rescheduled:*\n"
         f"  - Male: {report_data['appointments_rescheduled']['male']}\n"
         f"  - Female: {report_data['appointments_rescheduled']['female']}\n"
         f"  - Unspecified: {report_data['appointments_rescheduled']['unspecified']}\n"
         f"  {appointments_rescheduled_details_str}\n\n"
-
         f"❓ *Human Handover Requests:*\n"
         f"  - Male: {report_data['human_handover_requests']['male']}\n"
         f"  - Female: {report_data['human_handover_requests']['female']}\n"
         f"  - Unspecified: {report_data['human_handover_requests']['unspecified']}\n"
         f"  {human_handover_requests_details_str}\n\n"
-        
         f"🔥 *Burn/Injury Reports:*\n"
         f"  - Male: {report_data['burn_reports']['male']}\n"
         f"  - Female: {report_data['burn_reports']['female']}\n"
         f"  - Unspecified: {report_data['burn_reports']['unspecified']}\n"
         f"  {burn_reports_details_str}\n\n"
-
         f"❌ *Missed Appointments:*\n"
         f"  - Male: {report_data['missed_appointments']['male']}\n"
         f"  - Female: {report_data['missed_appointments']['female']}\n"
         f"  - Unspecified: {report_data['missed_appointments']['unspecified']}\n"
         f"  {missed_appointments_details_str}\n\n"
-        
         f"⚠️ *General Complaints/Issues:*\n"
         f"  - Male: {report_data['complaints']['male']}\n"
         f"  - Female: {report_data['complaints']['female']}\n"
         f"  - Unspecified: {report_data['complaints']['unspecified']}\n"
         f"  {complaints_details_str}\n\n"
-
         f"🔗 *API Calls:*\n"
         f"  - Success: {report_data['api_calls']['success']}\n"
         f"  - Failed: {report_data['api_calls']['failed']}\n"
@@ -1899,4 +2295,4 @@ async def generate_daily_report_command(user_id: str, send_message_func):
     )
 
     print("✅ Daily report generated.")
-    return report_message # Return the message instead of sending directly
+    return report_message  # Return the message instead of sending directly

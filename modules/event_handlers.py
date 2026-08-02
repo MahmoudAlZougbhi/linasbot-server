@@ -1,36 +1,36 @@
-# -*- coding: utf-8 -*-
 """
 Event handlers module: Startup and shutdown events
 Handles initialization of WhatsApp provider and scheduling services.
 """
 
-import datetime
-import asyncio
-import os
-from typing import Any, Dict, Optional
+from __future__ import annotations
 
-from modules.core import app, PYDUB_AVAILABLE, AudioSegment
+import asyncio
+import datetime
+import json
+import os
+
 import config
-from utils.utils import get_firestore_db, save_conversation_message_to_firestore
-from services.api_integrations import send_appointment_reminders, get_missed_appointments, get_paused_appointments_between_dates, log_report_event
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-from services.appointment_scheduler import (
-    populate_scheduled_messages_from_appointments,
-    populate_one_month_followups,
-    populate_missed_month_messages,
-    populate_missed_yesterday_messages
+from modules.core import app
+from services.api_integrations import (
+    get_missed_appointments,
+    get_paused_appointments_between_dates,
+    log_report_event,
+    send_appointment_reminders,
 )
 from services.daily_template_dispatcher import daily_template_dispatcher
+from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from utils.utils import save_conversation_message_to_firestore
 
 
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
     """Initialize MontyMobile as the default WhatsApp provider on startup"""
     try:
         print("=" * 60)
         print("🚀 INITIALIZING WHATSAPP PROVIDER")
         print("=" * 60)
-        
+
         # Use MontyMobile as the default provider (new endpoint)
         adapter = WhatsAppFactory.get_adapter("montymobile")
         print(f"✅ MontyMobile adapter initialized: {type(adapter).__name__}")
@@ -40,23 +40,25 @@ async def startup_event():
         print(f"❌ ERROR initializing Qiscus adapter: {e}")
         print("⚠️ Bot will continue but WhatsApp functionality may not work")
         import traceback
+
         traceback.print_exc()
-    
+
     # Initialize Smart Messaging Scheduler
     try:
         print("=" * 60)
         print("📅 INITIALIZING SMART MESSAGING SCHEDULER")
         print("=" * 60)
-        
+
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from services.smart_messaging import smart_messaging, deliver_scheduled_smart_whatsapp
+
         from services.appointment_scheduler import (
-            populate_scheduled_messages_from_appointments,
-            populate_one_month_followups,
             populate_missed_month_messages,
-            populate_missed_yesterday_messages
+            populate_missed_yesterday_messages,
+            populate_one_month_followups,
+            populate_scheduled_messages_from_appointments,
         )
-        
+        from services.smart_messaging import deliver_scheduled_smart_whatsapp, smart_messaging
+
         scheduler = AsyncIOScheduler()
         dispatcher_interval_minutes = max(
             1,
@@ -66,17 +68,17 @@ async def startup_event():
             1,
             int(os.getenv("SMART_MONITOR_INTERVAL_MINUTES", "5")),
         )
-        
+
         # Job 0A: Populate scheduled messages from REAL appointments (via send_appointment_reminders endpoint)
-        async def populate_messages_job():
+        async def populate_messages_job() -> None:
             """Fetch real appointments from backend and populate scheduled messages"""
             try:
                 print("🔄 POPULATING SCHEDULED MESSAGES FROM REAL APPOINTMENTS")
                 print("=" * 80)
                 result = await populate_scheduled_messages_from_appointments()
-                if result.get('success'):
+                if result.get("success"):
                     print(f"✅ {result.get('message')}")
-                    print(f"   📊 Statistics:")
+                    print("   📊 Statistics:")
                     print(f"   - Appointments found: {result.get('total_appointments', 0)}")
                     print(f"   - Processed: {result.get('processed_appointments', 0)}")
                     print(f"   - Failed: {result.get('failed_appointments', 0)}")
@@ -88,16 +90,17 @@ async def startup_event():
             except Exception as e:
                 print(f"❌ Error populating scheduled messages: {e}")
                 import traceback
+
                 traceback.print_exc()
-        
+
         # Job 0A3: Populate 1-MONTH FOLLOW-UP messages (from last month's appointments)
-        async def populate_one_month_job():
+        async def populate_one_month_job() -> None:
             """Fetch last month's appointments and populate 1-month follow-up messages"""
             try:
                 print("📅 POPULATING 1-MONTH FOLLOW-UP MESSAGES")
                 print("=" * 80)
                 result = await populate_one_month_followups()
-                if result.get('success'):
+                if result.get("success"):
                     print(f"✅ {result.get('message')}")
                     print(f"   📊 Month: {result.get('month', 'N/A')}")
                     print(f"   - Appointments found: {result.get('total_appointments', 0)}")
@@ -108,16 +111,17 @@ async def startup_event():
             except Exception as e:
                 print(f"❌ Error populating 1-month messages: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         # Job 0A4: Populate MISSED-MONTH messages (from this month's missed appointments)
-        async def populate_missed_month_job():
+        async def populate_missed_month_job() -> None:
             """Fetch this month's missed appointments and populate missed-month messages"""
             try:
                 print("📅 POPULATING MISSED-MONTH MESSAGES")
                 print("=" * 80)
                 result = await populate_missed_month_messages()
-                if result.get('success'):
+                if result.get("success"):
                     print(f"✅ {result.get('message')}")
                     print(f"   📊 Month: {result.get('month', 'N/A')}")
                     print(f"   - Missed appointments found: {result.get('total_missed', 0)}")
@@ -128,16 +132,17 @@ async def startup_event():
             except Exception as e:
                 print(f"❌ Error populating missed-month messages: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         # Job 0A5: Populate MISSED-YESTERDAY messages (from yesterday's paused appointments)
-        async def populate_missed_yesterday_job():
+        async def populate_missed_yesterday_job() -> None:
             """Fetch yesterday's paused appointments and populate missed-yesterday messages"""
             try:
                 print("📅 POPULATING MISSED-YESTERDAY MESSAGES")
                 print("=" * 80)
                 result = await populate_missed_yesterday_messages()
-                if result.get('success'):
+                if result.get("success"):
                     print(f"✅ {result.get('message')}")
                     print(f"   📅 Date: {result.get('date', 'N/A')}")
                     print(f"   - Paused appointments found: {result.get('total_missed', 0)}")
@@ -148,27 +153,34 @@ async def startup_event():
             except Exception as e:
                 print(f"❌ Error populating missed-yesterday messages: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         # Job 0B: Monitor Smart Messaging scheduled messages with global toggle & preview mode support
-        async def monitor_smart_messages_job():
+        async def monitor_smart_messages_job() -> None:
             """Monitor scheduled messages with smart controls"""
+            from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+
+            if not try_acquire_job_lock("monitor_smart_messages", ttl_seconds=max(60, monitor_interval_minutes * 60)):
+                print("[smart_scheduler] monitor tick skipped — another instance holds the lock")
+                return
             try:
                 import json
                 import os
 
                 # Check if smart messaging is globally enabled
                 from storage.persistent_storage import APP_SETTINGS_FILE
+
                 settings_file = str(APP_SETTINGS_FILE)
                 smart_messaging_enabled = True
                 preview_mode_enabled = False
 
                 if os.path.exists(settings_file):
                     try:
-                        with open(settings_file, 'r', encoding='utf-8') as f:
+                        with open(settings_file, encoding="utf-8") as f:
                             settings = json.load(f)
-                        smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
-                        preview_mode_enabled = settings.get('smartMessaging', {}).get('previewBeforeSend', False)
+                        smart_messaging_enabled = settings.get("smartMessaging", {}).get("enabled", True)
+                        preview_mode_enabled = settings.get("smartMessaging", {}).get("previewBeforeSend", False)
                     except Exception as e:
                         print(f"Error reading settings: {e}")
 
@@ -181,9 +193,7 @@ async def startup_event():
                     )
                     return
 
-                print(
-                    f"[smart_scheduler] queue_monitor tick scheduled_pool={len(smart_messaging.scheduled_messages)}"
-                )
+                print(f"[smart_scheduler] queue_monitor tick scheduled_pool={len(smart_messaging.scheduled_messages)}")
 
                 # If preview mode is enabled, messages need manual approval
                 if preview_mode_enabled:
@@ -193,28 +203,31 @@ async def startup_event():
                     # Check preview queue for pending messages
                     try:
                         from services.message_preview_service import message_preview_service
-                        pending_count = len(message_preview_service.get_pending_messages(status='pending_approval'))
-                        approved_count = len(message_preview_service.get_pending_messages(status='approved'))
+
+                        pending_count = len(message_preview_service.get_pending_messages(status="pending_approval"))
+                        approved_count = len(message_preview_service.get_pending_messages(status="approved"))
 
                         print(f"   Pending approval: {pending_count} messages")
                         print(f"   Approved (ready to send): {approved_count} messages")
 
                         # Process approved messages
                         if approved_count > 0:
-                            approved_messages = message_preview_service.get_pending_messages(status='approved')
+                            approved_messages = message_preview_service.get_pending_messages(status="approved")
                             print(f"\n Sending {approved_count} approved messages...")
 
                             for msg in approved_messages:
                                 try:
-                                    phone = msg.get('customer_phone')
-                                    content = msg.get('rendered_content')
-                                    message_id = msg.get('message_id')
-                                    template_id = msg.get('template_id', 'smart_message')
-                                    customer_name = msg.get('customer_name', 'Customer')
+                                    phone = str(msg.get("customer_phone") or "")
+                                    content = str(msg.get("rendered_content") or "")
+                                    message_id = str(msg.get("message_id") or "")
+                                    template_id = str(msg.get("template_id") or "smart_message")
+                                    customer_name = str(msg.get("customer_name") or "Customer")
 
-                                    if phone and content:
+                                    if not (phone and content and message_id):
+                                        continue
                                         # Send using WhatsApp adapter (template when configured — required outside 24h window)
                                         from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+
                                         adapter = WhatsAppFactory.get_adapter()
                                         result = await deliver_scheduled_smart_whatsapp(
                                             adapter,
@@ -235,7 +248,7 @@ async def startup_event():
                                                 smart_messaging.mark_message_dry_run(message_id)
                                             else:
                                                 message_preview_service.mark_would_send(message_id)
-                                        elif result.get('success'):
+                                        elif result.get("success"):
                                             message_preview_service.mark_as_sent(message_id)
                                             # Only mark this row as sent. mark_messages_sent_by_phone would mark
                                             # every scheduled/pending message for the same phone + template as
@@ -245,8 +258,10 @@ async def startup_event():
                                             print(f"   Sent message {message_id} to {phone}")
 
                                             _sched = smart_messaging.scheduled_messages.get(message_id) or {}
-                                            _meta = _sched.get("metadata") if isinstance(_sched.get("metadata"), dict) else {}
-                                            _ph = _sched.get("placeholders") or {}
+                                            _meta_raw = _sched.get("metadata")
+                                            _meta = _meta_raw if isinstance(_meta_raw, dict) else {}
+                                            _ph_raw = _sched.get("placeholders")
+                                            _ph = _ph_raw if isinstance(_ph_raw, dict) else {}
                                             _apt_id = _meta.get("appointment_id") or _ph.get("appointment_id")
 
                                             # Save to conversation history for continuous context
@@ -262,7 +277,7 @@ async def startup_event():
                                                     "type": template_id,
                                                     "message_id": message_id,
                                                     **({"appointment_id": _apt_id} if _apt_id is not None else {}),
-                                                }
+                                                },
                                             )
                                             print(f"   💾 Saved smart message to conversation history for {phone}")
                                         else:
@@ -274,9 +289,13 @@ async def startup_event():
                         print(f"Error checking preview queue: {preview_error}")
 
                     print("=" * 80)
+                    # Preview mode blocks automatic scheduled sends; only approved preview items send.
+                    print("PREVIEW MODE: skipping automatic status=scheduled sends")
+                    print("=" * 80)
+                    return
 
-                # Always process due rows with status=scheduled (automation exempts preview; CRM-style queue)
-                print("SENDING due Smart Messaging (status=scheduled, preview-independent)")
+                # Preview off: process due rows with status=scheduled
+                print("SENDING due Smart Messaging (status=scheduled)")
                 print("=" * 80)
 
                 # Get messages that are ready to send
@@ -292,16 +311,20 @@ async def startup_event():
 
                 # Send each message
                 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+
                 adapter = WhatsAppFactory.get_adapter()
                 sent_count = 0
                 failed_count = 0
 
                 for i, msg in enumerate(messages_to_send, 1):
-                    phone = msg.get('phone')
-                    content = msg.get('content')
-                    msg_type = msg.get('type')
-                    message_id = msg.get('message_id')
-                    customer_name = msg.get('customer_name', 'Customer')
+                    phone = str(msg.get("phone") or "")
+                    content = str(msg.get("content") or "")
+                    msg_type = str(msg.get("type") or "")
+                    message_id = str(msg.get("message_id") or "")
+                    customer_name = str(msg.get("customer_name") or "Customer")
+
+                    if not (phone and content and message_id and msg_type):
+                        continue
 
                     print(f"\n📤 Sending Message #{i}:")
                     print(f"   ID: {message_id}")
@@ -319,18 +342,20 @@ async def startup_event():
                             rendered_text=content,
                         )
 
-                        if result.get('dry_run'):
+                        if result.get("dry_run"):
                             sent_count += 1
                             smart_messaging.mark_message_dry_run(message_id)
-                            print(f"   📋 Dry-run (would send)")
-                        elif result.get('success'):
+                            print("   📋 Dry-run (would send)")
+                        elif result.get("success"):
                             sent_count += 1
                             smart_messaging.mark_message_sent(message_id)
-                            print(f"   ✅ Sent successfully")
+                            print("   ✅ Sent successfully")
 
                             _sched = smart_messaging.scheduled_messages.get(message_id) or {}
-                            _meta = _sched.get("metadata") if isinstance(_sched.get("metadata"), dict) else {}
-                            _ph = _sched.get("placeholders") or {}
+                            _meta_raw = _sched.get("metadata")
+                            _meta = _meta_raw if isinstance(_meta_raw, dict) else {}
+                            _ph_raw = _sched.get("placeholders")
+                            _ph = _ph_raw if isinstance(_ph_raw, dict) else {}
                             _apt_id = _meta.get("appointment_id") or _ph.get("appointment_id")
 
                             # Save to conversation history for continuous context
@@ -346,12 +371,12 @@ async def startup_event():
                                     "type": msg_type,
                                     "message_id": message_id,
                                     **({"appointment_id": _apt_id} if _apt_id is not None else {}),
-                                }
+                                },
                             )
-                            print(f"   💾 Saved to conversation history")
+                            print("   💾 Saved to conversation history")
                         else:
                             failed_count += 1
-                            error_msg = result.get('error', 'Unknown error')
+                            error_msg = result.get("error", "Unknown error")
                             smart_messaging.mark_message_failed(message_id, error_msg)
                             print(f"   ❌ Failed to send: {error_msg}")
 
@@ -367,36 +392,40 @@ async def startup_event():
             except Exception as e:
                 print(f"Error in monitor smart messages job: {e}")
                 import traceback
+
                 traceback.print_exc()
-        
+            finally:
+                release_job_lock("monitor_smart_messages")
+
         # Job 1: Trigger backend appointment reminders every 30 minutes
-        async def send_appointment_reminders_job():
+        async def send_appointment_reminders_job() -> None:
             try:
                 print("📧 Running appointment reminders job...")
-                today = datetime.datetime.now().strftime('%Y-%m-%d')
+                today = datetime.datetime.now().strftime("%Y-%m-%d")
                 result = await send_appointment_reminders(date=today)
-                if result.get('success'):
-                    print(f"✅ Appointment reminders sent successfully")
+                if result.get("success"):
+                    print("✅ Appointment reminders sent successfully")
                 else:
                     print(f"⚠️ Appointment reminders failed: {result.get('message')}")
             except Exception as e:
                 print(f"❌ Error in appointment reminders job: {e}")
-        
+
         # Job 2: Send "missed yesterday" follow-ups daily at 10 AM
-        async def send_missed_yesterday_followups():
+        async def send_missed_yesterday_followups() -> None:
             try:
                 print("📨 Running missed yesterday follow-ups job...")
 
                 # Check if smart messaging is globally enabled
                 from storage.persistent_storage import APP_SETTINGS_FILE
+
                 settings_file = str(APP_SETTINGS_FILE)
                 smart_messaging_enabled = True
 
                 if os.path.exists(settings_file):
                     try:
-                        with open(settings_file, 'r', encoding='utf-8') as f:
+                        with open(settings_file, encoding="utf-8") as f:
                             settings = json.load(f)
-                        smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
+                        smart_messaging_enabled = settings.get("smartMessaging", {}).get("enabled", True)
                     except Exception as e:
                         print(f"Error reading settings: {e}")
 
@@ -404,20 +433,18 @@ async def startup_event():
                     print("⏸️ Smart Messaging is DISABLED. Skipping missed yesterday follow-ups.")
                     return
 
-                yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+                yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
                 # Use the new paused appointments API with yesterday as both start and end
                 result = await get_paused_appointments_between_dates(
-                    start_date=yesterday,
-                    end_date=yesterday,
-                    service_id=None
+                    start_date=yesterday, end_date=yesterday, service_id=None
                 )
 
                 paused_appointments = []
-                if result.get('success'):
-                    response_data = result.get('data', {})
+                if result.get("success"):
+                    response_data = result.get("data", {})
                     if isinstance(response_data, dict):
-                        paused_appointments = response_data.get('appointments', [])
+                        paused_appointments = response_data.get("appointments", [])
                     elif isinstance(response_data, list):
                         paused_appointments = response_data
 
@@ -427,23 +454,21 @@ async def startup_event():
                     for appointment in paused_appointments:
                         try:
                             # New API response structure
-                            customer_data = appointment.get('customer', {})
-                            customer_phone = customer_data.get('phone')
-                            customer_name = customer_data.get('name', 'عميلنا العزيز')
-                            language = 'ar'  # Default language
+                            customer_data = appointment.get("customer", {})
+                            customer_phone = customer_data.get("phone")
+                            customer_name = customer_data.get("name", "عميلنا العزيز")
+                            language = "ar"  # Default language
 
                             if not customer_phone:
                                 continue
 
                             placeholders = {
-                                'customer_name': customer_name,
-                                'phone_number': config.TRAINER_WHATSAPP_NUMBER or '+961 XX XXXXXX'
+                                "customer_name": customer_name,
+                                "phone_number": config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX",
                             }
 
                             message_content = smart_messaging.get_message_content(
-                                'missed_yesterday',
-                                language,
-                                placeholders
+                                "missed_yesterday", language, placeholders
                             )
 
                             if message_content:
@@ -456,9 +481,9 @@ async def startup_event():
                                     placeholders=placeholders,
                                     rendered_text=message_content,
                                 )
-                                if result.get('dry_run'):
+                                if result.get("dry_run"):
                                     print(f"📋 [DRY-RUN] Would send missed yesterday to {customer_phone}")
-                                elif result.get('success'):
+                                elif result.get("success"):
                                     print(f"✅ Sent missed yesterday message to {customer_phone}")
 
                                     smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_yesterday")
@@ -470,18 +495,15 @@ async def startup_event():
                                         conversation_id=None,
                                         user_name=customer_name,
                                         phone_number=customer_phone,
-                                        metadata={
-                                            "source": "smart_message",
-                                            "type": "missed_yesterday"
-                                        }
+                                        metadata={"source": "smart_message", "type": "missed_yesterday"},
                                     )
-                                    print(f"💾 Saved missed yesterday message to conversation history")
+                                    print("💾 Saved missed yesterday message to conversation history")
 
                                     log_report_event(
                                         "scheduled_message_sent",
                                         customer_phone,
                                         "N/A",
-                                        {"type": "missed_yesterday", "customer_name": customer_name}
+                                        {"type": "missed_yesterday", "customer_name": customer_name},
                                     )
                                 else:
                                     print(
@@ -491,25 +513,26 @@ async def startup_event():
                         except Exception as e:
                             print(f"❌ Error sending missed yesterday message: {e}")
                 else:
-                    print(f"ℹ️ No paused appointments from yesterday")
+                    print("ℹ️ No paused appointments from yesterday")
             except Exception as e:
                 print(f"❌ Error in missed yesterday follow-ups job: {e}")
-        
+
         # Job 3: Send "missed this month" follow-ups on 1st of each month at 11 AM
-        async def send_missed_this_month_followups():
+        async def send_missed_this_month_followups() -> None:
             try:
                 print("📨 Running missed this month follow-ups job...")
 
                 # Check if smart messaging is globally enabled
                 from storage.persistent_storage import APP_SETTINGS_FILE
+
                 settings_file = str(APP_SETTINGS_FILE)
                 smart_messaging_enabled = True
 
                 if os.path.exists(settings_file):
                     try:
-                        with open(settings_file, 'r', encoding='utf-8') as f:
+                        with open(settings_file, encoding="utf-8") as f:
                             settings = json.load(f)
-                        smart_messaging_enabled = settings.get('smartMessaging', {}).get('enabled', True)
+                        smart_messaging_enabled = settings.get("smartMessaging", {}).get("enabled", True)
                     except Exception as e:
                         print(f"Error reading settings: {e}")
 
@@ -517,38 +540,36 @@ async def startup_event():
                     print("⏸️ Smart Messaging is DISABLED. Skipping missed this month follow-ups.")
                     return
 
-                first_day_of_month = datetime.datetime.now().replace(day=1).strftime('%Y-%m-%d')
+                first_day_of_month = datetime.datetime.now().replace(day=1).strftime("%Y-%m-%d")
                 result = await get_missed_appointments(date=first_day_of_month)
-                
-                if result.get('success') and result.get('data'):
-                    missed_appointments = result['data']
+
+                if result.get("success") and result.get("data"):
+                    missed_appointments = result["data"]
                     print(f"📋 Found {len(missed_appointments)} missed appointments this month")
-                    
+
                     customers_contacted = set()
-                    
+
                     for appointment in missed_appointments:
                         try:
-                            customer_phone = appointment.get('customer_phone', appointment.get('phone'))
-                            
+                            customer_phone = appointment.get("customer_phone", appointment.get("phone"))
+
                             if not customer_phone or customer_phone in customers_contacted:
                                 continue
-                            
+
                             customers_contacted.add(customer_phone)
-                            
-                            customer_name = appointment.get('customer_name', appointment.get('name', 'عميلنا العزيز'))
-                            language = appointment.get('language', 'ar')
-                            
+
+                            customer_name = appointment.get("customer_name", appointment.get("name", "عميلنا العزيز"))
+                            language = appointment.get("language", "ar")
+
                             placeholders = {
-                                'customer_name': customer_name,
-                                'phone_number': config.TRAINER_WHATSAPP_NUMBER or '+961 XX XXXXXX'
+                                "customer_name": customer_name,
+                                "phone_number": config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX",
                             }
-                            
+
                             message_content = smart_messaging.get_message_content(
-                                'sent_for_pause',
-                                language,
-                                placeholders
+                                "sent_for_pause", language, placeholders
                             )
-                            
+
                             if message_content:
                                 adapter = WhatsAppFactory.get_adapter()
                                 result = await deliver_scheduled_smart_whatsapp(
@@ -559,9 +580,9 @@ async def startup_event():
                                     placeholders=placeholders,
                                     rendered_text=message_content,
                                 )
-                                if result.get('dry_run'):
+                                if result.get("dry_run"):
                                     print(f"📋 [DRY-RUN] Would send missed this month to {customer_phone}")
-                                elif result.get('success'):
+                                elif result.get("success"):
                                     print(f"✅ Sent missed this month message to {customer_phone}")
 
                                     smart_messaging.mark_messages_sent_by_phone(customer_phone, "sent_for_pause")
@@ -573,18 +594,15 @@ async def startup_event():
                                         conversation_id=None,
                                         user_name=customer_name,
                                         phone_number=customer_phone,
-                                        metadata={
-                                            "source": "smart_message",
-                                            "type": "sent_for_pause"
-                                        }
+                                        metadata={"source": "smart_message", "type": "sent_for_pause"},
                                     )
-                                    print(f"💾 Saved missed this month message to conversation history")
+                                    print("💾 Saved missed this month message to conversation history")
 
                                     log_report_event(
                                         "scheduled_message_sent",
                                         customer_phone,
                                         "N/A",
-                                        {"type": "sent_for_pause", "customer_name": customer_name}
+                                        {"type": "sent_for_pause", "customer_name": customer_name},
                                     )
                                 else:
                                     print(
@@ -594,12 +612,12 @@ async def startup_event():
                         except Exception as e:
                             print(f"❌ Error sending missed this month message: {e}")
                 else:
-                    print(f"ℹ️ No missed appointments this month")
+                    print("ℹ️ No missed appointments this month")
             except Exception as e:
                 print(f"❌ Error in missed this month follow-ups job: {e}")
-        
+
         # Job 5: Daily refresh - clear stale messages and re-populate fresh ones
-        async def daily_refresh_messages_job():
+        async def daily_refresh_messages_job() -> None:
             """
             Runs daily to clear stale queue entries while preserving
             long-horizon follow-ups and campaign messages.
@@ -618,13 +636,22 @@ async def startup_event():
             except Exception as e:
                 print(f"❌ Error in daily refresh job: {e}")
                 import traceback
+
                 traceback.print_exc()
 
-        async def run_daily_template_dispatcher_job():
+        async def run_daily_template_dispatcher_job() -> None:
             """
             Minute-level runner that dispatches enabled template jobs
             when local time matches configured HH:MM.
             """
+            from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+
+            if not try_acquire_job_lock(
+                "daily_template_dispatcher",
+                ttl_seconds=max(60, dispatcher_interval_minutes * 60),
+            ):
+                print("[smart_scheduler] dispatcher tick skipped — another instance holds the lock")
+                return
             try:
                 dispatch_result = await daily_template_dispatcher.tick()
                 run_count = dispatch_result.get("run_count", 0)
@@ -640,38 +667,41 @@ async def startup_event():
             except Exception as e:
                 print(f"❌ Error in daily template dispatcher: {e}")
                 import traceback
+
                 traceback.print_exc()
+            finally:
+                release_job_lock("daily_template_dispatcher")
 
         # Schedule jobs
         # DAILY REFRESH: Clear stale in-memory queue once a day
         scheduler.add_job(
             daily_refresh_messages_job,
-            'cron',
+            "cron",
             hour=0,
             minute=1,
-            id='daily_refresh_messages',
-            name='Daily Refresh - Clear Stale Scheduled Messages',
-            replace_existing=True
+            id="daily_refresh_messages",
+            name="Daily Refresh - Clear Stale Scheduled Messages",
+            replace_existing=True,
         )
 
         # Template dispatcher cadence (default 5m). Dispatcher itself handles due windows safely.
         scheduler.add_job(
             run_daily_template_dispatcher_job,
-            'interval',
+            "interval",
             minutes=dispatcher_interval_minutes,
-            id='daily_template_dispatcher',
-            name='Daily Template Dispatcher (Config-Driven)',
-            replace_existing=True
+            id="daily_template_dispatcher",
+            name="Daily Template Dispatcher (Config-Driven)",
+            replace_existing=True,
         )
 
         # Monitor queue and send due messages (default every 5m)
         scheduler.add_job(
             monitor_smart_messages_job,
-            'interval',
+            "interval",
             minutes=monitor_interval_minutes,
-            id='monitor_smart_messages',
-            name='Monitor Smart Messaging Scheduled Messages',
-            replace_existing=True
+            id="monitor_smart_messages",
+            name="Monitor Smart Messaging Scheduled Messages",
+            replace_existing=True,
         )
 
         scheduler.start()
@@ -686,21 +716,22 @@ async def startup_event():
         print(f"   - Template dispatcher: Every {dispatcher_interval_minutes} minute(s)")
         print(f"   - Queue monitor/sender: Every {monitor_interval_minutes} minute(s)")
         print("=" * 60)
-        
+
         app.state.scheduler = scheduler
-        
+
     except Exception as e:
         print(f"❌ ERROR initializing Smart Messaging Scheduler: {e}")
         print("⚠️ Smart messaging will not work")
         import traceback
+
         traceback.print_exc()
 
 
 @app.on_event("shutdown")
-async def shutdown_event():
+async def shutdown_event() -> None:
     """Cleanup on shutdown"""
     try:
-        if hasattr(app.state, 'scheduler'):
+        if hasattr(app.state, "scheduler"):
             print("🛑 Shutting down Smart Messaging Scheduler...")
             app.state.scheduler.shutdown()
             print("✅ Scheduler shut down successfully")

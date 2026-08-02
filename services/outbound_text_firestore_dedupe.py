@@ -12,7 +12,6 @@ import asyncio
 import hashlib
 import os
 import time
-from typing import Optional
 
 from google.cloud import firestore
 
@@ -53,7 +52,7 @@ def firestore_outbound_dedupe_enabled() -> bool:
     )
 
 
-async def try_acquire_outbound_send_firestore(recipient_pk: str, body_norm: str) -> Optional[str]:
+async def try_acquire_outbound_send_firestore(recipient_pk: str, body_norm: str) -> str | None:
     """
     Try to claim the right to send this exact text to this recipient in the current time bucket.
 
@@ -73,13 +72,10 @@ async def try_acquire_outbound_send_firestore(recipient_pk: str, body_norm: str)
         return ""
     doc_id = _doc_id(r, b)
     ref = (
-        db.collection("artifacts")
-        .document("linas-ai-bot-backend")
-        .collection("outbound_text_dedupe")
-        .document(doc_id)
+        db.collection("artifacts").document("linas-ai-bot-backend").collection("outbound_text_dedupe").document(doc_id)
     )
 
-    def _create():
+    def _create() -> None:
         ref.create(
             {
                 "created_at": firestore.SERVER_TIMESTAMP,
@@ -106,13 +102,10 @@ async def release_outbound_send_firestore(doc_id: str, send_success: bool) -> No
     if not db:
         return
     ref = (
-        db.collection("artifacts")
-        .document("linas-ai-bot-backend")
-        .collection("outbound_text_dedupe")
-        .document(doc_id)
+        db.collection("artifacts").document("linas-ai-bot-backend").collection("outbound_text_dedupe").document(doc_id)
     )
 
-    def _delete():
+    def _delete() -> None:
         try:
             ref.delete()
         except Exception as ex:

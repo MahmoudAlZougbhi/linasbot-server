@@ -3,39 +3,53 @@
   "version": "1.0.0",
   "private": true,
   "homepage": ".",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "dependencies": {
     "@heroicons/react": "^2.0.18",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "autoprefixer": "^10.4.16",
     "axios": "^1.6.0",
     "date-fns": "^2.30.0",
     "framer-motion": "^10.16.0",
-    "http-proxy-middleware": "^2.0.9",
-    "postcss": "^8.4.31",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "react-dropzone": "^14.2.3",
     "react-hot-toast": "^2.4.1",
-    "react-router-dom": "^6.8.0",
-    "react-scripts": "5.0.1",
-    "react-syntax-highlighter": "^15.5.0",
-    "recharts": "^2.8.0",
+    "react-router-dom": "7.18.2",
+    "recharts": "^2.8.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.13.10",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.10",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.8.0",
+    "jsdom": "^30.0.1",
+    "postcss": "^8.4.31",
     "tailwindcss": "^3.3.0",
-    "web-vitals": "^2.1.4"
+    "typescript": "^5.8.3",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "start": "vite",
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "preview": "vite preview",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p jsconfig.json --noEmit"
   },
   "browserslist": {
     "production": [
@@ -48,13 +62,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "proxy": "http://localhost:8003",
-  "devProxy": {
-    "/agent": {
-      "target": "https://boc-lb.com",
-      "changeOrigin": true,
-      "secure": false
-    }
   }
 }

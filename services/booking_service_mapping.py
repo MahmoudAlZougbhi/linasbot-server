@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Booking service mapping guards.
 
@@ -9,11 +8,11 @@ model sends a mismatched service_id in create_appointment.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 # Keep backward compatibility for older IDs while supporting current IDs.
-CO2_SERVICE_IDS: Set[int] = {2, 11}
-WHITENING_SERVICE_IDS: Set[int] = {5, 14}
+CO2_SERVICE_IDS: set[int] = {2, 11}
+WHITENING_SERVICE_IDS: set[int] = {5, 14}
 
 _INTENT_PATTERNS = {
     "co2": [
@@ -38,7 +37,7 @@ _INTENT_LABELS = {
 }
 
 
-def detect_requested_service_intent(user_text: str) -> Optional[str]:
+def detect_requested_service_intent(user_text: str) -> str | None:
     """
     Infer requested service family from user text.
 
@@ -66,7 +65,7 @@ def detect_requested_service_intent(user_text: str) -> Optional[str]:
     return None
 
 
-def classify_service_id(service_id: Any) -> Optional[str]:
+def classify_service_id(service_id: Any) -> str | None:
     """Map known booking service IDs to high-level service family."""
     try:
         normalized_service_id = int(service_id)
@@ -80,14 +79,14 @@ def classify_service_id(service_id: Any) -> Optional[str]:
     return None
 
 
-def service_intent_label(intent: Optional[str]) -> str:
+def service_intent_label(intent: str | None) -> str:
     """Human-readable label for logs/messages."""
     if intent is None:
         return "Unknown"
     return _INTENT_LABELS.get(intent, "Unknown")
 
 
-def validate_service_mapping_from_text(user_text: str, service_id: Any) -> Dict[str, Any]:
+def validate_service_mapping_from_text(user_text: str, service_id: Any) -> dict[str, Any]:
     """
     Validate that selected service_id matches requested service family.
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Strict booking pipeline: AI submits extraction JSON → backend validates → CRM create only when valid.
 
@@ -18,7 +17,7 @@ import datetime
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import config
 from services import api_integrations
@@ -35,7 +34,6 @@ from services.booking.resolver import (
     load_branches,
     load_machines,
     load_services,
-    machine_label_for,
     pick_default_machine_for_non_hair,
     pick_pico_or_default_machine,
     resolve_body_part_ids,
@@ -55,7 +53,7 @@ from utils.datetime_utils import (
 )
 
 
-def _log_booking_attempt(payload: Dict[str, Any]) -> None:
+def _log_booking_attempt(payload: dict[str, Any]) -> None:
     try:
         line = json.dumps(payload, default=str, ensure_ascii=False)
     except (TypeError, ValueError):
@@ -63,7 +61,7 @@ def _log_booking_attempt(payload: Dict[str, Any]) -> None:
     print(f"[BOOKING_PIPELINE] {line[:12000]}")
 
 
-def _ai_intent_summary(intent: Dict[str, Any]) -> Dict[str, Any]:
+def _ai_intent_summary(intent: dict[str, Any]) -> dict[str, Any]:
     """Condensed extraction snapshot for activity_trace (IDs, names, date hints)."""
     if not intent:
         return {}
@@ -91,9 +89,9 @@ def _ai_intent_summary(intent: Dict[str, Any]) -> Dict[str, Any]:
 
 def _infer_primary_failure_stage(
     *,
-    missing: List[str],
-    conflicts: Dict[str, Any],
-    invalid: Dict[str, Any],
+    missing: list[str],
+    conflicts: dict[str, Any],
+    invalid: dict[str, Any],
     backend_resolves: bool,
 ) -> str:
     """Single primary stage for dashboards (most blocking issue first)."""
@@ -126,24 +124,24 @@ def _build_booking_activity_trace(
     failure_stage: str,
     execution_phase: str,
     backend_resolves_names: bool,
-    intent: Dict[str, Any],
+    intent: dict[str, Any],
     detail: str = "",
-    missing_fields: Optional[List[str]] = None,
-    conflicting_fields: Optional[Dict[str, Any]] = None,
-    invalid_fields: Optional[Dict[str, Any]] = None,
-    ambiguities: Optional[List[str]] = None,
-    datetime_resolution_source: Optional[str] = None,
-    normalized_values_snapshot: Optional[Dict[str, Any]] = None,
+    missing_fields: list[str] | None = None,
+    conflicting_fields: dict[str, Any] | None = None,
+    invalid_fields: dict[str, Any] | None = None,
+    ambiguities: list[str] | None = None,
+    datetime_resolution_source: str | None = None,
+    normalized_values_snapshot: dict[str, Any] | None = None,
     pipeline_phase: str = "submit_booking_intent",
-    slot_validation: Optional[Dict[str, Any]] = None,
-    customer_error: Optional[str] = None,
-) -> Dict[str, Any]:
+    slot_validation: dict[str, Any] | None = None,
+    customer_error: str | None = None,
+) -> dict[str, Any]:
     """
     Structured observability for activity flow: stage, pre/post execution, inputs, missing IDs.
     execution_phase: pre_execution | during_execution
     """
     pre_exec = execution_phase == "pre_execution"
-    trace: Dict[str, Any] = {
+    trace: dict[str, Any] = {
         "pipeline_phase": pipeline_phase,
         "failure_stage": failure_stage,
         "execution_phase": execution_phase,
@@ -173,7 +171,7 @@ def _build_booking_activity_trace(
     return trace
 
 
-def _merge_intent(function_args: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_intent(function_args: dict[str, Any]) -> dict[str, Any]:
     base = empty_booking_intent_template()
     fa = dict(function_args or {})
     for k in list(base.keys()):
@@ -182,7 +180,7 @@ def _merge_intent(function_args: Dict[str, Any]) -> Dict[str, Any]:
     return base
 
 
-def _effective_gender(intent: Dict[str, Any], current_gender: str) -> str:
+def _effective_gender(intent: dict[str, Any], current_gender: str) -> str:
     g = intent.get("gender") or current_gender
     return (g or "unknown").strip().lower()
 
@@ -191,8 +189,8 @@ _DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _build_api_datetime(
-    intent: Dict[str, Any],
-) -> Tuple[Optional[datetime.datetime], List[str], List[str], str]:
+    intent: dict[str, Any],
+) -> tuple[datetime.datetime | None, list[str], list[str], str]:
     """
     Build one aware datetime in BOT tz for CRM execution.
 
@@ -208,10 +206,10 @@ def _build_api_datetime(
     Returns (dt, missing, ambiguities, resolution_source) where resolution_source is one of:
     explicit | normalized | legacy_raw | unresolved
     """
-    missing: List[str] = []
-    amb: List[str] = []
+    missing: list[str] = []
+    amb: list[str] = []
     now = now_in_bot_tz()
-    dt: Optional[datetime.datetime] = None
+    dt: datetime.datetime | None = None
     resolution_source = "unresolved"
 
     dc = intent.get("date_components")
@@ -276,7 +274,7 @@ def _build_api_datetime(
     return dt, missing, amb, resolution_source
 
 
-def _coerce_int_id(value: Any) -> Optional[int]:
+def _coerce_int_id(value: Any) -> int | None:
     try:
         if value is None or value == "":
             return None
@@ -286,9 +284,9 @@ def _coerce_int_id(value: Any) -> Optional[int]:
 
 
 def _merge_body_parts_sessions_from_intent(
-    body_ids: List[int],
+    body_ids: list[int],
     raw_bps: Any,
-) -> List[Dict[str, int]]:
+) -> list[dict[str, int]]:
     """
     Build BOC body_parts list: use model-provided session_number per body_part_id when valid;
     fill missing ids with session_number=1. Order follows body_ids.
@@ -296,7 +294,7 @@ def _merge_body_parts_sessions_from_intent(
     if not body_ids:
         return []
     allowed = {int(b) for b in body_ids}
-    by_id: Dict[int, int] = {}
+    by_id: dict[int, int] = {}
     if isinstance(raw_bps, list) and raw_bps:
         for item in raw_bps:
             if not isinstance(item, dict):
@@ -311,13 +309,13 @@ def _merge_body_parts_sessions_from_intent(
             if sn < 1:
                 sn = 1
             by_id[pid] = sn
-    out: List[Dict[str, int]] = []
+    out: list[dict[str, int]] = []
     for bid in body_ids:
         out.append({"body_part_id": int(bid), "session_number": int(by_id.get(bid, 1))})
     return out
 
 
-def _service_requires_machine(service_id: Optional[int]) -> bool:
+def _service_requires_machine(service_id: int | None) -> bool:
     """
     Only laser hair removal services use customer-selected machines.
     """
@@ -327,15 +325,15 @@ def _service_requires_machine(service_id: Optional[int]) -> bool:
 
 
 def _crm_rejection_validation_error(
-    norm_vals: Dict[str, Any],
-    api_resp: Dict[str, Any],
+    norm_vals: dict[str, Any],
+    api_resp: dict[str, Any],
     *,
-    endpoint_payload: Optional[Dict[str, Any]] = None,
+    endpoint_payload: dict[str, Any] | None = None,
     pipeline_phase: str = "submit_booking_intent_execute",
-    ai_extracted: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    ai_extracted: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     api_msg = str(api_resp.get("message") or "").strip()
-    inv: Dict[str, Any] = {"calendar": "slot_unavailable_or_conflict"}
+    inv: dict[str, Any] = {"calendar": "slot_unavailable_or_conflict"}
     if api_msg:
         inv["api_detail"] = api_msg[:800]
     low = api_msg.lower()
@@ -363,7 +361,7 @@ def _crm_rejection_validation_error(
             "within allowed hours, then call submit_booking_intent again with the updated choice."
         )
     br = bool(getattr(config, "BOOKING_BACKEND_RESOLVES_NAMES", False))
-    payload_summary: Optional[Dict[str, Any]] = None
+    payload_summary: dict[str, Any] | None = None
     if endpoint_payload:
         payload_summary = {
             k: endpoint_payload.get(k)
@@ -418,11 +416,11 @@ async def finalize_crm_booking_tool_output(
     *,
     user_id: str,
     raw_user_message: str,
-    ai_extracted: Dict[str, Any],
-    norm_vals: Dict[str, Any],
-    payload: Dict[str, Any],
+    ai_extracted: dict[str, Any],
+    norm_vals: dict[str, Any],
+    payload: dict[str, Any],
     phase: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Single CRM create + logging + tool JSON shape for submit_booking_intent and legacy create_appointment.
     """
@@ -492,10 +490,10 @@ async def finalize_crm_booking_tool_output(
 async def legacy_create_appointment_tool_output(
     *,
     user_id: str,
-    function_args: Dict[str, Any],
+    function_args: dict[str, Any],
     current_gender: str,
     user_input: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Internal/legacy path: after chat_response_service preprocessing, run the same CRM create + response
     shape as submit_booking_intent (success + api_response wrapper, or validation_error on CRM reject).
@@ -518,7 +516,7 @@ async def legacy_create_appointment_tool_output(
         "yes",
     )
     bps = fa.get("body_parts_with_sessions")
-    body_ids: List[int] = []
+    body_ids: list[int] = []
     non_one_session = False
     if isinstance(bps, list) and bps:
         for item in bps:
@@ -539,7 +537,7 @@ async def legacy_create_appointment_tool_output(
             if pid is not None and pid > 0:
                 body_ids.append(pid)
 
-    norm_vals: Dict[str, Any] = {
+    norm_vals: dict[str, Any] = {
         "service_id": sid,
         "branch_id": bid,
         "machine_id": mid,
@@ -548,7 +546,7 @@ async def legacy_create_appointment_tool_output(
         "api_date": date_str,
     }
 
-    missing: List[str] = []
+    missing: list[str] = []
     machine_required_legacy = _service_requires_machine(sid)
     if not machine_required_legacy:
         mid = None
@@ -563,7 +561,7 @@ async def legacy_create_appointment_tool_output(
         missing.append("machine_id")
     if not date_str:
         missing.append("date")
-    conflicts: Dict[str, Any] = {}
+    conflicts: dict[str, Any] = {}
     if machine_required_legacy and mid is not None and mid not in HAIR_REMOVAL_MACHINE_IDS:
         conflicts["machine_service"] = {
             "detail": "machine_id is not an available hair-removal device. Trio is no longer available.",
@@ -601,10 +599,10 @@ async def legacy_create_appointment_tool_output(
         st["last_validation_error"] = err
         return err
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "phone": phone,
-        "service_id": int(sid),
-        "branch_id": int(bid),
+        "service_id": int(sid or 0),
+        "branch_id": int(bid or 0),
         "date": date_str,
     }
     if machine_required_legacy and mid is not None:
@@ -639,9 +637,9 @@ async def legacy_create_appointment_tool_output(
 
 async def _ensure_customer(
     phone: str,
-    customer_name: Optional[str],
+    customer_name: str | None,
     gender_capitalized: str,
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     r = await api_integrations.get_customer_by_phone(phone=phone)
     if r.get("success") and r.get("data"):
         return True, None
@@ -664,8 +662,8 @@ async def handle_submit_booking_intent(
     phone: str,
     current_gender: str,
     user_input: str,
-    function_args: Dict[str, Any],
-) -> Dict[str, Any]:
+    function_args: dict[str, Any],
+) -> dict[str, Any]:
     """
     Run full validation and optionally execute create_appointment.
 
@@ -740,24 +738,24 @@ async def handle_submit_booking_intent(
     branches = await load_branches()
     machines = await load_machines()
 
-    missing: List[str] = []
-    conflicts: Dict[str, Any] = {}
-    svc_id: Optional[int] = None
-    br_id: Optional[int] = None
-    mach_id: Optional[int] = None
-    mach_miss: Optional[str] = None
-    body_ids: List[int] = []
+    missing: list[str] = []
+    conflicts: dict[str, Any] = {}
+    svc_id: int | None = None
+    br_id: int | None = None
+    mach_id: int | None = None
+    mach_miss: str | None = None
+    body_ids: list[int] = []
     had_branch_hint = bool(intent.get("branch_name")) or intent.get("branch_id") is not None
 
     if backend_resolves:
-        svc_miss: Optional[str]
+        svc_miss: str | None
         svc_id, svc_miss = resolve_service_id(
             intent.get("service_name"),
             intent.get("service_id"),
             gender_raw,
             services,
         )
-        br_miss: Optional[str]
+        br_miss: str | None
         br_id, br_miss = resolve_branch_id(intent.get("branch_name"), intent.get("branch_id"), branches)
         if br_id is None:
             br_id = int(config.DEFAULT_BRANCH_ID or BEIRUT_BRANCH_ID)
@@ -818,17 +816,13 @@ async def handle_submit_booking_intent(
                 intent = dict(intent)
                 intent["body_part"] = (raw_msg or "").strip()[:280]
 
-        bp_miss: Optional[str] = None
+        bp_miss: str | None = None
         if svc_id is not None:
             explicit = intent.get("body_part_ids")
             if isinstance(explicit, list) and explicit:
-                body_ids, bp_miss = await resolve_body_part_ids(
-                    svc_id, intent.get("body_part"), explicit, mach_id
-                )
+                body_ids, bp_miss = await resolve_body_part_ids(svc_id, intent.get("body_part"), explicit, mach_id)
             else:
-                body_ids, bp_miss = await resolve_body_part_ids(
-                    svc_id, intent.get("body_part"), None, mach_id
-                )
+                body_ids, bp_miss = await resolve_body_part_ids(svc_id, intent.get("body_part"), None, mach_id)
             if bp_miss:
                 missing.append(bp_miss)
     else:
@@ -898,7 +892,7 @@ async def handle_submit_booking_intent(
     if intent.get("needs_clarification"):
         ambiguities.extend([str(x) for x in (intent.get("ambiguities") or [])])
 
-    invalid: Dict[str, Any] = {}
+    invalid: dict[str, Any] = {}
 
     if svc_id in LASER_HAIR_REMOVAL_SERVICE_IDS and mach_id is not None:
         if mach_id not in HAIR_REMOVAL_MACHINE_IDS and "machine_service" not in conflicts:
@@ -916,7 +910,7 @@ async def handle_submit_booking_intent(
                 "mapping_check": map_chk,
             }
 
-    norm_vals: Dict[str, Any] = {
+    norm_vals: dict[str, Any] = {
         "service_id": svc_id,
         "branch_id": br_id,
         "machine_id": mach_id,
@@ -937,10 +931,7 @@ async def handle_submit_booking_intent(
                 "Do not rely on raw_user_date_text/raw_user_time_text alone as the execution source of truth."
             )
         elif not backend_resolves and (
-            "service_id" in missing
-            or "branch_id" in missing
-            or "machine_id" in missing
-            or "body_part_ids" in missing
+            "service_id" in missing or "branch_id" in missing or "machine_id" in missing or "body_part_ids" in missing
         ):
             hr_booking = (
                 "Executor mode: the model must call get_services, get_branches, get_machines, and get_body_parts first, "
@@ -1056,8 +1047,7 @@ async def handle_submit_booking_intent(
                     backend_resolves_names=backend_resolves,
                     intent=intent,
                     detail=(
-                        "Slot rules rejected this datetime: "
-                        f"code={sv.get('code')!r}, {sv.get('explanation_en', '')}"
+                        f"Slot rules rejected this datetime: code={sv.get('code')!r}, {sv.get('explanation_en', '')}"
                     ),
                     invalid_fields={"slot": sv.get("code")},
                     normalized_values_snapshot=norm_vals,
@@ -1149,10 +1139,8 @@ async def handle_submit_booking_intent(
         )
         return shell
 
-    payload_bps = _merge_body_parts_sessions_from_intent(
-        body_ids, intent.get("body_parts_with_sessions")
-    )
-    payload = {
+    payload_bps = _merge_body_parts_sessions_from_intent(body_ids, intent.get("body_parts_with_sessions"))
+    payload: dict[str, Any] = {
         "phone": phone_clean,
         "service_id": svc_id,
         "branch_id": br_id,

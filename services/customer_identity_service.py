@@ -1,22 +1,22 @@
-# services/customer_identity_service.py
 """
 Resolve customer from external CRM/main system before naming or creating users.
 Cache by normalized_phone with TTL. On API failure: do NOT set a name (fallback unknown/phone only).
 """
-import asyncio
+
+from __future__ import annotations
+
+# services/customer_identity_service.py
 import logging
 import time
-from typing import Dict, Any, Optional
-
-from utils.phone_utils import normalize_phone
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # TTL in seconds for external lookup cache (reduce API load)
 EXTERNAL_RESOLVE_CACHE_TTL = 600  # 10 minutes
 
-_external_resolve_cache: Dict[str, Dict[str, Any]] = {}
-_cache_entries_ttl: Dict[str, float] = {}
+_external_resolve_cache: dict[str, dict[str, Any]] = {}
+_cache_entries_ttl: dict[str, float] = {}
 
 
 def _phone_to_api_format(normalized_phone: str) -> str:
@@ -29,7 +29,7 @@ def _phone_to_api_format(normalized_phone: str) -> str:
     return digits
 
 
-async def resolve_customer_from_external(normalized_phone: str) -> Dict[str, Any]:
+async def resolve_customer_from_external(normalized_phone: str) -> dict[str, Any]:
     """
     Resolve customer from external system by normalized E.164 phone.
     Returns: { "exists": bool, "name": str|None, "external_id": str|None, "gender": str|None }
@@ -52,10 +52,11 @@ async def resolve_customer_from_external(normalized_phone: str) -> Dict[str, Any
         return cached
 
     api_phone = _phone_to_api_format(normalized_phone)
-    result = {"exists": False, "name": None, "external_id": None, "gender": None}
+    result: dict[str, Any] = {"exists": False, "name": None, "external_id": None, "gender": None}
 
     try:
         from services.api_integrations import get_customer_by_phone
+
         response = await get_customer_by_phone(phone=api_phone)
         if response and response.get("success") and response.get("data"):
             data = response["data"]
@@ -67,14 +68,13 @@ async def resolve_customer_from_external(normalized_phone: str) -> Dict[str, Any
             result["gender"] = g if g in ("male", "female") else None
             logger.info(
                 "External resolve: phone=%s exists=True name=%s external_id=%s",
-                normalized_phone, result["name"], result["external_id"]
+                normalized_phone,
+                result["name"],
+                result["external_id"],
             )
         else:
-            logger.info(
-                "External resolve: phone=%s exists=False (not in CRM)",
-                normalized_phone
-            )
-    except asyncio.TimeoutError:
+            logger.info("External resolve: phone=%s exists=False (not in CRM)", normalized_phone)
+    except TimeoutError:
         logger.warning("External resolve timeout for %s; fallback unknown", normalized_phone)
     except Exception as e:
         logger.warning("External resolve failed for %s: %s; fallback unknown", normalized_phone, e)
@@ -84,7 +84,7 @@ async def resolve_customer_from_external(normalized_phone: str) -> Dict[str, Any
     return result
 
 
-def invalidate_external_resolve_cache(normalized_phone: Optional[str] = None):
+def invalidate_external_resolve_cache(normalized_phone: str | None = None) -> None:
     """Clear cache for one number or entire cache (e.g. after customer update)."""
     if normalized_phone:
         _external_resolve_cache.pop(normalized_phone, None)

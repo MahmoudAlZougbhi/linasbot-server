@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 # --- IDs (aligned with OpenAI tool schema / booking flow) ---
 BEIRUT_BRANCH_ID = 1
@@ -21,6 +21,7 @@ WHITENING_SERVICE_IDS = frozenset({4, 5, 14})
 TATTOO_SERVICE_ID = 13
 HAIR_MEN = 1
 HAIR_WOMEN = 12
+
 
 # Candela device IDs from CRM — override with APPOINTMENT_CANDELA_MACHINE_IDS="15,22"
 def _candela_machine_ids() -> frozenset:
@@ -35,7 +36,7 @@ def _candela_machine_ids() -> frozenset:
     return frozenset({15})
 
 
-def _safe_int(value: Any) -> Optional[int]:
+def _safe_int(value: Any) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool):
@@ -69,7 +70,7 @@ def _weekday(d: datetime.datetime) -> int:
     return d.weekday()  # Monday=0 ... Sunday=6
 
 
-def parse_normalized_api_datetime(date_str: str, tz: datetime.tzinfo) -> Optional[datetime.datetime]:
+def parse_normalized_api_datetime(date_str: str, tz: datetime.tzinfo) -> datetime.datetime | None:
     """Parse create/update tool `date` after normalize_tool_date (`%Y-%m-%d %H:%M:%S` in tz)."""
     if not date_str or not isinstance(date_str, str):
         return None
@@ -84,14 +85,14 @@ def parse_normalized_api_datetime(date_str: str, tz: datetime.tzinfo) -> Optiona
 
 
 def find_appointment_row_in_check_next_payload(
-    check_next_result: Optional[dict],
-    appointment_id: Optional[int],
-) -> Optional[dict]:
+    check_next_result: dict | None,
+    appointment_id: int | None,
+) -> dict | None:
     """Match `appointment_id` against enriched check_next payload (customer_appointments + next row)."""
     if appointment_id is None or not isinstance(check_next_result, dict):
         return None
 
-    def _rows_from_payload(payload: dict) -> List[dict]:
+    def _rows_from_payload(payload: dict) -> list[dict]:
         ca = payload.get("customer_appointments")
         if isinstance(ca, list):
             return [x for x in ca if isinstance(x, dict)]
@@ -119,7 +120,7 @@ def find_appointment_row_in_check_next_payload(
     return None
 
 
-def extract_appointment_booking_fields(row: Optional[dict]) -> Tuple[Optional[int], Optional[int], Optional[int]]:
+def extract_appointment_booking_fields(row: dict | None) -> tuple[int | None, int | None, int | None]:
     if not row or not isinstance(row, dict):
         return None, None, None
 
@@ -154,7 +155,7 @@ def _fail(
     code: str,
     explanation_en: str,
     suggestions_en: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "ok": False,
         "slot_validation": {
@@ -165,11 +166,11 @@ def _fail(
     }
 
 
-def _ok() -> Dict[str, Any]:
+def _ok() -> dict[str, Any]:
     return {"ok": True}
 
 
-def _resolve_effective_gender(gender_raw: str, service_id: Optional[int]) -> Optional[str]:
+def _resolve_effective_gender(gender_raw: str, service_id: int | None) -> str | None:
     g = (gender_raw or "").strip().lower()
     if g in ("male", "m", "man"):
         return "male"
@@ -182,7 +183,7 @@ def _resolve_effective_gender(gender_raw: str, service_id: Optional[int]) -> Opt
     return None
 
 
-def _is_candela(machine_id: Optional[int]) -> bool:
+def _is_candela(machine_id: int | None) -> bool:
     if machine_id is None:
         return False
     return machine_id in _candela_machine_ids()
@@ -191,11 +192,11 @@ def _is_candela(machine_id: Optional[int]) -> bool:
 def validate_booking_slot(
     *,
     dt_local: datetime.datetime,
-    service_id: Optional[int],
-    branch_id: Optional[int],
-    machine_id: Optional[int],
+    service_id: int | None,
+    branch_id: int | None,
+    machine_id: int | None,
     gender_raw: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Return {"ok": True} or {"ok": False, "slot_validation": {...}}.
     Unknown service_id → ok True (CRM may still reject).

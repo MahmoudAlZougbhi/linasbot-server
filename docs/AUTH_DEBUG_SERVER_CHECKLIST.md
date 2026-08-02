@@ -44,7 +44,7 @@ tail -f /var/log/linasbot.log
 # In another: trigger login
 curl -X POST http://127.0.0.1:8003/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@lina.com","password":"admin123"}' \
+  -d '{"email":"<YOUR_ADMIN_EMAIL>","password":"<YOUR_ADMIN_PASSWORD>"}' \
   -w "\nTime: %{time_total}s\n"
 ```
 

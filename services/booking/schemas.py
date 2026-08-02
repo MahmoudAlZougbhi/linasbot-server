@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """Structured shapes for AI extraction and backend validation responses."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from services.booking.constants import BOOKING_TIMEZONE_LABEL
 
 
-def empty_booking_intent_template() -> Dict[str, Any]:
+def empty_booking_intent_template() -> dict[str, Any]:
     return {
         "intent": "create_appointment",
         "service_name": None,
@@ -43,17 +42,17 @@ def empty_booking_intent_template() -> Dict[str, Any]:
 
 def validation_error_response(
     *,
-    missing_fields: Optional[List[str]] = None,
-    invalid_fields: Optional[Dict[str, Any]] = None,
-    conflicting_fields: Optional[Dict[str, Any]] = None,
-    allowed_values: Optional[Dict[str, Any]] = None,
-    normalized_values: Optional[Dict[str, Any]] = None,
-    suggested_slots: Optional[List[Any]] = None,
+    missing_fields: list[str] | None = None,
+    invalid_fields: dict[str, Any] | None = None,
+    conflicting_fields: dict[str, Any] | None = None,
+    allowed_values: dict[str, Any] | None = None,
+    normalized_values: dict[str, Any] | None = None,
+    suggested_slots: list[Any] | None = None,
     human_readable_reason: str = "",
-    slot_validation: Optional[Dict[str, Any]] = None,
-    activity_trace: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    out: Dict[str, Any] = {
+    slot_validation: dict[str, Any] | None = None,
+    activity_trace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "success": False,
         "error_type": "validation_error",
         "missing_fields": list(missing_fields or []),
@@ -73,9 +72,9 @@ def validation_error_response(
 
 def success_validation_shell(
     *,
-    normalized_values: Dict[str, Any],
+    normalized_values: dict[str, Any],
     booking_flow_state: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "success": True,
         "error_type": None,

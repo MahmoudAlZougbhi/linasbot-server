@@ -5,38 +5,41 @@
 
 يفحص: الـ provider، Firestore، OpenAI، ويحاكي رسالة ويب هوك لمعرفة أين يتوقف المسار.
 """
+
+from __future__ import annotations
+
+import asyncio
 import os
 import sys
-import asyncio
-import json
+from typing import Any
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
-def _ok(msg):
+def _ok(msg: Any) -> None:
     print(f"   ✅ {msg}")
 
 
-def _fail(msg):
+def _fail(msg: Any) -> None:
     print(f"   ❌ {msg}")
 
 
-def _warn(msg):
+def _warn(msg: Any) -> None:
     print(f"   ⚠️  {msg}")
 
 
-def _step(n, title):
+def _step(n: Any, title: Any) -> None:
     print(f"\n--- {n}. {title} ---")
 
 
-def check_env():
+def check_env() -> None:
     """1. فحص المتغيرات والـ provider"""
     _step(1, "فحص الـ Provider و credentials")
-    provider = os.getenv("MONTYMOBILE_API_KEY") and "montymobile" or "meta"
     if os.getenv("MONTYMOBILE_API_KEY"):
         _ok("MONTYMOBILE_API_KEY موجود")
     else:
@@ -55,11 +58,12 @@ def check_env():
         _warn("WHATSAPP_WEBHOOK_VERIFY_TOKEN غير موجود - التحقق من الويب هوك قد يفشل")
 
 
-def check_firestore():
+def check_firestore() -> None:
     """2. فحص Firestore"""
     _step(2, "فحص Firestore")
     try:
         from utils.utils import get_firestore_db
+
         db = get_firestore_db()
         if db:
             _ok("Firestore متصل")
@@ -69,33 +73,40 @@ def check_firestore():
         _fail(f"Firestore خطأ: {e}")
 
 
-def check_adapter_parse():
+def check_adapter_parse() -> None:
     """3. فحص تحليل الويب هوك (parse)"""
     _step(3, "فحص تحليل رسالة الويب هوك (parse)")
     try:
         from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+
         adapter = WhatsAppFactory.get_adapter()
         # محاكاة صيغة Meta/MontyMobile
         fake_webhook = {
             "object": "whatsapp_business_account",
-            "entry": [{
-                "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
-                "changes": [{
-                    "field": "messages",
-                    "value": {
-                        "messaging_product": "whatsapp",
-                        "metadata": {"display_phone_number": "9611234567", "phone_number_id": "123"},
-                        "contacts": [{"wa_id": "9611234567", "profile": {"name": "Test"}}],
-                        "messages": [{
-                            "from": "9611234567",
-                            "id": "wamid.test123",
-                            "timestamp": "1234567890",
-                            "type": "text",
-                            "text": {"body": "مرحبا"}
-                        }]
-                    }
-                }]
-            }]
+            "entry": [
+                {
+                    "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "messaging_product": "whatsapp",
+                                "metadata": {"display_phone_number": "9611234567", "phone_number_id": "123"},
+                                "contacts": [{"wa_id": "9611234567", "profile": {"name": "Test"}}],
+                                "messages": [
+                                    {
+                                        "from": "9611234567",
+                                        "id": "wamid.test123",
+                                        "timestamp": "1234567890",
+                                        "type": "text",
+                                        "text": {"body": "مرحبا"},
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
         }
         parsed = adapter.parse_webhook_message(fake_webhook)
         if parsed and parsed.get("user_id") and parsed.get("type") == "text":
@@ -105,36 +116,44 @@ def check_adapter_parse():
     except Exception as e:
         _fail(f"خطأ في الـ parse: {e}")
         import traceback
+
         traceback.print_exc()
 
 
-def check_webhook_post():
+def check_webhook_post() -> None:
     """5. فحص استقبال الويب هوك (يحتاج السيرفر شغال)"""
     _step(5, "فحص استقبال الويب هوك (POST /webhook)")
     try:
         import httpx
+
         base = os.getenv("WEBHOOK_TEST_URL", "http://localhost:8003")
         url = f"{base.rstrip('/')}/webhook"
-        payload = {
+        payload: dict[str, Any] = {
             "object": "whatsapp_business_account",
-            "entry": [{
-                "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
-                "changes": [{
-                    "field": "messages",
-                    "value": {
-                        "messaging_product": "whatsapp",
-                        "metadata": {"display_phone_number": "96178974402", "phone_number_id": "123"},
-                        "contacts": [{"wa_id": "96178974402", "profile": {"name": "Test"}}],
-                        "messages": [{
-                            "from": "96178974402",
-                            "id": "wamid.check_" + str(int(__import__("time").time())),
-                            "timestamp": "1234567890",
-                            "type": "text",
-                            "text": {"body": "test webhook"}
-                        }]
-                    }
-                }]
-            }]
+            "entry": [
+                {
+                    "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "messaging_product": "whatsapp",
+                                "metadata": {"display_phone_number": "96178974402", "phone_number_id": "123"},
+                                "contacts": [{"wa_id": "96178974402", "profile": {"name": "Test"}}],
+                                "messages": [
+                                    {
+                                        "from": "96178974402",
+                                        "id": "wamid.check_" + str(int(__import__("time").time())),
+                                        "timestamp": "1234567890",
+                                        "type": "text",
+                                        "text": {"body": "test webhook"},
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
         }
         r = httpx.post(url, json=payload, timeout=10)
         if r.status_code == 200:
@@ -153,38 +172,45 @@ def check_webhook_post():
         _fail(f"خطأ في فحص الويب هوك: {e}")
 
 
-def check_duplicate_webhook_same_message_id():
+def check_duplicate_webhook_same_message_id() -> Any:
     """5b. POST مرتين بنفس wamid — يجب أن تُرفض الثانية (duplicate_webhook)."""
     _step("5b", "ويب هوك مكرر (نفس message id مرتين)")
     try:
-        import httpx
         import time as time_mod
+
+        import httpx
 
         base = os.getenv("WEBHOOK_TEST_URL", "http://localhost:8003")
         url = f"{base.rstrip('/')}/webhook"
         mid = f"wamid.dedupe_{int(time_mod.time() * 1000)}"
 
-        def payload():
+        def payload() -> Any:
             return {
                 "object": "whatsapp_business_account",
-                "entry": [{
-                    "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
-                    "changes": [{
-                        "field": "messages",
-                        "value": {
-                            "messaging_product": "whatsapp",
-                            "metadata": {"display_phone_number": "96178974402", "phone_number_id": "123"},
-                            "contacts": [{"wa_id": "96178974402", "profile": {"name": "DedupeProbe"}}],
-                            "messages": [{
-                                "from": "96178974402",
-                                "id": mid,
-                                "timestamp": "1234567890",
-                                "type": "text",
-                                "text": {"body": "dedupe double post test"},
-                            }],
-                        },
-                    }],
-                }],
+                "entry": [
+                    {
+                        "id": os.getenv("MONTYMOBILE_TENANT_ID", "test"),
+                        "changes": [
+                            {
+                                "field": "messages",
+                                "value": {
+                                    "messaging_product": "whatsapp",
+                                    "metadata": {"display_phone_number": "96178974402", "phone_number_id": "123"},
+                                    "contacts": [{"wa_id": "96178974402", "profile": {"name": "DedupeProbe"}}],
+                                    "messages": [
+                                        {
+                                            "from": "96178974402",
+                                            "id": mid,
+                                            "timestamp": "1234567890",
+                                            "type": "text",
+                                            "text": {"body": "dedupe double post test"},
+                                        }
+                                    ],
+                                },
+                            }
+                        ],
+                    }
+                ],
             }
 
         r1 = httpx.post(url, json=payload(), timeout=15)
@@ -196,9 +222,7 @@ def check_duplicate_webhook_same_message_id():
         if j2.get("status") == "skipped" and "duplicate" in str(j2.get("reason", "")):
             _ok("الطلب الثاني رُفض كمكرر (dedupe يعمل على السيرفر)")
         elif j2.get("status") == "success":
-            _warn(
-                "الطلب الثاني عُولج كـ success — dedupe لم يمنع (Firestore غير متصل؟ أو workers مختلفة؟)"
-            )
+            _warn("الطلب الثاني عُولج كـ success — dedupe لم يمنع (Firestore غير متصل؟ أو workers مختلفة؟)")
         else:
             _warn(f"استجابة غير متوقعة للطلب الثاني: {j2}")
     except httpx.ConnectError:
@@ -207,11 +231,12 @@ def check_duplicate_webhook_same_message_id():
         _fail(f"خطأ في فحص التكرار: {e}")
 
 
-async def check_montymobile_send_async():
+async def check_montymobile_send_async() -> None:
     """6. فحص إرسال MontyMobile (dry-run في local)"""
     _step(6, "فحص MontyMobile إرسال (محاكاة)")
     try:
         from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+
         adapter = WhatsAppFactory.get_adapter()
         result = await adapter.send_text_message("9613000000", "Test من check_message_flow")
         if isinstance(result, dict) and result.get("success"):
@@ -227,13 +252,13 @@ async def check_montymobile_send_async():
         _fail(f"خطأ في MontyMobile إرسال: {e}")
 
 
-async def check_full_flow():
+async def check_full_flow() -> None:
     """7. محاكاة رسالة كاملة: webhook → handle_message → AI → رد"""
     _step(7, "محاكاة مسار كامل (رسالة → AI → رد)")
     try:
-        from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-        from modules.webhook_handlers import handle_message_whatsapp_with_adapter
         import config
+        from modules.webhook_handlers import handle_message_whatsapp_with_adapter
+        from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
         adapter = WhatsAppFactory.get_adapter()
         test_user = "9613000000"  # رقم اختبار
@@ -269,21 +294,24 @@ async def check_full_flow():
     except Exception as e:
         _fail(f"خطأ في المسار الكامل: {e}")
         import traceback
+
         traceback.print_exc()
 
 
-def main():
+def main() -> None:
     print("=" * 60)
     print("🔍 تشخيص مسار الرسائل: واتساب → AI → رد")
     print("=" * 60)
 
     # تهيئة Firestore و config قبل الفحوصات
     try:
-        from utils.utils import initialize_firestore
         from storage.persistent_storage import migrate_from_legacy
+        from utils.utils import initialize_firestore
+
         migrate_from_legacy()
         initialize_firestore()
         import config
+
         config.load_bot_assets()
         config.load_training_data()
         print("\n   ✅ تم تهيئة Firestore و config\n")

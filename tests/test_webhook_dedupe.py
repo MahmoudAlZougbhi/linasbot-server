@@ -1,4 +1,5 @@
 """Unit tests: webhook dedupe keys and in-process memory claim (no server required)."""
+
 import asyncio
 import time
 
@@ -26,19 +27,13 @@ def test_stable_generic_payload_timestamp_field_dropped():
 
 
 def test_stable_id_differs_when_body_differs():
-    a = _stable_id_when_provider_omits_message_id(
-        {"from": {"phone": "+1"}, "message": {"type": "text", "text": "a"}}
-    )
-    b = _stable_id_when_provider_omits_message_id(
-        {"from": {"phone": "+1"}, "message": {"type": "text", "text": "b"}}
-    )
+    a = _stable_id_when_provider_omits_message_id({"from": {"phone": "+1"}, "message": {"type": "text", "text": "a"}})
+    b = _stable_id_when_provider_omits_message_id({"from": {"phone": "+1"}, "message": {"type": "text", "text": "b"}})
     assert a != b
 
 
 def test_parse_montymobile_generic_uses_stable_id_when_no_message_id():
-    adapter = MontyMobileAdapter(
-        api_token="t", tenant_id="tenant", api_id="aid", source_number="9611"
-    )
+    adapter = MontyMobileAdapter(api_token="t", tenant_id="tenant", api_id="aid", source_number="9611")
     body = {
         "from": {"phone": "+96179999999", "name": "U"},
         "message": {"type": "text", "text": "same"},
@@ -80,12 +75,7 @@ def test_text_body_fingerprint_same_for_duplicate_payload_shape():
 def test_text_body_fingerprint_empty_for_non_text():
     from modules.webhook_handlers import _webhook_text_body_fingerprint
 
-    assert (
-        _webhook_text_body_fingerprint(
-            {"type": "image", "content": {"image_id": "x"}, "phone_number": "+1"}
-        )
-        == ""
-    )
+    assert _webhook_text_body_fingerprint({"type": "image", "content": {"image_id": "x"}, "phone_number": "+1"}) == ""
 
 
 def test_webhook_bodyfp_try_claim_serializes():

@@ -4,12 +4,14 @@ and no appointments in BOC. Optional filter: last chat activity in date range; o
 service filter via chat text mentioning mapped service names.
 """
 
+from __future__ import annotations
+
 import asyncio
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import config
-from services.api_integrations import get_customer_by_phone, get_customer_appointments
+from services.api_integrations import get_customer_appointments, get_customer_by_phone
 from services.chat_response_service import _extract_customer_appointments_list
 from services.live_chat_service import live_chat_service
 from services.message_logs_service import message_logs_service
@@ -26,11 +28,11 @@ def _normalize_phone_key(phone: Any) -> str:
     return str(phone).replace("+", "").replace(" ", "").replace("-", "")
 
 
-def _phone_for_api(row: Dict[str, Any]) -> str:
+def _phone_for_api(row: dict[str, Any]) -> str:
     return str(row.get("phone_full") or row.get("phone_clean") or "").strip()
 
 
-def _parse_iso_date_only(iso_ts: str) -> Optional[date]:
+def _parse_iso_date_only(iso_ts: str) -> date | None:
     if not iso_ts:
         return None
     s = str(iso_ts).strip()
@@ -49,7 +51,7 @@ class ChattedNoCrmLeadCampaignService:
 
     TEMPLATE_ID = "whatsapp_lead_no_booking"
 
-    def _resolve_date_range(self, filters: Dict[str, Any]) -> Dict[str, str]:
+    def _resolve_date_range(self, filters: dict[str, Any]) -> dict[str, str]:
         today = datetime.now().date()
         from_date = str(filters.get("from_date", "")).strip()
         to_date = str(filters.get("to_date", "")).strip()
@@ -78,26 +80,26 @@ class ChattedNoCrmLeadCampaignService:
             rows = _extract_customer_appointments_list(resp)
             return len(rows) == 0
 
-    def _service_names_for_ids(self, service_ids: List[int]) -> List[str]:
+    def _service_names_for_ids(self, service_ids: list[int]) -> list[str]:
         if not service_ids:
             return []
         by_id = {
             int(s["service_id"]): str(s.get("service_name") or "")
             for s in service_template_mapping_service.get_available_services()
         }
-        out: List[str] = []
+        out: list[str] = []
         for sid in service_ids:
             name = by_id.get(int(sid))
             if name:
                 out.append(name)
         return out
 
-    async def preview(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+    async def preview(self, filters: dict[str, Any]) -> dict[str, Any]:
         filters = dict(filters or {})
         service_ids = filters.get("service_ids") or []
         if not isinstance(service_ids, list):
             service_ids = []
-        normalized_service_ids: List[int] = []
+        normalized_service_ids: list[int] = []
         for value in service_ids:
             try:
                 normalized_service_ids.append(int(value))
@@ -109,10 +111,10 @@ class ChattedNoCrmLeadCampaignService:
         d_to = date.fromisoformat(date_range["to_date"])
 
         rows = await live_chat_service._collect_history_customer_rows()
-        candidates: List[Dict[str, Any]] = []
+        candidates: list[dict[str, Any]] = []
         for row in rows:
             ts = row.get("last_message_time")
-            d_msg = _parse_iso_date_only(ts)
+            d_msg = _parse_iso_date_only(str(ts or ""))
             if d_msg is None or d_msg < d_from or d_msg > d_to:
                 continue
             phone = _phone_for_api(row)
@@ -121,7 +123,7 @@ class ChattedNoCrmLeadCampaignService:
             candidates.append(row)
 
         # Dedupe by phone (keep latest last_message_time)
-        by_phone: Dict[str, Dict[str, Any]] = {}
+        by_phone: dict[str, dict[str, Any]] = {}
         for row in candidates:
             key = _normalize_phone_key(_phone_for_api(row))
             if not key:
@@ -137,8 +139,8 @@ class ChattedNoCrmLeadCampaignService:
             return_exceptions=True,
         )
 
-        qualified: List[Dict[str, Any]] = []
-        for row, ok in zip(unique_rows, checks):
+        qualified: list[dict[str, Any]] = []
+        for row, ok in zip(unique_rows, checks, strict=True):
             if isinstance(ok, Exception):
                 continue
             if ok:
@@ -151,22 +153,22 @@ class ChattedNoCrmLeadCampaignService:
                 "error": "Selected service IDs are not in Service Mappings; add mappings or clear the service filter.",
             }
 
-        recipients: List[Dict[str, Any]] = []
+        recipients: list[dict[str, Any]] = []
         if normalized_service_ids:
             sem2 = asyncio.Semaphore(12)
-            async def mention_ok(r: Dict[str, Any]) -> bool:
+
+            async def mention_ok(r: dict[str, Any]) -> bool:
                 uid = r.get("user_id")
                 if not uid:
                     return False
                 async with sem2:
-                    return await live_chat_service.user_chats_mention_any_service_name(
-                        str(uid), service_names
-                    )
+                    return await live_chat_service.user_chats_mention_any_service_name(str(uid), service_names)
+
             mention_flags = await asyncio.gather(
                 *[mention_ok(r) for r in qualified],
                 return_exceptions=True,
             )
-            for row, m in zip(qualified, mention_flags):
+            for row, m in zip(qualified, mention_flags, strict=True):
                 if m is True:
                     recipients.append(self._recipient_from_row(row))
         else:
@@ -191,7 +193,7 @@ class ChattedNoCrmLeadCampaignService:
             "recipients": recipients,
         }
 
-    def _recipient_from_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def _recipient_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         phone = _phone_for_api(row)
         d_msg = _parse_iso_date_only(row.get("last_message_time") or "")
         return {
@@ -206,16 +208,16 @@ class ChattedNoCrmLeadCampaignService:
 
     async def send_or_schedule(
         self,
-        filters: Dict[str, Any],
+        filters: dict[str, Any],
         send_mode: str = "send_now",
-        schedule_time: Optional[str] = None,
+        schedule_time: str | None = None,
         language: str = "ar",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         preview_result = await self.preview(filters)
         if not preview_result.get("success"):
             return preview_result
 
-        recipients: List[Dict[str, Any]] = preview_result.get("recipients", [])
+        recipients: list[dict[str, Any]] = preview_result.get("recipients", [])
         effective_filters = preview_result.get("filters", {})
         send_mode = (send_mode or "send_now").strip().lower()
         schedule_dt = None
@@ -238,7 +240,7 @@ class ChattedNoCrmLeadCampaignService:
 
         sent_count = 0
         queued_count = 0
-        failed: List[Dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
 
         adapter = WhatsAppFactory.get_adapter() if send_mode != "schedule" else None
         contact_phone = config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX"
@@ -268,7 +270,7 @@ class ChattedNoCrmLeadCampaignService:
                 "service_name": "",
                 "next_appointment_date": "",
             }
-            metadata = {
+            metadata: dict[str, Any] = {
                 "campaign_id": campaign_id,
                 "customer_id": recipient.get("customer_id"),
                 "reference_date": recipient.get("last_chat_date"),
@@ -299,15 +301,33 @@ class ChattedNoCrmLeadCampaignService:
                 placeholders=placeholders,
             )
             if not content:
-                failed.append({
-                    "phone": phone,
-                    "reason": "Template content is empty or missing",
-                })
+                failed.append(
+                    {
+                        "phone": phone,
+                        "reason": "Template content is empty or missing",
+                    }
+                )
                 continue
 
             try:
-                result = await adapter.send_text_message(phone, content)
-                if result.get("success"):
+                from services.smart_messaging import deliver_scheduled_smart_whatsapp
+
+                result = await deliver_scheduled_smart_whatsapp(
+                    adapter,
+                    phone=phone,
+                    template_id=self.TEMPLATE_ID,
+                    language=resolved_lang,
+                    placeholders=placeholders,
+                    rendered_text=content,
+                )
+                if result.get("dry_run"):
+                    failed.append(
+                        {
+                            "phone": phone,
+                            "reason": "dry_run (not delivered)",
+                        }
+                    )
+                elif result.get("success"):
                     sent_count += 1
                     message_logs_service.log_message(
                         customer_id=recipient.get("customer_id") or phone,
@@ -322,15 +342,19 @@ class ChattedNoCrmLeadCampaignService:
                         },
                     )
                 else:
-                    failed.append({
-                        "phone": phone,
-                        "reason": result.get("error", "Unknown send error"),
-                    })
+                    failed.append(
+                        {
+                            "phone": phone,
+                            "reason": result.get("error", "Unknown send error"),
+                        }
+                    )
             except Exception as exc:
-                failed.append({
-                    "phone": phone,
-                    "reason": str(exc),
-                })
+                failed.append(
+                    {
+                        "phone": phone,
+                        "reason": str(exc),
+                    }
+                )
 
         final_status = "scheduled" if send_mode == "schedule" else "completed"
         message_logs_service.finalize_campaign_log(

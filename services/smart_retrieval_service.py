@@ -1,17 +1,17 @@
-# -*- coding: utf-8 -*-
 """
 Smart Retrieval Service - AI selects the right files based on user question.
 Two-phase: 1) Load titles only, 2) Select relevant files, 3) Load content of selected files only.
 Uses audience (men/women/general) and priority (1-5) for selection.
 """
 
+from __future__ import annotations
+
 import re
 import time
-from typing import List, Optional, Tuple
 from difflib import SequenceMatcher
+from typing import Any, cast
 
 from services import content_files_service as cfs
-
 
 # Cache for titles (60 seconds)
 _TITLES_CACHE: dict = {}
@@ -23,18 +23,18 @@ NO_KNOWLEDGE_FALLBACK = "ما عندي هالمعلومة حالياً. ممكن
 DEFAULT_SAFE_STYLE = "Be professional, friendly, and helpful. Do not invent information."
 
 
-def _get_cached_titles(section: str) -> List[dict]:
+def _get_cached_titles(section: str) -> list[dict]:
     """Get titles for a section, with 60s cache."""
     now = time.time()
     if section in _TITLES_CACHE and (now - _TITLES_CACHE_TIME.get(section, 0)) < CACHE_TTL_SECONDS:
-        return _TITLES_CACHE[section]
+        return cast(list[dict[Any, Any]], _TITLES_CACHE[section])
     titles = cfs.get_titles_only(section)
     _TITLES_CACHE[section] = titles
     _TITLES_CACHE_TIME[section] = now
     return titles
 
 
-def invalidate_titles_cache():
+def invalidate_titles_cache() -> None:
     """Invalidate titles cache (call after create/update/delete)."""
     _TITLES_CACHE.clear()
     _TITLES_CACHE_TIME.clear()
@@ -51,7 +51,7 @@ def _normalize(text: str) -> str:
     return text.lower()
 
 
-def _score_title_relevance(query: str, title: str, tags: List[str]) -> float:
+def _score_title_relevance(query: str, title: str, tags: list[str]) -> float:
     """Score how relevant a title/tags is to the query."""
     q_norm = _normalize(query)
     t_norm = _normalize(title)
@@ -68,7 +68,7 @@ def _score_title_relevance(query: str, title: str, tags: List[str]) -> float:
     return 0.7 * title_score + 0.3 * overlap
 
 
-def _audience_matches(file_audience: str, gender_hint: Optional[str]) -> bool:
+def _audience_matches(file_audience: str, gender_hint: str | None) -> bool:
     """Check if file audience matches detected gender."""
     file_aud = (file_audience or "general").lower()
     if file_aud == "general":
@@ -83,7 +83,7 @@ def _audience_matches(file_audience: str, gender_hint: Optional[str]) -> bool:
     return True
 
 
-def _audience_score(file_audience: str, gender_hint: Optional[str]) -> float:
+def _audience_score(file_audience: str, gender_hint: str | None) -> float:
     """
     Score for audience match: gender-specific > general when gender known.
     Returns higher value for better match.
@@ -103,16 +103,51 @@ def _audience_score(file_audience: str, gender_hint: Optional[str]) -> float:
 
 # Keywords for intent detection
 PRICE_KEYWORDS = [
-    "price", "cost", "how much", "pricing", "سعر", "اسعار", "كم", "قديش", "أديش", "تكلفة",
-    "prix", "coût", "combien", "tarif", "adesh", "adde", "2adde", "2adesh", "kam", "sa3er",
+    "price",
+    "cost",
+    "how much",
+    "pricing",
+    "سعر",
+    "اسعار",
+    "كم",
+    "قديش",
+    "أديش",
+    "تكلفة",
+    "prix",
+    "coût",
+    "combien",
+    "tarif",
+    "adesh",
+    "adde",
+    "2adde",
+    "2adesh",
+    "kam",
+    "sa3er",
 ]
 SERVICE_KEYWORDS = [
-    "laser", "ليزر", "hair removal", "إزالة شعر", "tattoo", "وشم", "تاتو", "whitening", "تبييض",
-    "epilation", "épilation", "dpl", "homme", "رجال", "نساء", "men", "women", "female", "male",
+    "laser",
+    "ليزر",
+    "hair removal",
+    "إزالة شعر",
+    "tattoo",
+    "وشم",
+    "تاتو",
+    "whitening",
+    "تبييض",
+    "epilation",
+    "épilation",
+    "dpl",
+    "homme",
+    "رجال",
+    "نساء",
+    "men",
+    "women",
+    "female",
+    "male",
 ]
 
 
-def detect_intent(query: str) -> Tuple[str, Optional[str]]:
+def detect_intent(query: str) -> tuple[str, str | None]:
     """
     Detect intent: service_question, price_question, or general.
     Returns (intent, gender_hint) where gender_hint is "male", "female", or None.
@@ -137,12 +172,12 @@ def detect_intent(query: str) -> Tuple[str, Optional[str]]:
 
 
 def _select_with_audience_priority(
-    items: List[dict],
+    items: list[dict],
     query: str,
-    gender_hint: Optional[str],
+    gender_hint: str | None,
     max_count: int,
     min_score: float = 0.1,
-) -> Tuple[List[dict], List[dict]]:
+) -> tuple[list[dict], list[dict]]:
     """
     Select files using audience + priority rules.
     Returns (selected_file_objects, selected_ids) - file objects for debug logging.
@@ -172,24 +207,26 @@ def _select_with_audience_priority(
 def select_relevant_files(
     query: str,
     intent: str,
-    gender_hint: Optional[str] = None,
+    gender_hint: str | None = None,
     max_knowledge: int = 2,
     max_style: int = 1,
     max_price: int = 2,
-) -> Tuple[dict, dict]:
+) -> tuple[dict, dict]:
     """
     Select relevant file IDs for each section based on query, intent, audience, priority.
     Returns (selected_ids_dict, selected_files_for_debug) where:
     - selected_ids_dict: {"knowledge": [id1], "style": [id1], "price": [id1]}
     - selected_files_for_debug: {"knowledge": [{id, title}], ...} for logging
     """
-    result = {"knowledge": [], "style": [], "price": []}
-    debug_files = {"knowledge": [], "style": [], "price": []}
+    result: dict[str, list[Any]] = {"knowledge": [], "style": [], "price": []}
+    debug_files: dict[str, list[dict[str, Any]]] = {"knowledge": [], "style": [], "price": []}
 
     # Style: always one, best by relevance
     style_titles = _get_cached_titles("style")
     if style_titles:
-        best_style = max(style_titles, key=lambda x: _score_title_relevance(query, x.get("title", ""), x.get("tags", [])))
+        best_style = max(
+            style_titles, key=lambda x: _score_title_relevance(query, x.get("title", ""), x.get("tags", []))
+        )
         result["style"] = [best_style["id"]]
         debug_files["style"] = [{"id": best_style["id"], "title": best_style.get("title", "")}]
 
@@ -230,7 +267,9 @@ def select_relevant_files(
                 debug_files["knowledge"] = [{"id": t["id"], "title": t.get("title", "")} for t in selected]
             else:
                 result["knowledge"] = [knowledge_titles[0]["id"]]
-                debug_files["knowledge"] = [{"id": knowledge_titles[0]["id"], "title": knowledge_titles[0].get("title", "")}]
+                debug_files["knowledge"] = [
+                    {"id": knowledge_titles[0]["id"], "title": knowledge_titles[0].get("title", "")}
+                ]
 
     return result, debug_files
 
@@ -259,7 +298,7 @@ def retrieve_content(
 
     selected_ids, selected_files = select_relevant_files(query, intent, gender_hint)
 
-    result = {
+    result: dict[str, Any] = {
         "knowledge": cfs.load_file_contents("knowledge", selected_ids["knowledge"]),
         "style": cfs.load_file_contents("style", selected_ids["style"]),
         "price": "",

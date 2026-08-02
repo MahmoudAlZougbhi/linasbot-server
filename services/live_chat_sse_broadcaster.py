@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, Optional, Set
+from typing import Any
 
 from fastapi import Request
 
 from services.live_chat_contracts import utc_now
 
 
-def _json_serializer(obj):
+def _json_serializer(obj: Any) -> Any:
     if isinstance(obj, datetime):
         return obj.isoformat()
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
@@ -24,8 +25,8 @@ class LiveChatSSEBroadcaster:
     HEARTBEAT_SECONDS = 25
     CLIENT_QUEUE_SIZE = 64
 
-    def __init__(self):
-        self._clients: Set[asyncio.Queue] = set()
+    def __init__(self) -> None:
+        self._clients: set[asyncio.Queue] = set()
         self._lock = asyncio.Lock()
         self._sequence = 0
 
@@ -44,7 +45,7 @@ class LiveChatSSEBroadcaster:
             self._sequence += 1
             return self._sequence
 
-    async def _snapshot_clients(self):
+    async def _snapshot_clients(self) -> Any:
         async with self._lock:
             return list(self._clients)
 
@@ -52,7 +53,7 @@ class LiveChatSSEBroadcaster:
         async with self._lock:
             return len(self._clients)
 
-    async def publish(self, event_type: str, data: Dict[str, Any]) -> None:
+    async def publish(self, event_type: str, data: dict[str, Any]) -> None:
         clients = await self._snapshot_clients()
         if not clients:
             return
@@ -84,8 +85,8 @@ class LiveChatSSEBroadcaster:
     async def stream(
         self,
         request: Request,
-        initial_payload_loader: Optional[Callable[[], Awaitable[Optional[Dict[str, Any]]]]] = None,
-    ):
+        initial_payload_loader: Callable[[], Awaitable[dict[str, Any] | None]] | None = None,
+    ) -> Any:
         """Yield a resilient SSE stream for one connected client."""
         client_queue = await self._register()
         connected_payload = {"status": "connected", "connected_at": utc_now().isoformat()}
@@ -110,7 +111,7 @@ class LiveChatSSEBroadcaster:
                     event_data = json.dumps(event.get("data", {}), default=_json_serializer)
                     event_type = event.get("type", "message")
                     yield f"event: {event_type}\ndata: {event_data}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     heartbeat = {
                         "timestamp": utc_now().isoformat(),
                         "active_clients": await self.active_clients_count(),

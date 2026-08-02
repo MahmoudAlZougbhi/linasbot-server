@@ -65,7 +65,12 @@ tests/coverage*
 # Composer
 #-------------------------
 vendor/
-tests/
+# Track pytest modules; ignore local coverage/cache only
+tests/__pycache__/
+tests/.pytest_cache/
+tests/coverage*
+!tests/
+!tests/**/*.py
 
 #-------------------------
 # IDE / Development Files
@@ -118,6 +123,8 @@ __pycache__/
 *.so
 venv/
 .venv/
+.venv-*/
+.venv-py311/
 .venv-meta-test/
 ENV/
 .python-version

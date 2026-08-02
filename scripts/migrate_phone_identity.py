@@ -13,24 +13,26 @@ Usage:
   python scripts/migrate_phone_identity.py                 # full migration
   python scripts/migrate_phone_identity.py --skip-backfill # skip Step 1, merge only (faster)
 """
+
+from __future__ import annotations
+
 import argparse
-import asyncio
 import os
 import sys
+from typing import Any
 
 # Project root
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.phone_utils import normalize_phone, is_phone_like_user_id
-from utils.utils import get_firestore_db
 import config
-
+from utils.phone_utils import is_phone_like_user_id, normalize_phone
+from utils.utils import get_firestore_db
 
 APP_ID = "linas-ai-bot-backend"
 CONVERSATIONS_COLLECTION = getattr(config, "FIRESTORE_CONVERSATIONS_COLLECTION", "conversations")
 
 
-def _get_users_collection(db):
+def _get_users_collection(db: Any) -> Any:
     return db.collection("artifacts").document(APP_ID).collection("users")
 
 
@@ -48,7 +50,7 @@ def _normalized_from_user_doc(user_id: str, user_data: dict) -> str:
     return ""
 
 
-def run_migration(dry_run: bool, skip_backfill: bool = False):
+def run_migration(dry_run: bool, skip_backfill: bool = False) -> Any:
     db = get_firestore_db()
     if not db:
         print("❌ Firestore not initialized. Ensure data/firebase_data.json exists.")
@@ -74,7 +76,7 @@ def run_migration(dry_run: bool, skip_backfill: bool = False):
                 print(f"  Skip (already set) {user_id} -> {normalized}")
 
     # 2) Group by normalized_phone to find duplicates
-    by_normalized = {}
+    by_normalized: dict[str, Any] = {}
     for doc in users_docs:
         user_id = doc.id
         data = doc.to_dict() or {}
@@ -98,7 +100,7 @@ def run_migration(dry_run: bool, skip_backfill: bool = False):
     print("\nStep 3: Merge duplicates into canonical user")
     for normalized_phone, group in duplicates.items():
         # Prefer: E.164 format (e.g. +961...), then has external_id, then most messages, then newest
-        def key(item):
+        def key(item: Any, normalized_phone: Any = normalized_phone) -> Any:
             user_id, data, _ = item
             convs_ref = users_col.document(user_id).collection(CONVERSATIONS_COLLECTION)
             conv_count = len(list(convs_ref.stream()))
@@ -114,14 +116,16 @@ def run_migration(dry_run: bool, skip_backfill: bool = False):
         print(f"  Canonical for {normalized_phone}: {canonical_user_id} (rest: {[u[0] for u in duplicates_to_merge]})")
 
         index_coll = db.collection("artifacts").document(APP_ID).collection("live_chat_index")
-        for dup_user_id, dup_data, dup_ref in duplicates_to_merge:
+        for dup_user_id, _dup_data, dup_ref in duplicates_to_merge:
             dup_conv_col = dup_ref.collection(CONVERSATIONS_COLLECTION)
             conv_docs = list(dup_conv_col.stream())
             canonical_conv_col = canonical_ref.collection(CONVERSATIONS_COLLECTION)
             for conv_doc in conv_docs:
                 conv_data = conv_doc.to_dict() or {}
                 if dry_run:
-                    print(f"    [DRY-RUN] Would move conversation {conv_doc.id} from {dup_user_id} to {canonical_user_id}")
+                    print(
+                        f"    [DRY-RUN] Would move conversation {conv_doc.id} from {dup_user_id} to {canonical_user_id}"
+                    )
                     continue
                 # Move conversation preserving ID (so live_chat_index stays valid)
                 canonical_conv_col.document(conv_doc.id).set(conv_data)
@@ -137,6 +141,7 @@ def run_migration(dry_run: bool, skip_backfill: bool = False):
     if not dry_run and duplicates:
         try:
             from services.live_chat_service import live_chat_service
+
             live_chat_service.invalidate_cache()
             print("\n  Cache invalidated - Live Chat will show merged data on next refresh.")
         except Exception as e:
@@ -145,7 +150,7 @@ def run_migration(dry_run: bool, skip_backfill: bool = False):
     print("\nDone.")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill normalized_phone and merge duplicate users")
     parser.add_argument("--dry-run", action="store_true", help="Only report, do not write")
     parser.add_argument("--skip-backfill", action="store_true", help="Skip Step 1, go straight to merge (faster)")

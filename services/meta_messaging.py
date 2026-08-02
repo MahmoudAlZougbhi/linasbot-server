@@ -6,8 +6,9 @@ import hashlib
 import hmac
 import os
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, cast
 
 import httpx
 
@@ -28,8 +29,7 @@ def get_meta_messaging_settings() -> MetaMessagingSettings:
     if not version.startswith("v"):
         version = f"v{version}"
     return MetaMessagingSettings(
-        enabled=(os.getenv("META_SOCIAL_MESSAGING_ENABLED") or "false").strip().lower()
-        in {"1", "true", "yes"},
+        enabled=(os.getenv("META_SOCIAL_MESSAGING_ENABLED") or "false").strip().lower() in {"1", "true", "yes"},
         app_secret=(os.getenv("META_APP_SECRET") or "").strip(),
         page_id=(os.getenv("META_PAGE_ID") or "").strip(),
         page_access_token=(os.getenv("META_PAGE_ACCESS_TOKEN") or "").strip(),
@@ -41,7 +41,7 @@ def get_meta_messaging_settings() -> MetaMessagingSettings:
 
 def resolve_meta_send_account_id(
     channel: str,
-    event: Dict[str, Any],
+    event: dict[str, Any],
     settings: MetaMessagingSettings,
 ) -> str:
     """
@@ -61,7 +61,7 @@ class InMemoryMessageDeduper:
     """Short-TTL in-process dedupe for Meta webhook redeliveries."""
 
     ttl_seconds: float = 300.0
-    _seen: Dict[str, float] = field(default_factory=dict)
+    _seen: dict[str, float] = field(default_factory=dict)
 
     def claim(self, message_id: str) -> bool:
         now = time.time()
@@ -77,7 +77,7 @@ class InMemoryMessageDeduper:
         self._seen.clear()
 
 
-def verify_meta_signature(raw_body: bytes, signature_header: Optional[str], app_secret: str) -> bool:
+def verify_meta_signature(raw_body: bytes, signature_header: str | None, app_secret: str) -> bool:
     if not raw_body or not signature_header or not app_secret:
         return False
     prefix = "sha256="
@@ -126,10 +126,10 @@ def _account_allowed_for_channel(
 
 
 def parse_meta_messaging_events(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     instagram_account_id: str = "",
     page_id: str = "",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Parse Messenger Platform webhook payloads into normalized inbound events.
 
     Only Facebook Page (`object=page`) and Instagram (`object=instagram`) events are
@@ -143,7 +143,7 @@ def parse_meta_messaging_events(
     if payload_object not in {"page", "instagram"}:
         return []
 
-    events: List[Dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
     for entry in payload.get("entry") or []:
         if not isinstance(entry, dict):
             continue
@@ -151,32 +151,31 @@ def parse_meta_messaging_events(
         for item in entry.get("messaging") or []:
             if not isinstance(item, dict):
                 continue
-            message = item.get("message") if isinstance(item.get("message"), dict) else {}
-            if message.get("is_echo"):
+            message = item.get("message")
+            message_dict: dict[str, Any] = message if isinstance(message, dict) else {}
+            if message_dict.get("is_echo"):
                 continue
-            postback = item.get("postback") if isinstance(item.get("postback"), dict) else {}
+            postback_raw = item.get("postback")
+            postback: dict[str, Any] = postback_raw if isinstance(postback_raw, dict) else {}
             sender_id = str((item.get("sender") or {}).get("id") or "").strip()
             recipient_id = str((item.get("recipient") or {}).get("id") or entry_id).strip()
             if not sender_id:
                 continue
 
-            text = str(message.get("text") or postback.get("title") or postback.get("payload") or "").strip()
-            attachments = message.get("attachments") if isinstance(message.get("attachments"), list) else []
+            text = str(message_dict.get("text") or postback.get("title") or postback.get("payload") or "").strip()
+            attachments_raw = message_dict.get("attachments")
+            attachments = attachments_raw if isinstance(attachments_raw, list) else []
             if not text and not attachments:
                 continue
 
-            message_id = str(message.get("mid") or postback.get("mid") or "").strip()
+            message_id = str(message_dict.get("mid") or postback.get("mid") or "").strip()
             if not message_id:
                 stable = f"{payload_object}|{entry_id}|{sender_id}|{item.get('timestamp')}|{text}|{attachments}"
                 message_id = "meta_synth_" + hashlib.sha256(stable.encode("utf-8")).hexdigest()[:48]
 
-            channel = _event_channel(
-                payload_object, entry_id, recipient_id, instagram_account_id
-            )
+            channel = _event_channel(payload_object, entry_id, recipient_id, instagram_account_id)
             if page_id or instagram_account_id:
-                if not _account_allowed_for_channel(
-                    channel, entry_id, recipient_id, page_id, instagram_account_id
-                ):
+                if not _account_allowed_for_channel(channel, entry_id, recipient_id, page_id, instagram_account_id):
                     continue
 
             events.append(
@@ -217,7 +216,7 @@ class MetaMessagingAdapter:
         account_id: str,
         channel: str,
         graph_api_version: str = "v24.0",
-        client: Optional[httpx.AsyncClient] = None,
+        client: httpx.AsyncClient | None = None,
     ):
         self.access_token = access_token
         self.account_id = account_id
@@ -228,12 +227,9 @@ class MetaMessagingAdapter:
 
     @property
     def messages_url(self) -> str:
-        return (
-            f"https://graph.facebook.com/{self.graph_api_version}/"
-            f"{self.account_id}/messages"
-        )
+        return f"https://graph.facebook.com/{self.graph_api_version}/{self.account_id}/messages"
 
-    async def _post(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = await self.client.post(
             self.messages_url,
             headers={
@@ -246,15 +242,13 @@ class MetaMessagingAdapter:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             body = response.text[:800]
-            raise RuntimeError(
-                f"Meta Send API returned HTTP {response.status_code}: {body}"
-            ) from exc
-        return response.json()
+            raise RuntimeError(f"Meta Send API returned HTTP {response.status_code}: {body}") from exc
+        return cast(dict[str, Any], response.json())
 
-    async def send_text_message(self, recipient_id: str, text: str) -> Dict[str, Any]:
+    async def send_text_message(self, recipient_id: str, text: str) -> dict[str, Any]:
         responses = []
         for chunk in split_meta_text(text):
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "recipient": {"id": str(recipient_id)},
                 "messaging_type": "RESPONSE",
                 "message": {"text": chunk},
@@ -262,14 +256,11 @@ class MetaMessagingAdapter:
             responses.append(await self._post(payload))
         return {"success": True, "data": responses}
 
-    async def send_typing(self, recipient_id: str) -> Dict[str, Any]:
+    async def send_typing(self, recipient_id: str) -> dict[str, Any]:
         if self.channel != "facebook":
             return {"success": True, "skipped": True}
-        return await self._post(
-            {"recipient": {"id": str(recipient_id)}, "sender_action": "typing_on"}
-        )
+        return await self._post({"recipient": {"id": str(recipient_id)}, "sender_action": "typing_on"})
 
     async def close(self) -> None:
         if self._owns_client:
             await self.client.aclose()
-

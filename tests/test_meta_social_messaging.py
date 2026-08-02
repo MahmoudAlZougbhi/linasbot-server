@@ -32,9 +32,7 @@ class MetaSignatureTests(unittest.TestCase):
 
     def test_invalid_signature_rejected(self):
         body = b'{"object":"page","entry":[]}'
-        self.assertFalse(
-            verify_meta_signature(body, "sha256=deadbeef", "test_app_secret")
-        )
+        self.assertFalse(verify_meta_signature(body, "sha256=deadbeef", "test_app_secret"))
 
     def test_missing_signature_rejected(self):
         self.assertFalse(verify_meta_signature(b"{}", None, "secret"))
@@ -170,9 +168,7 @@ class MetaParseTests(unittest.TestCase):
                 }
             ],
         }
-        events = parse_meta_messaging_events(
-            payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT"
-        )
+        events = parse_meta_messaging_events(payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT")
         self.assertEqual(len(events), 1)
         self.assertTrue(events[0]["is_postback"])
         self.assertEqual(events[0]["text"], "Book")
@@ -194,9 +190,7 @@ class MetaParseTests(unittest.TestCase):
                 }
             ],
         }
-        events = parse_meta_messaging_events(
-            payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT"
-        )
+        events = parse_meta_messaging_events(payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT")
         self.assertEqual(events, [])
 
     def test_wrong_instagram_id_rejected(self):
@@ -216,9 +210,7 @@ class MetaParseTests(unittest.TestCase):
                 }
             ],
         }
-        events = parse_meta_messaging_events(
-            payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT"
-        )
+        events = parse_meta_messaging_events(payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT")
         self.assertEqual(events, [])
 
 
@@ -405,12 +397,8 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
 
         ud = {"channel": "instagram", "meta_account_id": "17841413184256533"}
         self.assertIsNone(route_social_contact_request("Hello", ud, None, "en"))
-        self.assertIsNone(
-            route_social_contact_request("Hello", ud, None, "en", force_intent="booking")
-        )
-        processor_src = Path("services/social_messaging_processor.py").read_text(
-            encoding="utf-8"
-        )
+        self.assertIsNone(route_social_contact_request("Hello", ud, None, "en", force_intent="booking"))
+        processor_src = Path("services/social_messaging_processor.py").read_text(encoding="utf-8")
         self.assertIn("await handle_message(", processor_src)
         self.assertNotIn("social_ai", processor_src.lower())
         self.assertNotIn("simplified_prompt", processor_src.lower())
@@ -493,9 +481,7 @@ class MetaWebhookContractTests(unittest.TestCase):
         @app.post("/webhook/meta-messaging")
         async def receive(request: Request):
             raw_body = await request.body()
-            if not verify_meta_signature(
-                raw_body, request.headers.get("X-Hub-Signature-256"), app_secret
-            ):
+            if not verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), app_secret):
                 raise HTTPException(status_code=401, detail="Invalid webhook signature")
             if not state["enabled"]:
                 return JSONResponse({"status": "disabled"})
@@ -521,9 +507,7 @@ class MetaWebhookContractTests(unittest.TestCase):
                     duplicates += 1
                     continue
                 accepted += 1
-            return JSONResponse(
-                {"status": "received", "accepted": accepted, "duplicates": duplicates}
-            )
+            return JSONResponse({"status": "received", "accepted": accepted, "duplicates": duplicates})
 
         @app.post("/webhook")
         async def whatsapp_inbound(request: Request):

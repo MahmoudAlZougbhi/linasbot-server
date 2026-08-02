@@ -1,17 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 Retrieval Debug Logging - Structured JSON logging for smart retrieval.
 Enable/disable via SMART_RETRIEVAL_DEBUG env or config.
 """
 
+from __future__ import annotations
+
 import json
 import os
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 from collections import deque
+from datetime import datetime
+from typing import Any
 
 # In-memory buffer for admin debug panel (last N entries)
 _DEBUG_BUFFER: deque = deque(maxlen=100)
+
 
 # Enable/disable via env or explicit set
 def is_debug_enabled() -> bool:
@@ -20,6 +22,7 @@ def is_debug_enabled() -> bool:
         return True
     try:
         import config
+
         return getattr(config, "SMART_RETRIEVAL_DEBUG", False)
     except Exception:
         return False
@@ -35,14 +38,14 @@ def _estimate_tokens(text: str) -> int:
 def log_retrieval(
     user_message: str,
     detected_intent: str,
-    detected_gender: Optional[str],
-    selected_knowledge: List[Dict[str, Any]],
-    selected_price: List[Dict[str, Any]],
-    selected_style: List[Dict[str, Any]],
+    detected_gender: str | None,
+    selected_knowledge: list[dict[str, Any]],
+    selected_price: list[dict[str, Any]],
+    selected_style: list[dict[str, Any]],
     faq_matched: bool,
-    faq_match_score: Optional[float],
-    prompt_token_estimate: Optional[int] = None,
-    source: Optional[str] = None,
+    faq_match_score: float | None,
+    prompt_token_estimate: int | None = None,
+    source: str | None = None,
 ) -> None:
     """Log structured retrieval debug info."""
     if not is_debug_enabled():
@@ -73,7 +76,7 @@ def log_retrieval(
         print(f"[RETRIEVAL_DEBUG] log error: {e}")
 
 
-def get_recent_logs(limit: int = 50) -> List[Dict]:
+def get_recent_logs(limit: int = 50) -> list[dict]:
     """Get recent retrieval logs for admin debug panel."""
     return list(_DEBUG_BUFFER)[-limit:]
 

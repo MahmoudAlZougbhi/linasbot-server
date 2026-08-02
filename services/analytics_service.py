@@ -1,12 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 Analytics Service
 Orchestrates analytics aggregation and optional real OpenAI usage costs.
 Enriches new-client dashboard rows with Firestore profile + price hints.
 """
 
+from __future__ import annotations
+
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from services.analytics_manager import analytics_manager
 from services.openai_usage_service import openai_usage_service
@@ -32,20 +33,17 @@ def _service_price_hint(service_key: str) -> str:
     return SERVICE_PRICE_HINTS.get(k, "See clinic price list — varies by case")
 
 
-def _attach_service_pricing(row: Dict[str, Any]) -> None:
+def _attach_service_pricing(row: dict[str, Any]) -> None:
     services = row.get("services") or []
-    row["services_pricing"] = [
-        {"service": s, "price_hint": _service_price_hint(s)}
-        for s in services
-    ]
+    row["services_pricing"] = [{"service": s, "price_hint": _service_price_hint(s)} for s in services]
 
 
-def _candidate_user_doc_ids(user_id: str) -> List[str]:
-    from utils.utils import get_canonical_user_id_and_phone
+def _candidate_user_doc_ids(user_id: str) -> list[str]:
     from utils.phone_utils import is_phone_like_user_id
+    from utils.utils import get_canonical_user_id_and_phone
 
     raw = str(user_id or "").strip()
-    out: List[str] = []
+    out: list[str] = []
     phone_guess = raw if is_phone_like_user_id(raw) else None
     canonical, _ = get_canonical_user_id_and_phone(raw, phone_guess)
     if canonical:
@@ -69,7 +67,7 @@ def _candidate_user_doc_ids(user_id: str) -> List[str]:
     return uniq
 
 
-def _read_firestore_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
+def _read_firestore_user_profile(user_id: str) -> dict[str, Any] | None:
     from utils.utils import get_firestore_db
 
     db = get_firestore_db()
@@ -107,8 +105,9 @@ def _default_phone_display(user_id: str) -> str:
 
 def _live_chat_search_token(phone_display: str, user_id: str) -> str:
     """Query value for /live-chat?search= — prefer digits for phone-like ids."""
-    from utils.phone_utils import is_phone_like_user_id
     import re
+
+    from utils.phone_utils import is_phone_like_user_id
 
     raw = str(user_id or "").strip()
     if phone_display:
@@ -133,7 +132,7 @@ def _is_real_name(name: str) -> bool:
     return True
 
 
-async def _enrich_new_client_row(row: Dict[str, Any]) -> None:
+async def _enrich_new_client_row(row: dict[str, Any]) -> None:
     uid = row.get("user_id")
     if not uid:
         return
@@ -151,7 +150,7 @@ async def _enrich_new_client_row(row: Dict[str, Any]) -> None:
     _attach_service_pricing(row)
 
 
-async def _enrich_new_client_dashboard_rows(result: Dict[str, Any]) -> None:
+async def _enrich_new_client_dashboard_rows(result: dict[str, Any]) -> None:
     nc = result.get("new_clients")
     if not isinstance(nc, dict):
         return
@@ -174,7 +173,7 @@ class AnalyticsService:
         except (TypeError, ValueError):
             return default
 
-    async def get_analytics_summary(self, time_range: int = 7, use_real_costs: bool = True) -> Dict[str, Any]:
+    async def get_analytics_summary(self, time_range: int = 7, use_real_costs: bool = True) -> dict[str, Any]:
         safe_days = self._safe_days(time_range, default=7)
         result = analytics_manager.get_summary(days=safe_days)
 

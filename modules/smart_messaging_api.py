@@ -3,22 +3,23 @@ Smart Messaging API Module
 Handles message templates endpoints for the dashboard
 """
 
+from __future__ import annotations
+
 import json
 import os
 import tempfile
-import uuid
 import threading
+import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
-from typing import Dict, Any, List
 from datetime import datetime
+from typing import Any, cast
 
 from fastapi import Body
 
 from modules.core import app
-from utils.utils import save_conversation_message_to_firestore
-from services.message_logs_service import message_logs_service
 from services.chatted_no_crm_lead_campaign_service import chatted_no_crm_lead_campaign_service
+from services.message_logs_service import message_logs_service
 from services.missed_paused_campaign_service import missed_paused_campaign_service
 from services.smart_messaging_catalog import (
     CAMPAIGN_TEMPLATE_IDS,
@@ -28,19 +29,21 @@ from services.smart_messaging_catalog import (
     normalize_template_id,
 )
 from services.template_schedule_service import template_schedule_service
-
-try:
-    import fcntl
-except ImportError:
-    fcntl = None
-
-
 from storage.persistent_storage import (
     MESSAGE_TEMPLATES_FILE,
     MESSAGE_TEMPLATES_LOCK_FILE,
     SMART_MESSAGING_DIR,
     ensure_dirs,
 )
+from utils.utils import save_conversation_message_to_firestore
+
+_fcntl_mod: Any
+try:
+    import fcntl as _fcntl_mod
+except ImportError:
+    _fcntl_mod = None
+
+fcntl: Any = _fcntl_mod
 
 _TEMPLATE_FILE = MESSAGE_TEMPLATES_FILE
 _TEMPLATE_LOCK_FILE = MESSAGE_TEMPLATES_LOCK_FILE
@@ -48,7 +51,7 @@ _PROCESS_TEMPLATE_LOCK = threading.Lock()
 
 
 @contextmanager
-def _template_store_lock():
+def _template_store_lock() -> Iterator[None]:
     """Lock template read/write across threads and (on Unix) processes."""
     ensure_dirs()
     with _PROCESS_TEMPLATE_LOCK:
@@ -62,11 +65,11 @@ def _template_store_lock():
                     fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
-def _load_templates_from_disk() -> Dict[str, Any]:
+def _load_templates_from_disk() -> dict[str, Any]:
     if not _TEMPLATE_FILE.exists():
         return {}
 
-    with open(_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
+    with open(_TEMPLATE_FILE, encoding="utf-8") as f:
         templates = json.load(f)
 
     if not isinstance(templates, dict):
@@ -75,16 +78,12 @@ def _load_templates_from_disk() -> Dict[str, Any]:
     return templates
 
 
-def _save_templates_to_disk(templates: Dict[str, Any]) -> None:
+def _save_templates_to_disk(templates: dict[str, Any]) -> None:
     ensure_dirs()
-    temp_fd, temp_path = tempfile.mkstemp(
-        dir=str(SMART_MESSAGING_DIR),
-        prefix="message_templates_",
-        suffix=".json"
-    )
+    temp_fd, temp_path = tempfile.mkstemp(dir=str(SMART_MESSAGING_DIR), prefix="message_templates_", suffix=".json")
 
     try:
-        with os.fdopen(temp_fd, 'w', encoding='utf-8') as temp_file:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as temp_file:
             json.dump(templates, temp_file, ensure_ascii=False, indent=2)
             temp_file.flush()
             os.fsync(temp_file.fileno())
@@ -98,14 +97,14 @@ def _save_templates_to_disk(templates: Dict[str, Any]) -> None:
                 pass
 
 
-def _default_template_ids() -> List[str]:
+def _default_template_ids() -> list[str]:
     return list(DAILY_TEMPLATE_IDS) + list(CAMPAIGN_TEMPLATE_IDS)
 
 
-def _build_template_record(template_id: str, source: Dict[str, Any] = None) -> Dict[str, Any]:
+def _build_template_record(template_id: str, source: dict[str, Any] | None = None) -> dict[str, Any]:
     source = source or {}
     meta = TEMPLATE_METADATA.get(template_id, {})
-    record = {
+    record: dict[str, Any] = {
         "name": str(source.get("name") or meta.get("name") or template_id),
         "description": str(source.get("description") or meta.get("description") or ""),
         "ar": str(source.get("ar", "")),
@@ -121,12 +120,12 @@ def _build_template_record(template_id: str, source: Dict[str, Any] = None) -> D
     return record
 
 
-def _migrate_templates(templates: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+def _migrate_templates(templates: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     """
     Canonicalize legacy template IDs and hide deprecated defaults.
     """
     changed = False
-    migrated: Dict[str, Any] = {}
+    migrated: dict[str, Any] = {}
 
     for template_id, template_data in (templates or {}).items():
         if not isinstance(template_data, dict):
@@ -153,7 +152,7 @@ def _migrate_templates(templates: Dict[str, Any]) -> tuple[Dict[str, Any], bool]
 
 
 @app.get("/api/smart-messaging/templates")
-async def get_message_templates():
+async def get_message_templates() -> Any:
     """Get all message templates from JSON file"""
     try:
         with _template_store_lock():
@@ -162,34 +161,25 @@ async def get_message_templates():
             if changed:
                 _save_templates_to_disk(templates)
 
-        return {
-            "success": True,
-            "templates": templates
-        }
+        return {"success": True, "templates": templates}
     except Exception as e:
         print(f"❌ Error getting templates: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/templates/{template_id}")
-async def update_message_template(template_id: str, template_data: Dict[str, Any]):
+async def update_message_template(template_id: str, template_data: dict[str, Any]) -> Any:
     """Update or create a message template"""
     try:
         template_id = normalize_template_id(template_id)
         if template_id in DEPRECATED_TEMPLATE_IDS:
-            return {
-                "success": False,
-                "error": f"Template '{template_id}' is deprecated and cannot be updated"
-            }
+            return {"success": False, "error": f"Template '{template_id}' is deprecated and cannot be updated"}
 
         with _template_store_lock():
             templates = _load_templates_from_disk()
             templates, _ = _migrate_templates(templates)
 
-            is_new = bool(template_data.get('isNew', False)) or template_id not in templates
+            is_new = bool(template_data.get("isNew", False)) or template_id not in templates
             now_iso = datetime.now().isoformat()
 
             # Check if creating a new template
@@ -204,18 +194,20 @@ async def update_message_template(template_id: str, template_data: Dict[str, Any
                         "fr": template_data.get("fr", ""),
                     },
                 )
-                base_template["isCustom"] = bool(template_data.get("isCustom", template_id not in _default_template_ids()))
+                base_template["isCustom"] = bool(
+                    template_data.get("isCustom", template_id not in _default_template_ids())
+                )
                 base_template["createdAt"] = now_iso
                 templates[template_id] = base_template
                 action = "created"
             else:
                 # Merge updates so partial payloads never wipe other languages/fields
-                for field in ('ar', 'en', 'fr', 'name', 'description'):
+                for field in ("ar", "en", "fr", "name", "description"):
                     if field in template_data:
                         value = template_data[field]
-                        templates[template_id][field] = '' if value is None else str(value)
+                        templates[template_id][field] = "" if value is None else str(value)
 
-                templates[template_id]['updatedAt'] = now_iso
+                templates[template_id]["updatedAt"] = now_iso
                 action = "updated"
 
             _save_templates_to_disk(templates)
@@ -224,10 +216,11 @@ async def update_message_template(template_id: str, template_data: Dict[str, Any
         # Reload templates in smart_messaging service if available
         try:
             from services.smart_messaging import smart_messaging
+
             smart_messaging.message_templates[template_id] = {
-                'ar': saved_template.get('ar', ''),
-                'en': saved_template.get('en', ''),
-                'fr': saved_template.get('fr', '')
+                "ar": saved_template.get("ar", ""),
+                "en": saved_template.get("en", ""),
+                "fr": saved_template.get("fr", ""),
             }
         except ImportError:
             # Service may not be available in all deployments
@@ -237,20 +230,18 @@ async def update_message_template(template_id: str, template_data: Dict[str, Any
             "success": True,
             "message": f"Template {action} successfully",
             "template_id": template_id,
-            "template": saved_template
+            "template": saved_template,
         }
     except Exception as e:
         print(f"❌ Error updating template: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @app.delete("/api/smart-messaging/templates/{template_id}")
-async def delete_message_template(template_id: str):
+async def delete_message_template(template_id: str) -> Any:
     """Delete a custom message template"""
     try:
         template_id = normalize_template_id(template_id)
@@ -258,20 +249,14 @@ async def delete_message_template(template_id: str):
         default_templates = _default_template_ids()
 
         if template_id in default_templates:
-            return {
-                "success": False,
-                "error": "Cannot delete default templates"
-            }
+            return {"success": False, "error": "Cannot delete default templates"}
 
         with _template_store_lock():
             templates = _load_templates_from_disk()
             templates, _ = _migrate_templates(templates)
 
             if template_id not in templates:
-                return {
-                    "success": False,
-                    "error": "Template not found"
-                }
+                return {"success": False, "error": "Template not found"}
 
             # Delete the template
             del templates[template_id]
@@ -280,24 +265,19 @@ async def delete_message_template(template_id: str):
         # Remove from smart_messaging service if available
         try:
             from services.smart_messaging import smart_messaging
+
             if template_id in smart_messaging.message_templates:
                 del smart_messaging.message_templates[template_id]
         except ImportError:
             pass
 
-        return {
-            "success": True,
-            "message": "Template deleted successfully",
-            "template_id": template_id
-        }
+        return {"success": True, "message": "Template deleted successfully", "template_id": template_id}
     except Exception as e:
         print(f"❌ Error deleting template: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 def _monty_whatsapp_language_code(saved_lang: str) -> str:
@@ -311,7 +291,7 @@ def _monty_whatsapp_language_code(saved_lang: str) -> str:
 
 
 @app.get("/api/smart-messaging/user-language")
-async def smart_messaging_resolve_user_language(phone: str):
+async def smart_messaging_resolve_user_language(phone: str) -> Any:
     """Resolve saved user language from phone (runtime memory / same keys as the bot)."""
     try:
         from services.user_persistence_service import user_persistence
@@ -334,14 +314,14 @@ async def smart_messaging_resolve_user_language(phone: str):
 
 
 @app.post("/api/smart-messaging/send-test-template")
-async def send_test_template_message(request_data: Dict[str, Any]):
+async def send_test_template_message(request_data: dict[str, Any]) -> Any:
     """Send a test message using MontyMobile template"""
     try:
         from services.montymobile_template_service import montymobile_template_service
         from services.user_persistence_service import user_persistence
 
-        template_id = normalize_template_id(request_data.get('template_id', '').strip())
-        phone_number = request_data.get('phone_number', '').strip()
+        template_id = normalize_template_id(request_data.get("template_id", "").strip())
+        phone_number = request_data.get("phone_number", "").strip()
         explicit = request_data.get("language")
         if isinstance(explicit, str):
             explicit = explicit.strip().lower()
@@ -352,16 +332,10 @@ async def send_test_template_message(request_data: Dict[str, Any]):
 
         # Validate inputs
         if not template_id:
-            return {
-                "success": False,
-                "error": "Template ID is required"
-            }
-        
+            return {"success": False, "error": "Template ID is required"}
+
         if not phone_number:
-            return {
-                "success": False,
-                "error": "Phone number is required"
-            }
+            return {"success": False, "error": "Phone number is required"}
 
         if explicit:
             if explicit not in ("ar", "en", "fr", "franco"):
@@ -375,16 +349,13 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             user_language, language_source = user_persistence.resolve_language_for_phone(phone_number)
 
         language = _monty_whatsapp_language_code(user_language)
-        
+
         # Get template info to know which parameters it needs
         template_info = montymobile_template_service.get_template_info(template_id)
-        
+
         if not template_info:
-            return {
-                "success": False,
-                "error": f"Template '{template_id}' not found"
-            }
-        
+            return {"success": False, "error": f"Template '{template_id}' not found"}
+
         # Body variable names + count (must match montymobile_template_service / Meta {{1}}..{{n}})
         effective_lang = montymobile_template_service.resolve_whatsapp_language_for_template(
             template_info, language, template_id_for_log=template_id
@@ -398,11 +369,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
 
         raw_count = template_lang.get("parameters_count")
         try:
-            n_body = (
-                max(0, int(raw_count))
-                if raw_count is not None
-                else len(template_param_names)
-            )
+            n_body = max(0, int(raw_count)) if raw_count is not None else len(template_param_names)
         except (TypeError, ValueError):
             n_body = len(template_param_names)
 
@@ -414,10 +381,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
         vals, ph_meta = await resolve_real_test_template_placeholders(phone_number)
         _test_correlation_id = uuid.uuid4().hex[:10]
 
-        test_parameters = {
-            param: str(vals.get(param) or "").strip()
-            for param in template_param_names
-        }
+        test_parameters = {param: str(vals.get(param) or "").strip() for param in template_param_names}
         _fill_order = [
             "customer_name",
             "appointment_date",
@@ -445,15 +409,11 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             if _slot in template_param_names and not str(test_parameters.get(_slot) or "").strip():
                 test_parameters[_slot] = _default
                 ph_meta.setdefault("warnings", [])
-                _w = (
-                    f"{_slot} was empty after CRM merge — filled with default for test send."
-                )
+                _w = f"{_slot} was empty after CRM merge — filled with default for test send."
                 if _w not in ph_meta["warnings"]:
                     ph_meta["warnings"].append(_w)
 
-        _ph_err = validate_test_placeholders_for_template(
-            template_param_names, n_body, test_parameters, ph_meta
-        )
+        _ph_err = validate_test_placeholders_for_template(template_param_names, n_body, test_parameters, ph_meta)
         if _ph_err:
             return {
                 "success": False,
@@ -489,13 +449,10 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                         _tweaked = True
                         break
             _vary_applied = _tweaked
-        
-        print(
-            f"📋 Template '{template_id}' body slots: count={n_body} "
-            f"named={template_param_names!r}"
-        )
+
+        print(f"📋 Template '{template_id}' body slots: count={n_body} named={template_param_names!r}")
         print(f"📋 Sending parameters: {test_parameters}")
-        
+
         print(
             f"📤 Sending test template '{template_id}' to {phone_number} "
             f"(user_lang={user_language} source={language_source} monty_lang={language})"
@@ -527,7 +484,7 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             template_id=template_id,
             phone_number=phone_number,
             language=effective_lang,
-            parameters=test_parameters
+            parameters=cast(dict[str, str | None], test_parameters),
         )
 
         if isinstance(result, dict):
@@ -567,31 +524,23 @@ async def send_test_template_message(request_data: Dict[str, Any]):
             mid = result.get("message_id")
             if mid and str(mid).strip() and str(mid).strip().lower() != "unknown":
                 try:
-                    from utils.utils import save_conversation_message_to_firestore
-                    from services.smart_messaging import smart_messaging
                     from services.message_preview_service import message_preview_service
+                    from services.smart_messaging import smart_messaging
+                    from utils.utils import save_conversation_message_to_firestore
 
                     # Live Chat should show the same body the customer sees (placeholders filled),
                     # matching scheduled sends that persist `content` / rendered template text.
                     _ph_display = {
                         k: v
                         for k, v in test_parameters.items()
-                        if isinstance(k, str)
-                        and not str(k).isdigit()
-                        and k != "header_image"
+                        if isinstance(k, str) and not str(k).isdigit() and k != "header_image"
                     }
-                    _display_text = smart_messaging.get_message_content(
-                        template_id, effective_lang, _ph_display
-                    )
+                    _display_text = smart_messaging.get_message_content(template_id, effective_lang, _ph_display)
                     if not _display_text:
                         _display_text = message_preview_service.render_message_preview(
                             template_id, effective_lang, _ph_display
                         )
-                    if (
-                        not _display_text
-                        or not str(_display_text).strip()
-                        or str(_display_text).startswith("[")
-                    ):
+                    if not _display_text or not str(_display_text).strip() or str(_display_text).startswith("["):
                         _display_text = (
                             f"Template «{template_id}» (test send, lang {effective_lang}). "
                             f"Parameters: {test_parameters}"
@@ -624,38 +573,30 @@ async def send_test_template_message(request_data: Dict[str, Any]):
                 )
 
         return result
-        
+
     except Exception as e:
         print(f"❌ Error sending test template: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/send-test")
-async def send_test_message(request_data: Dict[str, Any]):
+async def send_test_message(request_data: dict[str, Any]) -> Any:
     """Send a test message to a phone number using template data (OLD METHOD - for backward compatibility)"""
     try:
-        phone_number = request_data.get('phone_number', '').strip()
-        message = request_data.get('message', '').strip()
-        template_id = request_data.get('template_id', '')
-        language = request_data.get('language', 'ar')
+        phone_number = request_data.get("phone_number", "").strip()
+        message = request_data.get("message", "").strip()
+        template_id = request_data.get("template_id", "")
+        language = request_data.get("language", "ar")
 
         # Validate inputs
         if not phone_number:
-            return {
-                "success": False,
-                "error": "Phone number is required"
-            }
+            return {"success": False, "error": "Phone number is required"}
 
         if not message:
-            return {
-                "success": False,
-                "error": "Message content is empty"
-            }
+            return {"success": False, "error": "Message content is empty"}
 
         print(f"📤 Sending test message to phone: {phone_number}")
         print(f"   Template: {template_id}")
@@ -663,64 +604,70 @@ async def send_test_message(request_data: Dict[str, Any]):
         print(f"   Message preview: {message[:100]}...")
 
         # Normalize and clean the phone number for lookup
-        phone_clean = phone_number.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
-        
+        phone_clean = phone_number.replace("+", "").replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
+
         # Generate variations for matching
-        phone_without_country = phone_clean.lstrip('961')  # Remove Lebanon country code
+        phone_without_country = phone_clean.lstrip("961")  # Remove Lebanon country code
         phone_with_plus = f"+{phone_clean}"
-        
+
         print(f"🔍 Searching for phone: {phone_number}")
         print(f"   Cleaned: {phone_clean}")
         print(f"   Without country: {phone_without_country}")
-        
+
         print(f"🔍 Searching for phone: {phone_number}")
         print(f"   Cleaned: {phone_clean}")
-        
+
         # Generate multiple phone variations for matching (handles different formats)
-        phone_without_country = phone_clean.lstrip('961')  # Remove Lebanon country code
+        phone_without_country = phone_clean.lstrip("961")  # Remove Lebanon country code
         phone_with_plus = f"+{phone_clean}"
         phone_with_plus_country = f"+961{phone_without_country}"
-        
-        print(f"   Variations to try:")
+
+        print("   Variations to try:")
         print(f"     - {phone_clean}")
         print(f"     - {phone_without_country}")
         print(f"     - {phone_with_plus}")
         print(f"     - {phone_with_plus_country}")
-        
+
         # For Qiscus: need to fetch the room_id from Firebase using the phone number
         try:
-            from utils.utils import get_firestore_db
             import config
-            
+            from utils.utils import get_firestore_db
+
             # First, try to find the room_id from Firebase by searching through users
             db = get_firestore_db()
             if db:
                 app_id = "linas-ai-bot-backend"
                 users_collection = db.collection("artifacts").document(app_id).collection("users")
-                
+
                 # Search for user by phone number
                 room_id = None
                 found_match = False
-                
-                print(f"📂 Searching in Firebase for matching phone...")
+
+                print("📂 Searching in Firebase for matching phone...")
                 for user_doc in users_collection.stream():
                     user_id = user_doc.id
                     user_data = user_doc.to_dict() or {}
-                    
+
                     # Phone data is stored at root level, NOT in customer_info
                     stored_phone_full = user_data.get("phone_full", "")
                     stored_phone_clean = user_data.get("phone_clean", "")
-                    
+
                     # Log what we're checking
                     if stored_phone_full or stored_phone_clean:
                         print(f"   Checking user_id={user_id}:")
                         print(f"     phone_full: {stored_phone_full}")
                         print(f"     phone_clean: {stored_phone_clean}")
-                    
+
                     # Clean both for comparison
-                    stored_phone_full_clean = stored_phone_full.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
-                    stored_phone_without_country = stored_phone_clean.lstrip('961') if stored_phone_clean else ""
-                    
+                    stored_phone_full_clean = (
+                        stored_phone_full.replace("+", "")
+                        .replace("-", "")
+                        .replace(" ", "")
+                        .replace("(", "")
+                        .replace(")", "")
+                    )
+                    stored_phone_without_country = stored_phone_clean.lstrip("961") if stored_phone_clean else ""
+
                     # Try multiple matching strategies
                     match_pairs = [
                         (stored_phone_clean, phone_clean),
@@ -730,28 +677,34 @@ async def send_test_message(request_data: Dict[str, Any]):
                         (stored_phone_full, phone_number),
                         (stored_phone_without_country, phone_without_country),
                     ]
-                    
+
                     if any(stored == inputted for stored, inputted in match_pairs if stored and inputted):
                         room_id = user_id
                         found_match = True
                         print(f"     ✅ MATCH FOUND! room_id = {room_id}")
                         break
-                
+
                 if not found_match:
-                    print(f"❌ Phone not found in Firebase. Checking config fallback...")
+                    print("❌ Phone not found in Firebase. Checking config fallback...")
                     # Fall back to config lookup - config has room_id as keys
                     for user_id, user_data in config.user_data_whatsapp.items():
-                        user_phone = user_data.get('phone_number', '')
+                        user_phone = user_data.get("phone_number", "")
                         if not user_phone:
                             continue
-                        
-                        user_phone_clean = user_phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
-                        user_phone_without_country = user_phone_clean.lstrip('961')
-                        
+
+                        user_phone_clean = (
+                            user_phone.replace("+", "")
+                            .replace("-", "")
+                            .replace(" ", "")
+                            .replace("(", "")
+                            .replace(")", "")
+                        )
+                        user_phone_without_country = user_phone_clean.lstrip("961")
+
                         print(f"   Checking config user_id={user_id}:")
                         print(f"     phone: {user_phone}")
                         print(f"     cleaned: {user_phone_clean}")
-                        
+
                         # Try matching with multiple variations
                         config_match_pairs = [
                             (user_phone_clean, phone_clean),
@@ -759,32 +712,26 @@ async def send_test_message(request_data: Dict[str, Any]):
                             (user_phone, phone_number),
                             (user_phone_without_country, phone_without_country),
                         ]
-                        
+
                         if any(stored == inputted for stored, inputted in config_match_pairs if stored and inputted):
                             room_id = user_id
                             found_match = True
                             print(f"     ✅ MATCH FOUND in config! room_id = {room_id}")
                             break
-                
+
                 if not room_id:
                     return {
                         "success": False,
-                        "error": f"Phone number {phone_number} not found. Make sure customer has an active conversation."
+                        "error": f"Phone number {phone_number} not found. Make sure customer has an active conversation.",
                     }
             else:
-                return {
-                    "success": False,
-                    "error": "Database connection failed"
-                }
+                return {"success": False, "error": "Database connection failed"}
 
             # Now send the message using Qiscus adapter with the room_id
             from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-            
+
             adapter = WhatsAppFactory.get_adapter()
-            result = await adapter.send_text_message(
-                to_number=room_id,
-                message=message
-            )
+            result = await adapter.send_text_message(to_number=room_id, message=message)
 
             if result.get("dry_run"):
                 print(f"📋 [DRY-RUN] Test message would be sent to {phone_number} (room {room_id})")
@@ -793,7 +740,7 @@ async def send_test_message(request_data: Dict[str, Any]):
                     "message": f"Dry-run: message not sent (local/sandbox mode). Would send to {phone_number}.",
                     "phone_number": phone_number,
                     "room_id": room_id,
-                    "dry_run": True
+                    "dry_run": True,
                 }
             if result.get("success"):
                 print(f"✅ Test message sent successfully to {phone_number} (room {room_id})")
@@ -806,10 +753,7 @@ async def send_test_message(request_data: Dict[str, Any]):
                     conversation_id=None,
                     user_name="Customer",
                     phone_number=phone_number,
-                    metadata={
-                        "source": "smart_message",
-                        "type": template_id or "test_message"
-                    }
+                    metadata={"source": "smart_message", "type": template_id or "test_message"},
                 )
                 print(f"💾 Saved test message to conversation history for {phone_number}")
 
@@ -819,79 +763,74 @@ async def send_test_message(request_data: Dict[str, Any]):
                     "phone_number": phone_number,
                     "room_id": room_id,
                     "template_id": template_id,
-                    "language": language
+                    "language": language,
                 }
             else:
                 error_msg = result.get("error", "Unknown error")
                 print(f"❌ Failed to send test message to {phone_number} - {error_msg}")
-                return {
-                    "success": False,
-                    "error": f"Failed to send message: {error_msg}"
-                }
+                return {"success": False, "error": f"Failed to send message: {error_msg}"}
 
         except Exception as lookup_error:
             print(f"❌ Error looking up room or sending message: {lookup_error}")
             import traceback
+
             traceback.print_exc()
-            return {
-                "success": False,
-                "error": f"Error: {str(lookup_error)}"
-            }
+            return {"success": False, "error": f"Error: {str(lookup_error)}"}
 
     except Exception as e:
         print(f"❌ Error sending test message: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": f"Failed to send test message: {str(e)}"
-        }
+        return {"success": False, "error": f"Failed to send test message: {str(e)}"}
 
 
 @app.get("/api/smart-messaging/status")
-async def get_scheduler_status():
+async def get_scheduler_status() -> Any:
     """Get the current status of the Smart Messaging Scheduler"""
     try:
         from modules.core import app as fastapi_app
         from services.smart_messaging import smart_messaging
-        
+
         # Check if scheduler is running
         scheduler_running = False
         scheduled_jobs = []
-        
-        if hasattr(fastapi_app.state, 'scheduler'):
+
+        if hasattr(fastapi_app.state, "scheduler"):
             scheduler = fastapi_app.state.scheduler
             scheduler_running = scheduler.running
-            
+
             # Get all scheduled jobs
             for job in scheduler.get_jobs():
-                scheduled_jobs.append({
-                    "id": job.id,
-                    "name": job.name,
-                    "next_run_time": str(job.next_run_time) if job.next_run_time else None,
-                    "trigger": str(job.trigger)
-                })
-        
+                scheduled_jobs.append(
+                    {
+                        "id": job.id,
+                        "name": job.name,
+                        "next_run_time": str(job.next_run_time) if job.next_run_time else None,
+                        "trigger": str(job.trigger),
+                    }
+                )
+
         # Get statistics from smart_messaging service
-        statistics = {
+        statistics: dict[str, Any] = {
             "total_scheduled": len(smart_messaging.scheduled_messages),
             "total_sent": len(smart_messaging.sent_messages_log),
-            "by_type": {}
+            "by_type": {},
         }
-        
+
         # Count by message type
-        for msg_id, msg_data in smart_messaging.scheduled_messages.items():
+        for _msg_id, msg_data in smart_messaging.scheduled_messages.items():
             msg_type = normalize_template_id(msg_data.get("message_type", "unknown"))
             if msg_type in DEPRECATED_TEMPLATE_IDS:
                 continue
             if msg_type not in statistics["by_type"]:
                 statistics["by_type"][msg_type] = {"scheduled": 0, "sent": 0}
-            
+
             if msg_data.get("status") in ["scheduled", "pending_approval", "sending"]:
                 statistics["by_type"][msg_type]["scheduled"] += 1
             elif msg_data.get("status") in ("sent", "would_send"):
                 statistics["by_type"][msg_type]["sent"] += 1
-        
+
         # Add sent messages statistics
         for sent_msg in smart_messaging.sent_messages_log:
             msg_type = normalize_template_id(sent_msg.get("type", "unknown"))
@@ -900,42 +839,50 @@ async def get_scheduler_status():
             if msg_type not in statistics["by_type"]:
                 statistics["by_type"][msg_type] = {"scheduled": 0, "sent": 0}
             statistics["by_type"][msg_type]["sent"] += 1
-        
+
         return {
             "success": True,
             "scheduler_running": scheduler_running,
             "scheduled_jobs": scheduled_jobs,
             "statistics": statistics,
-            "last_check": datetime.now().isoformat()
+            "last_check": datetime.now().isoformat(),
         }
-        
+
     except Exception as e:
         print(f"❌ Error getting scheduler status: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
-def _apply_count_date_filter(msg_type: str, send_date_str, apt_date, send_at, now, today_str,
-                             yesterday_str, start_of_month_str, start_of_next_month_str,
-                             past_24h, next_24h) -> bool:
+def _apply_count_date_filter(
+    msg_type: str,
+    send_date_str: Any,
+    apt_date: Any,
+    send_at: Any,
+    now: Any,
+    today_str: Any,
+    yesterday_str: Any,
+    start_of_month_str: Any,
+    start_of_next_month_str: Any,
+    past_24h: Any,
+    next_24h: Any,
+) -> bool:
     """Apply same date filtering as frontend for a message."""
     if msg_type == "reminder_24h":
         if send_at:
-            return past_24h <= send_at <= next_24h
+            return bool(past_24h <= send_at <= next_24h)
         return True
     if msg_type == "thank_you_message_sent_after_session":
         return (send_date_str or "") == today_str or not send_date_str
     if msg_type == "session_feedback":
         return (send_date_str or "") == today_str or not send_date_str
     if msg_type == "missed_yesterday":
-        return apt_date == yesterday_str or send_date_str == yesterday_str
+        return cast(bool, apt_date == yesterday_str or send_date_str == yesterday_str)
     if msg_type == "sent_17_days_after_last_session_new":
         if send_date_str:
-            return start_of_month_str <= send_date_str < start_of_next_month_str
+            return bool(start_of_month_str <= send_date_str < start_of_next_month_str)
         return False
     if msg_type in ("sent_for_pause", "whatsapp_lead_no_booking"):
         return True
@@ -943,7 +890,7 @@ def _apply_count_date_filter(msg_type: str, send_date_str, apt_date, send_at, no
 
 
 @app.get("/api/smart-messaging/counts")
-async def get_message_counts():
+async def get_message_counts() -> Any:
     """
     Get counts for each message type. Source of truth: API-only (smart_messaging_customers_service).
     Counts = number of customers in each category; never negative. If API fails, fallback to 0.
@@ -954,23 +901,26 @@ async def get_message_counts():
         data = await get_all_counts_and_customers()
         counts = data.get("counts", {})
         # Ensure no negative and all keys present
-        for key in ("reminder_24h", "thank_you_message_sent_after_session", "session_feedback",
-                    "sent_17_days_after_last_session_new", "missed_yesterday", "sent_for_pause",
-                    "whatsapp_lead_no_booking"):
+        for key in (
+            "reminder_24h",
+            "thank_you_message_sent_after_session",
+            "session_feedback",
+            "sent_17_days_after_last_session_new",
+            "missed_yesterday",
+            "sent_for_pause",
+            "whatsapp_lead_no_booking",
+        ):
             if key not in counts:
                 counts[key] = 0
             counts[key] = max(0, int(counts[key]))
         total = max(0, sum(counts.values()))
-        return {
-            "success": True,
-            "counts": counts,
-            "total": total
-        }
+        return {"success": True, "counts": counts, "total": total}
     except Exception as e:
         print(f"Error getting message counts: {e}")
         import traceback
+
         traceback.print_exc()
-        counts = {
+        fallback_counts: dict[str, Any] = {
             "reminder_24h": 0,
             "thank_you_message_sent_after_session": 0,
             "session_feedback": 0,
@@ -979,15 +929,11 @@ async def get_message_counts():
             "sent_for_pause": 0,
             "whatsapp_lead_no_booking": 0,
         }
-        return {
-            "success": True,
-            "counts": counts,
-            "total": 0
-        }
+        return {"success": True, "counts": fallback_counts, "total": 0}
 
 
 @app.get("/api/smart-messaging/customers-by-category")
-async def get_customers_by_category(category: str):
+async def get_customers_by_category(category: str) -> Any:
     """
     Get the list of customers for a given category (source of truth from APIs).
     Returns: { success, category, count, customers: [ { customer_name, phone, appointment_id, status, type, reason, date, time, details, action_state } ] }
@@ -998,36 +944,21 @@ async def get_customers_by_category(category: str):
 
         canonical = normalize_template_id(category) if category else ""
         if not canonical or canonical in ("sent_for_pause", "whatsapp_lead_no_booking"):
-            return {
-                "success": True,
-                "category": canonical or category,
-                "count": 0,
-                "customers": []
-            }
+            return {"success": True, "category": canonical or category, "count": 0, "customers": []}
         customers = await fetch_customers(canonical)
         customers = list(customers) if customers else []
         count = max(0, len(customers))
-        return {
-            "success": True,
-            "category": canonical,
-            "count": count,
-            "customers": customers
-        }
+        return {"success": True, "category": canonical, "count": count, "customers": customers}
     except Exception as e:
         print(f"Error getting customers by category: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e),
-            "category": category or "",
-            "count": 0,
-            "customers": []
-        }
+        return {"success": False, "error": str(e), "category": category or "", "count": 0, "customers": []}
 
 
 @app.get("/api/smart-messaging/messages")
-async def get_messages_detail(status: str = "all", message_type: str = None):
+async def get_messages_detail(status: str = "all", message_type: str | None = None) -> Any:
     """
     Get detailed message information from in-memory scheduled messages.
 
@@ -1039,8 +970,9 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
         List of scheduled/sent messages with customer info and content preview
     """
     try:
-        from services.smart_messaging import smart_messaging
         from datetime import datetime as dt
+
+        from services.smart_messaging import smart_messaging
 
         messages = []
         seen_message_ids = set()  # Track message IDs to avoid duplicates
@@ -1084,29 +1016,30 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
             # Use edited content if present, otherwise render from template
             content_preview = msg_data.get("content")
             if not content_preview:
-                content_preview = smart_messaging.get_message_content(
-                    msg_type,
-                    language,
-                    placeholders
-                ) or ""
+                content_preview = smart_messaging.get_message_content(msg_type, language, placeholders) or ""
 
-            message_entry = {
-                "message_id": message_id,
-                "customer_phone": msg_data.get("customer_phone", ""),
-                "customer_name": customer_name,
-                "message_type": msg_type,
-                "language": language,
-                "status": msg_status,  # Use actual status (scheduled/sent/pending_approval)
-                "reason": message_type_names.get(msg_type, msg_type),
-                "scheduled_for": msg_data.get("send_at").isoformat() if msg_data.get("send_at") else None,
-                "send_at": msg_data.get("send_at").isoformat() if msg_data.get("send_at") else None,
-                "sent_at": msg_data.get("sent_at").isoformat() if msg_data.get("sent_at") else None,
-                "created_at": msg_data.get("created_at").isoformat() if msg_data.get("created_at") else None,
-                "template_data": placeholders,
-                "content_preview": content_preview[:100] + "..." if len(content_preview) > 100 else content_preview,
-                "full_content": content_preview,
-                "time_until_send": str(msg_data.get("send_at") - dt.now()) if msg_data.get("send_at") and msg_status == "scheduled" else None
-            }
+                send_at_val = msg_data.get("send_at")
+                sent_at_val = msg_data.get("sent_at")
+                created_at_val = msg_data.get("created_at")
+                message_entry = {
+                    "message_id": message_id,
+                    "customer_phone": msg_data.get("customer_phone", ""),
+                    "customer_name": customer_name,
+                    "message_type": msg_type,
+                    "language": language,
+                    "status": msg_status,  # Use actual status (scheduled/sent/pending_approval)
+                    "reason": message_type_names.get(msg_type, msg_type),
+                    "scheduled_for": send_at_val.isoformat() if send_at_val is not None else None,
+                    "send_at": send_at_val.isoformat() if send_at_val is not None else None,
+                    "sent_at": sent_at_val.isoformat() if sent_at_val is not None else None,
+                    "created_at": created_at_val.isoformat() if created_at_val is not None else None,
+                    "template_data": placeholders,
+                    "content_preview": content_preview[:100] + "..." if len(content_preview) > 100 else content_preview,
+                    "full_content": content_preview,
+                    "time_until_send": str(send_at_val - dt.now())
+                    if send_at_val is not None and msg_status == "scheduled"
+                    else None,
+                }
 
             messages.append(message_entry)
             seen_message_ids.add(message_id)
@@ -1116,109 +1049,91 @@ async def get_messages_detail(status: str = "all", message_type: str = None):
         # No need for separate sent_messages_log lookup
 
         # Sort by date (newest first)
-        messages.sort(
-            key=lambda x: x.get("sent_at") or x.get("send_at") or "9999",
-            reverse=True
-        )
+        messages.sort(key=lambda x: x.get("sent_at") or x.get("send_at") or "9999", reverse=True)
 
-        return {
-            "success": True,
-            "status_filter": status,
-            "total_messages": len(messages),
-            "messages": messages
-        }
+        return {"success": True, "status_filter": status, "total_messages": len(messages), "messages": messages}
 
     except Exception as e:
         print(f"❌ Error getting messages detail: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/collect-scheduled")
-async def collect_scheduled_messages():
+async def collect_scheduled_messages() -> Any:
     """
     Collect all future appointments and generate to-be-sent messages log.
     This scans all customers and their appointments to identify which messages
     should be sent in the future (24h reminders, next-day check-ins, etc.)
-    
+
     Returns: List of messages to be sent with send times
     """
     try:
         from services.scheduled_messages_collector import scheduled_messages_collector
-        
+
         # Collect all scheduled messages
         messages_to_send = await scheduled_messages_collector.collect_all_scheduled_messages()
-        
+
         return {
             "success": True,
             "message": f"Collected {len(messages_to_send)} messages to be sent",
             "total_messages": len(messages_to_send),
-            "messages_to_send": messages_to_send
+            "messages_to_send": messages_to_send,
         }
-        
+
     except Exception as e:
         print(f"❌ Error collecting scheduled messages: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/smart-messaging/scheduled-log")
-async def get_scheduled_messages_log():
+async def get_scheduled_messages_log() -> Any:
     """
     Get the to-be-sent messages log from file.
     Contains all future appointments that will have messages sent.
-    
+
     Query params:
     - status: "pending" | "sent" | "failed" | "all" (default: "all")
     """
     try:
         from services.scheduled_messages_collector import scheduled_messages_collector
-        
+
         # Get query parameter
         status = "all"  # Default
-        
+
         messages = scheduled_messages_collector.load_or_create_log()
-        
+
         # Filter by status if specified
         if status != "all":
-            messages = [m for m in messages if m.get('status') == status]
-        
+            messages = [m for m in messages if m.get("status") == status]
+
         # Count by status
-        pending_count = len([m for m in messages if m.get('status') == 'pending'])
-        sent_count = len([m for m in messages if m.get('status') == 'sent'])
-        failed_count = len([m for m in messages if m.get('status') == 'failed'])
-        
+        pending_count = len([m for m in messages if m.get("status") == "pending"])
+        sent_count = len([m for m in messages if m.get("status") == "sent"])
+        failed_count = len([m for m in messages if m.get("status") == "failed"])
+
         return {
             "success": True,
             "total_messages": len(messages),
-            "statistics": {
-                "pending": pending_count,
-                "sent": sent_count,
-                "failed": failed_count
-            },
-            "messages": messages
+            "statistics": {"pending": pending_count, "sent": sent_count, "failed": failed_count},
+            "messages": messages,
         }
-        
+
     except Exception as e:
         print(f"❌ Error getting scheduled messages log: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/smart-messaging/pending-messages")
-async def get_pending_messages():
+async def get_pending_messages() -> Any:
     """
     Get all messages that are pending and should be sent NOW or soon.
     These are messages with:
@@ -1230,47 +1145,38 @@ async def get_pending_messages():
     try:
         from services.scheduled_messages_collector import scheduled_messages_collector
 
-
         messages = scheduled_messages_collector.get_pending_messages()
 
-        return {
-            "success": True,
-            "pending_count": len(messages),
-            "messages": messages
-        }
+        return {"success": True, "pending_count": len(messages), "messages": messages}
 
     except Exception as e:
         print(f"❌ Error getting pending messages: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 # ==========================================
 # SMART MESSAGING SETTINGS & PREVIEW QUEUE
 # ==========================================
 
+
 @app.get("/api/smart-messaging/settings")
-async def get_smart_messaging_settings():
+async def get_smart_messaging_settings() -> Any:
     """Get smart messaging settings including global enabled state"""
     try:
         from services.message_preview_service import message_preview_service
 
         settings = message_preview_service.get_settings()
-        return {
-            "success": True,
-            "settings": settings
-        }
+        return {"success": True, "settings": settings}
     except Exception as e:
         print(f"Error getting smart messaging settings: {e}")
         return {"success": False, "error": str(e)}
 
 
 @app.get("/api/smart-messaging/template-header-status")
-async def smart_messaging_template_header_status():
+async def smart_messaging_template_header_status() -> Any:
     """
     Debug why template sends say "no header image URL": shows which sources are set on this server.
     Open in browser or curl while logged into the dashboard API.
@@ -1285,7 +1191,7 @@ async def smart_messaging_template_header_status():
 
 
 @app.post("/api/smart-messaging/settings")
-async def update_smart_messaging_settings(body: Dict[str, Any] = Body(...)):
+async def update_smart_messaging_settings(body: dict[str, Any] = Body(...)) -> Any:
     """Update smart messaging settings (JSON body merged into smartMessaging)."""
     try:
         from services.message_preview_service import message_preview_service
@@ -1298,15 +1204,15 @@ async def update_smart_messaging_settings(body: Dict[str, Any] = Body(...)):
 
 
 @app.post("/api/smart-messaging/toggle")
-async def toggle_smart_messaging(request_data: Dict[str, Any]):
+async def toggle_smart_messaging(request_data: dict[str, Any]) -> Any:
     """Toggle smart messaging on/off globally"""
     try:
         from services.message_preview_service import message_preview_service
 
-        enabled = request_data.get('enabled', True)
+        enabled = request_data.get("enabled", True)
         result = message_preview_service.toggle_smart_messaging(enabled)
 
-        if result.get('success'):
+        if result.get("success"):
             status_text = "enabled" if enabled else "disabled"
             print(f"Smart Messaging {status_text} via API")
 
@@ -1320,8 +1226,9 @@ async def toggle_smart_messaging(request_data: Dict[str, Any]):
 # TEMPLATE SCHEDULE SETTINGS
 # ==========================================
 
+
 @app.get("/api/smart-messaging/post-session-feedback-ratings")
-async def get_post_session_feedback_ratings_api(limit: int = 200):
+async def get_post_session_feedback_ratings_api(limit: int = 200) -> Any:
     """Logged 1–5 star replies after Post Session Feedback template (analytics JSONL)."""
     from services.analytics_events import analytics
 
@@ -1330,7 +1237,7 @@ async def get_post_session_feedback_ratings_api(limit: int = 200):
 
 
 @app.get("/api/smart-messaging/template-schedules")
-async def get_template_schedules():
+async def get_template_schedules() -> Any:
     """Get per-template daily schedule settings."""
     try:
         schedules = template_schedule_service.get_all_schedules()
@@ -1354,7 +1261,7 @@ async def get_template_schedules():
 
 
 @app.post("/api/smart-messaging/template-schedules/{template_id}")
-async def update_template_schedule(template_id: str, request_data: Dict[str, Any]):
+async def update_template_schedule(template_id: str, request_data: dict[str, Any]) -> Any:
     """Update enable/time/timezone for a template's daily schedule."""
     try:
         canonical_id = normalize_template_id(template_id)
@@ -1373,10 +1280,11 @@ async def update_template_schedule(template_id: str, request_data: Dict[str, Any
 # CAMPAIGN BUILDER (MISSED PAUSED APPOINTMENT)
 # ==========================================
 
+
 @app.post("/api/smart-messaging/campaigns/missed-paused/preview")
 async def preview_missed_paused_campaign(
-    request_data: Dict[str, Any] = Body(default_factory=dict),
-):
+    request_data: dict[str, Any] = Body(default_factory=dict),
+) -> Any:
     """Preview recipients for Missed This Month campaign (BOC paused appointments; Meta template sent_for_pause)."""
     try:
         result = await missed_paused_campaign_service.preview(request_data or {})
@@ -1392,12 +1300,13 @@ async def preview_missed_paused_campaign(
     except Exception as e:
         print(f"Error previewing missed paused campaign: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/campaigns/missed-paused/send")
-async def send_missed_paused_campaign(request_data: Dict[str, Any]):
+async def send_missed_paused_campaign(request_data: dict[str, Any]) -> Any:
     """Send Missed This Month (paused BOC) campaign; WhatsApp uses Meta template sent_for_pause (per-recipient language)."""
     try:
         filters = request_data.get("filters", {}) if isinstance(request_data, dict) else {}
@@ -1415,14 +1324,15 @@ async def send_missed_paused_campaign(request_data: Dict[str, Any]):
     except Exception as e:
         print(f"Error sending missed paused campaign: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/preview")
 async def preview_whatsapp_leads_no_crm_campaign(
-    request_data: Dict[str, Any] = Body(default_factory=dict),
-):
+    request_data: dict[str, Any] = Body(default_factory=dict),
+) -> Any:
     """Preview: Firestore-chatted users with no BOC customer file and no appointments (optional chat text service filter)."""
     try:
         result = await chatted_no_crm_lead_campaign_service.preview(request_data or {})
@@ -1430,14 +1340,15 @@ async def preview_whatsapp_leads_no_crm_campaign(
     except Exception as e:
         print(f"Error previewing whatsapp leads no-crm campaign: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/campaigns/whatsapp-leads-no-crm/send")
 async def send_whatsapp_leads_no_crm_campaign(
-    request_data: Dict[str, Any] = Body(default_factory=dict),
-):
+    request_data: dict[str, Any] = Body(default_factory=dict),
+) -> Any:
     """Send or schedule WhatsApp lead campaign — manual only; per-recipient language from saved prefs / Firestore."""
     try:
         filters = request_data.get("filters", {}) if isinstance(request_data, dict) else {}
@@ -1454,12 +1365,13 @@ async def send_whatsapp_leads_no_crm_campaign(
     except Exception as e:
         print(f"Error sending whatsapp leads no-crm campaign: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.get("/api/smart-messaging/campaign-logs")
-async def get_campaign_logs(limit: int = 50):
+async def get_campaign_logs(limit: int = 50) -> Any:
     """Get recent campaign logs."""
     try:
         logs = message_logs_service.get_campaign_logs(limit=limit)
@@ -1477,8 +1389,9 @@ async def get_campaign_logs(limit: int = 50):
 # SERVICE-TEMPLATE MAPPING ENDPOINTS
 # ==========================================
 
+
 @app.get("/api/smart-messaging/service-mappings")
-async def get_service_template_mappings():
+async def get_service_template_mappings() -> Any:
     """Get all service-to-template mappings"""
     try:
         from services.service_template_mapping_service import service_template_mapping_service
@@ -1491,18 +1404,16 @@ async def get_service_template_mappings():
 
 
 @app.post("/api/smart-messaging/service-mappings/{service_id}")
-async def update_service_template_mapping(service_id: int, mapping_data: Dict[str, Any]):
+async def update_service_template_mapping(service_id: int, mapping_data: dict[str, Any]) -> Any:
     """Update template mapping for a specific service"""
     try:
         from services.service_template_mapping_service import service_template_mapping_service
 
-        templates = mapping_data.get('templates', {})
-        service_name = mapping_data.get('service_name')
+        templates = mapping_data.get("templates", {})
+        service_name = mapping_data.get("service_name")
 
         result = service_template_mapping_service.update_mapping(
-            service_id=service_id,
-            templates=templates,
-            service_name=service_name
+            service_id=service_id, templates=templates, service_name=service_name
         )
         return result
     except Exception as e:
@@ -1511,7 +1422,7 @@ async def update_service_template_mapping(service_id: int, mapping_data: Dict[st
 
 
 @app.get("/api/smart-messaging/services")
-async def get_available_services():
+async def get_available_services() -> Any:
     """Get list of all clinic services for mapping UI"""
     try:
         from services.service_template_mapping_service import service_template_mapping_service
@@ -1519,11 +1430,7 @@ async def get_available_services():
         services = service_template_mapping_service.get_available_services()
         templates = service_template_mapping_service.get_available_templates()
 
-        return {
-            "success": True,
-            "services": services,
-            "templates": templates
-        }
+        return {"success": True, "services": services, "templates": templates}
     except Exception as e:
         print(f"Error getting services: {e}")
         return {"success": False, "error": str(e)}
@@ -1533,33 +1440,28 @@ async def get_available_services():
 # PREVIEW QUEUE ENDPOINTS
 # ==========================================
 
+
 @app.get("/api/smart-messaging/preview-queue/{message_id}")
-async def get_preview_message_details(message_id: str):
+async def get_preview_message_details(message_id: str) -> Any:
     """Get full details of a single message from the preview queue"""
     try:
         from services.message_preview_service import message_preview_service
 
         # Get all messages and find the one we need
-        all_messages = message_preview_service.get_pending_messages(status=None)
+        all_messages = message_preview_service.get_pending_messages(status="pending_approval")
 
         for msg in all_messages:
             if msg.get("message_id") == message_id:
-                return {
-                    "success": True,
-                    "message": msg
-                }
+                return {"success": True, "message": msg}
 
-        return {
-            "success": False,
-            "error": "Message not found"
-        }
+        return {"success": False, "error": "Message not found"}
     except Exception as e:
         print(f"Error getting message details: {e}")
         return {"success": False, "error": str(e)}
 
 
 @app.get("/api/smart-messaging/preview-queue")
-async def get_preview_queue(status: str = "pending_approval"):
+async def get_preview_queue(status: str | None = "pending_approval") -> Any:
     """
     Get messages pending approval with full details.
 
@@ -1587,17 +1489,18 @@ async def get_preview_queue(status: str = "pending_approval"):
             "status_filter": status or "all",
             "total": len(messages),
             "statistics": stats,
-            "messages": messages
+            "messages": messages,
         }
     except Exception as e:
         print(f"Error getting preview queue: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/preview-queue/{message_id}/approve")
-async def approve_preview_message(message_id: str):
+async def approve_preview_message(message_id: str) -> Any:
     """Approve a single message for sending"""
     try:
         from services.message_preview_service import message_preview_service
@@ -1610,12 +1513,12 @@ async def approve_preview_message(message_id: str):
 
 
 @app.post("/api/smart-messaging/preview-queue/{message_id}/reject")
-async def reject_preview_message(message_id: str, request_data: Dict[str, Any] = None):
+async def reject_preview_message(message_id: str, request_data: dict[str, Any] | None = None) -> Any:
     """Reject/delete a message from the queue"""
     try:
         from services.message_preview_service import message_preview_service
 
-        reason = request_data.get('reason') if request_data else None
+        reason = request_data.get("reason") if request_data else None
         result = message_preview_service.reject_message(message_id, reason)
         return result
     except Exception as e:
@@ -1624,7 +1527,7 @@ async def reject_preview_message(message_id: str, request_data: Dict[str, Any] =
 
 
 @app.post("/api/smart-messaging/preview-queue/{message_id}/edit")
-async def edit_preview_message(message_id: str, request_data: Dict[str, Any]):
+async def edit_preview_message(message_id: str, request_data: dict[str, Any]) -> Any:
     """Edit message content before sending"""
     try:
         from services.message_preview_service import message_preview_service
@@ -1633,7 +1536,7 @@ async def edit_preview_message(message_id: str, request_data: Dict[str, Any]):
         # First try to edit in preview queue
         result = message_preview_service.edit_message(message_id, request_data)
 
-        if result.get('success'):
+        if result.get("success"):
             return result
 
         # If not found in preview queue, try to edit in smart_messaging scheduled messages
@@ -1641,40 +1544,38 @@ async def edit_preview_message(message_id: str, request_data: Dict[str, Any]):
             msg = smart_messaging.scheduled_messages[message_id]
 
             # Update the message content if provided
-            if 'rendered_content' in request_data:
-                msg['content'] = request_data['rendered_content']
+            if "rendered_content" in request_data:
+                msg["content"] = request_data["rendered_content"]
 
             # Update scheduled send time if provided
-            if 'scheduled_send_time' in request_data:
+            if "scheduled_send_time" in request_data:
                 from datetime import datetime
+
                 try:
-                    new_time = datetime.fromisoformat(request_data['scheduled_send_time'].replace('Z', '+00:00'))
-                    msg['send_at'] = new_time
-                except:
+                    new_time = datetime.fromisoformat(request_data["scheduled_send_time"].replace("Z", "+00:00"))
+                    msg["send_at"] = new_time
+                except Exception:
                     pass
 
             smart_messaging.scheduled_messages[message_id] = msg
-            return {
-                "success": True,
-                "message": "Scheduled message updated successfully",
-                "message_id": message_id
-            }
+            return {"success": True, "message": "Scheduled message updated successfully", "message_id": message_id}
 
         return {"success": False, "error": "Message not found in any queue"}
     except Exception as e:
         print(f"Error editing message: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/preview-queue/batch-approve")
-async def batch_approve_messages(request_data: Dict[str, Any]):
+async def batch_approve_messages(request_data: dict[str, Any]) -> Any:
     """Approve multiple messages at once"""
     try:
         from services.message_preview_service import message_preview_service
 
-        message_ids = request_data.get('message_ids', [])
+        message_ids = request_data.get("message_ids", [])
         if not message_ids:
             return {"success": False, "error": "No message IDs provided"}
 
@@ -1686,13 +1587,13 @@ async def batch_approve_messages(request_data: Dict[str, Any]):
 
 
 @app.post("/api/smart-messaging/preview-queue/batch-reject")
-async def batch_reject_messages(request_data: Dict[str, Any]):
+async def batch_reject_messages(request_data: dict[str, Any]) -> Any:
     """Reject multiple messages at once"""
     try:
         from services.message_preview_service import message_preview_service
 
-        message_ids = request_data.get('message_ids', [])
-        reason = request_data.get('reason')
+        message_ids = request_data.get("message_ids", [])
+        reason = request_data.get("reason")
 
         if not message_ids:
             return {"success": False, "error": "No message IDs provided"}
@@ -1705,7 +1606,7 @@ async def batch_reject_messages(request_data: Dict[str, Any]):
 
 
 @app.post("/api/smart-messaging/validate")
-async def validate_message(request_data: Dict[str, Any]):
+async def validate_message(request_data: dict[str, Any]) -> Any:
     """
     Validate a message before queueing.
     Checks phone format, required variables, and message length.
@@ -1714,17 +1615,14 @@ async def validate_message(request_data: Dict[str, Any]):
         from services.message_preview_service import message_preview_service
 
         result = message_preview_service.validate_message(request_data)
-        return {
-            "success": True,
-            "validation": result
-        }
+        return {"success": True, "validation": result}
     except Exception as e:
         print(f"Error validating message: {e}")
         return {"success": False, "error": str(e)}
 
 
 @app.post("/api/smart-messaging/preview-queue/add")
-async def add_to_preview_queue(request_data: Dict[str, Any]):
+async def add_to_preview_queue(request_data: dict[str, Any]) -> Any:
     """
     Add a message to the preview queue.
     Used for testing or manual message addition.
@@ -1740,16 +1638,13 @@ async def add_to_preview_queue(request_data: Dict[str, Any]):
 
 
 @app.get("/api/smart-messaging/preview-queue/stats")
-async def get_preview_queue_stats():
+async def get_preview_queue_stats() -> Any:
     """Get statistics about the preview queue"""
     try:
         from services.message_preview_service import message_preview_service
 
         stats = message_preview_service.get_queue_stats()
-        return {
-            "success": True,
-            "statistics": stats
-        }
+        return {"success": True, "statistics": stats}
     except Exception as e:
         print(f"Error getting queue stats: {e}")
         return {"success": False, "error": str(e)}

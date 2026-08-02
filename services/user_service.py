@@ -3,14 +3,18 @@ User Service for Dashboard Authentication
 Handles Firestore operations for dashboard users with bcrypt password hashing
 """
 
+from __future__ import annotations
+
 import os
 import threading
 import time
 import uuid
-import bcrypt
 from datetime import datetime
-from typing import Optional, Dict, List, Any
+from typing import Any, cast
+
+import bcrypt
 from google.cloud.firestore_v1.base_query import FieldFilter
+
 from utils.utils import get_firestore_db
 
 
@@ -24,27 +28,28 @@ class UserService:
     COLLECTION = "artifacts/linas-ai-bot-backend/dashboard_users"
     AUTH_QUERY_TIMEOUT_SECONDS = float(os.getenv("AUTH_QUERY_TIMEOUT_SECONDS", "6"))
     AUTH_WRITE_TIMEOUT_SECONDS = float(os.getenv("AUTH_WRITE_TIMEOUT_SECONDS", "5"))
-    AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS = int(
-        os.getenv("AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS", "21600")
-    )
+    AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS = int(os.getenv("AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS", "21600"))
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._db = None
-        self._last_lastlogin_write_at: Dict[str, float] = {}
+        self._last_lastlogin_write_at: dict[str, float] = {}
 
     @property
-    def db(self):
+    def db(self) -> Any:
         """Lazy-load Firestore database connection"""
         if self._db is None:
             t0 = time.monotonic()
-            print(f"[auth:user_service] db property: first access, calling get_firestore_db t=0.00s", flush=True)
+            print("[auth:user_service] db property: first access, calling get_firestore_db t=0.00s", flush=True)
             self._db = get_firestore_db()
             elapsed = time.monotonic() - t0
-            print(f"[auth:user_service] db property: get_firestore_db returned in {elapsed:.3f}s (db is None: {self._db is None})", flush=True)
+            print(
+                f"[auth:user_service] db property: get_firestore_db returned in {elapsed:.3f}s (db is None: {self._db is None})",
+                flush=True,
+            )
         return self._db
 
     @property
-    def collection(self):
+    def collection(self) -> Any:
         """Get the dashboard_users collection reference"""
         t0 = time.monotonic()
         if not self.db:
@@ -62,14 +67,14 @@ class UserService:
     def _hash_password(self, password: str) -> str:
         """Hash a password using bcrypt"""
         salt = bcrypt.gensalt(rounds=12)
-        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
     def _verify_password(self, password: str, hashed: str) -> bool:
         """Verify a password against its bcrypt hash"""
         t0 = time.monotonic()
-        print(f"[auth:_verify_password] entry t=0.00s", flush=True)
+        print("[auth:_verify_password] entry t=0.00s", flush=True)
         try:
-            result = bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+            result = bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
             elapsed = time.monotonic() - t0
             print(f"[auth:_verify_password] done in {elapsed:.3f}s", flush=True)
             return result
@@ -82,7 +87,7 @@ class UserService:
     # CRUD Operations
     # ==========================================
 
-    def create_user(self, user_data: Dict[str, Any], created_by: Optional[str] = None) -> Dict[str, Any]:
+    def create_user(self, user_data: dict[str, Any], created_by: str | None = None) -> dict[str, Any]:
         """
         Create a new dashboard user
 
@@ -94,13 +99,13 @@ class UserService:
             Created user data (without password)
         """
         # Validate required fields
-        if not user_data.get('email'):
+        if not user_data.get("email"):
             raise ValueError("Email is required")
-        if not user_data.get('password'):
+        if not user_data.get("password"):
             raise ValueError("Password is required")
 
         # Check if email already exists
-        existing = self.get_user_by_email(user_data['email'])
+        existing = self.get_user_by_email(user_data["email"])
         if existing:
             raise ValueError("Email already exists")
 
@@ -111,16 +116,17 @@ class UserService:
         # Build user document
         user_doc = {
             "id": user_id,
-            "email": user_data['email'].lower().strip(),
-            "password": self._hash_password(user_data['password']),
-            "name": user_data.get('name') or (user_data.get('email') or 'user@unknown').split('@')[0],
-            "role": user_data.get('role', 'viewer'),
-            "permissions": user_data.get('permissions'),
-            "status": user_data.get('status', 'active'),
+            "email": user_data["email"].lower().strip(),
+            "password": self._hash_password(user_data["password"]),
+            "name": user_data.get("name") or (user_data.get("email") or "user@unknown").split("@")[0],
+            "role": user_data.get("role", "viewer"),
+            "permissions": user_data.get("permissions"),
+            "status": user_data.get("status", "active"),
+            "passwordEpoch": 0,
             "lastLogin": None,
             "createdAt": now,
             "createdBy": created_by,
-            "updatedAt": now
+            "updatedAt": now,
         }
 
         # Save to Firestore
@@ -132,7 +138,7 @@ class UserService:
         print(f"Created dashboard user: {user_doc['email']} (ID: {user_id})")
 
         # Return without password
-        return self._sanitize_user(user_doc)
+        return self._sanitize_user(user_doc) or {} or {}
 
     def _is_transient_firestore_error(self, e: Exception) -> bool:
         """Check if error is transient (quota, timeout, network) and worth retrying."""
@@ -151,7 +157,7 @@ class UserService:
             )
         )
 
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
         """Get a user by email address (includes password for auth)"""
         t_start = time.monotonic()
         email_lower = (email or "").lower().strip()
@@ -163,17 +169,21 @@ class UserService:
             try:
                 # Access collection (lazy Firestore init - may block on first access)
                 t1 = time.monotonic()
-                print(f"[auth:get_user_by_email] attempt {attempt + 1}/{max_retries}, accessing self.collection t={t1 - t_start:.3f}s", flush=True)
+                print(
+                    f"[auth:get_user_by_email] attempt {attempt + 1}/{max_retries}, accessing self.collection t={t1 - t_start:.3f}s",
+                    flush=True,
+                )
                 coll = self.collection
                 print(f"[auth:get_user_by_email] collection accessed in {time.monotonic() - t1:.3f}s", flush=True)
 
                 # Firestore query - direct email lookup
-                query = coll.where(
-                    filter=FieldFilter("email", "==", email_lower)
-                ).limit(1)
+                query = coll.where(filter=FieldFilter("email", "==", email_lower)).limit(1)
 
                 t2 = time.monotonic()
-                print(f"[auth:get_user_by_email] query.stream() START t={t2 - t_start:.3f}s (FIRESTORE NETWORK OP - may block)", flush=True)
+                print(
+                    f"[auth:get_user_by_email] query.stream() START t={t2 - t_start:.3f}s (FIRESTORE NETWORK OP - may block)",
+                    flush=True,
+                )
                 docs = list(
                     query.stream(
                         timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
@@ -181,12 +191,15 @@ class UserService:
                     )
                 )
                 elapsed = time.monotonic() - t2
-                print(f"[auth:get_user_by_email] query.stream() RETURNED in {elapsed:.3f}s, doc_count={len(docs)}", flush=True)
+                print(
+                    f"[auth:get_user_by_email] query.stream() RETURNED in {elapsed:.3f}s, doc_count={len(docs)}",
+                    flush=True,
+                )
 
                 if docs:
                     result = docs[0].to_dict()
                     print(f"[auth:get_user_by_email] USER_FOUND in {time.monotonic() - t_start:.3f}s", flush=True)
-                    return result
+                    return cast(dict[str, Any] | None, result)
                 print(f"[auth:get_user_by_email] USER_NOT_FOUND in {time.monotonic() - t_start:.3f}s", flush=True)
                 return None
             except Exception as e:
@@ -206,7 +219,7 @@ class UserService:
 
         raise AuthBackendUnavailableError(str(last_exception)) from last_exception
 
-    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
         """Get a user by ID (includes password for internal use)"""
         try:
             doc = self.collection.document(user_id).get(
@@ -214,29 +227,31 @@ class UserService:
                 retry=None,
             )
             if doc.exists:
-                return doc.to_dict()
+                return cast(dict[str, Any] | None, doc.to_dict())
             return None
         except Exception as e:
             print(f"[auth:get_user_by_id] Error: {e}", flush=True)
             return None
 
-    def get_all_users(self) -> List[Dict[str, Any]]:
+    def get_all_users(self) -> list[dict[str, Any]]:
         """Get all users (without passwords)"""
         try:
             docs = self.collection.stream(
                 timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
                 retry=None,
             )
-            users = []
+            users: list[dict[str, Any]] = []
             for doc in docs:
                 user_data = doc.to_dict()
-                users.append(self._sanitize_user(user_data))
+                sanitized = self._sanitize_user(user_data)
+                if sanitized is not None:
+                    users.append(sanitized)
             return users
         except Exception as e:
             print(f"Error getting all users: {e}")
             return []
 
-    def update_user(self, user_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_user(self, user_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """
         Update a user's profile
 
@@ -253,28 +268,32 @@ class UserService:
                 raise ValueError("User not found")
 
             # Build update dict
-            update_data = {
-                "updatedAt": datetime.utcnow().isoformat()
-            }
+            update_data: dict[str, Any] = {"updatedAt": datetime.utcnow().isoformat()}
 
             # Allowed fields to update
-            allowed_fields = ['name', 'role', 'permissions', 'status']
+            allowed_fields = ["name", "role", "permissions", "status"]
             for field in allowed_fields:
                 if field in updates:
                     update_data[field] = updates[field]
 
-            # Handle password update separately (hash it)
-            if 'password' in updates and updates['password']:
-                update_data['password'] = self._hash_password(updates['password'])
+            # Handle password update separately (hash it) and bump epoch for session invalidation
+            if "password" in updates and updates["password"]:
+                update_data["password"] = self._hash_password(updates["password"])
+                update_data["passwordEpoch"] = int(user.get("passwordEpoch") or user.get("password_epoch") or 0) + 1
 
             # Check if we're demoting the last admin
-            if 'role' in updates and updates['role'] != 'admin' and user['role'] == 'admin':
+            if "role" in updates and updates["role"] != "admin" and user["role"] == "admin":
                 admin_count = self.count_active_admins()
                 if admin_count <= 1:
                     raise ValueError("Cannot demote the last admin")
 
             # Check if we're deactivating the last admin
-            if 'status' in updates and updates['status'] != 'active' and user['role'] == 'admin' and user['status'] == 'active':
+            if (
+                "status" in updates
+                and updates["status"] != "active"
+                and user["role"] == "admin"
+                and user["status"] == "active"
+            ):
                 admin_count = self.count_active_admins()
                 if admin_count <= 1:
                     raise ValueError("Cannot deactivate the last admin")
@@ -287,7 +306,9 @@ class UserService:
 
             # Get updated user
             updated_user = self.get_user_by_id(user_id)
-            return self._sanitize_user(updated_user)
+            if updated_user is None:
+                raise ValueError(f"User not found after update: {user_id}")
+            return self._sanitize_user(updated_user) or {}
 
         except ValueError:
             raise
@@ -311,7 +332,7 @@ class UserService:
                 raise ValueError("User not found")
 
             # Prevent deleting the last admin
-            if user['role'] == 'admin' and user.get('status') == 'active':
+            if user["role"] == "admin" and user.get("status") == "active":
                 admin_count = self.count_active_admins()
                 if admin_count <= 1:
                     raise ValueError("Cannot delete the last admin")
@@ -333,7 +354,7 @@ class UserService:
     # Authentication
     # ==========================================
 
-    def authenticate(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+    def authenticate(self, email: str, password: str) -> dict[str, Any] | None:
         """
         Authenticate a user with email and password.
 
@@ -360,53 +381,62 @@ class UserService:
             print(f"[auth:authenticate] 3b. USER_NOT_FOUND t={_elapsed():.3f}s", flush=True)
             return None
 
-        if user.get('status') != 'active':
+        if user.get("status") != "active":
             raise ValueError(f"Account is {user.get('status', 'inactive')}")
 
         # Step 2: Password verification (bcrypt - CPU-bound, can be slow)
         print(f"[auth:authenticate] 4. BCRYPT_VERIFY_START t={_elapsed():.3f}s", flush=True)
-        if not self._verify_password(password, user.get('password') or ''):
+        if not self._verify_password(password, user.get("password") or ""):
             print(f"[auth:authenticate] 4b. PASSWORD_FAIL t={_elapsed():.3f}s", flush=True)
             return None
         print(f"[auth:authenticate] 5. BCRYPT_VERIFY_END t={_elapsed():.3f}s", flush=True)
 
         # Auth succeeded. Set lastLogin in memory for response; Firestore update is best-effort.
         now = datetime.utcnow().isoformat()
-        user['lastLogin'] = now
+        user["lastLogin"] = now
 
         # Step 3: lastLogin Firestore update - BEST-EFFORT ONLY, must NOT block auth.
         # Throttle writes per user to reduce quota usage during repeated logins.
-        disable_lastlogin_update = str(
-            os.getenv("AUTH_DISABLE_LASTLOGIN_UPDATE", "false")
-        ).strip().lower() in {"1", "true", "yes", "on"}
+        disable_lastlogin_update = str(os.getenv("AUTH_DISABLE_LASTLOGIN_UPDATE", "false")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         now_epoch = time.time()
         last_write_at = self._last_lastlogin_write_at.get(user["id"], 0.0)
         min_interval = max(0, self.AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS)
-        should_write_lastlogin = (
-            not disable_lastlogin_update
-            and (min_interval == 0 or (now_epoch - last_write_at) >= min_interval)
+        should_write_lastlogin = not disable_lastlogin_update and (
+            min_interval == 0 or (now_epoch - last_write_at) >= min_interval
         )
 
         if should_write_lastlogin:
             self._last_lastlogin_write_at[user["id"]] = now_epoch
 
-            def _update_lastlogin_background():
+            def _update_lastlogin_background() -> None:
                 try:
                     t_start = time.monotonic()
-                    self.collection.document(user['id']).update(
+                    self.collection.document(user["id"]).update(
                         {"lastLogin": now},
                         timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
                         retry=None,
                     )
                     elapsed = time.monotonic() - t_start
                     if elapsed > 1.0:
-                        print(f"[auth:authenticate] lastLogin update completed in {elapsed:.3f}s (background)", flush=True)
+                        print(
+                            f"[auth:authenticate] lastLogin update completed in {elapsed:.3f}s (background)", flush=True
+                        )
                 except Exception as e:
-                    print(f"[auth:authenticate] lastLogin background update FAILED (auth still succeeds): {e}", flush=True)
+                    print(
+                        f"[auth:authenticate] lastLogin background update FAILED (auth still succeeds): {e}", flush=True
+                    )
 
             t = threading.Thread(target=_update_lastlogin_background, daemon=True)
             t.start()
-            print(f"[auth:authenticate] 6. lastLogin DISPATCHED (non-blocking, best-effort) t={_elapsed():.3f}s", flush=True)
+            print(
+                f"[auth:authenticate] 6. lastLogin DISPATCHED (non-blocking, best-effort) t={_elapsed():.3f}s",
+                flush=True,
+            )
         else:
             print(
                 f"[auth:authenticate] 6. lastLogin SKIPPED (disabled/throttled) t={_elapsed():.3f}s",
@@ -437,14 +467,16 @@ class UserService:
             raise ValueError("User not found")
 
         # Verify current password
-        if not self._verify_password(current_password, user['password']):
+        if not self._verify_password(current_password, user["password"]):
             raise ValueError("Current password is incorrect")
 
-        # Update password
+        # Update password and bump passwordEpoch so stale sessions fail closed
+        next_epoch = int(user.get("passwordEpoch") or user.get("password_epoch") or 0) + 1
         self.collection.document(user_id).update(
             {
                 "password": self._hash_password(new_password),
-                "updatedAt": datetime.utcnow().isoformat()
+                "passwordEpoch": next_epoch,
+                "updatedAt": datetime.utcnow().isoformat(),
             },
             timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
             retry=None,
@@ -457,47 +489,20 @@ class UserService:
     # Helpers
     # ==========================================
 
-    def ensure_default_admin(self) -> Optional[Dict[str, Any]]:
+    def ensure_default_admin(self) -> dict[str, Any] | None:
         """
-        Ensure at least one admin user exists
-        Creates default admin@lina.com if no users exist
-
-        Returns:
-            Created admin user or None if users already exist
+        Deprecated: never creates known default credentials.
+        Use scripts/provision_dashboard_admin.py (offline CLI) instead.
         """
-        try:
-            # Check if any users exist
-            docs = list(
-                self.collection.limit(1).stream(
-                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
-                    retry=None,
-                )
-            )
-
-            if len(docs) == 0:
-                print("No dashboard users found. Creating default admin...")
-                admin = self.create_user({
-                    "email": "admin@lina.com",
-                    "password": "admin123",
-                    "name": "Admin",
-                    "role": "admin",
-                    "permissions": None,
-                    "status": "active"
-                }, created_by=None)
-                print(f"Default admin created: admin@lina.com")
-                return admin
-
-            return None
-        except Exception as e:
-            print(f"Error ensuring default admin: {e}")
-            return None
+        print("[user_service] ensure_default_admin is disabled — refusing to create hardcoded admin credentials")
+        return None
 
     def count_active_admins(self) -> int:
         """Count the number of active admin users"""
         try:
-            query = self.collection.where(
-                filter=FieldFilter("role", "==", "admin")
-            ).where(filter=FieldFilter("status", "==", "active"))
+            query = self.collection.where(filter=FieldFilter("role", "==", "admin")).where(
+                filter=FieldFilter("status", "==", "active")
+            )
             docs = list(
                 query.stream(
                     timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
@@ -509,7 +514,7 @@ class UserService:
             print(f"Error counting admins: {e}")
             return 0
 
-    def _sanitize_user(self, user: Dict[str, Any]) -> Dict[str, Any]:
+    def _sanitize_user(self, user: dict[str, Any]) -> dict[str, Any] | None:
         """Remove sensitive fields (password) from user data. Fast, in-memory only."""
         if not user:
             return None
@@ -521,10 +526,11 @@ class UserService:
             "role": user.get("role"),
             "permissions": user.get("permissions"),
             "status": user.get("status"),
+            "passwordEpoch": int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
             "lastLogin": user.get("lastLogin"),
             "createdAt": user.get("createdAt"),
             "createdBy": user.get("createdBy"),
-            "updatedAt": user.get("updatedAt")
+            "updatedAt": user.get("updatedAt"),
         }
 
 

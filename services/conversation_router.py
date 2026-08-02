@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Conversation Router – AI Smart Employee Architecture
 
@@ -17,10 +16,9 @@ Priority order (Plan §4):
 9. Otherwise → fallback
 """
 
-import re
-from typing import Optional
+from __future__ import annotations
 
-import config
+import re
 
 # --- Human handover intent (meaning-based; common phrases) ---
 HUMAN_REQUEST_PATTERNS = [
@@ -38,6 +36,10 @@ HUMAN_REQUEST_PATTERNS = [
     r"واحد\s*(?:منكم|منكن)",
     r"بدي\s*حد",
     r"حابب\s*أحكي\s*مع",
+    r"بدي\s*احكي\s*مع",
+    r"بدّي\s*احكي\s*مع",
+    r"بدي\s*أحكي\s*مع",
+    r"احكي\s*مع\s*حدا",
     r"بدي\s*خدمة\s*العملاء",
     r"ما\s*بدي\s*بوت",
     r"ممكن\s*(?:حد|واحد)\s*(?:يحكي|يتكلم)",
@@ -79,11 +81,42 @@ HUMAN_REQUEST_RE = re.compile("|".join(f"({p})" for p in HUMAN_REQUEST_PATTERNS)
 
 # Simple keywords (fallback when regex misses)
 HUMAN_REQUEST_KEYWORDS = [
-    "human", "موظف", "موظفة", "حد يحكي", "بدي حد", "واحد منكم", "شخص حقيقي",
-    "agent", "representative", "employee", "person", "customer service", "service client",
-    "بدي حدا", "بدي انسان", "حوّلني", "حولني", "تحويل لموظف",
-    "bade hada", "baddi hada", "bade a7ke", "ehke ma3", "hawelni", "7awelni",
-    "ما بدي بوت", "live agent", "no bot", "not a bot", "pas de bot",
+    "human",
+    "موظف",
+    "موظفة",
+    "حد يحكي",
+    "بدي حد",
+    "واحد منكم",
+    "شخص حقيقي",
+    # Do not use bare English "person" — matches "personal care tips" falsely.
+    "representative",
+    "employee",
+    "customer service",
+    "service client",
+    "بدي حدا",
+    "بدي انسان",
+    "حوّلني",
+    "حولني",
+    "تحويل لموظف",
+    "بدي احكي مع حدا",
+    "بدّي احكي مع حدا",
+    "احكي مع حدا",
+    "مع حدا",
+    "بدي احكي مع شخص",
+    "احكي مع شخص",
+    "bade hada",
+    "baddi hada",
+    "bade a7ke",
+    "ehke ma3",
+    "hawelni",
+    "7awelni",
+    "ما بدي بوت",
+    "live agent",
+    "no bot",
+    "not a bot",
+    "pas de bot",
+    "human agent",
+    "real person",
 ]
 
 # --- Gender answer patterns ---
@@ -109,14 +142,52 @@ GREETING_RE = re.compile("|".join(f"({p})" for p in GREETING_ONLY_PATTERNS), re.
 
 # Messages that are ONLY greeting (short, no other content)
 SERVICE_PRICING_BOOKING_KEYWORDS = [
-    "سعر", "اسعار", "كم", "قديش", "أديش", "price", "cost", "pricing", "combien", "prix",
-    "ليزر", "شعر", "وشم", "تاتو", "laser", "hair", "tattoo", "حجز", "booking", "reservation",
-    "خدمة", "service", "علاج", "treatment", "جلسة", "session",
-    "موعد", "appointment", "book", "rdv", "rendez-vous",
-    "épilation", "epilation", "détatouage",
-    "whitening", "blanchiment", "co2", "dpl",
-    "sa3er", "as3ar", "2adde", "2adesh", "hajz", "7ajz",
-    "tatouage", "tarif",
+    "سعر",
+    "اسعار",
+    "كم",
+    "قديش",
+    "أديش",
+    "price",
+    "cost",
+    "pricing",
+    "combien",
+    "prix",
+    "ليزر",
+    "شعر",
+    "وشم",
+    "تاتو",
+    "laser",
+    "hair",
+    "tattoo",
+    "حجز",
+    "booking",
+    "reservation",
+    "خدمة",
+    "service",
+    "علاج",
+    "treatment",
+    "جلسة",
+    "session",
+    "موعد",
+    "appointment",
+    "book",
+    "rdv",
+    "rendez-vous",
+    "épilation",
+    "epilation",
+    "détatouage",
+    "whitening",
+    "blanchiment",
+    "co2",
+    "dpl",
+    "sa3er",
+    "as3ar",
+    "2adde",
+    "2adesh",
+    "hajz",
+    "7ajz",
+    "tatouage",
+    "tarif",
 ]
 
 # --- Vague messages that need clarification ---
@@ -150,22 +221,78 @@ VAGUE_RE = re.compile("|".join(f"({p})" for p in VAGUE_CLARIFICATION_PATTERNS), 
 
 # --- Service-related (needs gender when unknown) ---
 SERVICE_INTENT_KEYWORDS = [
-    "ليزر", "شعر", "وشم", "تاتو", "laser", "hair", "tattoo", "جلسة", "session",
-    "علاج", "treatment", "خدمة", "service", "سعر", "اسعار", "price", "pricing",
-    "إزالة", "removal", "تبييض", "whitening", "حب شباب", "acne",
-    "موعد", "appointment", "حجز", "booking", "reservation", "book",
-    "co2", "dpl", "botox", "filler", "skin",
-    "tatouage", "épilation", "epilation", "blanchiment",
-    "sa3er", "as3ar", "hajz", "mou3ed", "3elaj",
+    "ليزر",
+    "شعر",
+    "وشم",
+    "تاتو",
+    "laser",
+    "hair",
+    "tattoo",
+    "جلسة",
+    "session",
+    "علاج",
+    "treatment",
+    "خدمة",
+    "service",
+    "سعر",
+    "اسعار",
+    "price",
+    "pricing",
+    "إزالة",
+    "removal",
+    "تبييض",
+    "whitening",
+    "حب شباب",
+    "acne",
+    "موعد",
+    "appointment",
+    "حجز",
+    "booking",
+    "reservation",
+    "book",
+    "co2",
+    "dpl",
+    "botox",
+    "filler",
+    "skin",
+    "tatouage",
+    "épilation",
+    "epilation",
+    "blanchiment",
+    "sa3er",
+    "as3ar",
+    "hajz",
+    "mou3ed",
+    "3elaj",
 ]
 
 TATTOO_KEYWORDS = ["وشم", "تاتو", "tattoo", "tatouage", "tatou"]
 BOOKING_OR_PRICE_KEYWORDS = [
-    "سعر", "اسعار", "price", "pricing", "cost", "prix",
-    "حجز", "booking", "book", "reservation",
-    "موعد", "ميعاد", "appointment", "date", "time", "session", "جلسة",
-    "as3ar", "sa3er", "2adde", "2adesh", "hajz",
-    "rdv", "rendez-vous", "tarif",
+    "سعر",
+    "اسعار",
+    "price",
+    "pricing",
+    "cost",
+    "prix",
+    "حجز",
+    "booking",
+    "book",
+    "reservation",
+    "موعد",
+    "ميعاد",
+    "appointment",
+    "date",
+    "time",
+    "session",
+    "جلسة",
+    "as3ar",
+    "sa3er",
+    "2adde",
+    "2adesh",
+    "hajz",
+    "rdv",
+    "rendez-vous",
+    "tarif",
 ]
 
 
@@ -178,9 +305,14 @@ def is_human_request(message: str) -> bool:
     t = _normalize(message)
     if len(t) < 3:
         return False
+    # Personal-care / product questions containing "person" must not escalate.
+    t_lower = t.lower()
+    if re.search(r"\bpersonal\b", t_lower) and not re.search(
+        r"\b(?:real\s+person|speak|talk|human\s+agent)\b", t_lower
+    ):
+        return False
     if HUMAN_REQUEST_RE.search(t):
         return True
-    t_lower = t.lower()
     return any(kw in t_lower for kw in HUMAN_REQUEST_KEYWORDS)
 
 
@@ -189,7 +321,7 @@ def is_gender_answer(message: str) -> bool:
     return get_gender_from_message(message) is not None
 
 
-def get_gender_from_message(message: str) -> Optional[str]:
+def get_gender_from_message(message: str) -> str | None:
     """Extract gender from message. Returns 'male', 'female', or None.
     Works for long messages too (e.g. one line with booking + «ana shab» + name)."""
     t = _normalize(message)
@@ -201,13 +333,40 @@ def get_gender_from_message(message: str) -> Optional[str]:
             return "female"
     short = t.lower().replace(" ", "")
     if short in (
-        "male", "man", "boy", "m", "ذكر", "شب", "شاب", "homme", "زلمة",
-        "zalame", "zalameh", "zalmeh", "shab", "rajol", "zakar"
+        "male",
+        "man",
+        "boy",
+        "m",
+        "ذكر",
+        "شب",
+        "شاب",
+        "homme",
+        "زلمة",
+        "zalame",
+        "zalameh",
+        "zalmeh",
+        "shab",
+        "rajol",
+        "zakar",
     ):
         return "male"
     if short in (
-        "female", "woman", "girl", "f", "أنثى", "صبية", "بنت", "femme", "مرة", "مرا",
-        "mara", "mra", "bent", "sabeye", "sabya", "onsa"
+        "female",
+        "woman",
+        "girl",
+        "f",
+        "أنثى",
+        "صبية",
+        "بنت",
+        "femme",
+        "مرة",
+        "مرا",
+        "mara",
+        "mra",
+        "bent",
+        "sabeye",
+        "sabya",
+        "onsa",
     ):
         return "female"
     return None
@@ -275,7 +434,7 @@ def has_enough_info(message: str, state: dict) -> bool:
     return not needs_clarification(message)
 
 
-def route(user_id: str, message: str, state: dict) -> Optional[str]:
+def route(user_id: str, message: str, state: dict) -> str | None:
     """
     Route user message to one of 6 actions.
 
@@ -303,11 +462,13 @@ def route(user_id: str, message: str, state: dict) -> Optional[str]:
         return "answer_question"
 
     # 5. Greeting only - ONLY when no active pending state
-    has_pending = any([
-        state.get("awaiting_gender"),
-        state.get("awaiting_clarification"),
-        state.get("awaiting_name"),
-    ])
+    has_pending = any(
+        [
+            state.get("awaiting_gender"),
+            state.get("awaiting_clarification"),
+            state.get("awaiting_name"),
+        ]
+    )
     if not has_pending and is_greeting_only(msg):
         return "greeting"
 

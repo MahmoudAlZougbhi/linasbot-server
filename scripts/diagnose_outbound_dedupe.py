@@ -22,6 +22,7 @@ import asyncio
 import hashlib
 import os
 import sys
+from typing import Any
 
 # Allow running from repo root
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,7 +42,7 @@ def main() -> None:
 
     # Mirrors services/outbound_turn_idempotency.stable_ai_claim_identity enough for local checks
     # without importing utils.utils (heavy deps). Run inside project venv for full parity tests.
-    def stable_ai_claim_identity(user_id: str, phone_number=None):
+    def stable_ai_claim_identity(user_id: str, phone_number: Any | None = None) -> Any:
         raw = phone_number or user_id
         pk = phone_match_key(raw)
         if pk:
@@ -85,7 +86,7 @@ def main() -> None:
     print("  5. dedupe=same_turn_suppressed → same Python turn tried twice")
     print("  6. Set TRACE_AI_OUTBOUND=true to log every successful send with trace_id")
 
-    async def _async_demo():
+    async def _async_demo() -> None:
         from services.whatsapp_adapters import outbound_text_dedupe as od
 
         od._cache.clear()

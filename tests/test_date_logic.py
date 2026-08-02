@@ -17,7 +17,6 @@ from utils.datetime_utils import (
     text_mentions_datetime,
 )
 
-
 REFERENCE_NOW = datetime.datetime(2026, 2, 27, 10, 0, 0, tzinfo=BOT_FIXED_TZ)
 
 
@@ -127,9 +126,7 @@ def test_forced_day_ref_overrides_stale_bokra_in_buffer():
     buf = "bokra " * 8 + "hotle mw3ad el yom se3a 2"
     assert detect_day_reference(buf) == "today"
     latest = "hotle mw3ad el yom se3a 2"
-    resolved = resolve_relative_datetime(
-        buf, reference=REFERENCE_NOW, forced_day_ref=detect_day_reference(latest)
-    )
+    resolved = resolve_relative_datetime(buf, reference=REFERENCE_NOW, forced_day_ref=detect_day_reference(latest))
     assert resolved.date() == REFERENCE_NOW.date()
     # 02:00 same day is before reference 10:00 → bump to 10:30
     assert resolved.strftime("%H:%M:%S") == "10:30:00"

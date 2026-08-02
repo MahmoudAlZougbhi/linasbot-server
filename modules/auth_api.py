@@ -1,53 +1,77 @@
 """
 Auth API Module
-Handles authentication and user management endpoints for the dashboard
+Handles authentication and user management endpoints for the dashboard.
+Sessions are server-issued HttpOnly cookies; permissions enforced server-side.
 """
+
+from __future__ import annotations
 
 import asyncio
 import os
-import time
+from typing import Any, Literal, cast
 
-from fastapi import HTTPException
-from pydantic import BaseModel, EmailStr
-from typing import Dict, Any, Optional, List
+from fastapi import Request, Response
+from pydantic import BaseModel
 
+from modules.api_security import is_production_env, require_session
 from modules.core import app
-from services.user_service import user_service, AuthBackendUnavailableError
+from services.dashboard_session_service import (
+    CSRF_COOKIE_NAME,
+    SESSION_COOKIE_NAME,
+    session_service,
+)
+from services.user_service import AuthBackendUnavailableError, user_service
 
-
-# Auth timeout (per attempt) - reduced from 45s to avoid long hangs
 AUTH_LOGIN_TIMEOUT_SECONDS = float(os.getenv("AUTH_LOGIN_TIMEOUT_SECONDS", "12"))
 AUTH_SESSION_TIMEOUT_SECONDS = float(os.getenv("AUTH_SESSION_TIMEOUT_SECONDS", "8"))
 
-# Emergency local fallback (disabled by default).
-# Enable only when Firestore is quota-limited and operators must access dashboard.
-AUTH_FALLBACK_ENABLED = os.getenv(
-    "ENABLE_AUTH_FALLBACK_WHEN_FIRESTORE_DOWN", "false"
-).strip().lower() == "true"
-AUTH_FALLBACK_EMAIL = os.getenv("AUTH_FALLBACK_EMAIL", "admin@lina.com").strip().lower()
-AUTH_FALLBACK_PASSWORD = os.getenv("AUTH_FALLBACK_PASSWORD", "admin123")
-AUTH_FALLBACK_USER_ID = os.getenv("AUTH_FALLBACK_USER_ID", "local-admin-fallback")
+
+def _cookie_secure() -> bool:
+    if os.getenv("DASHBOARD_COOKIE_SECURE", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    if os.getenv("DASHBOARD_COOKIE_SECURE", "").strip().lower() in {"0", "false", "no", "off"}:
+        return False
+    return is_production_env()
 
 
-def _build_auth_fallback_user(email: str) -> Dict[str, Any]:
-    now = time.strftime("%Y-%m-%dT%H:%M:%S")
-    return {
-        "id": AUTH_FALLBACK_USER_ID,
-        "email": email,
-        "name": "Local Admin",
-        "role": "admin",
-        "permissions": None,
-        "status": "active",
-        "lastLogin": now,
-        "createdAt": now,
-        "createdBy": "system",
-        "updatedAt": now,
-    }
+def _cookie_samesite() -> Literal["lax", "strict", "none"]:
+    value = (os.getenv("DASHBOARD_COOKIE_SAMESITE") or "lax").strip().lower()
+    if value in {"lax", "strict", "none"}:
+        return cast(Literal["lax", "strict", "none"], value)
+    return "lax"
 
 
-# ==========================================
-# Request/Response Models
-# ==========================================
+def _set_auth_cookies(response: Response, cookie_value: str, csrf_token: str) -> None:
+    secure = _cookie_secure()
+    samesite = _cookie_samesite()
+    # SameSite=None requires Secure
+    if samesite.lower() == "none":
+        secure = True
+    max_age = int(os.getenv("DASHBOARD_SESSION_TTL_SECONDS", str(12 * 60 * 60)))
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=cookie_value,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        max_age=max_age,
+        path="/",
+    )
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=csrf_token,
+        httponly=False,
+        secure=secure,
+        samesite=samesite,
+        max_age=max_age,
+        path="/",
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(CSRF_COOKIE_NAME, path="/")
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -57,400 +81,269 @@ class LoginRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     email: str
     password: str
-    name: Optional[str] = None
-    role: Optional[str] = "viewer"
-    permissions: Optional[Dict[str, bool]] = None
-    status: Optional[str] = "active"
+    name: str | None = None
+    role: str | None = "viewer"
+    permissions: dict[str, bool] | None = None
+    status: str | None = "active"
 
 
 class UpdateUserRequest(BaseModel):
-    name: Optional[str] = None
-    role: Optional[str] = None
-    permissions: Optional[Dict[str, bool]] = None
-    status: Optional[str] = None
-    password: Optional[str] = None  # For admin password reset
+    name: str | None = None
+    role: str | None = None
+    permissions: dict[str, bool] | None = None
+    status: str | None = None
+    password: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
-    user_id: str
     current_password: str
     new_password: str
 
 
-# ==========================================
-# Startup Event - Ensure Default Admin
-# ==========================================
-
 @app.on_event("startup")
-async def ensure_default_admin():
-    """Ensure default admin exists on startup"""
-    toggle = os.getenv("AUTH_ENSURE_DEFAULT_ADMIN_ON_STARTUP")
-    if toggle is None:
-        env_name = (
-            os.getenv("ENVIRONMENT")
-            or os.getenv("ENV")
-            or ""
-        ).strip().lower()
-        enabled = env_name not in {"prod", "production"}
-    else:
-        enabled = str(toggle).strip().lower() in {"1", "true", "yes", "on"}
-
-    if not enabled:
-        print("[auth_api] startup: skipping ensure_default_admin (disabled by config)")
-        return
+async def ensure_auth_secret_configured() -> None:
+    """
+    Fail closed when production/test cannot sign sessions.
+    First-admin provisioning is offline-only: scripts/provision_dashboard_admin.py
+    (no public HTTP bootstrap, no startup password injection).
+    """
+    from services.dashboard_session_service import require_auth_secret_configured
 
     try:
-        # Firestore calls are synchronous; run them off the event loop and
-        # fail open on timeout so API startup never hangs.
-        await asyncio.wait_for(
-            asyncio.to_thread(user_service.ensure_default_admin),
-            timeout=6.0
-        )
-    except asyncio.TimeoutError:
-        print("Warning: ensure_default_admin timed out after 6s; startup will continue.")
-    except Exception as e:
-        print(f"Warning: Could not ensure default admin: {e}")
+        require_auth_secret_configured()
+    except RuntimeError as exc:
+        print(f"[auth_api] FATAL: {exc}", flush=True)
+        raise
+    print(
+        "[auth_api] startup: auth secret OK — first admin via scripts/provision_dashboard_admin.py only",
+        flush=True,
+    )
 
-
-# ==========================================
-# Authentication Endpoints
-# ==========================================
 
 @app.post("/api/auth/login")
-async def login(request: LoginRequest):
-    """
-    Authenticate user with email and password
-
-    Returns user data (without password) on success
-    """
-    # Normalize email before auth
+async def login(request: LoginRequest, response: Response) -> Any:
     email = (request.email or "").strip().lower()
     password = request.password or ""
 
     max_retries = 3
-    last_error = None
-    last_error_type = None  # "timeout" | "backend_unavailable"
+    last_error_type = None
 
     for attempt in range(max_retries):
         try:
-            t0 = time.monotonic()
-            print(f"[auth_api] login: REQUEST_RECEIVED for {email} attempt {attempt + 1}/{max_retries} t=0", flush=True)
-            # Check Firestore state (diagnostic - first access may trigger lazy init)
-            try:
-                import utils.utils as u
-                fs_ready = getattr(u, "_firestore_init_done", False)
-            except Exception:
-                fs_ready = False
-            print(f"[auth_api] login: Firestore init_done={fs_ready}, calling authenticate (watch backend stdout for [auth:...] logs)", flush=True)
-            print(f"[auth_api] login: authenticate START", flush=True)
             user = await asyncio.wait_for(
                 asyncio.to_thread(user_service.authenticate, email, password),
-                timeout=AUTH_LOGIN_TIMEOUT_SECONDS
+                timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
             )
-            elapsed = time.monotonic() - t0
-            print(f"[auth_api] login: authenticate RETURNED in {elapsed:.3f}s", flush=True)
-
             if not user:
-                return {
-                    "success": False,
-                    "error": "Invalid email or password"
-                }
+                return {"success": False, "error": "Invalid email or password"}
 
-            print(f"[auth_api] login: returning success", flush=True)
+            record = session_service.create_session(
+                user_id=str(user["id"]),
+                email=str(user.get("email") or email),
+                role=str(user.get("role") or "viewer"),
+                permissions=user.get("permissions"),
+                password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
+            )
+            _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
             return {
                 "success": True,
-                "user": user
+                "user": user,
+                "csrf_token": record.csrf_token,
             }
         except ValueError as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
-        except AuthBackendUnavailableError as e:
-            last_error = e
+            return {"success": False, "error": str(e)}
+        except AuthBackendUnavailableError:
             last_error_type = "backend_unavailable"
             if attempt < max_retries - 1:
-                delay = (attempt + 1) * 2  # 2s, 4s
-                print(f"[auth_api] login: BACKEND_UNAVAILABLE, retrying in {delay}s...", flush=True)
-                await asyncio.sleep(delay)
+                await asyncio.sleep((attempt + 1) * 2)
             else:
                 break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             last_error_type = "timeout"
-            print(f"[auth_api] login: TIMEOUT after {AUTH_LOGIN_TIMEOUT_SECONDS}s for {email} (attempt {attempt + 1}/{max_retries})", flush=True)
-            print(f"[auth_api] login: DIAGNOSTIC - Check LAST [auth:...] log above to see where it hung: get_user_by_email query.stream() vs bcrypt", flush=True)
             if attempt < max_retries - 1:
-                delay = (attempt + 1) * 2  # 2s, 4s
-                print(f"[auth_api] login: retrying in {delay}s...", flush=True)
-                await asyncio.sleep(delay)
+                await asyncio.sleep((attempt + 1) * 2)
             else:
                 break
         except Exception as e:
             print(f"[auth_api] login: Login error: {e}", flush=True)
-            return {
-                "success": False,
-                "error": "Login failed"
-            }
+            return {"success": False, "error": "Login failed"}
 
-    # All retries exhausted - return appropriate error
     if last_error_type == "timeout":
         return {
             "success": False,
-            "error": f"Authentication timeout ({AUTH_LOGIN_TIMEOUT_SECONDS}s). تحقق من Firestore أو أعد تشغيل الـ backend."
+            "error": f"Authentication timeout ({AUTH_LOGIN_TIMEOUT_SECONDS}s). Please retry.",
         }
-
-    # AuthBackendUnavailableError (Firestore quota/network)
-    if last_error is not None:
-        # Optional emergency path: allow dashboard login while Firestore is down.
-        if (
-            AUTH_FALLBACK_ENABLED
-            and email == AUTH_FALLBACK_EMAIL
-            and password == AUTH_FALLBACK_PASSWORD
-        ):
-            print(
-                f"[auth_api] login: FALLBACK_LOGIN_GRANTED for {email} (Firestore unavailable)",
-                flush=True,
-            )
-            return {
-                "success": True,
-                "user": _build_auth_fallback_user(email),
-            }
-        print(f"[auth_api] login: BACKEND_UNAVAILABLE for {email}: {last_error}", flush=True)
-        return {
-            "success": False,
-            "error": "Authentication service temporarily unavailable (Firestore quota/network). Please retry in a few minutes."
-        }
-
     return {
         "success": False,
-        "error": "Login failed"
+        "error": "Authentication service temporarily unavailable (Firestore quota/network). Please retry in a few minutes.",
     }
 
 
-@app.get("/api/auth/session/{user_id}")
-async def validate_session(user_id: str):
+@app.post("/api/auth/logout")
+async def logout(request: Request, response: Response) -> Any:
     """
-    Validate session and get fresh user data.
+    Logout requires an authenticated session; CSRF is enforced by middleware.
+    Revokes the caller's server-side session and clears cookies.
+    """
+    session = require_session(request)
+    cookie = request.cookies.get(SESSION_COOKIE_NAME)
+    # Revoke the cookie-bound session (must match the authenticated principal)
+    record = session_service.get_valid_session(cookie)
+    if record is None or str(record.user_id) != str(session.user_id):
+        _clear_auth_cookies(response)
+        return {"success": False, "error": "Session mismatch"}
+    session_service.revoke_session(cookie)
+    _clear_auth_cookies(response)
+    return {"success": True}
 
-    Called by frontend to refresh user data (e.g., after permission changes).
-    SECURITY NOTE: This endpoint returns user data by user_id without verifying
-    the caller. In production, add JWT/session verification so callers can only
-    request their own user_id. Frontend currently sends only its own id from localStorage.
-    """
+
+@app.get("/api/auth/session")
+async def validate_own_session(request: Request) -> Any:
+    """Return the authenticated caller's user profile (no user_id in path — closes IDOR)."""
+    session = require_session(request)
     try:
-        if AUTH_FALLBACK_ENABLED and user_id == AUTH_FALLBACK_USER_ID:
-            return {
-                "success": True,
-                "user": _build_auth_fallback_user(AUTH_FALLBACK_EMAIL),
-            }
-
-        # Run sync Firestore access off the event loop with timeout
         user = await asyncio.wait_for(
-            asyncio.to_thread(user_service.get_user_by_id, user_id),
-            timeout=AUTH_SESSION_TIMEOUT_SECONDS
+            asyncio.to_thread(user_service.get_user_by_id, session.user_id),
+            timeout=AUTH_SESSION_TIMEOUT_SECONDS,
         )
-
-        if not user:
-            return {
-                "success": False,
-                "error": "User not found"
-            }
-
-        # Check if user is still active
-        if user.get('status') != 'active':
-            return {
-                "success": False,
-                "error": f"Account is {user.get('status', 'inactive')}"
-            }
-
-        # Sanitize (fast, in-memory - no Firestore)
+        if not user or user.get("status") != "active":
+            return {"success": False, "error": "User not found or inactive"}
         sanitized = user_service._sanitize_user(user)
         return {
             "success": True,
-            "user": sanitized
+            "user": sanitized,
+            "csrf_token": session.csrf_token,
         }
-    except asyncio.TimeoutError:
-        print(f"[auth_api] session: TIMEOUT after {AUTH_SESSION_TIMEOUT_SECONDS}s for user_id={user_id}", flush=True)
+    except TimeoutError:
         return {
             "success": False,
-            "error": f"Session validation timeout ({AUTH_SESSION_TIMEOUT_SECONDS}s). Please retry."
+            "error": f"Session validation timeout ({AUTH_SESSION_TIMEOUT_SECONDS}s). Please retry.",
         }
     except Exception as e:
         print(f"[auth_api] session: Session validation error: {e}", flush=True)
-        return {
-            "success": False,
-            "error": "Session validation failed"
-        }
+        return {"success": False, "error": "Session validation failed"}
+
+
+@app.get("/api/auth/session/{user_id}")
+async def validate_session_legacy(user_id: str, request: Request) -> Any:
+    """
+    Legacy path retained for compatibility but enforced against the cookie session.
+    Callers may only request their own user_id.
+    """
+    session = require_session(request)
+    if str(user_id) != str(session.user_id):
+        return {"success": False, "error": "Forbidden"}
+    return await validate_own_session(request)
 
 
 @app.post("/api/auth/change-password")
-async def change_password(request: ChangePasswordRequest):
-    """
-    Change user's password
-
-    Requires current password for verification
-    """
+async def change_password(body: ChangePasswordRequest, request: Request, response: Response) -> Any:
+    session = require_session(request)
     try:
         success = user_service.change_password(
-            request.user_id,
-            request.current_password,
-            request.new_password
+            session.user_id,
+            body.current_password,
+            body.new_password,
         )
-
-        if success:
-            return {
-                "success": True,
-                "message": "Password changed successfully"
-            }
-        else:
-            return {
-                "success": False,
-                "error": "Failed to change password"
-            }
-    except ValueError as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-    except Exception as e:
-        print(f"Change password error: {e}")
-        return {
-            "success": False,
-            "error": "Failed to change password"
-        }
-
-
-# ==========================================
-# User Management Endpoints
-# ==========================================
-
-@app.get("/api/auth/users")
-async def get_users():
-    """
-    Get all dashboard users (without passwords)
-
-    Admin only endpoint
-    """
-    try:
-        users = user_service.get_all_users()
+        if not success:
+            return {"success": False, "error": "Failed to change password"}
+        # Invalidate all sessions for this user, then issue a fresh one at the new epoch
+        session_service.revoke_all_for_user(session.user_id)
+        user = user_service.get_user_by_id(session.user_id)
+        if not user:
+            _clear_auth_cookies(response)
+            return {"success": True, "message": "Password changed successfully"}
+        record = session_service.create_session(
+            user_id=str(user["id"]),
+            email=str(user.get("email") or session.email),
+            role=str(user.get("role") or session.role),
+            permissions=user.get("permissions"),
+            password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
+        )
+        _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
         return {
             "success": True,
-            "users": users
+            "message": "Password changed successfully",
+            "csrf_token": record.csrf_token,
         }
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        print(f"Change password error: {e}")
+        return {"success": False, "error": "Failed to change password"}
+
+
+@app.get("/api/auth/users")
+async def get_users(request: Request) -> Any:
+    require_session(request)
+    try:
+        users = user_service.get_all_users()
+        return {"success": True, "users": users}
     except Exception as e:
         print(f"Get users error: {e}")
-        return {
-            "success": False,
-            "error": "Failed to fetch users"
-        }
+        return {"success": False, "error": "Failed to fetch users"}
 
 
 @app.post("/api/auth/users")
-async def create_user(request: CreateUserRequest, created_by: Optional[str] = None):
-    """
-    Create a new dashboard user
-
-    Admin only endpoint - no self-registration
-    """
+async def create_user(body: CreateUserRequest, request: Request) -> Any:
+    session = require_session(request)
     try:
-        user_data = {
-            "email": request.email,
-            "password": request.password,
-            "name": request.name,
-            "role": request.role,
-            "permissions": request.permissions,
-            "status": request.status
-        }
-
-        user = user_service.create_user(user_data, created_by)
-
-        return {
-            "success": True,
-            "user": user,
-            "message": "User created successfully"
-        }
+        user = user_service.create_user(
+            {
+                "email": body.email,
+                "password": body.password,
+                "name": body.name,
+                "role": body.role,
+                "permissions": body.permissions,
+                "status": body.status,
+            },
+            created_by=session.user_id,
+        )
+        return {"success": True, "user": user, "message": "User created successfully"}
     except ValueError as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
     except Exception as e:
         print(f"Create user error: {e}")
-        return {
-            "success": False,
-            "error": "Failed to create user"
-        }
+        return {"success": False, "error": "Failed to create user"}
 
 
 @app.put("/api/auth/users/{user_id}")
-async def update_user(user_id: str, request: UpdateUserRequest):
-    """
-    Update a dashboard user
-
-    Admin only endpoint
-    """
+async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -> Any:
+    require_session(request)
     try:
-        updates = {}
-
-        if request.name is not None:
-            updates['name'] = request.name
-        if request.role is not None:
-            updates['role'] = request.role
-        if request.permissions is not None:
-            updates['permissions'] = request.permissions
-        if request.status is not None:
-            updates['status'] = request.status
-        if request.password is not None:
-            updates['password'] = request.password
-
+        updates: dict[str, Any] = {}
+        if body.name is not None:
+            updates["name"] = body.name
+        if body.role is not None:
+            updates["role"] = body.role
+        if body.permissions is not None:
+            updates["permissions"] = body.permissions
+        if body.status is not None:
+            updates["status"] = body.status
+        if body.password is not None:
+            updates["password"] = body.password
         user = user_service.update_user(user_id, updates)
-
-        return {
-            "success": True,
-            "user": user,
-            "message": "User updated successfully"
-        }
+        if body.password is not None:
+            session_service.revoke_all_for_user(user_id)
+        return {"success": True, "user": user, "message": "User updated successfully"}
     except ValueError as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
     except Exception as e:
         print(f"Update user error: {e}")
-        return {
-            "success": False,
-            "error": "Failed to update user"
-        }
+        return {"success": False, "error": "Failed to update user"}
 
 
 @app.delete("/api/auth/users/{user_id}")
-async def delete_user(user_id: str):
-    """
-    Delete a dashboard user
-
-    Admin only endpoint
-    """
+async def delete_user(user_id: str, request: Request) -> Any:
+    require_session(request)
     try:
         success = user_service.delete_user(user_id)
-
         if success:
-            return {
-                "success": True,
-                "message": "User deleted successfully"
-            }
-        else:
-            return {
-                "success": False,
-                "error": "Failed to delete user"
-            }
+            session_service.revoke_all_for_user(user_id)
+            return {"success": True, "message": "User deleted successfully"}
+        return {"success": False, "error": "Failed to delete user"}
     except ValueError as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
     except Exception as e:
         print(f"Delete user error: {e}")
-        return {
-            "success": False,
-            "error": "Failed to delete user"
-        }
+        return {"success": False, "error": "Failed to delete user"}

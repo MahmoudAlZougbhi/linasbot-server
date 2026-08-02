@@ -1,31 +1,7 @@
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15
-    container_name: linas_postgres
-    environment:
-      POSTGRES_DB: linasbot
-      POSTGRES_USER: botuser
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
-    networks:
-      - linas_network
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: linas_redis
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    networks:
-      - linas_network
-
   # Backend (Python Bot + API)
+  # Note: Redis/Postgres compose services were unused by application code and removed.
+  # Durable state uses Firestore + LINASBOT_DATA_ROOT files.
   backend:
     build:
       context: .
@@ -33,8 +9,6 @@ services:
     container_name: linas_backend
     environment:
       - LINASBOT_DATA_ROOT=/opt/linasbot_data
-      - DATABASE_URL=postgresql://botuser:${DB_PASSWORD}@postgres:5432/linasbot
-      - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - WHATSAPP_API_TOKEN=${WHATSAPP_API_TOKEN}
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
@@ -47,15 +21,14 @@ services:
       - WHATSAPP_WEBHOOK_VERIFY_TOKEN=${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
       - LINASLASER_API_BASE_URL=${LINASLASER_API_BASE_URL}
       - LINASLASER_API_TOKEN=${LINASLASER_API_TOKEN}
+      - MONTYMOBILE_API_KEY=${MONTYMOBILE_API_KEY}
+      - DASHBOARD_AUTH_SECRET=${DASHBOARD_AUTH_SECRET}
     volumes:
       - ./:/app
       - ./data:/app/data
       - linasbot_data:/opt/linasbot_data
     ports:
       - "8003:8003"
-    depends_on:
-      - postgres
-      - redis
     restart: unless-stopped
     networks:
       - linas_network
@@ -78,7 +51,6 @@ services:
       - linas_network
 
 volumes:
-  postgres_data:
   linasbot_data:
 
 networks:

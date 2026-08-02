@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Live Chat Service - Canonical conversation_state
 - 6-hour time filter for active conversations
@@ -7,29 +6,35 @@ Live Chat Service - Canonical conversation_state
 - Auto-reopen on new message
 """
 
-import datetime
+from __future__ import annotations
+
 import asyncio
+import datetime
 import hashlib
 import json
 import os
 import re
 import time
-from typing import List, Dict, Optional, Any, Tuple, Union
 from collections import defaultdict
+from typing import Any
+
 from google.cloud import firestore
+
 import config
 from services.live_chat_contracts import (
     dedupe_messages as contract_dedupe_messages,
+)
+from services.live_chat_contracts import (
     normalize_conversation_document,
     parse_timestamp_utc,
     utc_now,
 )
-from utils.utils import get_firestore_db, set_human_takeover_status, get_canonical_user_id_and_phone
-from utils.phone_utils import normalize_phone, is_phone_like_user_id, phone_match_key
 from services.media_service import build_whatsapp_audio_delivery_url
+from utils.phone_utils import is_phone_like_user_id, normalize_phone, phone_match_key
+from utils.utils import get_canonical_user_id_and_phone, get_firestore_db, set_human_takeover_status
 
 # In-memory fallback when Firestore idempotency is unavailable (single-process only).
-_operator_send_idempotency_keys: Dict[str, float] = {}
+_operator_send_idempotency_keys: dict[str, float] = {}
 
 
 def _operator_send_idempotency_memory_consume(fingerprint: str) -> bool:
@@ -50,7 +55,7 @@ def _operator_send_idempotency_memory_consume(fingerprint: str) -> bool:
 
 
 def _build_operator_idempotency_fingerprint(
-    idempotency_key: Optional[str],
+    idempotency_key: str | None,
     conversation_id: str,
     operator_id: str,
     message_type: str,
@@ -71,7 +76,7 @@ def _operator_idempotency_doc_id(fingerprint: str) -> str:
     return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
 
-async def _try_acquire_operator_send_idempotency(db, app_id: str, fingerprint: str):
+async def _try_acquire_operator_send_idempotency(db: Any, app_id: str, fingerprint: str) -> Any:
     """
     Returns (acquired: bool, lock_ref_or_none).
     lock_ref is a Firestore DocumentReference when acquired via Firestore; caller must delete on failure.
@@ -81,14 +86,9 @@ async def _try_acquire_operator_send_idempotency(db, app_id: str, fingerprint: s
         ok = _operator_send_idempotency_memory_consume(fingerprint)
         return ok, None
 
-    ref = (
-        db.collection("artifacts")
-        .document(app_id)
-        .collection("operator_outbound_idempotency")
-        .document(doc_id)
-    )
+    ref = db.collection("artifacts").document(app_id).collection("operator_outbound_idempotency").document(doc_id)
 
-    def _create_lock():
+    def _create_lock() -> None:
         # create() is atomic: second caller gets ALREADY_EXISTS — works across workers (unlike in-memory).
         ref.create(
             {
@@ -105,28 +105,21 @@ async def _try_acquire_operator_send_idempotency(db, app_id: str, fingerprint: s
         if code in (409, "ALREADY_EXISTS"):
             return True
         s = str(err).lower()
-        return (
-            "already exists" in s
-            or "already_exists" in s
-            or "document already exists" in s
-            or "409" in s
-        )
+        return "already exists" in s or "already_exists" in s or "document already exists" in s or "409" in s
 
     try:
         await asyncio.to_thread(_create_lock)
         return True, ref
     except Exception as e:
         if _is_already_exists(e):
-            print(
-                f"⚠️ Duplicate operator send suppressed (Firestore idempotency doc={doc_id[:16]}...)"
-            )
+            print(f"⚠️ Duplicate operator send suppressed (Firestore idempotency doc={doc_id[:16]}...)")
             return False, None
         print(f"⚠️ Firestore idempotency create failed, falling back to memory: {e}")
         ok = _operator_send_idempotency_memory_consume(fingerprint)
         return ok, None
 
 
-async def _release_operator_idempotency_lock(db, lock_ref) -> None:
+async def _release_operator_idempotency_lock(db: Any, lock_ref: Any) -> None:
     if db is None or lock_ref is None:
         return
     try:
@@ -198,33 +191,33 @@ class LiveChatService:
 
     INDEX_COLLECTION = "live_chat_index"
 
-    def __init__(self):
-        self.operator_status = defaultdict(lambda: "available")
-        self.operator_sessions = {}
+    def __init__(self) -> None:
+        self.operator_status: defaultdict[str, str] = defaultdict(lambda: "available")
+        self.operator_sessions: dict[str, Any] = {}
         # Cache for active conversations
-        self._conversations_cache = None
-        self._conversations_cache_time = None
+        self._conversations_cache: list[dict[str, Any]] | None = None
+        self._conversations_cache_time: datetime.datetime | None = None
         # Cache for waiting queue
-        self._queue_cache = None
-        self._queue_cache_time = None
+        self._queue_cache: list[dict[str, Any]] | None = None
+        self._queue_cache_time: datetime.datetime | None = None
         # Cache for static phone<->room mapping file
-        self._phone_to_room_cache = {}
-        self._room_to_phone_cache = {}
-        self._phone_mapping_cache_time = None
+        self._phone_to_room_cache: dict[str, str] = {}
+        self._room_to_phone_cache: dict[str, str] = {}
+        self._phone_mapping_cache_time: datetime.datetime | None = None
         # Cache for unified chats (WhatsApp-style list)
-        self._unified_chats_cache = []
-        self._unified_chats_cache_time = None
+        self._unified_chats_cache: list[dict[str, Any]] = []
+        self._unified_chats_cache_time: datetime.datetime | None = None
         self._unified_chats_cache_has_more = False
         self._unified_chats_cache_total = 0
-        self._unified_chats_cache_next_cursor = None
-        self._unified_chats_cache_page_size = None
+        self._unified_chats_cache_next_cursor: str | None = None
+        self._unified_chats_cache_page_size: int | None = None
         self._index_counters_cache = self._empty_counters()
-        self._index_counters_cache_time = None
-        self._index_write_paused_until = None
+        self._index_counters_cache_time: datetime.datetime | None = None
+        self._index_write_paused_until: datetime.datetime | None = None
         # Prevent duplicate index writes for identical payloads.
-        self._index_signature_cache = {}
+        self._index_signature_cache: dict[str, Any] = {}
         # Throttle read-path index refreshes for the same conversation.
-        self._read_path_refresh_tracker = {}
+        self._read_path_refresh_tracker: dict[str, datetime.datetime] = {}
         self._load_unified_cache_from_disk()
 
     # ---------- State + index helpers ----------
@@ -270,7 +263,7 @@ class LiveChatService:
             if state in (self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED):
                 return self.STATE_BOT_ACTIVE
             if state in valid_states:
-                return state
+                return str(state)
             if status in {"waiting", "waiting_for_operator", "pending", "waiting_human"}:
                 return self.STATE_BOT_ACTIVE
             return self.STATE_BOT_ACTIVE
@@ -280,7 +273,7 @@ class LiveChatService:
 
         # Legacy: human_takeover_active field absent — keep old behavior (trust conversation_state if set)
         if state in valid_states:
-            return state
+            return str(state)
 
         human_takeover = bool(data.get("human_takeover_active", False))
         if human_takeover:
@@ -293,7 +286,7 @@ class LiveChatService:
     def _is_live_window(self, ts: datetime.datetime) -> bool:
         return bool(ts) and (utc_now() - ts).total_seconds() <= self.ACTIVE_TIME_WINDOW
 
-    def _state_filter_values(self, filter_key: str):
+    def _state_filter_values(self, filter_key: str) -> Any:
         key = (filter_key or "").lower()
         if key in {"waiting", "waiting_for_operator"}:
             return [self.STATE_WAITING_OPERATOR]
@@ -315,7 +308,7 @@ class LiveChatService:
             return "closed"
         return "bot"
 
-    def _to_frontend_chat_format(self, chat: Dict[str, Any]) -> Dict[str, Any]:
+    def _to_frontend_chat_format(self, chat: dict[str, Any]) -> dict[str, Any]:
         """Enrich chat entry with frontend-expected fields (status, last_message, user_phone, last_activity)."""
         state = chat.get("conversation_state", self.STATE_BOT_ACTIVE)
         last_text = chat.get("last_message_text", "")
@@ -325,28 +318,26 @@ class LiveChatService:
         out["user_phone"] = chat.get("user_phone") or chat.get("phone_number", "")
         out["last_activity"] = last_at
         out["last_message"] = (
-            {"content": last_text, "timestamp": last_at, "is_user": False}
-            if last_text or last_at
-            else None
+            {"content": last_text, "timestamp": last_at, "is_user": False} if last_text or last_at else None
         )
         return out
 
-    def _index_collection(self, db):
+    def _index_collection(self, db: Any) -> Any:
         return db.collection("artifacts").document(self.APP_ID).collection(self.INDEX_COLLECTION)
 
-    def _build_firestore_user_candidates(self, user_id: str) -> List[str]:
+    def _build_firestore_user_candidates(self, user_id: str) -> list[str]:
         """
         Build ordered candidate user IDs for Firestore document lookup.
         Handles canonical/raw IDs and +prefix variants.
         """
         canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-        candidates: List[str] = []
+        candidates: list[str] = []
 
-        def _add(candidate: str):
+        def _add(candidate: str) -> None:
             if candidate and candidate not in candidates:
                 candidates.append(candidate)
 
-        def _add_alt_phone_variant(candidate: str):
+        def _add_alt_phone_variant(candidate: str) -> None:
             if not candidate:
                 return
             if candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10):
@@ -359,7 +350,7 @@ class LiveChatService:
         _add_alt_phone_variant(canonical_user_id)
         return candidates
 
-    async def _resolve_conversation_doc_ref(self, db, user_id: str, conversation_id: str):
+    async def _resolve_conversation_doc_ref(self, db: Any, user_id: str, conversation_id: str) -> Any:
         """
         Resolve a conversation document by trying candidate Firestore user IDs.
         Returns (conv_ref, conv_snap, resolved_user_id).
@@ -385,7 +376,7 @@ class LiveChatService:
 
         return last_ref, last_snap, user_id
 
-    def _empty_counters(self) -> Dict[str, int]:
+    def _empty_counters(self) -> dict[str, int]:
         return {
             "all": 0,
             "waiting": 0,
@@ -399,13 +390,9 @@ class LiveChatService:
             return False
         return utc_now() < self._index_write_paused_until
 
-    def _pause_index_writes(self, reason: str):
-        self._index_write_paused_until = utc_now() + datetime.timedelta(
-            seconds=self.INDEX_WRITE_COOLDOWN_SECONDS
-        )
-        print(
-            f"⚠️ Pausing live_chat_index writes for {self.INDEX_WRITE_COOLDOWN_SECONDS}s: {reason}"
-        )
+    def _pause_index_writes(self, reason: str) -> None:
+        self._index_write_paused_until = utc_now() + datetime.timedelta(seconds=self.INDEX_WRITE_COOLDOWN_SECONDS)
+        print(f"⚠️ Pausing live_chat_index writes for {self.INDEX_WRITE_COOLDOWN_SECONDS}s: {reason}")
 
     def _should_schedule_read_path_refresh(self, conversation_id: str) -> bool:
         now = utc_now()
@@ -417,9 +404,7 @@ class LiveChatService:
         self._read_path_refresh_tracker[conversation_id] = now
         return True
 
-    def _cached_unified_response(
-        self, page: int, page_size: int, filter_state: str, search: str
-    ) -> Dict[str, Any]:
+    def _cached_unified_response(self, page: int, page_size: int, filter_state: str, search: str) -> dict[str, Any]:
         chats = list(self._unified_chats_cache or [])
         counters = dict(self._index_counters_cache or self._empty_counters())
         total = int(self._unified_chats_cache_total or len(chats))
@@ -443,7 +428,7 @@ class LiveChatService:
             return ""
         return path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
 
-    def _persist_unified_cache_to_disk(self):
+    def _persist_unified_cache_to_disk(self) -> None:
         if not self.PERSIST_UNIFIED_CACHE:
             return
         cache_file = self._unified_cache_file()
@@ -453,7 +438,7 @@ class LiveChatService:
             cache_dir = os.path.dirname(cache_file)
             if cache_dir:
                 os.makedirs(cache_dir, exist_ok=True)
-            payload = {
+            payload: dict[str, Any] = {
                 "updated_at": utc_now().isoformat(),
                 "chats": list(self._unified_chats_cache or []),
                 "has_more": bool(self._unified_chats_cache_has_more),
@@ -467,14 +452,14 @@ class LiveChatService:
         except Exception as e:
             print(f"⚠️ Could not persist unified cache to disk: {e}")
 
-    def _load_unified_cache_from_disk(self):
+    def _load_unified_cache_from_disk(self) -> None:
         if not self.PERSIST_UNIFIED_CACHE:
             return
         cache_file = self._unified_cache_file()
         if not cache_file or not os.path.exists(cache_file):
             return
         try:
-            with open(cache_file, "r", encoding="utf-8") as f:
+            with open(cache_file, encoding="utf-8") as f:
                 payload = json.load(f) or {}
             chats = payload.get("chats")
             if not isinstance(chats, list) or not chats:
@@ -501,15 +486,13 @@ class LiveChatService:
                 merged.update({k: int(v) for k, v in counters.items() if k in merged})
                 self._index_counters_cache = merged
             self._unified_chats_cache_time = utc_now()
-            print(
-                f"[live_chat:unified] loaded disk cache chats={len(chats)} file={cache_file}"
-            )
+            print(f"[live_chat:unified] loaded disk cache chats={len(chats)} file={cache_file}")
         except Exception as e:
             print(f"⚠️ Could not load unified cache from disk: {e}")
 
     def _empty_unified_response(
         self, page: int, page_size: int, filter_state: str, search: str, source: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         is_legitimate_empty = source in {"index_empty"}
         return {
             "success": is_legitimate_empty,
@@ -525,17 +508,17 @@ class LiveChatService:
             "source": source,
         }
 
-    async def _run_blocking_with_timeout(self, fn, timeout_seconds: float):
+    async def _run_blocking_with_timeout(self, fn: Any, timeout_seconds: float) -> Any:
         timeout = max(0.1, float(timeout_seconds or 0))
         task = asyncio.create_task(asyncio.to_thread(fn))
         done, pending = await asyncio.wait({task}, timeout=timeout)
         if not done:
             for p in pending:
                 p.cancel()
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
         return task.result()
 
-    async def _get_doc_with_timeout(self, doc_ref, timeout_seconds: Optional[float] = None):
+    async def _get_doc_with_timeout(self, doc_ref: Any, timeout_seconds: float | None = None) -> Any:
         """Guard Firestore doc reads so UI requests don't hang indefinitely."""
         timeout = timeout_seconds or self.FIRESTORE_DOC_TIMEOUT_SECONDS
         try:
@@ -546,10 +529,10 @@ class LiveChatService:
         except Exception as e:
             lowered = str(e).lower()
             if "timeout" in lowered or "timed out" in lowered or "deadline" in lowered:
-                raise asyncio.TimeoutError() from e
+                raise TimeoutError() from e
             raise
 
-    def _format_single_message(self, msg: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_single_message(self, msg: dict[str, Any]) -> dict[str, Any]:
         """Format one raw message to API response shape (for index cache and full doc path)."""
         meta = msg.get("metadata") or {}
         text_value = msg.get("text")
@@ -588,7 +571,9 @@ class LiveChatService:
             msg_data["metadata"]["faq_match"] = meta["faq_match"]
         return msg_data
 
-    async def _sync_index_from_source(self, user_id: str, conversation_id: str, *, allow_state_backfill: bool = False) -> Dict[str, Any]:
+    async def _sync_index_from_source(
+        self, user_id: str, conversation_id: str, *, allow_state_backfill: bool = False
+    ) -> dict[str, Any]:
         """Read canonical conversation from Firestore, normalize, and upsert index entry."""
         db = get_firestore_db()
         if not db:
@@ -656,11 +641,11 @@ class LiveChatService:
 
     async def rebuild_index_from_firestore(
         self,
-        max_users: Optional[int] = None,
-        max_conversations_per_user: Optional[int] = None,
+        max_users: int | None = None,
+        max_conversations_per_user: int | None = None,
         set_conversation_state: bool = True,
         return_details: bool = False,
-    ) -> Union[int, Dict[str, int]]:
+    ) -> int | dict[str, int]:
         """One-time (or manual) rebuild of live_chat_index from Firestore conversations.
 
         Returns number of index entries written.
@@ -682,10 +667,12 @@ class LiveChatService:
         conversation_results = []
         semaphore = asyncio.Semaphore(self.FIRESTORE_FETCH_PARALLELISM)
 
-        async def _bounded(user_id: str):
+        async def _bounded(user_id: str) -> Any:
             async with semaphore:
                 try:
-                    conversations_collection = users_collection.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                    conversations_collection = users_collection.document(user_id).collection(
+                        config.FIRESTORE_CONVERSATIONS_COLLECTION
+                    )
                     q = conversations_collection.order_by("last_updated", direction=firestore.Query.DESCENDING)
                     if max_conversations_per_user:
                         q = q.limit(max_conversations_per_user)
@@ -729,7 +716,7 @@ class LiveChatService:
     def _build_index_entry(self, user_id: str, conv_data: dict, messages: list) -> dict:
         state = self._normalize_conversation_state(conv_data)
         customer_info = conv_data.get("customer_info", {}) or {}
-        user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+        user_name = customer_info.get("name") or config.user_names.get(str(user_id or "")) or "Unknown Customer"
         phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
         last_ts = conv_data.get("last_message_at") or conv_data.get("last_updated") or utc_now()
         if isinstance(last_ts, str):
@@ -743,11 +730,19 @@ class LiveChatService:
         unread_count = conv_data.get("unread_count") or 0
         language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
         message_count = conv_data.get("message_count", len(messages))
-        is_live = state in {self.STATE_BOT_ACTIVE, self.STATE_WAITING_OPERATOR, self.STATE_ASSIGNED} and self._is_live_window(last_ts)
+        is_live = state in {
+            self.STATE_BOT_ACTIVE,
+            self.STATE_WAITING_OPERATOR,
+            self.STATE_ASSIGNED,
+        } and self._is_live_window(last_ts)
 
         recent_messages = []
         if messages:
-            tail = messages[-self.RECENT_MESSAGES_IN_INDEX:] if len(messages) > self.RECENT_MESSAGES_IN_INDEX else messages
+            tail = (
+                messages[-self.RECENT_MESSAGES_IN_INDEX :]
+                if len(messages) > self.RECENT_MESSAGES_IN_INDEX
+                else messages
+            )
             for m in tail:
                 try:
                     recent_messages.append(self._format_single_message(m))
@@ -780,7 +775,7 @@ class LiveChatService:
             out["recent_messages"] = recent_messages
         return out
 
-    async def _upsert_index_entry(self, entry: dict):
+    async def _upsert_index_entry(self, entry: dict) -> None:
         try:
             db = get_firestore_db()
             if not db or not entry:
@@ -813,9 +808,7 @@ class LiveChatService:
                 return
 
             idx = self._index_collection(db).document(conv_id)
-            await asyncio.to_thread(
-                lambda: idx.set(payload, timeout=self.INDEX_WRITE_TIMEOUT_SECONDS)
-            )
+            await asyncio.to_thread(lambda: idx.set(payload, timeout=self.INDEX_WRITE_TIMEOUT_SECONDS))
             self._index_signature_cache[conv_id] = signature
         except Exception as e:
             print(f"⚠️ Failed upserting index entry for {entry.get('conversation_id')}: {e}")
@@ -825,14 +818,12 @@ class LiveChatService:
             if "429" in lowered or "quota" in lowered or "resource exhausted" in lowered:
                 self._pause_index_writes(str(e))
 
-    async def _refresh_index_for_conversation(self, user_id: str, conv_id: str):
+    async def _refresh_index_for_conversation(self, user_id: str, conv_id: str) -> None:
         try:
             if self._is_index_write_paused():
                 return
             result = await asyncio.wait_for(
-                self._sync_index_from_source(
-                    user_id, conv_id, allow_state_backfill=False
-                ),
+                self._sync_index_from_source(user_id, conv_id, allow_state_backfill=False),
                 timeout=self.INDEX_REFRESH_TIMEOUT_SECONDS,
             )
             if not result.get("written"):
@@ -841,12 +832,12 @@ class LiveChatService:
             print(
                 f"🔄 [index-refresh] rebuilt index user={result.get('resolved_user_id', user_id)} conv={conv_id} state={result.get('conversation_state')}"
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(f"⚠️ [index-refresh] timeout user={user_id} conv={conv_id}")
         except Exception as e:
             print(f"⚠️ Failed to refresh index for {conv_id}: {e}")
 
-    def invalidate_cache(self):
+    def invalidate_cache(self) -> None:
         """Clear service caches so UI reads latest state."""
         self._conversations_cache = None
         self._conversations_cache_time = None
@@ -861,27 +852,27 @@ class LiveChatService:
         self._index_counters_cache = self._empty_counters()
         self._index_counters_cache_time = None
 
-    def _dedupe_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _dedupe_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return contract_dedupe_messages(messages)
 
-    def _is_smart_message(self, message: Dict[str, Any]) -> bool:
+    def _is_smart_message(self, message: dict[str, Any]) -> bool:
         metadata = (message or {}).get("metadata", {}) or {}
         return metadata.get("source") == "smart_message"
 
-    def _visible_chat_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _visible_chat_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Live Chat UI shows all messages including smart messages (scheduled/sent from Smart Messaging).
         Operators need to see the full conversation including automated messages.
         """
         return list(messages or [])
 
-    def _is_cache_fresh(self, cache_time: Optional[datetime.datetime], ttl_seconds: Optional[int] = None) -> bool:
+    def _is_cache_fresh(self, cache_time: datetime.datetime | None, ttl_seconds: int | None = None) -> bool:
         if cache_time is None:
             return False
         ttl = ttl_seconds or self.CACHE_TTL
         return (utc_now() - cache_time).total_seconds() < ttl
 
-    def _get_users_collection(self):
+    def _get_users_collection(self) -> Any:
         db = get_firestore_db()
         if not db:
             return None
@@ -890,49 +881,39 @@ class LiveChatService:
     # Limit users scanned when no search - speeds up first load (150 users ≈ top conversations)
     USERS_STREAM_LIMIT = 150
 
-    async def _stream_user_docs(self, users_collection, limit: Optional[int] = None):
+    async def _stream_user_docs(self, users_collection: Any, limit: int | None = None) -> Any:
         if users_collection is None:
             return []
         try:
             q = users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING)
             if limit is not None:
                 q = q.limit(limit)
-            return await asyncio.to_thread(
-                lambda: list(q.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
-            )
+            return await asyncio.to_thread(lambda: list(q.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)))
         except Exception:
             try:
                 return await asyncio.to_thread(
-                    lambda: list(
-                        users_collection.stream(
-                            timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
-                        )
-                    )
+                    lambda: list(users_collection.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
                 )
             except Exception:
                 return []
 
-    async def _stream_user_conversations(self, users_collection, user_id: str):
+    async def _stream_user_conversations(self, users_collection: Any, user_id: str) -> Any:
         try:
             conversations_collection = users_collection.document(user_id).collection(
                 config.FIRESTORE_CONVERSATIONS_COLLECTION
             )
             conversations_docs = await asyncio.to_thread(
-                lambda: list(
-                    conversations_collection.stream(
-                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS
-                    )
-                )
+                lambda: list(conversations_collection.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
             )
             return user_id, conversations_docs
         except Exception as e:
             print(f"⚠️ Error fetching conversations for user {user_id}: {e}")
             return user_id, []
 
-    async def _stream_conversations_for_users(self, users_collection, user_ids: List[str]):
+    async def _stream_conversations_for_users(self, users_collection: Any, user_ids: list[str]) -> Any:
         semaphore = asyncio.Semaphore(self.FIRESTORE_FETCH_PARALLELISM)
 
-        async def _bounded_fetch(uid: str):
+        async def _bounded_fetch(uid: str) -> Any:
             async with semaphore:
                 return await self._stream_user_conversations(users_collection, uid)
 
@@ -956,7 +937,7 @@ class LiveChatService:
             return age_hours <= 24 * 30
         return True
 
-    async def _collect_history_customer_rows(self) -> List[Dict[str, Any]]:
+    async def _collect_history_customer_rows(self) -> list[dict[str, Any]]:
         """All WhatsApp chat customers with last activity (no search / time-window / pagination)."""
         users_collection = self._get_users_collection()
         if users_collection is None:
@@ -966,7 +947,7 @@ class LiveChatService:
         user_ids = [doc.id for doc in users_docs]
         fetch_results = await self._stream_conversations_for_users(users_collection, user_ids)
 
-        customers: List[Dict[str, Any]] = []
+        customers: list[dict[str, Any]] = []
         for result in fetch_results:
             if isinstance(result, Exception):
                 continue
@@ -975,7 +956,7 @@ class LiveChatService:
 
             latest_timestamp = None
             latest_message_text = ""
-            latest_customer_info = {}
+            latest_customer_info: dict[str, Any] = {}
             total_messages = 0
             conversation_count = 0
 
@@ -1003,11 +984,7 @@ class LiveChatService:
             if latest_timestamp is None:
                 continue
 
-            user_name = (
-                latest_customer_info.get("name")
-                or config.user_names.get(user_id)
-                or ""
-            )
+            user_name = latest_customer_info.get("name") or config.user_names.get(str(user_id or "")) or ""
             phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=latest_customer_info)
             if not user_name and phone_full and phone_full != "Unknown":
                 user_name = phone_full
@@ -1015,25 +992,27 @@ class LiveChatService:
                 user_name = "Unknown Customer"
             gender = latest_customer_info.get("gender") or config.user_gender.get(user_id, "unknown")
 
-            customers.append({
-                "user_id": user_id,
-                "user_name": user_name,
-                "phone_full": phone_full,
-                "phone_clean": phone_clean,
-                "gender": gender,
-                "last_message": latest_message_text,
-                "last_message_time": latest_timestamp.isoformat(),
-                "message_count": total_messages,
-                "conversation_count": conversation_count,
-                "unread_count": 0,
-            })
+            customers.append(
+                {
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "phone_full": phone_full,
+                    "phone_clean": phone_clean,
+                    "gender": gender,
+                    "last_message": latest_message_text,
+                    "last_message_time": latest_timestamp.isoformat(),
+                    "message_count": total_messages,
+                    "conversation_count": conversation_count,
+                    "unread_count": 0,
+                }
+            )
 
         return customers
 
     async def user_chats_mention_any_service_name(
         self,
         user_id: str,
-        service_names: List[str],
+        service_names: list[str],
     ) -> bool:
         """
         True if recent visible chat text contains any of the given service names (substring, lowercase).
@@ -1047,13 +1026,17 @@ class LiveChatService:
         if not db:
             return False
 
-        conversations_collection = db.collection("artifacts").document(self.APP_ID).collection("users").document(
-            user_id
-        ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+        conversations_collection = (
+            db.collection("artifacts")
+            .document(self.APP_ID)
+            .collection("users")
+            .document(user_id)
+            .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+        )
 
         conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
 
-        blob_parts: List[str] = []
+        blob_parts: list[str] = []
         for conv_doc in conversations_docs:
             conv_data = normalize_conversation_document(
                 conversation_id=conv_doc.id,
@@ -1071,7 +1054,9 @@ class LiveChatService:
                 return True
         return False
 
-    def _paginate(self, items: List[Dict[str, Any]], page: int, page_size: int) -> Tuple[List[Dict[str, Any]], int, int]:
+    def _paginate(
+        self, items: list[dict[str, Any]], page: int, page_size: int
+    ) -> tuple[list[dict[str, Any]], int, int]:
         safe_page = max(1, int(page))
         safe_page_size = max(1, min(int(page_size), 1000))
         total_items = len(items)
@@ -1080,7 +1065,9 @@ class LiveChatService:
         end = start + safe_page_size
         return items[start:end], total_items, total_pages
 
-    async def _legacy_active_scan_for_fallback(self, search: Optional[str] = None, user_limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    async def _legacy_active_scan_for_fallback(
+        self, search: str | None = None, user_limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Lightweight scan of conversations (legacy path) used only as a safety fallback when index is empty."""
         users_collection = self._get_users_collection()
         if users_collection is None:
@@ -1091,7 +1078,7 @@ class LiveChatService:
             user_ids = [doc.id for doc in users_docs]
             conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
 
-            conversations: List[Dict[str, Any]] = []
+            conversations: list[dict[str, Any]] = []
             current_time = utc_now()
             for result in conversation_results:
                 if isinstance(result, Exception):
@@ -1106,7 +1093,11 @@ class LiveChatService:
                     state = self._normalize_conversation_state(conv_data)
                     messages = self._visible_chat_messages(conv_data.get("messages", []) or [])
                     last_msg = messages[-1] if messages else {}
-                    last_at = self._parse_timestamp(last_msg.get("timestamp")) if last_msg else conv_data.get("last_updated") or current_time
+                    last_at = (
+                        self._parse_timestamp(last_msg.get("timestamp"))
+                        if last_msg
+                        else conv_data.get("last_updated") or current_time
+                    )
                     if isinstance(last_at, str):
                         try:
                             last_at = self._parse_timestamp(last_at)
@@ -1119,7 +1110,9 @@ class LiveChatService:
                         continue
 
                     customer_info = conv_data.get("customer_info") or {}
-                    user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                    user_name = (
+                        customer_info.get("name") or config.user_names.get(str(user_id or "")) or "Unknown Customer"
+                    )
                     phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
                     language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
                     sentiment = conv_data.get("sentiment", "neutral")
@@ -1131,21 +1124,23 @@ class LiveChatService:
                     else:
                         status = "bot"
 
-                    conversations.append({
-                        "conversation_id": conv_doc.id,
-                        "user_id": user_id,
-                        "user_name": user_name,
-                        "user_phone": phone_full,
-                        "phone_clean": phone_clean,
-                        "last_message": last_msg.get("text", "") if last_msg else "",
-                        "last_activity": last_at.isoformat(),
-                        "status": status,
-                        "conversation_state": state,
-                        "language": language,
-                        "operator_id": conv_data.get("operator_id"),
-                        "sentiment": sentiment,
-                        "message_count": len(messages),
-                    })
+                    conversations.append(
+                        {
+                            "conversation_id": conv_doc.id,
+                            "user_id": user_id,
+                            "user_name": user_name,
+                            "user_phone": phone_full,
+                            "phone_clean": phone_clean,
+                            "last_message": last_msg.get("text", "") if last_msg else "",
+                            "last_activity": last_at.isoformat(),
+                            "status": status,
+                            "conversation_state": state,
+                            "language": language,
+                            "operator_id": conv_data.get("operator_id"),
+                            "sentiment": sentiment,
+                            "message_count": len(messages),
+                        }
+                    )
 
             conversations.sort(key=lambda x: x["last_activity"], reverse=True)
             if search:
@@ -1161,126 +1156,12 @@ class LiveChatService:
         page: int,
         page_size: int,
         filter_state: str,
-    ) -> Dict[str, Any]:
-        """Resilient inbox loader that reads source conversations directly when index is empty/unavailable."""
-        users_collection = self._get_users_collection()
-        if users_collection is None:
-            return {"success": False, "chats": [], "total": 0, "has_more": False, "error": "firestore_missing"}
-
-        search_val = (search or "").strip().lower()
-        state_values = self._state_filter_values(filter_state)
-        safe_size = max(1, min(int(page_size), 100))
-        user_limit = self.FALLBACK_SEARCH_USERS_LIMIT if search_val else self.FALLBACK_USERS_STREAM_LIMIT
-
-        try:
-            users_docs = await self._stream_user_docs(
-                users_collection, limit=user_limit
-            )
-            user_ids = [doc.id for doc in users_docs]
-            conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
-
-            chats: List[Dict[str, Any]] = []
-            counters = {
-                "all": 0,
-                "waiting": 0,
-                "with_operator": 0,
-                "bot_active": 0,
-                "closed": 0,
-            }
-
-            for result in conversation_results:
-                if isinstance(result, Exception):
-                    continue
-                user_id, conv_docs = result
-                for conv_doc in conv_docs:
-                    payload = conv_doc.to_dict() or {}
-                    conv_data = self._canonical_conversation(conv_doc.id, user_id, payload)
-                    state = conv_data.get("conversation_state")
-                    if state_values and state not in state_values:
-                        continue
-
-                    customer_info = conv_data.get("customer_info") or {}
-                    user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
-                    phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
-                    last_at = conv_data.get("last_message_at") or utc_now()
-                    if isinstance(last_at, str):
-                        try:
-                            last_at = self._parse_timestamp(last_at)
-                        except Exception:
-                            last_at = utc_now()
-
-                    customer_info_fb = conv_data.get("customer_info") or {}
-                    is_new_fb = customer_info_fb.get("crm_customer_exists") is False
-                    chat_entry = {
-                        "conversation_id": conv_doc.id,
-                        "user_id": user_id,
-                        "user_name": user_name,
-                        "phone_number": phone_full,
-                        "phone_clean": phone_clean,
-                        "last_message_text": conv_data.get("last_message_text", ""),
-                        "last_message_at": last_at.isoformat(),
-                        "conversation_state": state,
-                        "operator_id": conv_data.get("operator_id"),
-                        "human_takeover_active": conv_data.get("human_takeover_active"),
-                        "post_release_escalation_suppressed_until": conv_data.get(
-                            "post_release_escalation_suppressed_until"
-                        ),
-                        "unread_count": conv_data.get("unread_count", 0),
-                        "language": config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
-                        "sentiment": conv_data.get("sentiment", "neutral"),
-                        "message_count": conv_data.get("message_count", len(conv_data.get("visible_messages", []))),
-                        "is_new_customer": is_new_fb,
-                    }
-
-                    if search_val:
-                        if not (
-                            search_val in str(chat_entry.get("user_name", "")).lower()
-                            or search_val in str(chat_entry.get("phone_number", "")).lower()
-                            or search_val in str(chat_entry.get("phone_clean", "")).lower()
-                        ):
-                            continue
-
-                    chats.append(chat_entry)
-
-                    counters["all"] += 1
-                    if state == self.STATE_WAITING_OPERATOR:
-                        counters["waiting"] += 1
-                    if state == self.STATE_ASSIGNED:
-                        counters["with_operator"] += 1
-                    if state == self.STATE_BOT_ACTIVE:
-                        counters["bot_active"] += 1
-                    if state in {self.STATE_RESOLVED, self.STATE_ARCHIVED}:
-                        counters["closed"] += 1
-
-            chats.sort(key=lambda c: c.get("last_message_at", ""), reverse=True)
-
-            start = max(0, (max(1, int(page)) - 1) * safe_size)
-            paged = chats[start:start + safe_size]
-            paged = [self._to_frontend_chat_format(c) for c in paged]
-            has_more = len(chats) > start + safe_size
-            next_cursor = None
-            if has_more:
-                last = chats[start:start + safe_size][-1]
-                next_cursor = f"{last['last_message_at']}|{last['conversation_id']}"
-
-            return {
-                "success": True,
-                "chats": paged,
-                "total": len(paged),
-                "page": page,
-                "page_size": safe_size,
-                "has_more": has_more,
-                "next_cursor": next_cursor,
-                "filter": filter_state,
-                "counters": counters,
-                "search": search,
-                "source": "firestore_fallback",
-            }
-        except Exception as e:
-            print(f"⚠️ fallback unified chats failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return {"success": False, "chats": [], "total": 0, "has_more": False, "error": str(e)}
+    ) -> dict:
+        """Removed from request paths. Use scripts/backfill_live_chat_index.py."""
+        raise RuntimeError(
+            "Legacy Live Chat full-scan is disabled; run scripts/backfill_live_chat_index.py "
+            "or POST /api/live-chat/rebuild-index"
+        )
 
     async def _fallback_unified_chats_with_timeout(
         self,
@@ -1288,50 +1169,11 @@ class LiveChatService:
         page: int,
         page_size: int,
         filter_state: str,
-    ) -> Dict[str, Any]:
-        try:
-            return await asyncio.wait_for(
-                self._fallback_unified_chats(search, page, page_size, filter_state),
-                timeout=self.FALLBACK_UNIFIED_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            return {
-                "success": False,
-                "chats": [],
-                "total": 0,
-                "has_more": False,
-                "error": "fallback_timeout",
-            }
-        
-    async def get_active_conversations(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Backward-compatible wrapper: return master inbox page 1 (no 6h filter)."""
-        try:
-            unified = await self.get_unified_chats(search=search or "", page=1, page_size=200)
-            return [
-                {
-                    "conversation_id": c.get("conversation_id"),
-                    "user_id": c.get("user_id"),
-                    "user_name": c.get("user_name"),
-                    "user_phone": c.get("user_phone") or c.get("phone_number"),
-                    "phone_clean": c.get("phone_clean"),
-                    "last_message": c.get("last_message_text") or ((c.get("last_message") or {}).get("content") if isinstance(c.get("last_message"), dict) else ""),
-                    "last_activity": c.get("last_activity") or c.get("last_message_at"),
-                    "status": c.get("status") or self._conversation_state_to_status(c.get("conversation_state")),
-                    "conversation_state": c.get("conversation_state"),
-                    "operator_id": c.get("operator_id"),
-                    "human_takeover_active": c.get("human_takeover_active"),
-                    "post_release_escalation_suppressed_until": c.get(
-                        "post_release_escalation_suppressed_until"
-                    ),
-                    "unread_count": c.get("unread_count", 0),
-                }
-                for c in unified.get("chats", [])
-            ]
-        except Exception as e:
-            print(f"❌ Error getting active conversations: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+    ) -> dict:
+        raise RuntimeError(
+            "Legacy Live Chat full-scan is disabled; run scripts/backfill_live_chat_index.py "
+            "or POST /api/live-chat/rebuild-index"
+        )
 
     async def get_unified_chats(
         self,
@@ -1339,12 +1181,12 @@ class LiveChatService:
         page: int = 1,
         page_size: int = 30,
         filter_state: str = "all",
-        cursor: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
         """
         WhatsApp-style inbox driven ONLY by live_chat_index.
         - Single master list ordered by last_message_at desc
-        - Optional filter by conversation_state badge
+        -  filter by conversation_state badge
         - Cursor-based pagination (last_message_at + conversation_id)
         - Search by name / phone against index documents
         """
@@ -1353,11 +1195,7 @@ class LiveChatService:
         state_values = self._state_filter_values(filter_state)
         page_num = max(1, int(page))
         can_use_stale_cache = (
-            page_num == 1
-            and not search_val
-            and not cursor
-            and not state_values
-            and bool(self._unified_chats_cache)
+            page_num == 1 and not search_val and not cursor and not state_values and bool(self._unified_chats_cache)
         )
         use_cache_fallback = (
             page_num == 1
@@ -1365,30 +1203,21 @@ class LiveChatService:
             and not cursor
             and not state_values
             and bool(self._unified_chats_cache)
-            and (
-                self._unified_chats_cache_page_size is None
-                or self._unified_chats_cache_page_size == safe_size
-            )
+            and (self._unified_chats_cache_page_size is None or self._unified_chats_cache_page_size == safe_size)
         )
         if use_cache_fallback and self._is_cache_fresh(
             self._unified_chats_cache_time,
             ttl_seconds=self.UNIFIED_CACHE_TTL,
         ):
-            print(
-                f"[live_chat:unified] source=memory_cache page={page_num} size={safe_size} search={bool(search_val)}"
-            )
-            return self._cached_unified_response(
-                page_num, safe_size, filter_state, search
-            )
+            print(f"[live_chat:unified] source=memory_cache page={page_num} size={safe_size} search={bool(search_val)}")
+            return self._cached_unified_response(page_num, safe_size, filter_state, search)
 
         try:
             request_started = utc_now()
             db = get_firestore_db()
             if not db:
                 if can_use_stale_cache:
-                    return self._cached_unified_response(
-                        page_num, safe_size, filter_state, search
-                    )
+                    return self._cached_unified_response(page_num, safe_size, filter_state, search)
                 return self._empty_unified_response(
                     page_num,
                     safe_size,
@@ -1400,7 +1229,9 @@ class LiveChatService:
             index_coll = self._index_collection(db)
 
             # Build base query (ordered for pagination)
-            query = index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING).order_by("conversation_id")
+            query = index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING).order_by(
+                "conversation_id"
+            )
 
             if state_values:
                 if len(state_values) == 1:
@@ -1429,7 +1260,7 @@ class LiveChatService:
             if state_values and not search_val:
                 fetch_limit = min(max((safe_size + 1) * 15, 150), 500)
 
-            def _stream_page(q, after_doc=None):
+            def _stream_page(q: Any, after_doc: Any | None = None) -> Any:
                 use_q = q
                 if after_doc:
                     use_q = use_q.start_after(after_doc)
@@ -1451,7 +1282,8 @@ class LiveChatService:
             # If search provided, widen fetch so we find users by phone/name even if inactive for years
             if search_val:
                 widen_limit = self.SEARCH_WIDEN_MAX_DOCS
-                def _stream_search(q):
+
+                def _stream_search(q: Any) -> Any:
                     use_q = q
                     if state_values:
                         use_q = use_q
@@ -1461,6 +1293,7 @@ class LiveChatService:
                             retry=None,
                         )
                     )
+
                 docs = await self._run_blocking_with_timeout(
                     lambda: _stream_search(query),
                     self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
@@ -1471,46 +1304,25 @@ class LiveChatService:
 
             if not docs:
                 if can_use_stale_cache:
-                    return self._cached_unified_response(
-                        page_num, safe_size, filter_state, search
-                    )
-                fallback = await self._fallback_unified_chats_with_timeout(
-                    search=search,
-                    page=page_num,
-                    page_size=safe_size,
-                    filter_state=filter_state,
+                    return self._cached_unified_response(page_num, safe_size, filter_state, search)
+                # Never N+1 full-scan conversations on the list path.
+                # Operators must run scripts/backfill_live_chat_index.py (or rebuild-index API).
+                print(
+                    "[live_chat:unified] index empty — refusing legacy full scan; run live chat index backfill/rebuild"
                 )
-                if fallback.get("success"):
-                    if (
-                        page_num == 1
-                        and not cursor
-                        and not search_val
-                        and not state_values
-                    ):
-                        self._unified_chats_cache = list(fallback.get("chats") or [])
-                        self._unified_chats_cache_time = utc_now()
-                        self._unified_chats_cache_has_more = bool(
-                            fallback.get("has_more")
-                        )
-                        self._unified_chats_cache_total = int(
-                            fallback.get("total")
-                            or len(fallback.get("chats") or [])
-                        )
-                        self._unified_chats_cache_next_cursor = fallback.get(
-                            "next_cursor"
-                        )
-                        self._unified_chats_cache_page_size = safe_size
-                        self._persist_unified_cache_to_disk()
-                    return fallback
-                return self._empty_unified_response(
-                    page_num,
-                    safe_size,
-                    filter_state,
-                    search,
-                    source="index_empty",
-                )
+                return {
+                    "success": True,
+                    "chats": [],
+                    "total": 0,
+                    "page": page_num,
+                    "page_size": safe_size,
+                    "has_more": False,
+                    "next_cursor": None,
+                    "index_empty": True,
+                    "requires_index_rebuild": True,
+                }
 
-            chats: List[Dict[str, Any]] = []
+            chats: list[dict[str, Any]] = []
             allowed_states = set(state_values) if state_values else None
             for doc in docs:
                 data = doc.to_dict() or {}
@@ -1530,7 +1342,12 @@ class LiveChatService:
                         continue
                 customer_info = data.get("customer_info") or {}
                 user_id = data.get("user_id")
-                user_name = data.get("user_name") or customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                user_name = (
+                    data.get("user_name")
+                    or customer_info.get("name")
+                    or config.user_names.get(str(user_id or ""))
+                    or "Unknown Customer"
+                )
                 phone_full = data.get("user_phone") or customer_info.get("phone_full") or ""
                 phone_clean = data.get("phone_clean") or customer_info.get("phone_clean") or ""
                 last_at = data.get("last_message_at") or data.get("last_updated")
@@ -1547,16 +1364,20 @@ class LiveChatService:
                     "phone_number": phone_full,
                     "phone_clean": phone_clean,
                     "last_message_text": data.get("last_message_text", ""),
-                    "last_message_at": last_at.isoformat() if hasattr(last_at, "isoformat") else str(last_at),
+                    "last_message_at": (
+                        last_at.isoformat()
+                        if last_at is not None and hasattr(last_at, "isoformat")
+                        else str(last_at or "")
+                    ),
                     "conversation_state": state,
                     "operator_id": data.get("operator_id"),
                     # Exposed for dashboard: after release, last_message may still be waiting-queue text — UI must not re-classify as waiting.
                     "human_takeover_active": data.get("human_takeover_active"),
-                    "post_release_escalation_suppressed_until": data.get(
-                        "post_release_escalation_suppressed_until"
-                    ),
+                    "post_release_escalation_suppressed_until": data.get("post_release_escalation_suppressed_until"),
                     "unread_count": data.get("unread_count", 0),
-                    "language": data.get("language") or customer_info.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar"),
+                    "language": data.get("language")
+                    or customer_info.get("language")
+                    or config.user_data_whatsapp.get(str(user_id or ""), {}).get("user_preferred_lang", "ar"),
                     "sentiment": data.get("sentiment", "neutral"),
                     "message_count": data.get("message_count", 0),
                     "is_new_customer": data.get("is_new_customer", False),
@@ -1565,7 +1386,8 @@ class LiveChatService:
 
             if search_val:
                 chats = [
-                    c for c in chats
+                    c
+                    for c in chats
                     if search_val in str(c.get("user_name", "")).lower()
                     or search_val in str(c.get("phone_number", "")).lower()
                     or search_val in str(c.get("phone_clean", "")).lower()
@@ -1615,9 +1437,7 @@ class LiveChatService:
                 counters = dict(self._index_counters_cache or self._empty_counters())
 
             elapsed_ms = int((utc_now() - request_started).total_seconds() * 1000)
-            print(
-                f"[live_chat:unified] return chats={len(paged)} has_more={has_more} elapsed_ms={elapsed_ms}"
-            )
+            print(f"[live_chat:unified] return chats={len(paged)} has_more={has_more} elapsed_ms={elapsed_ms}")
 
             return {
                 "success": True,
@@ -1634,50 +1454,23 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error in get_unified_chats: {e}")
             import traceback
+
             traceback.print_exc()
-            fallback = await self._fallback_unified_chats_with_timeout(
-                search=search,
-                page=page_num,
-                page_size=safe_size,
-                filter_state=filter_state,
-            )
-            if fallback.get("success"):
-                if (
-                    page_num == 1
-                    and not cursor
-                    and not search_val
-                    and not state_values
-                ):
-                    self._unified_chats_cache = list(fallback.get("chats") or [])
-                    self._unified_chats_cache_time = utc_now()
-                    self._unified_chats_cache_has_more = bool(
-                        fallback.get("has_more")
-                    )
-                    self._unified_chats_cache_total = int(
-                        fallback.get("total")
-                        or len(fallback.get("chats") or [])
-                    )
-                    self._unified_chats_cache_next_cursor = fallback.get(
-                        "next_cursor"
-                    )
-                    self._unified_chats_cache_page_size = safe_size
-                    self._persist_unified_cache_to_disk()
-                return fallback
+            # Never fall back to legacy full-scan on errors — use cache or empty + rebuild signal.
             if can_use_stale_cache:
-                return self._cached_unified_response(
-                    page_num, safe_size, filter_state, search
-                )
-            return self._empty_unified_response(
+                return self._cached_unified_response(page_num, safe_size, filter_state, search)
+            empty = self._empty_unified_response(
                 page_num,
                 safe_size,
                 filter_state,
                 search,
                 source="index_error",
             )
+            if isinstance(empty, dict):
+                empty["requires_index_rebuild"] = True
+            return empty
 
-    def _identity_keys_for_index_chat(
-        self, user_id: Any, phone_full: str, phone_clean: str
-    ) -> set:
+    def _identity_keys_for_index_chat(self, user_id: Any, phone_full: str, phone_clean: str) -> set:
         keys = set()
         for part in (user_id, phone_full, phone_clean):
             k = phone_match_key(part)
@@ -1688,10 +1481,10 @@ class LiveChatService:
     async def get_chats_by_template_send_log(
         self,
         template_id: str,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-        scan_limit: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        date_from: str | None = None,
+        date_to: str | None = None,
+        scan_limit: int | None = None,
+    ) -> dict[str, Any]:
         """
         Match live_chat_index rows to Smart Messaging message_logs (successful template sends).
         Scans up to scan_limit index docs (newest first). Date filter applies to log sent_at (UTC day).
@@ -1752,7 +1545,7 @@ class LiveChatService:
 
         index_coll = self._index_collection(db)
 
-        def _stream():
+        def _stream() -> Any:
             return list(
                 index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
                 .order_by("conversation_id")
@@ -1778,7 +1571,7 @@ class LiveChatService:
                 "index_scanned": 0,
             }
 
-        matched: List[Dict[str, Any]] = []
+        matched: list[dict[str, Any]] = []
         for doc in docs or []:
             data = doc.to_dict() or {}
             state = self._normalize_conversation_state(data)
@@ -1787,7 +1580,7 @@ class LiveChatService:
             user_name = (
                 data.get("user_name")
                 or customer_info.get("name")
-                or config.user_names.get(user_id)
+                or config.user_names.get(str(user_id or ""))
                 or "Unknown Customer"
             )
             phone_full = data.get("user_phone") or customer_info.get("phone_full") or ""
@@ -1815,21 +1608,17 @@ class LiveChatService:
                 "phone_number": phone_full,
                 "phone_clean": phone_clean,
                 "last_message_text": data.get("last_message_text", ""),
-                "last_message_at": last_at.isoformat()
-                if hasattr(last_at, "isoformat")
-                else str(last_at),
+                "last_message_at": (
+                    last_at.isoformat() if last_at is not None and hasattr(last_at, "isoformat") else str(last_at or "")
+                ),
                 "conversation_state": state,
                 "operator_id": data.get("operator_id"),
                 "human_takeover_active": data.get("human_takeover_active"),
-                "post_release_escalation_suppressed_until": data.get(
-                    "post_release_escalation_suppressed_until"
-                ),
+                "post_release_escalation_suppressed_until": data.get("post_release_escalation_suppressed_until"),
                 "unread_count": data.get("unread_count", 0),
                 "language": data.get("language")
                 or customer_info.get("language")
-                or config.user_data_whatsapp.get(user_id, {}).get(
-                    "user_preferred_lang", "ar"
-                ),
+                or config.user_data_whatsapp.get(str(user_id or ""), {}).get("user_preferred_lang", "ar"),
                 "sentiment": data.get("sentiment", "neutral"),
                 "message_count": data.get("message_count", 0),
                 "is_new_customer": data.get("is_new_customer", False),
@@ -1854,7 +1643,7 @@ class LiveChatService:
             "date_to": dt or "",
         }
 
-    async def _compute_index_counters(self) -> Dict[str, int]:
+    async def _compute_index_counters(self) -> dict[str, int]:
         """Compute dashboard counters directly from live_chat_index (best-effort, capped for performance)."""
         if self._is_cache_fresh(
             self._index_counters_cache_time,
@@ -1872,16 +1661,12 @@ class LiveChatService:
             # Cap to avoid massive scans on every dashboard refresh.
             docs = await asyncio.to_thread(
                 lambda: list(
-                    index_coll.order_by(
-                        "last_message_at", direction=firestore.Query.DESCENDING
-                    )
+                    index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
                     .limit(self.INDEX_COUNTER_SCAN_LIMIT)
                     .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)
                 ),
             )
-            print(
-                f"[live_chat:counters] source=index docs_scanned={len(docs)} limit={self.INDEX_COUNTER_SCAN_LIMIT}"
-            )
+            print(f"[live_chat:counters] source=index docs_scanned={len(docs)} limit={self.INDEX_COUNTER_SCAN_LIMIT}")
             for doc in docs:
                 data = doc.to_dict() or {}
                 state = self._normalize_conversation_state(data)
@@ -1909,7 +1694,7 @@ class LiveChatService:
         filter_by: str = "all",
         page: int = 1,
         page_size: int = 200,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Canonical customer list for chat history."""
         try:
             users_collection = self._get_users_collection()
@@ -1933,11 +1718,9 @@ class LiveChatService:
                 customers = filtered_customers
 
             customers = [
-                customer for customer in customers
-                if self._history_filter_match(
-                    self._parse_timestamp(customer.get("last_message_time")),
-                    filter_by
-                )
+                customer
+                for customer in customers
+                if self._history_filter_match(self._parse_timestamp(customer.get("last_message_time")), filter_by)
             ]
 
             customers.sort(key=lambda item: item.get("last_message_time", ""), reverse=True)
@@ -1954,6 +1737,7 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error getting history customers: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e)}
 
@@ -1964,7 +1748,7 @@ class LiveChatService:
         page_size: int = 200,
         status: str = "all",
         search: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Canonical conversation list for a single user."""
         try:
             db = get_firestore_db()
@@ -1972,13 +1756,17 @@ class LiveChatService:
                 return {"success": False, "error": "Firestore not initialized"}
 
             app_id = "linas-ai-bot-backend"
-            conversations_collection = db.collection("artifacts").document(app_id).collection("users").document(
-                user_id
-            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            conversations_collection = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            )
 
             conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
 
-            conversations: List[Dict[str, Any]] = []
+            conversations: list[dict[str, Any]] = []
             total_messages = 0
             for conv_doc in conversations_docs:
                 conv_data = normalize_conversation_document(
@@ -2003,16 +1791,18 @@ class LiveChatService:
                         "type": raw_last.get("type", "text"),
                     }
 
-                conversations.append({
-                    "id": conv_doc.id,
-                    "message_count": message_count,
-                    "last_message": last_message,
-                    "timestamp": last_timestamp.isoformat(),
-                    "user_id": conv_data.get("user_id", user_id),
-                    "sentiment": conv_data.get("sentiment", "neutral"),
-                    "human_takeover_active": conv_data.get("human_takeover_active", False),
-                    "status": conv_data.get("status", "active"),
-                })
+                conversations.append(
+                    {
+                        "id": conv_doc.id,
+                        "message_count": message_count,
+                        "last_message": last_message,
+                        "timestamp": last_timestamp.isoformat(),
+                        "user_id": conv_data.get("user_id", user_id),
+                        "sentiment": conv_data.get("sentiment", "neutral"),
+                        "human_takeover_active": conv_data.get("human_takeover_active", False),
+                        "status": conv_data.get("status", "active"),
+                    }
+                )
 
             if status and status != "all":
                 conversations = [conv for conv in conversations if conv.get("status") == status]
@@ -2020,7 +1810,8 @@ class LiveChatService:
             search_value = (search or "").strip().lower()
             if search_value:
                 conversations = [
-                    conv for conv in conversations
+                    conv
+                    for conv in conversations
                     if search_value in str(conv.get("id", "")).lower()
                     or search_value in str(conv.get("status", "")).lower()
                     or search_value in str((conv.get("last_message") or {}).get("text", "")).lower()
@@ -2042,6 +1833,7 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error getting history conversations for {user_id}: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e)}
 
@@ -2053,7 +1845,7 @@ class LiveChatService:
         page_size: int = 1000,
         search: str = "",
         sort: str = "asc",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Canonical paginated message history for one conversation."""
         try:
             db = get_firestore_db()
@@ -2061,9 +1853,14 @@ class LiveChatService:
                 return {"success": False, "error": "Firestore not initialized", "messages": []}
 
             app_id = "linas-ai-bot-backend"
-            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(user_id).collection(
-                config.FIRESTORE_CONVERSATIONS_COLLECTION
-            ).document(conversation_id)
+            conv_ref = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
 
             conv_doc = await asyncio.to_thread(conv_ref.get)
             if not conv_doc.exists:
@@ -2079,16 +1876,17 @@ class LiveChatService:
             visible_messages = self._visible_chat_messages(messages)
             normalized_messages = []
             for msg in visible_messages:
-                normalized_messages.append({
-                    **msg,
-                    "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
-                })
+                normalized_messages.append(
+                    {
+                        **msg,
+                        "timestamp": self._parse_timestamp(msg.get("timestamp")).isoformat(),
+                    }
+                )
 
             search_value = (search or "").strip().lower()
             if search_value:
                 normalized_messages = [
-                    msg for msg in normalized_messages
-                    if search_value in str(msg.get("text", "")).lower()
+                    msg for msg in normalized_messages if search_value in str(msg.get("text", "")).lower()
                 ]
 
             reverse_sort = str(sort).lower() == "desc"
@@ -2118,10 +1916,11 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error getting history messages for {conversation_id}: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e), "messages": []}
-    
-    async def get_client_conversations(self, user_id: str) -> List[Dict[str, Any]]:
+
+    async def get_client_conversations(self, user_id: str) -> list[dict[str, Any]]:
         """
         Get all conversations for a specific client (for expanded view)
         """
@@ -2131,14 +1930,18 @@ class LiveChatService:
                 return []
 
             app_id = "linas-ai-bot-backend"
-            conversations_collection = db.collection("artifacts").document(app_id).collection(
-                "users"
-            ).document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            conversations_collection = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+            )
 
             # ✅ Use asyncio.to_thread to prevent blocking the event loop
             conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
             conversations = []
-            
+
             for conv_doc in conversations_docs:
                 conv_data = normalize_conversation_document(
                     conversation_id=conv_doc.id,
@@ -2147,31 +1950,33 @@ class LiveChatService:
                 )
                 messages = conv_data.get("messages", [])
                 visible_messages = self._visible_chat_messages(messages)
-                
+
                 if not visible_messages:
                     continue
-                
+
                 last_message = visible_messages[-1]
                 last_message_time = self._parse_timestamp(last_message.get("timestamp"))
-                
-                conversations.append({
-                    "conversation_id": conv_doc.id,
-                    "message_count": len(visible_messages),
-                    "last_activity": last_message_time.isoformat(),
-                    "status": conv_data.get("status", "active"),
-                    "sentiment": conv_data.get("sentiment", "neutral"),
-                    "human_takeover_active": conv_data.get("human_takeover_active", False),
-                    "operator_id": conv_data.get("operator_id")
-                })
-            
+
+                conversations.append(
+                    {
+                        "conversation_id": conv_doc.id,
+                        "message_count": len(visible_messages),
+                        "last_activity": last_message_time.isoformat(),
+                        "status": conv_data.get("status", "active"),
+                        "sentiment": conv_data.get("sentiment", "neutral"),
+                        "human_takeover_active": conv_data.get("human_takeover_active", False),
+                        "operator_id": conv_data.get("operator_id"),
+                    }
+                )
+
             conversations.sort(key=lambda x: x["last_activity"], reverse=True)
             return conversations
-            
+
         except Exception as e:
             print(f"❌ Error getting client conversations: {e}")
             return []
-    
-    async def get_waiting_queue(self) -> List[Dict[str, Any]]:
+
+    async def get_waiting_queue(self) -> list[dict[str, Any]]:
         """
         Get conversations waiting for human intervention
         Queries live_chat_index for conversations_state == waiting_for_operator
@@ -2192,8 +1997,7 @@ class LiveChatService:
             try:
                 docs = await asyncio.to_thread(
                     lambda: list(
-                        index_coll
-                        .where("human_takeover_active", "==", True)
+                        index_coll.where("human_takeover_active", "==", True)
                         .order_by("last_message_at", direction=firestore.Query.DESCENDING)
                         .limit(300)
                         .stream(
@@ -2209,8 +2013,7 @@ class LiveChatService:
                 try:
                     docs = await asyncio.to_thread(
                         lambda: list(
-                            index_coll
-                            .where("conversation_state", "==", self.STATE_WAITING_OPERATOR)
+                            index_coll.where("conversation_state", "==", self.STATE_WAITING_OPERATOR)
                             .order_by("last_message_at", direction=firestore.Query.DESCENDING)
                             .limit(300)
                             .stream(
@@ -2220,17 +2023,20 @@ class LiveChatService:
                         )
                     )
                 except Exception as idx_err:
-                    print(f"⚠️ waiting_queue index query failed, switching to source fallback: {idx_err}")
+                    print(
+                        f"⚠️ waiting_queue index query failed — refusing source full-scan "
+                        f"(run index backfill): {idx_err}"
+                    )
                     docs = []
 
             if not docs:
-                fallback_queue = await self._fallback_waiting_queue_from_source()
-                if fallback_queue:
-                    self._queue_cache = fallback_queue
-                    self._queue_cache_time = current_time
-                    print(f"[live_chat:waiting_queue] source=fallback_source count={len(fallback_queue)}")
-                    return fallback_queue
-                print("[live_chat:waiting_queue] index empty and source fallback returned no waiting chats")
+                print(
+                    "[live_chat:waiting_queue] index empty — refusing source full-scan; "
+                    "run live chat index backfill/rebuild"
+                )
+                self._queue_cache = []
+                self._queue_cache_time = current_time
+                return []
 
             waiting_queue = []
 
@@ -2264,10 +2070,12 @@ class LiveChatService:
                 wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
                 customer_info = data.get("customer_info") or {}
                 user_id = data.get("user_id")
-                user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
+                user_name = customer_info.get("name") or config.user_names.get(str(user_id or "")) or "Unknown Customer"
                 phone_full = data.get("user_phone") or "Unknown"
                 phone_clean = data.get("phone_clean") or "Unknown"
-                language = data.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
+                language = data.get("language") or config.user_data_whatsapp.get(str(user_id or ""), {}).get(
+                    "user_preferred_lang", "ar"
+                )
                 sentiment = data.get("sentiment", "neutral")
                 priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
 
@@ -2289,134 +2097,39 @@ class LiveChatService:
                 }
 
                 waiting_queue.append(queue_item)
-            
-            # If index returned docs but none normalized to waiting, fall back to source scan.
+
+            # Index rows that do not normalize to waiting are not scanned from source.
             if not waiting_queue:
-                fallback_queue = await self._fallback_waiting_queue_from_source()
-                if fallback_queue:
-                    self._queue_cache = fallback_queue
-                    self._queue_cache_time = current_time
-                    print(f"[live_chat:waiting_queue] source=fallback_source_after_index count={len(fallback_queue)}")
-                    return fallback_queue
+                print("[live_chat:waiting_queue] index docs present but none waiting — refusing source full-scan")
 
             # Sort by priority (1=high, 2=normal) then by wait time (longest first)
             waiting_queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
-            
+
             # Update cache
             self._queue_cache = waiting_queue
             self._queue_cache_time = current_time
 
             print(f"📊 Waiting queue: {len(waiting_queue)} conversations")
-            
+
             return waiting_queue
-            
+
         except Exception as e:
             print(f"❌ Error getting waiting queue: {e}")
             import traceback
+
             traceback.print_exc()
             return []
 
-    async def _fallback_waiting_queue_from_source(self, limit: int = 500) -> List[Dict[str, Any]]:
-        """
-        Build waiting queue directly from source conversations (collection_group)
-        so waiting counters still work even when live_chat_index is stale.
-        """
-        db = get_firestore_db()
-        if not db:
-            return []
+    async def _fallback_waiting_queue_from_source(self, limit: int = 500) -> list:
+        """Removed from request paths. Use scripts/backfill_live_chat_index.py."""
+        raise RuntimeError(
+            "Legacy Live Chat waiting-queue source scan is disabled; "
+            "run scripts/backfill_live_chat_index.py or POST /api/live-chat/rebuild-index"
+        )
 
-        current_time = utc_now()
-        def _build_queue_items_from_conversation_docs(conversation_docs) -> List[Dict[str, Any]]:
-            out: List[Dict[str, Any]] = []
-            for doc in conversation_docs:
-                payload = doc.to_dict() or {}
-                user_doc_ref = doc.reference.parent.parent if doc.reference.parent else None
-                user_id = user_doc_ref.id if user_doc_ref else payload.get("user_id")
-                if not user_id:
-                    continue
-
-                conv_data = normalize_conversation_document(
-                    conversation_id=doc.id,
-                    user_id=user_id,
-                    payload=payload,
-                )
-                state = self._normalize_conversation_state(conv_data)
-                if state != self.STATE_WAITING_OPERATOR:
-                    continue
-
-                last_at = conv_data.get("last_message_at") or conv_data.get("last_updated") or current_time
-                if isinstance(last_at, str):
-                    try:
-                        last_at = self._parse_timestamp(last_at)
-                    except Exception:
-                        last_at = current_time
-
-                wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
-                customer_info = conv_data.get("customer_info") or {}
-                user_name = customer_info.get("name") or config.user_names.get(user_id) or "Unknown Customer"
-                phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
-                language = conv_data.get("language") or config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
-                sentiment = conv_data.get("sentiment", "neutral")
-                priority = 1 if sentiment == "negative" or wait_time_seconds > 300 else 2
-
-                is_new = customer_info.get("crm_customer_exists") is False
-                out.append({
-                    "conversation_id": doc.id,
-                    "user_id": user_id,
-                    "user_name": user_name,
-                    "user_phone": phone_full,
-                    "phone_clean": phone_clean,
-                    "language": language,
-                    "reason": conv_data.get("escalation_reason", "user_request"),
-                    "wait_time_seconds": wait_time_seconds,
-                    "sentiment": sentiment,
-                    "message_count": conv_data.get("message_count", 0),
-                    "unread_count": conv_data.get("unread_count", 0),
-                    "priority": priority,
-                    "last_message": conv_data.get("last_message_text", ""),
-                    "is_new_customer": is_new,
-                })
-            return out
-
-        try:
-            query = (
-                db.collection_group(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-                .where("human_takeover_active", "==", True)
-                .limit(limit)
-            )
-            docs = await asyncio.to_thread(
-                lambda: list(
-                    query.stream(
-                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
-                        retry=None,
-                    )
-                )
-            )
-            queue = _build_queue_items_from_conversation_docs(docs)
-        except Exception as e:
-            print(f"⚠️ Waiting source fallback query failed (collection_group): {e}")
-            queue = []
-            # Last-resort fallback that does not require collection_group indexes.
-            users_collection = self._get_users_collection()
-            if users_collection is not None:
-                users_docs = await self._stream_user_docs(
-                    users_collection,
-                    limit=self.WAITING_SOURCE_USERS_LIMIT,
-                )
-                user_ids = [doc.id for doc in users_docs]
-                conversation_results = await self._stream_conversations_for_users(users_collection, user_ids)
-                all_conv_docs = []
-                for result in conversation_results:
-                    if isinstance(result, Exception):
-                        continue
-                    _, conv_docs = result
-                    all_conv_docs.extend(conv_docs)
-                queue = _build_queue_items_from_conversation_docs(all_conv_docs)
-
-        queue.sort(key=lambda x: (x["priority"], -x["wait_time_seconds"]))
-        return queue
-    
-    async def end_conversation(self, conversation_id: str, user_id: str, operator_id: str, adapter=None) -> Dict[str, Any]:
+    async def end_conversation(
+        self, conversation_id: str, user_id: str, operator_id: str, adapter: Any | None = None
+    ) -> dict[str, Any]:
         """
         Mark conversation as resolved/ended
         - Sets status to 'resolved'
@@ -2430,12 +2143,17 @@ class LiveChatService:
             db = get_firestore_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
-            
+
             app_id = "linas-ai-bot-backend"
-            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                canonical_user_id
-            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-            
+            conv_ref = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(canonical_user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
+
             # Update conversation status
             update_data = {
                 "status": "resolved",
@@ -2445,7 +2163,7 @@ class LiveChatService:
                 "operator_id": None,
                 "conversation_state": self.STATE_RESOLVED,
             }
-            
+
             print(f"🔄 Updating conversation {conversation_id} with data: {update_data}")
             # ✅ Use asyncio.to_thread to prevent blocking the event loop
             await asyncio.to_thread(conv_ref.update, update_data)
@@ -2455,8 +2173,10 @@ class LiveChatService:
             updated_doc = await asyncio.to_thread(conv_ref.get)
             if updated_doc.exists:
                 updated_data = updated_doc.to_dict()
-                print(f"✅ Verified: status = {updated_data.get('status')}, resolved_by = {updated_data.get('resolved_by')}")
-            
+                print(
+                    f"✅ Verified: status = {updated_data.get('status')}, resolved_by = {updated_data.get('resolved_by')}"
+                )
+
             # Update in-memory state
             config.user_in_human_takeover_mode[canonical_user_id] = False
             if conversation_id in self.operator_sessions:
@@ -2464,8 +2184,10 @@ class LiveChatService:
 
             # Clear current_conversation_id so next message creates a new conversation
             if canonical_user_id in config.user_data_whatsapp:
-                config.user_data_whatsapp[canonical_user_id].pop('current_conversation_id', None)
-                print(f"🔄 Cleared current_conversation_id for {canonical_user_id} - next message will start new conversation")
+                config.user_data_whatsapp[canonical_user_id].pop("current_conversation_id", None)
+                print(
+                    f"🔄 Cleared current_conversation_id for {canonical_user_id} - next message will start new conversation"
+                )
 
             # Invalidate cache
             self.invalidate_cache()
@@ -2480,48 +2202,47 @@ class LiveChatService:
                     end_messages = {
                         "ar": "شكراً لتواصلك معنا! تم إنهاء المحادثة. إذا كان لديك أي استفسار آخر، لا تتردد في مراسلتنا مجدداً. 🌟",
                         "en": "Thank you for contacting us! This conversation has been ended. If you have any other questions, feel free to message us again. 🌟",
-                        "fr": "Merci de nous avoir contactés! Cette conversation est terminée. Si vous avez d'autres questions, n'hésitez pas à nous écrire à nouveau. 🌟"
+                        "fr": "Merci de nous avoir contactés! Cette conversation est terminée. Si vous avez d'autres questions, n'hésitez pas à nous écrire à nouveau. 🌟",
                     }
-                    
+
                     # Get user's preferred language from config
-                    user_lang = config.user_data_whatsapp.get(canonical_user_id, {}).get('user_preferred_lang', 'ar')
-                    notification_message = end_messages.get(user_lang, end_messages['ar'])
-                    
+                    user_lang = config.user_data_whatsapp.get(canonical_user_id, {}).get("user_preferred_lang", "ar")
+                    notification_message = end_messages.get(user_lang, end_messages["ar"])
+
                     # Send notification via WhatsApp
                     await adapter.send_text_message(canonical_user_id, notification_message)
                     print(f"✅ Sent end conversation notification to customer {user_id}")
-                    
+
                     # Save notification to Firebase
                     from utils.utils import save_conversation_message_to_firestore
+
                     await save_conversation_message_to_firestore(
                         user_id=canonical_user_id,
                         role="ai",
                         text=notification_message,
                         conversation_id=conversation_id,
-                        metadata={"type": "end_conversation_notification", "operator_id": operator_id}
+                        metadata={"type": "end_conversation_notification", "operator_id": operator_id},
                     )
                 except Exception as e:
                     print(f"⚠️ Failed to send end conversation notification: {e}")
-            
+
             print(f"✅ Conversation {conversation_id} marked as resolved by {operator_id}")
-            
+
             return {
                 "success": True,
                 "message": "Conversation ended successfully",
                 "conversation_id": conversation_id,
-                "status": "resolved"
+                "status": "resolved",
             }
-            
+
         except Exception as e:
             print(f"❌ Error ending conversation: {e}")
             import traceback
+
             traceback.print_exc()
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    async def reopen_conversation(self, conversation_id: str, user_id: str) -> Dict[str, Any]:
+            return {"success": False, "error": str(e)}
+
+    async def reopen_conversation(self, conversation_id: str, user_id: str) -> dict[str, Any]:
         """
         Reopen a resolved conversation (auto-called when customer messages again)
         """
@@ -2530,42 +2251,43 @@ class LiveChatService:
             db = get_firestore_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
-            
+
             app_id = "linas-ai-bot-backend"
-            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                canonical_user_id
-            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-            
+            conv_ref = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(canonical_user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
+
             # Reopen conversation - use asyncio.to_thread to prevent blocking
-            await asyncio.to_thread(conv_ref.update, {
-                "status": "active",
-                "reopened_at": utc_now(),
-                "resolved_at": None,
-                "resolved_by": None,
-                "conversation_state": self.STATE_BOT_ACTIVE,
-                "human_takeover_active": False,
-                "operator_id": None,
-            })
-            
+            await asyncio.to_thread(
+                conv_ref.update,
+                {
+                    "status": "active",
+                    "reopened_at": utc_now(),
+                    "resolved_at": None,
+                    "resolved_by": None,
+                    "conversation_state": self.STATE_BOT_ACTIVE,
+                    "human_takeover_active": False,
+                    "operator_id": None,
+                },
+            )
+
             print(f"✅ Conversation {conversation_id} reopened (customer messaged again)")
 
             # Refresh index so UI picks up the reopened state
             await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
-            
-            return {
-                "success": True,
-                "message": "Conversation reopened",
-                "conversation_id": conversation_id
-            }
-            
+
+            return {"success": True, "message": "Conversation reopened", "conversation_id": conversation_id}
+
         except Exception as e:
             print(f"❌ Error reopening conversation: {e}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    async def _auto_archive_conversation(self, user_id: str, conversation_id: str):
+            return {"success": False, "error": str(e)}
+
+    async def _auto_archive_conversation(self, user_id: str, conversation_id: str) -> None:
         """
         Auto-archive conversations older than 6 hours
         """
@@ -2573,31 +2295,41 @@ class LiveChatService:
             db = get_firestore_db()
             if not db:
                 return
-            
+
             app_id = "linas-ai-bot-backend"
-            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                user_id
-            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
-            
+            conv_ref = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
+
             # ✅ Use asyncio.to_thread to prevent blocking the event loop
-            await asyncio.to_thread(conv_ref.update, {
-                "status": "archived",
-                "archived_at": utc_now(),
-                "archived_reason": "auto_6h_timeout",
-                "conversation_state": self.STATE_ARCHIVED,
-                "human_takeover_active": False,
-                "operator_id": None,
-            })
+            await asyncio.to_thread(
+                conv_ref.update,
+                {
+                    "status": "archived",
+                    "archived_at": utc_now(),
+                    "archived_reason": "auto_6h_timeout",
+                    "conversation_state": self.STATE_ARCHIVED,
+                    "human_takeover_active": False,
+                    "operator_id": None,
+                },
+            )
 
             print(f"📦 Auto-archived conversation {conversation_id} (6-hour timeout)")
 
             # Refresh index so the archive is reflected in lists
             await self._refresh_index_for_conversation(user_id, conversation_id)
-            
+
         except Exception as e:
             print(f"⚠️ Error auto-archiving conversation: {e}")
-    
-    async def takeover_conversation(self, conversation_id: str, user_id: str, operator_id: str, operator_name: str = None) -> Dict[str, Any]:
+
+    async def takeover_conversation(
+        self, conversation_id: str, user_id: str, operator_id: str, operator_name: str | None = None
+    ) -> dict[str, Any]:
         """Operator takes over a conversation"""
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
@@ -2605,25 +2337,36 @@ class LiveChatService:
             resolved_user_id = canonical_user_id
             if db:
                 users_coll = db.collection("artifacts").document(self.APP_ID).collection("users")
-                conv_ref = users_coll.document(canonical_user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                conv_ref = (
+                    users_coll.document(canonical_user_id)
+                    .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                    .document(conversation_id)
+                )
                 conv_snap = await asyncio.to_thread(conv_ref.get)
                 if not conv_snap.exists and user_id != canonical_user_id:
-                    conv_ref = users_coll.document(user_id).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+                    conv_ref = (
+                        users_coll.document(user_id)
+                        .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                        .document(conversation_id)
+                    )
                     conv_snap = await asyncio.to_thread(conv_ref.get)
                     if conv_snap.exists:
                         resolved_user_id = user_id
                 if not conv_snap.exists:
-                    return {"success": False, "error": f"Conversation not found. Check user_id and conversation_id."}
+                    return {"success": False, "error": "Conversation not found. Check user_id and conversation_id."}
             await set_human_takeover_status(resolved_user_id, conversation_id, True, operator_id, operator_name)
             config.user_in_human_takeover_mode[resolved_user_id] = True
             self.operator_sessions[conversation_id] = operator_id
 
             # Ensure canonical state is written
-            if db:
-                await asyncio.to_thread(conv_ref.update, {
-                    "conversation_state": self.STATE_ASSIGNED,
-                    "last_updated": utc_now(),
-                })
+            if db and conv_ref is not None:
+                await asyncio.to_thread(
+                    conv_ref.update,
+                    {
+                        "conversation_state": self.STATE_ASSIGNED,
+                        "last_updated": utc_now(),
+                    },
+                )
 
             # Refresh index
             await self._refresh_index_for_conversation(resolved_user_id, conversation_id)
@@ -2637,14 +2380,14 @@ class LiveChatService:
                 "success": True,
                 "message": "Conversation taken over successfully",
                 "conversation_id": conversation_id,
-                "operator_id": operator_id
+                "operator_id": operator_id,
             }
-            
+
         except Exception as e:
             print(f"❌ Error taking over conversation: {e}")
             return {"success": False, "error": str(e)}
-    
-    async def release_conversation(self, conversation_id: str, user_id: str) -> Dict[str, Any]:
+
+    async def release_conversation(self, conversation_id: str, user_id: str) -> dict[str, Any]:
         """Release conversation back to bot"""
         try:
             db = get_firestore_db()
@@ -2657,7 +2400,7 @@ class LiveChatService:
                 if not conv_snap.exists:
                     return {
                         "success": False,
-                        "error": f"Conversation not found. Check user_id and conversation_id.",
+                        "error": "Conversation not found. Check user_id and conversation_id.",
                     }
             else:
                 resolved_user_id, _ = get_canonical_user_id_and_phone(user_id)
@@ -2666,12 +2409,15 @@ class LiveChatService:
                 del self.operator_sessions[conversation_id]
 
             # Ensure canonical state is written
-            if db:
-                await asyncio.to_thread(conv_ref.update, {
-                    "conversation_state": self.STATE_BOT_ACTIVE,
-                    "last_updated": utc_now(),
-                    "operator_id": None,
-                })
+            if db and conv_ref is not None:
+                await asyncio.to_thread(
+                    conv_ref.update,
+                    {
+                        "conversation_state": self.STATE_BOT_ACTIVE,
+                        "last_updated": utc_now(),
+                        "operator_id": None,
+                    },
+                )
 
             # Force index update: clear signature cache so refresh doesn't skip write, update index directly
             self._index_signature_cache.pop(conversation_id, None)
@@ -2684,7 +2430,7 @@ class LiveChatService:
                         _cd_mins = 45
                     _post_rel = utc_now() + datetime.timedelta(minutes=_cd_mins)
 
-                    def _merge_release_index():
+                    def _merge_release_index() -> None:
                         idx_ref.set(
                             {
                                 "conversation_state": self.STATE_BOT_ACTIVE,
@@ -2705,7 +2451,8 @@ class LiveChatService:
 
             # Same-process WhatsApp session: prime cooldown so AI anti-re-escalation applies before next Firestore read
             try:
-                from utils.utils import set_post_takeover_escalation_cooldown, _build_user_id_variants_for_release
+                from utils.utils import _build_user_id_variants_for_release, set_post_takeover_escalation_cooldown
+
                 canonical_uid, _ = get_canonical_user_id_and_phone(user_id)
                 for vid in _build_user_id_variants_for_release(resolved_user_id, user_id, canonical_uid):
                     set_post_takeover_escalation_cooldown(config.user_data_whatsapp[vid])
@@ -2717,14 +2464,14 @@ class LiveChatService:
             return {
                 "success": True,
                 "message": "Conversation released to bot successfully",
-                "conversation_id": conversation_id
+                "conversation_id": conversation_id,
             }
-            
+
         except Exception as e:
             print(f"❌ Error releasing conversation: {e}")
             return {"success": False, "error": str(e)}
 
-    async def mark_conversation_read(self, user_id: str, conversation_id: str) -> Dict[str, Any]:
+    async def mark_conversation_read(self, user_id: str, conversation_id: str) -> dict[str, Any]:
         """
         Mark a conversation as read (operator opened it).
         Sets unread_count=0 in Firestore so it persists across refresh/update.
@@ -2765,12 +2512,12 @@ class LiveChatService:
         user_id: str,
         message: str,
         operator_id: str,
-        adapter,
+        adapter: Any,
         message_type: str = "text",
-        idempotency_key: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
         """Send message from operator to customer
-        
+
         Args:
             conversation_id: The conversation ID
             user_id: The customer's user ID (room_id for Qiscus)
@@ -2778,14 +2525,17 @@ class LiveChatService:
             operator_id: The operator's ID
             adapter: WhatsApp adapter instance
             message_type: Type of message - "text", "voice", or "image"
-            idempotency_key: Optional client key; duplicates within TTL are no-oped (no second WhatsApp delivery).
+            idempotency_key:  client key; duplicates within TTL are no-oped (no second WhatsApp delivery).
         """
         lock_ref = None
         completed_ok = False
         db = None
         try:
-            from utils.utils import save_conversation_message_to_firestore, get_firestore_db
-            from utils.utils import get_canonical_user_id_and_phone
+            from utils.utils import (
+                get_canonical_user_id_and_phone,
+                get_firestore_db,
+                save_conversation_message_to_firestore,
+            )
 
             fingerprint = _build_operator_idempotency_fingerprint(
                 idempotency_key,
@@ -2795,9 +2545,7 @@ class LiveChatService:
                 message,
             )
             db = get_firestore_db()
-            acquired, lock_ref = await _try_acquire_operator_send_idempotency(
-                db, self.APP_ID, fingerprint
-            )
+            acquired, lock_ref = await _try_acquire_operator_send_idempotency(db, self.APP_ID, fingerprint)
             if not acquired:
                 return {
                     "success": True,
@@ -2811,57 +2559,63 @@ class LiveChatService:
             if db:
                 try:
                     app_id = "linas-ai-bot-backend"
-                    user_doc = db.collection("artifacts").document(app_id).collection("users").document(canonical_user_id).get()
+                    user_doc = (
+                        db.collection("artifacts")
+                        .document(app_id)
+                        .collection("users")
+                        .document(canonical_user_id)
+                        .get()
+                    )
                     if user_doc.exists:
                         user_data = user_doc.to_dict()
                         phone_number = user_data.get("phone_full")
                         print(f"📱 Found phone_number from Firebase: {phone_number}")
                 except Exception as e:
                     print(f"⚠️ Could not fetch phone_number from Firebase: {e}")
-            
+
             # Handle different message types
             if message_type == "voice":
                 # message contains base64 audio data
-                
+
                 print(f"🎙️ Operator {operator_id} recorded voice message for {user_id}")
-                
+
                 # Step 0: Convert WebM to Opus (Qiscus/WhatsApp standard)
-                print(f"� Converting voice to Opus format (WhatsApp standard)...")
+                print("� Converting voice to Opus format (WhatsApp standard)...")
                 audio_data_to_upload = message
                 upload_file_name = f"voice_{user_id}_{int(__import__('time').time())}.webm"
                 upload_file_type = "audio/webm"
-                
+
                 try:
                     from utils.utils import convert_webm_to_opus
+
                     opus_data, opus_file_name = convert_webm_to_opus(message)
                     if opus_file_name:  # Conversion successful
                         audio_data_to_upload = opus_data
                         upload_file_name = opus_file_name
                         upload_file_type = "audio/ogg"
-                        print(f"✅ Voice converted to OGG/Opus")
+                        print("✅ Voice converted to OGG/Opus")
                 except Exception as e:
                     print(f"⚠️ WebM to Opus conversion failed: {e}")
-                    print(f"   Continuing with original WebM format...")
-                
+                    print("   Continuing with original WebM format...")
+
                 # Step 1: Upload to Firebase Storage
                 storage_url = None
                 try:
                     from utils.utils import upload_base64_to_firebase_storage
+
                     storage_url = await upload_base64_to_firebase_storage(
-                        base64_data=audio_data_to_upload,
-                        file_name=upload_file_name,
-                        file_type=upload_file_type
+                        base64_data=audio_data_to_upload, file_name=upload_file_name, file_type=upload_file_type
                     )
                     print(f"✅ Voice uploaded to Storage: {storage_url}")
                 except Exception as e:
                     print(f"⚠️ Failed to upload to Storage: {e}")
                     if "404" in str(e) and "bucket does not exist" in str(e).lower():
-                        print(f"   📌 HINT: Check storageBucket in data/firebase_data.json")
-                        print(f"   📌 Actual bucket: linas-ai-bot.firebasestorage.app (not appspot.com)")
+                        print("   📌 HINT: Check storageBucket in data/firebase_data.json")
+                        print("   📌 Actual bucket: linas-ai-bot.firebasestorage.app (not appspot.com)")
                     storage_url = None
-                
+
                 # Step 2: Save to Firebase Firestore
-                print(f"📝 Saving voice metadata to Firebase Firestore...")
+                print("📝 Saving voice metadata to Firebase Firestore...")
                 await save_conversation_message_to_firestore(
                     user_id=canonical_user_id,
                     role="operator",
@@ -2874,10 +2628,10 @@ class LiveChatService:
                         "type": "voice",
                         "audio_url": storage_url,  # Store the public URL with key name 'audio_url' for easy retrieval
                         "audio_mime_type": upload_file_type,
-                        "message_length": len(message)
-                    }
+                        "message_length": len(message),
+                    },
                 )
-                
+
                 # Step 3: Send voice message via WhatsApp
                 print(f"🎙️ Sending voice message via WhatsApp to {user_id}...")
                 try:
@@ -2886,7 +2640,7 @@ class LiveChatService:
                         print(f"📤 Proxy URL for WhatsApp: {whatsapp_audio_url}")
                         send_result = await adapter.send_audio_message(canonical_user_id, whatsapp_audio_url)
                         if send_result.get("success"):
-                            print(f"✅ Sent voice message via WhatsApp")
+                            print("✅ Sent voice message via WhatsApp")
                         else:
                             error_msg = send_result.get("error", "Unknown error")
                             print(f"⚠️ WhatsApp audio send failed: {error_msg}")
@@ -2895,16 +2649,17 @@ class LiveChatService:
                                 "success": False,
                                 "error": f"WhatsApp audio send failed: {error_msg}",
                                 "storage_url": storage_url,
-                                "whatsapp_audio_url": whatsapp_audio_url
+                                "whatsapp_audio_url": whatsapp_audio_url,
                             }
                     else:
                         # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام رسالة صوتية من المشغل. يرجى فتح لوحة المعلومات لسماعها."
                         await adapter.send_text_message(canonical_user_id, text_notification)
-                        print(f"✅ Sent text notification (storage upload failed)")
+                        print("✅ Sent text notification (storage upload failed)")
                 except Exception as e:
                     print(f"⚠️ Failed to send via WhatsApp: {e}")
                     import traceback
+
                     traceback.print_exc()
                     return {"success": False, "error": f"Failed to send voice: {str(e)}"}
 
@@ -2915,30 +2670,31 @@ class LiveChatService:
                     "success": True,
                     "message": "Voice message sent successfully",
                     "storage_url": storage_url,
-                    "whatsapp_audio_url": build_whatsapp_audio_delivery_url(storage_url) if storage_url else None
+                    "whatsapp_audio_url": build_whatsapp_audio_delivery_url(storage_url) if storage_url else None,
                 }
-                    
+
             elif message_type == "image":
                 # message contains base64 image data
                 print(f"🖼️ Operator {operator_id} uploaded image for {user_id}")
-                print(f"📝 Uploading image to Firebase Storage...")
-                
+                print("📝 Uploading image to Firebase Storage...")
+
                 # Step 1: Upload to Firebase Storage
                 storage_url = None
                 try:
                     from utils.utils import upload_base64_to_firebase_storage
+
                     storage_url = await upload_base64_to_firebase_storage(
                         base64_data=message,
                         file_name=f"image_{user_id}_{int(__import__('time').time())}.jpg",
-                        file_type="image/jpeg"
+                        file_type="image/jpeg",
                     )
                     print(f"✅ Image uploaded to Storage: {storage_url}")
                 except Exception as e:
                     print(f"⚠️ Failed to upload to Storage: {e}")
                     storage_url = None
-                
+
                 # Step 2: Save to Firebase Firestore
-                print(f"📝 Saving image metadata to Firebase Firestore...")
+                print("📝 Saving image metadata to Firebase Firestore...")
                 await save_conversation_message_to_firestore(
                     user_id=canonical_user_id,
                     role="operator",
@@ -2951,32 +2707,33 @@ class LiveChatService:
                         "type": "image",
                         "image_data": message,  # Store full base64 as backup
                         "image_url": storage_url,  # Store the public URL with key name 'image_url' for easy retrieval
-                        "message_length": len(message)
-                    }
+                        "message_length": len(message),
+                    },
                 )
-                
+
                 # Step 3: Send image via Qiscus
                 print(f"🖼️ Sending image via Qiscus to {user_id}...")
                 try:
                     if storage_url:
                         # Send as native image message (displays in gallery on phone, not just a link)
                         await adapter.send_image_message(canonical_user_id, storage_url, caption="صورة من المشغل")
-                        print(f"✅ Sent image as native image message via Qiscus")
+                        print("✅ Sent image as native image message via Qiscus")
                     else:
                         # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام صورة من المشغل. يرجى فتح لوحة المعلومات لعرضها."
                         await adapter.send_text_message(canonical_user_id, text_notification)
-                        print(f"✅ Sent text notification (storage upload failed)")
+                        print("✅ Sent text notification (storage upload failed)")
                 except Exception as e:
                     print(f"⚠️ Failed to send via Qiscus: {e}")
                     import traceback
+
                     traceback.print_exc()
-                
+
                 print(f"✅ Image message processed and sent for {user_id}")
-                
+
                 completed_ok = True
                 return {"success": True, "message": "Image message sent successfully", "storage_url": storage_url}
-                    
+
             else:  # Default to text
                 # Save to Firestore first (SSE broadcasts immediately → message appears in UI fast)
                 await save_conversation_message_to_firestore(
@@ -2985,56 +2742,71 @@ class LiveChatService:
                     text=message,
                     conversation_id=conversation_id,
                     phone_number=phone_number,  # NOW PASSING PHONE_NUMBER
-                    metadata={"operator_id": operator_id, "handled_by": "human"}
+                    metadata={"operator_id": operator_id, "handled_by": "human"},
                 )
-                print(f"✅ Saved operator message to Firestore")
+                print("✅ Saved operator message to Firestore")
 
                 # Await WhatsApp send (single delivery; avoids duplicate background tasks)
                 try:
                     result = await adapter.send_text_message(canonical_user_id, message)
-                    if result.get("success"):
-                        print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
-                    else:
-                        print(f"⚠️ WhatsApp send failed but message saved: {result.get('error')}")
+                    if not isinstance(result, dict) or not result.get("success"):
+                        err = (result or {}).get("error") if isinstance(result, dict) else "send failed"
+                        print(f"⚠️ WhatsApp send failed after save: {err}")
+                        return {
+                            "success": False,
+                            "error": f"Message saved locally but delivery failed: {err}",
+                            "delivered": False,
+                        }
+                    print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
                 except Exception as send_error:
-                    print(f"⚠️ WhatsApp adapter error but message saved: {send_error}")
+                    print(f"⚠️ WhatsApp adapter error after save: {send_error}")
+                    return {
+                        "success": False,
+                        "error": f"Message saved locally but delivery failed: {send_error}",
+                        "delivered": False,
+                    }
 
                 completed_ok = True
-                return {"success": True, "message": "Message sent successfully"}
-            
+                return {
+                    "success": True,
+                    "message": "Message sent successfully",
+                    "delivered": True,
+                }
+
         except Exception as e:
             print(f"❌ Error sending operator message: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e)}
         finally:
             if lock_ref is not None and not completed_ok:
                 await _release_operator_idempotency_lock(db, lock_ref)
-    
-    async def update_operator_status(self, operator_id: str, status: str) -> Dict[str, Any]:
+
+    async def update_operator_status(self, operator_id: str, status: str) -> dict[str, Any]:
         """Update operator availability"""
         try:
             valid_statuses = ["available", "busy", "away"]
             if status not in valid_statuses:
                 return {"success": False, "error": f"Invalid status. Must be one of: {valid_statuses}"}
-            
+
             self.operator_status[operator_id] = status
             print(f"✅ Operator {operator_id} status: {status}")
-            
+
             return {"success": True, "operator_id": operator_id, "status": status}
-            
+
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def get_conversation_details(
         self,
         user_id: str,
         conversation_id: str,
         max_messages: int = 100,
         days: int = 0,
-        before: Optional[str] = None,
+        before: str | None = None,
         day_window: int = 0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get detailed conversation history.
 
         Args:
@@ -3057,7 +2829,9 @@ class LiveChatService:
             if days <= 0 and not before:
                 try:
                     index_ref = index_coll.document(conversation_id)
-                    index_doc = await self._get_doc_with_timeout(index_ref, timeout_seconds=self.INDEX_READ_TIMEOUT_SECONDS)
+                    index_doc = await self._get_doc_with_timeout(
+                        index_ref, timeout_seconds=self.INDEX_READ_TIMEOUT_SECONDS
+                    )
                     if index_doc.exists:
                         data = index_doc.to_dict() or {}
                         recent = data.get("recent_messages")
@@ -3074,9 +2848,9 @@ class LiveChatService:
                                 "returned_messages": len(recent),
                                 "has_more": msg_count > len(recent),
                                 "sentiment": str(data.get("sentiment") or "neutral"),
-                                "status": self._conversation_state_to_status(data.get("conversation_state")),
+                                "status": self._conversation_state_to_status(str(data.get("conversation_state") or "")),
                             }
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 except Exception:
                     pass
@@ -3100,7 +2874,7 @@ class LiveChatService:
                 )
                 try:
                     candidate_doc = await self._get_doc_with_timeout(candidate_ref)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     had_timeout = True
                     continue
                 if candidate_doc.exists:
@@ -3144,7 +2918,7 @@ class LiveChatService:
                 filtered = []
                 for msg in messages:
                     ts = self._parse_timestamp(msg.get("timestamp"))
-                    if days > 0 and ts < cutoff:
+                    if days > 0 and cutoff is not None and (ts is None or ts < cutoff):
                         continue
                     if before_dt and ts >= before_dt:
                         continue
@@ -3160,10 +2934,7 @@ class LiveChatService:
             formatted_messages = [self._format_single_message(msg) for msg in messages]
 
             # WhatsApp-style: has_more = more older messages available (for Load More)
-            has_more = (
-                messages_before_slice > max_messages if before
-                else total_messages > max_messages
-            )
+            has_more = messages_before_slice > max_messages if before else total_messages > max_messages
 
             out = {
                 "success": True,
@@ -3173,34 +2944,47 @@ class LiveChatService:
                 "returned_messages": len(formatted_messages),
                 "has_more": has_more,
                 "sentiment": sentiment,
-                "status": status
+                "status": status,
             }
             print(
                 f"[live_chat:conversation] source=full_document conv={conversation_id} total_raw={total_messages} returned={len(formatted_messages)}"
             )
-            # Optional read-path backfill (disabled by default to avoid write amplification)
+            #  read-path backfill (disabled by default to avoid write amplification)
             if (
                 days <= 0
                 and not before
                 and self.ENABLE_INDEX_BACKFILL_ON_READ
                 and self._should_schedule_read_path_refresh(conversation_id)
             ):
-                asyncio.create_task(
-                    self._refresh_index_for_conversation(
-                        effective_user_id, conversation_id
-                    )
-                )
+                asyncio.create_task(self._refresh_index_for_conversation(effective_user_id, conversation_id))
             # #region agent log
             try:
                 import json
                 import os
+
                 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 _logpath = os.path.join(_root, ".cursor", "debug-420609.log")
                 os.makedirs(os.path.dirname(_logpath), exist_ok=True)
                 first_ts = formatted_messages[0]["timestamp"] if formatted_messages else None
                 last_ts = formatted_messages[-1]["timestamp"] if formatted_messages else None
                 with open(_logpath, "a") as f:
-                    f.write(json.dumps({"sessionId":"420609","location":"live_chat_service:get_conversation_details","message":"service return","data":{"msg_count":len(formatted_messages),"first_ts":first_ts,"last_ts":last_ts},"timestamp":int(__import__("time").time()*1000),"hypothesisId":"H1,H9"}) + "\n")
+                    f.write(
+                        json.dumps(
+                            {
+                                "sessionId": "420609",
+                                "location": "live_chat_service:get_conversation_details",
+                                "message": "service return",
+                                "data": {
+                                    "msg_count": len(formatted_messages),
+                                    "first_ts": first_ts,
+                                    "last_ts": last_ts,
+                                },
+                                "timestamp": int(__import__("time").time() * 1000),
+                                "hypothesisId": "H1,H9",
+                            }
+                        )
+                        + "\n"
+                    )
             except Exception:
                 pass
             # #endregion
@@ -3209,12 +2993,11 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error getting conversation details: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e)}
 
-    async def get_faq_match_context(
-        self, user_id: str, conversation_id: str, message_id: str
-    ) -> Dict[str, Any]:
+    async def get_faq_match_context(self, user_id: str, conversation_id: str, message_id: str) -> dict[str, Any]:
         """
         Get faq_match metadata and current FAQ entry for a message (for FAQ correction modal).
         Returns faq_match from message metadata and current_entry (question, answer) if faq_id exists.
@@ -3225,9 +3008,14 @@ class LiveChatService:
                 return {"success": False, "error": "Firestore not initialized"}
 
             app_id = "linas-ai-bot-backend"
-            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                user_id
-            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+            conv_ref = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
 
             conv_doc = await asyncio.to_thread(conv_ref.get)
             if not conv_doc.exists:
@@ -3237,11 +3025,11 @@ class LiveChatService:
             messages = doc_data.get("messages", [])
             message_id_str = str(message_id).strip()
 
-            def _msg_id(m: Dict[str, Any]) -> str:
+            def _msg_id(m: dict[str, Any]) -> str:
                 mid = m.get("message_id")
                 if mid:
                     return str(mid).strip()
-                meta = (m.get("metadata") or {})
+                meta = m.get("metadata") or {}
                 for key in ("message_id", "source_message_id"):
                     if meta.get(key):
                         return str(meta[key]).strip()
@@ -3267,8 +3055,13 @@ class LiveChatService:
             if faq_id is not None:
                 try:
                     from modules.local_qa_api import read_qa_pairs
+
                     qa_pairs = read_qa_pairs()
-                    idx = (int(faq_id) - 1) if isinstance(faq_id, int) else (int(faq_id) - 1 if isinstance(faq_id, str) and faq_id.isdigit() else -1)
+                    idx = (
+                        (int(faq_id) - 1)
+                        if isinstance(faq_id, int)
+                        else (int(faq_id) - 1 if isinstance(faq_id, str) and faq_id.isdigit() else -1)
+                    )
                     if 0 <= idx < len(qa_pairs):
                         row = qa_pairs[idx]
                         current_entry = {
@@ -3288,6 +3081,7 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error in get_faq_match_context: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e)}
 
@@ -3297,7 +3091,7 @@ class LiveChatService:
         conversation_id: str,
         message_id: str,
         new_content: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Update a single message's text in a conversation (e.g. operator edit after dislike).
         Updates Firestore, invalidates cache, and broadcasts message_updated for real-time UI.
@@ -3308,9 +3102,14 @@ class LiveChatService:
                 return {"success": False, "error": "Firestore not initialized"}
 
             app_id = "linas-ai-bot-backend"
-            conv_ref = db.collection("artifacts").document(app_id).collection("users").document(
-                user_id
-            ).collection(config.FIRESTORE_CONVERSATIONS_COLLECTION).document(conversation_id)
+            conv_ref = (
+                db.collection("artifacts")
+                .document(app_id)
+                .collection("users")
+                .document(user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(conversation_id)
+            )
 
             conv_doc = await asyncio.to_thread(conv_ref.get)
             if not conv_doc.exists:
@@ -3322,11 +3121,11 @@ class LiveChatService:
             if not message_id_str:
                 return {"success": False, "error": "message_id is required"}
 
-            def _msg_id(m: Dict[str, Any]) -> str:
+            def _msg_id(m: dict[str, Any]) -> str:
                 mid = m.get("message_id")
                 if mid:
                     return str(mid).strip()
-                meta = (m.get("metadata") or {})
+                meta = m.get("metadata") or {}
                 for key in ("message_id", "source_message_id"):
                     if meta.get(key):
                         return str(meta[key]).strip()
@@ -3350,10 +3149,13 @@ class LiveChatService:
             meta["edited_at"] = utc_now().isoformat()
             messages[found_index]["metadata"] = meta
 
-            await asyncio.to_thread(conv_ref.update, {
-                "messages": messages,
-                "last_updated": utc_now(),
-            })
+            await asyncio.to_thread(
+                conv_ref.update,
+                {
+                    "messages": messages,
+                    "last_updated": utc_now(),
+                },
+            )
             self.invalidate_cache()
 
             updated_msg = messages[found_index]
@@ -3363,18 +3165,26 @@ class LiveChatService:
                 "text": new_text,
                 "timestamp": updated_msg.get("timestamp"),
                 "is_user": updated_msg.get("role") == "user",
-                "handled_by": (updated_msg.get("metadata") or {}).get("handled_by") or updated_msg.get("handled_by") or "bot",
+                "handled_by": (updated_msg.get("metadata") or {}).get("handled_by")
+                or updated_msg.get("handled_by")
+                or "bot",
                 "role": updated_msg.get("role"),
             }
 
             try:
                 from modules.live_chat_api import broadcast_sse_event
-                asyncio.create_task(broadcast_sse_event("message_updated", {
-                    "user_id": user_id,
-                    "conversation_id": conversation_id,
-                    "message_id": message_id_str,
-                    "message": dash_msg,
-                }))
+
+                asyncio.create_task(
+                    broadcast_sse_event(
+                        "message_updated",
+                        {
+                            "user_id": user_id,
+                            "conversation_id": conversation_id,
+                            "message_id": message_id_str,
+                            "message": dash_msg,
+                        },
+                    )
+                )
             except Exception as sse_err:
                 print(f"⚠️ SSE broadcast after edit failed: {sse_err}")
 
@@ -3387,30 +3197,58 @@ class LiveChatService:
         except Exception as e:
             print(f"❌ Error updating message content: {e}")
             import traceback
+
             traceback.print_exc()
             return {"success": False, "error": str(e)}
-    
-    async def get_metrics(self) -> Dict[str, Any]:
+
+    async def get_active_conversations(self, search: str = "") -> list[dict[str, Any]]:
+        """Backward-compatible wrapper: return master inbox page 1 (no 6h filter)."""
+        try:
+            unified = await self.get_unified_chats(search=search, page=1, page_size=200)
+            return [
+                {
+                    "conversation_id": c.get("conversation_id"),
+                    "user_id": c.get("user_id"),
+                    "user_name": c.get("user_name"),
+                    "user_phone": c.get("phone_number"),
+                    "phone_clean": c.get("phone_clean"),
+                    "last_message": c.get("last_message_text"),
+                    "last_activity": c.get("last_message_at"),
+                    "status": c.get("conversation_state"),
+                    "conversation_state": c.get("conversation_state"),
+                    "operator_id": c.get("operator_id"),
+                    "unread_count": c.get("unread_count", 0),
+                }
+                for c in unified.get("chats", [])
+            ]
+        except Exception as e:
+            print(f"❌ Error getting active conversations: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return []
+
+    async def get_metrics(self) -> dict[str, Any]:
         """Get real-time metrics"""
         try:
             active_conversations = await self.get_active_conversations()
             waiting_queue = await self.get_waiting_queue()
-            
+
             total_active = len(active_conversations)
             bot_handling = len([c for c in active_conversations if c["status"] == "bot"])
             human_handling = len([c for c in active_conversations if c["status"] == "human"])
             waiting_human = len(waiting_queue)
-            
+
             sentiment_counts = {"positive": 0, "neutral": 0, "negative": 0}
             for conv in active_conversations:
                 sentiment = conv.get("sentiment", "neutral")
                 sentiment_counts[sentiment] = sentiment_counts.get(sentiment, 0) + 1
-            
+
             avg_wait_time = 0
             if waiting_queue:
                 total_wait = sum(item["wait_time_seconds"] for item in waiting_queue)
                 avg_wait_time = total_wait / len(waiting_queue)
-            
+
             return {
                 "success": True,
                 "metrics": {
@@ -3420,12 +3258,14 @@ class LiveChatService:
                     "waiting_for_human": waiting_human,
                     "sentiment_distribution": sentiment_counts,
                     "average_wait_time_seconds": int(avg_wait_time),
-                    "active_operators": len([op for op, status in self.operator_status.items() if status == "available"]),
-                    "time_window_hours": 6
+                    "active_operators": len(
+                        [op for op, status in self.operator_status.items() if status == "available"]
+                    ),
+                    "time_window_hours": 6,
                 },
-                "timestamp": utc_now().isoformat()
+                "timestamp": utc_now().isoformat(),
             }
-            
+
         except Exception as e:
             print(f"❌ Error getting metrics: {e}")
             return {"success": False, "error": str(e)}
@@ -3486,7 +3326,7 @@ class LiveChatService:
                         return True
         return False
 
-    def _filter_conversations(self, conversations: List[Dict[str, Any]], search_term: str) -> List[Dict[str, Any]]:
+    def _filter_conversations(self, conversations: list[dict[str, Any]], search_term: str) -> list[dict[str, Any]]:
         """Filter conversations by client name and/or phone (partial, normalized)."""
         normalized_search = (search_term or "").strip()
         if not normalized_search:
@@ -3522,7 +3362,7 @@ class LiveChatService:
 
         return filtered
 
-    def _choose_preferred_phone(self, current_phone: Optional[str], candidate_phone: str) -> str:
+    def _choose_preferred_phone(self, current_phone: str | None, candidate_phone: str) -> str:
         """Prefer a richer display phone (with +country code / longer digits)."""
         if not current_phone:
             return candidate_phone
@@ -3537,7 +3377,7 @@ class LiveChatService:
 
         return current_phone
 
-    def _load_phone_room_mapping(self) -> Dict[str, str]:
+    def _load_phone_room_mapping(self) -> dict[str, str]:
         """Load `data/phone_to_room_mapping.json` with short TTL cache."""
         now = utc_now()
         if (
@@ -3547,7 +3387,7 @@ class LiveChatService:
             return self._room_to_phone_cache
 
         phone_to_room = {}
-        room_to_phone = {}
+        room_to_phone: dict[str, Any] = {}
 
         mapping_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
@@ -3556,7 +3396,7 @@ class LiveChatService:
         )
 
         try:
-            with open(mapping_path, "r", encoding="utf-8") as mapping_file:
+            with open(mapping_path, encoding="utf-8") as mapping_file:
                 mapping_data = json.load(mapping_file)
             raw_mapping = mapping_data.get("phone_to_room_mapping", {})
             if isinstance(raw_mapping, dict):
@@ -3569,10 +3409,7 @@ class LiveChatService:
                         continue
 
                     phone_to_room[normalized_phone] = room_id
-                    room_to_phone[room_id] = self._choose_preferred_phone(
-                        room_to_phone.get(room_id),
-                        phone_value
-                    )
+                    room_to_phone[room_id] = self._choose_preferred_phone(room_to_phone.get(room_id), phone_value)
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -3583,12 +3420,12 @@ class LiveChatService:
         self._phone_mapping_cache_time = now
         return self._room_to_phone_cache
 
-    def _get_mapped_phone_for_room(self, user_id: str) -> Optional[str]:
+    def _get_mapped_phone_for_room(self, user_id: str) -> str | None:
         """Return mapped phone for a room_id/user_id when available."""
         room_to_phone = self._load_phone_room_mapping()
         return room_to_phone.get(str(user_id))
 
-    def _resolve_user_phone(self, user_id: str, customer_info: Optional[Dict[str, Any]]) -> Tuple[str, str]:
+    def _resolve_user_phone(self, user_id: str, customer_info: dict[str, Any] | None) -> tuple[str, str]:
         """
         Resolve best phone for dashboard/search:
         1) customer_info
@@ -3664,8 +3501,8 @@ class LiveChatService:
             phone_clean = "Unknown"
 
         return phone_full, phone_clean
-    
-    def _parse_timestamp(self, timestamp) -> datetime.datetime:
+
+    def _parse_timestamp(self, timestamp: Any) -> datetime.datetime:
         """Parse various timestamp formats - always returns UTC-aware datetime"""
         return parse_timestamp_utc(timestamp)
 

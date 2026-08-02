@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Deterministic booking state machine (server-side).
 
@@ -11,7 +10,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, cast
 
 import config
 from services.booking.constants import DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS
@@ -27,9 +26,7 @@ _BOOKING_ENTRY_RE = re.compile(
     r"حجز|موعد|مواعيد|احجز|بدي موعد|عندي موعد|جلسة|جلسات"
     r")\b"
 )
-_CANCEL_RE = re.compile(
-    r"(?i)\b(cancel|stop|never\s*mind|الغاء|الغي|ما بدي|بطلت|لغيت)\b"
-)
+_CANCEL_RE = re.compile(r"(?i)\b(cancel|stop|never\s*mind|الغاء|الغي|ما بدي|بطلت|لغيت)\b")
 
 # User already named body areas (Lebanese/Arabic/Franco) — do not ask again in chat.
 _BODY_AREA_MENTION_RE = re.compile(
@@ -62,14 +59,14 @@ _GENDER_RECONFIRM_RE = re.compile(
 )
 
 
-def _fsm_root(user_id: str) -> Dict[str, Any]:
+def _fsm_root(user_id: str) -> dict[str, Any]:
     st = config.user_booking_state[user_id]
     if "booking_fsm" not in st or not isinstance(st.get("booking_fsm"), dict):
         st["booking_fsm"] = new_fsm_state()
-    return st["booking_fsm"]
+    return cast(dict[str, Any], st["booking_fsm"])
 
 
-def new_fsm_state() -> Dict[str, Any]:
+def new_fsm_state() -> dict[str, Any]:
     return {
         "intent": "book_appointment",
         "active": False,
@@ -127,9 +124,9 @@ def set_session_context(
     gender: str,
     phone: str,
     *,
-    customer_display_name: Optional[str] = None,
+    customer_display_name: str | None = None,
     crm_customer_file: bool = False,
-    customer_id: Optional[str] = None,
+    customer_id: str | None = None,
 ) -> None:
     fsm = _fsm_root(user_id)
     lf = fsm.setdefault("locked_fields", {})
@@ -151,7 +148,7 @@ def set_session_context(
         fsm["crm_profile_applied"] = True
 
 
-def lock_field(fsm: Dict[str, Any], field: str, source: str) -> None:
+def lock_field(fsm: dict[str, Any], field: str, source: str) -> None:
     fsm.setdefault("locked_fields", {})[field] = source
 
 
@@ -176,13 +173,13 @@ def lock_gender_from_session(user_id: str, gender: str, source: str = "model_out
     lock_field(fsm, "customer_gender", source)
 
 
-def _crm_exists_for_user(user_id: str, fsm: Dict[str, Any]) -> bool:
+def _crm_exists_for_user(user_id: str, fsm: dict[str, Any]) -> bool:
     return bool(fsm.get("crm_customer_file")) or bool(
         config.user_data_whatsapp.get(user_id, {}).get("crm_customer_exists")
     )
 
 
-def _name_satisfied(fsm: Dict[str, Any], user_id: str) -> bool:
+def _name_satisfied(fsm: dict[str, Any], user_id: str) -> bool:
     if _crm_exists_for_user(user_id, fsm):
         return True
     if fsm.get("locked_fields", {}).get("customer_name"):
@@ -193,7 +190,7 @@ def _name_satisfied(fsm: Dict[str, Any], user_id: str) -> bool:
     return bool(un and un != "client" and nl not in ph and not nl.startswith("test user"))
 
 
-def _gender_satisfied(fsm: Dict[str, Any], user_id: str, current_gender: str) -> bool:
+def _gender_satisfied(fsm: dict[str, Any], user_id: str, current_gender: str) -> bool:
     if _crm_exists_for_user(user_id, fsm):
         return True
     if fsm.get("locked_fields", {}).get("customer_gender"):
@@ -202,11 +199,11 @@ def _gender_satisfied(fsm: Dict[str, Any], user_id: str, current_gender: str) ->
     return g in ("male", "female")
 
 
-def identity_missing(fsm: Dict[str, Any], user_id: str, current_gender: str) -> List[str]:
+def identity_missing(fsm: dict[str, Any], user_id: str, current_gender: str) -> list[str]:
     """New customers only: name + gender required before slot collection policy."""
     if _crm_exists_for_user(user_id, fsm):
         return []
-    miss: List[str] = []
+    miss: list[str] = []
     if not _name_satisfied(fsm, user_id):
         miss.append("customer_name")
     if not _gender_satisfied(fsm, user_id, current_gender):
@@ -214,7 +211,7 @@ def identity_missing(fsm: Dict[str, Any], user_id: str, current_gender: str) -> 
     return miss
 
 
-def log_fsm(user_id: str, event: str, payload: Optional[Dict[str, Any]] = None) -> None:
+def log_fsm(user_id: str, event: str, payload: dict[str, Any] | None = None) -> None:
     line = {
         "event": event,
         "user_id": user_id,
@@ -232,7 +229,7 @@ def log_fsm(user_id: str, event: str, payload: Optional[Dict[str, Any]] = None) 
         del log[:-30]
 
 
-def combined_user_text_for_fsm(user_input: Optional[str]) -> str:
+def combined_user_text_for_fsm(user_input: str | None) -> str:
     """
     Merge main message + any [User clarified: ...] blocks so Franco stubs + clarification
     still trigger booking mode and body-area detection (e.g. Ok + clarified «tizeh»).
@@ -240,7 +237,7 @@ def combined_user_text_for_fsm(user_input: Optional[str]) -> str:
     raw = (user_input or "").strip()
     if not raw:
         return ""
-    parts: List[str] = [raw]
+    parts: list[str] = [raw]
     for m in re.finditer(r"\[User clarified:\s*(.+?)\]", raw, flags=re.IGNORECASE | re.DOTALL):
         inner = (m.group(1) or "").strip()
         if inner:
@@ -360,7 +357,7 @@ def apply_heuristic_confirmation(user_id: str, user_input: str) -> None:
         log_fsm(user_id, "confirmation_heuristic_no", {})
 
 
-def invalidate_dependents(fsm: Dict[str, Any], changed: str) -> None:
+def invalidate_dependents(fsm: dict[str, Any], changed: str) -> None:
     ch = (changed or "").lower()
     if ch == "service_id":
         fsm["body_part_ids"] = []
@@ -389,12 +386,12 @@ def invalidate_dependents(fsm: Dict[str, Any], changed: str) -> None:
         fsm["confirmation_status"] = "none"
 
 
-def merge_patch(user_id: str, patch: Dict[str, Any]) -> List[str]:
+def merge_patch(user_id: str, patch: dict[str, Any]) -> list[str]:
     """Merge GPT-provided booking_fsm_patch. Returns list of field keys updated."""
     if not patch or not isinstance(patch, dict):
         return []
     fsm = _fsm_root(user_id)
-    updated: List[str] = []
+    updated: list[str] = []
     lf = fsm.setdefault("locked_fields", {})
     key_map = {
         "service_id": "service_id",
@@ -534,7 +531,7 @@ def sync_from_flat_booking_state(user_id: str) -> None:
 def sync_from_tool_call(
     user_id: str,
     tool_name: str,
-    function_args: Dict[str, Any],
+    function_args: dict[str, Any],
     tool_output: Any,
 ) -> None:
     if not fsm_enabled():
@@ -570,8 +567,8 @@ def sync_from_tool_call(
         log_fsm(user_id, "sync_from_submit_args", {"keys": list(fa.keys())})
 
 
-def fields_complete(fsm: Dict[str, Any], gender: str) -> Tuple[bool, List[str]]:
-    missing: List[str] = []
+def fields_complete(fsm: dict[str, Any], gender: str) -> tuple[bool, list[str]]:
+    missing: list[str] = []
     sid = fsm.get("service_id")
     bid = fsm.get("branch_id")
     if sid is None:
@@ -593,7 +590,7 @@ def fields_complete(fsm: Dict[str, Any], gender: str) -> Tuple[bool, List[str]]:
     return (len(missing) == 0, missing)
 
 
-def first_missing_field(fsm: Dict[str, Any], gender: str, user_id: str) -> Optional[str]:
+def first_missing_field(fsm: dict[str, Any], gender: str, user_id: str) -> str | None:
     id_m = identity_missing(fsm, user_id, gender)
     if "customer_name" in id_m:
         return "customer_name"
@@ -616,7 +613,7 @@ def first_missing_field(fsm: Dict[str, Any], gender: str, user_id: str) -> Optio
     return miss[0] if miss else None
 
 
-def first_missing_field_for_user_chat(fsm: Dict[str, Any], gender: str, user_id: str) -> Optional[str]:
+def first_missing_field_for_user_chat(fsm: dict[str, Any], gender: str, user_id: str) -> str | None:
     """
     Same as first_missing_field but skips re-asking body_part_ids when the user already
     described areas in natural language — model must map via get_body_parts instead.
@@ -651,7 +648,7 @@ def first_missing_field_for_user_chat(fsm: Dict[str, Any], gender: str, user_id:
     return miss[0] if miss else None
 
 
-def can_execute_submit(user_id: str, current_gender: str) -> Tuple[bool, str]:
+def can_execute_submit(user_id: str, current_gender: str) -> tuple[bool, str]:
     if not fsm_enabled():
         return True, ""
     fsm = _fsm_root(user_id)
@@ -674,7 +671,7 @@ def can_execute_submit(user_id: str, current_gender: str) -> Tuple[bool, str]:
     return True, ""
 
 
-def parse_gate_reason(gate_reason: str) -> List[str]:
+def parse_gate_reason(gate_reason: str) -> list[str]:
     if not gate_reason or not str(gate_reason).startswith("fsm_incomplete:"):
         return []
     return [x for x in str(gate_reason).split(":", 1)[1].split(",") if x]
@@ -688,9 +685,7 @@ def human_gate_message(gate_reason: str, lang: str) -> str:
                 "Booking is not executed yet: the user must confirm the summary once "
                 "(yes) before submit_booking_intent. Ask one short confirmation, then call the tool."
             )
-        return (
-            "الحجز لم يُنفَّذ: لازم تأكيد واحد من الزبون بعد الملخص قبل استدعاء submit_booking_intent."
-        )
+        return "الحجز لم يُنفَّذ: لازم تأكيد واحد من الزبون بعد الملخص قبل استدعاء submit_booking_intent."
     if gr.startswith("fsm_incomplete"):
         tail = gr.split(":", 1)[1] if ":" in gr else ""
         if (lang or "ar").lower() == "en":
@@ -719,10 +714,10 @@ def build_unified_booking_snapshot(
     current_gender: str,
     *,
     customer_exists: bool,
-    customer_id: Optional[str],
+    customer_id: str | None,
     name_is_known: bool,
     crm_data_used: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Single structured object for prompts + activity logs (session memory)."""
     fsm = _fsm_root(user_id)
     _cg_fsm = fsm.get("customer_gender")
@@ -743,11 +738,7 @@ def build_unified_booking_snapshot(
         "customer_name_source": lf.get("customer_name")
         or ("crm" if customer_exists and name_is_known else ("session" if name_is_known else None)),
         "gender_source": lf.get("customer_gender")
-        or (
-            "crm"
-            if customer_exists and g in ("male", "female")
-            else ("session" if g in ("male", "female") else None)
-        ),
+        or ("crm" if customer_exists and g in ("male", "female") else ("session" if g in ("male", "female") else None)),
         "gender_question_skipped": bool(customer_exists and g in ("male", "female")),
         "crm_profile_data_used": bool(crm_data_used),
         "service_id": fsm.get("service_id"),
@@ -775,10 +766,10 @@ def guard_bot_reply_booking_identity(
     current_gender: str,
     *,
     lang: str = "ar",
-) -> Tuple[str, Dict[str, Any]]:
+) -> tuple[str, dict[str, Any]]:
     """Remove gender re-confirmation lines when gender is already known (logic-level anti-loop)."""
     fsm = _fsm_root(user_id)
-    meta: Dict[str, Any] = {"guard_applied": False}
+    meta: dict[str, Any] = {"guard_applied": False}
     if not fsm.get("active"):
         return bot_reply, meta
     br = (bot_reply or "").strip()
@@ -873,8 +864,7 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
     )
     lines = [
         "**BOOKING MODE (STRICT — server state machine)**",
-        "- **SERVER-KNOWN PROFILE (authoritative):** "
-        f"Name: {_name_line} | Gender on server: {_gender_line}",
+        f"- **SERVER-KNOWN PROFILE (authoritative):** Name: {_name_line} | Gender on server: {_gender_line}",
         "- Collect **only remaining** booking facts (service/branch/areas/machine/date/time per BOOKING STATE); "
         "merge into tools / `booking_fsm_patch`. **Do not** re-verify identity when the line above already has name or gender.",
         "- You are in **booking mode**. Replies must be **short**. Ask **only one** clear question per message.",
@@ -899,18 +889,12 @@ def build_prompt_block(user_id: str, current_gender: str) -> str:
             if nxt_user is not None
             else (
                 "(use get_body_parts to map areas — do not ask the user again)"
-                if (
-                    not ok_all
-                    and "body_part_ids" in miss_all
-                    and fsm.get("body_area_already_described")
-                )
+                if (not ok_all and "body_part_ids" in miss_all and fsm.get("body_area_already_described"))
                 else ("(none — awaiting confirmation or ready)" if ok_all else "(see missing fields)")
             )
         ),
-        "- Fields still missing (identity + booking): "
-        + (", ".join(miss_all) if miss_all else "(none)"),
-        "- Gate for tool execution: "
-        + ("READY" if can_ex else f"BLOCKED ({gate_reason})"),
+        "- Fields still missing (identity + booking): " + (", ".join(miss_all) if miss_all else "(none)"),
+        "- Gate for tool execution: " + ("READY" if can_ex else f"BLOCKED ({gate_reason})"),
         "",
         "BOOKING_STATE_JSON:",
         json.dumps(snap, ensure_ascii=False, default=str),
@@ -935,9 +919,9 @@ def record_decision_log(
     user_id: str,
     *,
     phase: str,
-    next_field: Optional[str],
+    next_field: str | None,
     gate: str,
-    extracted: Optional[Dict[str, Any]] = None,
+    extracted: dict[str, Any] | None = None,
 ) -> None:
     fsm = _fsm_root(user_id)
     dup = False

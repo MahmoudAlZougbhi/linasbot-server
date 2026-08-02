@@ -166,10 +166,11 @@ The API base URL is automatically configured:
 
 ### Available Scripts
 
-- `npm start` - Start development server
-- `npm run build` - Build for production
-- `npm test` - Run test suite
-- `npm run eject` - Eject from Create React App
+- `npm start` / `npm run dev` - Start the Vite development server
+- `npm run build` - Build for production (outputs to `build/`)
+- `npm run preview` - Preview the production build locally
+- `npm test` - Run the Vitest test suite
+- `npm run lint` - Lint the codebase with ESLint
 
 ### Customization
 

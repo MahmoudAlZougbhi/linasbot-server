@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Dynamic Messages Service
 
@@ -6,19 +5,20 @@ Stores editable bot dynamic messages (with usage conditions) in persistent setti
 Used by Content Manager to let operators inspect/edit runtime wording.
 """
 
+from __future__ import annotations
+
 import json
 import re
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 from storage.persistent_storage import SETTINGS_DIR
-
 
 DYNAMIC_MESSAGES_FILE = SETTINGS_DIR / "dynamic_messages.json"
 
 
-DEFAULT_DYNAMIC_MESSAGES: Dict[str, Dict[str, Any]] = {
+DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
     "router_greeting": {
         "label": "Router Greeting",
         "when_used": "Sent when user message is greeting-only and there is no pending state.",
@@ -86,25 +86,25 @@ def _ensure_parent_dir() -> None:
     Path(SETTINGS_DIR).mkdir(parents=True, exist_ok=True)
 
 
-def _read_file() -> Dict[str, Any]:
+def _read_file() -> dict[str, Any]:
     _ensure_parent_dir()
     if not Path(DYNAMIC_MESSAGES_FILE).exists():
         return {}
     try:
-        with open(DYNAMIC_MESSAGES_FILE, "r", encoding="utf-8") as f:
+        with open(DYNAMIC_MESSAGES_FILE, encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
 
 
-def _write_file(data: Dict[str, Any]) -> None:
+def _write_file(data: dict[str, Any]) -> None:
     _ensure_parent_dir()
     with open(DYNAMIC_MESSAGES_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def get_dynamic_messages_catalog() -> Dict[str, Any]:
+def get_dynamic_messages_catalog() -> dict[str, Any]:
     """Return merged catalog: defaults + persisted overrides."""
     merged = deepcopy(DEFAULT_DYNAMIC_MESSAGES)
     stored = _read_file()
@@ -119,12 +119,13 @@ def get_dynamic_messages_catalog() -> Dict[str, Any]:
             msgs = value.get("messages")
             if isinstance(msgs, dict):
                 for lang in ("ar", "en", "fr", "franco"):
-                    if isinstance(msgs.get(lang), str) and msgs.get(lang).strip():
-                        merged[key]["messages"][lang] = msgs[lang]
+                    lang_msg = msgs.get(lang)
+                    if isinstance(lang_msg, str) and lang_msg.strip():
+                        merged[key]["messages"][lang] = lang_msg
     return merged
 
 
-def update_dynamic_messages_catalog(payload: Dict[str, Any]) -> Dict[str, Any]:
+def update_dynamic_messages_catalog(payload: dict[str, Any]) -> dict[str, Any]:
     """Update persisted overrides from API payload and return merged catalog."""
     if not isinstance(payload, dict):
         return get_dynamic_messages_catalog()
@@ -151,11 +152,7 @@ def get_dynamic_message(key: str, lang: str = "ar") -> str:
     item = catalog.get(key) or {}
     msgs = item.get("messages") or {}
     lang_key = (lang or "ar").lower()
-    message = (
-        msgs.get(lang_key)
-        or msgs.get("ar")
-        or ""
-    )
+    message = msgs.get(lang_key) or msgs.get("ar") or ""
     if lang_key in ("ar", "franco"):
         # Keep Arabic-facing runtime messages in Arabic script for known assistant/brand names.
         replacements = {

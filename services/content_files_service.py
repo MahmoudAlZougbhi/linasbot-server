@@ -1,21 +1,22 @@
-# -*- coding: utf-8 -*-
 """
 Content Files Service - File system for Knowledge Base, Style Guide, and Price List.
 Each section supports multiple files with title, content, tags, and language.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
 from pathlib import Path
+from typing import Any, cast
 
 from storage.persistent_storage import (
     CONTENT_DIR,
     KNOWLEDGE_FILES_DIR,
-    STYLE_FILES_DIR,
     PRICE_FILES_DIR,
+    STYLE_FILES_DIR,
     ensure_dirs,
 )
 
@@ -42,11 +43,15 @@ def _ensure_section_dir(section: str) -> str:
 
 
 def _file_path(section: str, file_id: str) -> str:
-    """Get full path for a content file."""
-    return os.path.join(_section_path(section), f"{file_id}.json")
+    """Get full path for a content file (contained under section root)."""
+    from services.safe_path import is_safe_relative_name, resolve_under_root
+
+    if not is_safe_relative_name(file_id):
+        raise ValueError("Invalid file_id")
+    return str(resolve_under_root(_section_path(section), f"{file_id}.json"))
 
 
-def _list_json_files(section: str) -> List[str]:
+def _list_json_files(section: str) -> list[str]:
     """List all .json file IDs in a section (without .json extension)."""
     path = _section_path(section)
     if not os.path.exists(path):
@@ -58,7 +63,7 @@ def _list_json_files(section: str) -> List[str]:
     return ids
 
 
-def list_files(section: str) -> List[Dict]:
+def list_files(section: str) -> list[dict]:
     """
     List all files in a section.
     Returns list of dicts with: id, title, tags, language, created_at, updated_at
@@ -68,7 +73,7 @@ def list_files(section: str) -> List[Dict]:
     result = []
     for file_id in _list_json_files(section):
         try:
-            with open(_file_path(section, file_id), "r", encoding="utf-8") as f:
+            with open(_file_path(section, file_id), encoding="utf-8") as f:
                 data = json.load(f)
             aud = (data.get("audience") or "general").lower()
             if aud not in ("men", "women", "general"):
@@ -78,22 +83,24 @@ def list_files(section: str) -> List[Dict]:
                 prio = max(1, min(5, int(prio)))
             except (TypeError, ValueError):
                 prio = 3
-            result.append({
-                "id": file_id,
-                "title": data.get("title", ""),
-                "tags": data.get("tags", []),
-                "language": data.get("language", ""),
-                "audience": aud,
-                "priority": prio,
-                "created_at": data.get("created_at", ""),
-                "updated_at": data.get("updated_at", ""),
-            })
+            result.append(
+                {
+                    "id": file_id,
+                    "title": data.get("title", ""),
+                    "tags": data.get("tags", []),
+                    "language": data.get("language", ""),
+                    "audience": aud,
+                    "priority": prio,
+                    "created_at": data.get("created_at", ""),
+                    "updated_at": data.get("updated_at", ""),
+                }
+            )
         except Exception as e:
             print(f"⚠️ Error loading file {file_id} in {section}: {e}")
     return sorted(result, key=lambda x: (x.get("updated_at", ""), x.get("title", "")), reverse=True)
 
 
-def get_titles_only(section: str) -> List[Dict[str, str]]:
+def get_titles_only(section: str) -> list[dict[str, str]]:
     """
     Get titles and metadata for smart retrieval (lightweight, cacheable).
     Returns: [{"id", "title", "tags", "language", "audience", "priority"}, ...]
@@ -104,7 +111,7 @@ def get_titles_only(section: str) -> List[Dict[str, str]]:
     result = []
     for file_id in _list_json_files(section):
         try:
-            with open(_file_path(section, file_id), "r", encoding="utf-8") as f:
+            with open(_file_path(section, file_id), encoding="utf-8") as f:
                 data = json.load(f)
             audience = (data.get("audience") or "general").lower()
             if audience not in ("men", "women", "general"):
@@ -116,27 +123,29 @@ def get_titles_only(section: str) -> List[Dict[str, str]]:
                 priority = max(1, min(5, int(priority)))
             except (TypeError, ValueError):
                 priority = 3
-            result.append({
-                "id": file_id,
-                "title": data.get("title", ""),
-                "tags": data.get("tags", []),
-                "language": data.get("language", ""),
-                "audience": audience,
-                "priority": priority,
-            })
+            result.append(
+                {
+                    "id": file_id,
+                    "title": data.get("title", ""),
+                    "tags": data.get("tags", []),
+                    "language": data.get("language", ""),
+                    "audience": audience,
+                    "priority": priority,
+                }
+            )
         except Exception as e:
             print(f"⚠️ Error loading titles for {file_id}: {e}")
     return result
 
 
-def get_file(section: str, file_id: str) -> Optional[Dict]:
+def get_file(section: str, file_id: str) -> dict | None:
     """Get full file content by ID."""
     path = _file_path(section, file_id)
     if not os.path.exists(path):
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(path, encoding="utf-8") as f:
+            return cast(dict[Any, Any] | None, json.load(f))
     except Exception as e:
         print(f"⚠️ Error reading file {file_id}: {e}")
         return None
@@ -146,11 +155,11 @@ def create_file(
     section: str,
     title: str,
     content: str,
-    tags: Optional[List[str]] = None,
-    language: Optional[str] = None,
-    audience: Optional[str] = None,
-    priority: Optional[int] = None,
-) -> Dict:
+    tags: list[str] | None = None,
+    language: str | None = None,
+    audience: str | None = None,
+    priority: int | None = None,
+) -> dict:
     """Create a new content file.
     audience: "men" | "women" | "general" (default "general")
     priority: 1-5 (default 3)
@@ -166,7 +175,7 @@ def create_file(
         prio = max(1, min(5, int(prio)))
     except (TypeError, ValueError):
         prio = 3
-    data = {
+    data: dict[str, Any] = {
         "id": file_id,
         "title": title or "Untitled",
         "content": content or "",
@@ -186,19 +195,19 @@ def create_file(
 def update_file(
     section: str,
     file_id: str,
-    title: Optional[str] = None,
-    content: Optional[str] = None,
-    tags: Optional[List[str]] = None,
-    language: Optional[str] = None,
-    audience: Optional[str] = None,
-    priority: Optional[int] = None,
-) -> Optional[Dict]:
+    title: str | None = None,
+    content: str | None = None,
+    tags: list[str] | None = None,
+    language: str | None = None,
+    audience: str | None = None,
+    priority: int | None = None,
+) -> dict | None:
     """Update an existing content file."""
     path = _file_path(section, file_id)
     if not os.path.exists(path):
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
         print(f"⚠️ Error reading file for update: {e}")
@@ -224,7 +233,7 @@ def update_file(
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    return data
+    return cast(dict[Any, Any] | None, data)
 
 
 def delete_file(section: str, file_id: str) -> bool:
@@ -236,7 +245,7 @@ def delete_file(section: str, file_id: str) -> bool:
     return False
 
 
-def load_file_contents(section: str, file_ids: List[str]) -> str:
+def load_file_contents(section: str, file_ids: list[str]) -> str:
     """
     Load content from selected files and concatenate.
     Used by smart retrieval after file selection.
@@ -252,14 +261,13 @@ def load_file_contents(section: str, file_ids: List[str]) -> str:
     return "\n\n".join(parts)
 
 
-def migrate_from_legacy(section: str, legacy_path: str) -> Optional[str]:
+def migrate_from_legacy(section: str, legacy_path: str) -> str | None:
     """
     Migrate from legacy single .txt file to new file system.
     Creates one file with content from legacy file.
     legacy_path: absolute or project-relative path (e.g. data/knowledge_base.txt).
     Returns the new file_id if migration was performed, else None.
     """
-    from pathlib import Path
     full_path = Path(legacy_path)
     if not full_path.is_absolute():
         base = Path(__file__).resolve().parent.parent
@@ -275,7 +283,7 @@ def migrate_from_legacy(section: str, legacy_path: str) -> Optional[str]:
     if _list_json_files(section):
         return None  # Already has files, skip migration
 
-    with open(full_path, "r", encoding="utf-8") as f:
+    with open(full_path, encoding="utf-8") as f:
         content = f.read().strip()
     if not content:
         return None

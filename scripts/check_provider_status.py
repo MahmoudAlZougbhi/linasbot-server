@@ -2,51 +2,52 @@
 Check current WhatsApp provider status
 Shows which provider is active and available
 """
+
+from __future__ import annotations
+
 import os
+
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-def check_provider_credentials():
+
+def check_provider_credentials() -> None:
     """Check which providers have valid credentials"""
-    
+
     print("=" * 70)
     print("📊 WHATSAPP PROVIDER STATUS CHECK")
     print("=" * 70)
-    
+
     providers = {
         "MontyMobile (NEW)": {
             "vars": ["MONTYMOBILE_API_KEY", "MONTYMOBILE_TENANT_ID", "MONTYMOBILE_API_ID", "MONTYMOBILE_SOURCE_NUMBER"],
             "status": "✅ ACTIVE (Default)",
-            "description": "New Qiscus endpoint using MontyMobile infrastructure"
+            "description": "New Qiscus endpoint using MontyMobile infrastructure",
         },
         "Qiscus (OLD)": {
             "vars": ["QISCUS_SDK_SECRET", "QISCUS_APP_CODE", "QISCUS_SENDER_EMAIL"],
             "status": "⚠️  DEPRECATED",
-            "description": "Old Qiscus endpoint (may not work)"
+            "description": "Old Qiscus endpoint (may not work)",
         },
         "Meta/Facebook": {
             "vars": ["WHATSAPP_API_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"],
             "status": "✅ Available",
-            "description": "Meta WhatsApp Cloud API"
+            "description": "Meta WhatsApp Cloud API",
         },
-        "360Dialog": {
-            "vars": ["DIALOG360_API_KEY"],
-            "status": "✅ Available",
-            "description": "360Dialog WhatsApp API"
-        }
+        "360Dialog": {"vars": ["DIALOG360_API_KEY"], "status": "✅ Available", "description": "360Dialog WhatsApp API"},
     }
-    
+
     print("\n🔍 Checking provider credentials...\n")
-    
+
     for provider_name, provider_info in providers.items():
         print(f"📱 {provider_name}")
         print(f"   Status: {provider_info['status']}")
         print(f"   Description: {provider_info['description']}")
-        
+
         all_present = True
-        for var in provider_info['vars']:
+        for var in provider_info["vars"]:
             value = os.getenv(var)
             if value:
                 # Mask sensitive data
@@ -58,14 +59,14 @@ def check_provider_credentials():
             else:
                 print(f"   ❌ {var}: NOT FOUND")
                 all_present = False
-        
+
         if all_present:
-            print(f"   ✅ All credentials present - READY TO USE")
+            print("   ✅ All credentials present - READY TO USE")
         else:
-            print(f"   ⚠️  Missing credentials - NOT CONFIGURED")
-        
+            print("   ⚠️  Missing credentials - NOT CONFIGURED")
+
         print()
-    
+
     # Check current default
     print("=" * 70)
     print("🎯 CURRENT DEFAULT PROVIDER")
@@ -75,7 +76,7 @@ def check_provider_credentials():
     print("   Line: _current_provider: str = 'montymobile'")
     print("\n   ✅ MontyMobile is set as the default provider")
     print()
-    
+
     # Check webhook configuration
     print("=" * 70)
     print("🔗 WEBHOOK CONFIGURATION")
@@ -84,12 +85,12 @@ def check_provider_credentials():
     if webhook_token:
         print(f"\n   ✅ Webhook verify token: {webhook_token}")
     else:
-        print(f"\n   ⚠️  Webhook verify token: NOT SET")
-    
+        print("\n   ⚠️  Webhook verify token: NOT SET")
+
     print("\n   📍 Webhook URL should be configured in MontyMobile dashboard:")
     print("   https://your-domain.com/webhook")
     print()
-    
+
     # Summary
     print("=" * 70)
     print("📝 SUMMARY")
@@ -102,7 +103,7 @@ def check_provider_credentials():
     print("   🚀 Bot is ready to use with the new API!")
     print()
     print("=" * 70)
-    
+
     # Next steps
     print("\n📋 NEXT STEPS:")
     print("   1. Run: python tests/test_montymobile.py")
@@ -110,6 +111,7 @@ def check_provider_credentials():
     print("   3. Send a message from your phone to: 96178974402")
     print("   4. Verify bot responds correctly")
     print("\n" + "=" * 70)
+
 
 if __name__ == "__main__":
     check_provider_credentials()

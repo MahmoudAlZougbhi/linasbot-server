@@ -2,12 +2,14 @@
 Template schedule persistence and validation.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
 import threading
-from pathlib import Path
-from typing import Any, Dict
+from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from services.smart_messaging_catalog import (
     DAILY_TEMPLATE_IDS,
@@ -15,30 +17,25 @@ from services.smart_messaging_catalog import (
     normalize_template_id,
 )
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:  # pragma: no cover - Python < 3.9 fallback
-    ZoneInfo = None
-
-
 _TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
 
 class TemplateScheduleService:
     """Manage per-template daily schedule settings under app_settings.smartMessaging."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         from storage.persistent_storage import APP_SETTINGS_FILE, ensure_dirs
+
         ensure_dirs()
         self.settings_file = APP_SETTINGS_FILE
         self._lock = threading.Lock()
 
-    def _load_settings(self) -> Dict[str, Any]:
+    def _load_settings(self) -> dict[str, Any]:
         if not self.settings_file.exists():
             return {}
 
         try:
-            with open(self.settings_file, "r", encoding="utf-8") as f:
+            with open(self.settings_file, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
                 return data
@@ -46,7 +43,7 @@ class TemplateScheduleService:
         except Exception:
             return {}
 
-    def _save_settings(self, settings: Dict[str, Any]) -> bool:
+    def _save_settings(self, settings: dict[str, Any]) -> bool:
         try:
             os.makedirs(self.settings_file.parent, exist_ok=True)
             with open(self.settings_file, "w", encoding="utf-8") as f:
@@ -55,7 +52,7 @@ class TemplateScheduleService:
         except Exception:
             return False
 
-    def _ensure_schedules(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+    def _ensure_schedules(self, settings: dict[str, Any]) -> dict[str, Any]:
         smart = settings.setdefault("smartMessaging", {})
         schedules = smart.setdefault("templateSchedules", {})
         # Legacy key attended_yesterday -> session_feedback (Meta template name)
@@ -83,7 +80,7 @@ class TemplateScheduleService:
                 if key not in existing:
                     existing[key] = value
 
-        return schedules
+        return cast(dict[str, Any], schedules)
 
     def _validate_timezone(self, tz_name: str) -> bool:
         if not tz_name:
@@ -97,7 +94,7 @@ class TemplateScheduleService:
         except Exception:
             return False
 
-    def _sanitize_schedule_payload(self, payload: Dict[str, Any], current: Dict[str, Any]) -> Dict[str, Any]:
+    def _sanitize_schedule_payload(self, payload: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
         sanitized = dict(current)
 
         if "enabled" in payload:
@@ -117,14 +114,14 @@ class TemplateScheduleService:
 
         if "delayHours" in payload:
             try:
-                h = float(payload.get("delayHours"))
-            except (TypeError, ValueError):
-                raise ValueError("delayHours must be a number")
+                h = float(payload.get("delayHours") or 0)
+            except (TypeError, ValueError) as e:
+                raise ValueError("delayHours must be a number") from e
             sanitized["delayHours"] = max(0.5, min(72.0, h))
 
         return sanitized
 
-    def get_all_schedules(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_schedules(self) -> dict[str, dict[str, Any]]:
         with self._lock:
             settings = self._load_settings()
             schedules = self._ensure_schedules(settings)
@@ -132,14 +129,14 @@ class TemplateScheduleService:
             self._save_settings(settings)
             return {k: dict(v) for k, v in schedules.items()}
 
-    def get_schedule(self, template_id: str) -> Dict[str, Any]:
+    def get_schedule(self, template_id: str) -> dict[str, Any]:
         template_id = normalize_template_id(template_id)
         if template_id not in DAILY_TEMPLATE_IDS:
             raise ValueError(f"Template '{template_id}' does not support daily scheduling")
         schedules = self.get_all_schedules()
         return schedules.get(template_id, get_default_schedule(template_id))
 
-    def update_schedule(self, template_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def update_schedule(self, template_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         template_id = normalize_template_id(template_id)
         if template_id not in DAILY_TEMPLATE_IDS:
             raise ValueError(f"Template '{template_id}' does not support daily scheduling")
@@ -156,7 +153,7 @@ class TemplateScheduleService:
 
             return dict(updated)
 
-    def get_enabled_daily_templates(self) -> Dict[str, Dict[str, Any]]:
+    def get_enabled_daily_templates(self) -> dict[str, dict[str, Any]]:
         schedules = self.get_all_schedules()
         enabled = {}
         for template_id, cfg in schedules.items():
@@ -166,4 +163,3 @@ class TemplateScheduleService:
 
 
 template_schedule_service = TemplateScheduleService()
-

@@ -1,16 +1,17 @@
-# utils/phone_utils.py
 """
 Single source of truth for phone normalization (E.164) used everywhere:
 lookups, cache keys, DB, conversation identity. Lebanon (+961) supported.
 """
+
+from __future__ import annotations
+
 import re
-from typing import Optional
 
 # Default country code when local number has no country code (Lebanon)
 DEFAULT_COUNTRY_CODE_LEBANON = "961"
 
 
-def normalize_phone(raw_phone: Optional[str]) -> str:
+def normalize_phone(raw_phone: str | None) -> str:
     """
     Normalize to E.164 for Lebanon. Used for ALL lookups, cache keys, DB, identity.
     - Remove spaces/dashes
@@ -51,7 +52,7 @@ def normalize_phone(raw_phone: Optional[str]) -> str:
     return "+" + digits
 
 
-def phone_match_key(raw: Optional[str]) -> str:
+def phone_match_key(raw: str | None) -> str:
     """
     Digits-only identity for comparing message-log customer_id to live_chat_index phones.
     Uses the same Lebanon E.164 rules as normalize_phone (e.g. 96131234567).
@@ -77,7 +78,7 @@ def phone_match_key(raw: Optional[str]) -> str:
     return re.sub(r"\D", "", e164)
 
 
-def is_phone_like_user_id(user_id: Optional[str]) -> bool:
+def is_phone_like_user_id(user_id: str | None) -> bool:
     """True if user_id looks like a phone (Meta/360 wa_id) rather than a room_id."""
     if not user_id:
         return False

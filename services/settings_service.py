@@ -1,13 +1,15 @@
-# services/settings_service.py
 """
 Settings Service
 Manages application settings storage and retrieval
 """
 
+from __future__ import annotations
+
+# services/settings_service.py
 import json
 import os
 import re
-from typing import Dict, Any
+from typing import Any, cast
 
 from storage.persistent_storage import APP_SETTINGS_FILE, ensure_dirs
 
@@ -15,34 +17,34 @@ from storage.persistent_storage import APP_SETTINGS_FILE, ensure_dirs
 class SettingsService:
     """Service for managing application settings"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         ensure_dirs()
         self.settings_file = str(APP_SETTINGS_FILE)
         self.settings = self._load_settings()
-        print(f"✅ Settings Service initialized")
-    
-    def _load_settings(self) -> Dict[str, Any]:
+        print("✅ Settings Service initialized")
+
+    def _load_settings(self) -> dict[str, Any]:
         """Load settings from file or create default"""
         if os.path.exists(self.settings_file):
             try:
-                with open(self.settings_file, 'r', encoding='utf-8') as f:
+                with open(self.settings_file, encoding="utf-8") as f:
                     settings = json.load(f)
                 if "clinic" not in settings or not isinstance(settings.get("clinic"), dict):
                     settings["clinic"] = {"branchHolidays": []}
                 elif not isinstance(settings["clinic"].get("branchHolidays"), list):
                     settings["clinic"]["branchHolidays"] = []
                 print(f"✅ Loaded settings from {self.settings_file}")
-                return settings
+                return cast(dict[str, Any], settings)
             except Exception as e:
                 print(f"⚠️ Error loading settings: {e}, using defaults")
                 return self._get_default_settings()
         else:
-            print(f"📝 Settings file not found, creating default settings")
+            print("📝 Settings file not found, creating default settings")
             default_settings = self._get_default_settings()
             self._save_settings(default_settings)
             return default_settings
-    
-    def _get_default_settings(self) -> Dict[str, Any]:
+
+    def _get_default_settings(self) -> dict[str, Any]:
         """Get default settings"""
         return {
             "general": {
@@ -51,37 +53,29 @@ class SettingsService:
                 "responseTimeout": 5,
                 "enableVoice": True,
                 "enableImages": True,
-                "enableTraining": True
+                "enableTraining": True,
             },
-            "notifications": {
-                "notificationsEnabled": True,
-                "emailAlerts": True,
-                "humanTakeoverNotifyMobiles": ""
-            },
-            "security": {
-                "sessionTimeout": 24
-            },
-            "clinic": {
-                "branchHolidays": []
-            },
+            "notifications": {"notificationsEnabled": True, "emailAlerts": True, "humanTakeoverNotifyMobiles": ""},
+            "security": {"sessionTimeout": 24},
+            "clinic": {"branchHolidays": []},
         }
-    
-    def _save_settings(self, settings: Dict[str, Any]) -> bool:
+
+    def _save_settings(self, settings: dict[str, Any]) -> bool:
         """Save settings to file"""
         try:
             # Ensure data directory exists
             os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
-            
-            with open(self.settings_file, 'w', encoding='utf-8') as f:
+
+            with open(self.settings_file, "w", encoding="utf-8") as f:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
-            
+
             print(f"✅ Settings saved to {self.settings_file}")
             return True
         except Exception as e:
             print(f"❌ Error saving settings: {e}")
             return False
-    
-    def get_all_settings(self) -> Dict[str, Any]:
+
+    def get_all_settings(self) -> dict[str, Any]:
         """Get all settings"""
         out = dict(self.settings)
         if "clinic" not in out or not isinstance(out.get("clinic"), dict):
@@ -89,29 +83,29 @@ class SettingsService:
         elif not isinstance(out["clinic"].get("branchHolidays"), list):
             out["clinic"]["branchHolidays"] = []
         return out
-    
-    def get_setting(self, category: str, key: str, default=None) -> Any:
+
+    def get_setting(self, category: str, key: str, default: Any | None = None) -> Any:
         """
         Get a specific setting value
-        
+
         Args:
             category: Settings category (e.g., 'general', 'notifications')
             key: Setting key
             default: Default value if not found
-            
+
         Returns:
             Setting value or default
         """
         return self.settings.get(category, {}).get(key, default)
-    
-    def update_settings(self, category: str, updates: Dict[str, Any]) -> bool:
+
+    def update_settings(self, category: str, updates: dict[str, Any]) -> bool:
         """
         Update settings in a category
-        
+
         Args:
             category: Settings category
             updates: Dictionary of key-value pairs to update
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -124,19 +118,19 @@ class SettingsService:
                 updates["humanTakeoverNotifyMobiles"] = self.normalize_human_takeover_notify_mobiles(
                     updates.get("humanTakeoverNotifyMobiles", "")
                 )
-            
+
             # Update the settings
             self.settings[category].update(updates)
-            
+
             # Save to file
             return self._save_settings(self.settings)
         except Exception as e:
             print(f"❌ Error updating settings: {e}")
             return False
-    
+
     def get_human_takeover_notify_mobiles(self) -> str:
         """Get the mobile numbers for human takeover notifications"""
-        raw_numbers = self.get_setting('notifications', 'humanTakeoverNotifyMobiles', '')
+        raw_numbers = self.get_setting("notifications", "humanTakeoverNotifyMobiles", "")
         return self.normalize_human_takeover_notify_mobiles(raw_numbers)
 
     def normalize_human_takeover_notify_mobiles(self, mobile_numbers: str) -> str:
@@ -189,20 +183,18 @@ class SettingsService:
 
         return cleaned
 
-    def get_human_takeover_notify_mobiles_list(self):
+    def get_human_takeover_notify_mobiles_list(self) -> Any:
         """Get normalized notification numbers as a list."""
         raw = self.get_human_takeover_notify_mobiles()
         normalized = self.normalize_human_takeover_notify_mobiles(raw)
         if not normalized:
             return []
         return [item.strip() for item in normalized.split(",") if item.strip()]
-    
+
     def set_human_takeover_notify_mobiles(self, mobile_numbers: str) -> bool:
         """Set the mobile numbers for human takeover notifications"""
         normalized_numbers = self.normalize_human_takeover_notify_mobiles(mobile_numbers)
-        return self.update_settings('notifications', {
-            'humanTakeoverNotifyMobiles': normalized_numbers
-        })
+        return self.update_settings("notifications", {"humanTakeoverNotifyMobiles": normalized_numbers})
 
 
 # Global instance

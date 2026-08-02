@@ -1,29 +1,40 @@
+from __future__ import annotations
+
 # services/chat_response_service.py
 import asyncio
-import json
-import random
-import config
-from utils.utils import detect_language, get_system_instruction, get_openai_tools_schema
-from utils.utils import get_canonical_user_id_and_phone, get_firestore_db, merge_conversation_user_id_variants
-from prompt_templates import CUSTOMER_STATUS_TOKEN
-from services.llm_core_service import client
-from services.gender_recognition_service import get_gender_from_gpt
-from services.moderation_service import check_rate_limits, get_rate_limit_response
-from difflib import SequenceMatcher
 import datetime
+import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from collections.abc import Iterator
+from typing import Any, cast
+
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
+from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
+
+import config
+from prompt_templates import CUSTOMER_STATUS_TOKEN
 
 # Import all API functions from api_integrations
 from services import api_integrations
 from services.booking.resolver import match_best_body_part_row, server_may_infer_body_parts
+
+# Import dynamic model selector for cost optimization
+from services.gender_recognition_service import get_gender_from_gpt
+from services.llm_core_service import client
+from services.moderation_service import check_rate_limits, get_rate_limit_response
+from utils.appointment_slot_rules import (
+    extract_appointment_booking_fields,
+    find_appointment_row_in_check_next_payload,
+    parse_normalized_api_datetime,
+    validate_booking_slot,
+)
 from utils.datetime_utils import (
     BOT_FIXED_TZ,
     align_datetime_to_day_reference,
-    detect_existing_appointment_edit_intent,
     datetime_from_ai_date_components,
     detect_appointment_inquiry_intent,
     detect_bulk_reschedule_all_intent,
+    detect_existing_appointment_edit_intent,
     detect_last_weekday_intent_from_user_text,
     detect_reschedule_intent,
     format_clinic_calendar_anchor,
@@ -32,15 +43,13 @@ from utils.datetime_utils import (
     parse_datetime_flexible,
     to_bot_tz,
 )
-from utils.appointment_slot_rules import (
-    extract_appointment_booking_fields,
-    find_appointment_row_in_check_next_payload,
-    parse_normalized_api_datetime,
-    validate_booking_slot,
+from utils.utils import (
+    get_canonical_user_id_and_phone,
+    get_firestore_db,
+    get_openai_tools_schema,
+    get_system_instruction,
+    merge_conversation_user_id_variants,
 )
-
-# Import dynamic model selector for cost optimization
-from services.dynamic_model_selector import select_optimal_model
 
 # Fixed bot timezone (UTC+0200) for all booking day comparisons
 BOOKING_TZ = BOT_FIXED_TZ
@@ -67,7 +76,11 @@ def _compute_cost_from_usage(model: str, prompt_tokens: int, completion_tokens: 
     ct = completion_tokens or 0
     input_cost = (pt / 1_000_000) * pricing["input"]
     output_cost = (ct / 1_000_000) * pricing["output"]
-    return {"input_cost_usd": round(input_cost, 6), "output_cost_usd": round(output_cost, 6), "cost_usd": round(input_cost + output_cost, 6)}
+    return {
+        "input_cost_usd": round(input_cost, 6),
+        "output_cost_usd": round(output_cost, 6),
+        "cost_usd": round(input_cost + output_cost, 6),
+    }
 
 
 _TOOL_ROUND_ARGS_MAX = 48_000
@@ -78,8 +91,8 @@ def _record_tool_round_trip(
     function_name: str,
     function_args: Any,
     tool_content: str,
-    parsed_output: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    parsed_output: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Activity-flow record: full JSON args + backend response for dashboard (no 300-char clip).
     Adds backend_execution summary when tool returns structured booking/validation JSON.
@@ -93,7 +106,7 @@ def _record_tool_round_trip(
     out = tool_content or ""
     if len(out) > _TOOL_ROUND_RESPONSE_MAX:
         out = out[:_TOOL_ROUND_RESPONSE_MAX] + "…[truncated]"
-    rec: Dict[str, Any] = {
+    rec: dict[str, Any] = {
         "ai_requested": function_name,
         "args": args_str,
         "bot_returned": out,
@@ -136,7 +149,7 @@ def _record_tool_round_trip(
     return rec
 
 
-def _normalize_profile_gender(value: Any) -> Optional[str]:
+def _normalize_profile_gender(value: Any) -> str | None:
     """Normalize user-facing gender words to the backend profile values."""
     s = str(value or "").strip().lower()
     if not s:
@@ -150,7 +163,7 @@ def _normalize_profile_gender(value: Any) -> Optional[str]:
     return None
 
 
-def _validate_profile_name(value: Any) -> Tuple[Optional[str], Optional[str]]:
+def _validate_profile_name(value: Any) -> tuple[str | None, str | None]:
     """Return (clean_name, error) for a user-requested profile name change."""
     name = str(value or "").strip()
     if not name:
@@ -163,7 +176,7 @@ def _validate_profile_name(value: Any) -> Tuple[Optional[str], Optional[str]]:
     return name, None
 
 
-async def _update_profile_name_in_firestore(user_id: str, name: str, phone_number: Optional[str]) -> int:
+async def _update_profile_name_in_firestore(user_id: str, name: str, phone_number: str | None) -> int:
     """Persist a profile name on all known user-id variants we can safely resolve."""
     db = get_firestore_db()
     if not db:
@@ -176,7 +189,7 @@ async def _update_profile_name_in_firestore(user_id: str, name: str, phone_numbe
         if not uid:
             continue
         user_doc_ref = users_coll.document(uid)
-        payload = {
+        payload: dict[str, Any] = {
             "user_id": uid,
             "name": name,
             "last_updated": datetime.datetime.now(),
@@ -197,11 +210,11 @@ async def _update_profile_name_in_firestore(user_id: str, name: str, phone_numbe
 
 async def _update_current_conversation_customer_info(
     user_id: str,
-    conversation_id: Optional[str],
+    conversation_id: str | None,
     *,
-    name: Optional[str] = None,
-    gender: Optional[str] = None,
-    phone_number: Optional[str] = None,
+    name: str | None = None,
+    gender: str | None = None,
+    phone_number: str | None = None,
 ) -> int:
     """Keep dashboard customer_info aligned after explicit profile corrections."""
     db = get_firestore_db()
@@ -267,7 +280,7 @@ def _normalize_arabic_reply(text: str) -> str:
     return text
 
 
-_custom_qa_cache = {}
+_custom_qa_cache: dict[str, Any] = {}
 
 PRICE_STRONG_KEYWORDS = [
     "price",
@@ -298,7 +311,7 @@ PRICE_WEAK_KEYWORDS = [
 ]
 
 
-def _extract_appointment_id_from_check_response(response: dict) -> Optional[int]:
+def _extract_appointment_id_from_check_response(response: dict) -> int | None:
     """Extract appointment_id from check_next_appointment API response."""
     if not isinstance(response, dict):
         return None
@@ -388,7 +401,7 @@ def _reschedule_row_kind_tag(apt: dict) -> str:
     return "ACTIVE"
 
 
-def _filter_appointments_for_reschedule_overview(appointments: List[dict]) -> List[dict]:
+def _filter_appointments_for_reschedule_overview(appointments: list[dict]) -> list[dict]:
     """Prefer rows that are not clearly finished/cancelled when listing choices for reschedule."""
     kept = [a for a in appointments if _appointment_row_status_lower(a) not in _EXCLUDED_RESCHEDULE_SUMMARY_STATUSES]
     return kept if len(kept) >= 2 else list(appointments)
@@ -409,7 +422,7 @@ def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
     mach = apt.get("machine") or apt.get("machine_name") or ""
     if isinstance(mach, dict):
         mach = (mach.get("name") or mach.get("title") or "").strip()
-    bits: List[str] = []
+    bits: list[str] = []
     if aid is not None:
         bits.append(f"appointment_id={aid}")
     else:
@@ -426,7 +439,7 @@ def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
         bits.append(f"machine={mach}")
 
     bp_raw = apt.get("body_parts") or apt.get("areas") or apt.get("body_part")
-    area_labels: List[str] = []
+    area_labels: list[str] = []
     if isinstance(bp_raw, list):
         for it in bp_raw[:8]:
             if isinstance(it, dict):
@@ -667,7 +680,7 @@ def _user_message_is_acknowledgment_only(text: str) -> bool:
     return False
 
 
-def _operational_context_promises_imminent_appointment_update(ctx: Optional[str]) -> bool:
+def _operational_context_promises_imminent_appointment_update(ctx: str | None) -> bool:
     """Last bot line said it will update/reschedule (but tools may not have run yet)."""
     if not ctx or not str(ctx).strip():
         return False
@@ -785,17 +798,13 @@ def _build_pause_resume_execution_guardrail(
         facts.append(
             "- You MUST NOT say the paused appointment became Available. Only say the date/time changed successfully."
         )
-        facts.append(
-            "- If needed, say status may still appear paused until reception/back office confirms it."
-        )
+        facts.append("- If needed, say status may still appear paused until reception/back office confirms it.")
     elif resume_attempted:
         facts.append(
             "- Resume was attempted but not confirmed successful. Do NOT say the appointment is Available now."
         )
     else:
-        facts.append(
-            "- No successful resume action was confirmed. Do NOT claim the paused status was removed."
-        )
+        facts.append("- No successful resume action was confirmed. Do NOT claim the paused status was removed.")
     return "\n".join(facts)
 
 
@@ -815,7 +824,7 @@ def _arabic_indic_digits_to_ascii(text: str) -> str:
     )
 
 
-def _appointment_numeric_id(apt: Optional[dict]) -> Optional[int]:
+def _appointment_numeric_id(apt: dict | None) -> int | None:
     if not isinstance(apt, dict):
         return None
     for key in ("appointment_id", "id", "appointmentId"):
@@ -829,7 +838,7 @@ def _appointment_numeric_id(apt: Optional[dict]) -> Optional[int]:
     return None
 
 
-def _customer_appointments_embedded_in_payload(payload: dict) -> List[dict]:
+def _customer_appointments_embedded_in_payload(payload: dict) -> list[dict]:
     """check_next_appointment enriched shape: data.customer_appointments."""
     if not isinstance(payload, dict):
         return []
@@ -841,7 +850,7 @@ def _customer_appointments_embedded_in_payload(payload: dict) -> List[dict]:
     return []
 
 
-def _ordered_paused_appointments_from_snapshot(payload: Optional[dict]) -> List[dict]:
+def _ordered_paused_appointments_from_snapshot(payload: dict | None) -> list[dict]:
     """Stable CRM order: paused rows only, deduped by id (check_next enrich or get_customer_appointments)."""
     if not isinstance(payload, dict):
         return []
@@ -849,7 +858,7 @@ def _ordered_paused_appointments_from_snapshot(payload: Optional[dict]) -> List[
     if not rows:
         rows = _extract_customer_appointments_list(payload)
     rows = _filter_appointments_for_reschedule_overview(rows)
-    out: List[dict] = []
+    out: list[dict] = []
     seen: set = set()
     for apt in rows:
         st = str(apt.get("status") or apt.get("appointment_status") or "")
@@ -863,7 +872,7 @@ def _ordered_paused_appointments_from_snapshot(payload: Optional[dict]) -> List[
     return out
 
 
-def _resolve_user_chosen_paused_appointment_id(user_text: str, paused_ids: List[int]) -> Optional[int]:
+def _resolve_user_chosen_paused_appointment_id(user_text: str, paused_ids: list[int]) -> int | None:
     """
     After the bot listed paused rows 1..N, map the user's reply to the CRM appointment_id.
     Avoids treating '3' inside a long datetime sentence as a list index (length + pattern guards).
@@ -981,6 +990,7 @@ LASER_HAIR_REMOVAL_SERVICE_IDS = {1, 12}
 # If GPT sends service_id 13 (tattoo) with one of these, it is almost always a hair booking misfire.
 HAIR_REMOVAL_MACHINE_IDS = frozenset({9, 13, 15})
 
+
 def validate_language_match(user_language: str, bot_response: str, detected_response_lang: str) -> tuple:
     """
     Validate bot response matches user language
@@ -988,14 +998,14 @@ def validate_language_match(user_language: str, bot_response: str, detected_resp
     """
     # Character patterns for each language
     patterns = {
-        'ar': r'[\u0600-\u06FF]',  # Arabic
-        'en': r'[a-zA-Z]',
-        'fr': r'[a-zA-Z]'
+        "ar": r"[\u0600-\u06FF]",  # Arabic
+        "en": r"[a-zA-Z]",
+        "fr": r"[a-zA-Z]",
     }
 
     # Franco should get Arabic response
-    if user_language == 'franco':
-        user_language = 'ar'
+    if user_language == "franco":
+        user_language = "ar"
 
     # For Arabic responses, enforce Arabic script only (names included).
     # Allow URLs/emails to pass untouched when needed.
@@ -1014,7 +1024,7 @@ def validate_language_match(user_language: str, bot_response: str, detected_resp
 
     # Count characters matching expected language
     expected_chars = len(re.findall(patterns[user_language], bot_response))
-    total_chars = len(re.sub(r'\s', '', bot_response))  # Exclude spaces
+    total_chars = len(re.sub(r"\s", "", bot_response))  # Exclude spaces
 
     if total_chars == 0:
         return True, ""
@@ -1049,7 +1059,7 @@ def looks_like_working_hours_reply(text: str) -> bool:
     return any(re.search(pattern, normalized, re.IGNORECASE | re.UNICODE) for pattern in hours_patterns)
 
 
-def is_price_related_question(text: str, booking_state: Optional[Dict[str, Any]] = None) -> bool:
+def is_price_related_question(text: str, booking_state: dict[str, Any] | None = None) -> bool:
     normalized = str(text or "").lower()
     if not normalized.strip():
         return False
@@ -1083,7 +1093,7 @@ def is_price_related_question(text: str, booking_state: Optional[Dict[str, Any]]
     return has_clinic_context or has_booking_context
 
 
-def _safe_int(value: Any) -> Optional[int]:
+def _safe_int(value: Any) -> int | None:
     try:
         if value is None or value == "":
             return None
@@ -1092,7 +1102,7 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
-def _safe_float(value: Any) -> Optional[float]:
+def _safe_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
 
@@ -1106,7 +1116,7 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
-def _normalize_body_part_ids(raw_value: Any) -> List[int]:
+def _normalize_body_part_ids(raw_value: Any) -> list[int]:
     if raw_value is None or raw_value == "":
         return []
 
@@ -1138,7 +1148,7 @@ def _normalize_body_part_ids(raw_value: Any) -> List[int]:
     return [parsed_single] if parsed_single is not None and parsed_single > 0 else []
 
 
-def _booking_submit_payload_complete_for_execution(function_args: Dict[str, Any], current_gender: str) -> bool:
+def _booking_submit_payload_complete_for_execution(function_args: dict[str, Any], current_gender: str) -> bool:
     """True when submit_booking_intent has enough concrete values to execute without a recap round-trip."""
     if not isinstance(function_args, dict):
         return False
@@ -1178,17 +1188,17 @@ def _booking_submit_payload_complete_for_execution(function_args: Dict[str, Any]
 def _extract_direct_submit_booking_args_from_user_message(
     text: str,
     *,
-    phone: Optional[str],
+    phone: str | None,
     current_gender: str,
-    fallback_name: Optional[str],
-) -> Optional[Dict[str, Any]]:
+    fallback_name: str | None,
+) -> dict[str, Any] | None:
     """Parse explicit technical booking fields from dashboard/admin test messages."""
     raw = text or ""
     low = raw.lower()
     if not any(tok in low for tok in ("احجز", "احجزي", "حجز", "book", "execute", "نفّذ", "نفذ")):
         return None
 
-    def pick_int(field: str) -> Optional[int]:
+    def pick_int(field: str) -> int | None:
         m = re.search(rf"\b{re.escape(field)}\s*[:=]\s*(\d+)\b", raw, flags=re.IGNORECASE)
         return _safe_int(m.group(1)) if m else None
 
@@ -1196,7 +1206,7 @@ def _extract_direct_submit_booking_args_from_user_message(
     bid = pick_int("branch_id")
     mid = pick_int("machine_id")
 
-    bp_ids: List[int] = []
+    bp_ids: list[int] = []
     m_bp = re.search(r"\bbody_part_ids\s*[:=]\s*\[([^\]]+)\]", raw, flags=re.IGNORECASE)
     if m_bp:
         bp_ids = _normalize_body_part_ids(m_bp.group(1))
@@ -1214,7 +1224,7 @@ def _extract_direct_submit_booking_args_from_user_message(
     date_part = m_dt.group(1)
     time_part = m_dt.group(2)
     if not time_part:
-        m_time = re.search(r"\b(\d{1,2}:\d{2})(?::\d{2})?\b", raw[m_dt.end():])
+        m_time = re.search(r"\b(\d{1,2}:\d{2})(?::\d{2})?\b", raw[m_dt.end() :])
         time_part = m_time.group(1) if m_time else None
     if not time_part:
         return None
@@ -1247,8 +1257,8 @@ def _extract_direct_submit_booking_args_from_user_message(
 
 
 def _merge_explicit_user_booking_args(
-    function_args: Dict[str, Any],
-    explicit_args: Optional[Dict[str, Any]],
+    function_args: dict[str, Any],
+    explicit_args: dict[str, Any] | None,
 ) -> bool:
     """Overlay explicit technical ids/date from the latest user message onto model tool args."""
     if not isinstance(function_args, dict) or not isinstance(explicit_args, dict):
@@ -1285,11 +1295,16 @@ def _merge_explicit_user_booking_args(
     return changed
 
 
-def _reply_from_submit_booking_tool(tool_output: Dict[str, Any], language: str) -> str:
-    if isinstance(tool_output, dict) and tool_output.get("success") and tool_output.get("booking_flow_state") == "booked":
+def _reply_from_submit_booking_tool(tool_output: dict[str, Any], language: str) -> str:
+    if (
+        isinstance(tool_output, dict)
+        and tool_output.get("success")
+        and tool_output.get("booking_flow_state") == "booked"
+    ):
         api = tool_output.get("api_response") or {}
         data = api.get("data") if isinstance(api, dict) else {}
-        appt = (data or {}).get("appointment") if isinstance(data, dict) else {}
+        appt_raw = (data or {}).get("appointment") if isinstance(data, dict) else {}
+        appt = appt_raw if isinstance(appt_raw, dict) else {}
         aid = appt.get("id") or appt.get("appointment_id")
         date = appt.get("date")
         cost = appt.get("cost")
@@ -1297,24 +1312,26 @@ def _reply_from_submit_booking_tool(tool_output: Dict[str, Any], language: str) 
             return f"Appointment booked successfully. Appointment ID: {aid}, date: {date}, system price: {cost}."
         return f"تم تثبيت الحجز على السيستم. رقم الموعد {aid}، التاريخ {date}، والسعر الظاهر بالنظام {cost}."
     reason = (
-        tool_output.get("human_readable_reason")
-        or tool_output.get("message")
-        or "لم يكتمل الحجز على السيستم."
+        tool_output.get("human_readable_reason") or tool_output.get("message") or "لم يكتمل الحجز على السيستم."
         if isinstance(tool_output, dict)
         else "لم يكتمل الحجز على السيستم."
     )
     return str(reason)
 
 
-def _get_body_part_required_service_ids() -> set:
+def _get_body_part_required_service_ids() -> set[int]:
     configured_ids = set(DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS)
     try:
         from storage.persistent_storage import APP_SETTINGS_FILE
-        with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as settings_file:
+
+        with open(APP_SETTINGS_FILE, encoding="utf-8") as settings_file:
             app_settings = json.load(settings_file)
         configured_list = app_settings.get("pricingSync", {}).get("requireBodyPartServiceIds", [])
-        normalized = {_safe_int(item) for item in configured_list}
-        normalized = {item for item in normalized if item is not None}
+        normalized: set[int] = set()
+        for item in configured_list:
+            sid = _safe_int(item)
+            if sid is not None:
+                normalized.add(sid)
         if normalized:
             configured_ids = normalized
     except Exception as settings_error:
@@ -1347,16 +1364,13 @@ def _pricing_missing_details_reply(language: str, missing: str) -> str:
     return lang_bucket.get(language, lang_bucket["en"])
 
 
-def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_state: Dict[str, Any]) -> Optional[int]:
+def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_state: dict[str, Any]) -> int | None:
     existing = _safe_int(booking_state.get("service_id"))
     if existing is not None:
         return existing
 
     text = str(user_input or "").lower()
-    if any(
-        keyword in text
-        for keyword in ("candela", "كانديلا", "kandila", "quadro", "كوادرو", " neo", "neo ")
-    ):
+    if any(keyword in text for keyword in ("candela", "كانديلا", "kandila", "quadro", "كوادرو", " neo", "neo ")):
         return 12 if current_gender == "female" else 1
     if any(keyword in text for keyword in ["tattoo", "وشم", "تاتو", "détatouage"]):
         return 13
@@ -1385,8 +1399,8 @@ def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_
 
 def _merge_pricing_args_with_booking_state(
     function_name: str,
-    function_args: Dict[str, Any],
-    booking_state: Dict[str, Any],
+    function_args: dict[str, Any],
+    booking_state: dict[str, Any],
     current_gender: str,
     user_input: str,
 ) -> None:
@@ -1425,7 +1439,7 @@ def _merge_pricing_args_with_booking_state(
                 function_args["body_part_ids"] = booking_state.get("body_part_ids")
 
 
-def _finalize_create_appointment_payload_for_api(function_args: Dict[str, Any]) -> None:
+def _finalize_create_appointment_payload_for_api(function_args: dict[str, Any]) -> None:
     """
     Align tool args before legacy create: CRM POST uses top-level body_part_ids (PDF).
     Keeps body_part_ids and body_parts_with_sessions consistent; preserves session_number
@@ -1434,7 +1448,7 @@ def _finalize_create_appointment_payload_for_api(function_args: Dict[str, Any]) 
     raw_bps = function_args.get("body_parts_with_sessions")
     ids = _normalize_body_part_ids(function_args.get("body_part_ids"))
     if isinstance(raw_bps, list) and raw_bps:
-        cleaned: List[Dict[str, Any]] = []
+        cleaned: list[dict[str, Any]] = []
         for x in raw_bps:
             if not isinstance(x, dict):
                 continue
@@ -1449,13 +1463,11 @@ def _finalize_create_appointment_payload_for_api(function_args: Dict[str, Any]) 
             function_args["body_part_ids"] = [c["body_part_id"] for c in cleaned]
             return
     if ids:
-        function_args["body_parts_with_sessions"] = [
-            {"body_part_id": bid, "session_number": 1} for bid in ids
-        ]
+        function_args["body_parts_with_sessions"] = [{"body_part_id": bid, "session_number": 1} for bid in ids]
         function_args["body_part_ids"] = list(ids)
 
 
-def _remember_booking_selection(user_id: str, function_args: Dict[str, Any]) -> None:
+def _remember_booking_selection(user_id: str, function_args: dict[str, Any]) -> None:
     state = config.user_booking_state[user_id]
 
     service_id = _safe_int(function_args.get("service_id"))
@@ -1491,7 +1503,7 @@ def _remember_booking_selection(user_id: str, function_args: Dict[str, Any]) -> 
         pass
 
 
-def _extract_first_numeric(item: Dict[str, Any], keys: List[str]) -> Optional[float]:
+def _extract_first_numeric(item: dict[str, Any], keys: list[str]) -> float | None:
     for key in keys:
         if key in item:
             parsed = _safe_float(item.get(key))
@@ -1500,7 +1512,7 @@ def _extract_first_numeric(item: Dict[str, Any], keys: List[str]) -> Optional[fl
     return None
 
 
-def _extract_label(item: Dict[str, Any]) -> str:
+def _extract_label(item: dict[str, Any]) -> str:
     machine_value = item.get("machine")
     machine_name = machine_value.get("name") if isinstance(machine_value, dict) else machine_value
     candidates = [
@@ -1520,11 +1532,11 @@ def _extract_label(item: Dict[str, Any]) -> str:
     return "Price"
 
 
-def _extract_pricing_rows(pricing_payload: Any) -> List[Dict[str, Any]]:
+def _extract_pricing_rows(pricing_payload: Any) -> list[dict[str, Any]]:
     if pricing_payload is None:
         return []
 
-    candidates: List[Dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     visited_nodes = set()
 
     def walk(node: Any) -> None:
@@ -1545,7 +1557,7 @@ def _extract_pricing_rows(pricing_payload: Any) -> List[Dict[str, Any]]:
 
     walk(pricing_payload)
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     seen_signatures = set()
 
     for item in candidates:
@@ -1585,12 +1597,7 @@ def _extract_pricing_rows(pricing_payload: Any) -> List[Dict[str, Any]]:
             if delta > 0.009:
                 discount_amount = delta
 
-        if (
-            discount_percent is None
-            and discount_amount is not None
-            and base_price is not None
-            and base_price > 0
-        ):
+        if discount_percent is None and discount_amount is not None and base_price is not None and base_price > 0:
             discount_percent = (discount_amount / base_price) * 100.0
 
         label = _extract_label(item)
@@ -1617,7 +1624,7 @@ def _extract_pricing_rows(pricing_payload: Any) -> List[Dict[str, Any]]:
     return rows
 
 
-def _format_amount(value: Optional[float]) -> str:
+def _format_amount(value: float | None) -> str:
     if value is None:
         return "0"
     rounded = round(float(value), 2)
@@ -1668,7 +1675,7 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     return "\n".join(lines)
 
 
-def _extract_json_objects(raw: str):
+def _extract_json_objects(raw: str) -> Iterator[str]:
     """
     Extract all complete JSON objects from a string. GPT sometimes returns multiple objects:
     - First: preferred_service, preferred_branch, etc. (no action/bot_reply)
@@ -1755,21 +1762,15 @@ def _parse_gpt_response_json(raw: str) -> dict:
     - Second: action, bot_reply (the actual response)
     It may also emit the same JSON object twice; duplicates are collapsed.
     """
-    matches: List[Dict[str, Any]] = []
+    matches: list[dict[str, Any]] = []
     for obj_str in _extract_json_objects(raw):
         try:
             parsed = json.loads(obj_str)
             # Require action + bot_reply key; allow empty bot_reply (models sometimes emit "" with a tool blob above).
-            if (
-                isinstance(parsed, dict)
-                and parsed.get("action") is not None
-                and "bot_reply" in parsed
-            ):
+            if isinstance(parsed, dict) and parsed.get("action") is not None and "bot_reply" in parsed:
                 br = _dedupe_bot_reply_text(str(parsed.get("bot_reply") or ""))
                 if not (br or "").strip():
-                    br = (
-                        "عذراً، لم يُكتمل نص الرد تلقائياً. جرّب مرة ثانية أو تواصل مع الفرع."
-                    )
+                    br = "عذراً، لم يُكتمل نص الرد تلقائياً. جرّب مرة ثانية أو تواصل مع الفرع."
                 parsed = {**parsed, "bot_reply": br}
                 matches.append(parsed)
         except (json.JSONDecodeError, TypeError):
@@ -1789,7 +1790,7 @@ def _extract_preferred_booking_from_gpt(raw: str) -> dict:
     Extract preferred_* fields from GPT response (first JSON object). Used by booking fallback
     to populate machine_id and body_part_ids when GPT returns confirmation but didn't call the tool.
     """
-    out = {}
+    out: dict[str, Any] = {}
     for obj_str in _extract_json_objects(raw):
         try:
             parsed = json.loads(obj_str)
@@ -1815,7 +1816,7 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
     Parse tool-style JSON blobs emitted before the action JSON (e.g. date/time/service/machine)
     when the model confirms booking in text but does not call create_appointment.
     """
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for obj_str in _extract_json_objects(raw or ""):
         try:
             parsed = json.loads(obj_str)
@@ -1876,9 +1877,9 @@ def _detect_change_request_intent(user_text: str) -> bool:
 
 
 def _collect_recent_user_text_for_change_intent(
-    context_messages: Optional[List[dict]], latest_user_input: str, max_parts: int = 15
+    context_messages: list[dict] | None, latest_user_input: str, max_parts: int = 15
 ) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     for msg in (context_messages or [])[-24:]:
         if msg.get("role") != "user":
             continue
@@ -1891,11 +1892,11 @@ def _collect_recent_user_text_for_change_intent(
     return " ".join(parts[-max_parts:]).strip()
 
 
-def _normalize_booking_date_for_tool_args(function_args: dict) -> Tuple[bool, Optional[str]]:
+def _normalize_booking_date_for_tool_args(function_args: dict) -> tuple[bool, str | None]:
     """
     Same rules as inline normalize_tool_date for create/update, without touching api_failure_reason.
     Mutates function_args (pops calendar_day_intent, date_components); sets date API string.
-    Returns (ok: bool, error_code: Optional[str]).
+    Returns (ok: bool, error_code: str | None).
     """
     if not function_args.get("date") and not function_args.get("date_components"):
         return False, "booking_date_missing_field"
@@ -1965,7 +1966,7 @@ def _bot_reply_claims_completed_booking(bot_reply: str) -> bool:
     )
 
 
-def _parse_tool_round_bot_returned_local(bot_returned: str):
+def _parse_tool_round_bot_returned_local(bot_returned: str) -> Any:
     if not bot_returned or not isinstance(bot_returned, str):
         return None
     try:
@@ -1974,7 +1975,7 @@ def _parse_tool_round_bot_returned_local(bot_returned: str):
         return None
 
 
-def _latest_successful_update_date_from_tool_rounds(tool_round_trips: List[Dict[str, Any]]) -> Optional[str]:
+def _latest_successful_update_date_from_tool_rounds(tool_round_trips: list[dict[str, Any]]) -> str | None:
     """Return the most recent CRM new_date from a successful appointment date/update tool."""
     for tr in reversed(tool_round_trips or []):
         name = str(tr.get("ai_requested") or "").strip()
@@ -1983,14 +1984,15 @@ def _latest_successful_update_date_from_tool_rounds(tool_round_trips: List[Dict[
         returned = _parse_tool_round_bot_returned_local(tr.get("bot_returned") or "")
         if not isinstance(returned, dict) or not returned.get("success"):
             continue
-        data = returned.get("data") if isinstance(returned.get("data"), dict) else {}
+        data_raw = returned.get("data")
+        data = data_raw if isinstance(data_raw, dict) else {}
         new_date = data.get("new_date") or data.get("date") or returned.get("new_date")
         if new_date:
             return str(new_date)
     return None
 
 
-def _partial_paused_date_update_reply(language: str, new_date: Optional[str]) -> str:
+def _partial_paused_date_update_reply(language: str, new_date: str | None) -> str:
     """User-facing fallback when date changed but pause/Available status did not confirm."""
     when = f" إلى {new_date}" if new_date else ""
     if language == "en":
@@ -2009,9 +2011,9 @@ def _partial_paused_date_update_reply(language: str, new_date: Optional[str]) ->
     )
 
 
-def _extract_submit_booking_failure_details(tool_round_trips: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _extract_submit_booking_failure_details(tool_round_trips: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the last submit_booking_intent failure with structured details for loop guard logs."""
-    last_detail: Optional[Dict[str, Any]] = None
+    last_detail: dict[str, Any] | None = None
     for tr in tool_round_trips or []:
         name = str(tr.get("ai_requested") or "").strip()
         if name != "submit_booking_intent":
@@ -2034,7 +2036,7 @@ def _extract_submit_booking_failure_details(tool_round_trips: List[Dict[str, Any
     return last_detail
 
 
-def _resolve_branch_id_from_leak(leaked: dict) -> Optional[int]:
+def _resolve_branch_id_from_leak(leaked: dict) -> int | None:
     bid = _safe_int(leaked.get("branch_id"))
     if bid in (1, 2):
         return bid
@@ -2063,10 +2065,10 @@ def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
 
 
 def _fix_misassigned_tattoo_service_for_hair_booking(
-    function_args: Dict[str, Any],
+    function_args: dict[str, Any],
     current_gender: str,
     user_input: str,
-    context_messages: Optional[List[dict]],
+    context_messages: list[dict] | None,
 ) -> None:
     """
     GPT often confuses tattoo service_id (13) with NEO machine id (13) or sends 13 + Candela/Quadro.
@@ -2110,14 +2112,12 @@ def _fix_misassigned_tattoo_service_for_hair_booking(
     tattoo_thread = any(t in blob for t in ("tattoo", "وشم", "تاتو", "détatouage", "detatouage"))
     if not tattoo_thread and (mid in HAIR_REMOVAL_MACHINE_IDS or hair_thread):
         new_sid = 12 if current_gender == "female" else 1
-        print(
-            f"DEBUG: Corrected service_id 13 → {new_sid} (hair booking; machine_id={mid}, hair_thread={hair_thread})"
-        )
+        print(f"DEBUG: Corrected service_id 13 → {new_sid} (hair booking; machine_id={mid}, hair_thread={hair_thread})")
         function_args["service_id"] = new_sid
 
 
-def _recent_booking_context_blob(context_messages: Optional[List[dict]], user_input: str, last_n: int = 24) -> str:
-    parts: List[str] = []
+def _recent_booking_context_blob(context_messages: list[dict] | None, user_input: str, last_n: int = 24) -> str:
+    parts: list[str] = []
     if user_input and str(user_input).strip():
         parts.append(str(user_input))
     for msg in (context_messages or [])[-last_n:]:
@@ -2130,9 +2130,9 @@ def _recent_booking_context_blob(context_messages: Optional[List[dict]], user_in
 async def _try_infer_body_part_ids_from_conversation(
     service_id: int,
     user_input: str,
-    context_messages: Optional[List[dict]],
-    machine_id: Optional[int] = None,
-) -> Optional[List[int]]:
+    context_messages: list[dict] | None,
+    machine_id: int | None = None,
+) -> list[int] | None:
     """When GPT omitted valid IDs but the user already named an area (e.g. underarm / ta7t el bat)."""
     if not server_may_infer_body_parts():
         return None
@@ -2156,17 +2156,11 @@ async def _try_infer_body_part_ids_from_conversation(
     underarm_ar = "ابط" in blob or "إبط" in blob or "اباط" in blob
     # "under arms", "under arm", "underarms" → compact contains underarm
     underarm_en = (
-        "underarm" in compact
-        or "armpit" in blob
-        or "arm pit" in blob
-        or "aisselle" in blob
-        or "axilla" in blob
+        "underarm" in compact or "armpit" in blob or "arm pit" in blob or "aisselle" in blob or "axilla" in blob
     )
     if underarm_franco or underarm_ar or underarm_en:
         for hint in ("underarm", "إبط", "ابط", "armpit"):
-            resolved = await _resolve_body_part_ids_from_area_hint(
-                hint, service_id, machine_id
-            )
+            resolved = await _resolve_body_part_ids_from_area_hint(hint, service_id, machine_id)
             if resolved:
                 return resolved
     legs_ctx = (
@@ -2175,15 +2169,13 @@ async def _try_infer_body_part_ids_from_conversation(
         or re.search(r"\blegs?\b", blob) is not None
     )
     if legs_ctx:
-        resolved = await _resolve_body_part_ids_from_area_hint(
-            blob[:500], service_id, machine_id
-        )
+        resolved = await _resolve_body_part_ids_from_area_hint(blob[:500], service_id, machine_id)
         if resolved:
             return resolved
     return None
 
 
-def _is_placeholder_booking_customer_name(name: Optional[str]) -> bool:
+def _is_placeholder_booking_customer_name(name: str | None) -> bool:
     if not name or not str(name).strip():
         return True
     n = str(name).strip().lower()
@@ -2208,7 +2200,7 @@ def _is_placeholder_booking_customer_name(name: Optional[str]) -> bool:
     return False
 
 
-def _extract_latin_name_from_franco_booking_bundle(text: str) -> Optional[str]:
+def _extract_latin_name_from_franco_booking_bundle(text: str) -> str | None:
     """
     Infer Latin customer name from Franco one-liners like:
     se3a 3 bilal bilal bilal esm
@@ -2216,7 +2208,7 @@ def _extract_latin_name_from_franco_booking_bundle(text: str) -> Optional[str]:
     """
     if not text or not str(text).strip():
         return None
-    chunks: List[str] = []
+    chunks: list[str] = []
     for m in re.finditer(r"\[User clarified:\s*(.+?)\]", text, flags=re.IGNORECASE | re.DOTALL):
         inner = (m.group(1) or "").strip()
         if inner:
@@ -2276,7 +2268,7 @@ def _extract_latin_name_from_franco_booking_bundle(text: str) -> Optional[str]:
         if not line:
             continue
         tokens = line.split()
-        latin_words: List[str] = []
+        latin_words: list[str] = []
         for t in tokens:
             tl = re.sub(r"^[^\w]+|[^\w]+$", "", t, flags=re.UNICODE)
             if not tl:
@@ -2311,7 +2303,7 @@ def _extract_latin_name_from_franco_booking_bundle(text: str) -> Optional[str]:
 def _apply_inferred_name_from_user_bundle(
     user_id: str,
     user_input: str,
-    parsed_response: Dict[str, Any],
+    parsed_response: dict[str, Any],
 ) -> None:
     """Backfill detected_name + session name when GPT missed Franco time+name bundles."""
     inferred = _extract_latin_name_from_franco_booking_bundle(user_input or "")
@@ -2331,7 +2323,7 @@ def _apply_inferred_name_from_user_bundle(
 
 def _prune_redundant_booking_questions_when_name_from_bundle(
     user_input: str,
-    parsed_response: Dict[str, Any],
+    parsed_response: dict[str, Any],
 ) -> None:
     """
     If the user already bundled time + Latin name (Franco) but the model still asks for
@@ -2358,22 +2350,17 @@ def _prune_redundant_booking_questions_when_name_from_bundle(
     if br2 == br:
         return
     still_numbered = bool(re.search(r"(?m)^\s*[١٢٣123][\).]", br2))
-    if not still_numbered and (
-        len(re.sub(r"\s+", "", br2)) < 20
-        or re.search(r"(شغلتين|سؤالين|أسألك)", br2)
-    ):
-        parsed_response["bot_reply"] = (
-            "تمام أستاذ 🌷 تم تسجيل اسمك والوقت اللي ذكرتهما من رسالتك؛ منتابع لإكمال الحجز."
-        )
+    if not still_numbered and (len(re.sub(r"\s+", "", br2)) < 20 or re.search(r"(شغلتين|سؤالين|أسألك)", br2)):
+        parsed_response["bot_reply"] = "تمام أستاذ 🌷 تم تسجيل اسمك والوقت اللي ذكرتهما من رسالتك؛ منتابع لإكمال الحجز."
     else:
         parsed_response["bot_reply"] = br2
 
 
 def _extract_customer_name_from_conversation_for_booking(
     user_id: str,
-    current_context_messages: Optional[List[dict]],
+    current_context_messages: list[dict] | None,
     user_input: str,
-) -> Optional[str]:
+) -> str | None:
     """
     Same heuristics as create_appointment tool path (conversation scan).
     Returns None if no usable Latin / structured name found.
@@ -2513,9 +2500,9 @@ def _extract_customer_name_from_conversation_for_booking(
 
 async def _recovery_map_body_part_label_to_ids(
     service_id: int,
-    machine_id: Optional[int],
+    machine_id: int | None,
     label: str,
-) -> Optional[List[int]]:
+) -> list[int] | None:
     """
     Auxiliary-JSON recovery only: GPT often sends body_part (e.g. mo25rah) but omits body_part_ids.
     Map via live get_body_parts + match_best_body_part_row. Independent of BOOKING_LEGACY_INFERENCE.
@@ -2530,7 +2517,7 @@ async def _recovery_map_body_part_label_to_ids(
     if not r.get("success"):
         return None
     raw = r.get("data")
-    rows: List[dict] = []
+    rows: list[dict] = []
     if isinstance(raw, list):
         rows = [x for x in raw if isinstance(x, dict)]
     elif isinstance(raw, dict):
@@ -2549,15 +2536,15 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     gpt_raw_content: str,
     *,
     user_id: str,
-    customer_phone_clean: Optional[str],
+    customer_phone_clean: str | None,
     current_gender: str,
     current_preferred_lang: str,
-    current_context_messages: Optional[List[dict]],
+    current_context_messages: list[dict] | None,
     user_input: str,
     body_part_required_service_ids: set,
     is_reschedule_intent: bool,
-    tool_names_so_far: List[str],
-) -> Optional[dict]:
+    tool_names_so_far: list[str],
+) -> dict | None:
     """
     Legacy recovery disabled by architecture decision:
     booking understanding + official-ID resolution belong to the AI/tooling layer,
@@ -2567,8 +2554,8 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
 
 
 async def _coerce_body_part_ids_from_gpt_booking_args(
-    booking_args: dict, service_id: int, machine_id: Optional[int] = None
-) -> Optional[List[int]]:
+    booking_args: dict, service_id: int, machine_id: int | None = None
+) -> list[int] | None:
     """
     GPT sometimes emits body_part_ids as a list of objects, e.g.
     [{"body_part": "dahreh", "session_number": 1}] — normalize to integer IDs for the API.
@@ -2581,7 +2568,7 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
             raw = booking_args.get("body_parts")
     if raw is None or not isinstance(raw, list):
         return None
-    out: List[int] = []
+    out: list[int] = []
     for item in raw:
         if item is None:
             continue
@@ -2600,9 +2587,7 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
                 area = str(_raw_id).strip()
             if area:
                 if server_may_infer_body_parts():
-                    resolved = await _resolve_body_part_ids_from_area_hint(
-                        str(area), service_id, machine_id
-                    )
+                    resolved = await _resolve_body_part_ids_from_area_hint(str(area), service_id, machine_id)
                     if resolved:
                         out.extend(resolved)
     normalized = _normalize_body_part_ids(out)
@@ -2626,7 +2611,7 @@ _SUBMIT_BOOKING_TOOL_HINT_CRM_REJECT = (
 )
 
 
-def _sanitize_submit_booking_tool_for_model(tool_output: Dict[str, Any]) -> Dict[str, Any]:
+def _sanitize_submit_booking_tool_for_model(tool_output: dict[str, Any]) -> dict[str, Any]:
     """
     Strip internal/technical strings from tool JSON before sending to the model so the assistant
     does not echo full exceptions or CRM payloads to the user.
@@ -2647,7 +2632,7 @@ def _sanitize_submit_booking_tool_for_model(tool_output: Dict[str, Any]) -> Dict
     return out
 
 
-def _missing_body_part_booking_prompt(service_id: Optional[int], lang: str) -> str:
+def _missing_body_part_booking_prompt(service_id: int | None, lang: str) -> str:
     """Ask for body area in wording that matches the service (tattoo vs hair vs other)."""
     sid = _safe_int(service_id)
     if sid in LASER_HAIR_REMOVAL_SERVICE_IDS:
@@ -2690,7 +2675,7 @@ def _missing_body_part_booking_prompt(service_id: Optional[int], lang: str) -> s
     return en
 
 
-def _service_hint_to_service_id(val: Any) -> Optional[int]:
+def _service_hint_to_service_id(val: Any) -> int | None:
     if val is None:
         return None
     sid = _safe_int(val)
@@ -2706,7 +2691,7 @@ def _service_hint_to_service_id(val: Any) -> Optional[int]:
     return None
 
 
-def _branch_hint_to_branch_id(val: Any) -> Optional[int]:
+def _branch_hint_to_branch_id(val: Any) -> int | None:
     if val is None:
         return None
     bid = _safe_int(val)
@@ -2720,7 +2705,7 @@ def _branch_hint_to_branch_id(val: Any) -> Optional[int]:
     return None
 
 
-def _datetime_from_gpt_booking_args(booking_args: dict) -> Optional[datetime.datetime]:
+def _datetime_from_gpt_booking_args(booking_args: dict) -> datetime.datetime | None:
     """Build an aware datetime from GPT-emitted date + optional time fields."""
     if not booking_args:
         return None
@@ -2747,8 +2732,8 @@ def _datetime_from_gpt_booking_args(booking_args: dict) -> Optional[datetime.dat
 
 
 async def _resolve_body_part_ids_from_area_hint(
-    area_hint: str, service_id: int, machine_id: Optional[int] = None
-) -> Optional[List[int]]:
+    area_hint: str, service_id: int, machine_id: int | None = None
+) -> list[int] | None:
     """Resolve body_part_ids when only a human-readable area (e.g. back) is known."""
     if not server_may_infer_body_parts():
         return None
@@ -2762,9 +2747,7 @@ async def _resolve_body_part_ids_from_area_hint(
     needle_terms = ("back", "ظهر", "ضهر", "dahr", "dahre", "عمود فقري")
     hand_terms = ("hand", "hands", "eideh", "eide", "يد", "اليد", "معصم", "wrist", "forearm", "arm")
     try:
-        bp_resp = await api_integrations.get_body_parts(
-            service_id=service_id, machine_id=machine_id
-        )
+        bp_resp = await api_integrations.get_body_parts(service_id=service_id, machine_id=machine_id)
         if not bp_resp.get("success") or not isinstance(bp_resp.get("data"), list):
             return None
         underarm_hint = (
@@ -2780,10 +2763,7 @@ async def _resolve_body_part_ids_from_area_hint(
                 name = (item.get("name") or item.get("body_part") or item.get("title") or "").strip().lower()
                 if not name:
                     continue
-                if any(
-                    u in name
-                    for u in ("underarm", "armpit", "ابط", "إبط", "aisselle", "axilla")
-                ):
+                if any(u in name for u in ("underarm", "armpit", "ابط", "إبط", "aisselle", "axilla")):
                     bid = _safe_int(item.get("id"))
                     if bid is not None and bid > 0:
                         return [bid]
@@ -2811,7 +2791,7 @@ async def _resolve_body_part_ids_from_area_hint(
     return None
 
 
-def _user_explicitly_requests_machine_change(text: Optional[str]) -> bool:
+def _user_explicitly_requests_machine_change(text: str | None) -> bool:
     s = (text or "").strip().lower()
     if not s:
         return False
@@ -2834,10 +2814,10 @@ def _user_explicitly_requests_machine_change(text: Optional[str]) -> bool:
 
 
 async def _resolve_machine_for_booking(
-    service_id: Optional[int],
-    candidate: Optional[int],
-    preferred_existing_machine_id: Optional[int] = None,
-) -> int:
+    service_id: int | None,
+    candidate: int | None,
+    preferred_existing_machine_id: int | None = None,
+) -> int | None:
     """
     Only laser hair removal (1, 12) uses the customer's machine choice from get_machines.
     Tattoo, CO2, whitening, etc. have a fixed device on the backend — ignore wrong GPT picks
@@ -2850,7 +2830,7 @@ async def _resolve_machine_for_booking(
     if fallback is None:
         fallback = 1
 
-    def _first_non_none(*values: Optional[int]) -> Optional[int]:
+    def _first_non_none(*values: int | None) -> int | None:
         for value in values:
             if value is not None:
                 return value
@@ -2860,15 +2840,13 @@ async def _resolve_machine_for_booking(
         try:
             resp = await api_integrations.get_machines()
             if resp.get("success") and isinstance(resp.get("data"), list):
-                hair_ids: List[int] = []
+                hair_ids: list[int] = []
                 for machine in resp["data"]:
                     mid = _safe_int(machine.get("id"))
                     name = str(machine.get("name") or "").strip().lower()
                     if mid is None:
                         continue
-                    if mid in HAIR_REMOVAL_MACHINE_IDS or any(
-                        kw in name for kw in ("neo", "candela", "quadro")
-                    ):
+                    if mid in HAIR_REMOVAL_MACHINE_IDS or any(kw in name for kw in ("neo", "candela", "quadro")):
                         hair_ids.append(mid)
                 hair_allowed = set(hair_ids)
                 if cand is not None and cand not in hair_allowed:
@@ -2895,7 +2873,7 @@ async def _resolve_machine_for_booking(
         def nm(m: dict) -> str:
             return (m.get("name") or "").strip().lower()
 
-        def first_id(pred) -> Optional[int]:
+        def first_id(pred: Any) -> int | None:
             for m in machines:
                 if pred(nm(m)):
                     mid = _safe_int(m.get("id"))
@@ -2928,7 +2906,7 @@ async def _resolve_machine_for_booking(
     return _first_non_none(preferred_existing, cand, fallback)
 
 
-def _area_name_to_body_part_ids(area_name: str, service_id: int) -> Optional[List[int]]:
+def _area_name_to_body_part_ids(area_name: str, service_id: int) -> list[int] | None:
     """
     Map area name (e.g. full body, full kel shi) to body_part_ids. Uses app_settings mapping
     first, then common full-body detection. Returns None if no mapping found.
@@ -2950,21 +2928,22 @@ def _area_name_to_body_part_ids(area_name: str, service_id: int) -> Optional[Lis
     return mapping.get(area_lower)
 
 
-def _get_area_to_body_part_mapping() -> dict:
+def _get_area_to_body_part_mapping() -> dict[Any, Any]:
     """Load area->body_part_ids mapping from app_settings or use defaults."""
     try:
         from storage.persistent_storage import APP_SETTINGS_FILE
-        with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+
+        with open(APP_SETTINGS_FILE, encoding="utf-8") as f:
             settings = json.load(f)
         m = settings.get("booking", {}).get("areaToBodyPartIds", {})
-        if m:
+        if isinstance(m, dict) and m:
             return m
     except Exception:
         pass
     return {}
 
 
-async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Optional[str]:
+async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> str | None:
     """
     Fetch full customer file summary for AI context: services, sessions (done + available only),
     body parts per service, payment, dates, machines. Excludes postponed sessions.
@@ -3009,7 +2988,7 @@ async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Opti
 
         if sessions_included:
             # Group by service
-            by_service: Dict[str, List[dict]] = {}
+            by_service: dict[str, list[dict]] = {}
             for s in sessions_included:
                 svc = (s.get("service") or s.get("service_name") or "Unknown").strip()
                 if svc not in by_service:
@@ -3058,37 +3037,50 @@ async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> Opti
 
 
 # user_id is the WhatsApp phone number
-async def get_bot_chat_response(user_id: str, user_input: str, current_context_messages: list, current_gender: str, current_preferred_lang: str, response_language: str, is_initial_message_after_start: bool, initial_user_query_to_process: str = None, custom_knowledge_context: str = None, operational_context: str = None, last_ai_response_at: Optional[datetime.datetime] = None, user_image_base64: str = None, user_image_format: str = "jpeg") -> dict:
+async def get_bot_chat_response(
+    user_id: str,
+    user_input: str,
+    current_context_messages: list,
+    current_gender: str,
+    current_preferred_lang: str,
+    response_language: str,
+    is_initial_message_after_start: bool,
+    initial_user_query_to_process: str | None = None,
+    custom_knowledge_context: str | None = None,
+    operational_context: str | None = None,
+    last_ai_response_at: datetime.datetime | None = None,
+    user_image_base64: str | None = None,
+    user_image_format: str = "jpeg",
+) -> dict:
     user_name = config.user_names.get(user_id, "client")
-    current_gender_attempts = config.gender_attempts.get(user_id, 0)
-    social_channel = str(
-        config.user_data_whatsapp.get(user_id, {}).get("channel") or ""
-    ).strip().lower() in {"instagram", "facebook"}
+    social_channel = str(config.user_data_whatsapp.get(user_id, {}).get("channel") or "").strip().lower() in {
+        "instagram",
+        "facebook",
+    }
 
     # Extract customer phone number (without country code for API calls)
-    customer_phone_full = (
-        None
-        if social_channel
-        else config.user_data_whatsapp.get(user_id, {}).get("phone_number")
-    )
+    customer_phone_full = None if social_channel else config.user_data_whatsapp.get(user_id, {}).get("phone_number")
 
     # CRITICAL: Sync CRM lookup when we have phone but no known name (fixes race: defer_external
     # runs in background, so AI was called before CRM name arrived - bot asked for name when customer has file)
     _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
     _name_lower = (user_name or "").strip().lower()
     _name_unknown = (
-        not user_name or user_name == "client"
+        not user_name
+        or user_name == "client"
         or _name_lower in _placeholder_names
         or _name_lower.startswith("test user")
     )
     if customer_phone_full and _name_unknown:
         from utils.phone_utils import normalize_phone
+
         normalized_for_crm = normalize_phone(customer_phone_full) or (
             str(customer_phone_full).strip() if str(customer_phone_full).strip().startswith("+") else ""
         )
         if normalized_for_crm:
             try:
                 from services.customer_identity_service import resolve_customer_from_external
+
                 ext = await resolve_customer_from_external(normalized_for_crm)
                 if ext.get("exists") and ext.get("name"):
                     config.user_names[user_id] = ext["name"]
@@ -3102,7 +3094,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     if ext.get("gender") in ("male", "female"):
                         config.user_gender[user_id] = ext["gender"]
                         config.gender_attempts[user_id] = 0
-                        print(f"✅ CRM sync: loaded name '{user_name}' and gender '{ext['gender']}' for {user_id} before AI call")
+                        print(
+                            f"✅ CRM sync: loaded name '{user_name}' and gender '{ext['gender']}' for {user_id} before AI call"
+                        )
                     else:
                         print(f"✅ CRM sync: loaded name '{user_name}' for {user_id} before AI call")
                 elif ext.get("exists"):
@@ -3143,19 +3137,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     crm_customer_id = config.user_data_whatsapp.get(user_id, {}).get("crm_customer_id")
 
     # Check rate limits first
-    within_limits, limit_message = await check_rate_limits(user_id, 'message')
+    within_limits, limit_message = await check_rate_limits(user_id, "message")
     if not within_limits:
         return {
             "action": "rate_limit_exceeded",
             "bot_reply": get_rate_limit_response(current_preferred_lang, limit_message),
             "detected_language": current_preferred_lang,
-            "current_gender_from_config": current_gender
+            "current_gender_from_config": current_gender,
         }
-    
+
     explicitly_detected_gender_from_input = None
     if user_input.strip():
         explicitly_detected_gender_from_input = await get_gender_from_gpt(user_input)
-        print(f"DEBUG GPT Gender Recognition: Input '{user_input}' -> Detected as '{explicitly_detected_gender_from_input}' (for logging/debug, GPT will decide action)")
+        print(
+            f"DEBUG GPT Gender Recognition: Input '{user_input}' -> Detected as '{explicitly_detected_gender_from_input}' (for logging/debug, GPT will decide action)"
+        )
 
     is_reschedule_intent = detect_reschedule_intent(user_input)
     is_appointment_inquiry_intent = detect_appointment_inquiry_intent(user_input)
@@ -3193,9 +3189,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 customer_id=str(crm_customer_id).strip() if crm_customer_id else None,
             )
             if explicitly_detected_gender_from_input in ("male", "female"):
-                _booking_fsm_mod.lock_gender_from_user_message(
-                    user_id, explicitly_detected_gender_from_input
-                )
+                _booking_fsm_mod.lock_gender_from_user_message(user_id, explicitly_detected_gender_from_input)
             _booking_fsm_mod.infer_body_area_from_user_message(user_id, user_input)
             _booking_fsm_mod.apply_heuristic_confirmation(user_id, user_input)
             booking_fsm_prompt_block = _booking_fsm_mod.build_prompt_block(user_id, current_gender)
@@ -3203,9 +3197,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 _fsm_snap = config.user_booking_state[user_id].get("booking_fsm") or {}
                 _g_fs = _fsm_snap.get("customer_gender") or current_gender
                 _ok_fc, _miss_fc = _booking_fsm_mod.fields_complete(_fsm_snap, _g_fs)
-                _nxt_fc = _booking_fsm_mod.first_missing_field_for_user_chat(
-                    _fsm_snap, _g_fs, user_id
-                )
+                _nxt_fc = _booking_fsm_mod.first_missing_field_for_user_chat(_fsm_snap, _g_fs, user_id)
                 _can_ex, _gr = _booking_fsm_mod.can_execute_submit(user_id, current_gender)
                 _booking_fsm_mod.record_decision_log(
                     user_id,
@@ -3223,10 +3215,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         name_is_known=bool(name_is_known),
                         crm_data_used=bool(_fsm_snap.get("crm_profile_applied")),
                     )
-                    print(
-                        "[BOOKING_ACTIVITY] "
-                        + json.dumps(_u_act, ensure_ascii=False, default=str)[:12000]
-                    )
+                    print("[BOOKING_ACTIVITY] " + json.dumps(_u_act, ensure_ascii=False, default=str)[:12000])
                 except Exception as _ba_e:
                     print(f"⚠️ BOOKING_ACTIVITY log: {_ba_e}")
     except Exception as _fsm_init_e:
@@ -3259,17 +3248,19 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     )
 
     # Log which training files GPT is receiving
-    print(f"📄 GPT will receive knowledge_base.txt in context")
-    print(f"📄 GPT will receive style_guide.txt in context")
+    print("📄 GPT will receive knowledge_base.txt in context")
+    print("📄 GPT will receive style_guide.txt in context")
 
     if is_price_question:
-        print(f"📄 GPT will receive price_list.txt in context (price-related question detected)")
+        print("📄 GPT will receive price_list.txt in context (price-related question detected)")
     else:
         print("📄 GPT will skip price_list.txt in context (not a price-related question)")
 
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
     # user_name, name_is_known, crm_customer_exists: set after CRM sync (see block above)
-    customer_first_name = (user_name.split()[0] if user_name and user_name != "client" else user_name) if user_name else None
+    customer_first_name = (
+        (user_name.split()[0] if user_name and user_name != "client" else user_name) if user_name else None
+    )
     _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
     _name_lower = (user_name or "").strip().lower()
     current_local_time = now_in_bot_tz()
@@ -3285,13 +3276,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "Write clinic as ليناز ليزر, assistant as مروى only. When introducing yourself: أهلاً، أنا مروى من ليناز ليزر – never 'مروى AI Assistant'.\n"
         )
 
-    customer_name_context = (
-        "NOT KNOWN - You MUST ask for their full name (see Name Capture Rules in Style Guide)"
-    )
+    customer_name_context = "NOT KNOWN - You MUST ask for their full name (see Name Capture Rules in Style Guide)"
     if name_is_known:
-        customer_name_context = (
-            f"KNOWN - {user_name} (First name: {customer_first_name}). Do NOT ask for name again."
-        )
+        customer_name_context = f"KNOWN - {user_name} (First name: {customer_first_name}). Do NOT ask for name again."
     elif crm_customer_exists:
         customer_name_context = (
             "Customer has EXISTING FILE in CRM - do NOT ask for their name. "
@@ -3301,13 +3288,6 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     arabic_addressing_policy = ""
     if response_language in ("ar", "franco"):
-        if current_gender == "male":
-            preferred_title = "أستاذ"
-        elif current_gender == "female":
-            preferred_title = "عزيزتي"
-        else:
-            preferred_title = "حضرتك"
-
         if name_is_known and not _contains_arabic_script(user_name):
             customer_name_context = (
                 f"KNOWN (non-Arabic script name): {user_name}. "
@@ -3367,10 +3347,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     # Show greeting only when: new user (no prior messages) OR inactive 12+ hours
     # Prefer Firestore last_ai_response_at (persists across restarts); fallback to in-memory
-    _now = datetime.datetime.now(datetime.timezone.utc)
-    _last_bot = last_ai_response_at if last_ai_response_at is not None else config.user_last_bot_response_time.get(user_id, _now)
-    if _last_bot and getattr(_last_bot, 'tzinfo', None) is None:
-        _last_bot = _last_bot.replace(tzinfo=datetime.timezone.utc)
+    _now = datetime.datetime.now(datetime.UTC)
+    _last_bot = (
+        last_ai_response_at
+        if last_ai_response_at is not None
+        else config.user_last_bot_response_time.get(user_id, _now)
+    )
+    if _last_bot and getattr(_last_bot, "tzinfo", None) is None:
+        _last_bot = _last_bot.replace(tzinfo=datetime.UTC)
     try:
         _hours_since = (_now - _last_bot).total_seconds() / 3600 if _last_bot else 0.0
     except (TypeError, AttributeError):
@@ -3393,7 +3377,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"- **Customer Name**: {customer_name_context}\n"
         f"- **Customer Phone**: '{customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, submit_booking_intent, create_appointment if ever used, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{current_gender}'"
-        + (" - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n" if current_gender in ['male', 'female'] else " - UNKNOWN. Follow gender collection rules in Style Guide.\n")
+        + (
+            " - GENDER IS ALREADY KNOWN. NEVER ask for gender again!\n"
+            if current_gender in ["male", "female"]
+            else " - UNKNOWN. Follow gender collection rules in Style Guide.\n"
+        )
         + "- **Profile correction rule**: If the user explicitly asks to change/correct their saved name or gender, call `update_customer_profile` with the new value before replying. Do not only set detected_name/detected_gender.\n"
         + f"- **Language**: YOU decide. Current hint: '{current_preferred_lang}'. Follow LANGUAGE rules: prefer Arabic when mixed; full English when all English; full French when all French.\n"
         + arabic_script_policy
@@ -3408,8 +3396,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         f"**🕐 CURRENT DATE AND TIME (UTC+0200): {current_day_name}, {current_date_str} at {current_time_str}**\n"
         f"**📅 CALENDAR ANCHOR (do not guess today/tomorrow; use this):** {format_clinic_calendar_anchor(current_local_time)}\n"
         f"{_clinic_holiday_calendar_block(user_id, current_local_time)}"
-        f"{customer_file_summary}"
-        + ((f"\n\n{booking_fsm_prompt_block}") if booking_fsm_prompt_block else "")
+        f"{customer_file_summary}" + ((f"\n\n{booking_fsm_prompt_block}") if booking_fsm_prompt_block else "")
     )
     if social_channel:
         dynamic_customer_context += (
@@ -3495,8 +3482,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     json_output_contract = (
         "\n\nOUTPUT FORMAT (MANDATORY):\n"
         "- Reply with a valid json object only.\n"
-        "- Include at least these keys: \"action\" and \"bot_reply\".\n"
-        "- Optional: \"booking_fsm_patch\" — object with any of: service_id, branch_id, machine_id, body_part_ids, "
+        '- Include at least these keys: "action" and "bot_reply".\n'
+        '- : "booking_fsm_patch" — object with any of: service_id, branch_id, machine_id, body_part_ids, '
         "appointment_date (YYYY-MM-DD), appointment_time (HH:MM), confirmed_booking (true only after explicit user yes to final summary).\n"
         "- Do not return markdown, code fences, or extra text outside json.\n"
     )
@@ -3510,11 +3497,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         )
     else:
         system_instruction_final = (
-            system_instruction_core
-            + "\n\n"
-            + dynamic_customer_context
-            + routing_guardrail
-            + json_output_contract
+            system_instruction_core + "\n\n" + dynamic_customer_context + routing_guardrail + json_output_contract
         )
 
     # Steer the model when the user only confirms after we promised an appointment update (Ok/deal/تمام…).
@@ -3540,9 +3523,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
     # Authoritative CRM rows in-system so «emtan mw3de» / multi-paused listings cannot be hallucinated or merged.
     if (
-        is_appointment_inquiry_intent
-        or is_reschedule_intent
-        or is_existing_appointment_edit_intent
+        is_appointment_inquiry_intent or is_reschedule_intent or is_existing_appointment_edit_intent
     ) and customer_phone_clean:
         _live_snap = await _build_live_crm_appointments_snapshot(customer_phone_clean)
         if _live_snap:
@@ -3580,7 +3561,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         image_url = f"data:image/{user_image_format};base64,{user_image_base64}"
         user_content = [
             {"type": "text", "text": user_input or "المستخدم أرسل صورة."},
-            {"type": "image_url", "image_url": {"url": image_url}}
+            {"type": "image_url", "image_url": {"url": image_url}},
         ]
         messages.append({"role": "user", "content": user_content})
     else:
@@ -3598,8 +3579,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
     )
     if custom_knowledge_context:
         flow_ai_query_summary += (
-            f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, full content:\n"
-            f"{custom_knowledge_context}"
+            f"\n- Dynamic knowledge: {len(custom_knowledge_context)} chars, full content:\n{custom_knowledge_context}"
         )
     flow_context_dump = []
     for msg in context_messages_for_ai:
@@ -3615,8 +3595,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         + "\n\n=== USER MESSAGE ===\n"
         + str(user_input)
     )
-    
-    gpt_raw_content = "" # Initialize gpt_raw_content here to make it accessible in except blocks
+
+    gpt_raw_content = ""  # Initialize gpt_raw_content here to make it accessible in except blocks
 
     # Stage split: keep orchestration/tool-routing on 5.1; final user-facing response after tools on 5.4-mini.
     selected_model = ORCHESTRATION_MODEL
@@ -3630,61 +3610,66 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         final_response_model_used = selected_model
         response = await client.chat.completions.create(
             model=selected_model,
-            messages=messages,
+            messages=cast(list[ChatCompletionMessageParam], messages),
             temperature=0.7,
-            tools=get_openai_tools_schema(
-                excluded_tool_names={
-                    "update_customer_profile",
-                    "submit_booking_intent",
-                    "create_appointment",
-                    "update_appointment_date",
-                    "update_paused_appointment",
-                    "edit_appointment",
-                    "resume_appointment",
-                    "sync_appointment_agreed_price",
-                    "send_appointment_reminders",
-                    "check_next_appointment",
-                    "get_appointment_details",
-                    "check_appointment_payment",
-                    "get_customer_sessions",
-                    "get_sessions_count_by_phone",
-                    "move_client_branch",
-                    "get_customer_by_phone",
-                    "check_customer_gender",
-                    "create_customer",
-                    "add_customer_note",
-                    "get_all_customers",
-                    "get_clients_without_today",
-                    "get_missed_appointments",
-                }
-                if social_channel
-                else None
+            tools=cast(
+                list[ChatCompletionToolParam],
+                get_openai_tools_schema(
+                    excluded_tool_names={
+                        "update_customer_profile",
+                        "submit_booking_intent",
+                        "create_appointment",
+                        "update_appointment_date",
+                        "update_paused_appointment",
+                        "edit_appointment",
+                        "resume_appointment",
+                        "sync_appointment_agreed_price",
+                        "send_appointment_reminders",
+                        "check_next_appointment",
+                        "get_appointment_details",
+                        "check_appointment_payment",
+                        "get_customer_sessions",
+                        "get_sessions_count_by_phone",
+                        "move_client_branch",
+                        "get_customer_by_phone",
+                        "check_customer_gender",
+                        "create_customer",
+                        "add_customer_note",
+                        "get_all_customers",
+                        "get_clients_without_today",
+                        "get_missed_appointments",
+                    }
+                    if social_channel
+                    else None
+                ),
             ),
             tool_choice="auto",
-            response_format={"type": "json_object"}
+            response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),
         )
-        
+
         if not response.choices:
             raise ValueError("GPT returned no choices")
         first_response_message = response.choices[0].message
-        
+
         gpt_raw_content = first_response_message.content.strip() if first_response_message.content else ""
-        print(f"GPT Raw Response (first pass): {gpt_raw_content}") 
+        print(f"GPT Raw Response (first pass): {gpt_raw_content}")
 
         tool_calls = first_response_message.tool_calls
 
-        parsed_response = {}
+        parsed_response: dict[str, Any] = {}
         latest_pricing_payload = None
         api_failure_reason = None  # Set when create_appointment/other API fails → flow_meta.error → human handover (submit_booking_intent uses sanitized tool hints + AI reply, no raw exceptions)
         update_appointment_date_success_count = 0  # Successful date/edit updates this turn (bulk guard)
-        pause_resume_success_count = 0  # Successful pause-lift actions (date update auto-resume or direct resume_appointment)
+        pause_resume_success_count = (
+            0  # Successful pause-lift actions (date update auto-resume or direct resume_appointment)
+        )
         pause_resume_attempted = False
-        pause_resume_confirmed_via_date_update = False
+        _pause_resume_confirmed_via_date_update = False
         direct_resume_success = False
         paused_followup_update_succeeded = False
         paused_followup_available_action_requested = False
-        tool_round_trips: List[Dict[str, Any]] = []
-        extra_tool_names: List[str] = []
+        tool_round_trips: list[dict[str, Any]] = []
+        extra_tool_names: list[str] = []
         ai_first_response_with_tools = ""
         recovered_create_appointment_ok = False
         booking_create_attempted_this_turn = False
@@ -3707,19 +3692,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         "bot_sent_to_ai": flow_bot_sent_to_ai_full,
                         "customer_context_sent": flow_customer_context_sent,
                     }
-                    print(f"PRIORITY: First response is ask_gender (gender unknown). Skipping tool calls and sending gender question.")
+                    print(
+                        "PRIORITY: First response is ask_gender (gender unknown). Skipping tool calls and sending gender question."
+                    )
                     return first_parsed
             except (json.JSONDecodeError, TypeError):
                 pass
 
         if tool_calls:
-            messages.append(first_response_message)
+            messages.append(first_response_message.model_dump(exclude_none=True))
             tool_round_trips.clear()
             ai_first_response_with_tools = gpt_raw_content  # Save before overwrite
 
             # Track check_next_appointment result to auto-chain appointment_id for update_appointment_date
             check_next_appointment_result = None
-            paused_appointment_lookup_cache = {}
+            paused_appointment_lookup_cache: dict[str, Any] = {}
 
             def normalize_phone_for_lookup(raw_phone: str) -> str:
                 if not raw_phone:
@@ -3729,7 +3716,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     normalized = normalized[3:]
                 return normalized
 
-            def extract_appointment_id(appointment_payload: dict):
+            def extract_appointment_id(appointment_payload: dict) -> Any:
                 if not isinstance(appointment_payload, dict):
                     return None
                 for key in ("appointment_id", "id", "appointmentId"):
@@ -3798,7 +3785,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     detect_existing_appointment_edit_intent(text)
                 )
 
-            async def find_paused_appointment_id(phone_to_lookup: str):
+            async def find_paused_appointment_id(phone_to_lookup: str) -> Any:
                 nonlocal check_next_appointment_result
                 normalized_phone = normalize_phone_for_lookup(phone_to_lookup)
                 if not normalized_phone:
@@ -3818,7 +3805,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         if is_paused_status(extract_appointment_status(next_appointment_payload)):
                             paused_appointment_id = extract_appointment_id(next_appointment_payload)
                 except Exception as pause_next_error:
-                    print(f"WARNING: Paused guard check_next_appointment failed for {normalized_phone}: {pause_next_error}")
+                    print(
+                        f"WARNING: Paused guard check_next_appointment failed for {normalized_phone}: {pause_next_error}"
+                    )
 
                 # Fallback: scan all customer appointments for paused records.
                 if not paused_appointment_id:
@@ -3831,7 +3820,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     if paused_appointment_id:
                                         break
                     except Exception as pause_list_error:
-                        print(f"WARNING: Paused guard get_customer_appointments failed for {normalized_phone}: {pause_list_error}")
+                        print(
+                            f"WARNING: Paused guard get_customer_appointments failed for {normalized_phone}: {pause_list_error}"
+                        )
 
                 paused_appointment_lookup_cache[normalized_phone] = paused_appointment_id
                 return paused_appointment_id
@@ -3842,9 +3833,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     return []
                 out: list = []
                 try:
-                    customer_appointments = await api_integrations.get_customer_appointments(
-                        phone=normalized_phone
-                    )
+                    customer_appointments = await api_integrations.get_customer_appointments(phone=normalized_phone)
                     if isinstance(customer_appointments, dict) and customer_appointments.get("success"):
                         for appointment_payload in extract_customer_appointments(customer_appointments):
                             if is_paused_status(extract_appointment_status(appointment_payload)):
@@ -3902,8 +3891,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 function_name: str,
                 function_args: dict,
                 *,
-                user_input_for_date: Optional[str] = None,
-                context_messages_for_date: Optional[list] = None,
+                user_input_for_date: str | None = None,
+                context_messages_for_date: list | None = None,
             ) -> bool:
                 """
                 Build API datetime from AI tool arguments only (date_components, date string,
@@ -3951,9 +3940,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         )
                         tw = detect_last_weekday_intent_from_user_text(u_sched)
                         if tw is not None and dt_obj.weekday() != tw:
-                            adjusted = next_future_datetime_matching_weekday(
-                                now, tw, dt_obj.hour, dt_obj.minute
-                            )
+                            adjusted = next_future_datetime_matching_weekday(now, tw, dt_obj.hour, dt_obj.minute)
                             if adjusted is not None:
                                 print(
                                     f"SAFETY: update_appointment_date weekday align {dt_obj} -> {adjusted} "
@@ -3982,8 +3969,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 return True
 
             for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
+                fn = getattr(tool_call, "function", None)
+                if fn is None:
+                    continue
+                function_name = fn.name
+                function_args = json.loads(fn.arguments) if fn.arguments else {}
                 all_user_text_for_date = collect_user_datetime_text(current_context_messages, user_input)
                 user_requested_change = detect_change_request_intent(all_user_text_for_date) or is_reschedule_intent
                 forced_update_appointment_id = None
@@ -4005,7 +3995,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         },
                         ensure_ascii=False,
                     )
-                    tool_outputs.append(
+                    tool_round_trips.append(_record_tool_round_trip(function_name, function_args, err_content, None))
+                    messages.append(
                         {
                             "tool_call_id": tool_call.id,
                             "role": "tool",
@@ -4023,7 +4014,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         function_args.get("new_gender") or function_args.get("gender")
                     )
                     errors = []
-                    updated_fields: Dict[str, Any] = {}
+                    updated_fields: dict[str, Any] = {}
 
                     if name_error:
                         errors.append(name_error)
@@ -4166,7 +4157,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         print(
                             f"SAFETY: Converted create_appointment -> update_appointment_date for paused NEXT appointment_id={paused_appointment_id}"
                         )
-                
+
                 # --- create_appointment: structured tool args only (no user-text booking inference) ---
                 if function_name == "create_appointment":
                     explicit_booking_args = _extract_direct_submit_booking_args_from_user_message(
@@ -4227,89 +4218,111 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     # Extract customer name and phone from the conversation if not provided in tool args
                     # CRITICAL FIX: For Qiscus, user_id is room_id, NOT phone number
                     # Get actual phone number from user_data_whatsapp
-                    phone_number = config.user_data_whatsapp.get(user_id, {}).get('phone_number')
-                    
+                    phone_number = config.user_data_whatsapp.get(user_id, {}).get("phone_number")
+
                     # Fallback: If no phone_number stored, check if user_id looks like a phone number
                     if not phone_number:
                         # Check if user_id looks like a phone number (starts with + and has digits)
-                        if user_id.startswith('+') or (user_id.replace('+', '').replace('-', '').replace(' ', '').isdigit() and len(user_id) >= 8):
+                        if user_id.startswith("+") or (
+                            user_id.replace("+", "").replace("-", "").replace(" ", "").isdigit() and len(user_id) >= 8
+                        ):
                             phone_number = user_id
                             print(f"DEBUG: Using user_id as phone_number (Meta/Dialog360 format): {phone_number}")
                         else:
-                            print(f"ERROR: No phone_number found for user {user_id} and user_id doesn't look like a phone number")
+                            print(
+                                f"ERROR: No phone_number found for user {user_id} and user_id doesn't look like a phone number"
+                            )
                     else:
                         print(f"DEBUG: Using stored phone_number from user_data: {phone_number}")
 
                     # CRITICAL FIX: Priority 1 - Use collected name (protected from webhook)
                     user_data_dict = config.user_data_whatsapp.get(user_id, {})
-                    customer_name = user_data_dict.get('collected_name')
-                    
+                    customer_name = user_data_dict.get("collected_name")
+
                     if customer_name:
                         print(f"DEBUG: Using protected collected name: {customer_name}")
-                    
+
                     # Priority 2: Check config.user_names (might be overwritten by webhook)
                     if not customer_name:
                         customer_name = config.user_names.get(user_id)
                         # Skip if Arabic (causes API 500 errors)
-                        if customer_name and re.search(r'[\u0600-\u06FF]', customer_name):
+                        if customer_name and re.search(r"[\u0600-\u06FF]", customer_name):
                             print(f"WARNING: Skipping Arabic name from config: {customer_name}")
                             customer_name = None
                         elif customer_name:
                             print(f"DEBUG: Using name from config.user_names: {customer_name}")
-                    
+
                     # Priority 3: Search conversation history for Latin name
                     # Check BOTH user messages AND bot messages (GPT might have confirmed the name)
                     if not customer_name:
                         for msg_entry in reversed(current_context_messages + [{"role": "user", "content": user_input}]):
                             msg_content = msg_entry["content"].strip()
                             msg_role = msg_entry["role"]
-                            
+
                             # Pattern 1: User explicitly states their name
                             if msg_role == "user":
                                 name_match = re.search(
                                     r"(?:my name is|i am|i'm|call me|انا اسمي|اسمي|اسمي هو|je\s*m['\s]?appelle|je suis|moi c'est)\s+([A-Za-zÀ-ÿا-ي\s]{2,50})",
                                     msg_content,
-                                    re.IGNORECASE | re.UNICODE
+                                    re.IGNORECASE | re.UNICODE,
                                 )
                                 if name_match:
                                     potential_name = name_match.group(1).strip()
-                                    
+
                                     # Validate: name should not contain booking-related words
                                     booking_keywords = [
-                                        'book', 'appointment', 'schedule', 'reserve', 'موعد', 'حجز',
-                                        'want', 'need', 'like', 'please', 'tomorrow', 'today', 'بدي', 'بحب',
-                                        'just', 'an', 'the', 'a', 'have', 'get'
+                                        "book",
+                                        "appointment",
+                                        "schedule",
+                                        "reserve",
+                                        "موعد",
+                                        "حجز",
+                                        "want",
+                                        "need",
+                                        "like",
+                                        "please",
+                                        "tomorrow",
+                                        "today",
+                                        "بدي",
+                                        "بحب",
+                                        "just",
+                                        "an",
+                                        "the",
+                                        "a",
+                                        "have",
+                                        "get",
                                     ]
-                                    
+
                                     contains_booking_word = any(
-                                        keyword in potential_name.lower() 
-                                        for keyword in booking_keywords
+                                        keyword in potential_name.lower() for keyword in booking_keywords
                                     )
-                                    
+
                                     if not contains_booking_word:
                                         customer_name = potential_name
                                         print(f"DEBUG: Extracted name from user message with prefix: {customer_name}")
                                         break
-                            
+
                             # Pattern 2: Bot confirmed the name (e.g., "Your name is John Smith")
                             elif msg_role == "assistant":
                                 name_match = re.search(
-                                    r'(?:your name is|you are|you\'re called|اسمك|اسمك هو|ton nom est)\s+([A-Za-zÀ-ÿا-ي\s]{2,50})',
+                                    r"(?:your name is|you are|you\'re called|اسمك|اسمك هو|ton nom est)\s+([A-Za-zÀ-ÿا-ي\s]{2,50})",
                                     msg_content,
-                                    re.IGNORECASE | re.UNICODE
+                                    re.IGNORECASE | re.UNICODE,
                                 )
                                 if name_match:
                                     potential_name = name_match.group(1).strip()
-                                    
+
                                     # Clean up any trailing punctuation or words
-                                    potential_name = re.sub(r'\s+(and|et|و|،|,|\.).*$', '', potential_name, flags=re.IGNORECASE)
-                                    
+                                    potential_name = re.sub(
+                                        r"\s+(and|et|و|،|,|\.).*$", "", potential_name, flags=re.IGNORECASE
+                                    )
+
                                     # Validate length
                                     if 2 <= len(potential_name) <= 50:
                                         customer_name = potential_name
                                         print(f"DEBUG: Extracted name from bot confirmation: {customer_name}")
                                         break
-                            
+
                             # Pattern 3: User provides JUST their name (2-4 words, proper capitalization)
                             # This is risky but necessary when user responds to "What is your name?"
                             elif msg_role == "user" and not customer_name:
@@ -4317,17 +4330,41 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 words = msg_content.split()
                                 if 1 <= len(words) <= 4:
                                     # Must start with capital letter or be Arabic
-                                    if (re.match(r'^[A-ZÀ-Ÿا-ي]', msg_content, re.UNICODE) and 
-                                        re.match(r'^[A-Za-zÀ-ÿا-ي\s\-\']+$', msg_content, re.UNICODE)):
-                                        
+                                    if re.match(r"^[A-ZÀ-Ÿا-ي]", msg_content, re.UNICODE) and re.match(
+                                        r"^[A-Za-zÀ-ÿا-ي\s\-\']+$", msg_content, re.UNICODE
+                                    ):
                                         # Exclude common words and booking terms
                                         excluded_words = [
-                                            'yes', 'no', 'ok', 'okay', 'sure', 'please', 'thanks', 'hello', 'hi',
-                                            'book', 'appointment', 'schedule', 'tomorrow', 'today', 'now',
-                                            'نعم', 'لا', 'تمام', 'ماشي', 'شكرا', 'مرحبا', 'موعد', 'حجز',
-                                            'oui', 'non', 'merci', 'bonjour', 'salut'
+                                            "yes",
+                                            "no",
+                                            "ok",
+                                            "okay",
+                                            "sure",
+                                            "please",
+                                            "thanks",
+                                            "hello",
+                                            "hi",
+                                            "book",
+                                            "appointment",
+                                            "schedule",
+                                            "tomorrow",
+                                            "today",
+                                            "now",
+                                            "نعم",
+                                            "لا",
+                                            "تمام",
+                                            "ماشي",
+                                            "شكرا",
+                                            "مرحبا",
+                                            "موعد",
+                                            "حجز",
+                                            "oui",
+                                            "non",
+                                            "merci",
+                                            "bonjour",
+                                            "salut",
                                         ]
-                                        
+
                                         if msg_content.lower() not in excluded_words:
                                             # Check if previous bot message was asking for name
                                             # Look back in conversation for name request
@@ -4335,22 +4372,34 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                             for prev_msg in reversed(current_context_messages):
                                                 if prev_msg["role"] == "assistant":
                                                     prev_content = prev_msg["content"].lower()
-                                                    if any(phrase in prev_content for phrase in [
-                                                        'your name', 'full name', 'what is your name', 'may i have your name',
-                                                        'اسمك', 'ما اسمك', 'شو اسمك',
-                                                        'votre nom', 'ton nom', 'quel est votre nom'
-                                                    ]):
+                                                    if any(
+                                                        phrase in prev_content
+                                                        for phrase in [
+                                                            "your name",
+                                                            "full name",
+                                                            "what is your name",
+                                                            "may i have your name",
+                                                            "اسمك",
+                                                            "ما اسمك",
+                                                            "شو اسمك",
+                                                            "votre nom",
+                                                            "ton nom",
+                                                            "quel est votre nom",
+                                                        ]
+                                                    ):
                                                         asking_for_name = True
                                                         break
                                                 # Only check last 2 bot messages
                                                 if prev_msg["role"] == "assistant":
                                                     break
-                                            
+
                                             if asking_for_name:
                                                 customer_name = msg_content.strip()
-                                                print(f"DEBUG: Extracted standalone name (response to name question): {customer_name}")
+                                                print(
+                                                    f"DEBUG: Extracted standalone name (response to name question): {customer_name}"
+                                                )
                                                 break
-                            
+
                             if customer_name:
                                 break
                     # === NEW PATCH: Persist detected customer name ===
@@ -4362,76 +4411,100 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         # Persist to Firestore asynchronously
                         try:
                             from utils.utils import save_user_name_to_firestore
+
                             await save_user_name_to_firestore(user_id, customer_name)
                         except Exception as e:
                             print(f"⚠️ Could not persist user name for {user_id}: {e}")
 
-
                     # Update function_args with inferred phone/name if not present
-                    function_args["phone"] = phone_number # Use the extracted/stored phone number
-                    
+                    function_args["phone"] = phone_number  # Use the extracted/stored phone number
+
                     # Check if customer exists, if not, create them
                     customer_exists = False
-                    customer_gender_for_api = current_gender # Default to current gender
+                    customer_gender_for_api = current_gender  # Default to current gender
                     if customer_gender_for_api == "unknown":
                         # Attempt to infer from name if needed for create_customer
                         if customer_name:
                             # This is a very basic heuristic; a dedicated service would be better
                             if current_preferred_lang == "ar" or current_preferred_lang == "franco":
-                                if re.search(r'\b(ظ…ط­ظ…ظˆط¯|ظ…ط­ظ…ط¯|ط¹ظ„ظٹ|ط£ط­ظ…ط¯|ط®ط§ظ„ط¯|ط±ط¬ظ„|ط´ط¨|ط°ظƒط±)\b', customer_name, re.UNICODE):
+                                if re.search(
+                                    r"\b(ظ…ط­ظ…ظˆط¯|ظ…ط­ظ…ط¯|ط¹ظ„ظٹ|ط£ط­ظ…ط¯|ط®ط§ظ„ط¯|ط±ط¬ظ„|ط´ط¨|ط°ظƒط±)\b",
+                                    customer_name,
+                                    re.UNICODE,
+                                ):
                                     customer_gender_for_api = "male"
-                                elif re.search(r'\b(ظ„ظٹظ†ط§|ظپط§ط·ظ…ط©|ظ…ط±ظٹظ…|ط³ط§ط±ط©|ط¨ظ†طھ|طµط¨ظٹط©|ط£ظ†ط«ظ‰)\b', customer_name, re.UNICODE):
+                                elif re.search(
+                                    r"\b(ظ„ظٹظ†ط§|ظپط§ط·ظ…ط©|ظ…ط±ظٹظ…|ط³ط§ط±ط©|ط¨ظ†طھ|طµط¨ظٹط©|ط£ظ†ط«ظ‰)\b",
+                                    customer_name,
+                                    re.UNICODE,
+                                ):
                                     customer_gender_for_api = "female"
                             elif current_preferred_lang == "en":
-                                if re.search(r'\b(john|paul|male|boy)\b', customer_name, re.IGNORECASE):
+                                if re.search(r"\b(john|paul|male|boy)\b", customer_name, re.IGNORECASE):
                                     customer_gender_for_api = "male"
-                                elif re.search(r'\b(jane|mary|female|girl)\b', customer_name, re.IGNORECASE):
+                                elif re.search(r"\b(jane|mary|female|girl)\b", customer_name, re.IGNORECASE):
                                     customer_gender_for_api = "female"
-                            
+
                         if customer_gender_for_api == "unknown":
-                            customer_gender_for_api = "male" # Default to male if still unknown, adjust as clinic policy
+                            customer_gender_for_api = (
+                                "male"  # Default to male if still unknown, adjust as clinic policy
+                            )
 
                     # Ensure gender is in "Male" or "Female" format as required by API
                     if customer_gender_for_api:
-                        customer_gender_for_api = customer_gender_for_api.capitalize() # "male" -> "Male"
-
+                        customer_gender_for_api = customer_gender_for_api.capitalize()  # "male" -> "Male"
 
                     if phone_number:
-                        customer_check_response = await api_integrations.get_customer_by_phone(phone=phone_number) # NEW API call
-                        if customer_check_response and customer_check_response.get("success") and customer_check_response.get("data"):
+                        customer_check_response = await api_integrations.get_customer_by_phone(
+                            phone=phone_number
+                        )  # NEW API call
+                        if (
+                            customer_check_response
+                            and customer_check_response.get("success")
+                            and customer_check_response.get("data")
+                        ):
                             customer_exists = True
                             print(f"DEBUG: Customer {phone_number} found in API.")
                         else:
                             print(f"DEBUG: Customer {phone_number} not found in API. Attempting to create.")
                             if customer_name and customer_gender_for_api:
                                 create_customer_response = await api_integrations.create_customer(
-                                    name=customer_name, 
-                                    phone=phone_number, 
-                                    gender=customer_gender_for_api, # Pass as "Male" or "Female"
-                                    branch_id=config.DEFAULT_BRANCH_ID # NEW: Ensure branch_id is passed for customer creation
+                                    name=customer_name,
+                                    phone=phone_number,
+                                    gender=customer_gender_for_api,  # Pass as "Male" or "Female"
+                                    branch_id=config.DEFAULT_BRANCH_ID,  # NEW: Ensure branch_id is passed for customer creation
                                 )
                                 if create_customer_response and create_customer_response.get("success"):
                                     customer_exists = True
                                     print(f"DEBUG: Successfully created new customer {customer_name} in API.")
                                 else:
-                                    print(f"ERROR: Failed to create customer {customer_name}: {create_customer_response.get('message', 'Unknown error')}")
-                                    err_content = json.dumps({"success": False, "message": f"Failed to create customer: {create_customer_response.get('message', 'Unknown error')}"})
+                                    print(
+                                        f"ERROR: Failed to create customer {customer_name}: {create_customer_response.get('message', 'Unknown error')}"
+                                    )
+                                    err_content = json.dumps(
+                                        {
+                                            "success": False,
+                                            "message": f"Failed to create customer: {create_customer_response.get('message', 'Unknown error')}",
+                                        }
+                                    )
                                     tool_round_trips.append(
                                         _record_tool_round_trip("create_customer", function_args, err_content, None)
                                     )
-                                    messages.append({
-                                        "tool_call_id": tool_call.id,
-                                        "role": "tool",
-                                        "name": "create_customer_failed",
-                                        "content": err_content,
-                                    })
+                                    messages.append(
+                                        {
+                                            "tool_call_id": tool_call.id,
+                                            "role": "tool",
+                                            "name": "create_customer_failed",
+                                            "content": err_content,
+                                        }
+                                    )
                                     # Indicate that booking failed because customer creation failed
                                     parsed_response = {
-                                        "action": "ask_for_details_for_booking", # Keep asking for details or suggest human handover
+                                        "action": "ask_for_details_for_booking",  # Keep asking for details or suggest human handover
                                         "bot_reply": "ط¹ط°ط±ظ‹ط§طŒ ظˆط§ط¬ظ‡طھ ظ…ط´ظƒظ„ط© ظپظٹ طھط³ط¬ظٹظ„ ط¨ظٹط§ظ†ط§طھظƒ ظƒط¹ظ…ظٹظ„ ط¬ط¯ظٹط¯. ظٹط±ط¬ظ‰ ط§ظ„طھط£ظƒط¯ ظ…ظ† طµط­ط© ط§ظ„ط§ط³ظ… ظˆط±ظ‚ظ… ط§ظ„ظ‡ط§طھظپطŒ ط£ظˆ ظٹظ…ظƒظ†ظ†ظٹ طھط­ظˆظٹظ„ظƒ ظ„ظ…ظˆط¸ظپ ظ„ظ…ط³ط§ط¹ط¯طھظƒ.",
                                         "detected_language": current_preferred_lang,
                                         "detected_gender": current_gender,
-                                        "current_gender_from_config": current_gender
+                                        "current_gender_from_config": current_gender,
                                     }
                                     parsed_response["_flow_meta"] = {
                                         "ai_first_response": gpt_raw_content[:1500] if gpt_raw_content else None,
@@ -4446,14 +4519,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     "ar": f"ظ„ط£طھظ…ظƒظ† ظ…ظ† ط­ط¬ط² ظ…ظˆط¹ط¯ظƒطŒ ط£ط­طھط§ط¬ ظ„ط§ط³ظ…ظƒ ط§ظ„ظƒط§ظ…ظ„{'.' if current_gender != 'unknown' else ' ظˆط¬ظ†ط³ظƒ (ط´ط¨ ط£ظˆ طµط¨ظٹط©).'}",
                                     "en": f"To book your appointment, I need your full name{'.' if current_gender != 'unknown' else ' and gender (male or female).'}",
                                     "fr": f"Pour rأ©server votre rendez-vous, j'ai besoin de votre nom complet{'.' if current_gender != 'unknown' else ' et votre sexe (homme ou femme).'}",
-                                    "franco": f"ظ„ط­ط¬ط² ظ…ظˆط¹ط¯ظƒطŒ ط¨ط¯ظٹ ط§ط³ظ…ظƒ ط§ظ„ظƒط§ظ…ظ„{'.' if current_gender != 'unknown' else ' ظˆط¬ظ†ط³ظƒ (ط´ط¨ ط£ظˆ طµط¨ظٹط©).'}"
+                                    "franco": f"ظ„ط­ط¬ط² ظ…ظˆط¹ط¯ظƒطŒ ط¨ط¯ظٹ ط§ط³ظ…ظƒ ط§ظ„ظƒط§ظ…ظ„{'.' if current_gender != 'unknown' else ' ظˆط¬ظ†ط³ظƒ (ط´ط¨ ط£ظˆ طµط¨ظٹط©).'}",
                                 }
                                 parsed_response = {
                                     "action": "ask_for_details_for_booking",
                                     "bot_reply": error_messages.get(current_preferred_lang, error_messages["en"]),
                                     "detected_language": current_preferred_lang,
                                     "detected_gender": current_gender,
-                                    "current_gender_from_config": current_gender
+                                    "current_gender_from_config": current_gender,
                                 }
                                 return parsed_response
                     else:
@@ -4463,14 +4536,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             "ar": "ط¹ط°ط±ط§ظ‹طŒ ط­ط¯ط«طھ ظ…ط´ظƒظ„ط© ظپظٹ ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط±ظ‚ظ… ظ‡ط§طھظپظƒ. ظٹط±ط¬ظ‰ ط§ظ„ظ…ط­ط§ظˆظ„ط© ظ…ط±ط© ط£ط®ط±ظ‰.",
                             "en": "Sorry, there was an issue verifying your phone number. Please try again.",
                             "fr": "Dأ©solأ©, il y a eu un problأ¨me pour vأ©rifier votre numأ©ro de tأ©lأ©phone. Veuillez rأ©essayer.",
-                            "franco": "ط¹ط°ط±ط§ظ‹طŒ ظپظٹ ظ…ط´ظƒظ„ط© ط¨ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط±ظ‚ظ… طھظ„ظپظˆظ†ظƒ. ط¬ط±ط¨ ظ…ط±ط© طھط§ظ†ظٹط©."
+                            "franco": "ط¹ط°ط±ط§ظ‹طŒ ظپظٹ ظ…ط´ظƒظ„ط© ط¨ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط±ظ‚ظ… طھظ„ظپظˆظ†ظƒ. ط¬ط±ط¨ ظ…ط±ط© طھط§ظ†ظٹط©.",
                         }
                         parsed_response = {
                             "action": "ask_for_details_for_booking",
                             "bot_reply": error_messages.get(current_preferred_lang, error_messages["en"]),
                             "detected_language": current_preferred_lang,
                             "detected_gender": current_gender,
-                            "current_gender_from_config": current_gender
+                            "current_gender_from_config": current_gender,
                         }
                         return parsed_response
 
@@ -4483,10 +4556,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             "bot_reply": "ط¹ط°ط±ظ‹ط§طŒ ظ„ط§ ظٹظ…ظƒظ†ظ†ظٹ ط¥طھظ…ط§ظ… ط§ظ„ط­ط¬ط² ط­ط§ظ„ظٹظ‹ط§. ط³ط£ظ‚ظˆظ… ط¨طھط­ظˆظٹظ„ظƒ ط¥ظ„ظ‰ ط£ط­ط¯ ظ…ظˆط¸ظپظٹظ†ط§ ظ„ظ„ظ…ط³ط§ط¹ط¯ط©.",
                             "detected_language": current_preferred_lang,
                             "detected_gender": current_gender,
-                            "current_gender_from_config": current_gender
+                            "current_gender_from_config": current_gender,
                         }
                         return parsed_response
-
 
                     _legacy_inf = getattr(config, "BOOKING_LEGACY_INFERENCE", False)
                     if _legacy_inf:
@@ -4524,7 +4596,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     # If the model passed body_parts_with_sessions, normalize and align body_part_ids.
                     bps_raw = function_args.get("body_parts_with_sessions")
                     if isinstance(bps_raw, list) and bps_raw:
-                        cleaned_sessions: List[Dict[str, Any]] = []
+                        cleaned_sessions: list[dict[str, Any]] = []
                         for item in bps_raw:
                             if not isinstance(item, dict):
                                 continue
@@ -4554,10 +4626,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             function_args["body_part_ids"] = inferred_bp
                             selected_body_part_ids = inferred_bp
                             _remember_booking_selection(user_id, function_args)
-                    if (
-                        selected_service_id in body_part_required_service_ids
-                        and not selected_body_part_ids
-                    ):
+                    if selected_service_id in body_part_required_service_ids and not selected_body_part_ids:
                         print("SAFETY: create_appointment missing body_part_ids — handover (no user-text fallback).")
                         return {
                             "action": "human_handover",
@@ -4617,14 +4686,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             }
                         )
                         continue
-                    
+
                     # NEW: Remove 'name' from function_args as create_appointment does not accept it directly.
                     # This resolves the `unexpected keyword argument 'name'` error.
-                    if 'name' in function_args:
-                        print(f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported.")
-                        del function_args['name']
+                    if "name" in function_args:
+                        print(
+                            f"DEBUG: Removing 'name' argument '{function_args['name']}' from create_appointment call as it's not supported."
+                        )
+                        del function_args["name"]
 
-                if function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment", "resume_appointment"):
+                if function_name in (
+                    "update_appointment_date",
+                    "update_paused_appointment",
+                    "edit_appointment",
+                    "resume_appointment",
+                ):
                     phone_for_pause_guard = normalize_phone_for_lookup(
                         function_args.get("phone")
                         or customer_phone_clean
@@ -4651,7 +4727,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             and is_paused_status(_next_st_upd)
                         ):
                             try:
-                                gpt_aid_int = int(function_args.get("appointment_id"))
+                                gpt_aid_int = _safe_int(function_args.get("appointment_id"))
                             except (TypeError, ValueError):
                                 gpt_aid_int = None
                             if gpt_aid_int != paused_appointment_id:
@@ -4682,12 +4758,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             _next_st_mix = extract_appointment_status(_next_pl_mix)
                             if _next_id_mix is not None and not is_paused_status(_next_st_mix):
                                 try:
-                                    gpt_aid_mix = (
-                                        int(function_args.get("appointment_id"))
-                                        if function_args.get("appointment_id") is not None
-                                        and str(function_args.get("appointment_id")).strip() != ""
-                                        else None
-                                    )
+                                    gpt_aid_mix = _safe_int(function_args.get("appointment_id"))
                                 except (TypeError, ValueError):
                                     gpt_aid_mix = None
                                 if gpt_aid_mix is None or gpt_aid_mix == _next_id_mix:
@@ -4701,9 +4772,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     # Many paused rows: user picks "3" / "رقم 5" / pastes CRM id — model often passes wrong id or chains "next".
                     # Do not require user_requested_change: a lone "3" after a numbered list is not detected as reschedule text.
                     if phone_for_pause_guard and not forced_update_appointment_id:
-                        paused_order = _ordered_paused_appointments_from_snapshot(
-                            check_next_appointment_result
-                        )
+                        paused_order = _ordered_paused_appointments_from_snapshot(check_next_appointment_result)
                         if len(paused_order) < 2:
                             try:
                                 ph = normalize_phone_for_lookup(phone_for_pause_guard) or phone_for_pause_guard
@@ -4715,17 +4784,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     f"WARNING: multi-paused pick: get_customer_appointments refresh failed: {multi_pause_e}"
                                 )
                         if len(paused_order) >= 2:
-                            pids = [_appointment_numeric_id(r) for r in paused_order]
-                            pids = [x for x in pids if x is not None]
+                            pids = [x for x in (_appointment_numeric_id(r) for r in paused_order) if x is not None]
                             chosen_pid = _resolve_user_chosen_paused_appointment_id(user_input, pids)
                             if chosen_pid is not None:
                                 try:
-                                    gpt_aid_pick = (
-                                        int(function_args.get("appointment_id"))
-                                        if function_args.get("appointment_id") is not None
-                                        and str(function_args.get("appointment_id")).strip() != ""
-                                        else None
-                                    )
+                                    gpt_aid_pick = _safe_int(function_args.get("appointment_id"))
                                 except (TypeError, ValueError):
                                     gpt_aid_pick = None
                                 if gpt_aid_pick is None or gpt_aid_pick != chosen_pid:
@@ -4750,12 +4813,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         _next_st_resume = extract_appointment_status(_next_pl_resume)
                         if _next_id_resume is not None and is_paused_status(_next_st_resume):
                             try:
-                                gpt_aid_resume = (
-                                    int(function_args.get("appointment_id"))
-                                    if function_args.get("appointment_id") is not None
-                                    and str(function_args.get("appointment_id")).strip() != ""
-                                    else None
-                                )
+                                gpt_aid_resume = _safe_int(function_args.get("appointment_id"))
                             except (TypeError, ValueError):
                                 gpt_aid_resume = None
                             if gpt_aid_resume is None:
@@ -4767,22 +4825,16 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                     aid_for_machine = _safe_int(function_args.get("appointment_id"))
                     machine_row = (
-                        find_appointment_row_in_check_next_payload(
-                            check_next_appointment_result, aid_for_machine
-                        )
+                        find_appointment_row_in_check_next_payload(check_next_appointment_result, aid_for_machine)
                         if aid_for_machine is not None and check_next_appointment_result
                         else None
                     )
                     row_service_id = row_branch_id = row_machine_id = None
                     if machine_row is not None:
-                        row_service_id, row_branch_id, row_machine_id = (
-                            extract_appointment_booking_fields(machine_row)
-                        )
+                        row_service_id, row_branch_id, row_machine_id = extract_appointment_booking_fields(machine_row)
                     target_row_was_paused = False
                     if machine_row is not None:
-                        target_row_was_paused = is_paused_status(
-                            extract_appointment_status(machine_row)
-                        )
+                        target_row_was_paused = is_paused_status(extract_appointment_status(machine_row))
                     elif forced_update_appointment_id is not None:
                         target_row_was_paused = True
                     if target_row_was_paused and function_name in (
@@ -4798,9 +4850,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 paused_followup_available_action_requested = True
                         elif function_name == "resume_appointment":
                             paused_followup_available_action_requested = True
-                    requested_machine_change = _user_explicitly_requests_machine_change(
-                        all_user_text_for_date
-                    )
+                    requested_machine_change = _user_explicitly_requests_machine_change(all_user_text_for_date)
                     arg_machine_id = _safe_int(function_args.get("machine_id"))
                     if arg_machine_id is not None and not requested_machine_change:
                         print(
@@ -4852,8 +4902,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
                 # --- Auto-chain appointment_id from check_next when GPT omitted it ---
                 # If GPT already set appointment_id (e.g. user picked from a multi-appointment list), do not overwrite.
-                if function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and check_next_appointment_result and not forced_update_appointment_id:
-                    actual_appointment_id = extract_appointment_id(extract_check_next_appointment(check_next_appointment_result))
+                if (
+                    function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment")
+                    and check_next_appointment_result
+                    and not forced_update_appointment_id
+                ):
+                    actual_appointment_id = extract_appointment_id(
+                        extract_check_next_appointment(check_next_appointment_result)
+                    )
                     if actual_appointment_id:
                         gpt_raw = function_args.get("appointment_id")
                         try:
@@ -4871,23 +4927,26 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             print(f"DEBUG: appointment_id already correct: {actual_appointment_id}")
 
                 # Reject day/time that violate clinic rules (service + gender + branch + device) before CRM.
-                if function_name in ("create_appointment", "update_appointment_date", "update_paused_appointment", "edit_appointment"):
+                if function_name in (
+                    "create_appointment",
+                    "update_appointment_date",
+                    "update_paused_appointment",
+                    "edit_appointment",
+                ):
                     date_s = function_args.get("date")
                     dt_local = None
                     if isinstance(date_s, str) and date_s.strip():
                         dt_local = parse_normalized_api_datetime(date_s.strip(), BOOKING_TZ)
                     if dt_local is not None:
                         sid = bid = None
-                        mid: Optional[int] = None
+                        mid: int | None = None
                         if function_name == "create_appointment":
                             sid = _safe_int(function_args.get("service_id"))
                             bid = _safe_int(function_args.get("branch_id"))
                             mid = _safe_int(function_args.get("machine_id"))
                         elif function_name == "edit_appointment":
                             aid = _safe_int(function_args.get("appointment_id"))
-                            row = find_appointment_row_in_check_next_payload(
-                                check_next_appointment_result, aid
-                            )
+                            row = find_appointment_row_in_check_next_payload(check_next_appointment_result, aid)
                             if row is not None:
                                 sid, bid, mid = extract_appointment_booking_fields(row)
                             else:
@@ -4896,9 +4955,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 mid = _safe_int(function_args.get("machine_id"))
                         else:
                             aid = _safe_int(function_args.get("appointment_id"))
-                            row = find_appointment_row_in_check_next_payload(
-                                check_next_appointment_result, aid
-                            )
+                            row = find_appointment_row_in_check_next_payload(check_next_appointment_result, aid)
                             if row is not None:
                                 sid, bid, mid = extract_appointment_booking_fields(row)
                             else:
@@ -4946,21 +5003,30 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     user_msg = function_args.get("user_message", user_input)
                     try:
                         from services.dynamic_retrieval_service import (
+                            _ensure_style_included,
+                            _get_default_general_and_style,
+                            _load_content_by_ids,
                             is_dynamic_retrieval_available,
                             select_files_llm,
-                            _load_content_by_ids,
-                            _get_default_general_and_style,
-                            _ensure_style_included,
                         )
+
                         if is_dynamic_retrieval_available():
                             result = await select_files_llm(user_msg)
                             action = result.get("action", "fallback_to_general")
                             files = result.get("files", [])
                             if action == "ask_clarification":
-                                tool_output = {"action": "ask_clarification", "content": "", "message": "User message needs clarification. Ask the user which service they mean (hair removal, tattoo, whitening, etc.)."}
+                                tool_output = {
+                                    "action": "ask_clarification",
+                                    "content": "",
+                                    "message": "User message needs clarification. Ask the user which service they mean (hair removal, tattoo, whitening, etc.).",
+                                }
                             elif files:
                                 merged, has_style = _load_content_by_ids(files)
-                                merged = _ensure_style_included(merged, has_style) if merged else _get_default_general_and_style()
+                                merged = (
+                                    _ensure_style_included(merged, has_style)
+                                    if merged
+                                    else _get_default_general_and_style()
+                                )
                                 tool_output = {"action": "normal", "content": merged or "", "files_loaded": files}
                             else:
                                 merged = _get_default_general_and_style()
@@ -4972,25 +5038,43 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         tool_round_trips.append(
                             _record_tool_round_trip(function_name, function_args, tool_content, None)
                         )
-                        messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": tool_content})
+                        messages.append(
+                            {
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": tool_content,
+                            }
+                        )
                     except Exception as kr_e:
                         print(f"⚠️ retrieve_relevant_knowledge error: {kr_e}")
                         err_content = json.dumps({"success": False, "content": "", "message": str(kr_e)})
                         tool_round_trips.append(
                             _record_tool_round_trip(function_name, function_args, err_content, None)
                         )
-                        messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": err_content})
+                        messages.append(
+                            {
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": err_content,
+                            }
+                        )
                 elif function_name == "submit_booking_intent":
-                    from services.booking.intent_pipeline import handle_submit_booking_intent
-                    from services.booking.schemas import validation_error_response
                     from services.booking.booking_fsm import (
                         can_execute_submit,
-                        fsm_enabled as _fsm_gate_enabled,
                         human_gate_message,
                         mark_booking_completed,
-                        merge_patch as _fsm_merge_patch,
                         parse_gate_reason,
                     )
+                    from services.booking.booking_fsm import (
+                        fsm_enabled as _fsm_gate_enabled,
+                    )
+                    from services.booking.booking_fsm import (
+                        merge_patch as _fsm_merge_patch,
+                    )
+                    from services.booking.intent_pipeline import handle_submit_booking_intent
+                    from services.booking.schemas import validation_error_response
 
                     explicit_submit_args = _extract_direct_submit_booking_args_from_user_message(
                         user_input,
@@ -5110,18 +5194,22 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             "content": tool_content,
                         }
                     )
-                    if isinstance(tool_output, dict) and tool_output.get("success") and tool_output.get("booking_flow_state") == "booked":
+                    if (
+                        isinstance(tool_output, dict)
+                        and tool_output.get("success")
+                        and tool_output.get("booking_flow_state") == "booked"
+                    ):
                         recovered_create_appointment_ok = True
                         try:
                             from services.analytics_events import analytics
 
-                            api_wrapped = tool_output.get("api_response") or {}
+                            api_wrapped_raw = tool_output.get("api_response")
+                            api_wrapped = api_wrapped_raw if isinstance(api_wrapped_raw, dict) else {}
                             raw_data_payload = api_wrapped.get("data", {})
-                            appointment_data = (
-                                raw_data_payload.get("appointment")
-                                if isinstance(raw_data_payload, dict)
-                                else {}
-                            ) or {}
+                            appointment_data_raw = (
+                                raw_data_payload.get("appointment") if isinstance(raw_data_payload, dict) else {}
+                            )
+                            appointment_data = appointment_data_raw if isinstance(appointment_data_raw, dict) else {}
                             service_info = appointment_data.get("service") or {}
                             service_name = (
                                 service_info.get("name", "unknown_service")
@@ -5181,14 +5269,13 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             and tool_output.get("success")
                         ):
                             tool_output = dict(tool_output)
-                            ra = tool_output.get("resume_appointment") or {}
+                            ra_raw = tool_output.get("resume_appointment") or {}
+                            ra = ra_raw if isinstance(ra_raw, dict) else {}
                             if ra.get("attempted"):
                                 pause_resume_attempted = True
-                            base = (
-                                "This tool returned success — the Agent API accepted the new datetime (see data.old_date / new_date). "
-                            )
+                            base = "This tool returned success — the Agent API accepted the new datetime (see data.old_date / new_date). "
                             if ra.get("attempted") and ra.get("success"):
-                                pause_resume_confirmed_via_date_update = True
+                                _pause_resume_confirmed_via_date_update = True
                                 base += (
                                     "A follow-up **resume** call also succeeded — the CRM should show the slot as active/Available "
                                     "(not Paused) in addition to the new time. Say so briefly in Arabic if bot_reply is Arabic. "
@@ -5229,7 +5316,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         print(f"DEBUG: Tool output for {function_name}: {tool_output}")
 
                         # Enrich "next" with full customer list so the model can list every upcoming booking.
-                        if function_name == "check_next_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
+                        if (
+                            function_name == "check_next_appointment"
+                            and isinstance(tool_output, dict)
+                            and tool_output.get("success")
+                        ):
                             phone_for_enrich = normalize_phone_for_lookup(
                                 function_args.get("phone")
                                 or customer_phone_clean
@@ -5258,48 +5349,62 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                         f"WARNING: check_next_appointment enrich get_customer_appointments failed: {enrich_e}"
                                     )
                             check_next_appointment_result = tool_output
-                            print(f"DEBUG: Stored check_next_appointment result for auto-chaining")
+                            print("DEBUG: Stored check_next_appointment result for auto-chaining")
 
                         # 📊 ANALYTICS: Track service when appointment is created
-                        if function_name == "create_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
+                        if (
+                            function_name == "create_appointment"
+                            and isinstance(tool_output, dict)
+                            and tool_output.get("success")
+                        ):
                             from services.analytics_events import analytics
 
-                            api_wrapped = (
-                                tool_output.get("api_response")
+                            create_api_wrapped: dict[str, Any] = (
+                                cast(dict[str, Any], tool_output.get("api_response"))
                                 if isinstance(tool_output.get("api_response"), dict)
                                 else tool_output
                             )
                             raw_data_payload = (
-                                api_wrapped.get("data", {}) if isinstance(api_wrapped, dict) else {}
+                                create_api_wrapped.get("data", {}) if isinstance(create_api_wrapped, dict) else {}
                             )
                             if isinstance(raw_data_payload, dict):
-                                appointment_data = raw_data_payload.get("appointment") or {}
+                                create_appointment_data: dict[str, Any] = raw_data_payload.get("appointment") or {}
                                 pricing_from_appointment = (
                                     raw_data_payload.get("pricing")
-                                    or appointment_data.get("pricing")
-                                    or appointment_data.get("price_details")
+                                    or create_appointment_data.get("pricing")
+                                    or create_appointment_data.get("price_details")
                                 )
                             else:
-                                appointment_data = {}
+                                create_appointment_data = {}
                                 pricing_from_appointment = None
                             if pricing_from_appointment:
                                 latest_pricing_payload = pricing_from_appointment
                                 config.user_booking_state[user_id]["last_pricing_payload"] = pricing_from_appointment
                                 print("💰 Synced pricing payload captured from create_appointment")
-                            service_info = appointment_data.get("service") or {}
-                            service_name = service_info.get("name", "unknown_service") if isinstance(service_info, dict) else str(service_info)
-                            machine_info = appointment_data.get("machine")
+                            service_info = create_appointment_data.get("service") or {}
+                            service_name = (
+                                service_info.get("name", "unknown_service")
+                                if isinstance(service_info, dict)
+                                else str(service_info)
+                            )
+                            machine_info = create_appointment_data.get("machine")
                             # Handle machine being either a string or a dict
-                            machine_name = machine_info.get("name", "unassigned") if isinstance(machine_info, dict) else (str(machine_info) if machine_info else "unassigned")
+                            machine_name = (
+                                machine_info.get("name", "unassigned")
+                                if isinstance(machine_info, dict)
+                                else (str(machine_info) if machine_info else "unassigned")
+                            )
 
-                            print(f"📊 Analytics: Service tracked from appointment - {service_name}, Machine: {machine_name}")
-                            
+                            print(
+                                f"📊 Analytics: Service tracked from appointment - {service_name}, Machine: {machine_name}"
+                            )
+
                             # Log appointment booking
                             analytics.log_appointment(
                                 user_id=user_id,
                                 service=service_name,
                                 status="booked",
-                                messages_count=len(current_context_messages)
+                                messages_count=len(current_context_messages),
                             )
                             print(f"📊 Analytics: Appointment booked - {service_name}")
                             try:
@@ -5312,41 +5417,60 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 print(f"WARNING: session rating schedule (create_appointment): {sr_e}")
                             if tool_output.get("booking_flow_state") == "booked":
                                 recovered_create_appointment_ok = True
-                        elif function_name == "create_appointment" and isinstance(tool_output, dict) and not tool_output.get("success"):
-                            _api = tool_output.get("api_response") if isinstance(tool_output.get("api_response"), dict) else {}
+                        elif (
+                            function_name == "create_appointment"
+                            and isinstance(tool_output, dict)
+                            and not tool_output.get("success")
+                        ):
+                            _api = (
+                                tool_output.get("api_response")
+                                if isinstance(tool_output.get("api_response"), dict)
+                                else {}
+                            )
                             err_msg_raw = (
                                 _api.get("message")
                                 if isinstance(_api, dict) and _api.get("message") is not None
                                 else tool_output.get("human_readable_reason", "Unknown error")
                             )
-                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
+                            err_msg = (
+                                str(err_msg_raw)
+                                if not isinstance(err_msg_raw, dict)
+                                else json.dumps(err_msg_raw, default=str)
+                            )
                             if tool_output.get("error_type") == "validation_error":
                                 print(f"create_appointment tool: validation failed (no handover): {err_msg}")
                             else:
                                 api_failure_reason = f"create_appointment_tool_failed: {err_msg}"
                             print(f"create_appointment tool: API failed (no user-text retry): {err_msg}")
-                        
+
                         # 📊 ANALYTICS: Track appointment reschedule
-                        elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and tool_output.get("success"):
+                        elif (
+                            function_name
+                            in ("update_appointment_date", "update_paused_appointment", "edit_appointment")
+                            and isinstance(tool_output, dict)
+                            and tool_output.get("success")
+                        ):
                             update_appointment_date_success_count += 1
                             if target_row_was_paused:
                                 paused_followup_update_succeeded = True
                             from services.analytics_events import analytics
-                            
+
                             # Get service from appointment data if available
-                            appointment_data = tool_output.get("data", {})
-                            service_id = appointment_data.get("service_id")
-                            
+                            update_appointment_data: dict[str, Any] = cast(dict[str, Any], tool_output.get("data", {}))
+                            service_id = update_appointment_data.get("service_id")
+
                             service_map = {
                                 1: "laser_hair_removal",
                                 2: "tattoo_removal",
                                 3: "co2_laser",
                                 4: "skin_whitening",
                                 5: "botox",
-                                6: "fillers"
+                                6: "fillers",
                             }
-                            service_name = service_map.get(service_id, "unknown_service") if service_id else "unknown_service"
-                            
+                            service_name = (
+                                service_map.get(service_id, "unknown_service") if service_id else "unknown_service"
+                            )
+
                             # Log appointment reschedule
                             _aid_rs = function_args.get("appointment_id")
                             _ph_rs = (
@@ -5364,7 +5488,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                 appointment_id=_aid_rs,
                             )
                             print(f"📊 Analytics: Appointment rescheduled - {service_name}")
-                            ra = tool_output.get("resume_appointment") or {}
+                            ra_raw = tool_output.get("resume_appointment") or {}
+                            ra = ra_raw if isinstance(ra_raw, dict) else {}
                             if ra.get("attempted") and ra.get("success"):
                                 pause_resume_success_count += 1
                                 try:
@@ -5383,14 +5508,27 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                                     )
                                 except Exception as pr_e:
                                     print(f"WARNING: analytics pause_cleared: {pr_e}")
-                        elif function_name == "resume_appointment" and isinstance(tool_output, dict) and tool_output.get("success"):
+                        elif (
+                            function_name == "resume_appointment"
+                            and isinstance(tool_output, dict)
+                            and tool_output.get("success")
+                        ):
                             pause_resume_success_count += 1
                             direct_resume_success = True
                             if target_row_was_paused:
                                 paused_followup_update_succeeded = True
-                        elif function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment") and isinstance(tool_output, dict) and not tool_output.get("success"):
+                        elif (
+                            function_name
+                            in ("update_appointment_date", "update_paused_appointment", "edit_appointment")
+                            and isinstance(tool_output, dict)
+                            and not tool_output.get("success")
+                        ):
                             err_msg_raw = (tool_output or {}).get("message", "Unknown error")
-                            err_msg = str(err_msg_raw) if not isinstance(err_msg_raw, dict) else json.dumps(err_msg_raw, default=str)
+                            err_msg = (
+                                str(err_msg_raw)
+                                if not isinstance(err_msg_raw, dict)
+                                else json.dumps(err_msg_raw, default=str)
+                            )
                             api_failure_reason = f"update_appointment_date_tool_failed: {err_msg}"
                             print(f"update_appointment_date tool: API failed: {err_msg}")
 
@@ -5429,10 +5567,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 else:
                     api_failure_reason = f"tool_not_found:{function_name}"
                     print(f"â‌Œ ERROR: Tool function '{function_name}' not found in api_integrations.")
-                    err_content = json.dumps({"success": False, "message": f"Tool function '{function_name}' not implemented."})
-                    tool_round_trips.append(
-                        _record_tool_round_trip(function_name, function_args, err_content, None)
+                    err_content = json.dumps(
+                        {"success": False, "message": f"Tool function '{function_name}' not implemented."}
                     )
+                    tool_round_trips.append(_record_tool_round_trip(function_name, function_args, err_content, None))
                     messages.append(
                         {
                             "tool_call_id": tool_call.id,
@@ -5455,13 +5593,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             )
             second_response = await client.chat.completions.create(
                 model=FINAL_RESPONSE_MODEL,
-                messages=messages,
-                response_format={"type": "json_object"}
+                messages=cast(list[ChatCompletionMessageParam], messages),
+                response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),
             )
             final_response_model_used = FINAL_RESPONSE_MODEL
             if not second_response.choices:
                 raise ValueError("GPT returned no choices (after tool call)")
-            gpt_raw_content = second_response.choices[0].message.content.strip() if second_response.choices[0].message.content else ""
+            gpt_raw_content = (
+                second_response.choices[0].message.content.strip() if second_response.choices[0].message.content else ""
+            )
             print(f"GPT Raw Response (after tool call): {gpt_raw_content}")
 
             parsed_response = _parse_gpt_response_json(gpt_raw_content)
@@ -5471,16 +5611,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         if not tool_calls and not social_channel:
             direct_submit_args = _extract_direct_submit_booking_args_from_user_message(
                 user_input,
-                phone=customer_phone_clean
-                or config.user_data_whatsapp.get(user_id, {}).get("phone_number")
-                or user_id,
+                phone=customer_phone_clean or config.user_data_whatsapp.get(user_id, {}).get("phone_number") or user_id,
                 current_gender=current_gender,
                 fallback_name=config.user_names.get(user_id, user_name),
             )
             if direct_submit_args:
                 try:
+                    from services.booking.booking_fsm import mark_booking_completed
+                    from services.booking.booking_fsm import merge_patch as _fsm_merge_patch
                     from services.booking.intent_pipeline import handle_submit_booking_intent
-                    from services.booking.booking_fsm import merge_patch as _fsm_merge_patch, mark_booking_completed
 
                     _fsm_merge_patch(user_id, {"confirmed_booking": True})
                     direct_output = await handle_submit_booking_intent(
@@ -5536,7 +5675,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         bot_reply = parsed_response.get("bot_reply", "")
         ai_detected = parsed_response.get("detected_language")
         detected_language = ai_detected if ai_detected in ("ar", "en", "fr", "franco") else current_preferred_lang
-        parsed_response['detected_language'] = detected_language
+        parsed_response["detected_language"] = detected_language
         print(f"🌐 AI detected language: {detected_language}")
 
         # Sanitize: when replying in Arabic/franco, replace Latin brand names with Arabic (no mixing)
@@ -5562,7 +5701,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         # Ensure current_gender_from_config in the output reflects the *actual* config value
         # This is critical for GPT to "see" the current state of the bot's knowledge about gender.
-        parsed_response['current_gender_from_config'] = current_gender
+        parsed_response["current_gender_from_config"] = current_gender
 
         # Respect AI decision: do not override action/bot_reply here.
         # We only normalize metadata fields above (detected_language/current_gender_from_config).
@@ -5571,10 +5710,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         # This part ensures that if our local gender recognition service detects a strong gender, it's reflected
         # in the output, potentially overriding GPT's 'null' or 'unknown' if it was less confident.
         if explicitly_detected_gender_from_input and explicitly_detected_gender_from_input in ["male", "female"]:
-            parsed_response['detected_gender'] = explicitly_detected_gender_from_input
-        elif 'detected_gender' in parsed_response and parsed_response['detected_gender'] not in ["male", "female"]:
+            parsed_response["detected_gender"] = explicitly_detected_gender_from_input
+        elif "detected_gender" in parsed_response and parsed_response["detected_gender"] not in ["male", "female"]:
             # If GPT returned something like 'unknown' or 'null' for detected_gender, set it to None
-            parsed_response['detected_gender'] = None
+            parsed_response["detected_gender"] = None
 
         try:
             from services.booking import booking_fsm as _bfsm_lock_g
@@ -5594,7 +5733,11 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             raise ValueError("GPT response missing required fields (action or bot_reply)")
 
         # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
-        tool_names = ([tc.function.name for tc in tool_calls] if tool_calls else []) + extra_tool_names
+        tool_names = (
+            [getattr(getattr(tc, "function", None), "name", "") for tc in tool_calls if getattr(tc, "function", None)]
+            if tool_calls
+            else []
+        ) + extra_tool_names
         _brl_flow = (parsed_response.get("bot_reply") or "").strip().lower()
         had_update_tool = bool(tool_calls) and (
             "update_appointment_date" in tool_names
@@ -5618,8 +5761,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             )
             if direct_submit_args:
                 try:
+                    from services.booking.booking_fsm import mark_booking_completed
+                    from services.booking.booking_fsm import merge_patch as _fsm_merge_patch
                     from services.booking.intent_pipeline import handle_submit_booking_intent
-                    from services.booking.booking_fsm import merge_patch as _fsm_merge_patch, mark_booking_completed
 
                     _fsm_merge_patch(user_id, {"confirmed_booking": True})
                     direct_output = await handle_submit_booking_intent(
@@ -5661,12 +5805,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         _rec_has_date = bool(_leaked_rec.get("date") or _leaked_rec.get("date_components"))
         _rec_mach = _safe_int(_leaked_rec.get("machine_id"))
         _rec_lw = dict(_leaked_rec)
-        _fix_misassigned_tattoo_service_for_hair_booking(
-            _rec_lw, current_gender, user_input, current_context_messages
-        )
-        _rec_sid = _safe_int(_rec_lw.get("service_id")) or _infer_service_id_from_leak(
-            _leaked_rec, current_gender
-        )
+        _fix_misassigned_tattoo_service_for_hair_booking(_rec_lw, current_gender, user_input, current_context_messages)
+        _rec_sid = _safe_int(_rec_lw.get("service_id")) or _infer_service_id_from_leak(_leaked_rec, current_gender)
         stuck_hair_booking_recovery = (
             (parsed_response.get("action") or "").strip().lower() == "ask_for_details_for_booking"
             and _rec_has_date
@@ -5684,9 +5824,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             and (
                 (
                     _bot_reply_claims_completed_booking(parsed_response.get("bot_reply") or "")
-                    and not _bot_reply_claims_completed_appointment_update(
-                        parsed_response.get("bot_reply") or ""
-                    )
+                    and not _bot_reply_claims_completed_appointment_update(parsed_response.get("bot_reply") or "")
                 )
                 or stuck_hair_booking_recovery
             )
@@ -5730,9 +5868,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                         from services.analytics_events import analytics
 
                         _rec_api = (
-                            rec_api.get("api_response")
-                            if isinstance(rec_api.get("api_response"), dict)
-                            else rec_api
+                            rec_api.get("api_response") if isinstance(rec_api.get("api_response"), dict) else rec_api
                         )
                         raw_data_payload = _rec_api.get("data", {}) if isinstance(_rec_api, dict) else {}
                         appointment_data = (
@@ -5796,12 +5932,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 api_failure_reason = "update_claimed_without_tool_after_pending_promise"
 
         # Reschedule wording in user message + completion text but no update_appointment_date in this turn.
-        if (
-            not api_failure_reason
-            and tool_calls
-            and not had_update_tool
-            and is_reschedule_intent
-        ):
+        if not api_failure_reason and tool_calls and not had_update_tool and is_reschedule_intent:
             if any(
                 m in _brl_flow
                 for m in (
@@ -5825,9 +5956,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         # Claims paused appointment was cleared / became active without a successful CRM update.
         _paused_date_changed_without_resume = (
-            update_appointment_date_success_count > 0
-            and pause_resume_attempted
-            and pause_resume_success_count == 0
+            update_appointment_date_success_count > 0 and pause_resume_attempted and pause_resume_success_count == 0
         )
         if (
             not api_failure_reason
@@ -5892,22 +6021,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     st = config.user_booking_state.get(user_id) or {}
                     st_sid = _safe_int(st.get("service_id"))
                     bp_leak = _normalize_body_part_ids(leaked_book.get("body_part_ids"))
-                    bp_state = (
-                        _normalize_body_part_ids(st.get("body_part_ids"))
-                        if st_sid == inf_sid
-                        else []
-                    )
-                    if (
-                        inf_sid == 13
-                        and 13 in body_part_required_service_ids
-                        and not (bp_leak or bp_state)
-                    ):
+                    bp_state = _normalize_body_part_ids(st.get("body_part_ids")) if st_sid == inf_sid else []
+                    if inf_sid == 13 and 13 in body_part_required_service_ids and not (bp_leak or bp_state):
                         tattoo_soft_recover = True
                         parsed_response["action"] = "ask_for_details_for_booking"
-                        parsed_response["bot_reply"] = _missing_body_part_booking_prompt(
-                            13, detected_language
-                        )
-                        partial_state: Dict[str, Any] = {"service_id": 13}
+                        parsed_response["bot_reply"] = _missing_body_part_booking_prompt(13, detected_language)
+                        partial_state: dict[str, Any] = {"service_id": 13}
                         bid = _resolve_branch_id_from_leak(leaked_book)
                         if bid is not None:
                             partial_state["branch_id"] = bid
@@ -5916,9 +6035,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             partial_state["machine_id"] = mid
                         _remember_booking_selection(user_id, partial_state)
                         if detected_language in ("ar", "franco") and parsed_response.get("bot_reply"):
-                            parsed_response["bot_reply"] = _normalize_arabic_reply(
-                                parsed_response["bot_reply"]
-                            )
+                            parsed_response["bot_reply"] = _normalize_arabic_reply(parsed_response["bot_reply"])
                 except Exception as tattoo_soft_e:
                     print(f"⚠️ Tattoo soft recover (missing body parts) failed: {tattoo_soft_e}")
                 if not tattoo_soft_recover:
@@ -5944,8 +6061,8 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
 
         # Token usage: when tool calls exist, sum BOTH first and second API call usage (second_response alone misses first call's output)
         first_usage = getattr(response, "usage", None) if tool_calls else None
-        usage = (getattr(second_response, "usage", None) if tool_calls else getattr(response, "usage", None))
-        token_breakdown: Optional[Dict[str, Any]] = None
+        usage = getattr(second_response, "usage", None) if tool_calls else getattr(response, "usage", None)
+        token_breakdown: dict[str, Any] | None = None
         if tool_calls and first_usage and usage:
             pt1 = getattr(first_usage, "prompt_tokens", 0) or 0
             ct1 = getattr(first_usage, "completion_tokens", 0) or 0
@@ -5957,8 +6074,12 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             cost2 = _compute_cost_from_usage(final_response_model_used, pt2, ct2)
             tokens_val = prompt_tokens_val + completion_tokens_val
             cost_info = {
-                "input_cost_usd": round((cost1.get("input_cost_usd", 0) or 0) + (cost2.get("input_cost_usd", 0) or 0), 6),
-                "output_cost_usd": round((cost1.get("output_cost_usd", 0) or 0) + (cost2.get("output_cost_usd", 0) or 0), 6),
+                "input_cost_usd": round(
+                    (cost1.get("input_cost_usd", 0) or 0) + (cost2.get("input_cost_usd", 0) or 0), 6
+                ),
+                "output_cost_usd": round(
+                    (cost1.get("output_cost_usd", 0) or 0) + (cost2.get("output_cost_usd", 0) or 0), 6
+                ),
                 "cost_usd": round((cost1.get("cost_usd", 0) or 0) + (cost2.get("cost_usd", 0) or 0), 6),
             }
             token_breakdown = {
@@ -5978,10 +6099,21 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                 },
             }
         else:
-            tokens_val = (usage.total_tokens or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)) if usage else None
+            tokens_val = (
+                (
+                    usage.total_tokens
+                    or (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0)
+                )
+                if usage
+                else None
+            )
             prompt_tokens_val = getattr(usage, "prompt_tokens", None) if usage else None
             completion_tokens_val = getattr(usage, "completion_tokens", None) if usage else None
-            cost_info = _compute_cost_from_usage(final_response_model_used, prompt_tokens_val or 0, completion_tokens_val or 0) if (prompt_tokens_val is not None or completion_tokens_val is not None) else {}
+            cost_info = (
+                _compute_cost_from_usage(final_response_model_used, prompt_tokens_val or 0, completion_tokens_val or 0)
+                if (prompt_tokens_val is not None or completion_tokens_val is not None)
+                else {}
+            )
             if usage and prompt_tokens_val is not None:
                 token_breakdown = {
                     "single_call": {
@@ -6014,14 +6146,20 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         if api_failure_reason:
             flow_meta["error"] = api_failure_reason
         if tool_calls and tool_round_trips:
-            flow_meta["ai_first_response"] = ai_first_response_with_tools[:1500] if ai_first_response_with_tools else None
+            flow_meta["ai_first_response"] = (
+                ai_first_response_with_tools[:1500] if ai_first_response_with_tools else None
+            )
             flow_meta["tool_round_trips"] = tool_round_trips
         _submit_fail = _extract_submit_booking_failure_details(tool_round_trips)
         if _submit_fail:
             st = config.user_booking_state[user_id]
             retry_meta = dict(st.get("booking_retry_meta") or {})
             fail_count = int(retry_meta.get("failed_submit_count") or 0) + 1
-            last_activity = (_submit_fail.get("activity_trace") or {}) if isinstance(_submit_fail.get("activity_trace"), dict) else {}
+            last_activity = (
+                (_submit_fail.get("activity_trace") or {})
+                if isinstance(_submit_fail.get("activity_trace"), dict)
+                else {}
+            )
             retry_meta = {
                 "failed_submit_count": fail_count,
                 "last_error_code": _submit_fail.get("error_type") or api_failure_reason or "validation_error",
@@ -6060,7 +6198,9 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
         parsed_response["_flow_meta"] = flow_meta
 
         if cost_info:
-            print(f"💰 GPT usage: input={prompt_tokens_val} tokens (${cost_info.get('input_cost_usd', 0):.6f}) | output={completion_tokens_val} tokens (${cost_info.get('output_cost_usd', 0):.6f}) | total=${cost_info.get('cost_usd', 0):.6f}")
+            print(
+                f"💰 GPT usage: input={prompt_tokens_val} tokens (${cost_info.get('input_cost_usd', 0):.6f}) | output={completion_tokens_val} tokens (${cost_info.get('output_cost_usd', 0):.6f}) | total=${cost_info.get('cost_usd', 0):.6f}"
+            )
 
         # ============================================================
         # PRICING: Use selector files only (no system API)
@@ -6087,7 +6227,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                     parsed_response["action"] = "ask_for_details_for_booking"
                     parsed_response["bot_reply"] = _pricing_missing_details_reply(current_preferred_lang, "body_part")
                 else:
-                    pricing_call_args = {"service_id": service_id_for_sync}
+                    pricing_call_args: dict[str, Any] = {"service_id": service_id_for_sync}
                     machine_id_for_sync = _safe_int(booking_state.get("machine_id"))
                     branch_id_for_sync = _safe_int(booking_state.get("branch_id"))
                     if machine_id_for_sync is not None:
@@ -6105,11 +6245,15 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
                             _remember_booking_selection(user_id, pricing_call_args)
                         else:
                             parsed_response["action"] = "ask_for_details_for_booking"
-                            parsed_response["bot_reply"] = _pricing_missing_details_reply(current_preferred_lang, "unavailable")
+                            parsed_response["bot_reply"] = _pricing_missing_details_reply(
+                                current_preferred_lang, "unavailable"
+                            )
                     except Exception as pricing_sync_error:
                         print(f"⚠️ Pricing sync fetch failed: {pricing_sync_error}")
                         parsed_response["action"] = "ask_for_details_for_booking"
-                        parsed_response["bot_reply"] = _pricing_missing_details_reply(current_preferred_lang, "unavailable")
+                        parsed_response["bot_reply"] = _pricing_missing_details_reply(
+                            current_preferred_lang, "unavailable"
+                        )
 
             if pricing_payload_to_send is not None:
                 parsed_response["action"] = "answer_question"
@@ -6135,10 +6279,10 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             else generic_error_by_lang.get(current_preferred_lang, generic_error_by_lang["en"])
         )
         return {
-            "action": "unknown_query", 
-            "bot_reply": fallback_bot_reply, 
+            "action": "unknown_query",
+            "bot_reply": fallback_bot_reply,
             "detected_language": current_preferred_lang,
-            "current_gender_from_config": current_gender, # Pass the actual gender from config
+            "current_gender_from_config": current_gender,  # Pass the actual gender from config
             "_flow_meta": {
                 "model": selected_model,
                 "orchestration_model": selected_model,
@@ -6155,13 +6299,14 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             },
         }
     except Exception as e:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"❌ ERROR in get_bot_chat_response from GPT: {e}")
         print(f"   Error type: {type(e).__name__}")
         import traceback
-        print(f"   Full traceback:")
+
+        print("   Full traceback:")
         traceback.print_exc()
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
         generic_error_by_lang = {
             "ar": "عذراً، صار خطأ وأنا عم عالج طلبك حالياً. جرّب مرة ثانية أو تواصل معنا مباشرة.",
             "en": "Sorry, I encountered an issue understanding your request at the moment. Please try again or contact our staff directly.",
@@ -6172,7 +6317,7 @@ async def get_bot_chat_response(user_id: str, user_input: str, current_context_m
             "action": "unknown_query",
             "bot_reply": generic_error_by_lang.get(current_preferred_lang, generic_error_by_lang["en"]),
             "detected_language": current_preferred_lang,
-            "current_gender_from_config": current_gender, # Pass the actual gender from config
+            "current_gender_from_config": current_gender,  # Pass the actual gender from config
             "_flow_meta": {
                 "model": selected_model,
                 "orchestration_model": selected_model,
