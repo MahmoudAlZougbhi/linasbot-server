@@ -9,6 +9,7 @@ permissions:
 jobs:
   validate:
     name: Validate new Page token and Instagram relationship
+    environment: meta-social-cutover
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
