@@ -106,18 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Secret patterns
-        run: |
-          set -euo pipefail
-          if command -v rg >/dev/null; then RG=rg; else RG="grep -RInE"; fi
-          if $RG -n --glob '!*.md' --glob '!.env*' --glob '!node_modules/**' --glob '!.venv*' \
-              -e 'sk-proj-[A-Za-z0-9_-]{20,}' \
-              -e 'EAA[A-Za-z0-9]{30,}' \
-              -e 'admin123' \
-              . ; then
-            echo "Potential secret or default password found"
-            exit 1
-          fi
-          echo "Secret scan passed"
+        run: bash scripts/scan_tracked_secrets.sh
 
   deploy-readiness:
     runs-on: ubuntu-latest
