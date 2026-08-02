@@ -1,0 +1,57 @@
+{
+  "tenant_id": "migration_dry_run",
+  "source_root": "tests/fixtures/cm_migration",
+  "faq_groups_imported": 3,
+  "knowledge_articles_imported": 2,
+  "care_articles_imported": 1,
+  "handoff_contacts_imported": 5,
+  "archived_files": [
+    {
+      "rel": "legacy/knowledge_base.txt",
+      "sha256": "b73b12e5207f220667e21e3583576bde6a9d63238284410353fe46969736a873",
+      "size": 50,
+      "archived_path": "/Users/alzoughbi/linasbot-server-cm-control-plane/.cm_testdata/tenants/migration_dry_run/cm/archive/legacy_migration/legacy/knowledge_base.txt"
+    },
+    {
+      "rel": "legacy/knowledge_files/sample_prep.json",
+      "sha256": "157e7f5a8571c14b295effe74b61a7dbcea067a35ab3803ba7ec3b620cc97daf",
+      "size": 153,
+      "archived_path": "/Users/alzoughbi/linasbot-server-cm-control-plane/.cm_testdata/tenants/migration_dry_run/cm/archive/legacy_migration/legacy/knowledge_files/sample_prep.json"
+    },
+    {
+      "rel": "legacy/price_list.txt",
+      "sha256": "adbd58c1c73bcd101d416f406c7aa6fa224053e4d7d9997fbbd8689e8c91d28e",
+      "size": 62,
+      "archived_path": "/Users/alzoughbi/linasbot-server-cm-control-plane/.cm_testdata/tenants/migration_dry_run/cm/archive/legacy_migration/legacy/price_list.txt"
+    },
+    {
+      "rel": "legacy/qa_pairs.jsonl",
+      "sha256": "3d9b9af20eb3ec723b0945a2f8ce50a7f48ab49189739722eb44ac176570f431",
+      "size": 574,
+      "archived_path": "/Users/alzoughbi/linasbot-server-cm-control-plane/.cm_testdata/tenants/migration_dry_run/cm/archive/legacy_migration/legacy/qa_pairs.jsonl"
+    }
+  ],
+  "conflicts": [
+    {
+      "code": "RESTRICTED_FAQ_AFFIRMATION",
+      "message": "FAQ group 'legacy_3b67e8d33de3' affirms restricted topic 'tattoo_removal'.",
+      "path": "faq.items[legacy_3b67e8d33de3].ar",
+      "severity": "error",
+      "details": {
+        "topic_id": "tattoo_removal",
+        "qa_group_id": "legacy_3b67e8d33de3"
+      }
+    },
+    {
+      "code": "RESTRICTED_HANDOFF_MATRIX_ROW",
+      "message": "Handoff matrix row 'row_social_whatsapp_tattoo_removal' routes restricted topic 'tattoo_removal'.",
+      "path": "handoff.matrix[row_social_whatsapp_tattoo_removal]",
+      "severity": "error",
+      "details": {
+        "topic_id": "tattoo_removal",
+        "row_id": "row_social_whatsapp_tattoo_removal"
+      }
+    }
+  ],
+  "conflict_count": 2
+}
