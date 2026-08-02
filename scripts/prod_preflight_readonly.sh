@@ -221,13 +221,16 @@ PY
 
 python3 - <<'PY'
 from pathlib import Path
-import json
 import os
+import sys
 
-for env_path in (
-    Path("/opt/linasbot/.env"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/.env"),
-):
+APP_DIR = "/opt/linasbot"
+if Path("/opt/linasbot/linaslaserbot-2.7.22/main.py").exists():
+    APP_DIR = "/opt/linasbot/linaslaserbot-2.7.22"
+sys.path.insert(0, APP_DIR)
+os.chdir(APP_DIR)
+
+for env_path in (Path("/opt/linasbot/.env"), Path(APP_DIR) / ".env"):
     if not env_path.exists():
         continue
     for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -236,41 +239,33 @@ for env_path in (
         k, v = line.split("=", 1)
         os.environ.setdefault(k.strip(), v.strip().strip("'").strip('"'))
 
-count = 0
-source = "none"
-candidates = [
-    Path("/opt/linasbot/data/dashboard_users.json"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/data/dashboard_users.json"),
-    Path("/opt/linasbot_data/dashboard_users.json"),
-    Path("/opt/linasbot/data/users.json"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/data/users.json"),
-]
-for root in (Path("/opt/linasbot/data"), Path("/opt/linasbot_data"), Path("/opt/linasbot/linaslaserbot-2.7.22/data")):
-    if root.exists():
-        for p in root.rglob("*user*.json"):
-            if p.is_file() and p not in candidates:
-                candidates.append(p)
+from utils.utils import get_firestore_db
 
-for p in candidates:
-    if not p.exists():
-        continue
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except Exception as e:
-        print(f"[preflight] admin_file_error path={p} type={type(e).__name__}")
-        continue
-    users = data.get("users") if isinstance(data, dict) else data
-    if isinstance(users, list) and users:
-        count = len(users)
-        source = f"file:{p}"
-        break
-    if isinstance(users, dict) and users:
-        count = len(users)
-        source = f"file:{p}"
-        break
+db = get_firestore_db()
+if not db:
+    raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS firestore_unavailable")
 
-print(f"[preflight] dashboard_users count={count} source={source}")
-if count < 1:
+coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
+docs = list(coll.stream())
+roles = {}
+active = 0
+owners = 0
+for doc in docs:
+    data = doc.to_dict() or {}
+    role = str(data.get("role") or "unknown")
+    roles[role] = roles.get(role, 0) + 1
+    status = str(data.get("status") or "").lower()
+    if status in {"", "active"}:
+        active += 1
+    if role in {"owner", "admin"} and status in {"", "active"}:
+        owners += 1
+
+print(
+    f"[preflight] dashboard_users count={len(docs)} active={active} "
+    f"owners_or_admins={owners} roles={roles} "
+    f"source=firestore:artifacts/linas-ai-bot-backend/dashboard_users"
+)
+if owners < 1 and active < 1:
     raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS")
 print("[preflight] existing_admin_retained=true (hashes unchanged by deploy; no default account created)")
 PY
