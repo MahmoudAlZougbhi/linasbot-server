@@ -84,6 +84,17 @@ try {
   }
 }
 
+const auditMeta = report?.metadata?.vulnerabilities;
+const completeSeverityCounts =
+  auditMeta &&
+  ["info", "low", "moderate", "high", "critical", "total"].every(
+    (severity) => Number.isInteger(auditMeta[severity]) && auditMeta[severity] >= 0
+  );
+if (report?.error || report?.auditReportVersion !== 2 || !completeSeverityCounts) {
+  console.error("npm audit returned an incomplete or error report; refusing to pass");
+  process.exit(1);
+}
+
 const vulns = report.vulnerabilities || {};
 const allow = [];
 const block = [];
@@ -160,7 +171,7 @@ for (const [name, v] of Object.entries(vulns)) {
   });
 }
 
-const meta = report.metadata?.vulnerabilities || {};
+const meta = auditMeta;
 console.log("npm audit severity counts:", JSON.stringify(meta));
 console.log("allowed documented findings:", JSON.stringify(allow, null, 2));
 if (!architectureOk) {

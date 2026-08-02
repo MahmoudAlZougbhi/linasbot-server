@@ -25,10 +25,41 @@ if [ "$META_PAGE_ID" != "378696005334409" ]; then
   exit 1
 fi
 
-if [ "$META_APP_ID" != "1784792718776344" ]; then
-  echo "[meta-apply] refusing unexpected META_APP_ID" >&2
+if [ "$META_INSTAGRAM_ACCOUNT_ID" != "17841413184256533" ]; then
+  echo "[meta-apply] refusing unexpected META_INSTAGRAM_ACCOUNT_ID" >&2
   exit 1
 fi
+
+if [ "$META_APP_ID" = "1784792718776344" ] || ! [[ "$META_APP_ID" =~ ^[0-9]+$ ]]; then
+  echo "[meta-apply] refusing old or malformed META_APP_ID for new-app cutover" >&2
+  exit 1
+fi
+
+if [ "$META_GRAPH_API_VERSION" != "v24.0" ]; then
+  echo "[meta-apply] refusing unexpected META_GRAPH_API_VERSION" >&2
+  exit 1
+fi
+
+umask 077
+TOKEN_PATTERN_FILE="$(mktemp /tmp/linasbot-meta-apply-pattern.XXXXXX)"
+trap 'rm -f "$TOKEN_PATTERN_FILE"' EXIT
+
+token_pattern_present_in_logs() {
+  local log_path
+  while IFS= read -r log_path; do
+    if grep -qFf "$TOKEN_PATTERN_FILE" "$log_path" 2>/dev/null; then
+      return 0
+    fi
+  done < <(
+    find /var/log/nginx /var/log -maxdepth 2 -type f \
+      \( -name '*linasaibot*.log*' -o -name 'access.log*' -o -name 'error.log*' \) 2>/dev/null
+  )
+  if command -v journalctl >/dev/null 2>&1 && \
+    journalctl -u linasbot --no-pager 2>/dev/null | grep -qFf "$TOKEN_PATTERN_FILE"; then
+    return 0
+  fi
+  return 1
+}
 
 python3 - <<'PY'
 import os
@@ -65,6 +96,8 @@ def upsert(path: Path, updates: dict) -> None:
     os.chmod(path, 0o600)
 
 updates = {k: os.environ[k].strip() for k in KEYS_ALWAYS}
+updates["META_SOCIAL_ROLLBACK_ACTIVE"] = "false"
+updates["META_SOCIAL_NEW_APP_REQUIRED"] = "true"
 for key in OPTIONAL:
     value = (os.environ.get(key) or "").strip()
     if value:
@@ -100,6 +133,8 @@ for path in paths:
         "META_WEBHOOK_VERIFY_TOKEN",
         "META_GRAPH_API_VERSION",
         "META_SOCIAL_MESSAGING_ENABLED",
+        "META_SOCIAL_ROLLBACK_ACTIVE",
+        "META_SOCIAL_NEW_APP_REQUIRED",
     ]:
         print(f"[meta-apply] {key}:present={present(key)}")
 
@@ -137,18 +172,52 @@ systemctl restart linasbot
 sleep 5
 systemctl is-active linasbot
 
-CHALLENGE=meta_apply_challenge
-CODE_OK="$(curl -sS -o /tmp/meta_ok_body -w '%{http_code}' --max-time 10 \
-  "http://127.0.0.1:8003/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=${META_WEBHOOK_VERIFY_TOKEN}&hub.challenge=${CHALLENGE}" || true)"
-BODY_OK="$(cat /tmp/meta_ok_body 2>/dev/null || true)"
-echo "local_correct_http=$CODE_OK"
-test "$CODE_OK" = "200"
-test "$BODY_OK" = "$CHALLENGE"
+python3 - <<'PY'
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
 
-CODE_BAD="$(curl -sS -o /tmp/meta_bad_body -w '%{http_code}' --max-time 10 \
-  "http://127.0.0.1:8003/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=${CHALLENGE}" || true)"
-echo "local_incorrect_http=$CODE_BAD"
-test "$CODE_BAD" != "200"
+challenge = "meta_apply_challenge"
+token = os.environ["META_WEBHOOK_VERIFY_TOKEN"]
+
+def call(base: str, supplied_token: str) -> tuple[int, str]:
+    query = urllib.parse.urlencode(
+        {
+            "hub.mode": "subscribe",
+            "hub.verify_token": supplied_token,
+            "hub.challenge": challenge,
+        }
+    )
+    try:
+        with urllib.request.urlopen(f"{base}?{query}", timeout=15) as response:
+            return response.status, response.read(4096).decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(4096).decode("utf-8", "replace")
+
+for label, base in (
+    ("local", "http://127.0.0.1:8003/webhook/meta-messaging"),
+    ("public", "https://www.linasaibot.com/webhook/meta-messaging"),
+):
+    correct = call(base, token)
+    incorrect = call(base, "wrong-token")
+    print(f"{label}_correct_http={correct[0]}")
+    print(f"{label}_incorrect_http={incorrect[0]}")
+    if correct != (200, challenge):
+        raise SystemExit(f"{label} correct-token challenge failed")
+    if incorrect[0] != 403:
+        raise SystemExit(f"{label} wrong-token challenge did not return 403")
+    if "<!doctype html" in incorrect[1].lower():
+        raise SystemExit(f"{label} returned dashboard HTML")
+PY
+
+printf '%s' "$META_WEBHOOK_VERIFY_TOKEN" > "$TOKEN_PATTERN_FILE"
+if token_pattern_present_in_logs; then
+  echo "new_verify_token_present_in_logs=true" >&2
+  exit 1
+fi
+echo "new_verify_token_present_in_logs=false"
+: > "$TOKEN_PATTERN_FILE"
 
 # Invalid signature POST must be rejected whenever App Secret is configured.
 POST_CODE="$(curl -sS -o /tmp/meta_post_body -w '%{http_code}' --max-time 10 \
@@ -171,17 +240,6 @@ echo "local_whatsapp_inbound_http=$WA_CODE"
 echo "local_whatsapp_inbound_body=$WA_BODY"
 test "$WA_CODE" = "200"
 printf '%s' "$WA_BODY" | grep -q 'whatsapp_inbound_ai_disabled'
-
-PUB_OK="$(curl -sS -o /tmp/pub_ok -w '%{http_code}' --max-time 15 \
-  "https://www.linasaibot.com/webhook/meta-messaging?hub.mode=subscribe&hub.verify_token=${META_WEBHOOK_VERIFY_TOKEN}&hub.challenge=${CHALLENGE}" || true)"
-echo "public_correct_http=$PUB_OK"
-test "$PUB_OK" = "200"
-test "$(cat /tmp/pub_ok)" = "$CHALLENGE"
-
-if head -c 80 /tmp/pub_ok | grep -qi '<!doctype html'; then
-  echo "public still HTML" >&2
-  exit 1
-fi
 
 echo "api_health=$(curl -sS --max-time 10 https://www.linasaibot.com/api/health || true)"
 echo "[meta-apply] SUCCESS"

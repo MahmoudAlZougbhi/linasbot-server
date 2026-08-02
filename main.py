@@ -48,6 +48,7 @@ import modules.instructions_api  # noqa: E402, F401
 import modules.live_chat_api  # noqa: E402, F401
 import modules.local_qa_api  # noqa: E402, F401
 import modules.media_api  # noqa: E402, F401
+import modules.meta_compliance  # noqa: E402, F401
 import modules.meta_messaging_webhook  # noqa: E402, F401
 import modules.qa_api  # noqa: E402, F401
 import modules.settings_api  # noqa: E402, F401
@@ -122,4 +123,7 @@ if __name__ == "__main__":
     use_reload = getattr(config, "is_local_env", lambda: False)()
     if use_reload:
         print("🔄 Local mode: auto-reload enabled")
-    uvicorn.run(app, host="0.0.0.0", port=8003, reload=use_reload)
+    # Uvicorn's default access log includes the raw query string. Nginx provides
+    # path-only request telemetry, so backend access logging stays disabled to
+    # ensure webhook verification tokens and other query secrets are never stored.
+    uvicorn.run(app, host="0.0.0.0", port=8003, reload=use_reload, access_log=False)

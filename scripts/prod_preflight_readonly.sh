@@ -9,11 +9,35 @@ echo "[preflight] deployed_subject=$(git log -1 --pretty=%s)"
 echo "[preflight] origin_main_remote=$(git rev-parse origin/main 2>/dev/null || echo unknown)"
 echo "[preflight] rollback_path=git reset --hard PREV_SHA && sudo bash /opt/linasbot/deploy.sh"
 
+NGINX_MATCH_COUNT=0
+if [ -d /etc/nginx/sites-enabled ]; then
+  while IFS= read -r NGINX_SITE_PATH; do
+    [ -n "$NGINX_SITE_PATH" ] || continue
+    NGINX_MATCH_COUNT=$((NGINX_MATCH_COUNT + 1))
+    echo "[preflight] nginx_target_vhost file=$NGINX_SITE_PATH realpath=$(readlink -f "$NGINX_SITE_PATH")"
+  done < <(grep -lE 'server_name[^;]*(^|[[:space:]])(www\.)?linasaibot\.com([[:space:];]|$)' /etc/nginx/sites-enabled/* 2>/dev/null || true)
+fi
+echo "[preflight] nginx_target_vhost_files=$NGINX_MATCH_COUNT"
+if [ "$NGINX_MATCH_COUNT" -ne 1 ]; then
+  echo "[preflight] nginx_target_vhost_unique=false"
+  exit 1
+fi
+echo "[preflight] nginx_target_vhost_unique=true"
+if command -v nginx >/dev/null 2>&1; then
+  if nginx -t >/dev/null 2>&1; then
+    echo "[preflight] nginx_syntax_ok=true"
+  else
+    echo "[preflight] nginx_syntax_ok=false"
+    exit 1
+  fi
+fi
+
 APP_DIR="/opt/linasbot"
 if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then
   APP_DIR="/opt/linasbot/linaslaserbot-2.7.22"
 fi
 echo "[preflight] app_dir=$APP_DIR"
+export APP_DIR
 
 python3 - <<'PY'
 from pathlib import Path
@@ -143,7 +167,7 @@ def report(key: str, *, min_len: int = 1, strong: bool = False) -> bool:
         strong_ok = length >= 32 and classes >= 2
         ok = ok and strong_ok
     print(
-        f"[preflight] {key}: present={present} length={length} "
+        f"[preflight] {key}: present={present} "
         f"min_len_ok={length >= min_len} strong_ok={strong_ok} check_ok={ok}"
     )
     return ok

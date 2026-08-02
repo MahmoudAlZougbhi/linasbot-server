@@ -151,13 +151,27 @@ echo -e "${YELLOW}[5b/8] Nginx config for /api proxy...${NC}"
 if [ -f "$REPO_ROOT/deploy/nginx-linasaibot.conf" ]; then
   apt install -y nginx 2>/dev/null || true
   if command -v nginx >/dev/null 2>&1; then
+    install -o root -g root -m 0644 \
+      "$REPO_ROOT/deploy/nginx-privacy-log.conf" \
+      /etc/nginx/conf.d/linasbot-privacy-log.conf
     cp "$REPO_ROOT/deploy/nginx-linasaibot.conf" /etc/nginx/sites-available/linasaibot
     ln -sf /etc/nginx/sites-available/linasaibot /etc/nginx/sites-enabled/linasaibot 2>/dev/null || true
-    if nginx -t 2>/dev/null; then
+    TARGET_VHOST_COUNT="$(
+      { grep -lE 'server_name[^;]*(^|[[:space:]])(www\.)?linasaibot\.com([[:space:];]|$)' \
+        /etc/nginx/sites-enabled/* 2>/dev/null || true; } | wc -l | tr -d '[:space:]'
+    )"
+    if [ "${TARGET_VHOST_COUNT:-0}" != "1" ]; then
+      echo -e "${RED}Expected exactly one enabled linasaibot.com vhost; found ${TARGET_VHOST_COUNT:-0}.${NC}"
+      grep -lE 'server_name[^;]*(^|[[:space:]])(www\.)?linasaibot\.com([[:space:];]|$)' \
+        /etc/nginx/sites-enabled/* 2>/dev/null || true
+      exit 1
+    fi
+    if nginx -t; then
       systemctl reload nginx 2>/dev/null || service nginx reload 2>/dev/null || true
       echo -e "${GREEN}Nginx config installed. /api -> localhost:8003${NC}"
     else
-      echo -e "${YELLOW}Nginx config copied. Run 'nginx -t' and fix any errors, then 'systemctl reload nginx'${NC}"
+      echo -e "${RED}Nginx config validation failed; refusing to continue deployment.${NC}"
+      exit 1
     fi
   else
     echo -e "${YELLOW}Nginx not installed. Copy deploy/nginx-linasaibot.conf to /etc/nginx/sites-available/ and add /api proxy.${NC}"

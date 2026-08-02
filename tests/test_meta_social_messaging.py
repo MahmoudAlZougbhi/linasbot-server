@@ -9,6 +9,8 @@ from unittest import mock
 from services.meta_messaging import (
     InMemoryMessageDeduper,
     MetaMessagingAdapter,
+    MetaMessagingSettings,
+    get_meta_messaging_readiness,
     parse_meta_messaging_events,
     verify_meta_signature,
 )
@@ -40,6 +42,101 @@ class MetaSignatureTests(unittest.TestCase):
     def test_missing_secret_rejected(self):
         body = b"{}"
         self.assertFalse(verify_meta_signature(body, _sign("secret", body), ""))
+
+
+class MetaReadinessTests(unittest.TestCase):
+    def test_enabled_readiness_requires_new_app_and_exact_allowlist(self):
+        settings = MetaMessagingSettings(
+            enabled=True,
+            app_secret="secret",
+            page_id="378696005334409",
+            page_access_token="page-token",
+            instagram_account_id="17841413184256533",
+            verify_token="verify-token",
+            graph_api_version="v24.0",
+        )
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "META_APP_ID": "999000111",
+                "META_SOCIAL_ROLLBACK_ACTIVE": "false",
+                "META_SOCIAL_NEW_APP_REQUIRED": "true",
+            },
+            clear=False,
+        ):
+            ready, checks = get_meta_messaging_readiness(settings)
+        self.assertTrue(ready)
+        self.assertTrue(all(checks.values()))
+
+    def test_retired_app_or_wrong_identity_is_not_ready(self):
+        settings = MetaMessagingSettings(
+            enabled=True,
+            app_secret="secret",
+            page_id="WRONG",
+            page_access_token="page-token",
+            instagram_account_id="17841413184256533",
+            verify_token="verify-token",
+            graph_api_version="v24.0",
+        )
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "META_APP_ID": "1784792718776344",
+                "META_SOCIAL_ROLLBACK_ACTIVE": "false",
+                "META_SOCIAL_NEW_APP_REQUIRED": "true",
+            },
+            clear=False,
+        ):
+            ready, checks = get_meta_messaging_readiness(settings)
+        self.assertFalse(ready)
+        self.assertFalse(checks["app_id_allowed_for_mode"])
+        self.assertFalse(checks["page_id_allowlisted"])
+
+    def test_retired_app_after_cutover_is_ready_only_in_explicit_single_secret_rollback_mode(self):
+        settings = MetaMessagingSettings(
+            enabled=True,
+            app_secret="old-secret",
+            page_id="378696005334409",
+            page_access_token="old-page-token",
+            instagram_account_id="17841413184256533",
+            verify_token="rotated-verify-token",
+            graph_api_version="v24.0",
+        )
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "META_APP_ID": "1784792718776344",
+                "META_SOCIAL_ROLLBACK_ACTIVE": "true",
+                "META_SOCIAL_NEW_APP_REQUIRED": "true",
+            },
+            clear=False,
+        ):
+            ready, checks = get_meta_messaging_readiness(settings)
+        self.assertTrue(ready)
+        self.assertTrue(checks["app_id_allowed_for_mode"])
+
+    def test_retired_app_remains_ready_before_new_app_cutover(self):
+        settings = MetaMessagingSettings(
+            enabled=True,
+            app_secret="old-secret",
+            page_id="378696005334409",
+            page_access_token="old-page-token",
+            instagram_account_id="17841413184256533",
+            verify_token="verify-token",
+            graph_api_version="v24.0",
+        )
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "META_APP_ID": "1784792718776344",
+                "META_SOCIAL_NEW_APP_REQUIRED": "false",
+                "META_SOCIAL_ROLLBACK_ACTIVE": "false",
+            },
+            clear=False,
+        ):
+            ready, checks = get_meta_messaging_readiness(settings)
+        self.assertTrue(ready)
+        self.assertTrue(checks["app_id_allowed_for_mode"])
 
 
 class MetaParseTests(unittest.TestCase):
@@ -110,6 +207,31 @@ class MetaParseTests(unittest.TestCase):
             ],
         }
         self.assertEqual(parse_meta_messaging_events(payload), [])
+
+    def test_self_message_without_echo_flag_is_ignored(self):
+        payload = {
+            "object": "page",
+            "entry": [
+                {
+                    "id": "378696005334409",
+                    "messaging": [
+                        {
+                            "sender": {"id": "378696005334409"},
+                            "recipient": {"id": "PSID1"},
+                            "message": {"mid": "m-self", "text": "outbound"},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.assertEqual(
+            parse_meta_messaging_events(
+                payload,
+                page_id="378696005334409",
+                instagram_account_id="17841413184256533",
+            ),
+            [],
+        )
 
     def test_whatsapp_object_yields_no_events(self):
         payload = {
@@ -212,6 +334,58 @@ class MetaParseTests(unittest.TestCase):
         }
         events = parse_meta_messaging_events(payload, page_id="378696005334409", instagram_account_id="IG_ACCOUNT")
         self.assertEqual(events, [])
+
+    def test_comment_change_payload_is_not_processed(self):
+        payload = {
+            "object": "page",
+            "entry": [
+                {
+                    "id": "378696005334409",
+                    "changes": [
+                        {
+                            "field": "feed",
+                            "value": {"item": "comment", "comment_id": "comment-1", "message": "hello"},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.assertEqual(
+            parse_meta_messaging_events(
+                payload,
+                page_id="378696005334409",
+                instagram_account_id="IG_ACCOUNT",
+            ),
+            [],
+        )
+
+    def test_attachment_without_text_is_normalized_for_safe_handling(self):
+        payload = {
+            "object": "page",
+            "entry": [
+                {
+                    "id": "378696005334409",
+                    "messaging": [
+                        {
+                            "sender": {"id": "PSID-ATTACHMENT"},
+                            "recipient": {"id": "378696005334409"},
+                            "message": {
+                                "mid": "attachment-1",
+                                "attachments": [{"type": "image", "payload": {"url": "https://example.test/a"}}],
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        events = parse_meta_messaging_events(
+            payload,
+            page_id="378696005334409",
+            instagram_account_id="IG_ACCOUNT",
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["text"], "")
+        self.assertEqual(events[0]["attachments"][0]["type"], "image")
 
 
 class MetaDedupeTests(unittest.TestCase):
@@ -402,6 +576,21 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
         self.assertIn("await handle_message(", processor_src)
         self.assertNotIn("social_ai", processor_src.lower())
         self.assertNotIn("simplified_prompt", processor_src.lower())
+
+    def test_social_ai_excludes_crm_booking_tools(self):
+        from pathlib import Path
+
+        source = Path("services/chat_response_service.py").read_text(encoding="utf-8")
+        for blocked_tool in (
+            '"submit_booking_intent"',
+            '"create_appointment"',
+            '"update_appointment_date"',
+            '"check_next_appointment"',
+            '"get_customer_by_phone"',
+        ):
+            self.assertIn(blocked_tool, source)
+        self.assertIn("if social_channel", source)
+        self.assertIn("Never create, change, cancel, confirm, list, or check an appointment", source)
 
 
 class MetaSendFailureTests(unittest.TestCase):
