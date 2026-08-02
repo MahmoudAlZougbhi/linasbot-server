@@ -558,6 +558,11 @@ interface TestingChatMessage {
   success?: boolean;
 }
 
+interface TestingLabSession {
+  messages: TestingChatMessage[];
+  turns: TestingTestResult[];
+}
+
 interface TestingTestResult {
   id: number;
   type: string;
@@ -571,6 +576,7 @@ interface TestingTestResult {
   userType?: string;
   userPhone?: string;
   provider?: string;
+  channel?: string;
   metadata?: Record<string, unknown>;
   [key: string]: unknown;
 }

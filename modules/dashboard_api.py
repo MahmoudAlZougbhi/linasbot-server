@@ -410,20 +410,16 @@ async def _test_message_meta_social(
     end_time = datetime.datetime.now()
     captured = dashboard_bot_responses.get(user_id) or []
     bot_response = ""
-    if captured:
-        last = captured[-1]
-        bot_response = last.get("text") or last.get("message") or ""
-        if isinstance(last, str):
-            bot_response = last
-    # Normalize capture list shapes
-    if not bot_response and isinstance(captured, list):
+    if isinstance(captured, list):
         for item in reversed(captured):
-            if isinstance(item, dict):
-                bot_response = item.get("text") or item.get("message") or item.get("content") or ""
-            elif isinstance(item, str):
-                bot_response = item
-            if bot_response:
+            if isinstance(item, str) and item.strip():
+                bot_response = item.strip()
                 break
+            if isinstance(item, dict):
+                candidate = item.get("text") or item.get("message") or item.get("content") or ""
+                if isinstance(candidate, str) and candidate.strip():
+                    bot_response = candidate.strip()
+                    break
     return {
         "success": True,
         "bot_response": bot_response,

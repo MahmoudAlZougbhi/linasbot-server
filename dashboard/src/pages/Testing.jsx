@@ -23,36 +23,19 @@ import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
 import { authFetch } from '../utils/authFetch';
 import { errorMessage, recordOrEmpty, metricString } from "../utils/apiValidate";
-
-const TESTING_CHAT_STORAGE_KEY = "testing_chat_sessions_v1";
-const DEFAULT_TEST_PHONE = "123456789";
-const MAX_CHAT_MESSAGES = 200;
-
-/** @returns {Record<string, TestingChatMessage[]>} */
-const safelyParseStoredChatSessions = () => {
-  if (typeof window === "undefined") return {};
-  try {
-    const storedSessions = localStorage.getItem(TESTING_CHAT_STORAGE_KEY);
-    const parsed = storedSessions ? JSON.parse(storedSessions) : {};
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return /** @type {Record<string, TestingChatMessage[]>} */ (parsed);
-    }
-    return {};
-  } catch {
-    return {};
-  }
-};
-
-/** @param {string} output */
-const splitBotOutputIntoMessages = (output) => {
-  const normalizedOutput =
-    typeof output === "string" ? output : "Test response received";
-  const chunks = normalizedOutput
-    .split(/\n{2,}/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return chunks.length ? chunks : [normalizedOutput];
-};
+import {
+  DEFAULT_TEST_PHONE,
+  appendMessagesToLabSessions,
+  appendTurnToLabSessions,
+  buildLabSessionKey,
+  clearLabSession,
+  emptyLabSession,
+  loadLabSessionsFromStorage,
+  normalizeLabChannel,
+  persistLabSessions,
+  splitBotOutputIntoMessages,
+  toChatMessages,
+} from "../utils/testingLabSession";
 
 const Testing = () => {
   const {
@@ -72,7 +55,6 @@ const Testing = () => {
   const [messageTab, setMessageTab] = useState("text");
   const [textInput, setTextInput] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState("auto");
-  const [testResults, setTestResults] = useState(/** @type {TestingTestResult[]} */ ([]));
   const [userPhone, setUserPhone] = useState("");
   const [userType, setUserType] = useState("customer");
   const [imageUrl, setImageUrl] = useState(
@@ -83,7 +65,9 @@ const Testing = () => {
     "Hello, I want to know laser hair removal prices for the face"
   );
   const [resultsView, setResultsView] = useState("chat");
-  const [chatSessions, setChatSessions] = useState(/** @type {Record<string, TestingChatMessage[]>} */ (safelyParseStoredChatSessions()));
+  const [labSessions, setLabSessions] = useState(
+    /** @type {Record<string, TestingLabSession>} */ (loadLabSessionsFromStorage())
+  );
   const chatEndRef = useRef(/** @type {HTMLDivElement | null} */ (null));
 
   // Hardcoded provider - MontyMobile (default for WhatsApp-style lab)
@@ -96,27 +80,27 @@ const Testing = () => {
     return normalizedPhone || DEFAULT_TEST_PHONE;
   }, [userPhone]);
 
-  const activeChatKey = useMemo(
-    () => `${selectedProvider}:${socialChannel || "wa"}:${resolvedPhone}`,
-    [selectedProvider, socialChannel, resolvedPhone]
+  const activeChannel = useMemo(
+    () => normalizeLabChannel(socialChannel),
+    [socialChannel]
   );
 
-  const activeChatMessages = useMemo(
-    () => chatSessions[activeChatKey] || [],
-    [chatSessions, activeChatKey]
+  const activeChatKey = useMemo(
+    () => buildLabSessionKey(selectedProvider, activeChannel, resolvedPhone),
+    [selectedProvider, activeChannel, resolvedPhone]
   );
+
+  const activeLabSession = useMemo(
+    () => labSessions[activeChatKey] || emptyLabSession(),
+    [labSessions, activeChatKey]
+  );
+
+  const activeChatMessages = activeLabSession.messages;
+  const activeTestResults = activeLabSession.turns;
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(
-        TESTING_CHAT_STORAGE_KEY,
-        JSON.stringify(chatSessions)
-      );
-    } catch {
-      // Ignore persistence errors so testing UI keeps working.
-    }
-  }, [chatSessions]);
+    persistLabSessions(labSessions);
+  }, [labSessions]);
 
   useEffect(() => {
     if (resultsView !== "chat") return;
@@ -125,40 +109,24 @@ const Testing = () => {
 
   const appendToChat = useCallback(
     (/** @type {Array<{ role?: string, type?: string, content?: string, timestamp?: string, success?: boolean }>} */ entries, phoneOverride = resolvedPhone) => {
-      const normalizedPhone =
-        (phoneOverride || DEFAULT_TEST_PHONE).trim() || DEFAULT_TEST_PHONE;
-      const chatKey = `${selectedProvider}:${normalizedPhone}`;
-
-      setChatSessions((prev) => {
-        const existingHistory = prev[chatKey] || [];
-        const nextMessages = entries
-          .filter((entry) => entry && entry.content)
-          .map((entry, index) => ({
-            id: `${Date.now()}-${index}-${Math.random()
-              .toString(36)
-              .slice(2, 8)}`,
-            role: entry.role || "assistant",
-            type: entry.type || "text",
-            content: String(entry.content),
-            timestamp: entry.timestamp || new Date().toLocaleTimeString(),
-            success: entry.success !== false,
-          }));
-
-        if (!nextMessages.length) return prev;
-        return {
-          ...prev,
-          [chatKey]: [...existingHistory, ...nextMessages].slice(
-            -MAX_CHAT_MESSAGES
-          ),
-        };
-      });
+      const sessionKey = buildLabSessionKey(
+        selectedProvider,
+        activeChannel,
+        phoneOverride || resolvedPhone
+      );
+      const nextMessages = toChatMessages(entries);
+      if (!nextMessages.length) return;
+      setLabSessions((prev) =>
+        appendMessagesToLabSessions(prev, sessionKey, nextMessages)
+      );
     },
-    [resolvedPhone, selectedProvider]
+    [activeChannel, resolvedPhone, selectedProvider]
   );
 
   const appendBotOutputToChat = useCallback(
     (/** @type {string} */ output, type = "text", phoneOverride = resolvedPhone, success = true) => {
       const responseChunks = splitBotOutputIntoMessages(output);
+      if (!responseChunks.length) return;
       appendToChat(
         responseChunks.map((content) => ({
           role: success ? "assistant" : "system",
@@ -172,14 +140,21 @@ const Testing = () => {
     [appendToChat, resolvedPhone]
   );
 
-  const clearActiveChat = useCallback(() => {
-    setChatSessions((prev) => {
-      if (!prev[activeChatKey]) return prev;
-      const next = { ...prev };
-      delete next[activeChatKey];
-      return next;
-    });
-    toast.success("Current chat cleared");
+  const appendLabTurn = useCallback(
+    (/** @type {TestingTestResult} */ turn, phoneOverride = resolvedPhone) => {
+      const sessionKey = buildLabSessionKey(
+        selectedProvider,
+        activeChannel,
+        phoneOverride || resolvedPhone
+      );
+      setLabSessions((prev) => appendTurnToLabSessions(prev, sessionKey, turn));
+    },
+    [activeChannel, resolvedPhone, selectedProvider]
+  );
+
+  const clearActiveLabSession = useCallback(() => {
+    setLabSessions((prev) => clearLabSession(prev, activeChatKey));
+    toast.success("Current Testing Lab session cleared");
   }, [activeChatKey]);
 
   const mainTabs = [
@@ -237,6 +212,10 @@ const Testing = () => {
   const handleTextTest = async () => {
     const outgoingMessage = textInput.trim();
     const phoneForTest = resolvedPhone;
+    const channelForTest =
+      socialChannel === "instagram" || socialChannel === "facebook"
+        ? socialChannel
+        : null;
 
     if (!outgoingMessage) {
       toast.error("Please enter a message to test");
@@ -253,19 +232,19 @@ const Testing = () => {
         outgoingMessage,
         selectedProvider,
         phoneForTest,
-        socialChannel === "instagram" || socialChannel === "facebook" ? socialChannel : null
+        channelForTest
       ));
       const responseTime = Date.now() - startTime;
-      const outputText = String(
-        result.bot_response ?? result.response ?? "Test response received"
-      );
+      const rawOutput = result.bot_response ?? result.response;
+      const outputText = typeof rawOutput === "string" ? rawOutput.trim() : "";
+      const success = result.success !== false && Boolean(outputText);
+      const displayOutput = outputText || (success ? "" : "No bot response returned");
 
-      appendBotOutputToChat(
-        outputText,
-        "text",
-        phoneForTest,
-        result.success !== false
-      );
+      if (displayOutput) {
+        appendBotOutputToChat(displayOutput, "text", phoneForTest, success);
+      } else {
+        appendBotOutputToChat("No bot response returned", "text", phoneForTest, false);
+      }
 
       /** @type {TestingTestResult} */
       const testResult = {
@@ -273,17 +252,18 @@ const Testing = () => {
         type: "text",
         input: outgoingMessage,
         language: selectedLanguage,
-        output: outputText,
+        output: displayOutput || "No bot response returned",
         responseTime: typeof result.response_time_ms === "number" ? result.response_time_ms : responseTime,
         timestamp: new Date().toLocaleTimeString(),
-        success: result.success !== false,
+        success: Boolean(displayOutput) && result.success !== false,
         mode: typeof result.mode === "string" ? result.mode : undefined,
         userType: userType,
         userPhone: phoneForTest,
         provider: selectedProvider,
+        channel: activeChannel,
       };
 
-      setTestResults((prev) => [testResult, ...prev]);
+      appendLabTurn(testResult, phoneForTest);
 
       // Don't clear input if in training mode
       if (result.mode !== "training" && result.mode !== "training_activated") {
@@ -305,8 +285,10 @@ const Testing = () => {
         success: false,
         provider: selectedProvider,
         userPhone: phoneForTest,
+        channel: activeChannel,
       };
-      setTestResults((prev) => [testResult, ...prev]);
+      appendLabTurn(testResult, phoneForTest);
+      setTextInput("");
     }
   };
 
@@ -360,7 +342,7 @@ const Testing = () => {
           provider: metricString(providerInfo.provider) || "montymobile",
         };
 
-        setTestResults((prev) => [testResult, ...prev]);
+        appendLabTurn(testResult);
       } catch (error) {
         const errMsg = errorMessage(error) || "Voice processing failed";
         appendBotOutputToChat(errMsg, "voice", phoneForTest, false);
@@ -374,11 +356,12 @@ const Testing = () => {
           timestamp: new Date().toLocaleTimeString(),
           success: false,
         };
-        setTestResults((prev) => [testResult, ...prev]);
+        appendLabTurn(testResult);
       }
     },
     [
       appendBotOutputToChat,
+      appendLabTurn,
       appendToChat,
       resolvedPhone,
       selectedProvider,
@@ -432,7 +415,7 @@ const Testing = () => {
           },
         };
 
-        setTestResults((prev) => [testResult, ...prev]);
+        appendLabTurn(testResult);
       } catch (error) {
         const errMsg = errorMessage(error) || "Image analysis failed";
         appendBotOutputToChat(errMsg, "image", phoneForTest, false);
@@ -446,11 +429,12 @@ const Testing = () => {
           timestamp: new Date().toLocaleTimeString(),
           success: false,
         };
-        setTestResults((prev) => [testResult, ...prev]);
+        appendLabTurn(testResult);
       }
     },
     [
       appendBotOutputToChat,
+      appendLabTurn,
       appendToChat,
       resolvedPhone,
       selectedProvider,
@@ -483,8 +467,7 @@ const Testing = () => {
   });
 
   const clearResults = () => {
-    setTestResults([]);
-    toast.success("Test results cleared");
+    clearActiveLabSession();
   };
 
   return (
@@ -800,7 +783,7 @@ const Testing = () => {
                                   metadata: result.results || {},
                                 };
 
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
 
                                 if (result.success) {
                                   toast.success(
@@ -822,7 +805,7 @@ const Testing = () => {
                                   timestamp: new Date().toLocaleTimeString(),
                                   success: false,
                                 };
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
                                 toast.error(
                                   `Firebase test error: ${errMsg}`
                                 );
@@ -899,7 +882,7 @@ const Testing = () => {
                                   webhookPayload: result.webhook_payload,
                                 };
 
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
 
                                 // Don't clear input if in training mode
                                 if (
@@ -930,7 +913,7 @@ const Testing = () => {
                                   provider: selectedProvider,
                                   userPhone: phoneForTest,
                                 };
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
                               }
                             }}
                             disabled={loading || !textInput.trim()}
@@ -1047,7 +1030,7 @@ const Testing = () => {
                                   userPhone: phoneForTest,
                                 };
 
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
                               } catch (error) {
                                 const errMsg =
                                   errorMessage(error) ||
@@ -1070,7 +1053,7 @@ const Testing = () => {
                                   provider: selectedProvider,
                                   userPhone: phoneForTest,
                                 };
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
                               }
                             }}
                             disabled={loading || !voiceText.trim()}
@@ -1229,7 +1212,7 @@ const Testing = () => {
                                   userPhone: phoneForTest,
                                 };
 
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
                               } catch (error) {
                                 const errMsg =
                                   errorMessage(error) || "Image URL test failed";
@@ -1251,7 +1234,7 @@ const Testing = () => {
                                   provider: selectedProvider,
                                   userPhone: phoneForTest,
                                 };
-                                setTestResults((prev) => [testResult, ...prev]);
+                                appendLabTurn(testResult);
                               }
                             }}
                             disabled={loading || !imageUrl.trim()}
@@ -1358,17 +1341,17 @@ const Testing = () => {
                     <div className="text-xs text-slate-600 flex items-center justify-between">
                       <span>
                         Session:{" "}
-                        <strong>{`${selectedProvider} • ${resolvedPhone}`}</strong>
+                        <strong>{`${selectedProvider} • ${activeChannel} • ${resolvedPhone}`}</strong>
                       </span>
                       {resultsView === "chat" && activeChatMessages.length > 0 && (
                         <button
-                          onClick={clearActiveChat}
+                          onClick={clearActiveLabSession}
                           className="text-red-600 hover:text-red-700 transition-colors"
                         >
                           Clear Chat
                         </button>
                       )}
-                      {resultsView === "results" && testResults.length > 0 && (
+                      {resultsView === "results" && activeTestResults.length > 0 && (
                         <button
                           onClick={clearResults}
                           className="text-slate-500 hover:text-slate-700 transition-colors"
@@ -1431,7 +1414,7 @@ const Testing = () => {
                   ) : (
                     <div className="space-y-4 max-h-96 overflow-y-auto scrollbar-hide">
                       <AnimatePresence>
-                        {testResults.length === 0 ? (
+                        {activeTestResults.length === 0 ? (
                           <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -1446,7 +1429,7 @@ const Testing = () => {
                             </p>
                           </motion.div>
                         ) : (
-                          testResults.map((result) => (
+                          activeTestResults.map((result) => (
                             <motion.div
                               key={result.id}
                               initial={{ opacity: 0, y: 20 }}
