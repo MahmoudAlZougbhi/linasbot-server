@@ -219,7 +219,20 @@ if not all(required) or not firebase_ok or not env_ok:
 print("[preflight] required_config_ok=true")
 PY
 
-python3 - <<'PY'
+# Activate app venv before Firestore admin probe / dry-run (system python lacks deps).
+cd "$APP_DIR"
+if [ -f venv/bin/activate ]; then
+  # shellcheck disable=SC1091
+  source venv/bin/activate
+fi
+export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+PYTHON_BIN="$APP_DIR/venv/bin/python3"
+if [ ! -x "$PYTHON_BIN" ]; then
+  PYTHON_BIN="$(command -v python3)"
+fi
+echo "[preflight] python_bin=$PYTHON_BIN"
+
+"$PYTHON_BIN" - <<'PY'
 from pathlib import Path
 import os
 import sys
@@ -270,16 +283,9 @@ if owners < 1 and active < 1:
 print("[preflight] existing_admin_retained=true (hashes unchanged by deploy; no default account created)")
 PY
 
-cd "$APP_DIR"
-if [ -f venv/bin/activate ]; then
-  # shellcheck disable=SC1091
-  source venv/bin/activate
-fi
-export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
-
 if [ -f scripts/backfill_live_chat_index.py ]; then
   echo "[preflight] starting live_chat_index dry-run"
-  python3 scripts/backfill_live_chat_index.py --dry-run
+  "$PYTHON_BIN" scripts/backfill_live_chat_index.py --dry-run
   echo "[preflight] dry_run_backfill_exit=0"
 else
   echo "[preflight] backfill_script_missing_on_current_deploy=true"
