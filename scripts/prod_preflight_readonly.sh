@@ -210,11 +210,11 @@ print(
 
 env_prod = (values.get("ENVIRONMENT") or values.get("ENV") or "").strip().lower()
 print(f"[preflight] environment_marker={env_prod or 'unset'}")
-
-# Soft signal: whether running service already exposes firestore-related keys.
+env_ok = env_prod in {"production", "prod"}
+print(f"[preflight] environment_production_ok={env_ok}")
 print(f"[preflight] auth_secret_source_ok={dash_ok or auth_alias_ok}")
 
-if not all(required) or not firebase_ok:
+if not all(required) or not firebase_ok or not env_ok:
     raise SystemExit("[preflight] REQUIRED_CONFIG_MISSING")
 print("[preflight] required_config_ok=true")
 PY
