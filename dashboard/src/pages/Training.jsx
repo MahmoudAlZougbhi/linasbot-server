@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AcademicCapIcon,
@@ -10,6 +11,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   SparklesIcon,
+  ArrowRightIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
 import toast from "react-hot-toast";
@@ -21,8 +23,13 @@ const Training = () => {
     updateLocalQAPair,
     deleteLocalQAPair,
     getLocalQAStatistics,
+    getCmMeta,
     loading,
   } = useApi();
+
+  // FAQ authoring migration banner: off by default, flips on via CM_FAQ_CANONICAL once
+  // Content Management's FAQ authoring flow is ready to fully replace this page.
+  const [faqCanonical, setFaqCanonical] = useState(false);
 
   const [activeTab, setActiveTab] = useState("add");
   const [trainingEntries, setTrainingEntries] = useState(/** @type {TrainingQAPair[]} */ ([]));
@@ -116,6 +123,22 @@ const Training = () => {
   useEffect(() => {
     loadStatistics();
   }, [loadStatistics]);
+
+  useEffect(() => {
+    let isMounted = true;
+    getCmMeta()
+      .then((response) => {
+        if (isMounted && response?.success) {
+          setFaqCanonical(Boolean(response.faq_canonical));
+        }
+      })
+      .catch(() => {
+        // Non-fatal: banner simply stays hidden if CM meta is unavailable.
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [getCmMeta]);
 
   useEffect(() => {
     loadTrainingData(selectedLanguage);
@@ -296,6 +319,30 @@ const Training = () => {
           English, French, Franco) is auto-translated to all 4 languages.
         </p>
       </motion.div>
+
+      {faqCanonical && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900"
+        >
+          <p className="text-sm sm:text-base">
+            FAQ authoring is moving to{" "}
+            <span className="font-semibold">Content Management</span>. New
+            FAQ entries created here are still saved, but we recommend
+            managing FAQs from the Content Management workspace going
+            forward.
+          </p>
+          <Link
+            to="/content-managers/faq"
+            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+          >
+            Go to Content Management
+            <ArrowRightIcon className="h-4 w-4" />
+          </Link>
+        </motion.div>
+      )}
 
       {/* Stats */}
       <motion.div
