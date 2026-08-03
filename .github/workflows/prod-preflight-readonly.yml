@@ -3,6 +3,12 @@ name: Prod Preflight Readonly
 
 on:
   workflow_dispatch:
+    inputs:
+      include_meta_runtime_diagnostics:
+        description: "Include redacted aggregate Meta social runtime diagnostics"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: prod-preflight-readonly
@@ -30,3 +36,88 @@ jobs:
             set -e
             test -f /opt/linasbot/scripts/prod_preflight_readonly.sh
             sudo bash /opt/linasbot/scripts/prod_preflight_readonly.sh
+
+      - name: Collect redacted Meta social runtime diagnostics
+        if: ${{ inputs.include_meta_runtime_diagnostics }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 5m
+          script: |
+            set -e
+            sudo python3 - <<'PY'
+            from __future__ import annotations
+
+            from collections import Counter
+            import re
+            import subprocess
+
+
+            completed = subprocess.run(
+                [
+                    "journalctl",
+                    "-u",
+                    "linasbot",
+                    "--since",
+                    "45 minutes ago",
+                    "--no-pager",
+                    "-o",
+                    "cat",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            lines = completed.stdout.splitlines()
+            patterns = {
+                "meta_background_failure": r"\[meta-social\] background processing failed",
+                "meta_state_restore_skipped": r"\[meta-social\] state restore skipped",
+                "delayed_processing_error": r"\[_delayed_process_messages\] ERROR",
+                "pending_queue_empty": r"pending message queue empty",
+                "ai_turn_claim_ok": r"\[ai-turn\].*claim=OK",
+                "ai_turn_duplicate_skip": r"\[ai-turn\].*claim=DUPLICATE_SKIP",
+                "text_turn_stale_skip": r"\[text-turn\].*STALE_SKIP",
+                "meta_send_http_4xx": r"Meta Send API returned HTTP 4\d\d",
+                "meta_send_http_5xx": r"Meta Send API returned HTTP 5\d\d",
+                "traceback": r"Traceback \(most recent call last\)",
+            }
+            counts = Counter(
+                name
+                for line in lines
+                for name, pattern in patterns.items()
+                if re.search(pattern, line, re.IGNORECASE)
+            )
+            print(f"[meta-runtime] journal_exit_code={completed.returncode}")
+            print(f"[meta-runtime] journal_lines_45m={len(lines)}")
+            for name in sorted(patterns):
+                print(f"[meta-runtime] {name}={counts[name]}")
+
+            sensitive = re.compile(
+                r"(?:EAA[A-Za-z0-9_-]+|Bearer\s+\S+|"
+                r"(?:access_token|app_secret|verify_token|hub\.verify_token)=[^&\s]+)",
+                re.IGNORECASE,
+            )
+            identifiers = re.compile(r"(?<![A-Za-z0-9])\d{7,}(?![A-Za-z0-9])")
+            long_values = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9_-]{24,}(?![A-Za-z0-9])")
+            error_lines = [
+                line
+                for line in lines
+                if re.search(
+                    r"\[meta-social\]|\[_delayed_process_messages\] ERROR|"
+                    r"Meta Send API returned HTTP|Traceback|pending message queue empty",
+                    line,
+                    re.IGNORECASE,
+                )
+            ]
+            print(f"[meta-runtime] selected_diagnostic_lines={len(error_lines)}")
+            for line in error_lines[-12:]:
+                safe = sensitive.sub("[REDACTED_SECRET]", line)
+                safe = identifiers.sub("[REDACTED_ID]", safe)
+                safe = long_values.sub("[REDACTED_VALUE]", safe)
+                safe = safe.replace("\r", " ").replace("\n", " ")[:320]
+                print(f"[meta-runtime] diagnostic={safe}")
+            PY
