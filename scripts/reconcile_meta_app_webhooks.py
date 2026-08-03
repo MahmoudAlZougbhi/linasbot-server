@@ -92,7 +92,25 @@ def _request_json(
         with urllib.request.urlopen(request, timeout=20) as response:
             decoded: object = json.loads(response.read(1_000_000))
     except urllib.error.HTTPError as exc:
-        raise MetaWebhookReconcileError(f"Meta webhook request failed stage={stage} http={exc.code}") from None
+        error_type = "unknown"
+        error_code = 0
+        error_subcode = 0
+        try:
+            error_payload: object = json.loads(exc.read(1_000_000))
+        except (AttributeError, json.JSONDecodeError):
+            error_payload = {}
+        error = _mapping(_mapping(error_payload).get("error"))
+        raw_type = str(error.get("type") or "unknown")
+        if raw_type.replace("_", "").isalnum():
+            error_type = raw_type[:64]
+        if isinstance(error.get("code"), int):
+            error_code = cast(int, error["code"])
+        if isinstance(error.get("error_subcode"), int):
+            error_subcode = cast(int, error["error_subcode"])
+        raise MetaWebhookReconcileError(
+            f"Meta webhook request failed stage={stage} http={exc.code} "
+            f"type={error_type} code={error_code} subcode={error_subcode}"
+        ) from None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
         raise MetaWebhookReconcileError(f"Meta webhook request failed stage={stage}") from None
     if not isinstance(decoded, dict):

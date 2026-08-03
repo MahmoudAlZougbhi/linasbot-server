@@ -1,5 +1,6 @@
 """Safety contracts for the dedicated Meta app webhook reconciler."""
 
+import io
 import urllib.error
 from unittest.mock import patch
 
@@ -92,7 +93,9 @@ def test_graph_failure_does_not_render_credentials() -> None:
         400,
         "Bad Request",
         hdrs=None,
-        fp=None,
+        fp=io.BytesIO(
+            b'{"error":{"message":"secret-containing text","type":"OAuthException","code":100,"error_subcode":33}}'
+        ),
     )
 
     with patch("urllib.request.urlopen", side_effect=http_error):
@@ -106,6 +109,7 @@ def test_graph_failure_does_not_render_credentials() -> None:
             )
 
     rendered = str(captured.value)
-    assert rendered == "Meta webhook request failed stage=test_stage http=400"
+    assert rendered == ("Meta webhook request failed stage=test_stage http=400 type=OAuthException code=100 subcode=33")
     assert app_token not in rendered
     assert verify_token not in rendered
+    assert "secret-containing text" not in rendered
