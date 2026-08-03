@@ -116,8 +116,28 @@ jobs:
                     if path.is_file() and path not in candidate_paths:
                         candidate_paths.append(path)
 
+            unit_text = subprocess.run(
+                ["systemctl", "cat", "linasbot", "--no-pager"],
+                check=False,
+                capture_output=True,
+                text=True,
+            ).stdout
+            append_targets = []
+            for unit_line in unit_text.splitlines():
+                match = re.match(r"\s*Standard(?:Output|Error)=append:(\S+)\s*$", unit_line)
+                if not match:
+                    continue
+                target = Path(match.group(1))
+                append_targets.append(target.name)
+                if target.is_file() and target not in candidate_paths:
+                    candidate_paths.append(target)
+            print(f"[meta-runtime] append_log_basenames={sorted(set(append_targets))}")
+
             file_lines = []
             source_names = []
+            per_file = []
+            greeting_probe = "Hello, what laser services do you offer?"
+            handoff_probe = "I want to book an appointment with a human."
             for path in candidate_paths:
                 try:
                     with path.open("rb") as handle:
@@ -128,7 +148,20 @@ jobs:
                 except OSError:
                     continue
                 source_names.append(path.name)
-                file_lines.extend(chunk.splitlines())
+                chunk_lines = chunk.splitlines()
+                file_lines.extend(chunk_lines)
+                per_file.append(
+                    (
+                        path.name,
+                        len(chunk_lines),
+                        sum(greeting_probe in line for line in chunk_lines),
+                        sum(handoff_probe in line for line in chunk_lines),
+                        sum(
+                            "POST" in line and "/webhook/meta-messaging" in line
+                            for line in chunk_lines
+                        ),
+                    )
+                )
             lines = journal_lines + file_lines
             patterns = {
                 "meta_background_failure": r"\[meta-social\] background processing failed",
@@ -153,6 +186,13 @@ jobs:
             print(f"[meta-runtime] candidate_log_files={len(source_names)}")
             print(f"[meta-runtime] candidate_log_basenames={sorted(set(source_names))}")
             print(f"[meta-runtime] scanned_log_lines={len(lines)}")
+            for name, line_count, greeting_hits, handoff_hits, webhook_posts in per_file:
+                print(
+                    f"[meta-runtime] file={name} lines={line_count} "
+                    f"greeting_probe_hits={greeting_hits} "
+                    f"handoff_probe_hits={handoff_hits} "
+                    f"webhook_post_hits={webhook_posts}"
+                )
             for name in sorted(patterns):
                 print(f"[meta-runtime] {name}={counts[name]}")
 
