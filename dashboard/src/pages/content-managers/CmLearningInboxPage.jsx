@@ -31,7 +31,7 @@ const CmLearningInboxPage = () => {
         unique.push(item);
       }
       setRows(unique);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load learning inbox");
       setRows([]);
     } finally {

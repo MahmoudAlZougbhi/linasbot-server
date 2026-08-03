@@ -137,7 +137,9 @@ def extract_price_rows_from_text(text: str, *, source: str) -> tuple[list[dict[s
                     }
                 )
             continue
-        name = (match.group("name") or "").strip(" .-–—|: ")
+        name = (match.group("name") or "").strip()
+        name = name.strip(".-–—|:")
+        name = name.strip()
         amount = _as_float(match.group("amount"))
         if not name or amount is None:
             ambiguous.append(
