@@ -1,0 +1,111 @@
+"""Safety contracts for the dedicated Meta app webhook reconciler."""
+
+import urllib.error
+from unittest.mock import patch
+
+import pytest
+
+from scripts.reconcile_meta_app_webhooks import (
+    MetaWebhookReconcileError,
+    _request_json,
+    validate_webhook_state,
+)
+
+
+def _payload(
+    *,
+    page_fields: list[str] | None = None,
+    instagram_fields: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "data": [
+            {
+                "object": "page",
+                "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                "active": True,
+                "fields": page_fields or [],
+            },
+            {
+                "object": "instagram",
+                "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                "active": True,
+                "fields": instagram_fields or [],
+            },
+        ]
+    }
+
+
+def test_empty_approved_fields_are_valid_only_as_reconcile_precondition() -> None:
+    fields = validate_webhook_state(_payload(), require_exact_fields=False)
+    assert fields == {"instagram": set(), "page": set()}
+
+    with pytest.raises(MetaWebhookReconcileError):
+        validate_webhook_state(_payload(), require_exact_fields=True)
+
+
+def test_exact_dm_only_fields_are_valid_final_state() -> None:
+    expected = ["messages", "messaging_postbacks"]
+    fields = validate_webhook_state(
+        _payload(page_fields=expected, instagram_fields=list(reversed(expected))),
+        require_exact_fields=True,
+    )
+    assert fields == {"instagram": set(expected), "page": set(expected)}
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["extra_object", "extra_field", "wrong_callback", "inactive", "missing_object"],
+)
+def test_unapproved_webhook_state_fails_closed(failure: str) -> None:
+    payload = _payload()
+    data = payload["data"]
+    assert isinstance(data, list)
+    page = data[0]
+    assert isinstance(page, dict)
+    if failure == "extra_object":
+        data.append(
+            {
+                "object": "user",
+                "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                "active": True,
+                "fields": [],
+            }
+        )
+    elif failure == "extra_field":
+        page["fields"] = ["messages", "feed"]
+    elif failure == "wrong_callback":
+        page["callback_url"] = "https://example.invalid/webhook"
+    elif failure == "inactive":
+        page["active"] = False
+    else:
+        data.pop()
+
+    with pytest.raises(MetaWebhookReconcileError):
+        validate_webhook_state(payload, require_exact_fields=False)
+
+
+def test_graph_failure_does_not_render_credentials() -> None:
+    app_token = "test-app-id|test-app-secret"
+    verify_token = "test-verify-token-that-must-stay-redacted"
+    http_error = urllib.error.HTTPError(
+        "https://graph.facebook.com/v24.0/test-app/subscriptions",
+        400,
+        "Bad Request",
+        hdrs=None,
+        fp=None,
+    )
+
+    with patch("urllib.request.urlopen", side_effect=http_error):
+        with pytest.raises(MetaWebhookReconcileError) as captured:
+            _request_json(
+                "https://graph.facebook.com/v24.0/test-app/subscriptions",
+                bearer=app_token,
+                method="POST",
+                form={"verify_token": verify_token},
+                stage="test_stage",
+            )
+
+    rendered = str(captured.value)
+    assert rendered == "Meta webhook request failed stage=test_stage http=400"
+    assert app_token not in rendered
+    assert verify_token not in rendered

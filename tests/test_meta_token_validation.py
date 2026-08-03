@@ -6,7 +6,6 @@ from scripts.validate_meta_social_token import (
     MetaTokenValidationError,
     validate_app_webhook_payload,
     validate_conversation_payloads,
-    validate_instagram_subscription_payload,
     validate_page_subscription_payload,
     validate_payloads,
 )
@@ -149,22 +148,6 @@ def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
             {"data": data},
             expected_app_id="999000111222333",
         )
-
-
-def test_exact_dm_only_instagram_subscription_passes() -> None:
-    checks = validate_instagram_subscription_payload(
-        {
-            "data": [
-                {
-                    "id": "999000111222333",
-                    "subscribed_fields": ["messaging_postbacks", "messages"],
-                }
-            ]
-        },
-        expected_app_id="999000111222333",
-    )
-
-    assert all(checks.values())
 
 
 def test_exact_page_and_instagram_app_webhooks_pass() -> None:

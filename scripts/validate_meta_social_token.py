@@ -149,28 +149,6 @@ def validate_page_subscription_payload(
     return checks
 
 
-def validate_instagram_subscription_payload(
-    payload: dict[str, object],
-    *,
-    expected_app_id: str,
-) -> dict[str, bool]:
-    """Require the linked Instagram account to install only the dedicated app's DM fields."""
-
-    raw_apps = payload.get("data")
-    apps = raw_apps if isinstance(raw_apps, list) else []
-    app = _mapping(apps[0]) if len(apps) == 1 else {}
-    fields = _subscription_field_names(app.get("subscribed_fields"))
-    checks = {
-        "instagram_has_single_subscribed_app": len(apps) == 1,
-        "instagram_subscribed_app_id_match": str(app.get("id") or "") == expected_app_id,
-        "instagram_subscribed_fields_dm_only": fields == EXPECTED_WEBHOOK_FIELDS,
-    }
-    if not all(checks.values()):
-        failed = sorted(key for key, value in checks.items() if not value)
-        raise MetaTokenValidationError(f"Meta Instagram subscription validation failed checks={failed}")
-    return checks
-
-
 def validate_app_webhook_payload(payload: dict[str, object]) -> dict[str, bool]:
     """Require active Page and Instagram callbacks with only DM webhook fields."""
 
@@ -276,6 +254,8 @@ def main() -> None:
         stage="page_subscribed_apps",
     )
     checks.update(validate_page_subscription_payload(subscription_payload, expected_app_id=app_id))
+    # This integration uses Instagram API with Facebook Login. The Page edge
+    # installs the app; the app's `instagram` webhook object supplies IG events.
     app_subscription_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
     app_subscription_payload = _request_json(
         f"{base}/{app_id}/subscriptions?{app_subscription_query}",
@@ -283,17 +263,6 @@ def main() -> None:
         stage="app_subscriptions",
     )
     checks.update(validate_app_webhook_payload(app_subscription_payload))
-    instagram_subscription_payload = _request_json(
-        f"{base}/{EXPECTED_INSTAGRAM_ID}/subscribed_apps?{subscription_query}",
-        bearer=page_token,
-        stage="instagram_subscribed_apps",
-    )
-    checks.update(
-        validate_instagram_subscription_payload(
-            instagram_subscription_payload,
-            expected_app_id=app_id,
-        )
-    )
     for name in sorted(checks):
         print(f"[meta-token] {name}=true")
     print(f"[meta-token] page_id={EXPECTED_PAGE_ID}")
