@@ -433,6 +433,35 @@ def test_migration_extract_does_not_invent() -> None:
     assert section.catalog[0]["item_type"] == "body_area"
 
 
+def test_migration_extract_content_file_and_map() -> None:
+    from services.cm.pricing.migration import extract_price_rows_from_text
+
+    content_obj = {
+        "id": "pf1",
+        "title": "Women body areas",
+        "content": "Underarms: 40 USD\nFull legs - 120\nSessions: 6\nAmbiguous only digits 99 somewhere",
+        "tags": ["price"],
+    }
+    rows = extract_price_rows_from_json_obj(content_obj, source="price_files/pf1.json")
+    names = {r["name"] for r in rows}
+    assert "Underarms" in names
+    assert "Full legs" in names
+    assert all(r["amount"] > 0 for r in rows)
+    # Session line skipped
+    assert not any("session" in r["name"].lower() for r in rows)
+
+    map_rows = extract_price_rows_from_json_obj({"Underarms": 40, "Full legs": 120}, source="map.json")
+    assert len(map_rows) == 2
+
+    text_rows, ambiguous = extract_price_rows_from_text(
+        "Arms: 35\nWeird line with 7 numbers but no separator structure here maybe",
+        source="t.txt",
+    )
+    assert len(text_rows) == 1
+    assert text_rows[0]["amount"] == 35.0
+    assert ambiguous  # second line archived, not invented into catalog
+
+
 def test_audit_no_linas_pricing_engine_in_code() -> None:
     result = audit_no_linas_pricing_in_code()
     assert result["ok"] is True, result["findings"]

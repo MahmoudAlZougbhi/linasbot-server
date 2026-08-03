@@ -173,6 +173,9 @@ const CmFaqPage = () => {
         <div className="text-xs text-slate-500 space-y-1 text-right">
           <div>Runtime: {runtimeMode}</div>
           <div>Publish: {publishEnabled ? "enabled" : "drafts only"}</div>
+          <Link to="/content-managers/learning-inbox" className="text-slate-700 hover:underline block">
+            Learning Inbox →
+          </Link>
           <Link to="/content-managers/publish" className="text-emerald-700 hover:underline">
             Preview / Validate / Publish →
           </Link>

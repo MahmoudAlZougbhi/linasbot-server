@@ -3589,9 +3589,21 @@ def get_system_instruction(
         include_price_list: Whether to include the price_list.txt content in prompt context
         custom_knowledge_context: When provided (dynamic retrieval), ADDITIVE to KB/Style - never replaces
         operational_context: Structured block with state, original_question, task (Plan §10)
+
+    ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
+    When ``cm_runtime_mode() == "published"``, never inject legacy price_list / style_guide /
+    knowledge_base file contents. Published path does not use this helper for customer answers;
+    this guard is defensive against accidental legacy calls (no silent SoT fill).
     """
     _ = qa_reference  # compatibility placeholder
     user_gender_str = config.user_gender.get(user_id, "unknown")
+
+    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
+    from services.cm.constants import cm_runtime_mode
+
+    published_mode = cm_runtime_mode() == "published"
+    if published_mode:
+        include_price_list = False
 
     gender_instruction = ""
     if user_gender_str == "male":
@@ -3616,19 +3628,22 @@ def get_system_instruction(
         {config.PRICE_LIST}
         """
 
-    # KB + Style are ALWAYS the foundation. Selector content (custom_knowledge_context) builds on top.
+    style_guide = "" if published_mode else (config.BOT_STYLE_GUIDE or "")
+    core_kb = "" if published_mode else (config.CORE_KNOWLEDGE_BASE or "")
+
+    # KB + Style are ALWAYS the foundation (legacy mode). Selector content builds on top.
     knowledge_section = f"""
         **🔴 STYLE GUIDE (MANDATORY - Foundation - FOLLOW EVERY STEP IN ORDER):**
         The following contains MANDATORY rules for how you communicate AND the exact step-by-step flow for each service. You MUST follow every step in order. Do NOT skip steps. Do NOT jump ahead to booking if a step requires waiting (e.g., waiting for a photo before giving pricing).
 
-        {config.BOT_STYLE_GUIDE}
+        {style_guide}
 
         **📘 CORE KNOWLEDGE BASE (Foundation):** (Use this to answer questions about services, devices, IDs, and matching rules)
-        {config.CORE_KNOWLEDGE_BASE}
+        {core_kb}
 
         {price_list_section}
         """
-    if custom_knowledge_context:
+    if custom_knowledge_context and not published_mode:
         knowledge_section += f"""
         **📂 ADDITIONAL RELEVANT CONTEXT (Selector - use for this specific query):**
         {custom_knowledge_context}

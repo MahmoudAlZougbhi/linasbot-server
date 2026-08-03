@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -264,3 +265,39 @@ def test_empty_price_import_does_not_wipe_existing_catalog(tmp_path: Path) -> No
     assert result["catalog_count"] == 1
     after = get_draft("prices", tenant_id=tenant)
     assert after.payload["catalog"][0]["id"] == "keep_me"
+
+
+def test_content_price_file_import_populates_catalog(tmp_path: Path) -> None:
+    from services.cm.pricing.migration import migrate_staged_price_files_to_catalog
+    from services.cm.storage import get_draft
+
+    tenant = "tenant_price_content_import"
+    stage = tmp_path / "stage"
+    pf = stage / "legacy" / "price_files"
+    pf.mkdir(parents=True)
+    (pf / "women.json").write_text(
+        json.dumps(
+            {
+                "id": "women",
+                "title": "Women prices",
+                "content": "Underarms: 40\nBikini: 55 USD\nSessions: 8",
+                "tags": ["price"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    result = migrate_staged_price_files_to_catalog(
+        staging_root=stage,
+        tenant_id=tenant,
+        category_id="body_area",
+        category_label="Body areas",
+        item_type="body_area",
+    )
+    assert result["rows_imported"] >= 2
+    assert result["invented_amounts"] == 0
+    assert result["preserved_existing"] is False
+    draft = get_draft("prices", tenant_id=tenant)
+    names = {item["labels"]["en"] for item in draft.payload["catalog"]}
+    assert "Underarms" in names
+    assert "Bikini" in names

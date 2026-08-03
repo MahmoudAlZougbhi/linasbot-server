@@ -47,6 +47,15 @@ async def list_qa_pairs(category: str | None = None, language: str = "ar", activ
 async def create_qa_pair(qa_data: dict) -> Any:
     """Create a new Q&A pair in database"""
     try:
+        from services.cm.constants import cm_faq_canonical
+
+        if cm_faq_canonical():
+            return {
+                "success": False,
+                "error": "CM_FAQ_CANONICAL",
+                "message": "Legacy Bot Training FAQ writes are disabled. Use Content Management → FAQ.",
+                "redirect": "/content-managers/faq",
+            }
         print("\n" + "=" * 80)
         print("🔵 DEBUG: /api/qa/create endpoint hit!")
         print("=" * 80)

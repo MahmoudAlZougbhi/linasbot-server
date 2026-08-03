@@ -15,9 +15,13 @@ on:
           - migrate_validate
           - enable_publish_keep_legacy
           - publish
+          - publish_faq_only
           - cutover_published
           - rollback_legacy
           - rollback_content_version
+          - price_source_ledger
+          - enable_faq_canonical
+          - sot_audit_published
       confirmation:
         description: "Type CM_CUTOVER_CONFIRMED"
         required: true
@@ -71,6 +75,8 @@ jobs:
               sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
             elif [ "${PHASE}" = "publish" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_publish.sh
+            elif [ "${PHASE}" = "publish_faq_only" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_publish_faq_only.sh
             elif [ "${PHASE}" = "cutover_published" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_cutover.sh
             elif [ "${PHASE}" = "rollback_legacy" ]; then
@@ -83,6 +89,17 @@ jobs:
               fi
               export CM_ROLLBACK_CONTENT_VERSION_ID="${CONTENT_VERSION_ID}"
               sudo -E bash /opt/linasbot/scripts/prod_cm_rollback_version.sh
+            elif [ "${PHASE}" = "price_source_ledger" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_price_source_ledger.sh
+            elif [ "${PHASE}" = "enable_faq_canonical" ]; then
+              export CM_RUNTIME_MODE_VALUE=published
+              export CM_PUBLISH_ENABLED_VALUE=true
+              export CM_FAQ_CANONICAL_VALUE=true
+              export CM_EMBEDDING_PROVIDER_VALUE=openai
+              export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
+              sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
+            elif [ "${PHASE}" = "sot_audit_published" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_sot_audit.sh
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1

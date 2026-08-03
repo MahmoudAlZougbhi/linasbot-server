@@ -7,6 +7,7 @@ MODE="${CM_RUNTIME_MODE_VALUE:-}"
 PUBLISH="${CM_PUBLISH_ENABLED_VALUE:-}"
 EMBED_PROVIDER="${CM_EMBEDDING_PROVIDER_VALUE:-openai}"
 EMBED_MODEL="${CM_EMBEDDING_MODEL_VALUE:-text-embedding-3-small}"
+FAQ_CANONICAL="${CM_FAQ_CANONICAL_VALUE:-}"
 
 if [ -z "$MODE" ] || [ -z "$PUBLISH" ]; then
   echo "[cm-flags] missing CM_RUNTIME_MODE_VALUE or CM_PUBLISH_ENABLED_VALUE" >&2
@@ -20,6 +21,12 @@ case "$PUBLISH" in
   true|false) ;;
   *) echo "[cm-flags] invalid publish=$PUBLISH" >&2; exit 1 ;;
 esac
+if [ -n "$FAQ_CANONICAL" ]; then
+  case "$FAQ_CANONICAL" in
+    true|false) ;;
+    *) echo "[cm-flags] invalid CM_FAQ_CANONICAL_VALUE=$FAQ_CANONICAL" >&2; exit 1 ;;
+  esac
+fi
 if [ "$MODE" = "published" ] && [ "$EMBED_PROVIDER" = "hash" ]; then
   echo "[cm-flags] refusing hash embeddings with published mode" >&2
   exit 1
@@ -29,6 +36,7 @@ export CM_RUNTIME_MODE_VALUE="$MODE"
 export CM_PUBLISH_ENABLED_VALUE="$PUBLISH"
 export CM_EMBEDDING_PROVIDER_VALUE="$EMBED_PROVIDER"
 export CM_EMBEDDING_MODEL_VALUE="$EMBED_MODEL"
+export CM_FAQ_CANONICAL_VALUE="$FAQ_CANONICAL"
 
 python3 - <<'PY'
 import os
@@ -40,6 +48,9 @@ updates = {
     "CM_EMBEDDING_PROVIDER": os.environ["CM_EMBEDDING_PROVIDER_VALUE"],
     "CM_EMBEDDING_MODEL": os.environ["CM_EMBEDDING_MODEL_VALUE"],
 }
+faq = (os.environ.get("CM_FAQ_CANONICAL_VALUE") or "").strip()
+if faq:
+    updates["CM_FAQ_CANONICAL"] = faq
 
 def upsert(path: Path, updates: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,5 +80,5 @@ PY
 systemctl restart linasbot
 sleep 2
 systemctl is-active linasbot
-echo "[cm-flags] runtime_mode=$MODE publish_enabled=$PUBLISH embedding_provider=$EMBED_PROVIDER"
+echo "[cm-flags] runtime_mode=$MODE publish_enabled=$PUBLISH embedding_provider=$EMBED_PROVIDER faq_canonical=${FAQ_CANONICAL:-unchanged}"
 echo "[cm-flags] COMPLETE_OK"

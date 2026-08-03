@@ -23,6 +23,7 @@ from services.cm.storage import get_draft, tenant_server_lock
 from services.cm.validation import validate_cm
 from services.cm.version_store import (
     read_published_pointer,
+    read_version_content,
     read_version_manifest,
     write_published_pointer,
     write_version_content,
@@ -84,6 +85,24 @@ async def publish_draft(
     final pointer flip — a tiny, synchronous read-then-write — is done under the lock, so two
     concurrent publishes for the same tenant can never interleave a partial pointer.
     """
+    return await publish_draft_sections(
+        tenant_id=tenant_id,
+        published_by=published_by,
+        notes=notes,
+        section_names=None,
+    )
+
+
+async def publish_draft_sections(
+    *,
+    tenant_id: str | None = None,
+    published_by: str = "unknown",
+    notes: str | None = None,
+    section_names: list[str] | tuple[str, ...] | None = None,
+) -> PublishResult:
+    """Publish draft sections; when ``section_names`` is set, overlay only those onto the
+    currently published content (FAQ-only / pricing-only publishes without dirty other drafts).
+    """
     tid = _normalize_tenant(tenant_id)
 
     validation = validate_cm(tenant_id=tid)
@@ -93,7 +112,35 @@ async def publish_draft(
             errors=validation["errors"],
         )
 
-    sections = _collect_draft_sections(tid)
+    allowed = {str(s).strip() for s in (section_names or []) if str(s).strip()}
+    if allowed:
+        unknown = sorted(allowed - set(CM_SECTIONS))
+        if unknown:
+            raise PublishBlockedError(
+                f"Publish blocked: unknown section(s) {unknown}.",
+                errors=[{"code": "UNKNOWN_SECTION", "sections": unknown}],
+            )
+        pointer = read_published_pointer(tid)
+        if pointer is None:
+            raise PublishBlockedError(
+                "Publish blocked: section-scoped publish requires an existing published version.",
+                errors=[{"code": "NO_PUBLISHED_BASE"}],
+            )
+        base = read_version_content(tid, pointer.content_version_id)
+        if not base:
+            raise PublishBlockedError(
+                "Publish blocked: published content unavailable for section overlay.",
+                errors=[{"code": "PUBLISHED_CONTENT_MISSING"}],
+            )
+        sections = {name: dict(base.get(name) or {}) for name in CM_SECTIONS}
+        draft_sections = _collect_draft_sections(tid)
+        for name in allowed:
+            sections[name] = dict(draft_sections[name])
+        if notes is None:
+            notes = f"section_scoped_publish:{','.join(sorted(allowed))}"
+    else:
+        sections = _collect_draft_sections(tid)
+
     content_version_id = f"v_{uuid.uuid4().hex[:12]}"
     checksums = write_version_content(tid, content_version_id, sections)
 
@@ -119,7 +166,7 @@ async def publish_draft(
     )
     write_version_manifest(tid, content_version_id, manifest.model_dump(mode="json"))
 
-    pointer = PublishedPointer(
+    pointer_out = PublishedPointer(
         content_version_id=content_version_id,
         index_version_id=index_version_id,
         checksums=checksums,
@@ -131,15 +178,30 @@ async def publish_draft(
     )
     with tenant_server_lock(tid):
         previous_pointer = read_published_pointer(tid)
-        write_published_pointer(tid, pointer)
+        write_published_pointer(tid, pointer_out)
 
     return PublishResult(
         tenant_id=tid,
         content_version_id=content_version_id,
         index_version_id=index_version_id,
         manifest=manifest.model_dump(mode="json"),
-        pointer=pointer.model_dump(mode="json"),
+        pointer=pointer_out.model_dump(mode="json"),
         previous_pointer=previous_pointer.model_dump(mode="json") if previous_pointer else None,
+    )
+
+
+async def publish_faq_only(
+    *,
+    tenant_id: str | None = None,
+    published_by: str = "unknown",
+    notes: str | None = None,
+) -> PublishResult:
+    """Atomic FAQ-only publish: draft FAQ over published base + semantic index rebuild."""
+    return await publish_draft_sections(
+        tenant_id=tenant_id,
+        published_by=published_by,
+        notes=notes or "faq_only_publish",
+        section_names=("faq",),
     )
 
 
