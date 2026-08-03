@@ -18,14 +18,21 @@ const CmLearningInboxPage = () => {
     setLoading(true);
     try {
       const [wrong, recent] = await Promise.all([getWrongAnswers(50), getRecentFeedback(50)]);
-      const wrongList = Array.isArray(wrong?.wrong_answers) ? wrong.wrong_answers : [];
-      const recentList = Array.isArray(recent?.feedback) ? recent.feedback : [];
-      const unclear = recentList.filter((f) => String(f?.feedback_type || "") === "unclear");
+      /** @type {Array<Record<string, unknown>>} */
+      const wrongList = Array.isArray(wrong?.wrong_answers)
+        ? /** @type {Array<Record<string, unknown>>} */ (wrong.wrong_answers)
+        : [];
+      /** @type {Array<Record<string, unknown>>} */
+      const recentList = Array.isArray(recent?.feedback)
+        ? /** @type {Array<Record<string, unknown>>} */ (recent.feedback)
+        : [];
+      const unclear = recentList.filter((f) => String(f.feedback_type || "") === "unclear");
       const merged = [...wrongList, ...unclear];
       const seen = new Set();
+      /** @type {Array<Record<string, unknown>>} */
       const unique = [];
       for (const item of merged) {
-        const key = String(item?.message_id || `${item?.user_question}-${item?.timestamp}`);
+        const key = String(item.message_id || `${item.user_question}-${item.timestamp}`);
         if (seen.has(key)) continue;
         seen.add(key);
         unique.push(item);

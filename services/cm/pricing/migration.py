@@ -233,9 +233,14 @@ def extract_price_rows_from_json_obj(obj: Any, *, source: str) -> list[dict[str,
             # Flat map: {"Arms": 35, "Legs": 50} — only when ALL values are numeric-ish and keys are names.
             if node and all(isinstance(k, str) for k in node.keys()):
                 values = list(node.values())
-                if values and all(_as_float(v) is not None for v in values) and all(
-                    k.lower() not in _AMOUNT_KEYS + _NAME_KEYS + ("id", "sku", "currency", "content", "tags", "language")
-                    for k in node.keys()
+                if (
+                    values
+                    and all(_as_float(v) is not None for v in values)
+                    and all(
+                        k.lower()
+                        not in _AMOUNT_KEYS + _NAME_KEYS + ("id", "sku", "currency", "content", "tags", "language")
+                        for k in node.keys()
+                    )
                 ):
                     # Avoid treating content-file metadata as a price map.
                     meta_keys = {"title", "audience", "priority", "created_at", "updated_at", "tags", "language"}
