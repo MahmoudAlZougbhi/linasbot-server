@@ -70,6 +70,12 @@ export const CM_SECTION_CARDS = [
     description: "Linked 4-language Q&A — visual editor, no JSON. Canonical FAQ for production.",
   },
   {
+    slug: "learning-inbox",
+    section: null,
+    name: "Learning Inbox",
+    description: "Review unclear answers and add them into the canonical FAQ (same pipeline).",
+  },
+  {
     slug: "handoff",
     section: "handoff",
     name: "Booking & Human Handoff",
