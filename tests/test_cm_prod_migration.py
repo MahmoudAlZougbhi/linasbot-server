@@ -21,7 +21,9 @@ def test_stage_and_migrate_from_flat_sample_data(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (data_root / "content" / "price_list.txt").write_text("Use selector price files only.\n", encoding="utf-8")
-    (data_root / "content" / "knowledge_base.txt").write_text("Linas Laser provides laser hair removal.\n", encoding="utf-8")
+    (data_root / "content" / "knowledge_base.txt").write_text(
+        "Linas Laser provides laser hair removal.\n", encoding="utf-8"
+    )
     (data_root / "content" / "style_guide.txt").write_text("Be warm and concise.\n", encoding="utf-8")
 
     staging = tmp_path / "staging"
