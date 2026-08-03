@@ -45,7 +45,9 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          script_stop: true
+          # script_stop rewrites each shell line and corrupts the Python heredoc.
+          # The script itself uses `set -e`, so failures still terminate the step.
+          script_stop: false
           command_timeout: 5m
           script: |
             set -e
