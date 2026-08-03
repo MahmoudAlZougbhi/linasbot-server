@@ -83,6 +83,27 @@ def validate_cm(
         else:
             errors.append(item)
 
+    prices_payload = drafts.get("prices") or {}
+    if isinstance(prices_payload, dict) and (
+        prices_payload.get("catalog")
+        or prices_payload.get("price_entries")
+        or prices_payload.get("discount_rules")
+        or prices_payload.get("categories")
+    ):
+        from services.cm.pricing.validation import validate_pricing_section
+
+        for failure in validate_pricing_section(
+            categories=list(prices_payload.get("categories") or []),
+            catalog=list(prices_payload.get("catalog") or []),
+            price_entries=list(prices_payload.get("price_entries") or []),
+            discount_rules=list(prices_payload.get("discount_rules") or []),
+        ):
+            item = _conflict_dict(failure, section="prices")
+            if failure.severity == "warning":
+                warnings.append(item)
+            else:
+                errors.append(item)
+
     return {
         "ok": len(errors) == 0,
         "errors": errors,

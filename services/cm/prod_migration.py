@@ -34,7 +34,6 @@ from services.cm.schemas import (
     ServiceRecord,
     ServicesSection,
     StylePolicy,
-    default_section_payload,
     initial_restricted_policy,
 )
 from services.cm.storage import get_draft, put_draft
@@ -431,13 +430,23 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
     )
     seeded["care_shave"] = True
 
-    # Prices: do not invent structured amounts. Keep default empty; unstructured price text
-    # remains in knowledge from migrate_legacy_fixture with needs_price_structuring tags.
-    prices_payload = default_section_payload("prices")
-    _put_section("prices", prices_payload, tenant_id=tenant_id, updated_by=updated_by)
-    seeded["prices_structured"] = 0
+    # Prices: import proven numeric rows from staged price JSON into generic catalog.
+    # Never invent amounts. Lina body areas are tenant catalog data (item_type=body_area), not code.
+    from services.cm.pricing.migration import migrate_staged_price_files_to_catalog
+
+    pricing_import = migrate_staged_price_files_to_catalog(
+        staging_root=staging_root,
+        tenant_id=tenant_id,
+        updated_by=updated_by,
+        category_id="body_area",
+        category_label="Body areas",
+        item_type="body_area",
+    )
+    seeded["prices_structured"] = int(pricing_import.get("price_entry_count") or 0)
+    seeded["pricing_import"] = pricing_import
     seeded["prices_note"] = (
-        "Structured price rows not invented. Legacy price text preserved in Knowledge for author review."
+        "Structured catalog/price_entries imported only from proven numeric sources; "
+        "no invented thresholds or amounts."
     )
 
     return seeded

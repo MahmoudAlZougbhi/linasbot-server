@@ -204,3 +204,73 @@ async def cm_preview_packet(body: dict[str, Any] = Body(default={})) -> Any:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "data": packet}
+
+
+@app.post("/api/cm/pricing/quote")
+async def cm_pricing_quote(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
+    """Deterministic Price Calculator Preview (draft or published). Never invents amounts."""
+    require_permission(request, "contentManagers")
+    from typing import cast
+
+    from services.cm.constants import DEFAULT_TENANT_ID
+    from services.cm.pricing.engine import compute_quote
+    from services.cm.pricing.schemas import AudienceScope, PricingContext, QuoteRequestLine
+    from services.cm.pricing.section import (
+        normalize_prices_section,
+        section_catalog_items,
+        section_discount_rules,
+        section_price_entries,
+    )
+    from services.cm.storage import get_draft
+    from services.cm.version_store import load_published_content
+
+    tenant_id = DEFAULT_TENANT_ID
+    # Never accept cross-tenant ids from the request body (session is single-tenant today).
+    if body.get("tenant_id") and str(body.get("tenant_id")).strip() not in {"", DEFAULT_TENANT_ID}:
+        raise HTTPException(status_code=403, detail="tenant_id not authorized for this session")
+    source = str(body.get("source") or "draft").strip().lower()
+    content_version_id = None
+    if source == "published":
+        pointer, sections = load_published_content(tenant_id)
+        prices_payload = sections.get("prices") or {}
+        content_version_id = pointer.content_version_id
+    else:
+        prices_payload = dict(get_draft("prices", tenant_id=tenant_id, create_default=True).payload)
+
+    section = normalize_prices_section(prices_payload)
+    raw_lines: list[Any] = list(body["lines"]) if isinstance(body.get("lines"), list) else []
+    request_lines: list[QuoteRequestLine] = []
+    for raw in raw_lines:
+        if not isinstance(raw, dict):
+            continue
+        request_lines.append(
+            QuoteRequestLine(
+                catalog_item_id=str(raw.get("catalog_item_id") or ""),
+                variant_id=str(raw["variant_id"]) if raw.get("variant_id") else None,
+                quantity=float(raw.get("quantity") or 1),
+            )
+        )
+    if not request_lines:
+        raise HTTPException(status_code=400, detail="lines required")
+    audience_raw = str(body.get("audience") or "any").strip().lower()
+    audience = audience_raw if audience_raw in {"men", "women", "general", "any"} else "any"
+    try:
+        quote = compute_quote(
+            catalog_items=section_catalog_items(section),
+            price_entries=section_price_entries(section),
+            discount_rules=section_discount_rules(section),
+            request_lines=request_lines,
+            context=PricingContext(
+                tenant_id=tenant_id,
+                branch_id=str(body["branch_id"]) if body.get("branch_id") else None,
+                audience=cast(AudienceScope, audience),
+                content_version_id=content_version_id,
+                currency=str(body["currency"]) if body.get("currency") else None,
+            ),
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "error": "QUOTE_INCOMPLETE", "message": str(exc)},
+        )
+    return {"success": True, "data": quote.model_dump(mode="json")}

@@ -49,7 +49,7 @@ export const CM_SECTION_CARDS = [
     slug: "prices",
     section: "prices",
     name: "Prices",
-    description: "Exact price rows — structured source of truth for amounts.",
+    description: "Catalog, base prices, discounts & packages — visual rules, no code.",
   },
   {
     slug: "care",

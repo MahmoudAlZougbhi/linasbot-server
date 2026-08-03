@@ -183,6 +183,68 @@ async def prepare_response(
     if interpreted.branch_id:
         facts.extend(resolve_branch_facts(sections.get("branches") or {}, interpreted.branch_id))
 
+    # Generic pricing engine: map message aliases → catalog IDs → deterministic PriceQuote.
+    metadata_extra: dict[str, Any] = {}
+    try:
+        from services.cm.pricing.catalog_resolve import disambiguate_matches, resolve_catalog_item_ids
+        from services.cm.pricing.engine import compute_quote, quote_to_answer_facts
+        from services.cm.pricing.schemas import PricingContext, QuoteRequestLine
+        from services.cm.pricing.section import (
+            normalize_prices_section,
+            section_catalog_items,
+            section_discount_rules,
+            section_price_entries,
+        )
+
+        prices_section = normalize_prices_section(sections.get("prices") or {})
+        catalog_items = section_catalog_items(prices_section)
+        if catalog_items:
+            matches = resolve_catalog_item_ids(message, catalog_items)
+            single_id, ambiguous = disambiguate_matches(matches)
+            if ambiguous:
+                labels = []
+                by_id = {i.id: i for i in catalog_items}
+                for iid in ambiguous:
+                    item = by_id.get(iid)
+                    labels.append((item.labels.en or item.labels.ar or iid) if item else iid)
+                clarify = "Which item did you mean: " + ", ".join(labels) + "?"
+                return PipelineOutcome(
+                    stop=True,
+                    reply=clarify,
+                    reason="pricing_catalog_ambiguous",
+                    metadata={"ambiguous_catalog_item_ids": ambiguous},
+                )
+            quote_item_id = single_id or interpreted.service_id
+            if quote_item_id and any(i.id == quote_item_id for i in catalog_items):
+                quote = compute_quote(
+                    catalog_items=catalog_items,
+                    price_entries=section_price_entries(prices_section),
+                    discount_rules=section_discount_rules(prices_section),
+                    request_lines=[QuoteRequestLine(catalog_item_id=quote_item_id, quantity=1)],
+                    context=PricingContext(
+                        tenant_id=tenant_id,
+                        branch_id=interpreted.branch_id,
+                        content_version_id=getattr(pointer, "content_version_id", None),
+                    ),
+                )
+                for raw in quote_to_answer_facts(quote):
+                    facts.append(AnswerFact.model_validate(raw))
+                metadata_extra = {
+                    "price_quote": {
+                        "final_total": quote.final_total,
+                        "currency": quote.currency,
+                        "applied_rule_ids": [a.rule_id for a in quote.applied_rules],
+                        "catalog_item_ids": [ln.catalog_item_id for ln in quote.lines],
+                    }
+                }
+    except ValueError as pricing_err:
+        return PipelineOutcome(
+            stop=True,
+            reply="I need a bit more detail to give an exact price. Which item and quantity should I quote?",
+            reason="pricing_quote_incomplete",
+            metadata={"error": str(pricing_err)},
+        )
+
     # Step 12 — Bounded semantic narrative chunks (Knowledge/Care only; never restricted-only FAQ).
     chunks: list[AnswerChunk] = []
     try:
@@ -212,7 +274,7 @@ async def prepare_response(
         packet=packet,
         interpreted=interpreted,
         reason="packet_ready",
-        metadata={"restricted_topic_active_ids": sorted(restricted_ids)},
+        metadata={"restricted_topic_active_ids": sorted(restricted_ids), **metadata_extra},
     )
 
 

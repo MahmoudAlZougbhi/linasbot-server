@@ -116,9 +116,36 @@ def resolve_service_facts(services: ServicesSection | dict[str, Any], service_id
 
 
 def resolve_price_facts(prices: PricesSection | dict[str, Any], service_id: str) -> list[AnswerFact]:
-    section = prices if isinstance(prices, PricesSection) else PricesSection.model_validate(prices)
+    from services.cm.pricing.section import normalize_prices_section, section_catalog_items, section_price_entries
+
+    section = normalize_prices_section(prices if isinstance(prices, dict) else prices.model_dump(mode="json"))
     facts: list[AnswerFact] = []
-    for price in section.items:
+    # Prefer generic catalog/price_entries (item id or legacy service_id match).
+    for entry in section_price_entries(section):
+        if entry.catalog_item_id != service_id:
+            continue
+        if not entry.active:
+            continue
+        facts.append(
+            AnswerFact(kind="price", value=f"{entry.amount} {entry.currency}", source_id=f"price_entry:{entry.id}")
+        )
+    if facts:
+        return facts
+    for item in section_catalog_items(section):
+        if item.id != service_id or item.base_price is None or not item.active:
+            continue
+        facts.append(
+            AnswerFact(
+                kind="price",
+                value=f"{item.base_price} {item.currency}",
+                source_id=f"catalog_base:{item.id}",
+            )
+        )
+    if facts:
+        return facts
+    # Legacy PriceRecord rows
+    legacy = prices if isinstance(prices, PricesSection) else PricesSection.model_validate(prices)
+    for price in legacy.items:
         if price.service_id != service_id:
             continue
         facts.append(AnswerFact(kind="price", value=f"{price.amount} {price.currency}", source_id=f"price:{price.id}"))
