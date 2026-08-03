@@ -17,6 +17,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Reconcile approved DM fields on diagnostic branch
+        if: github.ref_name == 'fix/meta-review-runtime-diagnostic'
+        env:
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
+          META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
+        run: python scripts/reconcile_meta_app_webhooks.py
       - name: Validate without rendering credentials
         env:
           META_APP_ID: ${{ secrets.META_APP_ID }}
