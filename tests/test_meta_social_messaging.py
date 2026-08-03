@@ -403,7 +403,8 @@ class SocialRoutingRegressionTests(unittest.TestCase):
         self.assertTrue(url.startswith("https://wa.me/"))
         self.assertNotIn("wa.link", url)
 
-    def test_tattoo_routing_beirut_only(self):
+    def test_tattoo_request_refuses_without_whatsapp_handoff(self):
+        """Owner-confirmed truth: tattoo removal is unsupported — never hand off a WA number."""
         user_data = {"channel": "instagram"}
         result = route_social_contact_request(
             "bade 7jez tattoo removal",
@@ -413,8 +414,10 @@ class SocialRoutingRegressionTests(unittest.TestCase):
         )
         self.assertIsNotNone(result)
         self.assertTrue(result.tattoo_removal)
-        self.assertIn("71534928", result.reply)
-        self.assertIn("https://wa.me/", result.reply)
+        self.assertIsNone(result.contact_env)
+        self.assertNotIn("wa.me", result.reply.lower())
+        self.assertNotIn("71534928", result.reply)
+        self.assertIn("isn't one of the services", result.reply.lower())
 
     def test_laser_female_beirut_handoff_unchanged(self):
         user_data = {"channel": "instagram"}
@@ -557,9 +560,9 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
             "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": "+96170707354",
             "SOCIAL_WHATSAPP_BEIRUT_MALE": "+96171534928",
             "SOCIAL_WHATSAPP_ANTELIAS_MALE": "+96171226082",
-            "SOCIAL_WHATSAPP_TATTOO_REMOVAL": "+96171534928",
         }
         self.assertEqual(DEFAULT_SOCIAL_WHATSAPP_CONTACTS, expected)
+        self.assertNotIn("SOCIAL_WHATSAPP_TATTOO_REMOVAL", DEFAULT_SOCIAL_WHATSAPP_CONTACTS)
 
 
 class SocialCanonicalAiPathTests(unittest.TestCase):

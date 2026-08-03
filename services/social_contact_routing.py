@@ -19,13 +19,13 @@ SOCIAL_CHANNELS = {"instagram", "facebook"}
 # Pending handoff collection TTL (seconds). After expiry, the next message returns to AI.
 SOCIAL_CONTACT_FLOW_TTL_SECONDS = 30 * 60
 
-# Public business WhatsApp contacts (authoritative defaults). Env vars override per key.
+# Public business WhatsApp contacts for supported laser booking handoff (env overrides per key).
+# Tattoo removal is intentionally absent — unsupported services never receive a WhatsApp route.
 DEFAULT_SOCIAL_WHATSAPP_CONTACTS = {
     "SOCIAL_WHATSAPP_BEIRUT_FEMALE": "+96178847527",
     "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": "+96170707354",
     "SOCIAL_WHATSAPP_BEIRUT_MALE": "+96171534928",
     "SOCIAL_WHATSAPP_ANTELIAS_MALE": "+96171226082",
-    "SOCIAL_WHATSAPP_TATTOO_REMOVAL": "+96171534928",
 }
 
 _APPOINTMENT_RE = re.compile(
@@ -141,10 +141,37 @@ def wa_me_url(phone: str) -> str:
 
 
 def resolve_social_whatsapp_number(env_name: str) -> str | None:
-    """Env override wins; otherwise use the tracked public default for that exact key."""
+    """Resolve public WhatsApp contact for a matrix key.
+
+    Precedence:
+    1. Explicit env override for that exact key (ops).
+    2. When ``CM_RUNTIME_MODE=published``, the published CM handoff contact
+       (``env_name.lower()``) — never silently fall back to code defaults.
+    3. Tracked ``DEFAULT_SOCIAL_WHATSAPP_CONTACTS`` (legacy mode only).
+    """
     override = (os.getenv(env_name) or "").strip()
     if override:
         return override
+
+    # CM AI CONTROL PLANE — published mode reads phones from published CM handoff only.
+    from services.cm.constants import DEFAULT_TENANT_ID, cm_runtime_mode
+
+    if cm_runtime_mode() == "published":
+        try:
+            from services.cm.schemas import HandoffPolicy
+            from services.cm.version_store import load_published_content
+
+            _pointer, sections = load_published_content(DEFAULT_TENANT_ID)
+            policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
+            contact_id = env_name.strip().lower()
+            for contact in policy.contacts:
+                if contact.id == contact_id and (contact.phone_e164 or "").strip():
+                    return contact.phone_e164.strip()
+        except Exception as exc:
+            print(f"[social_contact_routing] published handoff resolve failed for {env_name}: {exc}")
+            return None
+        return None
+
     default = DEFAULT_SOCIAL_WHATSAPP_CONTACTS.get(env_name)
     return default.strip() if default else None
 
@@ -211,28 +238,21 @@ def _laser_contact_reply(language: str, branch: str, phone: str) -> str:
     )
 
 
-def _tattoo_contact_reply(language: str, phone: str) -> str:
-    """Tattoo removal is Beirut-only and gender-independent."""
-    whatsapp_url = wa_me_url(phone)
+def _unsupported_service_refuse_reply(language: str) -> str:
+    """Owner-confirmed truth: tattoo removal is not offered — never hand off WhatsApp for it."""
     if language == "en":
         return (
-            "Tattoo removal is handled from our Beirut (Ramlet El Bayda) WhatsApp only—no calls "
-            "(same contact for all genders; not Antelias):\n"
-            f"{phone}\n{whatsapp_url}\n"
-            "Appointments are completed by the team on WhatsApp, not inside Instagram or Facebook."
+            "Tattoo removal isn't one of the services we currently offer. "
+            "I'm happy to help with laser hair removal or anything else we do provide."
         )
     if language == "fr":
         return (
-            "Le détatouage est géré uniquement via WhatsApp à Beyrouth (Ramlet El Bayda) — pas d'appels "
-            "(même numéro pour tous les genres ; pas Antélias) :\n"
-            f"{phone}\n{whatsapp_url}\n"
-            "La réservation est finalisée avec l'équipe sur WhatsApp, pas sur Instagram ou Facebook."
+            "Le détatouage ne fait pas partie des services que nous proposons actuellement. "
+            "Je peux vous aider pour l'épilation laser ou toute autre prestation disponible."
         )
     return (
-        "إزالة التاتو بتتم عبر واتساب فرع بيروت (الرملة البيضاء) فقط، من دون اتصالات "
-        "(نفس الرقم لكل الأجناس، مش أنطلياس):\n"
-        f"{phone}\n{whatsapp_url}\n"
-        "الحجز بيتم مع الفريق على واتساب، مش من داخل إنستغرام أو فيسبوك."
+        "إزالة التاتو مش من ضمن الخدمات يلي منقدمها حالياً. "
+        "فيني ساعدك بإزالة الشعر بالليزر أو بأي خدمة تانية من خدماتنا."
     )
 
 
@@ -396,24 +416,15 @@ def route_social_contact_request(
     _set_flow_state(user_data, state)
 
     if tattoo:
-        phone = resolve_social_whatsapp_number("SOCIAL_WHATSAPP_TATTOO_REMOVAL")
-        if not phone:
-            return SocialContactRouteResult(
-                _missing_contact(lang),
-                detected_intent,
-                branch="beirut",
-                gender=gender,
-                contact_env="SOCIAL_WHATSAPP_TATTOO_REMOVAL",
-                tattoo_removal=True,
-            )
-        reply = _tattoo_contact_reply(lang, phone)
+        # Confirmed clinic truth: tattoo removal is unsupported. Never return a WhatsApp number.
+        reply = _unsupported_service_refuse_reply(lang)
         _clear_flow_state(user_data)
         return SocialContactRouteResult(
             reply,
             detected_intent,
-            branch="beirut",
+            branch=None,
             gender=gender,
-            contact_env="SOCIAL_WHATSAPP_TATTOO_REMOVAL",
+            contact_env=None,
             tattoo_removal=True,
         )
 

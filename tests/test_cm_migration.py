@@ -19,7 +19,7 @@ def test_migration_imports_faq_knowledge_and_handoff() -> None:
     assert report["tenant_id"] == tenant_id
     assert report["faq_groups_imported"] == 3  # 3 rows in fixture qa_pairs.jsonl, no shared group ids
     assert report["knowledge_articles_imported"] >= 2  # legacy knowledge_base.txt + price_list.txt
-    assert report["handoff_contacts_imported"] == 5  # DEFAULT_SOCIAL_WHATSAPP_CONTACTS size
+    assert report["handoff_contacts_imported"] == 4  # laser branch/gender contacts only (no tattoo)
 
     faq_env = get_draft("faq", tenant_id=tenant_id)
     faq_section = FaqSection.model_validate(faq_env.payload)
@@ -48,10 +48,9 @@ def test_migration_flags_tattoo_restricted_conflict() -> None:
     tenant_id = "cm_migration_test_conflict"
     report = migrate_legacy_fixture(source_root=FIXTURE_ROOT, tenant_id=tenant_id)
 
-    assert report["conflict_count"] >= 2  # FAQ affirmation + handoff matrix row targeting tattoo_removal
+    assert report["conflict_count"] >= 1  # FAQ affirmation of tattoo removal (restricted)
     codes = {c["code"] for c in report["conflicts"]}
     assert "RESTRICTED_FAQ_AFFIRMATION" in codes
-    assert "RESTRICTED_HANDOFF_MATRIX_ROW" in codes
 
 
 def test_migration_is_idempotent() -> None:
@@ -73,7 +72,7 @@ def test_migration_is_idempotent() -> None:
     handoff_env = get_draft("handoff", tenant_id=tenant_id)
     handoff_policy = HandoffPolicy.model_validate(handoff_env.payload)
     assert len(handoff_policy.contacts) == len({c.id for c in handoff_policy.contacts})
-    assert len(handoff_policy.contacts) == 5
+    assert len(handoff_policy.contacts) == 4
 
 
 def test_migration_archives_legacy_files_under_tenant_cm_archive() -> None:

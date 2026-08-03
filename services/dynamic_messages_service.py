@@ -43,10 +43,10 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
         "label": "Ask Clarification",
         "when_used": "Sent when user request is too vague and missing required detail (service/topic).",
         "messages": {
-            "ar": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (ليزر شعر، إزالة وشم، تبييض، إلخ)",
-            "en": "Sure! Which service would you like prices or information about? (hair removal, tattoo removal, whitening, etc.)",
-            "fr": "Bien sûr ! Pour quel service souhaitez-vous des prix ou des informations ? (épilation, tatouage, blanchiment, etc.)",
-            "franco": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (ليزر شعر، إزالة وشم، تبييض، إلخ)",
+            "ar": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (إزالة الشعر بالليزر)",
+            "en": "Sure! Which service would you like prices or information about? (laser hair removal)",
+            "fr": "Bien sûr ! Pour quel service souhaitez-vous des prix ou des informations ? (épilation laser)",
+            "franco": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (إزالة الشعر بالليزر)",
         },
     },
     "session_greeting_after_inactivity": {
