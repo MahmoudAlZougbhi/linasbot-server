@@ -43,6 +43,7 @@ const navigationItems = [
     href: "/training",
     icon: AcademicCapIcon,
     permissionKey: "training",
+    hideWhenFaqCanonical: true,
   },
   {
     name: "Content Managers",
@@ -88,10 +89,31 @@ const downloadItems = [
 /** @param {{ collapsed: boolean; onToggleCollapse: () => void; onClose?: () => void }} props */
 const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const { user } = useAuth();
+  const [faqCanonical, setFaqCanonical] = useState(false);
   const [healthState, setHealthState] = useState({
     status: "unknown",
     detail: "Checking…",
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadMeta = async () => {
+      try {
+        const res = await authFetch("/api/cm/meta");
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) {
+          setFaqCanonical(Boolean(data?.faq_canonical));
+        }
+      } catch {
+        // Keep Legacy FAQ visible if meta is unavailable.
+      }
+    };
+    void loadMeta();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,17 +157,16 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const navigation = useMemo(() => {
     if (!user) return [];
 
-    // Admin has access to everything
-    if (user.role === 'admin') {
-      return navigationItems;
-    }
-
-    // Filter based on permissions
-    return navigationItems.filter(item => {
+    /** @param {typeof navigationItems[number]} item */
+    const keepItem = (item) => {
+      if (item.hideWhenFaqCanonical && faqCanonical) return false;
       if (!item.permissionKey) return true;
+      if (user.role === "admin") return true;
       return hasPermission(user, item.permissionKey);
-    });
-  }, [user]);
+    };
+
+    return navigationItems.filter(keepItem);
+  }, [user, faqCanonical]);
 
   const downloads = useMemo(() => {
     if (!user) return [];
