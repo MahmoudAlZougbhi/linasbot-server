@@ -253,7 +253,7 @@ const CmFaqPage = () => {
         <section className="lg:col-span-3 space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
             <h2 className="font-medium text-slate-900 flex items-center gap-2">
-              <PlusIcon className="w-4 h-4" /> Add FAQ group
+              <PlusIcon className="w-4 h-4" /> Add Q&A group
             </h2>
             <p className="text-xs text-slate-500">
               Write in any supported language. We create the linked 4-language group automatically. Numbers, prices,

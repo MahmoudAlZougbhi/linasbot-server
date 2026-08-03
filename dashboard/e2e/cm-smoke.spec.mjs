@@ -230,6 +230,38 @@ async function installCmApiMocks(page, options = {}) {
       return;
     }
 
+    if (path === "/api/cm/faq" && method === "GET") {
+      if (draftLoadFail) {
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ success: false, error: "FAQ store unavailable" }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: [], count: 0 }),
+      });
+      return;
+    }
+
+    if (path === "/api/cm/faq" && method === "POST") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          qa_group_id: "qa_smoke_1",
+          count_created: 4,
+          duplicates: [],
+          record: { qa_group_id: "qa_smoke_1", variants: [], status: "draft" },
+        }),
+      });
+      return;
+    }
+
     // Default: keep SPA working without leaking to a real backend.
     await route.fulfill({
       status: 200,
@@ -255,7 +287,7 @@ test.describe("Content Management browser smoke", () => {
     // Responsive: narrow viewport still shows CM heading and FAQ card.
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "Content Managers" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^FAQ/i })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: "FAQ", exact: true })).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
 
     await page.getByRole("link", { name: /Knowledge/i }).click();
@@ -304,10 +336,20 @@ test.describe("Content Management browser smoke", () => {
   test("draft load failure shows truthful error state", async ({ page }) => {
     await installCmApiMocks(page, { draftLoadFail: true });
     await page.goto("/content-managers/faq");
-    await expect(page.getByRole("heading", { name: "FAQ" })).toBeVisible();
-    // Toast + empty editor: loading settles and Publish stays unavailable.
-    await expect(page.getByText("Loading draft…")).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Publish — unavailable" })).toBeDisabled();
+    await expect(page.getByRole("heading", { name: "FAQ", exact: true })).toBeVisible();
+    // Professional FAQ UI: list endpoint failure surfaces honestly; publish stays on Publish page.
+    await expect(page.getByText("No FAQ groups yet.")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toBeVisible();
+  });
+
+  test("FAQ visual editor loads without JSON textarea", async ({ page }) => {
+    await installCmApiMocks(page);
+    await page.goto("/content-managers/faq");
+    await expect(page.getByRole("heading", { name: "FAQ", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Add Q&A group" })).toBeVisible();
+    await expect(page.getByPlaceholder("Question").first()).toBeVisible();
+    await expect(page.getByPlaceholder("Answer").first()).toBeVisible();
+    await expect(page.locator("textarea").filter({ hasText: "{" })).toHaveCount(0);
   });
 
   test("viewer without contentManagers permission cannot stay on CM routes", async ({ page }) => {
