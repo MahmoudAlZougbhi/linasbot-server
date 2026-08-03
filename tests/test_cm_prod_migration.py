@@ -47,3 +47,25 @@ def test_stage_and_migrate_from_flat_sample_data(tmp_path: Path) -> None:
     assert all(row.get("topic_id") is None for row in (handoff.payload.get("matrix") or []))
     assert report["conflict_count"] == 0
     assert report["publish_ready"] is True
+
+
+def test_stage_reads_app_data_fallback(tmp_path: Path) -> None:
+    data_root = tmp_path / "empty_root"
+    data_root.mkdir()
+    app_data = tmp_path / "app_data"
+    app_data.mkdir()
+    (app_data / "qa_pairs.jsonl").write_text(
+        '{"question":"Hours?","answer":"See published hours.","language":"en","qa_group_id":"g_hours"}\n',
+        encoding="utf-8",
+    )
+    (app_data / "knowledge_base.txt").write_text("Laser hair removal only.\n", encoding="utf-8")
+    staging = tmp_path / "staging"
+    stage = stage_live_data_for_migration(
+        data_root=data_root,
+        staging_root=staging,
+        app_data_root=app_data,
+    )
+    names = {Path(c["dest"]).name for c in stage["copied"]}
+    assert "qa_pairs.jsonl" in names
+    assert "knowledge_base.txt" in names
+    assert "qa_pairs.jsonl" not in stage["missing"]
