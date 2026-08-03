@@ -50,6 +50,14 @@ def _classify_error_message(message: object) -> tuple[str, tuple[str, ...]]:
         reason = "unsupported_field"
     elif "invalid parameter" in lowered:
         reason = "invalid_parameter"
+    elif "verify_token" in lowered and any(
+        term in lowered for term in ("too long", "length", "characters", "maximum", "between")
+    ):
+        reason = "verify_token_format"
+    elif "verify_token" in lowered and ("invalid" in lowered or "not valid" in lowered):
+        reason = "verify_token_invalid"
+    elif "verify_token" in lowered and ("required" in lowered or "missing" in lowered):
+        reason = "verify_token_missing"
     elif "callback" in lowered and ("validat" in lowered or "verify" in lowered):
         reason = "callback_verification"
     elif "permission" in lowered or "access token" in lowered:
@@ -163,6 +171,7 @@ def main() -> None:
         raise MetaWebhookReconcileError("Refusing an unexpected Graph API version")
     if not app_secret or len(verify_token) < 32:
         raise MetaWebhookReconcileError("Required Meta credentials are missing or malformed")
+    print(f"[meta-webhooks] verify_token_length={len(verify_token)}")
 
     app_token = f"{app_id}|{app_secret}"
     base_url = f"https://graph.facebook.com/{version}/{app_id}/subscriptions"

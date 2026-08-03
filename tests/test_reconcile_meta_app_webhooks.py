@@ -127,6 +127,8 @@ def test_graph_failure_does_not_render_credentials() -> None:
         ("Unsupported post request for instagram object", ("unsupported_request", ("instagram", "object"))),
         ("messages is not a valid field", ("unsupported_field", ("messages",))),
         ("Could not validate callback_url", ("callback_verification", ("callback_url",))),
+        ("verify_token has a maximum length", ("verify_token_format", ("verify_token",))),
+        ("verify_token is invalid", ("verify_token_invalid", ("verify_token",))),
     ],
 )
 def test_error_classifier_returns_only_fixed_labels(
