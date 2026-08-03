@@ -94,6 +94,22 @@ def validate_payloads(
     return checks
 
 
+def validate_conversation_payloads(
+    messenger_payload: dict[str, object],
+    instagram_payload: dict[str, object],
+) -> dict[str, bool]:
+    """Prove both messaging APIs are callable without rendering conversation data."""
+
+    checks = {
+        "messenger_conversations_query_succeeded": isinstance(messenger_payload.get("data"), list),
+        "instagram_conversations_query_succeeded": isinstance(instagram_payload.get("data"), list),
+    }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        raise MetaTokenValidationError(f"Meta conversation validation failed checks={failed}")
+    return checks
+
+
 def _request_json(url: str, *, bearer: str | None = None) -> dict[str, object]:
     headers = {"Accept": "application/json"}
     if bearer:
@@ -140,6 +156,17 @@ def main() -> None:
         page_payload,
         expected_app_id=app_id,
     )
+    messenger_query = urllib.parse.urlencode({"fields": "id", "limit": "1"})
+    instagram_query = urllib.parse.urlencode({"fields": "id", "limit": "1", "platform": "instagram"})
+    messenger_payload = _request_json(
+        f"{base}/{EXPECTED_PAGE_ID}/conversations?{messenger_query}",
+        bearer=page_token,
+    )
+    instagram_payload = _request_json(
+        f"{base}/{EXPECTED_PAGE_ID}/conversations?{instagram_query}",
+        bearer=page_token,
+    )
+    checks.update(validate_conversation_payloads(messenger_payload, instagram_payload))
     for name in sorted(checks):
         print(f"[meta-token] {name}=true")
     print(f"[meta-token] page_id={EXPECTED_PAGE_ID}")

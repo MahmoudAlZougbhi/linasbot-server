@@ -2,7 +2,11 @@
 
 import pytest
 
-from scripts.validate_meta_social_token import MetaTokenValidationError, validate_payloads
+from scripts.validate_meta_social_token import (
+    MetaTokenValidationError,
+    validate_conversation_payloads,
+    validate_payloads,
+)
 
 
 def _valid_payloads() -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
@@ -79,3 +83,25 @@ def test_unexpected_token_identity_or_access_fails(failure: str) -> None:
 
     with pytest.raises(MetaTokenValidationError):
         validate_payloads(debug, profile, page, expected_app_id=app_id)
+
+
+def test_messenger_and_instagram_conversation_queries_accept_empty_data() -> None:
+    checks = validate_conversation_payloads({"data": []}, {"data": []})
+
+    assert checks == {
+        "messenger_conversations_query_succeeded": True,
+        "instagram_conversations_query_succeeded": True,
+    }
+
+
+@pytest.mark.parametrize("channel", ["messenger", "instagram"])
+def test_malformed_conversation_query_payload_fails_closed(channel: str) -> None:
+    messenger: dict[str, object] = {"data": []}
+    instagram: dict[str, object] = {"data": []}
+    if channel == "messenger":
+        messenger = {"error": {"message": "not rendered"}}
+    else:
+        instagram = {"error": {"message": "not rendered"}}
+
+    with pytest.raises(MetaTokenValidationError):
+        validate_conversation_payloads(messenger, instagram)
