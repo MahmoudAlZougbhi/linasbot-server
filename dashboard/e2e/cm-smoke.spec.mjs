@@ -287,7 +287,7 @@ test.describe("Content Management browser smoke", () => {
     // Responsive: narrow viewport still shows CM heading and FAQ card.
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "Content Managers" })).toBeVisible();
-    await expect(page.getByRole("main").getByRole("link", { name: "FAQ", exact: true })).toBeVisible();
+    await expect(page.getByRole("main").locator('a[href="/content-managers/faq"]')).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
 
     await page.getByRole("link", { name: /Knowledge/i }).click();
