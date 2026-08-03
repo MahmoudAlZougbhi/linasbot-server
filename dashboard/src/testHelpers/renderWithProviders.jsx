@@ -35,6 +35,7 @@ export function makeAuthUser(overrides = {}) {
       settings: false,
       userManagement: false,
       contentManagers: false,
+      contentPublish: false,
       activityFlow: true,
     },
     ...overrides,

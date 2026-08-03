@@ -30,6 +30,7 @@ const PERMISSION_LABELS = {
   settings: 'Settings',
   userManagement: 'User Management',
   contentManagers: 'Content Managers',
+  contentPublish: 'Content Publish',
   activityFlow: 'Interaction Logs',
 };
 

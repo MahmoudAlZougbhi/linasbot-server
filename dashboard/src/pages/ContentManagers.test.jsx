@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import ContentManagers from "./ContentManagers";
 import { expectAccessibleControls } from "../testHelpers/a11ySmoke";
@@ -15,36 +16,33 @@ vi.mock("framer-motion", () => ({
   AnimatePresence: (/** @type {{ children?: import('react').ReactNode }} */ { children }) => <>{children}</>,
 }));
 
-vi.mock("../components/ContentFilesPanel", () => ({
-  default: (/** @type {{ sectionName: string }} */ { sectionName }) => <div>content-panel:{sectionName}</div>,
-}));
-vi.mock("../components/SystemPromptKnowledgeStylePanel", () => ({
-  default: () => <div>system-prompt-panel</div>,
-}));
-vi.mock("../components/DynamicMessagesPanel", () => ({
-  default: () => <div>dynamic-messages-panel</div>,
-}));
-
 describe("ContentManagers", () => {
-  it("renders section tabs and switches panels", async () => {
-    render(<ContentManagers />);
+  it("renders landing cards for all CM sections including Dynamic Messages, Restricted, and Publish", () => {
+    render(
+      <MemoryRouter>
+        <ContentManagers />
+      </MemoryRouter>
+    );
 
     expect(screen.getByRole("heading", { name: "Content Managers" })).toBeInTheDocument();
-    expect(screen.getByText("content-panel:Knowledge")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Prices/i }));
-    await waitFor(() => {
-      expect(screen.getByText("content-panel:Prices")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /Dynamic Messages/i }));
-    await waitFor(() => {
-      expect(screen.getByText("dynamic-messages-panel")).toBeInTheDocument();
-    });
+    expect(screen.getByRole("link", { name: /Dynamic Messages/i })).toHaveAttribute(
+      "href",
+      "/content-managers/dynamic-messages"
+    );
+    expect(screen.getByRole("link", { name: /Restricted/i })).toHaveAttribute(
+      "href",
+      "/content-managers/restricted"
+    );
+    expect(screen.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toHaveAttribute(
+      "href",
+      "/content-managers/publish"
+    );
+    expect(screen.getByRole("link", { name: /AI Basics/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^FAQ/i })).toBeInTheDocument();
 
     expectAccessibleControls([
-      { role: "button", name: "Knowledge" },
-      { role: "button", name: "Prices" },
+      { role: "link", name: /Knowledge/i },
+      { role: "link", name: /Prices/i },
     ]);
   });
 });

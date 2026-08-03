@@ -9,6 +9,7 @@ import {
   BellIcon,
   Cog6ToothIcon,
   UsersIcon,
+  RocketLaunchIcon,
 } from '@heroicons/react/24/outline';
 
 const PERMISSION_CONFIG = [
@@ -74,6 +75,13 @@ const PERMISSION_CONFIG = [
     description: 'Manage content manager screens',
     icon: AcademicCapIcon,
     color: 'amber'
+  },
+  {
+    key: 'contentPublish',
+    name: 'Content Publish',
+    description: 'Publish and rollback CM versions',
+    icon: RocketLaunchIcon,
+    color: 'orange'
   },
   {
     key: 'activityFlow',

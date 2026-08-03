@@ -1569,6 +1569,159 @@ export const useApi = () => {
     }
   }, []);
 
+  // Content Management control-plane APIs
+  const getCmMeta = useCallback(async () => {
+    try {
+      const response = await api.get("/api/cm/meta");
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: errorMessage(error) };
+    }
+  }, []);
+
+  const getCmDraft = useCallback(async (/** @type {string} */ section) => {
+    try {
+      const response = await api.get(`/api/cm/draft/${section}`);
+      const etagHeader = response.headers?.etag || response.headers?.ETag;
+      return {
+        ...response.data,
+        etag: typeof etagHeader === "string" ? etagHeader : response.data?.data?.etag,
+      };
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
+  const putCmDraft = useCallback(
+    async (
+      /** @type {string} */ section,
+      /** @type {Record<string, unknown>} */ payload,
+      /** @type {string} */ ifMatch
+    ) => {
+      try {
+        const response = await api.put(`/api/cm/draft/${section}`, payload, {
+          headers: { "If-Match": ifMatch },
+        });
+        const etagHeader = response.headers?.etag || response.headers?.ETag;
+        return {
+          ...response.data,
+          etag: typeof etagHeader === "string" ? etagHeader : response.data?.data?.etag,
+        };
+      } catch (error) {
+        if (isAxiosLikeError(error) && error.response?.status === 409) {
+          const data =
+            error.response.data && typeof error.response.data === "object"
+              ? error.response.data
+              : {};
+          return {
+            success: false,
+            conflict: true,
+            ...data,
+            error: data.message || data.error || "Draft conflict",
+          };
+        }
+        if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+          return { success: false, error: "Backend offline" };
+        }
+        return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+      }
+    },
+    []
+  );
+
+  const validateCmDraft = useCallback(async (/** @type {Record<string, unknown>} */ payload = {}) => {
+    try {
+      const response = await api.post("/api/cm/validate", payload);
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", ok: false, errors: [], warnings: [] };
+      }
+      return {
+        success: false,
+        error: getAxiosResponseDetail(error) || errorMessage(error),
+        ok: false,
+        errors: [],
+        warnings: [],
+      };
+    }
+  }, []);
+
+  const publishCm = useCallback(async () => {
+    try {
+      const response = await api.post("/api/cm/publish", {});
+      return response.data;
+    } catch (error) {
+      if (isAxiosLikeError(error) && error.response?.status === 403) {
+        const data =
+          error.response.data && typeof error.response.data === "object"
+            ? error.response.data
+            : {};
+        return {
+          success: false,
+          error: data.message || data.detail || data.error || "Publish disabled",
+          message: data.message || data.detail,
+        };
+      }
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
+  const getCmVersions = useCallback(async () => {
+    try {
+      const response = await api.get("/api/cm/versions");
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", data: [], count: 0 };
+      }
+      return { success: false, error: errorMessage(error), data: [], count: 0 };
+    }
+  }, []);
+
+  const rollbackCmVersion = useCallback(async (/** @type {string} */ versionId) => {
+    try {
+      const response = await api.post(`/api/cm/versions/${versionId}/rollback`, {});
+      return response.data;
+    } catch (error) {
+      if (isAxiosLikeError(error) && error.response?.status === 403) {
+        const data =
+          error.response.data && typeof error.response.data === "object"
+            ? error.response.data
+            : {};
+        return {
+          success: false,
+          error: data.message || data.detail || data.error || "Publish disabled",
+        };
+      }
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
+  const buildCmPreviewPacket = useCallback(async (/** @type {Record<string, unknown>} */ payload = {}) => {
+    try {
+      const response = await api.post("/api/cm/preview-packet", payload);
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
   return {
     loading,
     currentProvider,
@@ -1644,5 +1797,14 @@ export const useApi = () => {
     deleteContentFile,
     getDynamicMessages,
     updateDynamicMessages,
+    // Content Management control plane
+    getCmMeta,
+    getCmDraft,
+    putCmDraft,
+    validateCmDraft,
+    publishCm,
+    getCmVersions,
+    rollbackCmVersion,
+    buildCmPreviewPacket,
   };
 };

@@ -129,11 +129,15 @@ export const canAccessPath = (user, path) => {
   /** @type {Record<string, string>} */
   const pathMap = PATH_TO_PERMISSION;
   const permissionKey = pathMap[path];
-  if (!permissionKey) {
-    // If path is not in the map, allow access (public or unknown route)
-    return true;
+  if (permissionKey) {
+    return hasPermission(user, permissionKey);
   }
-  return hasPermission(user, permissionKey);
+  // Nested CM routes share the contentManagers permission.
+  if (path.startsWith('/content-managers/')) {
+    return hasPermission(user, 'contentManagers');
+  }
+  // If path is not in the map, allow access (public or unknown route)
+  return true;
 };
 
 /**

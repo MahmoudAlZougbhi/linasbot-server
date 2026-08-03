@@ -1,0 +1,82 @@
+# Production Content Management cutover. Confirmation-gated SSH steps.
+# Never prints secrets or customer message bodies.
+name: CM Production Cutover
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "Phase to run"
+        required: true
+        type: choice
+        options:
+          - backup
+          - migrate_validate
+          - enable_publish_keep_legacy
+          - publish
+          - cutover_published
+          - rollback_legacy
+      confirmation:
+        description: "Type CM_CUTOVER_CONFIRMED"
+        required: true
+        type: string
+
+concurrency:
+  group: cm-production-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: CM production phase
+    if: inputs.confirmation == 'CM_CUTOVER_CONFIRMED'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Execute phase on production
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          PHASE: ${{ inputs.phase }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 40m
+          envs: PHASE
+          script: |
+            set -euo pipefail
+            echo "[cm-workflow] phase=${PHASE}"
+            echo "[cm-workflow] deployed_sha=$(git -C /opt/linasbot rev-parse HEAD)"
+            case "${PHASE}" in
+              backup)
+                sudo bash /opt/linasbot/scripts/prod_cm_backup.sh
+                ;;
+              migrate_validate)
+                sudo bash /opt/linasbot/scripts/prod_cm_migrate_and_validate.sh
+                ;;
+              enable_publish_keep_legacy)
+                export CM_RUNTIME_MODE_VALUE=legacy
+                export CM_PUBLISH_ENABLED_VALUE=true
+                export CM_EMBEDDING_PROVIDER_VALUE=openai
+                export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
+                sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
+                ;;
+              publish)
+                sudo bash /opt/linasbot/scripts/prod_cm_publish.sh
+                ;;
+              cutover_published)
+                sudo bash /opt/linasbot/scripts/prod_cm_cutover.sh
+                ;;
+              rollback_legacy)
+                export CM_PUBLISH_ENABLED_VALUE=false
+                sudo -E bash /opt/linasbot/scripts/prod_cm_rollback.sh
+                ;;
+              *)
+                echo "unknown phase" >&2
+                exit 1
+                ;;
+            esac

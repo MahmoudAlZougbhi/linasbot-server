@@ -43,10 +43,10 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
         "label": "Ask Clarification",
         "when_used": "Sent when user request is too vague and missing required detail (service/topic).",
         "messages": {
-            "ar": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (ليزر شعر، إزالة وشم، تبييض، إلخ)",
-            "en": "Sure! Which service would you like prices or information about? (hair removal, tattoo removal, whitening, etc.)",
-            "fr": "Bien sûr ! Pour quel service souhaitez-vous des prix ou des informations ? (épilation, tatouage, blanchiment, etc.)",
-            "franco": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (ليزر شعر، إزالة وشم، تبييض، إلخ)",
+            "ar": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (إزالة الشعر بالليزر)",
+            "en": "Sure! Which service would you like prices or information about? (laser hair removal)",
+            "fr": "Bien sûr ! Pour quel service souhaitez-vous des prix ou des informations ? (épilation laser)",
+            "franco": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (إزالة الشعر بالليزر)",
         },
     },
     "session_greeting_after_inactivity": {
@@ -77,6 +77,20 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
             "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
             "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
             "franco": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
+        },
+    },
+    "answer_validation_failed": {
+        "label": "Answer Validation Failed (CM Runtime)",
+        "when_used": (
+            "Sent when the CM runtime pipeline's deterministic validator rejects a generated "
+            "answer twice (once, plus one constrained regeneration) — polite clarify/contact "
+            "handoff with no invented facts. See services/cm/runtime_pipeline.py."
+        ),
+        "messages": {
+            "ar": "ما قدرت أتأكد ١٠٠٪ من هالمعلومة هلق. فيك تعيد صياغة سؤالك أو تتواصل معنا مباشرة وفريقنا بيساعدك؟",
+            "en": "I couldn't fully confirm that detail right now. Could you rephrase your question, or reach out to our team directly so they can help?",
+            "fr": "Je n'ai pas pu confirmer entièrement ce détail pour le moment. Pouvez-vous reformuler votre question ou contacter directement notre équipe ?",
+            "franco": "ما قدرت أتأكد ١٠٠٪ من هالمعلومة هلق. فيك تعيد صياغة سؤالك أو تتواصل معنا مباشرة وفريقنا بيساعدك؟",
         },
     },
 }
