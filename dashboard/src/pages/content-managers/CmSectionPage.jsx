@@ -32,9 +32,9 @@ const CmSectionPage = () => {
       null
     )
   );
-  const [publishMessage, setPublishMessage] = useState(
-    "Publishing is not enabled yet. This phase saves drafts only."
-  );
+  const [publishEnabled, setPublishEnabled] = useState(false);
+  const [runtimeMode, setRuntimeMode] = useState("legacy");
+  const [publishMessage, setPublishMessage] = useState("");
 
   const loadDraft = useCallback(async () => {
     if (!card?.section) return;
@@ -45,8 +45,21 @@ const CmSectionPage = () => {
         getCmDraft(card.section),
         getCmMeta(),
       ]);
-      if (metaRes?.publish_disabled_message) {
+      const enabled = Boolean(metaRes?.publish_enabled);
+      setPublishEnabled(enabled);
+      setRuntimeMode(
+        typeof metaRes?.runtime_mode === "string" ? metaRes.runtime_mode : "legacy"
+      );
+      if (enabled) {
+        setPublishMessage(
+          `Publishing is enabled. Runtime mode: ${
+            typeof metaRes?.runtime_mode === "string" ? metaRes.runtime_mode : "unknown"
+          }. Save draft → Validate → open Preview / Validate / Publish to push a new version.`
+        );
+      } else if (metaRes?.publish_disabled_message) {
         setPublishMessage(String(metaRes.publish_disabled_message));
+      } else {
+        setPublishMessage("Publishing is not enabled yet. This phase saves drafts only.");
       }
       if (!draftRes?.success || !draftRes.data) {
         toast.error(draftRes?.error || "Failed to load draft");
@@ -243,17 +256,34 @@ const CmSectionPage = () => {
             >
               {validating ? "Validating…" : "Validate"}
             </button>
-            <button
-              type="button"
-              disabled
-              title={publishMessage}
-              className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-400 cursor-not-allowed"
-            >
-              Publish — unavailable
-            </button>
+            {publishEnabled ? (
+              <Link
+                to="/content-managers/publish"
+                className="rounded-xl bg-emerald-700 text-white px-4 py-2.5 text-sm font-medium hover:bg-emerald-600"
+              >
+                Go to Publish
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title={publishMessage}
+                className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-400 cursor-not-allowed"
+              >
+                Publish — unavailable
+              </button>
+            )}
           </div>
 
-          <p className="text-sm text-slate-500 max-w-2xl">{publishMessage}</p>
+          <p className="text-sm text-slate-500 max-w-2xl">
+            {publishMessage}
+            {publishEnabled ? (
+              <span className="block mt-1 text-emerald-700">
+                Live runtime is <span className="font-mono">{runtimeMode}</span>. Publishing from the
+                Publish page creates a new immutable version.
+              </span>
+            ) : null}
+          </p>
 
           {validation && (
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
