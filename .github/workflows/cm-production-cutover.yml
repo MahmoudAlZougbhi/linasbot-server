@@ -20,6 +20,7 @@ on:
           - rollback_legacy
           - rollback_content_version
           - price_source_ledger
+          - price_line_shape_probe
           - enable_faq_canonical
           - sot_audit_published
       confirmation:
@@ -91,6 +92,8 @@ jobs:
               sudo -E bash /opt/linasbot/scripts/prod_cm_rollback_version.sh
             elif [ "${PHASE}" = "price_source_ledger" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_price_source_ledger.sh
+            elif [ "${PHASE}" = "price_line_shape_probe" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_price_line_shape_probe.sh
             elif [ "${PHASE}" = "enable_faq_canonical" ]; then
               export CM_RUNTIME_MODE_VALUE=published
               export CM_PUBLISH_ENABLED_VALUE=true
