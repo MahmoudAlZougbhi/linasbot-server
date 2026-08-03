@@ -175,12 +175,14 @@ def _check_pricing_catalog(
     for raw in catalog_list:
         if not isinstance(raw, dict):
             continue
+        aliases_raw = raw.get("aliases")
+        aliases_list: list[object] = aliases_raw if isinstance(aliases_raw, list) else []
         blob = " ".join(
             [
                 str(raw.get("id") or ""),
                 str((raw.get("labels") or {}).get("en") if isinstance(raw.get("labels"), dict) else ""),
                 str((raw.get("labels") or {}).get("ar") if isinstance(raw.get("labels"), dict) else ""),
-                *[str(a) for a in (raw.get("aliases") if isinstance(raw.get("aliases"), list) else [])],
+                *[str(a) for a in aliases_list],
             ]
         )
         if raw.get("active", True) and _text_mentions(blob, markers):
