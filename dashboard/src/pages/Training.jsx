@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AcademicCapIcon,
@@ -304,6 +304,7 @@ const Training = () => {
 
   return (
     <div className="space-y-8">
+      {faqCanonical ? <Navigate to="/content-managers/faq" replace /> : null}
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -312,11 +313,11 @@ const Training = () => {
         className="text-center"
       >
         <h1 className="text-4xl font-bold gradient-text font-display mb-4">
-          AI Training Center
+          FAQ Authoring (legacy)
         </h1>
         <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-          Teach your AI assistant with Q&A pairs. Q&A in any language (Arabic,
-          English, French, Franco) is auto-translated to all 4 languages.
+          Teach your AI with Q&A pairs — this is FAQ authoring, not OpenAI model retraining.
+          Prefer Content Management → FAQ for the canonical editor.
         </p>
       </motion.div>
 

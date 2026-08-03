@@ -12,8 +12,10 @@ import toast from "react-hot-toast";
 import { useApi } from "../../hooks/useApi";
 
 const TABS = [
+  { id: "wizard", label: "Setup Wizard" },
   { id: "catalog", label: "Catalog / Services & Products" },
-  { id: "prices", label: "Base Prices & Variants" },
+  { id: "prices", label: "Base Prices & Variants / Matrix" },
+  { id: "resources", label: "Options / Machines / Variables" },
   { id: "discounts", label: "Discounts & Packages" },
   { id: "preview", label: "Price Calculator Preview" },
   { id: "validation", label: "Validation & Conflicts" },
@@ -42,7 +44,7 @@ const asRecord = (value) =>
 
 const CmPricesPage = () => {
   const { getCmDraft, putCmDraft, validateCmDraft, getCmMeta, quoteCmPricing } = useApi();
-  const [tab, setTab] = useState("catalog");
+  const [tab, setTab] = useState("wizard");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [etag, setEtag] = useState(/** @type {string | null} */ (null));
@@ -51,6 +53,8 @@ const CmPricesPage = () => {
   const [catalog, setCatalog] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [priceEntries, setPriceEntries] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [discountRules, setDiscountRules] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
+  const [resources, setResources] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
+  const [dimensions, setDimensions] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [validation, setValidation] = useState(
     /** @type {{ ok?: boolean; error_count?: number; errors?: Array<Record<string, unknown>> } | null} */ (null)
   );
@@ -73,10 +77,12 @@ const CmPricesPage = () => {
       catalog,
       price_entries: priceEntries,
       discount_rules: discountRules,
+      resources,
+      dimension_definitions: dimensions,
       items: [],
       notes: notes || null,
     }),
-    [categories, catalog, priceEntries, discountRules, notes]
+    [categories, catalog, priceEntries, discountRules, resources, dimensions, notes]
   );
 
   const load = useCallback(async () => {
@@ -105,6 +111,14 @@ const CmPricesPage = () => {
       setDiscountRules(
         Array.isArray(section.discount_rules)
           ? /** @type {Array<Record<string, unknown>>} */ (section.discount_rules)
+          : []
+      );
+      setResources(
+        Array.isArray(section.resources) ? /** @type {Array<Record<string, unknown>>} */ (section.resources) : []
+      );
+      setDimensions(
+        Array.isArray(section.dimension_definitions)
+          ? /** @type {Array<Record<string, unknown>>} */ (section.dimension_definitions)
           : []
       );
       const firstCatalog = Array.isArray(section.catalog) ? section.catalog[0] : null;
@@ -320,6 +334,126 @@ const CmPricesPage = () => {
         <div className="text-sm text-slate-600 py-12 text-center">Loading prices…</div>
       ) : (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          {tab === "wizard" && (
+            <section className="rounded-2xl border bg-white p-5 space-y-3 text-sm text-slate-700">
+              <h2 className="text-lg font-medium text-slate-900">Pricing setup wizard</h2>
+              <ol className="list-decimal pl-5 space-y-2">
+                <li>Add categories and catalog items (services, products, packages, body areas as data, etc.).</li>
+                <li>Set base prices and variants in the price matrix — notes never override amounts.</li>
+                <li>Optionally define machines/resources and typed variables for your business.</li>
+                <li>Build WHEN / THEN discount or package rules visually (no formulas or code).</li>
+                <li>Preview with the same engine production uses, then Validate → Publish.</li>
+              </ol>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button type="button" onClick={() => setTab("catalog")} className="rounded-xl bg-slate-900 text-white px-3 py-2">
+                  Start with catalog
+                </button>
+                <button type="button" onClick={() => setTab("preview")} className="rounded-xl border px-3 py-2">
+                  Open calculator
+                </button>
+              </div>
+            </section>
+          )}
+          {tab === "resources" && (
+            <section className="space-y-4">
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setResources((prev) => [
+                      ...prev,
+                      {
+                        id: `res_${Date.now()}`,
+                        labels: emptyLabels(),
+                        resource_kind: "machine",
+                        aliases: [],
+                        active: true,
+                      },
+                    ])
+                  }
+                  className="inline-flex items-center gap-1 rounded-xl bg-slate-800 text-white px-3 py-2 text-sm"
+                >
+                  <PlusIcon className="w-4 h-4" /> Resource / machine
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDimensions((prev) => [
+                      ...prev,
+                      {
+                        id: `dim_${Date.now()}`,
+                        labels: emptyLabels(),
+                        value_type: "enum",
+                        allowed_values: [],
+                        required: false,
+                        active: true,
+                      },
+                    ])
+                  }
+                  className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm"
+                >
+                  <PlusIcon className="w-4 h-4" /> Variable / dimension
+                </button>
+              </div>
+              {resources.map((res, idx) => (
+                <div key={String(res.id)} className="rounded-xl border bg-white p-4 space-y-2">
+                  <div className="text-xs font-medium text-slate-500">ResourceOrMethod</div>
+                  <input
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                    value={labelEn(res.labels)}
+                    placeholder="Display name"
+                    onChange={(e) => {
+                      const next = [...resources];
+                      next[idx] = { ...res, labels: { ...emptyLabels(), ...(res.labels || {}), en: e.target.value } };
+                      setResources(next);
+                    }}
+                  />
+                  <input
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                    value={String(res.resource_kind || "")}
+                    placeholder="Kind (machine, room, staff…)"
+                    onChange={(e) => {
+                      const next = [...resources];
+                      next[idx] = { ...res, resource_kind: e.target.value };
+                      setResources(next);
+                    }}
+                  />
+                </div>
+              ))}
+              {dimensions.map((dim, idx) => (
+                <div key={String(dim.id)} className="rounded-xl border bg-white p-4 space-y-2">
+                  <div className="text-xs font-medium text-slate-500">Pricing dimension</div>
+                  <input
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                    value={labelEn(dim.labels)}
+                    placeholder="Variable name"
+                    onChange={(e) => {
+                      const next = [...dimensions];
+                      next[idx] = { ...dim, labels: { ...emptyLabels(), ...(dim.labels || {}), en: e.target.value } };
+                      setDimensions(next);
+                    }}
+                  />
+                  <select
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                    value={String(dim.value_type || "string")}
+                    onChange={(e) => {
+                      const next = [...dimensions];
+                      next[idx] = { ...dim, value_type: e.target.value };
+                      setDimensions(next);
+                    }}
+                  >
+                    <option value="string">Text</option>
+                    <option value="number">Number</option>
+                    <option value="enum">List of values</option>
+                    <option value="boolean">Yes / No</option>
+                  </select>
+                </div>
+              ))}
+              {!resources.length && !dimensions.length ? (
+                <div className="text-sm text-slate-500">No machines or variables yet — optional for simple catalogs.</div>
+              ) : null}
+            </section>
+          )}
           {tab === "catalog" && (
             <section className="space-y-4">
               <div className="flex gap-2 flex-wrap">

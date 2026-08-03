@@ -32,10 +32,16 @@ const navigationItems = [
     permissionKey: "testing",
   },
   {
-    name: "Bot Training",
+    name: "FAQ / Bot Training",
+    href: "/content-managers/faq",
+    icon: AcademicCapIcon,
+    badge: "CM",
+    permissionKey: "contentManagers",
+  },
+  {
+    name: "Legacy FAQ",
     href: "/training",
     icon: AcademicCapIcon,
-    badge: "Active",
     permissionKey: "training",
   },
   {

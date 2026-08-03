@@ -15,8 +15,8 @@ export const FEATURES = {
   TRAINING: {
     key: 'training',
     path: '/training',
-    name: 'AI Training',
-    description: 'Train and configure the AI bot'
+    name: 'FAQ Authoring (legacy)',
+    description: 'Legacy FAQ surface — prefer Content Management → FAQ'
   },
   TESTING: {
     key: 'testing',

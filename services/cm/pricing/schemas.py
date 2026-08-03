@@ -245,3 +245,125 @@ class QuoteRequestLine(CmBaseModel):
         if value <= 0:
             raise ValueError("quantity must be > 0")
         return value
+
+
+# --- Superseding control-plane concepts (tenant-owned, business-agnostic) ---
+
+DimensionValueType = Literal["string", "number", "enum", "boolean"]
+
+
+class PricingDimensionDefinition(CmBaseModel):
+    """Owner-declared typed dimension (validated; never free-form executable formulas)."""
+
+    id: str
+    labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
+    value_type: DimensionValueType = "string"
+    allowed_values: list[str] = Field(default_factory=list)  # required when value_type=enum
+    required: bool = False
+    active: bool = True
+    notes: str | None = None
+
+
+class PricingDimensionValue(CmBaseModel):
+    dimension_id: str
+    value: str
+
+
+class ResourceOrMethod(CmBaseModel):
+    """Tenant resource/method (machines, rooms, practitioners, tools) — data, not code."""
+
+    id: str
+    labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
+    aliases: list[str] = Field(default_factory=list)
+    resource_kind: str = "generic"  # tenant-defined: machine, room, staff, tool, …
+    branch_ids: list[str] = Field(default_factory=list)
+    active: bool = True
+    provenance: str | None = None
+    revision: int = 1
+    notes: str | None = None
+
+
+class PriceBook(CmBaseModel):
+    """Named price book (e.g. standard, promo window) scoping a set of PriceEntry ids."""
+
+    id: str
+    labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
+    currency: str = "USD"
+    entry_ids: list[str] = Field(default_factory=list)
+    branch_ids: list[str] = Field(default_factory=list)
+    audience: AudienceScope = "any"
+    active: bool = True
+    effective: EffectiveWindow = Field(default_factory=EffectiveWindow)
+    provenance: str | None = None
+    revision: int = 1
+    notes: str | None = None
+
+
+class DiscountRuleSet(CmBaseModel):
+    """Named collection of discount/package rules with shared stacking defaults."""
+
+    id: str
+    labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
+    rule_ids: list[str] = Field(default_factory=list)
+    default_stacking: StackingPolicy = "exclusive"
+    active: bool = True
+    notes: str | None = None
+
+
+class PackageRule(CmBaseModel):
+    """Package/bundle rule — declarative WHEN/THEN, same engine as DiscountRule."""
+
+    id: str
+    labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
+    priority: int = 100
+    stacking: StackingPolicy = "exclusive"
+    exclusive: bool = True
+    when: RuleConditionGroup = Field(default_factory=RuleConditionGroup)
+    then: RuleAction
+    included_item_ids: list[str] = Field(default_factory=list)
+    included_category_ids: list[str] = Field(default_factory=list)
+    currency: str = "USD"
+    rounding: RoundingPolicy = "nearest_0_01"
+    active: bool = True
+    effective: EffectiveWindow = Field(default_factory=EffectiveWindow)
+    provenance: str | None = None
+    revision: int = 1
+    notes: str | None = None
+
+    def as_discount_rule(self) -> DiscountRule:
+        return DiscountRule(
+            id=self.id,
+            labels=self.labels,
+            priority=self.priority,
+            stacking=self.stacking,
+            exclusive=self.exclusive,
+            when=self.when,
+            then=self.then,
+            eligible_item_ids=list(self.included_item_ids),
+            eligible_category_ids=list(self.included_category_ids),
+            currency=self.currency,
+            rounding=self.rounding,
+            active=self.active,
+            effective=self.effective,
+            provenance=self.provenance,
+            revision=self.revision,
+            notes=self.notes,
+        )
+
+
+class PublishedPricingVersion(CmBaseModel):
+    """Immutable pricing slice pointer published with content/index atomically."""
+
+    tenant_id: str
+    pricing_version_id: str
+    content_version_id: str
+    checksum: str
+    created_at: str | None = None
+    created_by: str | None = None
+    schema_version: int = 1
+
+
+# Stable aliases matching the owner vocabulary (same runtime objects).
+ConditionGroup = RuleConditionGroup
+PricingAction = RuleAction
+QuoteLineItem = QuoteLine

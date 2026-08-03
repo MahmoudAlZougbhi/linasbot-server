@@ -1672,6 +1672,67 @@ export const useApi = () => {
     }
   }, []);
 
+  const listCmFaq = useCallback(async (/** @type {Record<string, unknown>} */ params = {}) => {
+    try {
+      const response = await api.get("/api/cm/faq", { params });
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", data: [] };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error), data: [] };
+    }
+  }, []);
+
+  const createCmFaq = useCallback(async (/** @type {Record<string, unknown>} */ body) => {
+    try {
+      const response = await api.post("/api/cm/faq", body);
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
+  const archiveCmFaq = useCallback(async (/** @type {string} */ qaGroupId) => {
+    try {
+      const response = await api.post(`/api/cm/faq/${qaGroupId}/archive`);
+      return response.data;
+    } catch (error) {
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
+  const patchCmFaqVariant = useCallback(
+    async (
+      /** @type {string} */ qaGroupId,
+      /** @type {string} */ language,
+      /** @type {Record<string, unknown>} */ body
+    ) => {
+      try {
+        const response = await api.patch(`/api/cm/faq/${qaGroupId}/variants/${language}`, body);
+        return response.data;
+      } catch (error) {
+        return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+      }
+    },
+    []
+  );
+
+  const regenerateCmFaq = useCallback(
+    async (/** @type {string} */ qaGroupId, /** @type {Record<string, unknown>} */ body = {}) => {
+      try {
+        const response = await api.post(`/api/cm/faq/${qaGroupId}/regenerate`, body);
+        return response.data;
+      } catch (error) {
+        return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+      }
+    },
+    []
+  );
+
   const publishCm = useCallback(async () => {
     try {
       const response = await api.post("/api/cm/publish", {});
@@ -1822,6 +1883,11 @@ export const useApi = () => {
     putCmDraft,
     validateCmDraft,
     quoteCmPricing,
+    listCmFaq,
+    createCmFaq,
+    archiveCmFaq,
+    patchCmFaqVariant,
+    regenerateCmFaq,
     publishCm,
     getCmVersions,
     rollbackCmVersion,

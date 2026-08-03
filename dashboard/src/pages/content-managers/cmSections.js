@@ -67,7 +67,7 @@ export const CM_SECTION_CARDS = [
     slug: "faq",
     section: "faq",
     name: "FAQ",
-    description: "Exact FAQ pairs with 4-language auto-translate preserved.",
+    description: "Linked 4-language Q&A — visual editor, no JSON. Canonical FAQ for production.",
   },
   {
     slug: "handoff",
