@@ -69,6 +69,10 @@ def validate_restricted_conflicts(
         markers = _topic_markers(topic)
         failures.extend(_check_services(topic, markers, service_items))
         failures.extend(_check_prices(topic, markers, price_items, service_items))
+        if isinstance(prices, dict):
+            failures.extend(_check_pricing_catalog(topic, markers, prices))
+        elif isinstance(prices, PricesSection):
+            failures.extend(_check_pricing_catalog(topic, markers, prices.model_dump(mode="json")))
         failures.extend(_check_faq(topic, markers, faq_items))
         failures.extend(_check_knowledge(topic, markers, knowledge_items))
         failures.extend(_check_handoff(topic, markers, handoff_policy))
@@ -152,6 +156,42 @@ def _check_prices(
                     ),
                     path=f"prices.items[{price.id}]",
                     details={"topic_id": topic.id, "price_id": price.id},
+                )
+            )
+    return out
+
+
+def _check_pricing_catalog(
+    topic: RestrictedTopic,
+    markers: set[str],
+    prices_payload: dict[str, object] | None,
+) -> list[ValidationFailure]:
+    """Block active catalog items / price entries that affirm restricted topics."""
+    if not isinstance(prices_payload, dict):
+        return []
+    out: list[ValidationFailure] = []
+    catalog_raw = prices_payload.get("catalog")
+    catalog_list: list[object] = catalog_raw if isinstance(catalog_raw, list) else []
+    for raw in catalog_list:
+        if not isinstance(raw, dict):
+            continue
+        aliases_raw = raw.get("aliases")
+        aliases_list: list[object] = aliases_raw if isinstance(aliases_raw, list) else []
+        blob = " ".join(
+            [
+                str(raw.get("id") or ""),
+                str((raw.get("labels") or {}).get("en") if isinstance(raw.get("labels"), dict) else ""),
+                str((raw.get("labels") or {}).get("ar") if isinstance(raw.get("labels"), dict) else ""),
+                *[str(a) for a in aliases_list],
+            ]
+        )
+        if raw.get("active", True) and _text_mentions(blob, markers):
+            out.append(
+                ValidationFailure(
+                    code=RESTRICTED_PRICE_PRESENT,
+                    message=f"Restricted topic '{topic.id}' conflicts with catalog item '{raw.get('id')}'.",
+                    path=f"prices.catalog[{raw.get('id')}]",
+                    details={"topic_id": topic.id, "catalog_item_id": str(raw.get("id") or "")},
                 )
             )
     return out

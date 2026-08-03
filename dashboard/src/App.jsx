@@ -20,6 +20,7 @@ const SimpleApiTest = lazy(() => import('./pages/SimpleApiTest'));
 const Training = lazy(() => import('./pages/Training'));
 const ContentManagers = lazy(() => import('./pages/ContentManagers'));
 const CmSectionPage = lazy(() => import('./pages/content-managers/CmSectionPage'));
+const CmPricesPage = lazy(() => import('./pages/content-managers/CmPricesPage'));
 const CmPublishPage = lazy(() => import('./pages/content-managers/CmPublishPage'));
 const ActivityFlow = lazy(() => import('./pages/ActivityFlow'));
 const LiveChat = lazy(() => import('./pages/LiveChat'));
@@ -90,6 +91,7 @@ function AppContent() {
                     <Route path="/training" element={<Training />} />
                     <Route path="/content-managers" element={<ContentManagers />} />
                     <Route path="/content-managers/publish" element={<CmPublishPage />} />
+                    <Route path="/content-managers/prices" element={<CmPricesPage />} />
                     <Route path="/content-managers/:sectionSlug" element={<CmSectionPage />} />
                     <Route path="/activity-flow" element={<ActivityFlow />} />
                     <Route path="/live-chat" element={<LiveChat />} />

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -98,6 +98,8 @@ class BranchRecord(CmBaseModel):
 
 
 class PriceRecord(CmBaseModel):
+    """Legacy structured price row (service_id keyed). Prefer PriceEntry + CatalogItem."""
+
     id: str
     service_id: str
     amount: float
@@ -176,6 +178,16 @@ class BranchesSection(CmBaseModel):
 
 
 class PricesSection(CmBaseModel):
+    """Tenant pricing control plane: catalog + entries + discount rules.
+
+    ``items`` retains legacy PriceRecord rows for backward compatibility; new authoring
+    uses ``catalog`` / ``price_entries`` / ``discount_rules`` (business-agnostic).
+    """
+
+    categories: list[Any] = Field(default_factory=list)
+    catalog: list[Any] = Field(default_factory=list)
+    price_entries: list[Any] = Field(default_factory=list)
+    discount_rules: list[Any] = Field(default_factory=list)
     items: list[PriceRecord] = Field(default_factory=list)
     notes: str | None = None
 

@@ -1653,6 +1653,25 @@ export const useApi = () => {
     }
   }, []);
 
+  const quoteCmPricing = useCallback(async (/** @type {Record<string, unknown>} */ body = {}) => {
+    try {
+      const response = await api.post("/api/cm/pricing/quote", body);
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      if (isAxiosLikeError(error) && error.response?.data && typeof error.response.data === "object") {
+        return {
+          success: false,
+          ...error.response.data,
+          error: error.response.data.message || error.response.data.error || errorMessage(error),
+        };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
   const publishCm = useCallback(async () => {
     try {
       const response = await api.post("/api/cm/publish", {});
@@ -1802,6 +1821,7 @@ export const useApi = () => {
     getCmDraft,
     putCmDraft,
     validateCmDraft,
+    quoteCmPricing,
     publishCm,
     getCmVersions,
     rollbackCmVersion,
