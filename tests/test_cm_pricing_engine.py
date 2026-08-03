@@ -451,13 +451,18 @@ def test_migration_extract_content_file_and_map() -> None:
     assert not any("session" in r["name"].lower() for r in rows)
 
     space_rows = extract_price_rows_from_json_obj(
-        {"title": "Men", "content": "Chest 80$\nBack 90 USD\nSessions 8"},
+        {
+            "title": "Men",
+            "content": "Chest 80$\nBack 90 USD\nSessions 8\nArms: $55 (6 sessions)\n**Face**: $40",
+        },
         source="price_files/men.json",
         allow_space_amounts=True,
     )
     space_names = {r["name"] for r in space_rows}
     assert "Chest" in space_names
     assert "Back" in space_names
+    assert "Arms" in space_names
+    assert "Face" in space_names
 
     map_rows = extract_price_rows_from_json_obj({"Underarms": 40, "Full legs": 120}, source="map.json")
     assert len(map_rows) == 2

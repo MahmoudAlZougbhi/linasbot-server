@@ -94,6 +94,43 @@ _TRAILING_AMOUNT_RE = re.compile(
     r"^(?P<cur>\$|€|£|USD|EUR|LL|L\.?L\.?)?\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*(?P<cur2>\$|€|£|USD|EUR|LL|L\.?L\.?)?$",
     re.IGNORECASE,
 )
+_MARKUP_RE = re.compile(r"<[^>]+>")
+_MD_NOISE_RE = re.compile(r"[*_`#]+")
+# Last resort for selector files: require an explicit currency token next to the amount.
+_FALLBACK_CUR_THEN_AMOUNT_RE = re.compile(
+    r"^(?P<name>.+?)\s*(?::|=|-|–|—|\|)?\s*"
+    r"(?P<cur>\$|€|£|USD|EUR|LL|L\.?L\.?)\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*$",
+    re.IGNORECASE,
+)
+_FALLBACK_AMOUNT_THEN_CUR_RE = re.compile(
+    r"^(?P<name>.+?)\s*(?::|=|-|–|—|\|)?\s*"
+    r"(?P<amount>\d+(?:[.,]\d{1,2})?)\s*(?P<cur>\$|€|£|USD|EUR|LL|L\.?L\.?)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _should_skip_non_price_line(line: str) -> bool:
+    """Skip session/schedule rule lines, but keep lines that also contain a money amount."""
+    if not _SKIP_LINE_RE.search(line):
+        return False
+    if re.search(
+        r"(\$\s*\d|\d\s*\$|\bUSD\b\s*\d|\d\s*\bUSD\b|€\s*\d|\d\s*€|\bEUR\b\s*\d|\d\s*\bEUR\b)",
+        line,
+        re.IGNORECASE,
+    ):
+        return False
+    return True
+
+
+def _normalize_price_line(line: str) -> str:
+    """Strip HTML/markdown noise without inventing tokens."""
+    text = _MARKUP_RE.sub(" ", line or "")
+    text = _MD_NOISE_RE.sub(" ", text)
+    text = text.replace("\u00a0", " ").replace("\u2007", " ").replace("\u202f", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    # Drop leading list markers / numbering prefixes.
+    text = re.sub(r"^(?:[-•*]|\d+[.)])\s+", "", text)
+    return text.strip()
 
 
 def _as_float(value: Any) -> float | None:
@@ -188,10 +225,10 @@ def extract_price_rows_from_text(
         return True
 
     for line_no, raw_line in enumerate(str(text).splitlines(), start=1):
-        line = raw_line.strip()
+        line = _normalize_price_line(raw_line)
         if not line or line.startswith("#") or set(line) <= {"-", "=", "_", "*"}:
             continue
-        if _SKIP_LINE_RE.search(line):
+        if _should_skip_non_price_line(line):
             continue
         matched = False
         match = _PRICED_LINE_RE.match(line)
@@ -239,6 +276,29 @@ def extract_price_rows_from_text(
                             require_currency_or_min=True,
                         ):
                             matched = True
+                    if not matched:
+                        # Currency-required fallback for noisy selector lines (still no invent).
+                        fb = _FALLBACK_CUR_THEN_AMOUNT_RE.match(line)
+                        if fb and _append(
+                            name=fb.group("name") or "",
+                            amount_raw=str(fb.group("amount") or ""),
+                            cur=fb.group("cur"),
+                            cur2=None,
+                            line_no=line_no,
+                            require_currency_or_min=True,
+                        ):
+                            matched = True
+                        else:
+                            fb2 = _FALLBACK_AMOUNT_THEN_CUR_RE.match(line)
+                            if fb2 and _append(
+                                name=fb2.group("name") or "",
+                                amount_raw=str(fb2.group("amount") or ""),
+                                cur=None,
+                                cur2=fb2.group("cur"),
+                                line_no=line_no,
+                                require_currency_or_min=True,
+                            ):
+                                matched = True
         if matched:
             continue
         if re.search(r"\d", line) and re.search(r"[A-Za-z\u0600-\u06FF]", line):
