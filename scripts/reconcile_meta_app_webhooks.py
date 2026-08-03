@@ -39,6 +39,36 @@ def _field_names(value: object) -> set[str]:
     return names
 
 
+def _classify_error_message(message: object) -> tuple[str, tuple[str, ...]]:
+    """Convert a Meta error message to fixed non-sensitive diagnostic labels."""
+
+    lowered = str(message or "").lower()
+    reason = "unknown"
+    if "unsupported post request" in lowered or "unsupported get request" in lowered:
+        reason = "unsupported_request"
+    elif "does not exist" in lowered or "not a valid field" in lowered:
+        reason = "unsupported_field"
+    elif "invalid parameter" in lowered:
+        reason = "invalid_parameter"
+    elif "callback" in lowered and ("validat" in lowered or "verify" in lowered):
+        reason = "callback_verification"
+    elif "permission" in lowered or "access token" in lowered:
+        reason = "permission_or_token"
+
+    approved_terms = (
+        "callback_url",
+        "fields",
+        "instagram",
+        "messages",
+        "messaging_postbacks",
+        "object",
+        "page",
+        "verify_token",
+    )
+    mentions = tuple(term for term in approved_terms if term in lowered)
+    return reason, mentions
+
+
 def validate_webhook_state(
     payload: dict[str, object],
     *,
@@ -95,11 +125,14 @@ def _request_json(
         error_type = "unknown"
         error_code = 0
         error_subcode = 0
+        error_reason = "unknown"
+        error_mentions: tuple[str, ...] = ()
         try:
             error_payload: object = json.loads(exc.read(1_000_000))
         except (AttributeError, json.JSONDecodeError):
             error_payload = {}
         error = _mapping(_mapping(error_payload).get("error"))
+        error_reason, error_mentions = _classify_error_message(error.get("message"))
         raw_type = str(error.get("type") or "unknown")
         if raw_type.replace("_", "").isalnum():
             error_type = raw_type[:64]
@@ -109,7 +142,8 @@ def _request_json(
             error_subcode = cast(int, error["error_subcode"])
         raise MetaWebhookReconcileError(
             f"Meta webhook request failed stage={stage} http={exc.code} "
-            f"type={error_type} code={error_code} subcode={error_subcode}"
+            f"type={error_type} code={error_code} subcode={error_subcode} "
+            f"reason={error_reason} mentions={','.join(error_mentions) or 'none'}"
         ) from None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
         raise MetaWebhookReconcileError(f"Meta webhook request failed stage={stage}") from None

@@ -8,6 +8,7 @@ import pytest
 
 from scripts.reconcile_meta_app_webhooks import (
     MetaWebhookReconcileError,
+    _classify_error_message,
     _request_json,
     validate_webhook_state,
 )
@@ -94,7 +95,8 @@ def test_graph_failure_does_not_render_credentials() -> None:
         "Bad Request",
         hdrs=None,
         fp=io.BytesIO(
-            b'{"error":{"message":"secret-containing text","type":"OAuthException","code":100,"error_subcode":33}}'
+            b'{"error":{"message":"Invalid parameter fields secret-containing text",'
+            b'"type":"OAuthException","code":100,"error_subcode":33}}'
         ),
     )
 
@@ -109,7 +111,26 @@ def test_graph_failure_does_not_render_credentials() -> None:
             )
 
     rendered = str(captured.value)
-    assert rendered == ("Meta webhook request failed stage=test_stage http=400 type=OAuthException code=100 subcode=33")
+    assert rendered == (
+        "Meta webhook request failed stage=test_stage http=400 "
+        "type=OAuthException code=100 subcode=33 "
+        "reason=invalid_parameter mentions=fields"
+    )
     assert app_token not in rendered
     assert verify_token not in rendered
     assert "secret-containing text" not in rendered
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Unsupported post request for instagram object", ("unsupported_request", ("instagram", "object"))),
+        ("messages is not a valid field", ("unsupported_field", ("messages",))),
+        ("Could not validate callback_url", ("callback_verification", ("callback_url",))),
+    ],
+)
+def test_error_classifier_returns_only_fixed_labels(
+    message: str,
+    expected: tuple[str, tuple[str, ...]],
+) -> None:
+    assert _classify_error_message(message) == expected
