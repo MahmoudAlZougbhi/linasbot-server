@@ -59,7 +59,14 @@ async def _delayed_process_messages(
 
         outbound_send = _guarded_send if text_turn_epoch is not None else send_message_func
 
-        await send_action_func(user_id)  # Send typing indicator
+        # A typing indicator is cosmetic. Meta (or any other provider) may reject
+        # it transiently even while ordinary message delivery remains healthy;
+        # never abort the customer reply pipeline for that failure.
+        try:
+            await send_action_func(user_id)
+        except Exception as typing_error:
+            channel = str(user_data.get("channel") or "unknown").strip().lower()
+            print(f"[typing-indicator] send failed; continuing channel={channel} type={type(typing_error).__name__}")
         delay = config.MESSAGE_COMBINING_DELAY if combine_delay_seconds is None else float(combine_delay_seconds)
         if delay > 0:
             await asyncio.sleep(delay)
