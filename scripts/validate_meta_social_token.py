@@ -271,6 +271,13 @@ def main() -> None:
         stage="page_subscribed_apps",
     )
     checks.update(validate_page_subscription_payload(subscription_payload, expected_app_id=app_id))
+    app_subscription_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
+    app_subscription_payload = _request_json(
+        f"{base}/{app_id}/subscriptions?{app_subscription_query}",
+        bearer=f"{app_id}|{app_secret}",
+        stage="app_subscriptions",
+    )
+    checks.update(validate_app_webhook_payload(app_subscription_payload))
     instagram_subscription_payload = _request_json(
         f"{base}/{EXPECTED_INSTAGRAM_ID}/subscribed_apps?{subscription_query}",
         bearer=page_token,
@@ -282,13 +289,6 @@ def main() -> None:
             expected_app_id=app_id,
         )
     )
-    app_subscription_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
-    app_subscription_payload = _request_json(
-        f"{base}/{app_id}/subscriptions?{app_subscription_query}",
-        bearer=f"{app_id}|{app_secret}",
-        stage="app_subscriptions",
-    )
-    checks.update(validate_app_webhook_payload(app_subscription_payload))
     for name in sorted(checks):
         print(f"[meta-token] {name}=true")
     print(f"[meta-token] page_id={EXPECTED_PAGE_ID}")
