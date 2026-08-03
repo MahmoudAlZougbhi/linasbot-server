@@ -195,7 +195,12 @@ def validate_app_webhook_payload(payload: dict[str, object]) -> dict[str, bool]:
     }
     if not all(checks.values()):
         failed = sorted(key for key, value in checks.items() if not value)
-        raise MetaTokenValidationError(f"Meta app webhook validation failed checks={failed}")
+        page_fields = sorted(_subscription_field_names(page.get("fields")))
+        instagram_fields = sorted(_subscription_field_names(instagram.get("fields")))
+        raise MetaTokenValidationError(
+            "Meta app webhook validation failed "
+            f"checks={failed} page_fields={page_fields} instagram_fields={instagram_fields}"
+        )
     return checks
 
 
