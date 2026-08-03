@@ -970,6 +970,59 @@ def _reply_offers_handover_confirmation(text: str) -> bool:
     return any(p in m for p in permission_markers) and any(h in m for h in handover_markers)
 
 
+async def _handle_published_cm_runtime(
+    *,
+    tenant_id: str,
+    message: str,
+    detected_language: str,
+    response_language: str,
+) -> tuple[str, dict[str, Any]]:
+    """Run the CM published-mode pipeline end-to-end and return ``(reply_text, metadata)``.
+
+    Never raises for expected "no published version" cases — returns an honest clarify/contact
+    message instead (no silent fallback to the legacy pipeline, per plan §12).
+    """
+    from services.cm.answer_generation import generate_answer, make_regenerate_fn
+    from services.cm.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
+    from services.cm.runtime_pipeline import finalize_response, prepare_response
+    from services.dynamic_messages_service import get_dynamic_message
+
+    outcome = await prepare_response(
+        tenant_id=tenant_id,
+        message=message,
+        detected_language=detected_language,
+        response_language=response_language,
+    )
+
+    if outcome.stop:
+        reply = outcome.reply or get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
+        return reply, {"reason": outcome.reason, **outcome.metadata}
+
+    packet = outcome.packet
+    assert packet is not None  # stop=False always carries a packet (prepare_response contract)
+    try:
+        candidate_text = await generate_answer(message, packet)
+    except Exception as gen_error:
+        print(f"[_handle_published_cm_runtime] ⚠️ generate_answer failed: {gen_error}")
+        candidate_text = ""
+
+    restricted_ids = set(outcome.metadata.get("restricted_topic_active_ids") or [])
+    result = await finalize_response(
+        candidate_text=candidate_text,
+        packet=packet,
+        restricted_topic_active_ids=restricted_ids,
+        regenerate_fn=make_regenerate_fn(message, packet),
+    )
+    return result.text, {
+        "reason": "packet_ready" if result.ok else "answer_validation_failed",
+        "content_version_id": packet.content_version_id,
+        "index_version_id": packet.index_version_id,
+        "validated": result.ok,
+        "regenerated": result.regenerated,
+        "failed_rules": result.failed_rules,
+    }
+
+
 async def _process_and_respond(
     user_id: str,
     user_name: str,
@@ -1201,6 +1254,44 @@ async def _process_and_respond(
             customer_file_status=user_data.get("customer_file_status"),
         )
         return
+
+    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
+    # Opt-in only (CM_RUNTIME_MODE defaults to "legacy" => this block is a no-op and the
+    # rest of the function is completely unchanged). When enabled, this fully replaces the
+    # legacy FAQ/GPT/booking flow for THIS message with the CM answer pipeline; there is
+    # no silent fallback to legacy if the published pointer/index is missing (honest failure).
+    from services.cm.constants import DEFAULT_TENANT_ID, cm_runtime_mode
+
+    if cm_runtime_mode() == "published":
+        cm_reply, cm_metadata = await _handle_published_cm_runtime(
+            tenant_id=user_data.get("tenant_id") or DEFAULT_TENANT_ID,
+            message=user_input_to_process,
+            detected_language=current_preferred_lang,
+            response_language=response_language,
+        )
+        await send_message_func(user_id, cm_reply)
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            cm_reply,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "cm_runtime_pipeline", **cm_metadata},
+        )
+        log_interaction(
+            user_id,
+            user_input_to_process,
+            cm_reply,
+            cm_metadata.get("reason", "cm_runtime"),
+            user_name=user_name,
+            user_phone=user_data.get("phone_number"),
+            user_gender=current_gender,
+            customer_exists=user_data.get("crm_customer_exists"),
+            customer_file_status=user_data.get("customer_file_status"),
+        )
+        return
+    # =====================================================================
 
     # ===== AI SMART EMPLOYEE: ROUTER (Phase 2, 10) =====
     # Long one-line messages often include gender («ana shab», «شاب», etc.). Infer before router/GPT

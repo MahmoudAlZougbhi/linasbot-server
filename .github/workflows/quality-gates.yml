@@ -3,7 +3,7 @@ name: Quality Gates
 on:
   pull_request:
   push:
-    branches: [main, fix/**]
+    branches: [main, fix/**, feat/**]
 
 jobs:
   backend:
@@ -93,6 +93,14 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Content Management browser smoke
+        env:
+          # Explicitly select Playwright-managed Chromium installed above.
+          CM_PW_CHANNEL: bundled
+          CI: true
+        run: npm run test:e2e:cm
 
   secret-scan:
     runs-on: ubuntu-latest

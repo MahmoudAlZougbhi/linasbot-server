@@ -1,80 +1,79 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
+  AcademicCapIcon,
   BookOpenIcon,
-  CurrencyDollarIcon,
-  SparklesIcon,
-  DocumentTextIcon,
+  BuildingOffice2Icon,
   ChatBubbleLeftRightIcon,
+  ClockIcon,
+  CurrencyDollarIcon,
+  ExclamationTriangleIcon,
+  GlobeAltIcon,
+  HandRaisedIcon,
+  LanguageIcon,
+  QuestionMarkCircleIcon,
+  RocketLaunchIcon,
+  SparklesIcon,
+  WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
-import ContentFilesPanel from "../components/ContentFilesPanel";
-import SystemPromptKnowledgeStylePanel from "../components/SystemPromptKnowledgeStylePanel";
-import DynamicMessagesPanel from "../components/DynamicMessagesPanel";
+import { CM_SECTION_CARDS } from "./content-managers/cmSections";
 
-const SECTIONS = [
-  { id: "knowledge", name: "Knowledge", icon: BookOpenIcon },
-  { id: "price", name: "Prices", icon: CurrencyDollarIcon },
-  { id: "style", name: "Style", icon: SparklesIcon },
-  { id: "dynamic_messages", name: "Dynamic Messages", icon: ChatBubbleLeftRightIcon },
-  { id: "system_prompt", name: "System Prompt (Template + KB + Style)", icon: DocumentTextIcon },
-];
+/** @type {Record<string, import('react').ComponentType<{ className?: string }>>} */
+const SECTION_ICONS = {
+  "ai-basics": SparklesIcon,
+  languages: LanguageIcon,
+  style: AcademicCapIcon,
+  "dynamic-messages": ChatBubbleLeftRightIcon,
+  services: WrenchScrewdriverIcon,
+  branches: BuildingOffice2Icon,
+  prices: CurrencyDollarIcon,
+  care: HandRaisedIcon,
+  knowledge: BookOpenIcon,
+  faq: QuestionMarkCircleIcon,
+  handoff: GlobeAltIcon,
+  restricted: ExclamationTriangleIcon,
+  publish: RocketLaunchIcon,
+};
 
 const ContentManagers = () => {
-  const [activeSection, setActiveSection] = useState("knowledge");
-  const defaultSection = SECTIONS[0];
-  if (!defaultSection) {
-    throw new Error("ContentManagers requires at least one section");
-  }
-  const section = SECTIONS.find((s) => s.id === activeSection) ?? defaultSection;
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Content Managers</h1>
-        <p className="text-slate-600 mt-1">
-          Manage Knowledge, Prices, and Style files. The bot uses dynamic retrieval to load only relevant files.
+        <p className="text-slate-600 mt-1 max-w-3xl">
+          Guided control plane for Linas AI facts, FAQ, handoff, and restricted topics.
+          Save drafts freely — publishing stays disabled until an approved later phase.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-slate-100 rounded-xl w-fit">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setActiveSection(s.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-              activeSection === s.id
-                ? "bg-white text-slate-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-800"
-            }`}
-          >
-            <s.icon className="w-5 h-5" />
-            {s.name}
-          </button>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {CM_SECTION_CARDS.map((card, index) => {
+          const Icon = SECTION_ICONS[card.slug] || ClockIcon;
+          return (
+            <motion.div
+              key={card.slug}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: index * 0.03 }}
+            >
+              <Link
+                to={`/content-managers/${card.slug}`}
+                className="block h-full rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur-sm p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-slate-100 p-2.5 text-slate-700 group-hover:bg-slate-200 transition">
+                    <Icon className="w-6 h-6" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-slate-800">{card.name}</h2>
+                    <p className="mt-1 text-sm text-slate-600 leading-relaxed">{card.description}</p>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          );
+        })}
       </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeSection}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
-        >
-          {section.id === "system_prompt" ? (
-            <SystemPromptKnowledgeStylePanel />
-          ) : section.id === "dynamic_messages" ? (
-            <DynamicMessagesPanel />
-          ) : (
-            <ContentFilesPanel
-              section={section.id}
-              sectionName={section.name}
-              icon={section.icon}
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
     </div>
   );
 };
