@@ -164,8 +164,15 @@ jobs:
                 )
             lines = journal_lines + file_lines
             patterns = {
-                "meta_background_failure": r"\[meta-social\] background processing failed",
+                "meta_background_failure": (
+                    r"\[meta-social\] (?:background processing failed|background_processing_failed)"
+                ),
+                "meta_event_processing_started": r"\[meta-social\] event_processing_started",
+                "meta_event_processing_completed": r"\[meta-social\] event_processing_completed",
+                "meta_event_processing_failed": r"\[meta-social\] event_processing_failed",
+                "meta_webhook_authenticated": r"\[meta-social\] webhook_authenticated",
                 "meta_state_restore_skipped": r"\[meta-social\] state restore skipped",
+                "typing_indicator_failure": r"\[typing-indicator\] send failed; continuing",
                 "delayed_processing_error": r"\[_delayed_process_messages\] ERROR",
                 "pending_queue_empty": r"pending message queue empty",
                 "ai_turn_claim_ok": r"\[ai-turn\].*claim=OK",
@@ -195,6 +202,26 @@ jobs:
                 )
             for name in sorted(patterns):
                 print(f"[meta-runtime] {name}={counts[name]}")
+
+            webhook_metric_counts = Counter()
+            for line in lines:
+                match = re.search(
+                    r"\[meta-social\] webhook_authenticated "
+                    r"object=(facebook|instagram) parsed=(\d+) accepted=(\d+) "
+                    r"duplicates=(\d+) facebook=(\d+) instagram=(\d+)",
+                    line,
+                )
+                if not match:
+                    continue
+                key = (
+                    f"object={match.group(1)} parsed={match.group(2)} "
+                    f"accepted={match.group(3)} duplicates={match.group(4)} "
+                    f"facebook={match.group(5)} instagram={match.group(6)}"
+                )
+                webhook_metric_counts[key] += 1
+            print(f"[meta-runtime] webhook_metric_variants={len(webhook_metric_counts)}")
+            for key, count in sorted(webhook_metric_counts.items()):
+                print(f"[meta-runtime] webhook_metrics {key} occurrences={count}")
 
             webhook_access = []
             for line in lines:

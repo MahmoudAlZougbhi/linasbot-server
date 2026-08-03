@@ -14,6 +14,8 @@ EXPECTED_PAGE_ID = "378696005334409"
 EXPECTED_INSTAGRAM_ID = "17841413184256533"
 RETIRED_APP_ID = "1784792718776344"
 EXPECTED_GRAPH_VERSION = "v24.0"
+EXPECTED_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
+EXPECTED_WEBHOOK_FIELDS = {"messages", "messaging_postbacks"}
 REQUIRED_SCOPES = {
     "pages_messaging",
     "pages_manage_metadata",
@@ -30,6 +32,20 @@ class MetaTokenValidationError(RuntimeError):
 
 def _mapping(value: object) -> dict[str, object]:
     return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+def _subscription_field_names(value: object) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    names: set[str] = set()
+    for item in value:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+        else:
+            name = str(item).strip()
+        if name:
+            names.add(name)
+    return names
 
 
 def validate_debug_payload(
@@ -94,7 +110,84 @@ def validate_payloads(
     return checks
 
 
-def _request_json(url: str, *, bearer: str | None = None) -> dict[str, object]:
+def validate_conversation_payloads(
+    messenger_payload: dict[str, object],
+    instagram_payload: dict[str, object],
+) -> dict[str, bool]:
+    """Prove both messaging APIs are callable without rendering conversation data."""
+
+    checks = {
+        "messenger_conversations_query_succeeded": isinstance(messenger_payload.get("data"), list),
+        "instagram_conversations_query_succeeded": isinstance(instagram_payload.get("data"), list),
+    }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        raise MetaTokenValidationError(f"Meta conversation validation failed checks={failed}")
+    return checks
+
+
+def validate_page_subscription_payload(
+    payload: dict[str, object],
+    *,
+    expected_app_id: str,
+) -> dict[str, bool]:
+    """Require one installed messaging app with the exact DM-only webhook fields."""
+
+    raw_apps = payload.get("data")
+    apps = raw_apps if isinstance(raw_apps, list) else []
+    app = _mapping(apps[0]) if len(apps) == 1 else {}
+    raw_fields = app.get("subscribed_fields")
+    fields = _subscription_field_names(raw_fields)
+    checks = {
+        "page_has_single_subscribed_app": len(apps) == 1,
+        "page_subscribed_app_id_match": str(app.get("id") or "") == expected_app_id,
+        "page_subscribed_fields_dm_only": fields == EXPECTED_WEBHOOK_FIELDS,
+    }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        raise MetaTokenValidationError(f"Meta Page subscription validation failed checks={failed}")
+    return checks
+
+
+def validate_app_webhook_payload(payload: dict[str, object]) -> dict[str, bool]:
+    """Require active Page and Instagram callbacks with only DM webhook fields."""
+
+    raw_subscriptions = payload.get("data")
+    subscriptions = raw_subscriptions if isinstance(raw_subscriptions, list) else []
+    by_object = {
+        str(subscription.get("object") or "").strip().lower(): subscription
+        for subscription in subscriptions
+        if isinstance(subscription, dict)
+    }
+    page = _mapping(by_object.get("page"))
+    instagram = _mapping(by_object.get("instagram"))
+    checks = {
+        "app_webhook_objects_dm_only": set(by_object) == {"page", "instagram"},
+        "app_page_webhook_active": page.get("active") is True,
+        "app_page_webhook_callback_match": str(page.get("callback_url") or "") == EXPECTED_CALLBACK_URL,
+        "app_page_webhook_fields_dm_only": _subscription_field_names(page.get("fields")) == EXPECTED_WEBHOOK_FIELDS,
+        "app_instagram_webhook_active": instagram.get("active") is True,
+        "app_instagram_webhook_callback_match": str(instagram.get("callback_url") or "") == EXPECTED_CALLBACK_URL,
+        "app_instagram_webhook_fields_dm_only": _subscription_field_names(instagram.get("fields"))
+        == EXPECTED_WEBHOOK_FIELDS,
+    }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        page_fields = sorted(_subscription_field_names(page.get("fields")))
+        instagram_fields = sorted(_subscription_field_names(instagram.get("fields")))
+        raise MetaTokenValidationError(
+            "Meta app webhook validation failed "
+            f"checks={failed} page_fields={page_fields} instagram_fields={instagram_fields}"
+        )
+    return checks
+
+
+def _request_json(
+    url: str,
+    *,
+    bearer: str | None = None,
+    stage: str,
+) -> dict[str, object]:
     headers = {"Accept": "application/json"}
     if bearer:
         headers["Authorization"] = f"Bearer {bearer}"
@@ -103,11 +196,11 @@ def _request_json(url: str, *, bearer: str | None = None) -> dict[str, object]:
         with urllib.request.urlopen(request, timeout=20) as response:
             decoded: object = json.loads(response.read(1_000_000))
     except urllib.error.HTTPError as exc:
-        raise MetaTokenValidationError(f"Meta Graph request returned HTTP {exc.code}") from None
+        raise MetaTokenValidationError(f"Meta Graph request failed stage={stage} http={exc.code}") from None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-        raise MetaTokenValidationError("Meta Graph request failed") from None
+        raise MetaTokenValidationError(f"Meta Graph request failed stage={stage}") from None
     if not isinstance(decoded, dict):
-        raise MetaTokenValidationError("Meta Graph response was not an object")
+        raise MetaTokenValidationError(f"Meta Graph response was not an object stage={stage}")
     return cast(dict[str, object], decoded)
 
 
@@ -128,11 +221,12 @@ def main() -> None:
             "access_token": f"{app_id}|{app_secret}",
         }
     )
-    debug_payload = _request_json(f"{base}/debug_token?{debug_query}")
+    debug_payload = _request_json(f"{base}/debug_token?{debug_query}", stage="debug_token")
     validate_debug_payload(debug_payload, expected_app_id=app_id)
     page_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}?fields=id,instagram_business_account{{id}}",
         bearer=page_token,
+        stage="page_relationship",
     )
     checks = validate_payloads(
         debug_payload,
@@ -140,6 +234,35 @@ def main() -> None:
         page_payload,
         expected_app_id=app_id,
     )
+    messenger_query = urllib.parse.urlencode({"fields": "id", "limit": "1"})
+    instagram_query = urllib.parse.urlencode({"fields": "id", "limit": "1", "platform": "instagram"})
+    messenger_payload = _request_json(
+        f"{base}/{EXPECTED_PAGE_ID}/conversations?{messenger_query}",
+        bearer=page_token,
+        stage="messenger_conversations",
+    )
+    instagram_payload = _request_json(
+        f"{base}/{EXPECTED_PAGE_ID}/conversations?{instagram_query}",
+        bearer=page_token,
+        stage="instagram_conversations",
+    )
+    checks.update(validate_conversation_payloads(messenger_payload, instagram_payload))
+    subscription_query = urllib.parse.urlencode({"fields": "id,subscribed_fields"})
+    subscription_payload = _request_json(
+        f"{base}/{EXPECTED_PAGE_ID}/subscribed_apps?{subscription_query}",
+        bearer=page_token,
+        stage="page_subscribed_apps",
+    )
+    checks.update(validate_page_subscription_payload(subscription_payload, expected_app_id=app_id))
+    # This integration uses Instagram API with Facebook Login. The Page edge
+    # installs the app; the app's `instagram` webhook object supplies IG events.
+    app_subscription_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
+    app_subscription_payload = _request_json(
+        f"{base}/{app_id}/subscriptions?{app_subscription_query}",
+        bearer=f"{app_id}|{app_secret}",
+        stage="app_subscriptions",
+    )
+    checks.update(validate_app_webhook_payload(app_subscription_payload))
     for name in sorted(checks):
         print(f"[meta-token] {name}=true")
     print(f"[meta-token] page_id={EXPECTED_PAGE_ID}")
