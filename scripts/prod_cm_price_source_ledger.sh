@@ -108,11 +108,22 @@ def scan_file(path: Path) -> dict[str, Any]:
         try:
             obj = json.loads(path.read_text(encoding="utf-8"))
             rows, hits = extract_rows(obj)
+            content_rows = 0
+            if isinstance(obj, dict) and isinstance(obj.get("content"), str):
+                content = obj["content"]
+                for line in content.splitlines():
+                    if re.search(r"[A-Za-z\u0600-\u06FF].{0,80}\d+(?:\.\d+)?", line) and not any(
+                        tok in line.lower() for tok in ("do not", "selector", "pricing rules", "session")
+                    ):
+                        content_rows += 1
             info.update(
                 {
                     "kind": "json",
                     "top_keys": top_keys(obj),
                     "extractable_rows": rows,
+                    "content_candidate_priced_lines": content_rows,
+                    "has_content_field": isinstance(obj, dict) and isinstance(obj.get("content"), str),
+                    "title_len": len(str(obj.get("title") or "")) if isinstance(obj, dict) else 0,
                     "key_hits": sorted(hits),
                     "parse_ok": True,
                 }
@@ -210,11 +221,13 @@ ledger = {
         "files_scanned": len(unique_files),
         "json_extractable_rows": 0,
         "text_candidate_lines": 0,
+        "content_candidate_priced_lines": 0,
     },
 }
 for entry in ledger["files"]:
     ledger["totals"]["json_extractable_rows"] += int(entry.get("extractable_rows") or 0)
     ledger["totals"]["text_candidate_lines"] += int(entry.get("candidate_priced_lines") or 0)
+    ledger["totals"]["content_candidate_priced_lines"] += int(entry.get("content_candidate_priced_lines") or 0)
 
 # Pointer summary without secrets
 pointer_path = cm_root / "published" / "pointer.json"

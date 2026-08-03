@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 # services/chat_response_service.py
+#
+# ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
+# Customer answers when cm_runtime_mode() == "published" are handled in
+# handlers/text_handlers_respond.py (early return). This module is the legacy GPT path only.
+# Defensive guards below refuse legacy price_list.txt / style_guide.txt / knowledge_base.txt
+# injection if this module is ever reached while published.
+#
 import asyncio
 import datetime
 import json
@@ -3238,23 +3245,30 @@ async def get_bot_chat_response(
 
     # Get the core system instruction from utils.py, with conditional price list loading.
     # When custom_knowledge_context is provided (from dynamic retrieval), ADDITIVE to KB/Style.
+    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
+    from services.cm.constants import cm_runtime_mode
+
+    _published = cm_runtime_mode() == "published"
     system_instruction_core = get_system_instruction(
         user_id,
         current_preferred_lang,
         qa_reference_text,
-        include_price_list=is_price_question,
-        custom_knowledge_context=custom_knowledge_context,
+        include_price_list=(is_price_question and not _published),
+        custom_knowledge_context=(None if _published else custom_knowledge_context),
         operational_context=operational_context,
     )
 
-    # Log which training files GPT is receiving
-    print("📄 GPT will receive knowledge_base.txt in context")
-    print("📄 GPT will receive style_guide.txt in context")
-
-    if is_price_question:
-        print("📄 GPT will receive price_list.txt in context (price-related question detected)")
+    # Log which training files GPT is receiving (legacy path only)
+    if _published:
+        print("📄 CM published mode: skipping knowledge_base.txt / style_guide.txt / price_list.txt injection")
     else:
-        print("📄 GPT will skip price_list.txt in context (not a price-related question)")
+        print("📄 GPT will receive knowledge_base.txt in context")
+        print("📄 GPT will receive style_guide.txt in context")
+
+        if is_price_question:
+            print("📄 GPT will receive price_list.txt in context (price-related question detected)")
+        else:
+            print("📄 GPT will skip price_list.txt in context (not a price-related question)")
 
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
     # user_name, name_is_known, crm_customer_exists: set after CRM sync (see block above)
@@ -5033,7 +5047,11 @@ async def get_bot_chat_response(
                                 merged = _ensure_style_included(merged, False)
                                 tool_output = {"action": "fallback_to_general", "content": merged or ""}
                         else:
-                            tool_output = {"action": "fallback_to_general", "content": config.CORE_KNOWLEDGE_BASE or ""}
+                            # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
+                            from services.cm.constants import cm_runtime_mode as _cm_mode
+
+                            kb = "" if _cm_mode() == "published" else (config.CORE_KNOWLEDGE_BASE or "")
+                            tool_output = {"action": "fallback_to_general", "content": kb}
                         tool_content = json.dumps(tool_output, default=str)
                         tool_round_trips.append(
                             _record_tool_round_trip(function_name, function_args, tool_content, None)

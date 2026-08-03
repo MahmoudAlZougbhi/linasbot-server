@@ -16,7 +16,13 @@ from modules.api_security import require_permission
 from modules.core import app
 from services.cm.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, cm_faq_canonical, cm_runtime_mode
 from services.cm.preview_packet import build_preview_packet, list_versions
-from services.cm.publish import PublishBlockedError, RollbackTargetError, publish_draft, rollback_to_version
+from services.cm.publish import (
+    PublishBlockedError,
+    RollbackTargetError,
+    publish_draft,
+    publish_faq_only,
+    rollback_to_version,
+)
 from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
 from services.cm.storage import ConflictError, UnknownSectionError, get_draft, put_draft
 from services.cm.validation import validate_cm
@@ -144,11 +150,18 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
         return _publish_disabled_response(exc.message)
 
     notes = body.get("notes") if isinstance(body.get("notes"), str) else None
+    scope = str(body.get("scope") or "all").strip().lower()
     try:
-        result = await publish_draft(
-            published_by=session.user_id or session.email,
-            notes=notes,
-        )
+        if scope in {"faq", "faq_only"}:
+            result = await publish_faq_only(
+                published_by=session.user_id or session.email,
+                notes=notes,
+            )
+        else:
+            result = await publish_draft(
+                published_by=session.user_id or session.email,
+                notes=notes,
+            )
     except PublishBlockedError as exc:
         return JSONResponse(
             status_code=422,
@@ -161,6 +174,7 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
         )
     return {
         "success": True,
+        "scope": scope,
         "content_version_id": result.content_version_id,
         "index_version_id": result.index_version_id,
         "manifest": result.manifest,

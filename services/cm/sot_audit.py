@@ -97,6 +97,7 @@ SCAN_TARGET_FILES: tuple[str, ...] = (
     "services/local_qa_service.py",
     "services/social_contact_routing.py",
     "config.py",
+    "utils/utils.py",
 )
 
 

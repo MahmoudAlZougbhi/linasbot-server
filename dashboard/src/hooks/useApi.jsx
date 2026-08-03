@@ -1254,6 +1254,19 @@ export const useApi = () => {
     }
   }, []);
 
+  const getRecentFeedback = useCallback(async (limit = 20) => {
+    try {
+      const response = await api.get(`/api/feedback/recent?limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error getting recent feedback:", error);
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline", feedback: [] };
+      }
+      return { success: false, error: errorMessage(error) };
+    }
+  }, []);
+
   // ✨ NEW: Training Files Management functions (Knowledge Base, Style Guide, Price List)
   const getTrainingFiles = useCallback(async () => {
     try {
@@ -1854,6 +1867,7 @@ export const useApi = () => {
     submitFeedback,
     getFeedbackStats,
     getWrongAnswers,
+    getRecentFeedback,
     // Bot Instructions Management functions
     getInstructions,
     updateInstructions,

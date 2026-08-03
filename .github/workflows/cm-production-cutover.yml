@@ -15,6 +15,7 @@ on:
           - migrate_validate
           - enable_publish_keep_legacy
           - publish
+          - publish_faq_only
           - cutover_published
           - rollback_legacy
           - rollback_content_version
@@ -74,6 +75,8 @@ jobs:
               sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
             elif [ "${PHASE}" = "publish" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_publish.sh
+            elif [ "${PHASE}" = "publish_faq_only" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_publish_faq_only.sh
             elif [ "${PHASE}" = "cutover_published" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_cutover.sh
             elif [ "${PHASE}" = "rollback_legacy" ]; then
@@ -87,148 +90,7 @@ jobs:
               export CM_ROLLBACK_CONTENT_VERSION_ID="${CONTENT_VERSION_ID}"
               sudo -E bash /opt/linasbot/scripts/prod_cm_rollback_version.sh
             elif [ "${PHASE}" = "price_source_ledger" ]; then
-              if [ -f /opt/linasbot/scripts/prod_cm_price_source_ledger.sh ]; then
-                sudo bash /opt/linasbot/scripts/prod_cm_price_source_ledger.sh
-              else
-                echo "[cm-workflow] ledger script missing on server; using inline inventory"
-                sudo LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}" /opt/linasbot/venv/bin/python - <<'PY'
-from __future__ import annotations
-import hashlib, json, os, re
-from pathlib import Path
-from typing import Any
-DATA_ROOT = Path(os.environ.get("LINASBOT_DATA_ROOT", "/opt/linasbot_data"))
-APP_DATA = Path("/opt/linasbot/data")
-TENANT = os.environ.get("LINASBOT_TENANT_ID", "linas")
-BACKUP_ROOT = Path("/opt/linasbot_backups/cm")
-AMOUNT_KEYS = ("amount", "price", "unit_price", "base_price", "cost", "final_price", "discounted_price", "value")
-NAME_KEYS = ("name", "title", "label", "body_part", "service", "item", "area", "body_area", "part", "machine")
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()[:16]
-
-def as_float(value: Any) -> float | None:
-    if value is None: return None
-    if isinstance(value, (int, float)): return float(value)
-    text = str(value).strip().replace(",", "")
-    m = re.search(r"(\d+(?:\.\d+)?)", text)
-    return float(m.group(1)) if m else None
-
-def extract_rows(obj: Any) -> tuple[int, set[str], int]:
-    rows = 0
-    map_pairs = 0
-    key_hits: set[str] = set()
-    def walk(node: Any, parent_key: str | None = None) -> None:
-        nonlocal rows, map_pairs
-        if isinstance(node, dict):
-            amount = None
-            amount_key = None
-            for key in AMOUNT_KEYS:
-                if key in node:
-                    amount = as_float(node.get(key))
-                    if amount is not None:
-                        amount_key = key
-                        break
-            name = None
-            name_key = None
-            for key in NAME_KEYS:
-                if key in node and str(node.get(key) or "").strip():
-                    name = str(node.get(key)).strip(); name_key = key; break
-            if amount is not None and name:
-                rows += 1
-                if amount_key: key_hits.add(f"amount:{amount_key}")
-                if name_key: key_hits.add(f"name:{name_key}")
-            # name -> number map
-            numeric_children = 0
-            for k, v in node.items():
-                if isinstance(v, (int, float)) or (isinstance(v, str) and as_float(v) is not None and not any(ch.isalpha() for ch in str(v) if ord(ch)<128)):
-                    if as_float(v) is not None and str(k).strip():
-                        numeric_children += 1
-                walk(v, str(k))
-            if numeric_children >= 2 and not (amount is not None and name):
-                map_pairs += numeric_children
-                key_hits.add("shape:name_to_number_map")
-        elif isinstance(node, list):
-            for v in node: walk(v, parent_key)
-    walk(obj)
-    return rows, key_hits, map_pairs
-
-def top_keys(obj: Any) -> list[str]:
-    if isinstance(obj, dict): return sorted(str(k) for k in list(obj.keys())[:40])
-    if isinstance(obj, list): return [f"list[{len(obj)}]"]
-    return [type(obj).__name__]
-
-def scan_file(path: Path) -> dict[str, Any]:
-    info: dict[str, Any] = {"path": str(path), "exists": path.exists(), "size": path.stat().st_size if path.exists() else 0, "sha256_16": sha256_file(path) if path.exists() and path.is_file() else None}
-    if not path.is_file(): return info
-    if path.suffix.lower() == ".json":
-        try:
-            obj = json.loads(path.read_text(encoding="utf-8"))
-            rows, hits, maps = extract_rows(obj)
-            info.update({"kind":"json","top_keys":top_keys(obj),"extractable_rows":rows,"map_numeric_pairs":maps,"key_hits":sorted(hits),"parse_ok":True})
-        except Exception as exc:
-            info.update({"kind":"json","parse_ok":False,"error_type":type(exc).__name__})
-    elif path.suffix.lower() in {".txt",".md"}:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        line_hits = 0
-        for line in text.splitlines():
-            low = line.lower()
-            if any(tok in low for tok in ("do not", "selector", "pricing rules", "----")): continue
-            if re.search(r"[A-Za-z\u0600-\u06FF].{0,80}\d+(?:\.\d+)?", line): line_hits += 1
-        info.update({"kind":"text","line_count":len(text.splitlines()),"candidate_priced_lines":line_hits,"nonempty":bool(text.strip())})
-    else:
-        info["kind"] = path.suffix or "unknown"
-    return info
-
-files=[]
-for root in [DATA_ROOT/"content"/"price_files", DATA_ROOT/"price_files", APP_DATA/"price_files", APP_DATA/"content"/"price_files"]:
-    if root.is_dir():
-        files.extend(sorted(root.glob("*.json"))); files.extend(sorted(root.glob("*.txt")))
-for root in [DATA_ROOT/"content", DATA_ROOT, APP_DATA, APP_DATA/"content"]:
-    for name in ("price_list.txt","prices.json"):
-        p = root/name
-        if p.is_file(): files.append(p)
-cm_root = DATA_ROOT/"tenants"/TENANT/"cm"
-files.append(cm_root/"draft"/"prices.json")
-files.append(cm_root/"published"/"pointer.json")
-if (cm_root/"versions").is_dir():
-    for vd in sorted((cm_root/"versions").iterdir())[-8:]:
-        p = vd/"content"/"prices.json"
-        if p.is_file(): files.append(p)
-# knowledge_files that look price-related by name only
-for kf_root in [DATA_ROOT/"content"/"knowledge_files", APP_DATA/"knowledge_files", APP_DATA/"content"/"knowledge_files"]:
-    if kf_root.is_dir():
-        for p in sorted(kf_root.glob("*.json")):
-            if any(tok in p.name.lower() for tok in ("price", "pricing", "laser", "body")):
-                files.append(p)
-backup_hits=[]
-if BACKUP_ROOT.is_dir():
-    for snap in sorted(BACKUP_ROOT.glob("cm_snapshot_*"))[-6:]:
-        backup_hits.append({"snapshot":snap.name,"price_json_files":len(list(snap.rglob("price_files/*.json"))),"price_list_txt":len(list(snap.rglob("price_list.txt"))),"draft_prices_json":len(list(snap.rglob("tenants/*/cm/draft/prices.json")))})
-seen=set(); unique=[]
-for p in files:
-    k=str(p.resolve()) if p.exists() else str(p)
-    if k in seen: continue
-    seen.add(k); unique.append(p)
-ledger={"files":[scan_file(p) for p in unique],"backups":backup_hits,"totals":{"files_scanned":len(unique),"json_extractable_rows":0,"map_numeric_pairs":0,"text_candidate_lines":0}}
-for e in ledger["files"]:
-    ledger["totals"]["json_extractable_rows"] += int(e.get("extractable_rows") or 0)
-    ledger["totals"]["map_numeric_pairs"] += int(e.get("map_numeric_pairs") or 0)
-    ledger["totals"]["text_candidate_lines"] += int(e.get("candidate_priced_lines") or 0)
-ptr = cm_root/"published"/"pointer.json"
-if ptr.is_file():
-    try:
-        pointer=json.loads(ptr.read_text(encoding="utf-8"))
-        ledger["published_pointer"]={"content_version_id":pointer.get("content_version_id"),"index_version_id":pointer.get("index_version_id")}
-    except Exception as exc:
-        ledger["published_pointer"]={"error_type":type(exc).__name__}
-print(json.dumps(ledger, indent=2, ensure_ascii=False))
-print("[price-ledger] COMPLETE_OK")
-PY
-              fi
+              sudo bash /opt/linasbot/scripts/prod_cm_price_source_ledger.sh
             elif [ "${PHASE}" = "enable_faq_canonical" ]; then
               export CM_RUNTIME_MODE_VALUE=published
               export CM_PUBLISH_ENABLED_VALUE=true
@@ -237,30 +99,7 @@ PY
               export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
               sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
             elif [ "${PHASE}" = "sot_audit_published" ]; then
-              sudo /opt/linasbot/venv/bin/python - <<'PY'
-from services.cm.sot_audit import run_sot_audit
-import json
-report = run_sot_audit()
-# never print file bodies; only summary fields
-summary = {
-  "ok": report.get("ok") if isinstance(report, dict) else getattr(report, "ok", None),
-  "ungated_count": report.get("ungated_count") if isinstance(report, dict) else None,
-  "gated_count": report.get("gated_count") if isinstance(report, dict) else None,
-  "findings": report.get("findings") if isinstance(report, dict) else getattr(report, "findings", None),
-}
-if not isinstance(summary["findings"], list):
-  summary["findings"] = []
-# redact any long strings
-clean=[]
-for f in summary["findings"][:50]:
-  if isinstance(f, dict):
-    clean.append({k: f.get(k) for k in ("id", "path", "code", "message", "gated") if k in f})
-  else:
-    clean.append(str(f)[:200])
-summary["findings"]=clean
-print(json.dumps(summary, indent=2, ensure_ascii=False))
-print("[sot-audit] COMPLETE_OK")
-PY
+              sudo bash /opt/linasbot/scripts/prod_cm_sot_audit.sh
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1
