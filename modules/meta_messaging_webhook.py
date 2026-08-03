@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -20,6 +21,7 @@ from services.social_messaging_processor import process_meta_social_event
 
 _message_deduper = InMemoryMessageDeduper(ttl_seconds=300.0)
 _background_tasks: set[asyncio.Task] = set()
+_runtime_logger = logging.getLogger("uvicorn.error")
 
 
 def _track_task(task: asyncio.Task) -> None:
@@ -30,7 +32,10 @@ def _track_task(task: asyncio.Task) -> None:
         try:
             completed.result()
         except Exception as exc:
-            print(f"[meta-social] background processing failed: {exc}")
+            _runtime_logger.error(
+                "[meta-social] background_processing_failed type=%s",
+                type(exc).__name__,
+            )
 
     task.add_done_callback(_done)
 
@@ -107,6 +112,8 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         from services.durable_event_claim import complete_event_claim, release_event_claim
 
         mid = str(event.get("message_id") or "")
+        channel = str(event.get("channel") or "unknown").strip().lower()
+        _runtime_logger.info("[meta-social] event_processing_started channel=%s", channel)
         try:
             await process_meta_social_event(event, settings)
             await complete_event_claim(
@@ -114,7 +121,13 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
                 mid,
                 firestore_collection="meta_messaging_mid_claims",
             )
-        except Exception:
+            _runtime_logger.info("[meta-social] event_processing_completed channel=%s", channel)
+        except Exception as exc:
+            _runtime_logger.error(
+                "[meta-social] event_processing_failed channel=%s type=%s",
+                channel,
+                type(exc).__name__,
+            )
             await release_event_claim(
                 "meta_messaging_mid",
                 mid,
@@ -141,6 +154,19 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             continue
         _track_task(asyncio.create_task(_process_claimed(event)))
         accepted += 1
+    channel_counts = {
+        "facebook": sum(str(event.get("channel") or "") == "facebook" for event in events),
+        "instagram": sum(str(event.get("channel") or "") == "instagram" for event in events),
+    }
+    _runtime_logger.info(
+        "[meta-social] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d facebook=%d instagram=%d",
+        payload_object,
+        len(events),
+        accepted,
+        duplicates,
+        channel_counts["facebook"],
+        channel_counts["instagram"],
+    )
     return JSONResponse(
         {
             "status": "received",

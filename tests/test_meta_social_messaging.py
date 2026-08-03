@@ -624,8 +624,10 @@ class MetaSendFailureTests(unittest.TestCase):
 
         import asyncio
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError) as caught:
             asyncio.run(adapter.send_text_message("PSID1", "hello"))
+        self.assertIn("HTTP 400", str(caught.exception))
+        self.assertNotIn("fail", str(caught.exception))
 
 
 class WhatsAppInboundPolicyTests(unittest.TestCase):
