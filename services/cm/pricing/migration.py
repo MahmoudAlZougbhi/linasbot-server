@@ -63,8 +63,37 @@ _PRICED_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Selector style without colon: "Underarms 40$" / "Full legs 120 USD"
+_PRICED_SPACE_EOL_RE = re.compile(
+    r"^\s*[-•*]?\s*(?P<name>[A-Za-z\u0600-\u06FF][^\$€£\d]{1,80}?)\s+"
+    r"(?P<cur>\$|€|£|USD|EUR|LL|L\.?L\.?)?\s*"
+    r"(?P<amount>\d+(?:[.,]\d{1,2})?)\s*"
+    r"(?P<cur2>\$|€|£|USD|EUR|LL|L\.?L\.?)?\s*$",
+    re.IGNORECASE,
+)
+
+# Leading amount: "40$ Underarms" / "$40 Underarms"
+_PRICED_LEADING_RE = re.compile(
+    r"^\s*(?P<cur>\$|€|£|USD|EUR|LL|L\.?L\.?)?\s*"
+    r"(?P<amount>\d+(?:[.,]\d{1,2})?)\s*"
+    r"(?P<cur2>\$|€|£|USD|EUR|LL|L\.?L\.?)?\s+"
+    r"(?P<name>[A-Za-z\u0600-\u06FF].{0,80}?)\s*$",
+    re.IGNORECASE,
+)
+
+# Table / multi-token: last token is amount(+currency), rest is name.
+_PRICED_TRAILING_TOKEN_RE = re.compile(
+    r"^\s*[-•*]?\s*(?P<name>[A-Za-z\u0600-\u06FF].{1,80}?)\s+"
+    r"(?P<tail>(?:\$|€|£|USD|EUR|LL)?\s*\d+(?:[.,]\d{1,2})?\s*(?:\$|€|£|USD|EUR|LL)?)\s*$",
+    re.IGNORECASE,
+)
+
 _PRICE_TAG_HINTS = ("price", "pricing", "prices", "أسعار", "سعر", "tarif", "tarifs")
 _PHONE_LIKE_RE = re.compile(r"^\+?\d{8,15}$")
+_TRAILING_AMOUNT_RE = re.compile(
+    r"^(?P<cur>\$|€|£|USD|EUR|LL|L\.?L\.?)?\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*(?P<cur2>\$|€|£|USD|EUR|LL|L\.?L\.?)?$",
+    re.IGNORECASE,
+)
 
 
 def _as_float(value: Any) -> float | None:
@@ -111,12 +140,52 @@ def _currency_from_tokens(*tokens: str | None, default: str = "USD") -> str:
     return default
 
 
-def extract_price_rows_from_text(text: str, *, source: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Extract proven name+amount rows from free text. Ambiguous lines returned separately (no invent)."""
+def extract_price_rows_from_text(
+    text: str,
+    *,
+    source: str,
+    allow_space_amounts: bool = False,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Extract proven name+amount rows from free text. Ambiguous lines returned separately (no invent).
+
+    When ``allow_space_amounts`` is True (price selector files), also accept
+    ``Name 40$`` / ``40$ Name`` / trailing-token amount forms. Without currency,
+    space-separated amounts must be >= 15 to avoid importing session counts.
+    """
     rows: list[dict[str, Any]] = []
     ambiguous: list[dict[str, Any]] = []
     if not text or not str(text).strip():
         return rows, ambiguous
+
+    def _append(
+        *,
+        name: str,
+        amount_raw: str,
+        cur: str | None,
+        cur2: str | None,
+        line_no: int,
+        require_currency_or_min: bool,
+    ) -> bool:
+        clean_name = name.strip().strip(".-–—|:")
+        clean_name = clean_name.strip()
+        amount = _as_float(amount_raw)
+        if not clean_name or amount is None:
+            return False
+        if "." not in amount_raw and "," not in amount_raw and len(amount_raw) >= 7:
+            return False
+        has_currency = bool(cur or cur2)
+        if require_currency_or_min and not has_currency and amount < 15:
+            return False
+        rows.append(
+            {
+                "id": _item_id_from_name(clean_name),
+                "name": clean_name,
+                "amount": amount,
+                "currency": _currency_from_tokens(cur, cur2),
+                "provenance": f"{source}:L{line_no}",
+            }
+        )
+        return True
 
     for line_no, raw_line in enumerate(str(text).splitlines(), start=1):
         line = raw_line.strip()
@@ -124,69 +193,72 @@ def extract_price_rows_from_text(text: str, *, source: str) -> tuple[list[dict[s
             continue
         if _SKIP_LINE_RE.search(line):
             continue
+        matched = False
         match = _PRICED_LINE_RE.match(line)
-        if not match:
-            # Digit present but no clear name+amount structure → archive for review.
-            if re.search(r"\d", line) and re.search(r"[A-Za-z\u0600-\u06FF]", line):
-                ambiguous.append(
-                    {
-                        "source": source,
-                        "line_no": line_no,
-                        "reason": "no_clear_name_amount_separator",
-                        "line_len": len(line),
-                    }
-                )
+        if match and _append(
+            name=match.group("name") or "",
+            amount_raw=str(match.group("amount") or ""),
+            cur=match.group("cur"),
+            cur2=match.group("cur2"),
+            line_no=line_no,
+            require_currency_or_min=False,
+        ):
+            matched = True
+        elif allow_space_amounts:
+            match = _PRICED_SPACE_EOL_RE.match(line)
+            if match and _append(
+                name=match.group("name") or "",
+                amount_raw=str(match.group("amount") or ""),
+                cur=match.group("cur"),
+                cur2=match.group("cur2"),
+                line_no=line_no,
+                require_currency_or_min=True,
+            ):
+                matched = True
+            else:
+                match = _PRICED_LEADING_RE.match(line)
+                if match and _append(
+                    name=match.group("name") or "",
+                    amount_raw=str(match.group("amount") or ""),
+                    cur=match.group("cur"),
+                    cur2=match.group("cur2"),
+                    line_no=line_no,
+                    require_currency_or_min=True,
+                ):
+                    matched = True
+                else:
+                    match = _PRICED_TRAILING_TOKEN_RE.match(line)
+                    if match:
+                        tail = _TRAILING_AMOUNT_RE.match((match.group("tail") or "").strip())
+                        if tail and _append(
+                            name=match.group("name") or "",
+                            amount_raw=str(tail.group("amount") or ""),
+                            cur=tail.group("cur"),
+                            cur2=tail.group("cur2"),
+                            line_no=line_no,
+                            require_currency_or_min=True,
+                        ):
+                            matched = True
+        if matched:
             continue
-        name = (match.group("name") or "").strip()
-        name = name.strip(".-–—|:")
-        name = name.strip()
-        amount = _as_float(match.group("amount"))
-        if not name or amount is None:
+        if re.search(r"\d", line) and re.search(r"[A-Za-z\u0600-\u06FF]", line):
             ambiguous.append(
                 {
                     "source": source,
                     "line_no": line_no,
-                    "reason": "missing_name_or_amount",
+                    "reason": "no_clear_name_amount_separator",
                     "line_len": len(line),
                 }
             )
-            continue
-        if _PHONE_LIKE_RE.match(str(match.group("amount") or "")):
-            ambiguous.append(
-                {
-                    "source": source,
-                    "line_no": line_no,
-                    "reason": "phone_like_amount",
-                    "line_len": len(line),
-                }
-            )
-            continue
-        # Reject absurdly large bare integers that look like IDs (e.g. 10+ digits).
-        amount_raw = str(match.group("amount") or "")
-        if "." not in amount_raw and "," not in amount_raw and len(amount_raw) >= 7:
-            ambiguous.append(
-                {
-                    "source": source,
-                    "line_no": line_no,
-                    "reason": "id_like_amount",
-                    "line_len": len(line),
-                }
-            )
-            continue
-        currency = _currency_from_tokens(match.group("cur"), match.group("cur2"))
-        rows.append(
-            {
-                "id": _item_id_from_name(name),
-                "name": name,
-                "amount": amount,
-                "currency": currency,
-                "provenance": f"{source}:L{line_no}",
-            }
-        )
     return rows, ambiguous
 
 
-def extract_price_rows_from_json_obj(obj: Any, *, source: str) -> list[dict[str, Any]]:
+def extract_price_rows_from_json_obj(
+    obj: Any,
+    *,
+    source: str,
+    allow_space_amounts: bool = False,
+) -> list[dict[str, Any]]:
     """Best-effort extract of {id,name,amount,currency} from heterogeneous tenant JSON.
 
     Supports:
@@ -203,10 +275,13 @@ def extract_price_rows_from_json_obj(obj: Any, *, source: str) -> list[dict[str,
             # Content-file selector shape used by Content Managers price section.
             content = node.get("content")
             if isinstance(content, str) and content.strip():
-                text_rows, ambiguous = extract_price_rows_from_text(content, source=f"{source}{path}/content")
+                text_rows, ambiguous = extract_price_rows_from_text(
+                    content,
+                    source=f"{source}{path}/content",
+                    allow_space_amounts=allow_space_amounts,
+                )
                 rows.extend(text_rows)
                 ambiguous_bucket.extend(ambiguous)
-
             amount = None
             for key in _AMOUNT_KEYS:
                 if key in node:
@@ -283,13 +358,20 @@ def extract_price_rows_from_json_obj(obj: Any, *, source: str) -> list[dict[str,
 
 
 def extract_price_rows_from_json_obj_with_ambiguous(
-    obj: Any, *, source: str
+    obj: Any,
+    *,
+    source: str,
+    allow_space_amounts: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Like extract_price_rows_from_json_obj but also returns ambiguous text-line ledger entries."""
-    rows = extract_price_rows_from_json_obj(obj, source=source)
+    rows = extract_price_rows_from_json_obj(obj, source=source, allow_space_amounts=allow_space_amounts)
     ambiguous: list[dict[str, Any]] = []
     if isinstance(obj, dict) and isinstance(obj.get("content"), str):
-        _, ambiguous = extract_price_rows_from_text(obj["content"], source=f"{source}/content")
+        _, ambiguous = extract_price_rows_from_text(
+            obj["content"],
+            source=f"{source}/content",
+            allow_space_amounts=allow_space_amounts,
+        )
     return rows, ambiguous
 
 
@@ -377,40 +459,48 @@ def migrate_staged_price_files_to_catalog(
     scanned = 0
     sources: dict[str, int] = {}
 
-    def _consume_json(path: Path, *, source: str) -> None:
+    def _consume_json(path: Path, *, source: str, allow_space_amounts: bool) -> None:
         nonlocal scanned
         scanned += 1
         try:
             obj = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return
-        extracted, ambiguous = extract_price_rows_from_json_obj_with_ambiguous(obj, source=source)
+        extracted, ambiguous = extract_price_rows_from_json_obj_with_ambiguous(
+            obj,
+            source=source,
+            allow_space_amounts=allow_space_amounts,
+        )
         rows.extend(extracted)
         ambiguous_all.extend(ambiguous)
         sources[source] = sources.get(source, 0) + len(extracted)
 
-    def _consume_text(path: Path, *, source: str) -> None:
+    def _consume_text(path: Path, *, source: str, allow_space_amounts: bool) -> None:
         nonlocal scanned
         scanned += 1
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
             return
-        extracted, ambiguous = extract_price_rows_from_text(text, source=source)
+        extracted, ambiguous = extract_price_rows_from_text(
+            text,
+            source=source,
+            allow_space_amounts=allow_space_amounts,
+        )
         rows.extend(extracted)
         ambiguous_all.extend(ambiguous)
         sources[source] = sources.get(source, 0) + len(extracted)
 
     if legacy_prices.is_dir():
         for path in sorted(legacy_prices.glob("*.json")):
-            _consume_json(path, source=f"price_files/{path.name}")
+            _consume_json(path, source=f"price_files/{path.name}", allow_space_amounts=True)
         for path in sorted(legacy_prices.glob("*.txt")):
-            _consume_text(path, source=f"price_files/{path.name}")
+            _consume_text(path, source=f"price_files/{path.name}", allow_space_amounts=True)
 
     # price_list.txt is usually rules-only; still scan — rules lines are skipped, priced lines imported.
     price_list = legacy / "price_list.txt"
     if price_list.is_file():
-        _consume_text(price_list, source="price_list.txt")
+        _consume_text(price_list, source="price_list.txt", allow_space_amounts=False)
 
     knowledge_dir = legacy / "knowledge_files"
     if knowledge_dir.is_dir():
@@ -421,7 +511,7 @@ def migrate_staged_price_files_to_catalog(
                 continue
             if not isinstance(obj, dict) or not _looks_like_price_knowledge_file(obj):
                 continue
-            _consume_json(path, source=f"knowledge_files/{path.name}")
+            _consume_json(path, source=f"knowledge_files/{path.name}", allow_space_amounts=True)
 
     if ambiguous_all:
         archive_dir = legacy / "price_archive"
