@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 from unittest import mock
@@ -10,6 +12,7 @@ import pytest
 
 import config
 from handlers import text_handlers_delayed
+from modules import meta_messaging_webhook
 
 
 @pytest.mark.asyncio
@@ -63,3 +66,19 @@ async def test_typing_failure_does_not_abort_customer_reply_pipeline(capsys: pyt
     assert "type=RuntimeError" in captured.out
     assert "sensitive-provider-response-must-not-be-logged" not in captured.out
     assert "sensitive-provider-response-must-not-be-logged" not in captured.err
+
+
+@pytest.mark.asyncio
+async def test_background_failure_log_omits_exception_message(caplog: pytest.LogCaptureFixture) -> None:
+    async def failed_background_work() -> None:
+        raise RuntimeError("sensitive-webhook-payload-must-not-be-logged")
+
+    with caplog.at_level(logging.ERROR, logger="uvicorn.error"):
+        task = asyncio.create_task(failed_background_work())
+        meta_messaging_webhook._track_task(task)
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    rendered = "\n".join(record.getMessage() for record in caplog.records)
+    assert "background_processing_failed type=RuntimeError" in rendered
+    assert "sensitive-webhook-payload-must-not-be-logged" not in rendered
