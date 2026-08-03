@@ -17,10 +17,30 @@ echo "[cm-migrate] data_root=$LINASBOT_DATA_ROOT tenant=$TENANT_ID"
 
 /opt/linasbot/venv/bin/python - <<PY
 import json
+import os
 from pathlib import Path
+
+def _load_env() -> None:
+    for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
+        if not env_path.is_file():
+            continue
+        for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or "=" not in s:
+                continue
+            key, value = s.split("=", 1)
+            key = key.strip()
+            if key:
+                os.environ.setdefault(key, value.strip().strip("'").strip('"'))
+
+_load_env()
+if not (os.environ.get("OPENAI_API_KEY") or "").strip():
+    raise SystemExit("[cm-migrate] OPENAI_API_KEY missing after .env load")
+print("[cm-migrate] env_loaded=true")
+
 from services.cm.prod_migration import run_production_content_migration
-from services.cm.validation import validate_cm
 from services.cm.sot_audit import audit_sot_sources
+from services.cm.validation import validate_cm
 
 report = run_production_content_migration(
     data_root=Path("${LINASBOT_DATA_ROOT}"),
@@ -53,21 +73,13 @@ out = {
         "errors": validation.get("errors"),
     },
     "sot": {
-        "source_count": len(sot.get("sources") or sot) if isinstance(sot, dict) else None,
-        "raw_type": type(sot).__name__,
+        "source_count": len(sot.get("sources") or []) if isinstance(sot, dict) else None,
     },
 }
-# Normalize SoT summary without dumping file contents
 if isinstance(sot, dict) and "sources" in sot:
     out["sot"]["ungated"] = [
         s.get("id") or s.get("path")
         for s in sot["sources"]
-        if s.get("referenced_in") and not s.get("fully_gated_by_cm_runtime_mode")
-    ]
-elif isinstance(sot, list):
-    out["sot"]["ungated"] = [
-        s.get("id") or s.get("path")
-        for s in sot
         if s.get("referenced_in") and not s.get("fully_gated_by_cm_runtime_mode")
     ]
 
@@ -77,6 +89,8 @@ print(f"[cm-migrate] report={path}")
 print(f"[cm-migrate] conflict_count={out['migration']['conflict_count']}")
 print(f"[cm-migrate] validation_ok={out['validation']['ok']} errors={out['validation']['error_count']}")
 print(f"[cm-migrate] faq_groups={out['migration']['faq_groups_imported']}")
+print(f"[cm-migrate] scrub_faq_removed={out['migration']['scrub_faq_removed']}")
+print(f"[cm-migrate] sot_ungated={out['sot'].get('ungated')}")
 if out["migration"]["conflict_count"] or not out["validation"]["ok"]:
     print("[cm-migrate] BLOCKED_NOT_PUBLISH_READY")
     raise SystemExit(2)
