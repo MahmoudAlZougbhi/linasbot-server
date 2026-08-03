@@ -1,5 +1,6 @@
 # Production Content Management cutover. Confirmation-gated SSH steps.
 # Never prints secrets or customer message bodies.
+# Uses if/elif (not case/;;) because appleboy/ssh-action mangles `;;` in remote scripts.
 name: CM Production Cutover
 
 on:
@@ -51,32 +52,24 @@ jobs:
             set -euo pipefail
             echo "[cm-workflow] phase=${PHASE}"
             echo "[cm-workflow] deployed_sha=$(git -C /opt/linasbot rev-parse HEAD)"
-            case "${PHASE}" in
-              backup)
-                sudo bash /opt/linasbot/scripts/prod_cm_backup.sh
-                ;;
-              migrate_validate)
-                sudo bash /opt/linasbot/scripts/prod_cm_migrate_and_validate.sh
-                ;;
-              enable_publish_keep_legacy)
-                export CM_RUNTIME_MODE_VALUE=legacy
-                export CM_PUBLISH_ENABLED_VALUE=true
-                export CM_EMBEDDING_PROVIDER_VALUE=openai
-                export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
-                sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
-                ;;
-              publish)
-                sudo bash /opt/linasbot/scripts/prod_cm_publish.sh
-                ;;
-              cutover_published)
-                sudo bash /opt/linasbot/scripts/prod_cm_cutover.sh
-                ;;
-              rollback_legacy)
-                export CM_PUBLISH_ENABLED_VALUE=false
-                sudo -E bash /opt/linasbot/scripts/prod_cm_rollback.sh
-                ;;
-              *)
-                echo "unknown phase" >&2
-                exit 1
-                ;;
-            esac
+            if [ "${PHASE}" = "backup" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_backup.sh
+            elif [ "${PHASE}" = "migrate_validate" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_migrate_and_validate.sh
+            elif [ "${PHASE}" = "enable_publish_keep_legacy" ]; then
+              export CM_RUNTIME_MODE_VALUE=legacy
+              export CM_PUBLISH_ENABLED_VALUE=true
+              export CM_EMBEDDING_PROVIDER_VALUE=openai
+              export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
+              sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
+            elif [ "${PHASE}" = "publish" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_publish.sh
+            elif [ "${PHASE}" = "cutover_published" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_cutover.sh
+            elif [ "${PHASE}" = "rollback_legacy" ]; then
+              export CM_PUBLISH_ENABLED_VALUE=false
+              sudo -E bash /opt/linasbot/scripts/prod_cm_rollback.sh
+            else
+              echo "unknown phase=${PHASE}" >&2
+              exit 1
+            fi
