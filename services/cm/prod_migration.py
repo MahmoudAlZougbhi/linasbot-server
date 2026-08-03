@@ -131,7 +131,12 @@ def stage_live_data_for_migration(
         ],
     }
     for name, paths in candidates.items():
-        chosen = next((p for p in paths if p.exists()), None)
+        # Prefer the first *non-empty* existing candidate so an empty placeholder under
+        # LINASBOT_DATA_ROOT cannot shadow the live /opt/linasbot/data copy.
+        existing = [p for p in paths if p.exists()]
+        chosen = next((p for p in existing if p.is_file() and p.stat().st_size > 0), None)
+        if chosen is None and existing:
+            chosen = existing[0]
         if chosen is None:
             missing.append(name)
             continue
@@ -468,6 +473,33 @@ def run_production_content_migration(
     migrate_report = migrate_legacy_fixture(source_root=staging, tenant_id=tid, updated_by=updated_by)
     seeded = seed_owner_confirmed_structured_truth(tenant_id=tid, updated_by=updated_by, staging_root=staging)
     scrub = scrub_restricted_affirmations(tenant_id=tid, updated_by=updated_by)
+
+    qa_path = staging / "legacy" / "qa_pairs.jsonl"
+    qa_stats: dict[str, Any] = {
+        "exists": qa_path.exists(),
+        "bytes": 0,
+        "lines": 0,
+        "parsed_rows": 0,
+        "usable_rows": 0,
+        "sample_keys": [],
+    }
+    if qa_path.exists():
+        raw = qa_path.read_bytes()
+        qa_stats["bytes"] = len(raw)
+        lines = [ln for ln in raw.decode("utf-8", errors="replace").splitlines() if ln.strip()]
+        qa_stats["lines"] = len(lines)
+        for line in lines:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            qa_stats["parsed_rows"] += 1
+            if not qa_stats["sample_keys"]:
+                qa_stats["sample_keys"] = sorted(str(k) for k in row.keys())
+            if str(row.get("question") or "").strip() and str(row.get("answer") or "").strip():
+                qa_stats["usable_rows"] += 1
     drafts = {
         name: dict(get_draft(name, tenant_id=tid, create_default=True).payload)
         for name in ("restricted", "services", "prices", "faq", "knowledge", "handoff")
@@ -491,6 +523,7 @@ def run_production_content_migration(
         "migrate": migrate_report,
         "seeded": seeded,
         "scrub": scrub,
+        "qa_stats": qa_stats,
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
         "publish_ready": len(conflicts) == 0,
