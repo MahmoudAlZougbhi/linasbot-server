@@ -17,10 +17,16 @@ on:
           - publish
           - cutover_published
           - rollback_legacy
+          - rollback_content_version
       confirmation:
         description: "Type CM_CUTOVER_CONFIRMED"
         required: true
         type: string
+      content_version_id:
+        description: "Required for rollback_content_version (e.g. v_f2e930f21c4c)"
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: cm-production-cutover
@@ -40,6 +46,7 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           PHASE: ${{ inputs.phase }}
+          CONTENT_VERSION_ID: ${{ inputs.content_version_id }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -47,7 +54,7 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 40m
-          envs: PHASE
+          envs: PHASE,CONTENT_VERSION_ID
           script: |
             set -euo pipefail
             echo "[cm-workflow] phase=${PHASE}"
@@ -69,6 +76,13 @@ jobs:
             elif [ "${PHASE}" = "rollback_legacy" ]; then
               export CM_PUBLISH_ENABLED_VALUE=false
               sudo -E bash /opt/linasbot/scripts/prod_cm_rollback.sh
+            elif [ "${PHASE}" = "rollback_content_version" ]; then
+              if [ -z "${CONTENT_VERSION_ID}" ]; then
+                echo "[cm-workflow] content_version_id required for rollback_content_version" >&2
+                exit 1
+              fi
+              export CM_ROLLBACK_CONTENT_VERSION_ID="${CONTENT_VERSION_ID}"
+              sudo -E bash /opt/linasbot/scripts/prod_cm_rollback_version.sh
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1
