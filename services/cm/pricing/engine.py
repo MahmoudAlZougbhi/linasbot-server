@@ -47,19 +47,9 @@ def _in_effective(window_start: str | None, window_end: str | None, now: datetim
 
 
 def _round_amount(value: float, policy: RoundingPolicy) -> float:
-    if policy == "none":
-        return value
-    if policy == "nearest_1":
-        return float(round(value))
-    if policy == "floor_0_01":
-        return float(int(value * 100) / 100)
-    if policy == "ceil_0_01":
-        scaled = int(value * 100)
-        if value * 100 > scaled:
-            scaled += 1
-        return scaled / 100
-    # nearest_0_01
-    return round(value + 1e-9, 2)
+    from services.cm.pricing.money import as_money, money_to_float, quantize_money
+
+    return money_to_float(quantize_money(as_money(value), policy))
 
 
 def _audience_matches(scope: AudienceScope, context_audience: AudienceScope) -> bool:

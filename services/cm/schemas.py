@@ -188,6 +188,11 @@ class PricesSection(CmBaseModel):
     catalog: list[Any] = Field(default_factory=list)
     price_entries: list[Any] = Field(default_factory=list)
     discount_rules: list[Any] = Field(default_factory=list)
+    dimension_definitions: list[Any] = Field(default_factory=list)
+    resources: list[Any] = Field(default_factory=list)
+    price_books: list[Any] = Field(default_factory=list)
+    rule_sets: list[Any] = Field(default_factory=list)
+    package_rules: list[Any] = Field(default_factory=list)
     items: list[PriceRecord] = Field(default_factory=list)
     notes: str | None = None
 
@@ -220,6 +225,8 @@ class FaqVariant(CmBaseModel):
     language: LangCode
     question: str = ""
     answer: str = ""
+    reviewed: bool = False
+    is_auto_translated: bool = False
 
 
 class FaqRecord(CmBaseModel):
@@ -227,6 +234,16 @@ class FaqRecord(CmBaseModel):
     variants: list[FaqVariant] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
+    status: Literal["draft", "active", "archived"] = "draft"
+    source_language: LangCode | None = None
+    reviewed: bool = False
+    provenance: str | None = None
+    revision: int = 1
+
+    @property
+    def is_complete_four_lang(self) -> bool:
+        langs = {v.language for v in self.variants if (v.question or "").strip() and (v.answer or "").strip()}
+        return langs >= {"ar", "en", "fr", "franco"}
 
 
 class FaqSection(CmBaseModel):

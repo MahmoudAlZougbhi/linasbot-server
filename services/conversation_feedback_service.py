@@ -92,42 +92,43 @@ class ConversationFeedbackService:
                     "training_result": training_result,
                 }
 
-            # If "save_to_faq" (Like on AI answer): save to LOCAL QA so it appears in Manage Data
+            # If "save_to_faq" (Like on AI answer): write ONLY via canonical CM FAQ service.
+            # Never write remote/dead QA stores. No silent fallback to a second knowledge base.
             if feedback_type == "save_to_faq" and correct_answer:
-                print("🎓 Saving to FAQ (Manage Data) in 4 languages...")
-                try:
-                    from modules.local_qa_api import create_local_qa_pair_internal
+                print("🎓 Saving to canonical CM FAQ in 4 languages...")
+                from services.cm.faq_integration import FaqIntegrationError, create_faq_pair_from_livechat
 
-                    local_result = await create_local_qa_pair_internal(
+                try:
+                    local_result = await create_faq_pair_from_livechat(
                         question=user_question,
                         answer=correct_answer,
                         language=language,
-                        category="operator_trained",
+                        updated_by="live_chat_like",
+                        publish=False,
                     )
-                    if local_result.get("success"):
-                        print(f"✅ Saved to Manage Data! Count: {local_result.get('count_created', 0)}")
-                        return {
+                except FaqIntegrationError as exc:
+                    return {
+                        "success": False,
+                        "error": str(exc),
+                        "feedback_id": len(self.feedback_log) - 1,
+                    }
+                if local_result.get("success"):
+                    print(f"✅ Saved to CM FAQ! Count: {local_result.get('count_created', 0)}")
+                    return {
+                        "success": True,
+                        "message": "Saved to FAQ in 4 languages (awaiting publication)",
+                        "feedback_id": len(self.feedback_log) - 1,
+                        "training_result": {
                             "success": True,
-                            "message": "Saved to FAQ in 4 languages",
-                            "feedback_id": len(self.feedback_log) - 1,
-                            "training_result": {"success": True, "qa_id": "local"},
-                        }
-                    # Fallback to external QA if local fails
-                    print(f"⚠️ Local save failed: {local_result.get('error')}, trying external QA...")
-                except Exception as e:
-                    print(f"⚠️ Local QA save error: {e}, trying external QA...")
-                # Fallback: also save to external QA database
-                training_result = await self.train_from_feedback_multilang(
-                    user_question=user_question,
-                    correct_answer=correct_answer,
-                    source_language=language,
-                    category="operator_trained",
-                )
+                            "qa_group_id": local_result.get("qa_group_id"),
+                            "awaiting_publication": True,
+                        },
+                        "duplicates": local_result.get("duplicates") or [],
+                    }
                 return {
-                    "success": True,
-                    "message": "Saved to FAQ in 4 languages",
+                    "success": False,
+                    "error": local_result.get("error") or "Failed to save FAQ",
                     "feedback_id": len(self.feedback_log) - 1,
-                    "training_result": training_result,
                 }
 
             return {
