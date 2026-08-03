@@ -66,6 +66,7 @@ out = {
         "stage_missing": report["stage"]["missing"],
         "stage_copied_count": len(report["stage"]["copied"]),
         "stage_copied_names": sorted({Path(c["dest"]).name for c in report["stage"]["copied"]}),
+        "qa_stats": report.get("qa_stats"),
     },
     "validation": {
         "ok": validation.get("ok"),
@@ -93,6 +94,7 @@ print(f"[cm-migrate] faq_groups={out['migration']['faq_groups_imported']}")
 print(f"[cm-migrate] knowledge_articles={out['migration']['knowledge_articles_imported']}")
 print(f"[cm-migrate] stage_copied={out['migration']['stage_copied_names']}")
 print(f"[cm-migrate] stage_missing={out['migration']['stage_missing']}")
+print(f"[cm-migrate] qa_stats={out['migration'].get('qa_stats')}")
 print(f"[cm-migrate] scrub_faq_removed={out['migration']['scrub_faq_removed']}")
 print(f"[cm-migrate] sot_ungated={out['sot'].get('ungated')}")
 if "qa_pairs.jsonl" in out["migration"]["stage_missing"]:
