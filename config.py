@@ -353,7 +353,13 @@ def load_bot_assets() -> None:
             CORE_KNOWLEDGE_BASE = f.read().strip()
         print("✅ تم تحميل قاعدة المعرفة الأساسية من " + str(KNOWLEDGE_BASE_FILE))
     except FileNotFoundError:
-        CORE_KNOWLEDGE_BASE = "خدمات الليزر: إزالة شعر وتاتو فقط. لا تقدم علاجات جلدية أخرى. مواعيد العمل من 10 صباحًا حتى 6 مساءً يومياً ما عدا الأحد (عطلة)."
+        # Owner-confirmed: laser hair removal only — never claim tattoo/CO₂/pigmentation/facial.
+        # Hours/prices are not invented here; restore knowledge_base.txt for authoritative facts.
+        CORE_KNOWLEDGE_BASE = (
+            "Linas Laser: laser hair removal only. "
+            "Do not offer tattoo removal, CO2 laser, pigmentation removal, or facial/skin-cleaning. "
+            "Do not invent prices, hours, branches, or WhatsApp numbers when the knowledge file is missing."
+        )
         print("❌ تحذير: ملف قاعدة المعرفة غير موجود. الرجاء إنشاءه.")
     except Exception as e:
         CORE_KNOWLEDGE_BASE = "خطأ في تحميل قاعدة المعرفة الأساسية."

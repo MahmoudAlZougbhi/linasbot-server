@@ -22,7 +22,6 @@ REQUIRED = {
     "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": "96170707354",
     "SOCIAL_WHATSAPP_BEIRUT_MALE": "96171534928",
     "SOCIAL_WHATSAPP_ANTELIAS_MALE": "96171226082",
-    "SOCIAL_WHATSAPP_TATTOO_REMOVAL": "96171534928",
 }
 
 
@@ -71,12 +70,14 @@ def test_explicit_booking_english():
     assert out.intent == "booking"
 
 
-def test_tattoo_beirut_only_number():
+def test_tattoo_request_refuses_without_whatsapp():
     out = route_social_contact_request("tattoo removal", {"channel": "instagram"}, None, "en")
     assert out is not None
-    assert "71534928" in out.reply
-    assert "wa.me/96171534928" in out.reply
-    assert "Antelias" not in out.reply or "not Antelias" in out.reply
+    assert out.tattoo_removal is True
+    assert out.contact_env is None
+    assert "71534928" not in out.reply
+    assert "wa.me" not in out.reply.lower()
+    assert "isn't one of the services" in out.reply.lower()
 
 
 def test_full_laser_handoff_women_beirut():
