@@ -445,8 +445,7 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
     seeded["prices_structured"] = int(pricing_import.get("price_entry_count") or 0)
     seeded["pricing_import"] = pricing_import
     seeded["prices_note"] = (
-        "Structured catalog/price_entries imported only from proven numeric sources; "
-        "no invented thresholds or amounts."
+        "Structured catalog/price_entries imported only from proven numeric sources; no invented thresholds or amounts."
     )
 
     return seeded
