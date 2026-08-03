@@ -42,7 +42,8 @@ const ContentManagers = () => {
         <h1 className="text-2xl font-bold text-slate-800">Content Managers</h1>
         <p className="text-slate-600 mt-1 max-w-3xl">
           Guided control plane for Linas AI facts, FAQ, handoff, and restricted topics.
-          Save drafts freely — publishing stays disabled until an approved later phase.
+          Edit each section, Save Draft, Validate, then open Preview / Validate / Publish when you
+          want customer-facing AI to use the new version.
         </p>
       </div>
 
