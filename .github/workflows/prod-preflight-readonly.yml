@@ -168,28 +168,4 @@ jobs:
             for timestamp, status in webhook_access[-12:]:
                 print(f"[meta-runtime] webhook_access=timestamp:{timestamp} status:{status}")
 
-            sensitive = re.compile(
-                r"(?:EAA[A-Za-z0-9_-]+|Bearer\s+\S+|"
-                r"(?:access_token|app_secret|verify_token|hub\.verify_token)=[^&\s]+)",
-                re.IGNORECASE,
-            )
-            identifiers = re.compile(r"(?<![A-Za-z0-9])\d{7,}(?![A-Za-z0-9])")
-            long_values = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9_-]{24,}(?![A-Za-z0-9])")
-            error_lines = [
-                line
-                for line in lines
-                if re.search(
-                    r"\[meta-social\]|\[_delayed_process_messages\] ERROR|"
-                    r"Meta Send API returned HTTP|Traceback|pending message queue empty",
-                    line,
-                    re.IGNORECASE,
-                )
-            ]
-            print(f"[meta-runtime] selected_diagnostic_lines={len(error_lines)}")
-            for line in error_lines[-12:]:
-                safe = sensitive.sub("[REDACTED_SECRET]", line)
-                safe = identifiers.sub("[REDACTED_ID]", safe)
-                safe = long_values.sub("[REDACTED_VALUE]", safe)
-                safe = safe.replace("\r", " ").replace("\n", " ")[:320]
-                print(f"[meta-runtime] diagnostic={safe}")
             PY
