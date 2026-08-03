@@ -70,6 +70,7 @@ def stage_live_data_for_migration(
     *,
     data_root: Path,
     staging_root: Path,
+    app_data_root: Path | None = None,
 ) -> dict[str, Any]:
     """Copy live FAQ/content into ``staging_root/legacy/`` for migrate_legacy_fixture."""
     legacy = staging_root / "legacy"
@@ -95,26 +96,38 @@ def stage_live_data_for_migration(
         copied.append({"src": str(src), "dest": str(dest)})
 
     # Prefer persistent layout; also accept flat project data/ for recovery copies.
+    # Production historically keeps FAQ/content under /opt/linasbot/data as well as LINASBOT_DATA_ROOT.
+    app_data = Path(app_data_root) if app_data_root is not None else Path("/opt/linasbot/data")
     candidates = {
         "qa_pairs.jsonl": [
             data_root / "qa" / "qa_pairs.jsonl",
             data_root / "qa_pairs.jsonl",
+            app_data / "qa" / "qa_pairs.jsonl",
+            app_data / "qa_pairs.jsonl",
         ],
         "price_list.txt": [
             data_root / "content" / "price_list.txt",
             data_root / "price_list.txt",
+            app_data / "price_list.txt",
+            app_data / "content" / "price_list.txt",
         ],
         "knowledge_base.txt": [
             data_root / "content" / "knowledge_base.txt",
             data_root / "knowledge_base.txt",
+            app_data / "knowledge_base.txt",
+            app_data / "content" / "knowledge_base.txt",
         ],
         "style_guide.txt": [
             data_root / "content" / "style_guide.txt",
             data_root / "style_guide.txt",
+            app_data / "style_guide.txt",
+            app_data / "content" / "style_guide.txt",
         ],
         "system_prompt_template.txt": [
             data_root / "content" / "system_prompt_template.txt",
             data_root / "system_prompt_template.txt",
+            app_data / "system_prompt_template.txt",
+            app_data / "content" / "system_prompt_template.txt",
         ],
     }
     for name, paths in candidates.items():
@@ -124,33 +137,52 @@ def stage_live_data_for_migration(
             continue
         _copy(chosen, legacy / name)
 
-    for kf_root in (data_root / "content" / "knowledge_files", data_root / "knowledge_files"):
+    for kf_root in (
+        data_root / "content" / "knowledge_files",
+        data_root / "knowledge_files",
+        app_data / "knowledge_files",
+        app_data / "content" / "knowledge_files",
+    ):
         if kf_root.is_dir():
             for path in sorted(kf_root.glob("*.json")):
                 _copy(path, legacy / "knowledge_files" / path.name)
 
-    for pf_root in (data_root / "content" / "price_files", data_root / "price_files"):
+    for pf_root in (
+        data_root / "content" / "price_files",
+        data_root / "price_files",
+        app_data / "price_files",
+        app_data / "content" / "price_files",
+    ):
         if pf_root.is_dir():
             dest_dir = legacy / "price_files"
             dest_dir.mkdir(parents=True, exist_ok=True)
             for path in sorted(pf_root.glob("*.json")):
                 _copy(path, dest_dir / path.name)
 
-    dyn_src = data_root / "settings" / "dynamic_messages.json"
-    if not dyn_src.exists():
-        dyn_src = data_root / "dynamic_messages.json"
-    if dyn_src.exists():
+    dyn_candidates = [
+        data_root / "settings" / "dynamic_messages.json",
+        data_root / "dynamic_messages.json",
+        app_data / "settings" / "dynamic_messages.json",
+        app_data / "dynamic_messages.json",
+    ]
+    dyn_src = next((p for p in dyn_candidates if p.exists()), None)
+    if dyn_src is not None:
         _copy(dyn_src, legacy / "dynamic_messages.json")
 
-    settings_src = data_root / "settings" / "app_settings.json"
-    if not settings_src.exists():
-        settings_src = data_root / "app_settings.json"
-    if settings_src.exists():
+    settings_candidates = [
+        data_root / "settings" / "app_settings.json",
+        data_root / "app_settings.json",
+        app_data / "settings" / "app_settings.json",
+        app_data / "app_settings.json",
+    ]
+    settings_src = next((p for p in settings_candidates if p.exists()), None)
+    if settings_src is not None:
         _copy(settings_src, legacy / "app_settings.json")
 
     manifest = {
         "schema": "cm_prod_stage_v1",
         "data_root": str(data_root),
+        "app_data_root": str(app_data),
         "copied": copied,
         "missing": missing,
     }
@@ -422,12 +454,17 @@ def run_production_content_migration(
     staging_root: str | Path,
     tenant_id: str | None = None,
     updated_by: str = "prod_cm_migration",
+    app_data_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Full production draft migration: stage → fixture migrate → seed truth → scrub conflicts."""
     tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
     root = resolve_live_data_root(data_root)
     staging = Path(staging_root)
-    stage_report = stage_live_data_for_migration(data_root=root, staging_root=staging)
+    stage_report = stage_live_data_for_migration(
+        data_root=root,
+        staging_root=staging,
+        app_data_root=Path(app_data_root) if app_data_root is not None else None,
+    )
     migrate_report = migrate_legacy_fixture(source_root=staging, tenant_id=tid, updated_by=updated_by)
     seeded = seed_owner_confirmed_structured_truth(tenant_id=tid, updated_by=updated_by, staging_root=staging)
     scrub = scrub_restricted_affirmations(tenant_id=tid, updated_by=updated_by)

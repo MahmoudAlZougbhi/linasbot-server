@@ -65,6 +65,7 @@ out = {
         "conflicts": report["conflicts"],
         "stage_missing": report["stage"]["missing"],
         "stage_copied_count": len(report["stage"]["copied"]),
+        "stage_copied_names": sorted({Path(c["dest"]).name for c in report["stage"]["copied"]}),
     },
     "validation": {
         "ok": validation.get("ok"),
@@ -89,8 +90,17 @@ print(f"[cm-migrate] report={path}")
 print(f"[cm-migrate] conflict_count={out['migration']['conflict_count']}")
 print(f"[cm-migrate] validation_ok={out['validation']['ok']} errors={out['validation']['error_count']}")
 print(f"[cm-migrate] faq_groups={out['migration']['faq_groups_imported']}")
+print(f"[cm-migrate] knowledge_articles={out['migration']['knowledge_articles_imported']}")
+print(f"[cm-migrate] stage_copied={out['migration']['stage_copied_names']}")
+print(f"[cm-migrate] stage_missing={out['migration']['stage_missing']}")
 print(f"[cm-migrate] scrub_faq_removed={out['migration']['scrub_faq_removed']}")
 print(f"[cm-migrate] sot_ungated={out['sot'].get('ungated')}")
+if "qa_pairs.jsonl" in out["migration"]["stage_missing"]:
+    print("[cm-migrate] BLOCKED_MISSING_QA_SOURCE")
+    raise SystemExit(3)
+if out["migration"]["faq_groups_imported"] < 1 and "qa_pairs.jsonl" in out["migration"]["stage_copied_names"]:
+    print("[cm-migrate] BLOCKED_EMPTY_QA_IMPORT")
+    raise SystemExit(3)
 if out["migration"]["conflict_count"] or not out["validation"]["ok"]:
     print("[cm-migrate] BLOCKED_NOT_PUBLISH_READY")
     raise SystemExit(2)
