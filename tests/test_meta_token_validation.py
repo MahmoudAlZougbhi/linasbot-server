@@ -5,6 +5,7 @@ import pytest
 from scripts.validate_meta_social_token import (
     MetaTokenValidationError,
     validate_conversation_payloads,
+    validate_page_subscription_payload,
     validate_payloads,
 )
 
@@ -105,3 +106,44 @@ def test_malformed_conversation_query_payload_fails_closed(channel: str) -> None
 
     with pytest.raises(MetaTokenValidationError):
         validate_conversation_payloads(messenger, instagram)
+
+
+def test_exact_dm_only_page_subscription_passes() -> None:
+    checks = validate_page_subscription_payload(
+        {
+            "data": [
+                {
+                    "id": "999000111222333",
+                    "subscribed_fields": ["messages", "messaging_postbacks"],
+                }
+            ]
+        },
+        expected_app_id="999000111222333",
+    )
+
+    assert all(checks.values())
+
+
+@pytest.mark.parametrize("failure", ["none", "multiple", "wrong_app", "extra_field", "missing_field"])
+def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
+    app = {
+        "id": "999000111222333",
+        "subscribed_fields": ["messages", "messaging_postbacks"],
+    }
+    data: list[dict[str, object]] = [app]
+    if failure == "none":
+        data = []
+    elif failure == "multiple":
+        data.append({"id": "another-app", "subscribed_fields": ["messages"]})
+    elif failure == "wrong_app":
+        app["id"] = "1784792718776344"
+    elif failure == "extra_field":
+        app["subscribed_fields"] = ["messages", "messaging_postbacks", "feed"]
+    else:
+        app["subscribed_fields"] = ["messages"]
+
+    with pytest.raises(MetaTokenValidationError):
+        validate_page_subscription_payload(
+            {"data": data},
+            expected_app_id="999000111222333",
+        )

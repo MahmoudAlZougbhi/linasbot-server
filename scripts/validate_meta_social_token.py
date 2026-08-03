@@ -110,6 +110,29 @@ def validate_conversation_payloads(
     return checks
 
 
+def validate_page_subscription_payload(
+    payload: dict[str, object],
+    *,
+    expected_app_id: str,
+) -> dict[str, bool]:
+    """Require one installed messaging app with the exact DM-only webhook fields."""
+
+    raw_apps = payload.get("data")
+    apps = raw_apps if isinstance(raw_apps, list) else []
+    app = _mapping(apps[0]) if len(apps) == 1 else {}
+    raw_fields = app.get("subscribed_fields")
+    fields = {str(field) for field in raw_fields} if isinstance(raw_fields, list) else set()
+    checks = {
+        "page_has_single_subscribed_app": len(apps) == 1,
+        "page_subscribed_app_id_match": str(app.get("id") or "") == expected_app_id,
+        "page_subscribed_fields_dm_only": fields == {"messages", "messaging_postbacks"},
+    }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        raise MetaTokenValidationError(f"Meta Page subscription validation failed checks={failed}")
+    return checks
+
+
 def _request_json(url: str, *, bearer: str | None = None) -> dict[str, object]:
     headers = {"Accept": "application/json"}
     if bearer:
@@ -167,6 +190,12 @@ def main() -> None:
         bearer=page_token,
     )
     checks.update(validate_conversation_payloads(messenger_payload, instagram_payload))
+    subscription_query = urllib.parse.urlencode({"fields": "id,subscribed_fields"})
+    subscription_payload = _request_json(
+        f"{base}/{EXPECTED_PAGE_ID}/subscribed_apps?{subscription_query}",
+        bearer=page_token,
+    )
+    checks.update(validate_page_subscription_payload(subscription_payload, expected_app_id=app_id))
     for name in sorted(checks):
         print(f"[meta-token] {name}=true")
     print(f"[meta-token] page_id={EXPECTED_PAGE_ID}")
