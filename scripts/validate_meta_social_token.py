@@ -14,6 +14,8 @@ EXPECTED_PAGE_ID = "378696005334409"
 EXPECTED_INSTAGRAM_ID = "17841413184256533"
 RETIRED_APP_ID = "1784792718776344"
 EXPECTED_GRAPH_VERSION = "v24.0"
+EXPECTED_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
+EXPECTED_WEBHOOK_FIELDS = {"messages", "messaging_postbacks"}
 REQUIRED_SCOPES = {
     "pages_messaging",
     "pages_manage_metadata",
@@ -30,6 +32,20 @@ class MetaTokenValidationError(RuntimeError):
 
 def _mapping(value: object) -> dict[str, object]:
     return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+def _subscription_field_names(value: object) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    names: set[str] = set()
+    for item in value:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+        else:
+            name = str(item).strip()
+        if name:
+            names.add(name)
+    return names
 
 
 def validate_debug_payload(
@@ -121,15 +137,65 @@ def validate_page_subscription_payload(
     apps = raw_apps if isinstance(raw_apps, list) else []
     app = _mapping(apps[0]) if len(apps) == 1 else {}
     raw_fields = app.get("subscribed_fields")
-    fields = {str(field) for field in raw_fields} if isinstance(raw_fields, list) else set()
+    fields = _subscription_field_names(raw_fields)
     checks = {
         "page_has_single_subscribed_app": len(apps) == 1,
         "page_subscribed_app_id_match": str(app.get("id") or "") == expected_app_id,
-        "page_subscribed_fields_dm_only": fields == {"messages", "messaging_postbacks"},
+        "page_subscribed_fields_dm_only": fields == EXPECTED_WEBHOOK_FIELDS,
     }
     if not all(checks.values()):
         failed = sorted(key for key, value in checks.items() if not value)
         raise MetaTokenValidationError(f"Meta Page subscription validation failed checks={failed}")
+    return checks
+
+
+def validate_instagram_subscription_payload(
+    payload: dict[str, object],
+    *,
+    expected_app_id: str,
+) -> dict[str, bool]:
+    """Require the linked Instagram account to install only the dedicated app's DM fields."""
+
+    raw_apps = payload.get("data")
+    apps = raw_apps if isinstance(raw_apps, list) else []
+    app = _mapping(apps[0]) if len(apps) == 1 else {}
+    fields = _subscription_field_names(app.get("subscribed_fields"))
+    checks = {
+        "instagram_has_single_subscribed_app": len(apps) == 1,
+        "instagram_subscribed_app_id_match": str(app.get("id") or "") == expected_app_id,
+        "instagram_subscribed_fields_dm_only": fields == EXPECTED_WEBHOOK_FIELDS,
+    }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        raise MetaTokenValidationError(f"Meta Instagram subscription validation failed checks={failed}")
+    return checks
+
+
+def validate_app_webhook_payload(payload: dict[str, object]) -> dict[str, bool]:
+    """Require active Page and Instagram callbacks with only DM webhook fields."""
+
+    raw_subscriptions = payload.get("data")
+    subscriptions = raw_subscriptions if isinstance(raw_subscriptions, list) else []
+    by_object = {
+        str(subscription.get("object") or "").strip().lower(): subscription
+        for subscription in subscriptions
+        if isinstance(subscription, dict)
+    }
+    page = _mapping(by_object.get("page"))
+    instagram = _mapping(by_object.get("instagram"))
+    checks = {
+        "app_webhook_objects_dm_only": set(by_object) == {"page", "instagram"},
+        "app_page_webhook_active": page.get("active") is True,
+        "app_page_webhook_callback_match": str(page.get("callback_url") or "") == EXPECTED_CALLBACK_URL,
+        "app_page_webhook_fields_dm_only": _subscription_field_names(page.get("fields")) == EXPECTED_WEBHOOK_FIELDS,
+        "app_instagram_webhook_active": instagram.get("active") is True,
+        "app_instagram_webhook_callback_match": str(instagram.get("callback_url") or "") == EXPECTED_CALLBACK_URL,
+        "app_instagram_webhook_fields_dm_only": _subscription_field_names(instagram.get("fields"))
+        == EXPECTED_WEBHOOK_FIELDS,
+    }
+    if not all(checks.values()):
+        failed = sorted(key for key, value in checks.items() if not value)
+        raise MetaTokenValidationError(f"Meta app webhook validation failed checks={failed}")
     return checks
 
 
@@ -196,6 +262,22 @@ def main() -> None:
         bearer=page_token,
     )
     checks.update(validate_page_subscription_payload(subscription_payload, expected_app_id=app_id))
+    instagram_subscription_payload = _request_json(
+        f"{base}/{EXPECTED_INSTAGRAM_ID}/subscribed_apps?{subscription_query}",
+        bearer=page_token,
+    )
+    checks.update(
+        validate_instagram_subscription_payload(
+            instagram_subscription_payload,
+            expected_app_id=app_id,
+        )
+    )
+    app_subscription_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
+    app_subscription_payload = _request_json(
+        f"{base}/{app_id}/subscriptions?{app_subscription_query}",
+        bearer=f"{app_id}|{app_secret}",
+    )
+    checks.update(validate_app_webhook_payload(app_subscription_payload))
     for name in sorted(checks):
         print(f"[meta-token] {name}=true")
     print(f"[meta-token] page_id={EXPECTED_PAGE_ID}")

@@ -4,7 +4,9 @@ import pytest
 
 from scripts.validate_meta_social_token import (
     MetaTokenValidationError,
+    validate_app_webhook_payload,
     validate_conversation_payloads,
+    validate_instagram_subscription_payload,
     validate_page_subscription_payload,
     validate_payloads,
 )
@@ -147,3 +149,77 @@ def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
             {"data": data},
             expected_app_id="999000111222333",
         )
+
+
+def test_exact_dm_only_instagram_subscription_passes() -> None:
+    checks = validate_instagram_subscription_payload(
+        {
+            "data": [
+                {
+                    "id": "999000111222333",
+                    "subscribed_fields": ["messaging_postbacks", "messages"],
+                }
+            ]
+        },
+        expected_app_id="999000111222333",
+    )
+
+    assert all(checks.values())
+
+
+def test_exact_page_and_instagram_app_webhooks_pass() -> None:
+    fields = [{"name": "messages"}, {"name": "messaging_postbacks"}]
+    checks = validate_app_webhook_payload(
+        {
+            "data": [
+                {
+                    "object": "page",
+                    "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                    "active": True,
+                    "fields": fields,
+                },
+                {
+                    "object": "instagram",
+                    "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                    "active": True,
+                    "fields": fields,
+                },
+            ]
+        }
+    )
+
+    assert all(checks.values())
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["missing_instagram", "inactive_page", "wrong_callback", "extra_object", "extra_field"],
+)
+def test_app_webhook_mismatch_fails_closed(failure: str) -> None:
+    fields: list[object] = [{"name": "messages"}, {"name": "messaging_postbacks"}]
+    page: dict[str, object] = {
+        "object": "page",
+        "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+        "active": True,
+        "fields": fields,
+    }
+    instagram: dict[str, object] = {
+        "object": "instagram",
+        "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+        "active": True,
+        "fields": fields,
+    }
+    data = [page, instagram]
+    if failure == "missing_instagram":
+        data = [page]
+    elif failure == "inactive_page":
+        page["active"] = False
+    elif failure == "wrong_callback":
+        instagram["callback_url"] = "https://example.invalid/webhook"
+    elif failure == "extra_object":
+        data.append({"object": "feed", "active": True, "fields": []})
+    else:
+        instagram["fields"] = [*fields, {"name": "comments"}]
+
+    with pytest.raises(MetaTokenValidationError):
+        validate_app_webhook_payload({"data": data})
