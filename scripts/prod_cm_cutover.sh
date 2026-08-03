@@ -14,7 +14,25 @@ echo "[cm-cutover] verifying published pointer before flipping runtime"
 
 /opt/linasbot/venv/bin/python - <<PY
 import json
+import os
 from pathlib import Path
+
+def _load_env() -> None:
+    for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
+        if not env_path.is_file():
+            continue
+        for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or "=" not in s:
+                continue
+            key, value = s.split("=", 1)
+            key = key.strip()
+            if key:
+                os.environ.setdefault(key, value.strip().strip("'").strip('"'))
+
+_load_env()
+print("[cm-cutover] env_loaded=true")
+
 from services.cm.embeddings import assert_published_embedding_pin
 from services.cm.version_store import load_published_content
 
