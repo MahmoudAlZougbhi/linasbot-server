@@ -149,7 +149,10 @@ def migrate_staged_price_files_to_catalog(
     category_label: str = "Sellable items",
     item_type: CatalogItemType = "custom",
 ) -> dict[str, Any]:
-    """Scan staged legacy/price_files/*.json and import proven numeric rows only."""
+    """Scan staged legacy/price_files/*.json and import proven numeric rows only.
+
+    Never invent amounts. Never wipe an existing non-empty prices draft with an empty import.
+    """
     legacy_prices = staging_root / "legacy" / "price_files"
     rows: list[dict[str, Any]] = []
     scanned = 0
@@ -162,13 +165,38 @@ def migrate_staged_price_files_to_catalog(
                 continue
             rows.extend(extract_price_rows_from_json_obj(obj, source=f"price_files/{path.name}"))
 
+    env = get_draft("prices", tenant_id=tenant_id, create_default=True)
+    existing = PricesSection.model_validate(env.payload)
+    existing_catalog_count = len(existing.catalog) + len(existing.price_entries) + len(existing.items)
+
+    if not rows:
+        return {
+            "tenant_id": tenant_id,
+            "files_scanned": scanned,
+            "rows_imported": 0,
+            "catalog_count": len(existing.catalog),
+            "price_entry_count": len(existing.price_entries),
+            "invented_amounts": 0,
+            "skipped_empty_overwrite": existing_catalog_count > 0,
+            "preserved_existing": True,
+        }
+
     section = build_prices_section_from_rows(
         rows,
         category_id=category_id,
         category_label=category_label,
         item_type=item_type,
     )
-    env = get_draft("prices", tenant_id=tenant_id, create_default=True)
+    # Keep any already-authored discount/package/resources when re-importing catalog rows.
+    if existing.discount_rules and not section.discount_rules:
+        section.discount_rules = list(existing.discount_rules)
+    if existing.resources and not section.resources:
+        section.resources = list(existing.resources)
+    if existing.dimension_definitions and not section.dimension_definitions:
+        section.dimension_definitions = list(existing.dimension_definitions)
+    if existing.package_rules and not section.package_rules:
+        section.package_rules = list(existing.package_rules)
+
     put_draft(
         "prices",
         payload=section.model_dump(mode="json"),
@@ -183,6 +211,8 @@ def migrate_staged_price_files_to_catalog(
         "catalog_count": len(section.catalog),
         "price_entry_count": len(section.price_entries),
         "invented_amounts": 0,
+        "skipped_empty_overwrite": False,
+        "preserved_existing": False,
     }
 
 
