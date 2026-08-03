@@ -209,19 +209,10 @@ def _text_affirms_restricted(text: str) -> str | None:
             continue
         for marker in markers:
             if marker.lower() in lowered:
-                # Affirmation heuristics: offer/provide/price/book language near marker.
-                if re.search(
-                    r"(offer|provide|available|book|سعر|منقدم|متوفر|نحجز|نوفر|نعمل)",
-                    lowered,
-                    re.IGNORECASE,
-                ):
-                    return topic_id
-                if topic_id == "tattoo_removal" and re.search(
-                    r"(tattoo removal|إزالة التاتو|ازالة التاتو|détatouage)",
-                    lowered,
-                    re.IGNORECASE,
-                ):
-                    return topic_id
+                # Any mention of an unsupported service in active FAQ/knowledge is archived.
+                # Restricted Topics remain the internal blocklist; active published copy must not
+                # affirm or advertise these services.
+                return topic_id
     return None
 
 
