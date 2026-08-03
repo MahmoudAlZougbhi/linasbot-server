@@ -199,7 +199,12 @@ def validate_app_webhook_payload(payload: dict[str, object]) -> dict[str, bool]:
     return checks
 
 
-def _request_json(url: str, *, bearer: str | None = None) -> dict[str, object]:
+def _request_json(
+    url: str,
+    *,
+    bearer: str | None = None,
+    stage: str,
+) -> dict[str, object]:
     headers = {"Accept": "application/json"}
     if bearer:
         headers["Authorization"] = f"Bearer {bearer}"
@@ -208,11 +213,11 @@ def _request_json(url: str, *, bearer: str | None = None) -> dict[str, object]:
         with urllib.request.urlopen(request, timeout=20) as response:
             decoded: object = json.loads(response.read(1_000_000))
     except urllib.error.HTTPError as exc:
-        raise MetaTokenValidationError(f"Meta Graph request returned HTTP {exc.code}") from None
+        raise MetaTokenValidationError(f"Meta Graph request failed stage={stage} http={exc.code}") from None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-        raise MetaTokenValidationError("Meta Graph request failed") from None
+        raise MetaTokenValidationError(f"Meta Graph request failed stage={stage}") from None
     if not isinstance(decoded, dict):
-        raise MetaTokenValidationError("Meta Graph response was not an object")
+        raise MetaTokenValidationError(f"Meta Graph response was not an object stage={stage}")
     return cast(dict[str, object], decoded)
 
 
@@ -233,11 +238,12 @@ def main() -> None:
             "access_token": f"{app_id}|{app_secret}",
         }
     )
-    debug_payload = _request_json(f"{base}/debug_token?{debug_query}")
+    debug_payload = _request_json(f"{base}/debug_token?{debug_query}", stage="debug_token")
     validate_debug_payload(debug_payload, expected_app_id=app_id)
     page_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}?fields=id,instagram_business_account{{id}}",
         bearer=page_token,
+        stage="page_relationship",
     )
     checks = validate_payloads(
         debug_payload,
@@ -250,21 +256,25 @@ def main() -> None:
     messenger_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}/conversations?{messenger_query}",
         bearer=page_token,
+        stage="messenger_conversations",
     )
     instagram_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}/conversations?{instagram_query}",
         bearer=page_token,
+        stage="instagram_conversations",
     )
     checks.update(validate_conversation_payloads(messenger_payload, instagram_payload))
     subscription_query = urllib.parse.urlencode({"fields": "id,subscribed_fields"})
     subscription_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}/subscribed_apps?{subscription_query}",
         bearer=page_token,
+        stage="page_subscribed_apps",
     )
     checks.update(validate_page_subscription_payload(subscription_payload, expected_app_id=app_id))
     instagram_subscription_payload = _request_json(
         f"{base}/{EXPECTED_INSTAGRAM_ID}/subscribed_apps?{subscription_query}",
         bearer=page_token,
+        stage="instagram_subscribed_apps",
     )
     checks.update(
         validate_instagram_subscription_payload(
@@ -276,6 +286,7 @@ def main() -> None:
     app_subscription_payload = _request_json(
         f"{base}/{app_id}/subscriptions?{app_subscription_query}",
         bearer=f"{app_id}|{app_secret}",
+        stage="app_subscriptions",
     )
     checks.update(validate_app_webhook_payload(app_subscription_payload))
     for name in sorted(checks):
