@@ -170,7 +170,9 @@ def _check_pricing_catalog(
     if not isinstance(prices_payload, dict):
         return []
     out: list[ValidationFailure] = []
-    for raw in list(prices_payload.get("catalog") or []):
+    catalog_raw = prices_payload.get("catalog")
+    catalog_list: list[object] = catalog_raw if isinstance(catalog_raw, list) else []
+    for raw in catalog_list:
         if not isinstance(raw, dict):
             continue
         blob = " ".join(
@@ -178,7 +180,7 @@ def _check_pricing_catalog(
                 str(raw.get("id") or ""),
                 str((raw.get("labels") or {}).get("en") if isinstance(raw.get("labels"), dict) else ""),
                 str((raw.get("labels") or {}).get("ar") if isinstance(raw.get("labels"), dict) else ""),
-                *[str(a) for a in (raw.get("aliases") or [])],
+                *[str(a) for a in (raw.get("aliases") if isinstance(raw.get("aliases"), list) else [])],
             ]
         )
         if raw.get("active", True) and _text_mentions(blob, markers):
@@ -187,7 +189,7 @@ def _check_pricing_catalog(
                     code=RESTRICTED_PRICE_PRESENT,
                     message=f"Restricted topic '{topic.id}' conflicts with catalog item '{raw.get('id')}'.",
                     path=f"prices.catalog[{raw.get('id')}]",
-                    details={"topic_id": topic.id, "catalog_item_id": raw.get("id")},
+                    details={"topic_id": topic.id, "catalog_item_id": str(raw.get("id") or "")},
                 )
             )
     return out

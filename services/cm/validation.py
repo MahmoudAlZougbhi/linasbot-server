@@ -92,11 +92,15 @@ def validate_cm(
     ):
         from services.cm.pricing.validation import validate_pricing_section
 
+        def _list_field(key: str) -> list[Any]:
+            value = prices_payload.get(key)
+            return list(value) if isinstance(value, list) else []
+
         for failure in validate_pricing_section(
-            categories=list(prices_payload.get("categories") or []),
-            catalog=list(prices_payload.get("catalog") or []),
-            price_entries=list(prices_payload.get("price_entries") or []),
-            discount_rules=list(prices_payload.get("discount_rules") or []),
+            categories=_list_field("categories"),
+            catalog=_list_field("catalog"),
+            price_entries=_list_field("price_entries"),
+            discount_rules=_list_field("discount_rules"),
         ):
             item = _conflict_dict(failure, section="prices")
             if failure.severity == "warning":
