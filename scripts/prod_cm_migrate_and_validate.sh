@@ -96,6 +96,8 @@ print(f"[cm-migrate] stage_copied={out['migration']['stage_copied_names']}")
 print(f"[cm-migrate] stage_missing={out['migration']['stage_missing']}")
 print(f"[cm-migrate] qa_stats={out['migration'].get('qa_stats')}")
 print(f"[cm-migrate] scrub_faq_removed={out['migration']['scrub_faq_removed']}")
+print(f"[cm-migrate] pricing_import={out['migration']['seeded'].get('pricing_import')}")
+print(f"[cm-migrate] prices_structured={out['migration']['seeded'].get('prices_structured')}")
 print(f"[cm-migrate] conflict_codes={[c.get('code') for c in out['migration']['conflicts']]}")
 print(
     f"[cm-migrate] validation_codes={[e.get('code') or e.get('rule') or e.get('message') for e in (out['validation'].get('errors') or [])]}"
