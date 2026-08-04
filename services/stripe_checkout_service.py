@@ -75,11 +75,11 @@ class StripeCheckoutService:
             # Stripe minimum is typically $0.50 — packs should be above this.
             raise ValueError("Package price below Stripe minimum charge")
 
-        session = stripe.checkout.Session.create(
-            mode="payment",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            line_items=[
+        create_kwargs: dict[str, Any] = {
+            "mode": "payment",
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "line_items": [
                 {
                     "quantity": 1,
                     "price_data": {
@@ -92,15 +92,17 @@ class StripeCheckoutService:
                     },
                 }
             ],
-            metadata={
+            "metadata": {
                 "tenant_id": tenant_id,
                 "package_id": package_id,
                 "tokens": str(tokens),
                 "amount_usd": f"{float(amount_usd):.2f}",
                 "product": "linas_token_pack",
             },
-            **({"customer_email": customer_email} if customer_email else {}),
-        )
+        }
+        if customer_email:
+            create_kwargs["customer_email"] = customer_email
+        session = stripe.checkout.Session.create(**create_kwargs)  # type: ignore[arg-type]
         return {
             "id": session["id"],
             "url": session.get("url"),
