@@ -40,6 +40,7 @@ _ROUTE_MODULES = (
     "modules.webhook_handlers",
     "modules.meta_connections_api",
     "modules.meta_messaging_webhook",
+    "modules.wallet_api",
 )
 
 _MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -158,18 +159,26 @@ class TestRouteInventory:
         assert counts["protected_gets"] + counts["protected_mutations"] <= counts["protected"]
 
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
-        assert counts["total_api_routes"] == 143
-        assert counts["public"] == 4
-        assert counts["protected"] == 139
+        # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
+        assert counts["total_api_routes"] == 152
+        assert counts["public"] == 10
+        assert counts["protected"] == 142
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
             ("POST", "/api/auth/login"),
             ("POST", "/api/auth/register"),
+            ("POST", "/api/auth/forgot-password"),
+            ("POST", "/api/auth/reset-password"),
+            ("POST", "/api/auth/verify-email"),
+            ("POST", "/api/auth/resend-verification"),
+            ("GET", "/api/billing/packages"),
+            ("POST", "/api/billing/stripe/webhook"),
         }
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set
+        assert ("GET", "/api/billing/wallet") not in public_set
 
     def test_public_allowlist_matches_api_security(self, auth_matrix: dict[str, Any]) -> None:
         discovered_public = set(auth_matrix["public"])
