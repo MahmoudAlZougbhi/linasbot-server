@@ -23,7 +23,7 @@ import { authFetch } from "../../utils/authFetch";
 
 // Navigation items with permission keys
 const navigationItems = [
-  { name: "Dashboard", href: "/", icon: HomeIcon, permissionKey: "dashboard" },
+  { name: "Dashboard", href: "/app", icon: HomeIcon, permissionKey: "dashboard" },
   {
     name: "Testing Lab",
     href: "/testing",

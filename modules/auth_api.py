@@ -78,6 +78,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    business_name: str
+    email: str
+    password: str
+    name: str | None = None
+
+
 class CreateUserRequest(BaseModel):
     email: str
     password: str
@@ -179,6 +186,60 @@ async def login(request: LoginRequest, response: Response) -> Any:
     return {
         "success": False,
         "error": "Authentication service temporarily unavailable (Firestore quota/network). Please retry in a few minutes.",
+    }
+
+
+@app.post("/api/auth/register")
+async def register(request: RegisterRequest, response: Response) -> Any:
+    """
+    Public SaaS registration: create an isolated tenant admin and sign them in.
+    Never creates users under the reserved ``linas`` tenant.
+    """
+    from services.tenant_registration_service import register_company_account
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                register_company_account,
+                business_name=request.business_name,
+                email=request.email,
+                password=request.password,
+                name=request.name,
+            ),
+            timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
+        )
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except AuthBackendUnavailableError:
+        return {
+            "success": False,
+            "error": "Authentication service temporarily unavailable. Please retry in a few minutes.",
+        }
+    except TimeoutError:
+        return {
+            "success": False,
+            "error": f"Registration timeout ({AUTH_LOGIN_TIMEOUT_SECONDS}s). Please retry.",
+        }
+    except Exception as e:
+        print(f"[auth_api] register: error: {e}", flush=True)
+        return {"success": False, "error": "Registration failed"}
+
+    user = result.user
+    record = session_service.create_session(
+        user_id=str(user["id"]),
+        email=str(user.get("email") or request.email),
+        role=str(user.get("role") or "admin"),
+        permissions=user.get("permissions"),
+        tenant_id=str(result.tenant_id),
+        password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
+    )
+    _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
+    return {
+        "success": True,
+        "user": user,
+        "tenant_id": result.tenant_id,
+        "business_name": result.business_name,
+        "csrf_token": record.csrf_token,
     }
 
 

@@ -6,21 +6,21 @@ import NotFound from "./pages/NotFound";
 function TestRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<div>dashboard-root</div>} />
-      <Route path="/analytics" element={<Navigate to="/" replace />} />
+      <Route path="/app" element={<div>dashboard-app</div>} />
+      <Route path="/analytics" element={<Navigate to="/app" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
 
 describe("App analytics redirect route", () => {
-  it("redirects /analytics to dashboard root", () => {
+  it("redirects /analytics to dashboard app home", () => {
     render(
       <MemoryRouter initialEntries={["/analytics"]}>
         <TestRoutes />
       </MemoryRouter>
     );
-    expect(screen.getByText("dashboard-root")).toBeInTheDocument();
+    expect(screen.getByText("dashboard-app")).toBeInTheDocument();
   });
 
   it("shows NotFound for unknown routes", () => {

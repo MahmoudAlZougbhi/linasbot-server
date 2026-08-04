@@ -158,14 +158,15 @@ class TestRouteInventory:
         assert counts["protected_gets"] + counts["protected_mutations"] <= counts["protected"]
 
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
-        assert counts["total_api_routes"] == 142
-        assert counts["public"] == 3
+        assert counts["total_api_routes"] == 143
+        assert counts["public"] == 4
         assert counts["protected"] == 139
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
             ("POST", "/api/auth/login"),
+            ("POST", "/api/auth/register"),
         }
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set

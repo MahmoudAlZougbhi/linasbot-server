@@ -21,7 +21,7 @@ const Login = () => {
   const location = useLocation();
   const redirectTo = location.state?.from
     ? `${location.state.from.pathname || ''}${location.state.from.search || ''}`
-    : '/';
+    : '/app';
 
   /** @param {string} message */
   const isConnectionError = (message) => {
@@ -100,7 +100,12 @@ const Login = () => {
           <h1 className="text-4xl font-bold gradient-text font-display mb-2">
             Welcome Back
           </h1>
-          <p className="text-slate-600">Login to Lina{"'"}s AI Dashboard</p>
+          <p className="text-slate-600">Log in to your Linas AI dashboard</p>
+          <p className="mt-2 text-sm text-slate-500">
+            <a href="/" className="font-medium text-primary-700 underline">Back to home</a>
+            {" · "}
+            <a href="/register" className="font-medium text-primary-700 underline">Create Account</a>
+          </p>
         </motion.div>
 
         {/* Login Card */}
@@ -246,7 +251,7 @@ const Login = () => {
           className="text-center mt-8"
         >
           <p className="text-sm text-slate-500">
-            © 2024 Lina{"'"}s Laser Center. All rights reserved.
+            © {new Date().getFullYear()} Linas AI
           </p>
         </motion.div>
       </motion.div>

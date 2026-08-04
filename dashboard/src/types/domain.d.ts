@@ -35,6 +35,12 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string, redirectTo?: string, retryCount?: number) => Promise<AuthUser>;
+  register: (payload: {
+    businessName: string;
+    email: string;
+    password: string;
+    name?: string;
+  }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   getUsers: () => Promise<unknown>;

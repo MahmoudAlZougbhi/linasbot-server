@@ -19,10 +19,18 @@ from services.cm.faq_integration import (
     regenerate_cm_faq_variants,
     update_cm_faq_variant,
 )
+from services.dashboard_session_service import SessionRecord
 
 
 def _actor(session: Any) -> str:
     return getattr(session, "user_id", None) or getattr(session, "email", None) or "content_manager"
+
+
+def _session_tenant(session: SessionRecord) -> str:
+    tenant_id = str(session.tenant_id or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant context required")
+    return tenant_id
 
 
 @app.get("/api/cm/faq")
@@ -34,8 +42,10 @@ async def cm_list_faq(
     reviewed: bool | None = Query(default=None),
     include_archived: bool = Query(default=False),
 ) -> Any:
-    require_permission(request, "contentManagers")
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     items = list_cm_faq(
+        tenant_id=tenant_id,
         status=status,
         language=language,
         q=q,
@@ -51,14 +61,16 @@ async def cm_faq_duplicates(
     question: str = Query(...),
     language: str = Query(default="ar"),
 ) -> Any:
-    require_permission(request, "contentManagers")
-    hits = find_duplicate_faq_groups(question=question, language=language)
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    hits = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
     return {"success": True, "data": hits, "count": len(hits)}
 
 
 @app.post("/api/cm/faq")
 async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     question = str(body.get("question") or "").strip()
     answer = str(body.get("answer") or "").strip()
     language = str(body.get("language") or "ar")
@@ -69,13 +81,14 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
         raise HTTPException(status_code=400, detail="question and answer are required")
 
     try:
-        duplicates = find_duplicate_faq_groups(question=question, language=language)
+        duplicates = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
         result = await create_faq_pair(
             question=question,
             answer=answer,
             language=language,
             tags=tags,
             updated_by=_actor(session),
+            tenant_id=tenant_id,
         )
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -87,6 +100,7 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
 async def cm_faq_from_livechat(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     """Live Chat Like → canonical FAQ. Requires liveChat; contentPublish for add_and_publish."""
     session = require_permission(request, "liveChat")
+    tenant_id = _session_tenant(session)
     question = str(body.get("question") or body.get("user_question") or "").strip()
     answer = str(body.get("answer") or body.get("correct_answer") or "").strip()
     language = str(body.get("language") or "ar")
@@ -102,6 +116,7 @@ async def cm_faq_from_livechat(request: Request, body: dict[str, Any] = Body(def
             language=language,
             updated_by=_actor(session),
             publish=publish,
+            tenant_id=tenant_id,
         )
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -110,8 +125,9 @@ async def cm_faq_from_livechat(request: Request, body: dict[str, Any] = Body(def
 
 @app.get("/api/cm/faq/{qa_group_id}")
 async def cm_get_faq(request: Request, qa_group_id: str) -> Any:
-    require_permission(request, "contentManagers")
-    item = get_cm_faq_group(qa_group_id=qa_group_id)
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    item = get_cm_faq_group(qa_group_id=qa_group_id, tenant_id=tenant_id)
     if item is None:
         raise HTTPException(status_code=404, detail="FAQ group not found")
     return {"success": True, "data": item}
@@ -125,6 +141,7 @@ async def cm_patch_faq_variant(
     body: dict[str, Any] = Body(default={}),
 ) -> Any:
     session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     try:
         result = await update_cm_faq_variant(
             qa_group_id=qa_group_id,
@@ -133,6 +150,7 @@ async def cm_patch_faq_variant(
             answer=body.get("answer"),
             reviewed=body.get("reviewed") if "reviewed" in body else None,
             updated_by=_actor(session),
+            tenant_id=tenant_id,
         )
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -146,6 +164,7 @@ async def cm_regenerate_faq(
     body: dict[str, Any] = Body(default={}),
 ) -> Any:
     session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     raw_langs = body.get("languages")
     languages = [str(lang) for lang in raw_langs] if isinstance(raw_langs, list) else None
     try:
@@ -154,6 +173,7 @@ async def cm_regenerate_faq(
             source_language=str(body["source_language"]) if body.get("source_language") else None,
             languages=languages,
             updated_by=_actor(session),
+            tenant_id=tenant_id,
         )
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -163,8 +183,13 @@ async def cm_regenerate_faq(
 @app.post("/api/cm/faq/{qa_group_id}/archive")
 async def cm_archive_faq(request: Request, qa_group_id: str) -> Any:
     session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     try:
-        return archive_cm_faq_group(qa_group_id=qa_group_id, updated_by=_actor(session))
+        return archive_cm_faq_group(
+            qa_group_id=qa_group_id,
+            updated_by=_actor(session),
+            tenant_id=tenant_id,
+        )
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

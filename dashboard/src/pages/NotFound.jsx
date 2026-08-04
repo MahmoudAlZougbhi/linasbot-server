@@ -7,7 +7,7 @@ const NotFound = () => (
       That route does not exist. Use the sidebar to open an available page.
     </p>
     <Link
-      to="/"
+      to="/app"
       className="inline-flex items-center px-4 py-2 rounded-xl bg-primary-600 text-white font-medium hover:bg-primary-700"
     >
       Back to Dashboard

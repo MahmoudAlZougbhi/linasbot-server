@@ -97,6 +97,7 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("GET", "/api/health"),
     ("GET", "/api/ready"),
     ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/register"),
 }
 
 # Prefix public (rare)
@@ -182,6 +183,7 @@ _SENSITIVE_MUTATION_PREFIXES = (
     "/api/live-chat/takeover",
     "/api/debug/",
     "/api/auth/login",
+    "/api/auth/register",
     "/api/auth/change-password",
 )
 
@@ -200,6 +202,8 @@ def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
     rules = []
     if path == "/api/auth/login":
         rules.append((f"login:{ip}", 10, 300))
+    if path == "/api/auth/register":
+        rules.append((f"register:{ip}", 5, 300))
     if path == "/api/auth/change-password":
         rules.append((f"pw:{ip}", 10, 300))
     if any(path.startswith(p) for p in _SENSITIVE_MUTATION_PREFIXES):
@@ -267,11 +271,10 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
         # The legacy dashboard control planes still operate on Lina's production
         # stores. External App B tenants are deliberately fail-closed to every
         # legacy API until that surface has an explicit tenant-aware query path.
-        # Their current self-service surface is Meta connection management plus
-        # authentication; this prevents analytics, settings, conversation, or
-        # customer-history data from crossing tenant boundaries.
+        # Their self-service surface is Meta connection management, Content
+        # Management (tenant-scoped drafts/publish), and authentication.
         if session.tenant_id != "linas" and not (
-            path.startswith("/api/auth/") or path.startswith("/api/meta/connections")
+            path.startswith("/api/auth/") or path.startswith("/api/meta/connections") or path.startswith("/api/cm")
         ):
             return JSONResponse(
                 status_code=403,
