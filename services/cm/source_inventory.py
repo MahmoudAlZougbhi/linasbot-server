@@ -113,10 +113,44 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
                     "status": item.status,
                     "source_filename": item.source_filename,
                     "source_checksum": item.source_checksum,
+                    "tags": list(item.tags),
                     "ui_visibility": "content-managers/" + ("care" if kind == "care" else "knowledge"),
                     "runtime_active": item.status not in {"archived", "restricted"},
                 }
             )
+
+    # Structured section inventory (metadata only).
+    structured_sources: list[dict[str, Any]] = []
+    for section_name in ("services", "branches", "dynamic_messages", "handoff", "prices", "ai_basics", "style"):
+        if not _draft_exists(tid, section_name):
+            continue
+        env = get_draft(section_name, tenant_id=tid, create_default=False)
+        section_payload: dict[str, Any] = env.payload if isinstance(env.payload, dict) else {}
+        if section_name in {"services", "branches", "dynamic_messages"}:
+            raw_items = section_payload.get("items")
+            items_list: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
+            for item in items_list:
+                if not isinstance(item, dict):
+                    continue
+                labels_raw = item.get("labels")
+                labels: dict[str, Any] = labels_raw if isinstance(labels_raw, dict) else {}
+                structured_sources.append(
+                    {
+                        "section": section_name,
+                        "id": item.get("id"),
+                        "title": labels.get("en") or item.get("name") or item.get("id"),
+                        "available": item.get("available"),
+                        "status": item.get("status"),
+                    }
+                )
+        structured_sources.append(
+            {
+                "section": section_name,
+                "id": f"{section_name}:notes",
+                "notes_chars": len(str(section_payload.get("notes") or "")),
+                "has_notes": bool(str(section_payload.get("notes") or "").strip()),
+            }
+        )
 
     staging_legacy = root / "tenants" / tid / "cm" / "staging" / "prod_migration" / "legacy"
     staged_files: list[dict[str, Any]] = []
@@ -171,6 +205,7 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
         ),
         "section_counts": section_counts,
         "article_sources": article_sources,
+        "structured_sources": structured_sources,
         "faq_status_counts": {
             status: sum(1 for item in faq.items if item.status == status)
             for status in sorted({item.status for item in faq.items} | {"draft", "active", "archived", "restricted"})

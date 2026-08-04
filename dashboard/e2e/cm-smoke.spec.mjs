@@ -312,11 +312,28 @@ test.describe("Content Management browser smoke", () => {
       ["/content-managers/languages", "Languages"],
       ["/content-managers/services", "Services"],
       ["/content-managers/branches", "Branches & Hours"],
+      ["/content-managers/handoff", "Booking & Human Handoff"],
     ]) {
       await page.goto(href);
       await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
       await expect(page.getByText("Section data (JSON)")).toHaveCount(0);
     }
+
+    // Section content kinds after redistribution: Services show cards, Branches show location notes,
+    // Knowledge defaults to active educational articles (no JSON).
+    await page.goto("/content-managers/services");
+    await expect(page.getByRole("heading", { name: "Services", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Add service/i })).toBeVisible();
+    await expect(page.getByText(/Active service catalog/i)).toBeVisible();
+
+    await page.goto("/content-managers/branches");
+    await expect(page.getByRole("heading", { name: "Branches & Hours", level: 1 })).toBeVisible();
+    await expect(page.getByText(/Location policy notes/i)).toBeVisible();
+
+    await page.goto("/content-managers/knowledge");
+    await expect(page.getByRole("heading", { name: "Knowledge", level: 1 })).toBeVisible();
+    await expect(page.getByText(/Educational clinic articles/i)).toBeVisible();
+    await expect(page.getByText("Section data (JSON)")).toHaveCount(0);
   });
 
   test("stale ETag conflict and validation errors are truthful", async ({ page }) => {

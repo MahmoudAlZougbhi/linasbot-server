@@ -501,6 +501,12 @@ def run_production_content_migration(
     seeded = seed_owner_confirmed_structured_truth(tenant_id=tid, updated_by=updated_by, staging_root=staging)
     restore = restore_keyword_scrubbed_content(tenant_id=tid, updated_by=updated_by)
 
+    from services.cm.redistribution import redistribute_knowledge_draft, section_counts_snapshot
+
+    before_counts = section_counts_snapshot(tenant_id=tid)
+    redistribution = redistribute_knowledge_draft(tenant_id=tid, updated_by=updated_by)
+    after_counts = section_counts_snapshot(tenant_id=tid)
+
     qa_path = staging / "legacy" / "qa_pairs.jsonl"
     qa_stats: dict[str, Any] = {
         "exists": qa_path.exists(),
@@ -557,8 +563,12 @@ def run_production_content_migration(
             "reason": "keyword_topic_scrub_revoked",
         },
         "restore": restore,
+        "redistribution": redistribution,
+        "section_counts_before": before_counts,
+        "section_counts_after": after_counts,
         "qa_stats": qa_stats,
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
+        "availability_conflicts": redistribution.get("availability_conflicts") or [],
         "publish_ready": len(conflicts) == 0,
     }

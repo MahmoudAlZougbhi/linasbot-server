@@ -29,6 +29,7 @@ from services.cm.structured_resolver import (
     resolve_branch_facts,
     resolve_handoff,
     resolve_price_facts,
+    resolve_service_catalog_facts,
     resolve_service_facts,
 )
 from services.cm.version_store import PublishedVersionError, load_published_content
@@ -177,6 +178,7 @@ async def prepare_response(
 
     # Step 11 — Structured facts from the published version.
     facts: list[AnswerFact] = []
+    facts.extend(resolve_service_catalog_facts(services_section))
     if interpreted.service_id:
         facts.extend(resolve_service_facts(services_section, interpreted.service_id))
         facts.extend(resolve_price_facts(sections.get("prices") or {}, interpreted.service_id))

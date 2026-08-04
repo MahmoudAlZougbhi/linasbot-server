@@ -190,7 +190,18 @@ def _migrate_knowledge_and_care(
             source_checksum=str(entry.get("checksum") or "") or None,
             notes=None,
         )
-        if any(tag in {"prep", "aftercare", "care"} for tag in tags):
+        from services.cm.section_classifier import classify_article
+
+        classification = classify_article(
+            article_id=article.id,
+            title=article.title,
+            body=article.body,
+            tags=tags,
+            source_filename=article.source_filename,
+            source_checksum=article.source_checksum,
+            category=article.category,
+        )
+        if classification.move_to_care:
             care_items.append(article)
         else:
             knowledge_items.append(article)

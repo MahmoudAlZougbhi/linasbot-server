@@ -160,8 +160,30 @@ def resolve_branch_facts(branches: BranchesSection | dict[str, Any], branch_id: 
         facts = [AnswerFact(kind="branch_address", value=branch.address, source_id=f"branch:{branch.id}")]
         if branch.hours.summary:
             facts.append(AnswerFact(kind="branch_hours", value=branch.hours.summary, source_id=f"branch:{branch.id}"))
+        if branch.notes:
+            facts.append(AnswerFact(kind="branch_notes", value=branch.notes, source_id=f"branch:{branch.id}:notes"))
+        if section.notes:
+            facts.append(AnswerFact(kind="branches_policy", value=section.notes, source_id="branches:notes"))
         return facts
     return []
+
+
+def resolve_service_catalog_facts(services: ServicesSection | dict[str, Any]) -> list[AnswerFact]:
+    """Expose available services as grounded facts (no invented services)."""
+    section = services if isinstance(services, ServicesSection) else ServicesSection.model_validate(services)
+    facts: list[AnswerFact] = []
+    for service in section.items:
+        label = service.labels.en or service.labels.ar or service.id
+        facts.append(
+            AnswerFact(
+                kind="service_catalog",
+                value=f"{label} available={service.available}",
+                source_id=f"service:{service.id}",
+            )
+        )
+        if service.notes:
+            facts.append(AnswerFact(kind="service_notes", value=service.notes, source_id=f"service:{service.id}:notes"))
+    return facts
 
 
 def resolve_handoff_phone_facts(
