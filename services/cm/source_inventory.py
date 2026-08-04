@@ -62,7 +62,8 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
         count: int | None = None
         status_counts: dict[str, int] = {}
         if section in {"knowledge", "care", "faq", "services", "branches", "dynamic_messages"}:
-            items = payload.get("items") if isinstance(payload.get("items"), list) else []
+            raw_items = payload.get("items")
+            items: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
             count = len(items)
             for item in items:
                 if not isinstance(item, dict):
@@ -70,15 +71,20 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
                 status = str(item.get("status") or "active")
                 status_counts[status] = status_counts.get(status, 0) + 1
         elif section == "handoff":
-            contacts = payload.get("contacts") if isinstance(payload.get("contacts"), list) else []
-            matrix = payload.get("matrix") if isinstance(payload.get("matrix"), list) else []
+            raw_contacts = payload.get("contacts")
+            raw_matrix = payload.get("matrix")
+            contacts: list[Any] = list(raw_contacts) if isinstance(raw_contacts, list) else []
+            matrix: list[Any] = list(raw_matrix) if isinstance(raw_matrix, list) else []
             count = len(contacts) + len(matrix)
         elif section == "restricted":
-            topics = payload.get("topics") if isinstance(payload.get("topics"), list) else []
+            raw_topics = payload.get("topics")
+            topics: list[Any] = list(raw_topics) if isinstance(raw_topics, list) else []
             count = len(topics)
         elif section == "prices":
-            catalog = payload.get("catalog") if isinstance(payload.get("catalog"), list) else []
-            entries = payload.get("price_entries") if isinstance(payload.get("price_entries"), list) else []
+            raw_catalog = payload.get("catalog")
+            raw_entries = payload.get("price_entries")
+            catalog: list[Any] = list(raw_catalog) if isinstance(raw_catalog, list) else []
+            entries: list[Any] = list(raw_entries) if isinstance(raw_entries, list) else []
             section_counts[section] = {
                 "draft_present": True,
                 "catalog_count": len(catalog),
