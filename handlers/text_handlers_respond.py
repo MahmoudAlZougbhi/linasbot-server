@@ -1383,7 +1383,10 @@ async def _process_and_respond(
             current_conversation_id,
             user_name,
             user_data.get("phone_number"),
-            metadata={"handled_by": "cm_runtime_pipeline", **{k: v for k, v in cm_metadata.items() if k != "retrieved_sources"}},
+            metadata={
+                "handled_by": "cm_runtime_pipeline",
+                **{k: v for k, v in cm_metadata.items() if k != "retrieved_sources"},
+            },
         )
         log_interaction(
             user_id,

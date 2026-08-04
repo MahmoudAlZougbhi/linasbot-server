@@ -22,9 +22,7 @@ _BUFFER_MAXLEN = 500
 _FLOW_BUFFER: deque = deque(maxlen=_BUFFER_MAXLEN)
 _INITIALIZED = False
 
-_SECRET_RE = re.compile(
-    r"(?i)\b(api[_-]?key|access[_-]?token|bearer|authorization|secret|password)\b\s*[:=]\s*\S+"
-)
+_SECRET_RE = re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|bearer|authorization|secret|password)\b\s*[:=]\s*\S+")
 
 
 def _ensure_data_dir() -> None:
@@ -192,9 +190,7 @@ def _derive_cost_status(
         "packet_ready",
         "answer_validation_failed",
     }
-    called = ai_called if ai_called is not None else (
-        src in ai_sources or src.startswith("cm_") or "gpt" in src
-    )
+    called = ai_called if ai_called is not None else (src in ai_sources or src.startswith("cm_") or "gpt" in src)
     if not called:
         return "none"
     if cost_usd is not None:
