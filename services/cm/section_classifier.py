@@ -149,7 +149,7 @@ _SERVICE_SPECS: tuple[tuple[tuple[str, ...], str, LocalizedLabels, str, tuple[st
         ("dpl", "whitening", "تبييض", "pigmentation"),
     ),
     (
-        ("laser hair removal", "hair removal", "épilation", "إزالة الشعر"),
+        ("laser hair removal", "laser_hair_removal", "hair removal", "épilation", "إزالة الشعر"),
         "laser_hair_removal",
         LocalizedLabels(en="Laser hair removal", ar="إزالة الشعر بالليزر", fr="Épilation laser"),
         "laser",
@@ -239,16 +239,7 @@ def classify_article(
         archive_from_knowledge=False,
     )
 
-    # Explicit care tags win for prep/aftercare files.
-    if any(tag in {"prep", "aftercare", "care", "preparation"} for tag in tag_list) or _has_any(blob, _CARE_MARKERS):
-        base.targets = ["care"]
-        base.move_to_care = True
-        base.keep_in_knowledge_active = False
-        base.archive_from_knowledge = True
-        base.rationale = "prep/aftercare content"
-        return base
-
-    # Treatment philosophies must win over booking/tool language inside the same body.
+    # Treatment philosophies must win over care/booking language inside the same body.
     services = _matched_services(blob)
     if services and philosophy:
         availability = _availability_from_text(blob, philosophy=True)
@@ -268,6 +259,15 @@ def classify_article(
         base.keep_in_knowledge_active = True
         base.archive_from_knowledge = False
         base.rationale = "named treatment philosophy — service card + educational knowledge retained"
+        return base
+
+    # Explicit care tags win for prep/aftercare files (not treatment philosophies).
+    if any(tag in {"prep", "aftercare", "care", "preparation"} for tag in tag_list) or _has_any(blob, _CARE_MARKERS):
+        base.targets = ["care"]
+        base.move_to_care = True
+        base.keep_in_knowledge_active = False
+        base.archive_from_knowledge = True
+        base.rationale = "prep/aftercare content"
         return base
 
     if _has_any(blob, _LOCATION_MARKERS) or "location_rules" in title_l or title_l.strip("<>/ ") == "location_rules":
