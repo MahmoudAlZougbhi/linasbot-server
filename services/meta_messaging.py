@@ -191,7 +191,8 @@ def parse_meta_messaging_events(
                 continue
             postback_raw = item.get("postback")
             postback: dict[str, Any] = postback_raw if isinstance(postback_raw, dict) else {}
-            sender_raw = item.get("sender") if isinstance(item.get("sender"), dict) else {}
+            sender_candidate = item.get("sender")
+            sender_raw: dict[str, Any] = sender_candidate if isinstance(sender_candidate, dict) else {}
             sender_id = str(sender_raw.get("id") or "").strip()
             recipient_id = str((item.get("recipient") or {}).get("id") or entry_id).strip()
             if not sender_id:
