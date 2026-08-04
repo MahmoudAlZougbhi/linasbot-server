@@ -144,8 +144,6 @@ def redistribute_knowledge_draft(
 
     for article in knowledge.items:
         # Re-classify even archived redistributed rows so philosophy fixes can reactivate.
-        already_archived = article.status == "archived" and _REDISTRIBUTED_TAG in article.tags
-
         classification = classify_article(
             article_id=article.id,
             title=article.title,
