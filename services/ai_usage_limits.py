@@ -58,8 +58,7 @@ class AiLimitSettings:
             "recommended": recommended_defaults(),
             "definitions": {
                 "image": (
-                    "Counts each image the AI analyzes for one Messenger/Instagram/"
-                    "WhatsApp end-user within the period."
+                    "Counts each image the AI analyzes for one Messenger/Instagram/WhatsApp end-user within the period."
                 ),
                 "context_line": (
                     "Counts non-empty lines of retrieved knowledge plus message/"
@@ -96,12 +95,8 @@ def normalize_ai_limit_settings(raw: dict[str, Any] | None) -> AiLimitSettings:
     data = raw if isinstance(raw, dict) else {}
     return AiLimitSettings(
         unlimited=bool(data.get("unlimited", False)),
-        image_per_day=_clamp_int(
-            data.get("image_per_day"), default=RECOMMENDED_IMAGE_PER_DAY, hi=_HARD_MAX_IMAGES
-        ),
-        image_per_week=_clamp_int(
-            data.get("image_per_week"), default=RECOMMENDED_IMAGE_PER_WEEK, hi=_HARD_MAX_IMAGES
-        ),
+        image_per_day=_clamp_int(data.get("image_per_day"), default=RECOMMENDED_IMAGE_PER_DAY, hi=_HARD_MAX_IMAGES),
+        image_per_week=_clamp_int(data.get("image_per_week"), default=RECOMMENDED_IMAGE_PER_WEEK, hi=_HARD_MAX_IMAGES),
         context_lines_per_day=_clamp_int(
             data.get("context_lines_per_day"),
             default=RECOMMENDED_CONTEXT_LINES_PER_DAY,

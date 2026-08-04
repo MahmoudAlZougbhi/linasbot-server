@@ -59,6 +59,7 @@ async def update_ai_limits(updates: dict[str, Any], request: Request) -> Any:
         "message": "AI limits saved",
     }
 
+
 @app.get("/api/settings/integrations")
 async def get_integration_status() -> Any:
     """

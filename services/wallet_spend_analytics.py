@@ -248,9 +248,7 @@ def build_wallet_spend_analytics(
     if prior["interactions"] == 0:
         notes.append("Spend for the previous 12 months is unavailable (no Interaction Log rows in that window).")
     if current["rows_without_cost"] and current["interactions"]:
-        notes.append(
-            "Some Interaction Log rows lack cost estimates; USD totals only include rows with recorded cost."
-        )
+        notes.append("Some Interaction Log rows lack cost estimates; USD totals only include rows with recorded cost.")
     if current["rows_without_channel"] and current["interactions"]:
         notes.append("Some older rows lack a channel label and are counted under Unknown.")
 

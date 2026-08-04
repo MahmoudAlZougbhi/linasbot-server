@@ -427,8 +427,7 @@ class TokenWalletService:
                         "model": model,
                         "input_remaining_after": data.get("input_remaining", 0),
                         "output_remaining_after": data.get("output_remaining", 0),
-                        "balance_after": int(data.get("input_remaining") or 0)
-                        + int(data.get("output_remaining") or 0),
+                        "balance_after": int(data.get("input_remaining") or 0) + int(data.get("output_remaining") or 0),
                     }
                 )
             return self.get_wallet(tid)
