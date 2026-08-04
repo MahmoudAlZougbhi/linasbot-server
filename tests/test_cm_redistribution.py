@@ -178,13 +178,13 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     assert tattoo.available is True
 
     handoff = get_draft("handoff", tenant_id=tenant).payload
-    assert "Appointment booking rules" in str(handoff.get("notes") or "")
+    assert "Appointment booking rules" in str(handoff.get("policy_text") or "")
     branches = get_draft("branches", tenant_id=tenant).payload
-    assert "Beirut and Antelias" in str(branches.get("notes") or "")
+    assert "Beirut and Antelias" in str(branches.get("policy_text") or "")
     ai = get_draft("ai_basics", tenant_id=tenant).payload
     assert "Greeting rule" in str(ai.get("greeting_behavior") or "")
     prices = get_draft("prices", tenant_id=tenant).payload
-    assert "Beard area pricing" in str(prices.get("notes") or "")
+    assert "Beard area pricing" in str(prices.get("policy_text") or "")
 
     from services.cm.schemas import CareSection
 
@@ -195,10 +195,10 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     assert "sha_loc" in (first.get("checksums") or [])
     assert any(i.title == "Laser prep" for i in care.items)
 
-    # Re-run must not duplicate notes blocks.
-    notes1 = str(handoff.get("notes") or "")
-    notes2 = str(get_draft("handoff", tenant_id=tenant).payload.get("notes") or "")
-    assert notes1.count("id=") == notes2.count("id=")
+    # Re-run must not duplicate policy blocks.
+    policy1 = str(handoff.get("policy_text") or "")
+    policy2 = str(get_draft("handoff", tenant_id=tenant).payload.get("policy_text") or "")
+    assert policy1.count("id=") == policy2.count("id=")
 
     before = section_counts_snapshot(tenant_id=tenant)
     redistribute_knowledge_draft(tenant_id=tenant, updated_by="test")

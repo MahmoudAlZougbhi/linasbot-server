@@ -328,7 +328,7 @@ test.describe("Content Management browser smoke", () => {
 
     await page.goto("/content-managers/branches");
     await expect(page.getByRole("heading", { name: "Branches & Hours", level: 1 })).toBeVisible();
-    await expect(page.getByText(/Location policy notes/i)).toBeVisible();
+    await expect(page.getByText(/Location policy/i)).toBeVisible();
 
     await page.goto("/content-managers/knowledge");
     await expect(page.getByRole("heading", { name: "Knowledge", level: 1 })).toBeVisible();

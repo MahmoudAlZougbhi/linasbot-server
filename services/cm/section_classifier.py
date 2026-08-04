@@ -322,7 +322,7 @@ def classify_article(
                                 available=True,
                                 category=category_name,
                                 aliases=aliases,
-                                notes=f"Derived from {source_filename or article_id}; availability inferred as offered from philosophy/catalog language.",
+                                notes=f"Derived from source {source_filename or article_id} (training philosophy).",
                             )
                         )
                 continue
@@ -335,7 +335,7 @@ def classify_article(
                     available=availability,
                     category=category_name,
                     aliases=aliases,
-                    notes=f"Derived from {source_filename or article_id}; availability={availability} from source wording.",
+                    notes=f"Derived from source {source_filename or article_id}.",
                 )
             )
 
@@ -350,7 +350,7 @@ def classify_article(
                             available=True,
                             category=category_name,
                             aliases=aliases,
-                            notes=f"Derived from training philosophy {source_filename or article_id}; treated as offered clinic service.",
+                            notes=f"Derived from training philosophy source {source_filename or article_id}.",
                         )
                     )
             base.targets = ["services", "knowledge"]

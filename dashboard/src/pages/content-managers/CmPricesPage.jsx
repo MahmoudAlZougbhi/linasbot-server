@@ -49,6 +49,7 @@ const CmPricesPage = () => {
   const [saving, setSaving] = useState(false);
   const [etag, setEtag] = useState(/** @type {string | null} */ (null));
   const [notes, setNotes] = useState("");
+  const [policyText, setPolicyText] = useState("");
   const [categories, setCategories] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [catalog, setCatalog] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [priceEntries, setPriceEntries] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
@@ -80,9 +81,10 @@ const CmPricesPage = () => {
       resources,
       dimension_definitions: dimensions,
       items: [],
+      policy_text: policyText || "",
       notes: notes || null,
     }),
-    [categories, catalog, priceEntries, discountRules, resources, dimensions, notes]
+    [categories, catalog, priceEntries, discountRules, resources, dimensions, policyText, notes]
   );
 
   const load = useCallback(async () => {
@@ -99,6 +101,7 @@ const CmPricesPage = () => {
       const section = raw && typeof raw === "object" ? /** @type {Record<string, unknown>} */ (raw) : {};
       setEtag(typeof draftRes.etag === "string" ? draftRes.etag : envelope.etag || null);
       setNotes(typeof section.notes === "string" ? section.notes : "");
+      setPolicyText(typeof section.policy_text === "string" ? section.policy_text : "");
       setCategories(
         Array.isArray(section.categories) ? /** @type {Array<Record<string, unknown>>} */ (section.categories) : []
       );
@@ -846,6 +849,17 @@ const CmPricesPage = () => {
               </Link>
             </section>
           )}
+
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">Price policy (redistributed text)</span>
+            <textarea
+              value={policyText}
+              onChange={(e) => setPolicyText(e.target.value)}
+              rows={5}
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+              placeholder="Recovered pricing guidance text. Structured amounts above always win — never invent numbers here."
+            />
+          </label>
 
           <label className="block space-y-1.5">
             <span className="text-sm font-medium text-slate-700">Author notes</span>

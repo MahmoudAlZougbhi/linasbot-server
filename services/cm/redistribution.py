@@ -8,6 +8,7 @@ auto-restricts by topic keywords.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from services.cm.paths import archive_dir
@@ -47,15 +48,15 @@ def _provenance_block(article: ArticleRecord, classification: ArticleClassificat
     return f"{header}\n{article.body}".strip()
 
 
-def _notes_already_contain(notes: str | None, article: ArticleRecord) -> bool:
-    text = notes or ""
+def _policy_already_contain(policy_text: str | None, article: ArticleRecord) -> bool:
+    text = policy_text or ""
     if article.source_checksum and article.source_checksum in text:
         return True
     marker = f"id={article.id} "
     return marker in text
 
 
-def _append_notes(existing: str | None, block: str) -> str:
+def _append_text(existing: str | None, block: str) -> str:
     if not existing or not existing.strip():
         return block
     if block in existing:
@@ -70,29 +71,37 @@ def _put(section: str, payload: dict[str, Any], *, tenant_id: str, updated_by: s
 
 def _merge_service(existing: ServiceRecord | None, derived: ServiceRecord) -> ServiceRecord:
     if existing is None:
-        return derived
-    # Preserve both availability claims via notes when they conflict; do not silently overwrite.
-    notes = existing.notes or ""
-    if existing.available != derived.available:
-        conflict_note = (
-            f"AVAILABILITY CONFLICT: existing={existing.available} vs derived={derived.available}. "
-            f"Both preserved; owner must resolve. Derived note: {derived.notes or ''}"
+        # Provenance only — never put availability claim language into notes (validator).
+        safe_notes = derived.notes
+        if safe_notes and re.search(r"\b(available|offer|offered|unavailable)\b", safe_notes, re.I):
+            safe_notes = re.sub(
+                r"(?i)\b(availability|available|unavailable|offered|offer)\b[^=\n]*",
+                "source-derived",
+                safe_notes,
+            )
+        return ServiceRecord(
+            id=derived.id,
+            labels=derived.labels,
+            available=derived.available,
+            category=derived.category,
+            aliases=list(derived.aliases),
+            audience=derived.audience,
+            notes=safe_notes,
         )
-        notes = _append_notes(notes, conflict_note)
-        # Keep existing availability bit; conflict is surfaced in report/notes.
-        available = existing.available
-    else:
-        available = existing.available
-        if derived.notes:
-            notes = _append_notes(notes, derived.notes)
+    # Conflicts are reported in redistribution ledger; keep structured available bit stable.
     aliases = list(dict.fromkeys([*existing.aliases, *derived.aliases]))
     labels = existing.labels
     if not (labels.en or labels.ar or labels.fr):
         labels = derived.labels
+    notes = existing.notes
+    if derived.notes and "source file" in (derived.notes or "").lower():
+        # Keep short provenance without availability claim wording.
+        prov = f"Source linked during redistribution ({derived.id})."
+        notes = _append_text(notes, prov) if not (notes and "Source linked during redistribution" in notes) else notes
     return ServiceRecord(
         id=existing.id,
         labels=labels,
-        available=available,
+        available=existing.available if existing.available == derived.available else existing.available,
         category=existing.category or derived.category,
         aliases=aliases,
         audience=existing.audience or derived.audience,
@@ -193,27 +202,29 @@ def redistribute_knowledge_draft(
                 source_checksum=article.source_checksum,
                 linked_service_ids=list(article.linked_service_ids),
                 linked_branch_ids=list(article.linked_branch_ids),
-                notes=_append_notes(article.notes, "Redistributed into Preparation & Aftercare."),
+                notes=_append_text(article.notes, "Redistributed into Preparation & Aftercare."),
             )
             care_by_id[article.id] = care_article
             derived_ids.append(f"care:{article.id}")
 
-        if classification.notes_home == "branches" and not _notes_already_contain(branches.notes, article):
+        if classification.notes_home == "branches" and not _policy_already_contain(branches.policy_text, article):
             branches = BranchesSection(
                 items=branches.items,
-                notes=_append_notes(branches.notes, block),
+                policy_text=_append_text(branches.policy_text, block),
+                notes=branches.notes,
             )
-            derived_ids.append("branches:notes")
+            derived_ids.append("branches:policy_text")
 
-        if classification.notes_home == "handoff" and not _notes_already_contain(handoff.notes, article):
+        if classification.notes_home == "handoff" and not _policy_already_contain(handoff.policy_text, article):
             handoff = HandoffPolicy(
                 contacts=handoff.contacts,
                 matrix=handoff.matrix,
-                notes=_append_notes(handoff.notes, block),
+                policy_text=_append_text(handoff.policy_text, block),
+                notes=handoff.notes,
             )
-            derived_ids.append("handoff:notes")
+            derived_ids.append("handoff:policy_text")
 
-        if classification.notes_home == "prices" and not _notes_already_contain(prices.notes, article):
+        if classification.notes_home == "prices" and not _policy_already_contain(prices.policy_text, article):
             prices = PricesSection(
                 categories=prices.categories,
                 catalog=prices.catalog,
@@ -225,9 +236,10 @@ def redistribute_knowledge_draft(
                 rule_sets=prices.rule_sets,
                 package_rules=prices.package_rules,
                 items=prices.items,
-                notes=_append_notes(prices.notes, block),
+                policy_text=_append_text(prices.policy_text, block),
+                notes=prices.notes,
             )
-            derived_ids.append("prices:notes")
+            derived_ids.append("prices:policy_text")
 
         if classification.notes_home == "style":
             if article.source_checksum and article.source_checksum in (style.style_body or ""):
@@ -244,7 +256,7 @@ def redistribute_knowledge_draft(
                     example_replies=list(style.example_replies),
                     do_list=list(style.do_list),
                     dont_list=list(style.dont_list),
-                    style_body=_append_notes(style.style_body, block),
+                    style_body=_append_text(style.style_body, block),
                     notes=style.notes,
                 )
             derived_ids.append("style:style_body")
@@ -252,8 +264,8 @@ def redistribute_knowledge_draft(
         if classification.notes_home == "ai_basics" and classification.ai_basics_field:
             field_name = classification.ai_basics_field
             current = str(getattr(ai, field_name) or "")
-            if not _notes_already_contain(current, article):
-                setattr(ai, field_name, _append_notes(current, block))
+            if not _policy_already_contain(current, article):
+                setattr(ai, field_name, _append_text(current, block))
             derived_ids.append(f"ai_basics:{field_name}")
 
         if classification.dynamic_message_id:
@@ -294,7 +306,7 @@ def redistribute_knowledge_draft(
                     source_checksum=article.source_checksum,
                     linked_service_ids=linked_services,
                     linked_branch_ids=list(article.linked_branch_ids),
-                    notes=_append_notes(
+                    notes=_append_text(
                         article.notes,
                         f"Archived after redistribution to: {', '.join(classification.targets)}. Words preserved in destination.",
                     ),
@@ -412,9 +424,9 @@ def section_counts_snapshot(*, tenant_id: str) -> dict[str, Any]:
     counts["services_available"] = sum(1 for i in services.items if i.available)
     counts["branches"] = len(branches.items)
     counts["handoff_contacts"] = len(handoff.contacts)
-    counts["handoff_notes_chars"] = len(handoff.notes or "")
-    counts["prices_notes_chars"] = len(prices.notes or "")
-    counts["branches_notes_chars"] = len(branches.notes or "")
+    counts["handoff_policy_chars"] = len(handoff.policy_text or "")
+    counts["prices_policy_chars"] = len(prices.policy_text or "")
+    counts["branches_policy_chars"] = len(branches.policy_text or "")
     counts["dynamic_messages"] = len(dyn.items)
     counts["price_entries"] = len(prices.price_entries) if isinstance(prices.price_entries, list) else 0
     return counts

@@ -146,7 +146,9 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
         structured_sources.append(
             {
                 "section": section_name,
-                "id": f"{section_name}:notes",
+                "id": f"{section_name}:policy_text",
+                "policy_chars": len(str(section_payload.get("policy_text") or "")),
+                "has_policy_text": bool(str(section_payload.get("policy_text") or "").strip()),
                 "notes_chars": len(str(section_payload.get("notes") or "")),
                 "has_notes": bool(str(section_payload.get("notes") or "").strip()),
             }

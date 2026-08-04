@@ -88,15 +88,15 @@ const CmHandoffPage = () => {
     >
       <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
         <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-800">Booking & appointment policy notes</span>
+          <span className="text-sm font-medium text-slate-800">Booking & appointment policy</span>
           <p className="text-xs text-slate-500">
             Appointment, booking-creation, and operational CRM rules redistributed from Knowledge. Original wording is preserved.
           </p>
           <textarea
             className={FIELD_CLASS}
             rows={8}
-            value={String(draft.payload.notes || "")}
-            onChange={(e) => setSection({ notes: e.target.value || null })}
+            value={String(draft.payload.policy_text || "")}
+            onChange={(e) => setSection({ policy_text: e.target.value })}
           />
         </label>
       </div>
