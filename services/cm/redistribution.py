@@ -48,12 +48,14 @@ def _provenance_block(article: ArticleRecord, classification: ArticleClassificat
     return f"{header}\n{article.body}".strip()
 
 
-def _policy_already_contain(policy_text: str | None, article: ArticleRecord) -> bool:
-    text = policy_text or ""
-    if article.source_checksum and article.source_checksum in text:
-        return True
-    marker = f"id={article.id} "
-    return marker in text
+def _strip_redistributed_blocks(policy_text: str | None) -> str:
+    """Remove prior redistribution provenance blocks so remigrate can re-home cleanly."""
+    text = (policy_text or "").strip()
+    if not text or _PROVENANCE_PREFIX not in text:
+        return text
+    parts = re.split(rf"(?={re.escape(_PROVENANCE_PREFIX)})", text)
+    kept = [part.strip() for part in parts if part.strip() and not part.strip().startswith(_PROVENANCE_PREFIX)]
+    return "\n\n".join(kept).strip()
 
 
 def _append_text(existing: str | None, block: str) -> str:
@@ -135,8 +137,61 @@ def redistribute_knowledge_draft(
     dyn = DynamicMessagesSection.model_validate(dyn_env.payload)
 
     services_by_id = {item.id: item for item in services.items}
-    care_by_id = {item.id: item for item in care.items}
-    dyn_by_id = {item.id: item for item in dyn.items}
+    # Drop prior redistributed Care rows so remigrate can re-home (e.g. Marwa → handoff).
+    care_by_id = {
+        item.id: item
+        for item in care.items
+        if _REDISTRIBUTED_TAG not in (item.tags or [])
+    }
+    dyn_by_id = {
+        item.id: item
+        for item in dyn.items
+        if not str(item.id).startswith("redistributed_")
+    }
+
+    # Rebuild redistributed policy blocks from current classification (avoid stale homes).
+    branches = BranchesSection(
+        items=branches.items,
+        policy_text=_strip_redistributed_blocks(branches.policy_text),
+        notes=branches.notes,
+    )
+    handoff = HandoffPolicy(
+        contacts=handoff.contacts,
+        matrix=handoff.matrix,
+        policy_text=_strip_redistributed_blocks(handoff.policy_text),
+        notes=handoff.notes,
+    )
+    prices = PricesSection(
+        categories=prices.categories,
+        catalog=prices.catalog,
+        price_entries=prices.price_entries,
+        discount_rules=prices.discount_rules,
+        dimension_definitions=prices.dimension_definitions,
+        resources=prices.resources,
+        price_books=prices.price_books,
+        rule_sets=prices.rule_sets,
+        package_rules=prices.package_rules,
+        items=prices.items,
+        policy_text=_strip_redistributed_blocks(prices.policy_text),
+        notes=prices.notes,
+    )
+    style = StylePolicy(
+        tone=style.tone,
+        formality=style.formality,
+        response_length=style.response_length,
+        emoji_level=style.emoji_level,
+        one_question_at_a_time=style.one_question_at_a_time,
+        use_customer_name=style.use_customer_name,
+        preferred_terms=list(style.preferred_terms),
+        example_replies=list(style.example_replies),
+        do_list=list(style.do_list),
+        dont_list=list(style.dont_list),
+        style_body=_strip_redistributed_blocks(style.style_body),
+        notes=style.notes,
+    )
+    for field_name in ("greeting_behavior", "short_introduction", "identity_summary", "advanced_instructions"):
+        current = str(getattr(ai, field_name) or "")
+        setattr(ai, field_name, _strip_redistributed_blocks(current))
 
     ledger: list[dict[str, Any]] = []
     classifications: list[ArticleClassification] = []
@@ -189,7 +244,15 @@ def redistribute_knowledge_draft(
             care_by_id[article.id] = care_article
             derived_ids.append(f"care:{article.id}")
 
-        if classification.notes_home == "branches" and not _policy_already_contain(branches.policy_text, article):
+        policy_homes: list[str] = []
+        if classification.notes_home in {"branches", "handoff", "prices", "style"}:
+            policy_homes.append(classification.notes_home)
+        if "handoff" in classification.targets and "handoff" not in policy_homes:
+            # Dual-home price+handoff narratives.
+            if classification.notes_home == "prices":
+                policy_homes.append("handoff")
+
+        if "branches" in policy_homes:
             branches = BranchesSection(
                 items=branches.items,
                 policy_text=_append_text(branches.policy_text, block),
@@ -197,7 +260,7 @@ def redistribute_knowledge_draft(
             )
             derived_ids.append("branches:policy_text")
 
-        if classification.notes_home == "handoff" and not _policy_already_contain(handoff.policy_text, article):
+        if "handoff" in policy_homes:
             handoff = HandoffPolicy(
                 contacts=handoff.contacts,
                 matrix=handoff.matrix,
@@ -206,7 +269,7 @@ def redistribute_knowledge_draft(
             )
             derived_ids.append("handoff:policy_text")
 
-        if classification.notes_home == "prices" and not _policy_already_contain(prices.policy_text, article):
+        if "prices" in policy_homes:
             prices = PricesSection(
                 categories=prices.categories,
                 catalog=prices.catalog,
@@ -223,31 +286,27 @@ def redistribute_knowledge_draft(
             )
             derived_ids.append("prices:policy_text")
 
-        if classification.notes_home == "style":
-            if article.source_checksum and article.source_checksum in (style.style_body or ""):
-                pass
-            else:
-                style = StylePolicy(
-                    tone=style.tone,
-                    formality=style.formality,
-                    response_length=style.response_length,
-                    emoji_level=style.emoji_level,
-                    one_question_at_a_time=style.one_question_at_a_time,
-                    use_customer_name=style.use_customer_name,
-                    preferred_terms=list(style.preferred_terms),
-                    example_replies=list(style.example_replies),
-                    do_list=list(style.do_list),
-                    dont_list=list(style.dont_list),
-                    style_body=_append_text(style.style_body, block),
-                    notes=style.notes,
-                )
+        if "style" in policy_homes:
+            style = StylePolicy(
+                tone=style.tone,
+                formality=style.formality,
+                response_length=style.response_length,
+                emoji_level=style.emoji_level,
+                one_question_at_a_time=style.one_question_at_a_time,
+                use_customer_name=style.use_customer_name,
+                preferred_terms=list(style.preferred_terms),
+                example_replies=list(style.example_replies),
+                do_list=list(style.do_list),
+                dont_list=list(style.dont_list),
+                style_body=_append_text(style.style_body, block),
+                notes=style.notes,
+            )
             derived_ids.append("style:style_body")
 
         if classification.notes_home == "ai_basics" and classification.ai_basics_field:
             field_name = classification.ai_basics_field
             current = str(getattr(ai, field_name) or "")
-            if not _policy_already_contain(current, article):
-                setattr(ai, field_name, _append_text(current, block))
+            setattr(ai, field_name, _append_text(current, block))
             derived_ids.append(f"ai_basics:{field_name}")
 
         if classification.dynamic_message_id:

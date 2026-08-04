@@ -45,6 +45,26 @@ def test_classifier_routes_known_misplaced_titles() -> None:
             ["care"],
         ),
         ("Legacy knowledge base", "General clinic education about Linas Laser.", ["knowledge"]),
+        (
+            "## New User Handling Rules",
+            "How to handle new users. Mention aftercare and shave before session only as FAQ tip.",
+            ["ai_basics", "dynamic_messages"],
+        ),
+        (
+            "</APPOINTMENT_RULES>",
+            "Booking rules for Antelias and Beirut branches with hours.",
+            ["handoff"],
+        ),
+        (
+            "Marwa — Extended tool & CRM rules (reference)",
+            "Marwa tool rules. submit_booking_intent. Also mentions aftercare prep.",
+            ["handoff"],
+        ),
+        (
+            "PRICING AFTER BODY / MACHINE CHANGES (EXISTING APPOINTMENT)",
+            "Pricing after body or machine changes for an existing appointment. Do not invent amounts.",
+            ["prices", "handoff"],
+        ),
     ]
     for title, body, expected in cases:
         result = classify_article(article_id="x", title=title, body=body)

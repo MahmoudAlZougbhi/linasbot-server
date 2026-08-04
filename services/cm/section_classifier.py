@@ -275,21 +275,13 @@ def classify_article(
         base.rationale = "foundation / general clinic education"
         return base
 
-    # Explicit care tags win for prep/aftercare files (not treatment philosophies).
-    if any(tag in {"prep", "aftercare", "care", "preparation"} for tag in tag_list) or _has_any(blob, _CARE_MARKERS):
+    # Explicit care *tags* only — body care markers run later so greeting/booking/location win.
+    if any(tag in {"prep", "aftercare", "care", "preparation"} for tag in tag_list):
         base.targets = ["care"]
         base.move_to_care = True
         base.keep_in_knowledge_active = False
         base.archive_from_knowledge = True
         base.rationale = "prep/aftercare content"
-        return base
-
-    if _has_any(blob, _LOCATION_MARKERS) or "location_rules" in title_l or title_l.strip("<>/ ") == "location_rules":
-        base.targets = ["branches"]
-        base.notes_home = "branches"
-        base.keep_in_knowledge_active = False
-        base.archive_from_knowledge = True
-        base.rationale = "location/branch routing rules"
         return base
 
     if _has_any(blob, _GREETING_MARKERS):
@@ -304,28 +296,12 @@ def classify_article(
         base.rationale = "greeting / new-user handling"
         return base
 
-    if _has_any(blob, _BOOKING_MARKERS) or "appointment" in title_l or "booking" in title_l:
-        base.targets = ["handoff"]
-        base.notes_home = "handoff"
-        base.keep_in_knowledge_active = False
-        base.archive_from_knowledge = True
-        base.rationale = "appointment/booking/handoff operational rules"
-        return base
-
-    if _has_any(blob, _STYLE_MARKERS):
-        base.targets = ["style"]
-        base.notes_home = "style"
-        base.keep_in_knowledge_active = False
-        base.archive_from_knowledge = True
-        base.rationale = "style/tone guidance"
-        return base
-
-    # Price narrative (never invent amounts — policy_text/provenance only).
+    # Price narrative before booking so "pricing after appointment" lands in Prices (+handoff).
     if (
         _has_any(blob, _PRICE_MARKERS)
         or "pricing" in title_l
         or "price" in title_l
-        or "price_list" in (source_filename or "").lower()
+        or "price_list" in source_l
         or category == "pricing_source"
     ):
         if "appointment" in blob and "pricing after" in blob:
@@ -337,6 +313,38 @@ def classify_article(
         base.keep_in_knowledge_active = False
         base.archive_from_knowledge = True
         base.rationale = "price/provenance text (no invented amounts)"
+        return base
+
+    if _has_any(blob, _BOOKING_MARKERS) or "appointment" in title_l or "booking" in title_l:
+        base.targets = ["handoff"]
+        base.notes_home = "handoff"
+        base.keep_in_knowledge_active = False
+        base.archive_from_knowledge = True
+        base.rationale = "appointment/booking/handoff operational rules"
+        return base
+
+    if _has_any(blob, _LOCATION_MARKERS) or "location_rules" in title_l or title_l.strip("<>/ ") == "location_rules":
+        base.targets = ["branches"]
+        base.notes_home = "branches"
+        base.keep_in_knowledge_active = False
+        base.archive_from_knowledge = True
+        base.rationale = "location/branch routing rules"
+        return base
+
+    if _has_any(blob, _CARE_MARKERS):
+        base.targets = ["care"]
+        base.move_to_care = True
+        base.keep_in_knowledge_active = False
+        base.archive_from_knowledge = True
+        base.rationale = "prep/aftercare content"
+        return base
+
+    if _has_any(blob, _STYLE_MARKERS):
+        base.targets = ["style"]
+        base.notes_home = "style"
+        base.keep_in_knowledge_active = False
+        base.archive_from_knowledge = True
+        base.rationale = "style/tone guidance"
         return base
 
     if services:
