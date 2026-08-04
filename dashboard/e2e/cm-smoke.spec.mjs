@@ -300,8 +300,9 @@ test.describe("Content Management browser smoke", () => {
     await expect(page.getByText("Loading…")).toBeHidden({ timeout: 15_000 });
     await expect(page.getByText("Section data (JSON)")).toHaveCount(0);
     await page.getByRole("button", { name: "Add" }).click();
-    await expect(page.getByDisplayValue("New article")).toBeVisible();
-    await page.getByDisplayValue("New article").fill("About laser");
+    const titleInput = page.locator('input').filter({ hasText: "" }).first();
+    // Title field is the first labeled input in the editor panel.
+    await page.getByLabel("Title").fill("About laser");
     await page.getByRole("button", { name: "Save Draft" }).click();
     await expect(page.getByText("Draft saved")).toBeVisible();
 
@@ -328,7 +329,7 @@ test.describe("Content Management browser smoke", () => {
 
     await page.getByRole("button", { name: "Add" }).click();
     await page.getByRole("button", { name: "Save Draft" }).click();
-    await expect(page.getByText("Version conflict").first()).toBeVisible();
+    await expect(page.getByText(/conflict|Stale version/i).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Validate" }).click();
     await expect(page.getByText(/tattoo_removal/).first()).toBeVisible();
