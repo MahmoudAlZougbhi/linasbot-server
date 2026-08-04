@@ -125,12 +125,15 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
         if not _draft_exists(tid, section_name):
             continue
         env = get_draft(section_name, tenant_id=tid, create_default=False)
-        payload = env.payload if isinstance(env.payload, dict) else {}
+        payload: dict[str, Any] = env.payload if isinstance(env.payload, dict) else {}
         if section_name in {"services", "branches", "dynamic_messages"}:
-            for item in payload.get("items") or []:
+            raw_items = payload.get("items")
+            items_list: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
+            for item in items_list:
                 if not isinstance(item, dict):
                     continue
-                labels = item.get("labels") if isinstance(item.get("labels"), dict) else {}
+                labels_raw = item.get("labels")
+                labels: dict[str, Any] = labels_raw if isinstance(labels_raw, dict) else {}
                 structured_sources.append(
                     {
                         "section": section_name,
