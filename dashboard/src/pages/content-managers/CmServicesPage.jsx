@@ -48,7 +48,7 @@ const CmServicesPage = () => {
   return (
     <CmSectionShell
       title="Services"
-      description="Active service catalog. Lina’s default business truth is laser hair removal only unless you explicitly add another approved service."
+      description="Active service catalog used by answers and booking. Add every service Linas actually offers (laser hair removal, tattoo removal, CO₂, DPL whitening, etc.). Do not invent services."
       countLabel={countLabel}
       loading={draft.loading}
       dirty={draft.dirty}

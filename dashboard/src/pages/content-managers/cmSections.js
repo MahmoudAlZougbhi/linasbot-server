@@ -61,7 +61,7 @@ export const CM_SECTION_CARDS = [
     slug: "knowledge",
     section: "knowledge",
     name: "Knowledge",
-    description: "Narrative knowledge chunks for retrieval after FAQ miss.",
+  knowledge: "Narrative knowledge for retrieval after FAQ miss — educational articles only. Location, booking, greeting, and price rules belong in their dedicated sections.",
   },
   {
     slug: "faq",

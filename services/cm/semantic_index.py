@@ -67,6 +67,26 @@ def _article_entries(payload: dict[str, Any] | None, kind: str) -> list[_RawEntr
     return out
 
 
+def _section_notes_entries(section_name: str, payload: dict[str, Any] | None) -> list[_RawEntry]:
+    """Index owner policy notes moved out of Knowledge (branches/handoff/prices)."""
+    out: list[_RawEntry] = []
+    if not payload or not isinstance(payload, dict):
+        return out
+    notes = payload.get("notes")
+    if not isinstance(notes, str) or not notes.strip():
+        return out
+    out.append(
+        (
+            f"{section_name}:notes",
+            section_name,
+            "",
+            notes.strip(),
+            {"title": f"{section_name} policy notes", "tags": ["section_notes", "cm_redistributed"]},
+        )
+    )
+    return out
+
+
 async def build_index(
     *,
     tenant_id: str,
@@ -74,11 +94,14 @@ async def build_index(
     sections: dict[str, dict[str, Any]],
     index_id: str | None = None,
 ) -> dict[str, Any]:
-    """Build and persist a semantic index over FAQ + Knowledge + Care for one content version."""
+    """Build and persist a semantic index over FAQ + Knowledge + Care + redistributed notes."""
     entries: list[_RawEntry] = [
         *_faq_entries(sections.get("faq")),
         *_article_entries(sections.get("knowledge"), "knowledge"),
         *_article_entries(sections.get("care"), "care"),
+        *_section_notes_entries("branches", sections.get("branches")),
+        *_section_notes_entries("handoff", sections.get("handoff")),
+        *_section_notes_entries("prices", sections.get("prices")),
     ]
 
     texts = [text for _, _, _, text, _ in entries]

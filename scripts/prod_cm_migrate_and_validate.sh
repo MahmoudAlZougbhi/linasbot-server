@@ -67,6 +67,17 @@ out = {
         "stage_copied_count": len(report["stage"]["copied"]),
         "stage_copied_names": sorted({Path(c["dest"]).name for c in report["stage"]["copied"]}),
         "qa_stats": report.get("qa_stats"),
+        "redistribution": {
+            "mapped": (report.get("redistribution") or {}).get("mapped"),
+            "active_knowledge": (report.get("redistribution") or {}).get("active_knowledge"),
+            "archived_knowledge": (report.get("redistribution") or {}).get("archived_knowledge"),
+            "services_count": (report.get("redistribution") or {}).get("services_count"),
+            "availability_conflicts": (report.get("redistribution") or {}).get("availability_conflicts"),
+            "ledger_path": (report.get("redistribution") or {}).get("ledger_path"),
+            "ledger": (report.get("redistribution") or {}).get("ledger"),
+        },
+        "section_counts_before": report.get("section_counts_before"),
+        "section_counts_after": report.get("section_counts_after"),
     },
     "validation": {
         "ok": validation.get("ok"),
