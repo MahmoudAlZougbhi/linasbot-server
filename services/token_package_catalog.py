@@ -74,9 +74,7 @@ class TokenPackage:
         """Customer-facing package card — price + input/output allowances only."""
         return {
             "id": self.id,
-            "label": (
-                f"{self.input_tokens:,} input + {self.output_tokens:,} output tokens"
-            ),
+            "label": (f"{self.input_tokens:,} input + {self.output_tokens:,} output tokens"),
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "sell_price_usd": self.sell_price_usd,
