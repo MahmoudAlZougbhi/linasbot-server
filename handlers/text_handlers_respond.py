@@ -982,7 +982,11 @@ async def _handle_published_cm_runtime(
     Never raises for expected "no published version" cases — returns an honest clarify/contact
     message instead (no silent fallback to the legacy pipeline, per plan §12).
     """
-    from services.cm.answer_generation import generate_answer, make_regenerate_fn
+    from services.cm.answer_generation import (
+        UsageAccumulator,
+        generate_answer_with_usage,
+        make_regenerate_fn_with_usage,
+    )
     from services.cm.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
     from services.cm.runtime_pipeline import finalize_response, prepare_response
     from services.dynamic_messages_service import get_dynamic_message
@@ -996,12 +1000,27 @@ async def _handle_published_cm_runtime(
 
     if outcome.stop:
         reply = outcome.reply or get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
-        return reply, {"reason": outcome.reason, **outcome.metadata}
+        return reply, {
+            "reason": outcome.reason,
+            **outcome.metadata,
+            "ai_called": False,
+            "cost_status": "none",
+            "pipeline_decisions": [
+                {"step": "cm_prepare", "decision": outcome.reason, "ai_called": False},
+            ],
+        }
 
     packet = outcome.packet
     assert packet is not None  # stop=False always carries a packet (prepare_response contract)
+    usage_acc = UsageAccumulator()
     try:
-        candidate_text = await generate_answer(message, packet)
+        gen_result = await generate_answer_with_usage(message, packet)
+        candidate_text = gen_result.text
+        if gen_result.prompt_tokens is not None or gen_result.completion_tokens is not None:
+            usage_acc.prompt_tokens += int(gen_result.prompt_tokens or 0)
+            usage_acc.completion_tokens += int(gen_result.completion_tokens or 0)
+            usage_acc.calls += max(int(gen_result.call_count or 1), 1)
+            usage_acc.models.append(gen_result.model)
     except Exception as gen_error:
         print(f"[_handle_published_cm_runtime] ⚠️ generate_answer failed: {gen_error}")
         candidate_text = ""
@@ -1011,11 +1030,12 @@ async def _handle_published_cm_runtime(
         candidate_text=candidate_text,
         packet=packet,
         restricted_topic_active_ids=restricted_ids,
-        regenerate_fn=make_regenerate_fn(message, packet),
+        regenerate_fn=make_regenerate_fn_with_usage(message, packet, usage_acc),
     )
     source_titles = [
         {"source_id": chunk.source_id, "title": (chunk.text or "")[:120]} for chunk in (packet.chunks or [])[:20]
     ]
+    usage_summary = usage_acc.to_result(result.text, usage_acc.models[-1] if usage_acc.models else "gpt-4o-mini")
     return result.text, {
         "reason": "packet_ready" if result.ok else "answer_validation_failed",
         "content_version_id": packet.content_version_id,
@@ -1025,6 +1045,24 @@ async def _handle_published_cm_runtime(
         "failed_rules": result.failed_rules,
         "source_ids": list(packet.source_ids or []),
         "retrieved_sources": source_titles,
+        "ai_called": True,
+        "model": usage_summary.model,
+        "prompt_tokens": usage_summary.prompt_tokens,
+        "completion_tokens": usage_summary.completion_tokens,
+        "tokens": usage_summary.total_tokens,
+        "cost_usd": usage_summary.cost_usd,
+        "input_cost_usd": usage_summary.input_cost_usd,
+        "output_cost_usd": usage_summary.output_cost_usd,
+        "cost_status": usage_summary.cost_status,
+        "cost_basis": usage_summary.cost_basis,
+        "pipeline_decisions": [
+            {"step": "cm_prepare", "decision": "packet_ready", "ai_called": True},
+            {
+                "step": "cm_finalize",
+                "decision": "validated" if result.ok else "validation_failed",
+                "regenerated": result.regenerated,
+            },
+        ],
     }
 
 
@@ -1257,6 +1295,23 @@ async def _process_and_respond(
             user_gender=current_gender,
             customer_exists=user_data.get("crm_customer_exists"),
             customer_file_status=user_data.get("customer_file_status"),
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            handler_path="out_of_scope_guard",
+            outcome="restricted_refuse",
+            ai_called=False,
+            cost_status="none",
+            pipeline_decisions=[{"step": "scope_guard", "decision": "out_of_scope_refuse"}],
+            flow_steps=[
+                {"step": 1, "title": "User → Bot", "content": user_input_to_process},
+                {
+                    "step": 2,
+                    "title": "Out-of-scope guard",
+                    "content": "Refused before AI call (clinic scope guard).",
+                    "event_type": "restricted_refuse",
+                },
+                {"step": 3, "title": "Bot → User", "content": out_of_scope_reply, "event_type": "response_sent"},
+            ],
         )
         return
 
@@ -1274,15 +1329,52 @@ async def _process_and_respond(
             detected_language=current_preferred_lang,
             response_language=response_language,
         )
-        # Safe diagnostic view for Testing Lab (IDs/titles only — never customer PII).
+        # Safe diagnostic view for Testing Lab + Interaction Logs (IDs/titles only).
+        cm_diag = {
+            "reason": cm_metadata.get("reason"),
+            "content_version_id": cm_metadata.get("content_version_id"),
+            "index_version_id": cm_metadata.get("index_version_id"),
+            "source_ids": list(cm_metadata.get("source_ids") or []),
+            "retrieved_sources": list(cm_metadata.get("retrieved_sources") or []),
+            "validated": cm_metadata.get("validated"),
+            "regenerated": cm_metadata.get("regenerated"),
+            "failed_rules": list(cm_metadata.get("failed_rules") or []),
+        }
         if user_data.get("_dashboard_test_simulation"):
-            user_data["_dashboard_cm_diagnostics"] = {
-                "reason": cm_metadata.get("reason"),
-                "content_version_id": cm_metadata.get("content_version_id"),
-                "index_version_id": cm_metadata.get("index_version_id"),
-                "source_ids": list(cm_metadata.get("source_ids") or []),
-                "retrieved_sources": list(cm_metadata.get("retrieved_sources") or []),
-            }
+            user_data["_dashboard_cm_diagnostics"] = cm_diag
+        cm_steps = [
+            {
+                "step": 1,
+                "title": "User → Bot",
+                "content": user_input_to_process,
+                "event_type": "user_message",
+            },
+            {
+                "step": 2,
+                "title": f"CM pipeline ({cm_metadata.get('reason', 'cm_runtime')})",
+                "content": (
+                    f"Channel route: published CM runtime\n"
+                    f"Reason: {cm_metadata.get('reason')}\n"
+                    f"Content version: {cm_metadata.get('content_version_id') or 'n/a'}\n"
+                    f"Sources: {len(cm_metadata.get('source_ids') or [])}"
+                ),
+                "event_type": "cm_pipeline",
+                "status": "success" if cm_metadata.get("validated", True) else "error",
+                "model": cm_metadata.get("model"),
+                "tokens": cm_metadata.get("tokens"),
+                "cost_usd": cm_metadata.get("cost_usd"),
+                "metadata": {
+                    "pipeline_decisions": cm_metadata.get("pipeline_decisions"),
+                    "ai_called": cm_metadata.get("ai_called"),
+                },
+            },
+            {
+                "step": 3,
+                "title": "Bot → User",
+                "content": cm_reply,
+                "event_type": "response_sent",
+            },
+        ]
         await send_message_func(user_id, cm_reply)
         await save_conversation_message_to_firestore(
             user_id,
@@ -1291,7 +1383,7 @@ async def _process_and_respond(
             current_conversation_id,
             user_name,
             user_data.get("phone_number"),
-            metadata={"handled_by": "cm_runtime_pipeline", **cm_metadata},
+            metadata={"handled_by": "cm_runtime_pipeline", **{k: v for k, v in cm_metadata.items() if k != "retrieved_sources"}},
         )
         log_interaction(
             user_id,
@@ -1303,6 +1395,24 @@ async def _process_and_respond(
             user_gender=current_gender,
             customer_exists=user_data.get("crm_customer_exists"),
             customer_file_status=user_data.get("customer_file_status"),
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            handler_path="cm_runtime_pipeline",
+            outcome=cm_metadata.get("reason", "cm_runtime"),
+            pipeline_decisions=list(cm_metadata.get("pipeline_decisions") or []),
+            cm_diagnostics=cm_diag,
+            model=cm_metadata.get("model"),
+            tokens=cm_metadata.get("tokens"),
+            prompt_tokens=cm_metadata.get("prompt_tokens"),
+            completion_tokens=cm_metadata.get("completion_tokens"),
+            cost_usd=cm_metadata.get("cost_usd"),
+            input_cost_usd=cm_metadata.get("input_cost_usd"),
+            output_cost_usd=cm_metadata.get("output_cost_usd"),
+            cost_status=cm_metadata.get("cost_status"),
+            cost_basis=cm_metadata.get("cost_basis"),
+            ai_called=bool(cm_metadata.get("ai_called")),
+            token_source="backend" if cm_metadata.get("prompt_tokens") is not None else None,
+            flow_steps=cm_steps,
         )
         return
     # =====================================================================
@@ -1501,6 +1611,12 @@ async def _process_and_respond(
             user_gender=current_gender,
             customer_exists=user_data.get("crm_customer_exists"),
             customer_file_status=user_data.get("customer_file_status"),
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            handler_path="router_greeting",
+            outcome="greeting",
+            ai_called=False,
+            cost_status="none",
         )
         return
 
@@ -1529,6 +1645,12 @@ async def _process_and_respond(
             user_gender=current_gender,
             customer_exists=user_data.get("crm_customer_exists"),
             customer_file_status=user_data.get("customer_file_status"),
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            handler_path="router_fallback",
+            outcome="fallback",
+            ai_called=False,
+            cost_status="none",
         )
         return
 
@@ -1562,6 +1684,12 @@ async def _process_and_respond(
             user_gender=current_gender,
             customer_exists=user_data.get("crm_customer_exists"),
             customer_file_status=user_data.get("customer_file_status"),
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            handler_path="router_ask_gender",
+            outcome="ask_gender",
+            ai_called=False,
+            cost_status="none",
         )
         return
 
@@ -1594,6 +1722,12 @@ async def _process_and_respond(
             user_gender=current_gender,
             customer_exists=user_data.get("crm_customer_exists"),
             customer_file_status=user_data.get("customer_file_status"),
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            handler_path="router_ask_clarification",
+            outcome="ask_clarification",
+            ai_called=False,
+            cost_status="none",
         )
         return
 
@@ -1882,6 +2016,26 @@ async def _process_and_respond(
                 qa_match_score=match_score,
                 flow_steps=qa_steps,
                 message_type="voice" if voice_meta else "text",
+                user_data=user_data,
+                conversation_id=current_conversation_id,
+                handler_path="managed_faq",
+                outcome=f"faq_{match_tier or 'match'}",
+                ai_called=False,
+                cost_status="none",
+                faq_match={
+                    "faq_id": faq_id,
+                    "tier": match_result.get("tier", match_tier or "direct"),
+                    "similarity": match_score,
+                    "stored_language": stored_language,
+                },
+                pipeline_decisions=[
+                    {
+                        "step": "faq_match",
+                        "decision": match_tier or "match",
+                        "similarity": match_score,
+                        "faq_id": faq_id,
+                    }
+                ],
             )
             return
         else:
@@ -3381,6 +3535,21 @@ async def _process_and_respond(
         flow_error=flow_error_for_log,
         token_source="backend" if flow_meta.get("prompt_tokens") is not None else None,
         message_type=msg_type,
+        user_data=user_data,
+        conversation_id=current_conversation_id,
+        handler_path="ai_orchestration",
+        outcome=action or flow_source,
+        ai_called=True,
+        cost_status="estimated" if flow_meta.get("cost_usd") is not None else "unavailable",
+        cost_basis="openai_usage_tokens_x_configured_rates" if flow_meta.get("cost_usd") is not None else None,
+        pipeline_decisions=[
+            {"step": "router", "decision": "ai_decides" if ai_primary_mode else (router_action or "ai")},
+            {"step": "action", "decision": action or flow_source},
+            {
+                "step": "handoff",
+                "decision": action in ("human_handover", "human_handover_confirmed"),
+            },
+        ],
     )
 
     # Token counting and cost: prefer real GPT usage from flow_meta when available
