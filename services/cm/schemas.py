@@ -168,6 +168,7 @@ class HandoffMatrixRow(CmBaseModel):
 class HandoffPolicy(CmBaseModel):
     contacts: list[HandoffContact] = Field(default_factory=list)
     matrix: list[HandoffMatrixRow] = Field(default_factory=list)
+    policy_text: str = ""
     notes: str | None = None
 
 
@@ -192,6 +193,7 @@ class ServicesSection(CmBaseModel):
 
 class BranchesSection(CmBaseModel):
     items: list[BranchRecord] = Field(default_factory=list)
+    policy_text: str = ""
     notes: str | None = None
 
 
@@ -212,6 +214,7 @@ class PricesSection(CmBaseModel):
     rule_sets: list[Any] = Field(default_factory=list)
     package_rules: list[Any] = Field(default_factory=list)
     items: list[PriceRecord] = Field(default_factory=list)
+    policy_text: str = ""
     notes: str | None = None
 
 

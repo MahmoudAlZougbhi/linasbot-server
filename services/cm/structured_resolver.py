@@ -162,8 +162,10 @@ def resolve_branch_facts(branches: BranchesSection | dict[str, Any], branch_id: 
             facts.append(AnswerFact(kind="branch_hours", value=branch.hours.summary, source_id=f"branch:{branch.id}"))
         if branch.notes:
             facts.append(AnswerFact(kind="branch_notes", value=branch.notes, source_id=f"branch:{branch.id}:notes"))
-        if section.notes:
-            facts.append(AnswerFact(kind="branches_policy", value=section.notes, source_id="branches:notes"))
+        if section.policy_text:
+            facts.append(
+                AnswerFact(kind="branches_policy", value=section.policy_text, source_id="branches:policy_text")
+            )
         return facts
     return []
 

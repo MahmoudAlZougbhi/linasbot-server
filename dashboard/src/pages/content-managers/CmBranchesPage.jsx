@@ -71,15 +71,15 @@ const CmBranchesPage = () => {
     >
       <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
         <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-800">Location policy notes</span>
+          <span className="text-sm font-medium text-slate-800">Location policy</span>
           <p className="text-xs text-slate-500">
             Branch routing rules and location guidance recovered from Knowledge. Blank means nothing proven was found — nothing is invented.
           </p>
           <textarea
             className={FIELD_CLASS}
             rows={6}
-            value={String(draft.payload.notes || "")}
-            onChange={(e) => draft.setPayload({ ...draft.payload, notes: e.target.value || null })}
+            value={String(draft.payload.policy_text || "")}
+            onChange={(e) => draft.setPayload({ ...draft.payload, policy_text: e.target.value })}
           />
         </label>
       </div>

@@ -68,22 +68,21 @@ def _article_entries(payload: dict[str, Any] | None, kind: str) -> list[_RawEntr
 
 
 def _section_notes_entries(section_name: str, payload: dict[str, Any] | None) -> list[_RawEntry]:
-    """Index owner policy notes moved out of Knowledge (branches/handoff/prices)."""
+    """Index redistributed policy text moved out of Knowledge (branches/handoff/prices)."""
     out: list[_RawEntry] = []
     if not payload or not isinstance(payload, dict):
         return out
-    notes = payload.get("notes")
-    if not isinstance(notes, str) or not notes.strip():
-        return out
-    out.append(
-        (
-            f"{section_name}:notes",
-            section_name,
-            "",
-            notes.strip(),
-            {"title": f"{section_name} policy notes", "tags": ["section_notes", "cm_redistributed"]},
+    policy = payload.get("policy_text")
+    if isinstance(policy, str) and policy.strip():
+        out.append(
+            (
+                f"{section_name}:policy_text",
+                section_name,
+                "",
+                policy.strip(),
+                {"title": f"{section_name} policy", "tags": ["section_policy", "cm_redistributed"]},
+            )
         )
-    )
     return out
 
 
