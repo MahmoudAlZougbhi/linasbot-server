@@ -43,6 +43,13 @@ async def handle_photo_message(
         )
         return
 
+    from services.ai_limits_enforcement import customer_image_limit_message, enforce_image_analysis_quota
+
+    image_quota = enforce_image_analysis_quota(user_id=user_id, user_data=user_data, amount=1, consume=True)
+    if not image_quota.allowed:
+        await send_message_func(user_id, customer_image_limit_message(image_quota))
+        return
+
     if (
         getattr(config, "ENFORCE_TOTAL_PHOTO_ANALYSIS_LIMIT", False)
         and config.user_photo_analysis_count[user_id] >= config.MAX_PHOTO_ANALYSIS_PER_USER

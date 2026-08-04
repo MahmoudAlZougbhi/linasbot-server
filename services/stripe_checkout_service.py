@@ -59,6 +59,8 @@ class StripeCheckoutService:
         success_url: str,
         cancel_url: str,
         customer_email: str | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
     ) -> dict[str, Any]:
         secret = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
         if not secret:
@@ -75,6 +77,15 @@ class StripeCheckoutService:
             # Stripe minimum is typically $0.50 — packs should be above this.
             raise ValueError("Package price below Stripe minimum charge")
 
+        inn = int(input_tokens or 0)
+        out = int(output_tokens or 0)
+        if inn > 0 and out > 0:
+            product_name = f"Linas AI pack ({inn:,} input + {out:,} output)"
+            product_desc = f"Prepaid input and output AI tokens for tenant {tenant_id}"
+        else:
+            product_name = f"Linas AI token pack ({tokens:,} tokens)"
+            product_desc = f"Prepaid AI tokens for tenant {tenant_id}"
+
         create_kwargs: dict[str, Any] = {
             "mode": "payment",
             "success_url": success_url,
@@ -86,8 +97,8 @@ class StripeCheckoutService:
                         "currency": "usd",
                         "unit_amount": amount_cents,
                         "product_data": {
-                            "name": f"Linas AI token pack ({tokens:,} tokens)",
-                            "description": f"Prepaid AI tokens for tenant {tenant_id}",
+                            "name": product_name,
+                            "description": product_desc,
                         },
                     },
                 }
@@ -96,6 +107,8 @@ class StripeCheckoutService:
                 "tenant_id": tenant_id,
                 "package_id": package_id,
                 "tokens": str(tokens),
+                "input_tokens": str(inn),
+                "output_tokens": str(out),
                 "amount_usd": f"{float(amount_usd):.2f}",
                 "product": "linas_token_pack",
             },

@@ -173,6 +173,41 @@ async def process_meta_social_event(
                 config.user_gender[user_id] = persisted_gender
 
         text = str(event.get("text") or "").strip()
+        attachments = event.get("attachments") or []
+        image_attachment_count = 0
+        if isinstance(attachments, list):
+            for item in attachments:
+                if isinstance(item, dict) and str(item.get("type") or "").lower() == "image":
+                    image_attachment_count += 1
+                elif item:
+                    image_attachment_count += 1
+        if image_attachment_count > 0:
+            from services.ai_limits_enforcement import (
+                customer_image_limit_message,
+                enforce_image_analysis_quota,
+            )
+
+            # Count each inbound image toward the per-end-user quota even when
+            # Meta social path does not yet run full vision analysis.
+            image_quota = enforce_image_analysis_quota(
+                user_id=user_id,
+                user_data=user_data,
+                amount=image_attachment_count,
+                consume=True,
+            )
+            if not image_quota.allowed:
+                limit_msg = customer_image_limit_message(image_quota)
+                if capture_send is not None:
+                    await capture_send(user_id, limit_msg, None, None)
+                elif adapter is not None:
+                    await adapter.send_text_message(sender_id, limit_msg)
+                print(
+                    f"[ai_limits] social_image_blocked tenant={tenant_id} "
+                    f"count={image_attachment_count} reason={image_quota.reason}",
+                    flush=True,
+                )
+                return
+
         if not text and event.get("attachments"):
             text = "أرسلت صورة أو ملف. اكتبلي شو حابب تعرف عنه كرمال ساعدك."
         if not text:

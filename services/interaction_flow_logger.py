@@ -272,6 +272,11 @@ def log_interaction(
         "on",
     }
     resolved_channel = channel or resolve_interaction_channel(user_data)
+    resolved_tenant_id: str | None = None
+    if isinstance(user_data, dict):
+        raw_tid = user_data.get("tenant_id") or user_data.get("tenantId")
+        if raw_tid:
+            resolved_tenant_id = str(raw_tid).strip().lower() or None
     resolved_cost_status = _derive_cost_status(
         source=source,
         cost_usd=cost_usd,
@@ -308,6 +313,7 @@ def log_interaction(
         "bot_to_user": _redact_secrets(bot_to_user, 1000),
         "source": source,
         "channel": resolved_channel,
+        "tenant_id": resolved_tenant_id,
         "direction": (direction or "inbound").strip().lower()[:20],
         "conversation_id": (str(conversation_id)[:120] if conversation_id else None),
         "message_id": (str(message_id)[:120] if message_id else None),
@@ -362,21 +368,25 @@ def log_interaction(
 
     # Meter prepaid wallets using the same token fields as Interaction Logs.
     try:
+        use_in = max(0, int(prompt_tokens or 0)) if isinstance(prompt_tokens, int) else 0
+        use_out = max(0, int(completion_tokens or 0)) if isinstance(completion_tokens, int) else 0
         total_tokens = 0
         if isinstance(tokens, int):
             total_tokens = max(0, tokens)
         else:
-            total_tokens = max(0, int(prompt_tokens or 0)) + max(0, int(completion_tokens or 0))
-        if total_tokens > 0:
+            total_tokens = use_in + use_out
+        if use_in > 0 or use_out > 0 or total_tokens > 0:
             from services.token_metering import debit_ai_usage, resolve_tenant_id
 
             tid = resolve_tenant_id(user_data if isinstance(user_data, dict) else None)
             debit_ai_usage(
                 tenant_id=tid,
-                prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
-                completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
-                tokens=total_tokens,
+                prompt_tokens=use_in if use_in or use_out else None,
+                completion_tokens=use_out if use_in or use_out else None,
+                tokens=total_tokens if not (use_in or use_out) else None,
                 cost_usd=float(cost_usd) if isinstance(cost_usd, (int, float)) else None,
+                input_cost_usd=float(input_cost_usd) if isinstance(input_cost_usd, (int, float)) else None,
+                output_cost_usd=float(output_cost_usd) if isinstance(output_cost_usd, (int, float)) else None,
                 model=model,
                 reference=str(message_id) if message_id else None,
             )
