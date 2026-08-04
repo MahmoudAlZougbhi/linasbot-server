@@ -50,6 +50,17 @@ def test_classifier_routes_known_misplaced_titles() -> None:
         result = classify_article(article_id="x", title=title, body=body)
         assert result.targets == expected, (title, result.targets, result.rationale)
 
+    foundation = classify_article(
+        article_id="kb",
+        title="Legacy knowledge base",
+        body="Clinic overview mentioning aftercare and shave before laser sessions.",
+        category="foundation",
+        source_filename="knowledge_base.txt",
+    )
+    assert foundation.targets == ["knowledge"]
+    assert foundation.keep_in_knowledge_active is True
+    assert foundation.archive_from_knowledge is False
+
 
 def test_classifier_philosophy_wins_over_booking_language_in_body() -> None:
     result = classify_article(

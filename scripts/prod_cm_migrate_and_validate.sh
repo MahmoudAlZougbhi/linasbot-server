@@ -109,6 +109,21 @@ print(f"[cm-migrate] qa_stats={out['migration'].get('qa_stats')}")
 print(f"[cm-migrate] scrub_faq_removed={out['migration']['scrub_faq_removed']}")
 print(f"[cm-migrate] pricing_import={out['migration']['seeded'].get('pricing_import')}")
 print(f"[cm-migrate] prices_structured={out['migration']['seeded'].get('prices_structured')}")
+rd = out["migration"].get("redistribution") or {}
+print(
+    f"[cm-migrate] redistribution mapped={rd.get('mapped')} "
+    f"active_knowledge={rd.get('active_knowledge')} archived_knowledge={rd.get('archived_knowledge')} "
+    f"services={rd.get('services_count')} conflicts={rd.get('availability_conflicts')}"
+)
+print(f"[cm-migrate] section_counts_before={out['migration'].get('section_counts_before')}")
+print(f"[cm-migrate] section_counts_after={out['migration'].get('section_counts_after')}")
+print(f"[cm-migrate] redistribution_ledger={rd.get('ledger_path')}")
+for row in rd.get("ledger") or []:
+    print(
+        f"[cm-migrate] map title={row.get('title')!r} targets={row.get('targets')} "
+        f"keep_active={row.get('keep_in_knowledge_active')} derived={row.get('derived_ids')} "
+        f"checksum={row.get('source_checksum')}"
+    )
 print(f"[cm-migrate] conflict_codes={[c.get('code') for c in out['migration']['conflicts']]}")
 print(
     f"[cm-migrate] validation_codes={[e.get('code') or e.get('rule') or e.get('message') for e in (out['validation'].get('errors') or [])]}"
