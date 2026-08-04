@@ -21,6 +21,13 @@ SOCIAL_CHANNELS = {"instagram", "facebook"}
 # Pending handoff collection TTL (seconds). After expiry, the next message returns to AI.
 SOCIAL_CONTACT_FLOW_TTL_SECONDS = 30 * 60
 
+# Durable, customer-selected social booking preference.  This is intentionally
+# separate from the legacy/global ``gender`` profile field: a social preference
+# is scoped to one workspace + channel + business asset + sender and is not a
+# claim about a customer's biological identity.
+SOCIAL_BOOKING_PREFERENCES_FIELD = "social_booking_preferences"
+SOCIAL_BOOKING_PREFERENCE_MEMORY_PREFIX = "social_booking_preference::v1::"
+
 # Public business WhatsApp contacts for supported laser booking handoff (env overrides per key).
 # Tattoo removal is intentionally absent — unsupported services never receive a WhatsApp route.
 DEFAULT_SOCIAL_WHATSAPP_CONTACTS = {
@@ -86,6 +93,25 @@ _GREETING_ONLY_RE = re.compile(
     r")[\s!?.]*$",
     re.IGNORECASE | re.UNICODE,
 )
+_PREFERENCE_CHANGE_RE = re.compile(
+    r"(?:"
+    r"\b(?:change|update|set|use)\s+(?:my\s+)?(?:preference|category)?\s*(?:to|as)?\s*"
+    r"(?:men|women|male|female)\b|"
+    r"\buse\s+(?:men|women|male|female)\s+(?:from\s+now|going\s+forward)\b|"
+    r"\b(?:i\s*am|i'm|je\s+suis)\s+(?:men|women|male|female|man|woman|homme|femme)\b|"
+    r"(?:غي[ّير]|غير|بدّل|بدل|استعمل|استخدم).*(?:تفضيل|رجال|نساء|شاب|صبية)|"
+    r"(?:أنا|انا)\s*(?:شاب|زلمة|رجل|صبية|بنت|مرة|مرا)"
+    r")",
+    re.IGNORECASE | re.UNICODE,
+)
+_OTHER_PERSON_MALE_RE = re.compile(
+    r"\bfor\s+(?:my\s+)?(?:husband|boyfriend|son|brother|father|male\s+friend|man\s+friend)\b",
+    re.IGNORECASE,
+)
+_OTHER_PERSON_FEMALE_RE = re.compile(
+    r"\bfor\s+(?:my\s+)?(?:wife|girlfriend|daughter|sister|mother|female\s+friend|woman\s+friend)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -96,6 +122,9 @@ class SocialContactRouteResult:
     gender: str | None = None
     contact_env: str | None = None
     tattoo_removal: bool = False
+    # Set only when the customer explicitly selected their own future default.
+    # The caller persists it in the existing customer profile document.
+    preference_to_persist: str | None = None
 
 
 @dataclass(frozen=True)
@@ -275,12 +304,58 @@ def _unsupported_service_refuse_reply(language: str) -> str:
     )
 
 
+def _preference_updated_reply(language: str, preference: str) -> str:
+    label = "Men" if preference == "male" else "Women"
+    if language == "en":
+        return f"Got it. I’ll use {label} as your default for future booking handoffs."
+    if language == "fr":
+        return f"C’est noté. J’utiliserai {label} comme préférence par défaut pour vos prochains transferts de réservation."
+    return "تمام. رح اعتمد هالتفضيل لطلبات الحجز الجاية."
+
+
+def _preference_persistence_failed_reply(language: str) -> str:
+    if language == "en":
+        return "I can use that selection for this conversation, but I couldn’t save it for future booking handoffs yet."
+    if language == "fr":
+        return "Je peux utiliser ce choix pour cette conversation, mais je n’ai pas encore pu l’enregistrer pour vos prochains transferts."
+    return "فيني اعتمد هالاختيار بهالمحادثة، بس ما قدرنا نحفظه لطلبات الحجز الجاية بعد."
+
+
+def social_booking_preference_reply(language: str, preference: str, *, persisted: bool) -> str:
+    """Return a truthful acknowledgement after the profile write outcome is known."""
+    if persisted:
+        return _preference_updated_reply(language, preference)
+    return _preference_persistence_failed_reply(language)
+
+
 def _is_greeting_only(message: str) -> bool:
     return bool(_GREETING_ONLY_RE.match((message or "").strip()))
 
 
 def _is_cancel_handoff(message: str) -> bool:
     return bool(_CANCEL_HANDOFF_RE.search(message or ""))
+
+
+def _explicit_preference_change(message: str) -> bool:
+    return bool(_PREFERENCE_CHANGE_RE.search(message or ""))
+
+
+def _other_person_booking_gender(message: str) -> str | None:
+    """Detect a current-request booking override without changing the customer's default."""
+    text = message or ""
+    if _OTHER_PERSON_MALE_RE.search(text):
+        return "male"
+    if _OTHER_PERSON_FEMALE_RE.search(text):
+        return "female"
+    return None
+
+
+def _message_gender_selection(message: str) -> tuple[str | None, bool]:
+    """Return (gender, is_another_person_override) for the current message only."""
+    other_person_gender = _other_person_booking_gender(message)
+    if other_person_gender:
+        return other_person_gender, True
+    return get_gender_from_message(message), False
 
 
 def _explicit_handoff_intent(message: str) -> str | None:
@@ -315,6 +390,48 @@ def _scope_fingerprint(scope: SocialContactScope) -> str:
     )
     framed = "".join(f"{len(component)}:{component}" for component in components)
     return hashlib.sha256(framed.encode("utf-8")).hexdigest()
+
+
+def social_booking_preference_key(user_data: dict) -> str:
+    """Stable opaque key for one social customer's durable booking preference."""
+    return _scope_fingerprint(_flow_scope(user_data))
+
+
+def _preference_memory_key(user_data: dict) -> str:
+    return f"{SOCIAL_BOOKING_PREFERENCE_MEMORY_PREFIX}{social_booking_preference_key(user_data)}"
+
+
+def get_social_booking_preference(user_data: dict) -> str | None:
+    """Return the validated in-memory preference for the current social scope."""
+    value = user_data.get(_preference_memory_key(user_data))
+    return value if value in {"male", "female"} else None
+
+
+def set_social_booking_preference(user_data: dict, preference: str) -> None:
+    """Cache a validated durable preference without touching temporary flow state."""
+    if preference not in {"male", "female"}:
+        raise ValueError("Invalid social booking preference")
+    user_data[_preference_memory_key(user_data)] = preference
+
+
+def clear_social_booking_preference(user_data: dict) -> None:
+    """Discard an in-memory preference when the durable profile write failed."""
+    user_data.pop(_preference_memory_key(user_data), None)
+
+
+def restore_social_booking_preference(user_data: dict, persisted_state: dict) -> str | None:
+    """Restore only this exact social scope from the existing customer profile document."""
+    stored_preferences = persisted_state.get(SOCIAL_BOOKING_PREFERENCES_FIELD)
+    if not isinstance(stored_preferences, dict):
+        return None
+    record = stored_preferences.get(social_booking_preference_key(user_data))
+    if not isinstance(record, dict):
+        return None
+    preference = record.get("value")
+    if not isinstance(preference, str) or preference not in {"male", "female"}:
+        return None
+    set_social_booking_preference(user_data, preference)
+    return preference
 
 
 def _sender_fingerprint(sender_id: str) -> str:
@@ -384,7 +501,9 @@ def _state_expired(state: dict) -> bool:
     """Expire after SOCIAL_CONTACT_FLOW_TTL_SECONDS of inactivity (updated_at)."""
     if not state:
         return False
-    stamp = state.get("updated_at") or state.get("started_at")
+    stamp = state.get("updated_at")
+    if stamp is None:
+        stamp = state.get("started_at")
     try:
         stamp_f = float(stamp or 0)
     except (TypeError, ValueError):
@@ -395,6 +514,8 @@ def _state_expired(state: dict) -> bool:
 def _is_valid_continuation(message: str, state: dict) -> bool:
     """Only branch/gender answers (or re-stated handoff intent) continue a pending flow."""
     if detect_branch(message):
+        return True
+    if _other_person_booking_gender(message):
         return True
     if get_gender_from_message(message):
         return True
@@ -423,14 +544,17 @@ def route_social_contact_request(
 
     ``force_intent`` (from GPT/router) cannot start a new handoff by itself. A new flow
     starts only when the user message explicitly requests booking/human/tattoo contact.
-    Persisted/profile gender is deliberately not an input: branch and gender must come
-    from the current explicit request or this same isolated active flow.
+    A branch must always come from the current explicit request or this same isolated
+    active flow. A saved Men/Women booking preference may fill only the missing
+    category after branch collection; it is scope-isolated and never copied into
+    temporary handoff state.
     Pending branch/gender collection continues only on valid answers; greetings, cancels,
     topic changes, and expired state return None so the canonical AI handles the message.
     """
     explicit = _explicit_handoff_intent(message)
     try:
         state = _get_flow_state(user_data)
+        saved_preference = get_social_booking_preference(user_data)
     except SocialContactScopeError:
         clear_social_contact_flow(user_data)
         if explicit:
@@ -439,6 +563,25 @@ def route_social_contact_request(
     if state and _state_expired(state):
         _clear_flow_state(user_data)
         state = {}
+
+    selected_gender, another_person_override = _message_gender_selection(message)
+    explicit_preference_change = _explicit_preference_change(message)
+    preference_to_persist: str | None = None
+
+    # A direct preference change may happen outside a booking flow. It is the only
+    # standalone social category message that produces a deterministic reply.
+    if explicit_preference_change and selected_gender:
+        if saved_preference != selected_gender:
+            set_social_booking_preference(user_data, selected_gender)
+            saved_preference = selected_gender
+            preference_to_persist = selected_gender
+        if not explicit and not state:
+            return SocialContactRouteResult(
+                reply="",
+                intent="preference",
+                gender=selected_gender,
+                preference_to_persist=preference_to_persist,
+            )
 
     if explicit:
         # A new user-authored booking/human request always replaces prior state.
@@ -498,10 +641,18 @@ def route_social_contact_request(
     tattoo = bool(state.get("tattoo_removal")) or is_tattoo_removal_request(message)
     state["tattoo_removal"] = tattoo
 
-    detected_gender = get_gender_from_message(message)
-    if detected_gender:
-        state["gender"] = detected_gender
-    gender = state.get("gender") if state.get("gender") in {"male", "female"} else None
+    if selected_gender:
+        state["gender"] = selected_gender
+        if another_person_override:
+            state["gender_source"] = "current_request_override"
+        else:
+            state["gender_source"] = "customer_selection"
+            if saved_preference != selected_gender:
+                set_social_booking_preference(user_data, selected_gender)
+                saved_preference = selected_gender
+                preference_to_persist = selected_gender
+    state_gender = state.get("gender") if state.get("gender") in {"male", "female"} else None
+    gender = state_gender or saved_preference
 
     lang = _language(language)
     _set_flow_state(user_data, state)
@@ -517,13 +668,24 @@ def route_social_contact_request(
             gender=gender,
             contact_env=None,
             tattoo_removal=True,
+            preference_to_persist=preference_to_persist,
         )
 
     branch = state.get("branch")
     if not branch:
-        return SocialContactRouteResult(_ask_branch(lang), detected_intent, gender=gender)
+        return SocialContactRouteResult(
+            _ask_branch(lang),
+            detected_intent,
+            gender=gender,
+            preference_to_persist=preference_to_persist,
+        )
     if not gender:
-        return SocialContactRouteResult(_ask_gender(lang), detected_intent, branch=branch)
+        return SocialContactRouteResult(
+            _ask_gender(lang),
+            detected_intent,
+            branch=branch,
+            preference_to_persist=preference_to_persist,
+        )
 
     env_name = f"SOCIAL_WHATSAPP_{branch.upper()}_{gender.upper()}"
     phone = resolve_social_whatsapp_number(
@@ -537,6 +699,7 @@ def route_social_contact_request(
             branch=branch,
             gender=gender,
             contact_env=env_name,
+            preference_to_persist=preference_to_persist,
         )
 
     reply = _laser_contact_reply(lang, branch, phone)
@@ -547,6 +710,7 @@ def route_social_contact_request(
         branch=branch,
         gender=gender,
         contact_env=env_name,
+        preference_to_persist=preference_to_persist,
     )
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import re
 from typing import cast
 
 import config
@@ -173,6 +174,63 @@ class UserPersistenceService:
             traceback.print_exc()
 
         return firestore_saved or True  # Return True if at least memory was updated
+
+    async def save_social_booking_preference(
+        self,
+        user_id: str,
+        preference_key: str,
+        preference: str,
+    ) -> bool:
+        """Persist one scoped social booking preference in the existing user document.
+
+        The opaque key is a SHA-256 scope fingerprint supplied by the social router.
+        This deliberately does not use or alter the legacy/global ``gender`` field.
+        """
+        if preference not in {"male", "female"}:
+            raise ValueError("Invalid social booking preference")
+        if not re.fullmatch(r"[0-9a-f]{64}", preference_key):
+            raise ValueError("Invalid social booking preference key")
+
+        db = get_firestore_db()
+        if not db:
+            print("[social-preference] persistence_unavailable")
+            return False
+
+        from services.social_contact_routing import SOCIAL_BOOKING_PREFERENCES_FIELD
+
+        app_id_for_firestore = "linas-ai-bot-backend"
+        user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)
+        record = {
+            "value": preference,
+            "updated_at": datetime.datetime.now(),
+        }
+        try:
+            user_doc = await asyncio.to_thread(user_doc_ref.get)
+            if user_doc.exists:
+                await asyncio.to_thread(
+                    user_doc_ref.update,
+                    {
+                        f"{SOCIAL_BOOKING_PREFERENCES_FIELD}.{preference_key}": record,
+                        "last_updated": datetime.datetime.now(),
+                    },
+                )
+            else:
+                await asyncio.to_thread(
+                    user_doc_ref.set,
+                    {
+                        "user_id": user_id,
+                        SOCIAL_BOOKING_PREFERENCES_FIELD: {preference_key: record},
+                        "created_at": datetime.datetime.now(),
+                        "last_updated": datetime.datetime.now(),
+                    },
+                )
+        except Exception as exc:
+            # Provider errors can contain customer identifiers; retain only the type.
+            print(f"[social-preference] persistence_failed type={type(exc).__name__}")
+            return False
+
+        print("[social-preference] persistence_saved")
+        return True
 
     def get_user_language(self, user_id: str) -> str:
         """

@@ -1135,8 +1135,11 @@ async def _process_and_respond(
     # Route booking and human-agent requests to the correct branch/gender WhatsApp contact
     # before any GPT or CRM tool can run.
     from services.social_contact_routing import (
+        clear_social_booking_preference,
         is_social_channel,
         route_social_contact_request,
+        social_booking_preference_key,
+        social_booking_preference_reply,
     )
 
     if is_social_channel(user_data.get("channel")):
@@ -1148,25 +1151,29 @@ async def _process_and_respond(
             current_preferred_lang,
         )
         if social_route:
-            if social_route.gender in ("male", "female"):
-                gender_changed = config.user_gender.get(user_id) != social_route.gender
-                config.user_gender[user_id] = social_route.gender
-                current_gender = social_route.gender
-                if gender_changed:
-                    try:
-                        await user_persistence.save_user_gender(
-                            user_id,
-                            social_route.gender,
-                            phone=user_data.get("phone_number"),
-                            name=user_name,
-                        )
-                    except Exception as social_gender_error:
-                        print(f"[_process_and_respond] social gender persistence skipped: {social_gender_error}")
-            await send_message_func(user_id, social_route.reply)
+            preference_persisted = True
+            if social_route.preference_to_persist:
+                preference_persisted = await user_persistence.save_social_booking_preference(
+                    user_id,
+                    social_booking_preference_key(user_data),
+                    social_route.preference_to_persist,
+                )
+                if not preference_persisted:
+                    clear_social_booking_preference(user_data)
+
+            reply = social_route.reply
+            if social_route.intent == "preference" and social_route.gender in {"male", "female"}:
+                reply = social_booking_preference_reply(
+                    current_preferred_lang,
+                    social_route.gender,
+                    persisted=preference_persisted,
+                )
+
+            await send_message_func(user_id, reply)
             await save_conversation_message_to_firestore(
                 user_id,
                 "ai",
-                social_route.reply,
+                reply,
                 current_conversation_id,
                 user_name,
                 user_data.get("phone_number"),
@@ -1175,6 +1182,7 @@ async def _process_and_respond(
                     "channel": user_data.get("channel"),
                     "social_contact_intent": social_route.intent,
                     "social_contact_env": social_route.contact_env,
+                    "social_preference_persisted": preference_persisted,
                 },
             )
             return

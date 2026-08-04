@@ -2461,6 +2461,7 @@ async def get_user_state_from_firestore(user_id: str) -> dict:
                         "name": customer_info.get("name", ""),
                         "phone_full": customer_info.get("phone_full", ""),
                         "phone_clean": customer_info.get("phone_clean", ""),
+                        "social_booking_preferences": {},
                     }
             return {}
 
@@ -2469,12 +2470,16 @@ async def get_user_state_from_firestore(user_id: str) -> dict:
             f"✅ Retrieved user state from Firestore for {user_id}: gender={user_data.get('gender')}, greeting_stage={user_data.get('greeting_stage')}"
         )
 
+        social_booking_preferences = user_data.get("social_booking_preferences")
         return {
             "gender": user_data.get("gender", ""),
             "greeting_stage": user_data.get("greeting_stage", 0),
             "name": user_data.get("name", ""),
             "phone_full": user_data.get("phone_full", ""),
             "phone_clean": user_data.get("phone_clean", ""),
+            "social_booking_preferences": (
+                social_booking_preferences if isinstance(social_booking_preferences, dict) else {}
+            ),
         }
 
     except Exception as e:
