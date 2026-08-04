@@ -29,12 +29,22 @@ from services.live_chat_contracts import (
     parse_timestamp_utc,
     utc_now,
 )
+from services.meta_messaging import scrub_legacy_meta_channel_placeholder
 from services.media_service import build_whatsapp_audio_delivery_url
 from utils.phone_utils import is_phone_like_user_id, normalize_phone, phone_match_key
 from utils.utils import get_canonical_user_id_and_phone, get_firestore_db, set_human_takeover_status
 
 # In-memory fallback when Firestore idempotency is unavailable (single-process only).
 _operator_send_idempotency_keys: dict[str, float] = {}
+
+
+def _live_chat_display_name(*candidates: Any, fallback: str = "Unknown Customer") -> str:
+    """Pick the first non-empty label, scrubbing legacy Meta channel placeholders."""
+    for candidate in candidates:
+        cleaned = scrub_legacy_meta_channel_placeholder(candidate)
+        if cleaned:
+            return cleaned
+    return fallback
 
 
 def _operator_send_idempotency_memory_consume(fingerprint: str) -> bool:
@@ -716,7 +726,10 @@ class LiveChatService:
     def _build_index_entry(self, user_id: str, conv_data: dict, messages: list) -> dict:
         state = self._normalize_conversation_state(conv_data)
         customer_info = conv_data.get("customer_info", {}) or {}
-        user_name = customer_info.get("name") or config.user_names.get(str(user_id or "")) or "Unknown Customer"
+        user_name = _live_chat_display_name(
+            customer_info.get("name"),
+            config.user_names.get(str(user_id or "")),
+        )
         phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
         last_ts = conv_data.get("last_message_at") or conv_data.get("last_updated") or utc_now()
         if isinstance(last_ts, str):
@@ -984,7 +997,11 @@ class LiveChatService:
             if latest_timestamp is None:
                 continue
 
-            user_name = latest_customer_info.get("name") or config.user_names.get(str(user_id or "")) or ""
+            user_name = _live_chat_display_name(
+                latest_customer_info.get("name"),
+                config.user_names.get(str(user_id or "")),
+                fallback="",
+            )
             phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=latest_customer_info)
             if not user_name and phone_full and phone_full != "Unknown":
                 user_name = phone_full
@@ -1110,8 +1127,9 @@ class LiveChatService:
                         continue
 
                     customer_info = conv_data.get("customer_info") or {}
-                    user_name = (
-                        customer_info.get("name") or config.user_names.get(str(user_id or "")) or "Unknown Customer"
+                    user_name = _live_chat_display_name(
+                        customer_info.get("name"),
+                        config.user_names.get(str(user_id or "")),
                     )
                     phone_full, phone_clean = self._resolve_user_phone(user_id=user_id, customer_info=customer_info)
                     language = config.user_data_whatsapp.get(user_id, {}).get("user_preferred_lang", "ar")
@@ -1342,11 +1360,10 @@ class LiveChatService:
                         continue
                 customer_info = data.get("customer_info") or {}
                 user_id = data.get("user_id")
-                user_name = (
-                    data.get("user_name")
-                    or customer_info.get("name")
-                    or config.user_names.get(str(user_id or ""))
-                    or "Unknown Customer"
+                user_name = _live_chat_display_name(
+                    data.get("user_name"),
+                    customer_info.get("name"),
+                    config.user_names.get(str(user_id or "")),
                 )
                 phone_full = data.get("user_phone") or customer_info.get("phone_full") or ""
                 phone_clean = data.get("phone_clean") or customer_info.get("phone_clean") or ""
@@ -1577,11 +1594,10 @@ class LiveChatService:
             state = self._normalize_conversation_state(data)
             customer_info = data.get("customer_info") or {}
             user_id = data.get("user_id")
-            user_name = (
-                data.get("user_name")
-                or customer_info.get("name")
-                or config.user_names.get(str(user_id or ""))
-                or "Unknown Customer"
+            user_name = _live_chat_display_name(
+                data.get("user_name"),
+                customer_info.get("name"),
+                config.user_names.get(str(user_id or "")),
             )
             phone_full = data.get("user_phone") or customer_info.get("phone_full") or ""
             phone_clean = data.get("phone_clean") or customer_info.get("phone_clean") or ""
@@ -2070,7 +2086,10 @@ class LiveChatService:
                 wait_time_seconds = max(0, int((current_time - last_at).total_seconds()))
                 customer_info = data.get("customer_info") or {}
                 user_id = data.get("user_id")
-                user_name = customer_info.get("name") or config.user_names.get(str(user_id or "")) or "Unknown Customer"
+                user_name = _live_chat_display_name(
+                    customer_info.get("name"),
+                    config.user_names.get(str(user_id or "")),
+                )
                 phone_full = data.get("user_phone") or "Unknown"
                 phone_clean = data.get("phone_clean") or "Unknown"
                 language = data.get("language") or config.user_data_whatsapp.get(str(user_id or ""), {}).get(
