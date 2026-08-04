@@ -5,6 +5,8 @@ describe("LiveChat social read-only detection", () => {
   it("detects instagram and facebook channels", () => {
     expect(isSocialChannelUser("instagram:123", null)).toBe(true);
     expect(isSocialChannelUser("facebook:456", null)).toBe(true);
+    expect(isSocialChannelUser("external-clinic:instagram:123", null)).toBe(true);
+    expect(isSocialChannelUser("external-clinic:facebook:456", null)).toBe(true);
     expect(isSocialChannelUser("9613000000", "instagram")).toBe(true);
     expect(isSocialChannelUser("9613000000", "facebook")).toBe(true);
   });
@@ -13,5 +15,6 @@ describe("LiveChat social read-only detection", () => {
     expect(isSocialChannelUser("9613000000", "whatsapp")).toBe(false);
     expect(isSocialChannelUser("9613000000", null)).toBe(false);
     expect(isSocialChannelUser("+9613000000", "")).toBe(false);
+    expect(isSocialChannelUser("external-clinic:whatsapp:456", null)).toBe(false);
   });
 });

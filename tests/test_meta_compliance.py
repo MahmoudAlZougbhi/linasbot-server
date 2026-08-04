@@ -8,6 +8,7 @@ import hmac
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -137,7 +138,74 @@ def test_valid_deletion_callback_returns_meta_contract(
         "url": f"https://www.linasaibot.com/data-deletion?confirmation_code={'a' * 32}",
         "confirmation_code": "a" * 32,
     }
-    delete_mock.assert_called_once_with("123456789", APP_SECRET)
+    delete_mock.assert_called_once_with(
+        "123456789",
+        APP_SECRET,
+        app_key="linas_first_party",
+    )
+
+
+def test_app_b_signed_deletion_uses_only_app_b_secret_and_key(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("META_APP_B_ID", "998877665544")
+    monkeypatch.setenv("META_APP_B_SECRET", "app-b-deletion-secret")
+    monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "app-b-verify")
+    result = MetaDeletionResult(
+        confirmation_code="b" * 32,
+        deleted_user_documents=1,
+        deleted_nested_documents=0,
+        deleted_index_documents=1,
+    )
+    with mock.patch("modules.meta_compliance.delete_meta_social_user_data", return_value=result) as delete_mock:
+        response = compliance_client.post(
+            "/data-deletion",
+            data={"signed_request": _signed_request(secret="app-b-deletion-secret")},
+        )
+    assert response.status_code == 200
+    delete_mock.assert_called_once_with(
+        "123456789",
+        "app-b-deletion-secret",
+        app_key="saas_tech_provider",
+    )
+
+
+def test_app_b_deauthorization_revokes_only_authenticated_owner_connections(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("META_APP_B_ID", "998877665544")
+    monkeypatch.setenv("META_APP_B_SECRET", "app-b-deletion-secret")
+    monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "app-b-verify")
+    registry = mock.Mock()
+    with mock.patch("modules.meta_compliance.get_meta_app_registry", return_value=registry):
+        response = compliance_client.post(
+            "/meta/deauthorize",
+            data={"signed_request": _signed_request(secret="app-b-deletion-secret")},
+        )
+    assert response.status_code == 200
+    assert response.json() == {"success": True}
+    registry.revoke_authorization.assert_called_once_with(
+        app_key="saas_tech_provider",
+        authorized_meta_user_id="123456789",
+    )
+
+
+def test_invalid_deauthorization_signature_is_rejected_without_registry_access(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("META_APP_B_ID", "998877665544")
+    monkeypatch.setenv("META_APP_B_SECRET", "app-b-deletion-secret")
+    monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "app-b-verify")
+    with mock.patch("modules.meta_compliance.get_meta_app_registry") as registry:
+        response = compliance_client.post(
+            "/meta/deauthorize",
+            data={"signed_request": _signed_request(secret="wrong-secret")},
+        )
+    assert response.status_code == 401
+    registry.assert_not_called()
 
 
 def test_callback_never_reports_success_when_deletion_fails(
@@ -264,6 +332,53 @@ def test_real_deletion_removes_namespaced_user_tree_and_index(
     assert (tmp_path / "status" / f"{result.confirmation_code}.json").stat().st_mode & 0o777 == 0o600
 
 
+def test_app_b_deletion_is_tenant_namespaced_and_does_not_touch_app_a_user(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import config
+    import services.meta_app_registry as registry_service
+    import services.meta_data_deletion as deletion_service
+    import utils.utils
+
+    db = _FakeFirestore()
+    app = db.collection("artifacts").document("linas-ai-bot-backend")
+    users = app.collection("users")
+    app_b_user = users.document("tenant-a:facebook:123456789")
+    app_b_user.exists = True
+    app_a_user = users.document("facebook:123456789")
+    app_a_user.exists = True
+    index = app.collection("live_chat_index")
+    index.documents["app-b-index"] = _FakeDocument(
+        f"{index.path}/app-b-index",
+        data={"user_id": "tenant-a:facebook:123456789"},
+    )
+    config.user_data_whatsapp["tenant-a:facebook:123456789"] = {"temporary": True}
+
+    fake_registry = SimpleNamespace(
+        list_bindings=lambda: [
+            SimpleNamespace(
+                app_key="saas_tech_provider",
+                tenant_id="tenant-a",
+                channel="facebook",
+            )
+        ]
+    )
+    monkeypatch.setattr(registry_service, "get_meta_app_registry", lambda: fake_registry)
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(deletion_service, "_STATUS_DIR", tmp_path / "status-b")
+
+    result = delete_meta_social_user_data(
+        "123456789",
+        "app-b-deletion-secret",
+        app_key="saas_tech_provider",
+    )
+    assert result.deleted_user_documents == 1
+    assert app_b_user.exists is False
+    assert app_a_user.exists is True
+    assert index.documents["app-b-index"].exists is False
+
+
 def test_production_main_route_inventory_is_explicit() -> None:
     import main
 
@@ -287,4 +402,5 @@ def test_production_main_route_inventory_is_explicit() -> None:
         "/privacy-policy",
         "/terms",
         "/data-deletion",
+        "/meta/deauthorize",
     } <= registered_paths

@@ -29,7 +29,7 @@ async def _await_delayed_processing(user_id: str) -> None:
 
 
 async def process_meta_social_event(
-    event: dict,
+    event: dict[str, Any],
     settings: MetaMessagingSettings,
     *,
     capture_send: SendFunc | None = None,
@@ -44,7 +44,10 @@ async def process_meta_social_event(
     """
     channel = str(event["channel"])
     sender_id = str(event["sender_id"])
-    user_id = f"{channel}:{sender_id}"
+    tenant_id = str(event.get("tenant_id") or settings.tenant_id or "linas").strip()
+    # Preserve Lina's established identities/state while namespacing every future
+    # SaaS tenant so two businesses can never share customer state.
+    user_id = f"{channel}:{sender_id}" if tenant_id == "linas" else f"{tenant_id}:{channel}:{sender_id}"
     account_id = resolve_meta_send_account_id(channel, event, settings)
 
     adapter = None
@@ -70,6 +73,9 @@ async def process_meta_social_event(
                 "channel": channel,
                 "social_sender_id": sender_id,
                 "meta_account_id": account_id,
+                "tenant_id": tenant_id,
+                "meta_app_key": str(event.get("meta_app_key") or settings.app_key),
+                "meta_binding_id": str(event.get("meta_binding_id") or settings.binding_id),
                 # Namespaced non-phone identity so CRM phone tools never treat this as a mobile.
                 "phone_number": f"room:{user_id}",
                 "_source_message_id": str(event.get("message_id") or ""),
@@ -91,7 +97,9 @@ async def process_meta_social_event(
                 if persisted_gender in {"male", "female"}:
                     config.user_gender[user_id] = persisted_gender
             except Exception as exc:
-                print(f"[meta-social] state restore skipped for {user_id}: {exc}")
+                # A social identity contains a platform-scoped sender ID. Keep it and
+                # exception text out of logs; the error type is sufficient to operate.
+                print(f"[meta-social] state_restore_skipped type={type(exc).__name__}")
 
         text = str(event.get("text") or "").strip()
         if not text and event.get("attachments"):

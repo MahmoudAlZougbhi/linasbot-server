@@ -109,4 +109,62 @@ describe("Settings integrations", () => {
 
     expect(await screen.findByText("Forbidden")).toBeInTheDocument();
   });
+
+  it("offers server-side Meta onboarding without token-entry fields", async () => {
+    authFetchMock.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path === "/api/meta/connections") {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            registry_enabled: true,
+            apps: [
+              {
+                key: "saas_tech_provider",
+                app_id: "998877665544",
+                classification: "tech_provider",
+                enabled: true,
+                oauth_configured: true,
+                advanced_access_approved: false,
+              },
+            ],
+            connections: [
+              {
+                binding_id: "binding-one",
+                tenant_id: "linas",
+                channel: "facebook",
+                asset_id: "378696005334409",
+                app_key: "linas_first_party",
+                status: "active",
+                generation: 1,
+                token_status: "valid",
+              },
+            ],
+          }),
+        };
+      }
+      if (path.includes("/api/settings/integrations")) {
+        return { ok: true, json: async () => ({ success: true, integrations: [] }) };
+      }
+      if (path.includes("/api/settings")) {
+        return {
+          ok: true,
+          json: async () => ({ success: true, settings: { general: {}, notifications: {}, clinic: {} } }),
+        };
+      }
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+
+    render(<Settings />);
+    fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
+
+    expect(await screen.findByRole("button", { name: "Connect Facebook" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeEnabled();
+    expect(screen.getByText("Lina first-party")).toBeInTheDocument();
+    expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/app secret/i)).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue(/998877665544/)).not.toBeInTheDocument();
+  });
 });

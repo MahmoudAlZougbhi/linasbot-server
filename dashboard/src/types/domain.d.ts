@@ -22,6 +22,7 @@ interface AuthUser {
   status: string;
   lastLogin?: string | null;
   createdAt?: string | null;
+  tenantId?: string;
 }
 
 interface AuthSessionData {
@@ -532,6 +533,29 @@ interface IntegrationStatus {
   service?: string;
   configured?: boolean;
   notes?: string;
+}
+
+interface MetaAppPublicStatus {
+  key: string;
+  app_id: string;
+  classification: "own_business" | "tech_provider";
+  oauth_configured?: boolean;
+  advanced_access_approved?: boolean;
+  credentials_configured?: boolean;
+  enabled?: boolean;
+}
+
+interface MetaConnectionStatus {
+  binding_id: string;
+  tenant_id: string;
+  channel: "facebook" | "instagram";
+  asset_id: string;
+  app_key: string;
+  status: "active" | "inactive" | "testing" | "disconnected";
+  generation: number;
+  token_status?: "valid" | "expired" | "unavailable";
+  expires_at?: number | null;
+  granted_permissions?: string[];
 }
 
 interface TrainingQAPair {

@@ -23,6 +23,7 @@ import { errorMessage } from '../utils/apiValidate';
 
 const Settings = () => {
   const { user, changePassword } = /** @type {AuthContextValue} */ (useAuth());
+  const isLinasTenant = (user?.tenantId || 'linas') === 'linas';
   const [activeTab, setActiveTab] = useState('general');
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -49,6 +50,17 @@ const Settings = () => {
   const [branchHolidays, setBranchHolidays] = useState(/** @type {BranchHolidayRow[]} */ ([]));
   const [integrations, setIntegrations] = useState(/** @type {IntegrationStatus[]} */ ([]));
   const [integrationsError, setIntegrationsError] = useState(/** @type {string | null} */ (null));
+  const [metaConnections, setMetaConnections] = useState(/** @type {MetaConnectionStatus[]} */ ([]));
+  const [metaApps, setMetaApps] = useState(/** @type {MetaAppPublicStatus[]} */ ([]));
+  const [metaRegistryEnabled, setMetaRegistryEnabled] = useState(false);
+  const [metaConnectionError, setMetaConnectionError] = useState(/** @type {string | null} */ (null));
+  const [metaConnectionBusy, setMetaConnectionBusy] = useState('');
+
+  useEffect(() => {
+    if (!isLinasTenant && activeTab === 'general') {
+      setActiveTab('api');
+    }
+  }, [activeTab, isLinasTenant]);
 
   // Load settings from API on mount and when page is shown/refreshed
   useEffect(() => {
@@ -94,20 +106,41 @@ const Settings = () => {
         setIntegrationsError(errorMessage(e) || 'Failed to load integrations');
       }
     };
-    loadSettings();
-    loadIntegrations();
-  }, []);
+    const loadMetaConnections = async () => {
+      try {
+        const res = await authFetch('/api/meta/connections');
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          setMetaConnectionError(data.detail || data.error || `Failed to load Meta connections (${res.status})`);
+          return;
+        }
+        setMetaConnections(Array.isArray(data.connections) ? data.connections : []);
+        setMetaApps(Array.isArray(data.apps) ? data.apps : []);
+        setMetaRegistryEnabled(data.registry_enabled === true);
+        setMetaConnectionError(null);
+      } catch (e) {
+        setMetaConnectionError(errorMessage(e) || 'Failed to load Meta connections');
+      }
+    };
+    if (isLinasTenant) {
+      loadSettings();
+      loadIntegrations();
+    }
+    loadMetaConnections();
+  }, [isLinasTenant]);
 
   // Check if user can manage users
   const canManageUsers = user?.role === 'admin' || user?.resolvedPermissions?.userManagement === true;
 
   const tabs = [
-    { id: 'general', name: 'General', icon: Cog6ToothIcon, color: 'from-blue-500 to-cyan-500' },
+    ...(isLinasTenant ? [{ id: 'general', name: 'General', icon: Cog6ToothIcon, color: 'from-blue-500 to-cyan-500' }] : []),
     { id: 'security', name: 'Security', icon: LockClosedIcon, color: 'from-red-500 to-pink-500' },
     { id: 'api', name: 'Integrations', icon: KeyIcon, color: 'from-green-500 to-emerald-500' },
-    { id: 'languages', name: 'Languages', icon: GlobeAltIcon, color: 'from-purple-500 to-pink-500' },
-    { id: 'notifications', name: 'Notifications', icon: BellIcon, color: 'from-orange-500 to-red-500' },
-    { id: 'clinic', name: 'Clinic calendar', icon: CalendarDaysIcon, color: 'from-teal-500 to-cyan-500' },
+    ...(isLinasTenant ? [
+      { id: 'languages', name: 'Languages', icon: GlobeAltIcon, color: 'from-purple-500 to-pink-500' },
+      { id: 'notifications', name: 'Notifications', icon: BellIcon, color: 'from-orange-500 to-red-500' },
+      { id: 'clinic', name: 'Clinic calendar', icon: CalendarDaysIcon, color: 'from-teal-500 to-cyan-500' },
+    ] : []),
     // Users tab only visible to users with userManagement permission
     ...(canManageUsers ? [{ id: 'users', name: 'Users', icon: UsersIcon, color: 'from-indigo-500 to-violet-500' }] : []),
   ];
@@ -238,6 +271,73 @@ const Settings = () => {
       }
     } catch (e) {
       toast.error(`${apiName}: ${errorMessage(e) || 'connection failed'}`, { id: toastId });
+    }
+  };
+
+  /** @param {'facebook' | 'instagram'} channel */
+  const handleConnectMeta = async (channel) => {
+    setMetaConnectionBusy(channel);
+    try {
+      const res = await authFetch('/api/meta/connections/start', {
+        method: 'POST',
+        body: JSON.stringify({ channel }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || typeof data.authorization_url !== 'string') {
+        throw new Error(data.detail || data.error || 'Meta connection could not be started');
+      }
+      const target = new URL(data.authorization_url);
+      if (target.protocol !== 'https:' || target.hostname !== 'www.facebook.com') {
+        throw new Error('Meta returned an invalid authorization destination');
+      }
+      window.location.assign(target.toString());
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Meta connection could not be started');
+      setMetaConnectionBusy('');
+    }
+  };
+
+  /** @param {MetaConnectionStatus} connection */
+  const handleDisconnectMeta = async (connection) => {
+    setMetaConnectionBusy(connection.binding_id);
+    try {
+      const res = await authFetch(`/api/meta/connections/${connection.binding_id}/disconnect`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || data.error || 'Disconnect failed');
+      }
+      setMetaConnections((rows) => rows.map((row) => (
+        row.binding_id === connection.binding_id ? { ...row, status: 'disconnected' } : row
+      )));
+      toast.success(`${connection.channel === 'facebook' ? 'Facebook' : 'Instagram'} disconnected`);
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Disconnect failed');
+    } finally {
+      setMetaConnectionBusy('');
+    }
+  };
+
+  /** @param {MetaConnectionStatus} connection */
+  const handleActivateMeta = async (connection) => {
+    setMetaConnectionBusy(connection.binding_id);
+    try {
+      const res = await authFetch(`/api/meta/connections/${connection.binding_id}/activate`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || data.error || 'Activation failed');
+      }
+      setMetaConnections((rows) => rows.map((row) => (
+        row.binding_id === connection.binding_id ? { ...row, status: 'active' } : row
+      )));
+      toast.success(`${connection.channel === 'facebook' ? 'Facebook' : 'Instagram'} activated`);
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Activation failed');
+    } finally {
+      setMetaConnectionBusy('');
     }
   };
 
@@ -587,7 +687,78 @@ const Settings = () => {
               </div>
             ) : null}
 
-            <div className="space-y-4">
+            <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="font-semibold text-blue-900">Meta business messaging</h3>
+                  <p className="mt-1 text-sm text-blue-800">
+                    Connect one Facebook Page or linked professional Instagram account. Tokens stay encrypted on the server and are never shown here.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary text-sm"
+                    disabled={!metaRegistryEnabled || metaConnectionBusy !== '' || !metaApps.some((item) => item.key === 'saas_tech_provider' && item.enabled && item.oauth_configured)}
+                    onClick={() => handleConnectMeta('facebook')}
+                  >
+                    {metaConnectionBusy === 'facebook' ? 'Opening Meta…' : 'Connect Facebook'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary text-sm"
+                    disabled={!metaRegistryEnabled || metaConnectionBusy !== '' || !metaApps.some((item) => item.key === 'saas_tech_provider' && item.enabled && item.oauth_configured)}
+                    onClick={() => handleConnectMeta('instagram')}
+                  >
+                    {metaConnectionBusy === 'instagram' ? 'Opening Meta…' : 'Connect Instagram'}
+                  </button>
+                </div>
+              </div>
+              {metaConnectionError ? (
+                <p className="mt-3 text-sm text-red-700">{metaConnectionError}</p>
+              ) : null}
+              {!metaRegistryEnabled ? (
+                <p className="mt-3 text-xs text-blue-700">Multi-app onboarding is staged but not enabled on this deployment.</p>
+              ) : null}
+              {metaConnections.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  {metaConnections.map((connection) => (
+                    <div key={connection.binding_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm">
+                      <div>
+                        <span className="font-medium capitalize text-slate-800">{connection.channel}</span>
+                        <span className="ml-2 text-slate-500">{connection.app_key === 'linas_first_party' ? 'Lina first-party' : 'Tech Provider'}</span>
+                        <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{connection.status}</span>
+                        <span className="ml-2 text-xs text-slate-500">token {connection.token_status || 'unknown'}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        {connection.status === 'testing' && connection.tenant_id !== 'linas' && metaApps.some((item) => item.key === 'saas_tech_provider' && item.advanced_access_approved) ? (
+                          <button
+                            type="button"
+                            className="btn-primary px-3 py-1 text-sm"
+                            disabled={metaConnectionBusy !== ''}
+                            onClick={() => handleActivateMeta(connection)}
+                          >
+                            {metaConnectionBusy === connection.binding_id ? 'Activating…' : 'Activate'}
+                          </button>
+                        ) : null}
+                        {connection.status !== 'disconnected' ? (
+                          <button
+                            type="button"
+                            className="btn-ghost px-3 py-1 text-sm text-red-700"
+                            disabled={metaConnectionBusy !== ''}
+                            onClick={() => handleDisconnectMeta(connection)}
+                          >
+                            {metaConnectionBusy === connection.binding_id ? 'Working…' : 'Disconnect'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            {isLinasTenant ? <div className="space-y-4">
               {integrations.map((api, index) => (
                 <motion.div
                   key={api.name}
@@ -641,7 +812,7 @@ const Settings = () => {
                   </div>
                 </motion.div>
               ))}
-            </div>
+            </div> : null}
 
             <div className="mt-6 glass rounded-xl p-4 bg-blue-50 border border-blue-200">
               <div className="flex items-start space-x-3">

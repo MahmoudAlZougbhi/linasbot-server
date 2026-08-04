@@ -14,7 +14,7 @@ from typing import Any
 
 _SENSITIVE_QUERY_VALUE = re.compile(
     r"(?i)(?P<prefix>^|[?&;\s])(?P<key>(?:hub\.verify_token|access_token|api[_-]?key|"
-    r"app_secret|client_secret|code|password|refresh_token|"
+    r"app_secret|client_secret|code|state|password|refresh_token|"
     r"signature|signed_request|token))=(?P<value>[^&\s\"']*)"
 )
 

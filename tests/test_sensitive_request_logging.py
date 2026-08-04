@@ -68,8 +68,20 @@ def test_record_factory_scrubs_handlers_created_after_install() -> None:
     assert "code=[REDACTED]" in record.getMessage()
 
 
+def test_oauth_state_and_code_are_redacted_together() -> None:
+    rendered = redact_sensitive_query_text("/oauth/meta/callback?code=private-code&state=private-state&ok=yes")
+    assert "private-code" not in rendered
+    assert "private-state" not in rendered
+    assert "code=[REDACTED]" in rendered
+    assert "state=[REDACTED]" in rendered
+
+
 @pytest.mark.asyncio
-async def test_real_verification_handler_never_logs_token(monkeypatch, caplog, capsys) -> None:
+async def test_real_verification_handler_never_logs_token(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     from modules import meta_messaging_webhook
 
     marker = "real-handler-secret-must-not-appear"

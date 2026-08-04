@@ -6,6 +6,7 @@ Handles Firestore operations for dashboard users with bcrypt password hashing
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 import uuid
@@ -29,6 +30,13 @@ class UserService:
     AUTH_QUERY_TIMEOUT_SECONDS = float(os.getenv("AUTH_QUERY_TIMEOUT_SECONDS", "6"))
     AUTH_WRITE_TIMEOUT_SECONDS = float(os.getenv("AUTH_WRITE_TIMEOUT_SECONDS", "5"))
     AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS = int(os.getenv("AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS", "21600"))
+
+    @staticmethod
+    def _normalize_tenant_id(value: Any) -> str:
+        tenant_id = str(value or "linas").strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", tenant_id):
+            raise ValueError("Invalid tenant identifier")
+        return tenant_id
 
     def __init__(self) -> None:
         self._db = None
@@ -121,6 +129,7 @@ class UserService:
             "name": user_data.get("name") or (user_data.get("email") or "user@unknown").split("@")[0],
             "role": user_data.get("role", "viewer"),
             "permissions": user_data.get("permissions"),
+            "tenantId": self._normalize_tenant_id(user_data.get("tenantId")),
             "status": user_data.get("status", "active"),
             "passwordEpoch": 0,
             "lastLogin": None,
@@ -275,6 +284,8 @@ class UserService:
             for field in allowed_fields:
                 if field in updates:
                     update_data[field] = updates[field]
+            if "tenantId" in updates:
+                update_data["tenantId"] = self._normalize_tenant_id(updates["tenantId"])
 
             # Handle password update separately (hash it) and bump epoch for session invalidation
             if "password" in updates and updates["password"]:
@@ -525,6 +536,7 @@ class UserService:
             "name": user.get("name"),
             "role": user.get("role"),
             "permissions": user.get("permissions"),
+            "tenantId": self._normalize_tenant_id(user.get("tenantId")),
             "status": user.get("status"),
             "passwordEpoch": int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
             "lastLogin": user.get("lastLogin"),

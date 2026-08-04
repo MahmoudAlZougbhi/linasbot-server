@@ -10,7 +10,7 @@ import asyncio
 import os
 from typing import Any, Literal, cast
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from pydantic import BaseModel
 
 from modules.api_security import is_production_env, require_session
@@ -84,6 +84,7 @@ class CreateUserRequest(BaseModel):
     name: str | None = None
     role: str | None = "viewer"
     permissions: dict[str, bool] | None = None
+    tenant_id: str | None = None
     status: str | None = "active"
 
 
@@ -91,6 +92,7 @@ class UpdateUserRequest(BaseModel):
     name: str | None = None
     role: str | None = None
     permissions: dict[str, bool] | None = None
+    tenant_id: str | None = None
     status: str | None = None
     password: str | None = None
 
@@ -142,6 +144,7 @@ async def login(request: LoginRequest, response: Response) -> Any:
                 email=str(user.get("email") or email),
                 role=str(user.get("role") or "viewer"),
                 permissions=user.get("permissions"),
+                tenant_id=str(user.get("tenantId") or "linas"),
                 password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
             )
             _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
@@ -258,6 +261,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
             email=str(user.get("email") or session.email),
             role=str(user.get("role") or session.role),
             permissions=user.get("permissions"),
+            tenant_id=str(user.get("tenantId") or session.tenant_id),
             password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
         )
         _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
@@ -275,9 +279,11 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
 
 @app.get("/api/auth/users")
 async def get_users(request: Request) -> Any:
-    require_session(request)
+    session = require_session(request)
     try:
-        users = user_service.get_all_users()
+        users = [
+            user for user in user_service.get_all_users() if str(user.get("tenantId") or "linas") == session.tenant_id
+        ]
         return {"success": True, "users": users}
     except Exception as e:
         print(f"Get users error: {e}")
@@ -287,6 +293,9 @@ async def get_users(request: Request) -> Any:
 @app.post("/api/auth/users")
 async def create_user(body: CreateUserRequest, request: Request) -> Any:
     session = require_session(request)
+    requested_tenant = (body.tenant_id or session.tenant_id).strip()
+    if requested_tenant != session.tenant_id:
+        raise HTTPException(status_code=403, detail="Cross-tenant user provisioning is forbidden")
     try:
         user = user_service.create_user(
             {
@@ -295,6 +304,7 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
                 "name": body.name,
                 "role": body.role,
                 "permissions": body.permissions,
+                "tenantId": session.tenant_id,
                 "status": body.status,
             },
             created_by=session.user_id,
@@ -309,7 +319,12 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
 
 @app.put("/api/auth/users/{user_id}")
 async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -> Any:
-    require_session(request)
+    session = require_session(request)
+    target = user_service.get_user_by_id(user_id)
+    if target is None or str(target.get("tenantId") or "linas") != session.tenant_id:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.tenant_id is not None and body.tenant_id.strip() != session.tenant_id:
+        raise HTTPException(status_code=403, detail="Cross-tenant user reassignment is forbidden")
     try:
         updates: dict[str, Any] = {}
         if body.name is not None:
@@ -335,7 +350,10 @@ async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -
 
 @app.delete("/api/auth/users/{user_id}")
 async def delete_user(user_id: str, request: Request) -> Any:
-    require_session(request)
+    session = require_session(request)
+    target = user_service.get_user_by_id(user_id)
+    if target is None or str(target.get("tenantId") or "linas") != session.tenant_id:
+        raise HTTPException(status_code=404, detail="User not found")
     try:
         success = user_service.delete_user(user_id)
         if success:

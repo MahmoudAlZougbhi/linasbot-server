@@ -1,0 +1,941 @@
+"""Encrypted registry for Meta apps, tenant assets, OAuth state, and rollback.
+
+The registry intentionally stores application secrets in the process environment and
+tenant/Page tokens only as AES-GCM ciphertext.  Active bindings are exclusive across
+both tenant/channel and channel/asset indexes, so two Meta apps can never answer the
+same Page or Instagram account at the same time.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
+import os
+import re
+import secrets
+import tempfile
+import threading
+import time
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Literal, cast
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from storage.persistent_storage import _DATA_ROOT
+
+APP_A_KEY = "linas_first_party"
+APP_B_KEY = "saas_tech_provider"
+APP_A_EXPECTED_ID = "2963733803971681"
+RETIRED_APP_ID = "1784792718776344"
+LINAS_PAGE_ID = "378696005334409"
+LINAS_INSTAGRAM_ACCOUNT_ID = "17841413184256533"
+REGISTRY_SCHEMA_VERSION = 1
+
+MetaChannel = Literal["facebook", "instagram"]
+MetaAppClassification = Literal["own_business", "tech_provider"]
+BindingStatus = Literal["active", "inactive", "testing", "disconnected"]
+
+META_COMMON_MESSAGING_SCOPES = frozenset(
+    {
+        "pages_show_list",
+        "pages_manage_metadata",
+        "pages_read_engagement",
+    }
+)
+META_CHANNEL_SCOPES: dict[MetaChannel, frozenset[str]] = {
+    "facebook": META_COMMON_MESSAGING_SCOPES | {"pages_messaging"},
+    "instagram": META_COMMON_MESSAGING_SCOPES | {"instagram_basic", "instagram_manage_messages"},
+}
+META_FORBIDDEN_SCOPES = frozenset(
+    {
+        "business_management",
+        "instagram_manage_comments",
+        "instagram_content_publish",
+        "pages_manage_posts",
+        "pages_manage_ads",
+        "ads_management",
+        "ads_read",
+        "catalog_management",
+        "commerce_account_manage_orders",
+        "whatsapp_business_management",
+        "whatsapp_business_messaging",
+    }
+)
+
+
+class MetaRegistryError(RuntimeError):
+    """Base class for registry failures safe to report by type only."""
+
+
+class MetaRegistryNotConfiguredError(MetaRegistryError):
+    pass
+
+
+class MetaBindingConflictError(MetaRegistryError):
+    pass
+
+
+class MetaBindingNotFoundError(MetaRegistryError):
+    pass
+
+
+class MetaCredentialError(MetaRegistryError):
+    pass
+
+
+class MetaOAuthStateError(MetaRegistryError):
+    pass
+
+
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def meta_multi_app_registry_enabled() -> bool:
+    return _truthy(os.getenv("META_MULTI_APP_REGISTRY_ENABLED"))
+
+
+def _normalized_graph_version(value: str | None) -> str:
+    version = (value or "v24.0").strip()
+    return version if version.startswith("v") else f"v{version}"
+
+
+def _app_b_linas_cutover_allowed() -> bool:
+    return _truthy(os.getenv("META_APP_B_LINAS_CUTOVER_APPROVED"))
+
+
+def normalize_meta_tenant_id(value: str) -> str:
+    """Return the canonical tenant key used in bindings and state namespaces."""
+
+    tenant = str(value or "").strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", tenant):
+        raise MetaBindingConflictError("tenant identifier is invalid")
+    return tenant
+
+
+@dataclass(frozen=True)
+class MetaAppConfig:
+    key: str
+    app_id: str
+    app_secret: str
+    verify_token: str
+    graph_api_version: str
+    classification: MetaAppClassification
+    oauth_config_id: str = ""
+    advanced_access_approved: bool = False
+    enabled: bool = False
+
+    def public_dict(self) -> dict[str, Any]:
+        return {
+            "key": self.key,
+            "app_id": self.app_id,
+            "classification": self.classification,
+            "graph_api_version": self.graph_api_version,
+            "oauth_configured": bool(self.oauth_config_id),
+            "advanced_access_approved": self.advanced_access_approved,
+            "credentials_configured": bool(self.app_secret and self.verify_token),
+            "enabled": self.enabled,
+        }
+
+
+def get_meta_app_configs() -> dict[str, MetaAppConfig]:
+    """Load the two allowlisted Meta apps without exposing secret values."""
+
+    graph_version = _normalized_graph_version(os.getenv("META_GRAPH_API_VERSION"))
+    app_a_id = (os.getenv("META_APP_A_ID") or os.getenv("META_APP_ID") or "").strip()
+    app_a_secret = (os.getenv("META_APP_A_SECRET") or os.getenv("META_APP_SECRET") or "").strip()
+    app_a_verify = (
+        os.getenv("META_APP_A_WEBHOOK_VERIFY_TOKEN") or os.getenv("META_WEBHOOK_VERIFY_TOKEN") or ""
+    ).strip()
+    app_a = MetaAppConfig(
+        key=APP_A_KEY,
+        app_id=app_a_id,
+        app_secret=app_a_secret,
+        verify_token=app_a_verify,
+        graph_api_version=graph_version,
+        classification="own_business",
+        oauth_config_id=(os.getenv("META_APP_A_LOGIN_CONFIG_ID") or "").strip(),
+        advanced_access_approved=_truthy(os.getenv("META_APP_A_ADVANCED_ACCESS_APPROVED")),
+        enabled=bool(
+            app_a_id and app_a_id == APP_A_EXPECTED_ID and app_a_id != RETIRED_APP_ID and app_a_secret and app_a_verify
+        ),
+    )
+
+    app_b_id = (os.getenv("META_APP_B_ID") or "").strip()
+    app_b_secret = (os.getenv("META_APP_B_SECRET") or "").strip()
+    app_b_verify = (os.getenv("META_APP_B_WEBHOOK_VERIFY_TOKEN") or "").strip()
+    app_b = MetaAppConfig(
+        key=APP_B_KEY,
+        app_id=app_b_id,
+        app_secret=app_b_secret,
+        verify_token=app_b_verify,
+        graph_api_version=graph_version,
+        classification="tech_provider",
+        oauth_config_id=(os.getenv("META_APP_B_LOGIN_CONFIG_ID") or "").strip(),
+        advanced_access_approved=_truthy(os.getenv("META_APP_B_ADVANCED_ACCESS_APPROVED")),
+        enabled=bool(
+            app_b_id
+            and app_b_id.isdigit()
+            and app_b_id not in {RETIRED_APP_ID, APP_A_EXPECTED_ID}
+            and app_b_secret
+            and app_b_verify
+        ),
+    )
+    return {APP_A_KEY: app_a, APP_B_KEY: app_b}
+
+
+def identify_signed_meta_app(raw_body: bytes, signature_header: str | None) -> MetaAppConfig | None:
+    """Return the single configured app whose secret authenticates ``raw_body``.
+
+    Every candidate is explicitly allowlisted by registry key.  Ambiguous signatures
+    are rejected rather than falling back to an unrestricted secondary secret.
+    """
+
+    if not raw_body or not signature_header or not signature_header.startswith("sha256="):
+        return None
+    received = signature_header[len("sha256=") :].strip().lower()
+    matches: list[MetaAppConfig] = []
+    for config in get_meta_app_configs().values():
+        if not config.enabled:
+            continue
+        expected = hmac.new(config.app_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(received, expected):
+            matches.append(config)
+    return matches[0] if len(matches) == 1 else None
+
+
+def verify_any_meta_challenge_token(candidate: str | None) -> bool:
+    """Constant-time verification against only the two configured app tokens."""
+
+    supplied = candidate or ""
+    matched = False
+    for config in get_meta_app_configs().values():
+        if config.enabled and config.verify_token:
+            matched = hmac.compare_digest(supplied, config.verify_token) or matched
+    return matched
+
+
+class MetaCredentialCipher:
+    """AES-256-GCM envelope for tenant tokens persisted by the registry."""
+
+    def __init__(self, master_secret: str):
+        secret = (master_secret or "").strip()
+        if len(secret) < 32:
+            raise MetaRegistryNotConfiguredError("META_CREDENTIAL_ENCRYPTION_KEY must be at least 32 characters")
+        key = hashlib.sha256(b"linas-meta-registry-v1\x00" + secret.encode("utf-8")).digest()
+        self._aead = AESGCM(key)
+
+    def seal(self, payload: dict[str, Any], *, aad: str) -> str:
+        nonce = secrets.token_bytes(12)
+        plaintext = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        ciphertext = self._aead.encrypt(nonce, plaintext, aad.encode("utf-8"))
+        envelope = base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii").rstrip("=")
+        return f"v1.{envelope}"
+
+    def open(self, envelope: str, *, aad: str) -> dict[str, Any]:
+        try:
+            version, encoded = envelope.split(".", 1)
+            if version != "v1":
+                raise ValueError("unsupported envelope")
+            raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+            plaintext = self._aead.decrypt(raw[:12], raw[12:], aad.encode("utf-8"))
+            decoded = json.loads(plaintext)
+            if not isinstance(decoded, dict):
+                raise ValueError("credential payload is not an object")
+            return cast(dict[str, Any], decoded)
+        except Exception as exc:
+            raise MetaCredentialError("stored Meta credential could not be decrypted") from exc
+
+
+@dataclass(frozen=True)
+class MetaAssetBinding:
+    binding_id: str
+    tenant_id: str
+    channel: MetaChannel
+    asset_id: str
+    page_id: str
+    instagram_account_id: str
+    app_key: str
+    credential_id: str
+    status: BindingStatus
+    generation: int
+    created_at: float
+    updated_at: float
+    previous_binding_id: str = ""
+
+    @property
+    def active(self) -> bool:
+        return self.status == "active"
+
+    def public_dict(self) -> dict[str, Any]:
+        return {
+            "binding_id": self.binding_id,
+            "tenant_id": self.tenant_id,
+            "channel": self.channel,
+            "asset_id": self.asset_id,
+            "page_id": self.page_id,
+            "instagram_account_id": self.instagram_account_id,
+            "app_key": self.app_key,
+            "status": self.status,
+            "generation": self.generation,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "previous_binding_id": self.previous_binding_id,
+        }
+
+
+@dataclass(frozen=True)
+class MetaBindingCredential:
+    access_token: str
+    token_app_id: str
+    token_profile_id: str
+    scopes: tuple[str, ...]
+    expires_at: int | None = None
+    authorized_meta_user_id: str = ""
+
+    def as_secret_dict(self) -> dict[str, Any]:
+        return {
+            "access_token": self.access_token,
+            "token_app_id": self.token_app_id,
+            "token_profile_id": self.token_profile_id,
+            "scopes": list(self.scopes),
+            "expires_at": self.expires_at,
+            "authorized_meta_user_id": self.authorized_meta_user_id,
+        }
+
+
+class MetaAppRegistry:
+    """File-backed, process-safe registry with encrypted credential envelopes."""
+
+    def __init__(
+        self,
+        *,
+        store_path: Path | None = None,
+        audit_path: Path | None = None,
+        master_secret: str | None = None,
+    ) -> None:
+        registry_root = Path(_DATA_ROOT) / "meta_registry"
+        self.store_path = store_path or registry_root / "registry.json"
+        self.audit_path = audit_path or registry_root / "audit.jsonl"
+        self.lock_path = self.store_path.with_suffix(".lock")
+        self.store_path.parent.mkdir(parents=True, exist_ok=True)
+        self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+        self._thread_lock = threading.RLock()
+        self._cipher = MetaCredentialCipher(master_secret or os.getenv("META_CREDENTIAL_ENCRYPTION_KEY") or "")
+
+    def _empty(self) -> dict[str, Any]:
+        return {
+            "schema_version": REGISTRY_SCHEMA_VERSION,
+            "bindings": {},
+            "credentials": {},
+            "oauth_states": {},
+        }
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        import fcntl
+
+        self.lock_path.touch(mode=0o600, exist_ok=True)
+        os.chmod(self.lock_path, 0o600)
+        with self._thread_lock, self.lock_path.open("r+", encoding="utf-8") as lock_handle:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+    def _read_unlocked(self) -> dict[str, Any]:
+        if not self.store_path.exists():
+            return self._empty()
+        try:
+            raw = json.loads(self.store_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise MetaRegistryError("Meta registry is unreadable") from exc
+        if not isinstance(raw, dict) or raw.get("schema_version") != REGISTRY_SCHEMA_VERSION:
+            raise MetaRegistryError("Meta registry schema is invalid")
+        for key in ("bindings", "credentials", "oauth_states"):
+            if not isinstance(raw.get(key), dict):
+                raise MetaRegistryError("Meta registry structure is invalid")
+        return cast(dict[str, Any], raw)
+
+    def _write_unlocked(self, state: dict[str, Any]) -> None:
+        self.store_path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary_name = tempfile.mkstemp(prefix=".meta-registry-", dir=self.store_path.parent)
+        temporary_path = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(state, handle, separators=(",", ":"), sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary_path, 0o600)
+            os.replace(temporary_path, self.store_path)
+            os.chmod(self.store_path, 0o600)
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
+
+    def _append_audit(self, event: dict[str, Any]) -> None:
+        actor_id = str(event.get("actor_id") or "system")
+        safe = {
+            "timestamp": time.time(),
+            "event": str(event.get("event") or "unknown"),
+            "actor_id_hash": hashlib.sha256(actor_id.encode("utf-8")).hexdigest()[:16],
+            "tenant_id": str(event.get("tenant_id") or ""),
+            "channel": str(event.get("channel") or ""),
+            "asset_id_hash": hashlib.sha256(str(event.get("asset_id") or "").encode("utf-8")).hexdigest()[:16],
+            "app_key": str(event.get("app_key") or ""),
+            "binding_id": str(event.get("binding_id") or ""),
+            "result": str(event.get("result") or "ok"),
+        }
+        with self.audit_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(safe, separators=(",", ":"), sort_keys=True) + "\n")
+        os.chmod(self.audit_path, 0o600)
+
+    @staticmethod
+    def _binding_from_dict(raw: dict[str, Any]) -> MetaAssetBinding:
+        return MetaAssetBinding(
+            binding_id=str(raw["binding_id"]),
+            tenant_id=str(raw["tenant_id"]),
+            channel=cast(MetaChannel, raw["channel"]),
+            asset_id=str(raw["asset_id"]),
+            page_id=str(raw.get("page_id") or ""),
+            instagram_account_id=str(raw.get("instagram_account_id") or ""),
+            app_key=str(raw["app_key"]),
+            credential_id=str(raw["credential_id"]),
+            status=cast(BindingStatus, raw["status"]),
+            generation=int(raw.get("generation") or 1),
+            created_at=float(raw.get("created_at") or 0),
+            updated_at=float(raw.get("updated_at") or 0),
+            previous_binding_id=str(raw.get("previous_binding_id") or ""),
+        )
+
+    def list_bindings(self, *, include_inactive: bool = True) -> list[MetaAssetBinding]:
+        with self._locked():
+            state = self._read_unlocked()
+        bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
+        if not include_inactive:
+            bindings = [binding for binding in bindings if binding.active]
+        return sorted(bindings, key=lambda item: (item.tenant_id, item.channel, item.asset_id, item.created_at))
+
+    def _validate_activation_unlocked(
+        self,
+        state: dict[str, Any],
+        current: MetaAssetBinding,
+        *,
+        replacing_binding_id: str = "",
+    ) -> None:
+        app = get_meta_app_configs().get(current.app_key)
+        if app is None or not app.enabled:
+            raise MetaBindingConflictError("target Meta app is not configured")
+        if current.app_key == APP_B_KEY and not app.advanced_access_approved:
+            raise MetaBindingConflictError("App B cannot activate before Advanced Access approval")
+        if (
+            current.app_key == APP_B_KEY
+            and current.asset_id in {LINAS_PAGE_ID, LINAS_INSTAGRAM_ACCOUNT_ID}
+            and not _app_b_linas_cutover_allowed()
+        ):
+            raise MetaBindingConflictError("App B cannot activate Lina assets without an approved cutover")
+        for value in state["bindings"].values():
+            other = self._binding_from_dict(value)
+            if other.binding_id in {current.binding_id, replacing_binding_id} or not other.active:
+                continue
+            if (other.tenant_id == current.tenant_id and other.channel == current.channel) or (
+                other.channel == current.channel and other.asset_id == current.asset_id
+            ):
+                raise MetaBindingConflictError("another active binding owns this tenant/channel or asset")
+
+    def assert_binding_can_activate(
+        self,
+        binding_id: str,
+        *,
+        expected_generation: int | None = None,
+        replacing_binding_id: str = "",
+    ) -> MetaAssetBinding:
+        """Read-only activation preflight used before any Meta subscription change."""
+
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["bindings"].get(binding_id)
+            if not isinstance(raw, dict):
+                raise MetaBindingNotFoundError("binding not found")
+            current = self._binding_from_dict(raw)
+            if expected_generation is not None and current.generation != expected_generation:
+                raise MetaBindingConflictError("binding generation changed")
+            self._validate_activation_unlocked(
+                state,
+                current,
+                replacing_binding_id=replacing_binding_id,
+            )
+            return current
+
+    def activate_binding(
+        self,
+        *,
+        tenant_id: str,
+        channel: MetaChannel,
+        asset_id: str,
+        page_id: str,
+        instagram_account_id: str,
+        app_key: str,
+        credential: MetaBindingCredential,
+        actor_id: str,
+        expected_generation: int | None = None,
+        replace_existing: bool = False,
+        status: BindingStatus = "active",
+    ) -> MetaAssetBinding:
+        tenant = normalize_meta_tenant_id(tenant_id)
+        asset = asset_id.strip()
+        if not tenant or channel not in {"facebook", "instagram"} or not asset:
+            raise MetaBindingConflictError("tenant, channel, and asset are required")
+        if status not in {"active", "inactive", "testing", "disconnected"}:
+            raise MetaBindingConflictError("invalid binding status")
+        app = get_meta_app_configs().get(app_key)
+        if app is None or not app.enabled:
+            raise MetaBindingConflictError("target Meta app is not configured")
+        if credential.token_app_id != app.app_id:
+            raise MetaBindingConflictError("token app does not match target Meta app")
+        if credential.token_profile_id != page_id:
+            raise MetaBindingConflictError("token profile does not match the selected Page")
+        scopes = set(credential.scopes)
+        missing_scopes = META_CHANNEL_SCOPES[channel] - scopes
+        if missing_scopes:
+            raise MetaBindingConflictError("token is missing required private-messaging permissions")
+        if scopes & META_FORBIDDEN_SCOPES:
+            raise MetaBindingConflictError("token includes a prohibited non-messaging permission")
+        if status == "active" and app_key == APP_B_KEY and not app.advanced_access_approved:
+            raise MetaBindingConflictError("App B cannot activate before Advanced Access approval")
+        if (
+            status == "active"
+            and app_key == APP_B_KEY
+            and asset in {LINAS_PAGE_ID, LINAS_INSTAGRAM_ACCOUNT_ID}
+            and not _app_b_linas_cutover_allowed()
+        ):
+            raise MetaBindingConflictError("App B cannot activate Lina assets without an approved cutover")
+
+        now = time.time()
+        with self._locked():
+            state = self._read_unlocked()
+            all_bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
+            active_candidates = [
+                existing
+                for existing in all_bindings
+                if existing.active
+                and (
+                    (existing.tenant_id == tenant and existing.channel == channel)
+                    or (existing.channel == channel and existing.asset_id == asset)
+                )
+            ]
+            if len({candidate.binding_id for candidate in active_candidates}) > 1:
+                raise MetaBindingConflictError("active binding indexes are inconsistent")
+            conflicts = [existing for existing in active_candidates if status == "active"]
+            identical = next(
+                (
+                    existing
+                    for existing in conflicts
+                    if existing.tenant_id == tenant
+                    and existing.channel == channel
+                    and existing.asset_id == asset
+                    and existing.app_key == app_key
+                ),
+                None,
+            )
+            if identical and expected_generation is not None and identical.generation != expected_generation:
+                raise MetaBindingConflictError("binding generation changed")
+            if conflicts and not replace_existing and identical is None:
+                raise MetaBindingConflictError("an active binding already owns this tenant/channel or asset")
+
+            previous_binding_id = (
+                identical.binding_id if identical else (active_candidates[0].binding_id if active_candidates else "")
+            )
+            for existing in conflicts:
+                raw = dict(state["bindings"][existing.binding_id])
+                raw["status"] = "inactive"
+                raw["updated_at"] = now
+                state["bindings"][existing.binding_id] = raw
+            if status == "testing":
+                for existing in all_bindings:
+                    if (
+                        existing.status == "testing"
+                        and existing.tenant_id == tenant
+                        and existing.channel == channel
+                        and existing.asset_id == asset
+                        and existing.app_key == app_key
+                    ):
+                        raw = dict(state["bindings"][existing.binding_id])
+                        raw["status"] = "inactive"
+                        raw["updated_at"] = now
+                        state["bindings"][existing.binding_id] = raw
+
+            credential_id = uuid.uuid4().hex
+            binding_id = uuid.uuid4().hex
+            generation = (identical.generation + 1) if identical else 1
+            binding = MetaAssetBinding(
+                binding_id=binding_id,
+                tenant_id=tenant,
+                channel=channel,
+                asset_id=asset,
+                page_id=page_id.strip(),
+                instagram_account_id=instagram_account_id.strip(),
+                app_key=app_key,
+                credential_id=credential_id,
+                status=status,
+                generation=generation,
+                created_at=now,
+                updated_at=now,
+                previous_binding_id=previous_binding_id,
+            )
+            aad = f"{binding_id}:{credential_id}:{tenant}:{channel}:{asset}:{app_key}"
+            state["credentials"][credential_id] = {
+                "binding_id": binding_id,
+                "aad": aad,
+                "sealed": self._cipher.seal(credential.as_secret_dict(), aad=aad),
+                "created_at": now,
+            }
+            state["bindings"][binding_id] = asdict(binding)
+            self._write_unlocked(state)
+            self._append_audit(
+                {
+                    "event": "binding_activated" if status == "active" else f"binding_{status}_created",
+                    "actor_id": actor_id,
+                    "tenant_id": tenant,
+                    "channel": channel,
+                    "asset_id": asset,
+                    "app_key": app_key,
+                    "binding_id": binding_id,
+                }
+            )
+        return binding
+
+    def set_binding_status(
+        self,
+        binding_id: str,
+        *,
+        status: BindingStatus,
+        actor_id: str,
+        expected_generation: int | None = None,
+    ) -> MetaAssetBinding:
+        if status not in {"active", "inactive", "testing", "disconnected"}:
+            raise MetaBindingConflictError("invalid binding status")
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["bindings"].get(binding_id)
+            if not isinstance(raw, dict):
+                raise MetaBindingNotFoundError("binding not found")
+            current = self._binding_from_dict(raw)
+            if expected_generation is not None and current.generation != expected_generation:
+                raise MetaBindingConflictError("binding generation changed")
+            if status == "active":
+                self._validate_activation_unlocked(state, current)
+            raw = dict(raw)
+            raw["status"] = status
+            raw["generation"] = current.generation + 1
+            raw["updated_at"] = time.time()
+            state["bindings"][binding_id] = raw
+            self._write_unlocked(state)
+            updated = self._binding_from_dict(raw)
+            self._append_audit(
+                {
+                    "event": f"binding_{status}",
+                    "actor_id": actor_id,
+                    "tenant_id": current.tenant_id,
+                    "channel": current.channel,
+                    "asset_id": current.asset_id,
+                    "app_key": current.app_key,
+                    "binding_id": current.binding_id,
+                }
+            )
+            return updated
+
+    def activate_staged_binding(
+        self,
+        binding_id: str,
+        *,
+        actor_id: str,
+        expected_generation: int | None = None,
+        replace_existing: bool = False,
+    ) -> MetaAssetBinding:
+        """Atomically activate a staged binding and optionally replace one provider."""
+
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["bindings"].get(binding_id)
+            if not isinstance(raw, dict):
+                raise MetaBindingNotFoundError("binding not found")
+            current = self._binding_from_dict(raw)
+            if current.status not in {"testing", "inactive"}:
+                raise MetaBindingConflictError("binding is not staged for activation")
+            if expected_generation is not None and current.generation != expected_generation:
+                raise MetaBindingConflictError("binding generation changed")
+            conflicts: list[MetaAssetBinding] = []
+            for value in state["bindings"].values():
+                other = self._binding_from_dict(value)
+                if not other.active:
+                    continue
+                if (other.tenant_id == current.tenant_id and other.channel == current.channel) or (
+                    other.channel == current.channel and other.asset_id == current.asset_id
+                ):
+                    conflicts.append(other)
+            conflict_ids = {conflict.binding_id for conflict in conflicts}
+            if len(conflict_ids) > 1:
+                raise MetaBindingConflictError("active binding indexes are inconsistent")
+            if conflicts and not replace_existing:
+                raise MetaBindingConflictError("another active binding owns this tenant/channel or asset")
+            replacement_id = conflicts[0].binding_id if conflicts else ""
+            self._validate_activation_unlocked(
+                state,
+                current,
+                replacing_binding_id=replacement_id if replace_existing else "",
+            )
+            now = time.time()
+            for conflict in conflicts:
+                changed = dict(state["bindings"][conflict.binding_id])
+                changed["status"] = "inactive"
+                changed["updated_at"] = now
+                state["bindings"][conflict.binding_id] = changed
+            changed_current = dict(raw)
+            changed_current["status"] = "active"
+            changed_current["generation"] = current.generation + 1
+            changed_current["updated_at"] = now
+            if replacement_id:
+                changed_current["previous_binding_id"] = replacement_id
+            state["bindings"][binding_id] = changed_current
+            self._write_unlocked(state)
+            activated = self._binding_from_dict(changed_current)
+            self._append_audit(
+                {
+                    "event": "binding_cutover_activated" if replacement_id else "binding_activated",
+                    "actor_id": actor_id,
+                    "tenant_id": activated.tenant_id,
+                    "channel": activated.channel,
+                    "asset_id": activated.asset_id,
+                    "app_key": activated.app_key,
+                    "binding_id": activated.binding_id,
+                }
+            )
+            return activated
+
+    def get_active_bindings_for_app(self, app_key: str) -> list[MetaAssetBinding]:
+        return [binding for binding in self.list_bindings(include_inactive=False) if binding.app_key == app_key]
+
+    def get_credential(self, binding: MetaAssetBinding) -> MetaBindingCredential:
+        with self._locked():
+            state = self._read_unlocked()
+            record = state["credentials"].get(binding.credential_id)
+            if not isinstance(record, dict) or record.get("binding_id") != binding.binding_id:
+                raise MetaCredentialError("binding credential is unavailable")
+            aad = str(record.get("aad") or "")
+            decoded = self._cipher.open(str(record.get("sealed") or ""), aad=aad)
+        scopes = decoded.get("scopes")
+        if not isinstance(scopes, list):
+            raise MetaCredentialError("binding credential scopes are invalid")
+        return MetaBindingCredential(
+            access_token=str(decoded.get("access_token") or ""),
+            token_app_id=str(decoded.get("token_app_id") or ""),
+            token_profile_id=str(decoded.get("token_profile_id") or ""),
+            scopes=tuple(str(scope) for scope in scopes),
+            expires_at=int(decoded["expires_at"]) if decoded.get("expires_at") is not None else None,
+            authorized_meta_user_id=str(decoded.get("authorized_meta_user_id") or ""),
+        )
+
+    def revoke_authorization(
+        self,
+        *,
+        app_key: str,
+        authorized_meta_user_id: str,
+        actor_id: str = "meta-deauthorization",
+    ) -> list[MetaAssetBinding]:
+        """Disconnect matching bindings and remove their local encrypted tokens."""
+
+        meta_user_id = str(authorized_meta_user_id or "").strip()
+        if not re.fullmatch(r"[0-9]{3,64}", meta_user_id):
+            raise MetaCredentialError("authorization identifier is invalid")
+        revoked: list[MetaAssetBinding] = []
+        with self._locked():
+            state = self._read_unlocked()
+            now = time.time()
+            for binding_id, raw_binding in list(state["bindings"].items()):
+                binding = self._binding_from_dict(raw_binding)
+                if binding.app_key != app_key:
+                    continue
+                record = state["credentials"].get(binding.credential_id)
+                if not isinstance(record, dict) or record.get("binding_id") != binding.binding_id:
+                    continue
+                aad = str(record.get("aad") or "")
+                decoded = self._cipher.open(str(record.get("sealed") or ""), aad=aad)
+                if str(decoded.get("authorized_meta_user_id") or "") != meta_user_id:
+                    continue
+                changed = dict(raw_binding)
+                changed["status"] = "disconnected"
+                changed["generation"] = binding.generation + 1
+                changed["updated_at"] = now
+                state["bindings"][binding_id] = changed
+                state["credentials"].pop(binding.credential_id, None)
+                revoked.append(self._binding_from_dict(changed))
+            self._write_unlocked(state)
+            for binding in revoked:
+                self._append_audit(
+                    {
+                        "event": "authorization_revoked",
+                        "actor_id": actor_id,
+                        "tenant_id": binding.tenant_id,
+                        "channel": binding.channel,
+                        "asset_id": binding.asset_id,
+                        "app_key": binding.app_key,
+                        "binding_id": binding.binding_id,
+                    }
+                )
+        return revoked
+
+    def rollback_binding(self, binding_id: str, *, actor_id: str) -> MetaAssetBinding:
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["bindings"].get(binding_id)
+            if not isinstance(raw, dict):
+                raise MetaBindingNotFoundError("binding not found")
+            current = self._binding_from_dict(raw)
+            previous_raw = state["bindings"].get(current.previous_binding_id)
+            if not isinstance(previous_raw, dict):
+                raise MetaBindingNotFoundError("previous binding is unavailable")
+            previous = self._binding_from_dict(previous_raw)
+            self._validate_activation_unlocked(
+                state,
+                previous,
+                replacing_binding_id=current.binding_id,
+            )
+            for value in state["bindings"].values():
+                other = self._binding_from_dict(value)
+                if not other.active:
+                    continue
+                if (other.tenant_id == previous.tenant_id and other.channel == previous.channel) or (
+                    other.channel == previous.channel and other.asset_id == previous.asset_id
+                ):
+                    changed = dict(state["bindings"][other.binding_id])
+                    changed["status"] = "inactive"
+                    changed["updated_at"] = time.time()
+                    state["bindings"][other.binding_id] = changed
+            previous_raw = dict(previous_raw)
+            previous_raw["status"] = "active"
+            previous_raw["generation"] = previous.generation + 1
+            previous_raw["updated_at"] = time.time()
+            state["bindings"][previous.binding_id] = previous_raw
+            self._write_unlocked(state)
+            restored = self._binding_from_dict(previous_raw)
+            self._append_audit(
+                {
+                    "event": "binding_rollback",
+                    "actor_id": actor_id,
+                    "tenant_id": restored.tenant_id,
+                    "channel": restored.channel,
+                    "asset_id": restored.asset_id,
+                    "app_key": restored.app_key,
+                    "binding_id": restored.binding_id,
+                }
+            )
+            return restored
+
+    def store_oauth_state(self, nonce_hash: str, payload: dict[str, Any]) -> None:
+        with self._locked():
+            state = self._read_unlocked()
+            now = time.time()
+            state["oauth_states"] = {
+                key: value for key, value in state["oauth_states"].items() if float(value.get("expires_at") or 0) >= now
+            }
+            state["oauth_states"][nonce_hash] = dict(payload)
+            self._write_unlocked(state)
+
+    def consume_oauth_state(self, nonce_hash: str) -> dict[str, Any]:
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["oauth_states"].pop(nonce_hash, None)
+            self._write_unlocked(state)
+        if not isinstance(raw, dict) or float(raw.get("expires_at") or 0) < time.time():
+            raise MetaOAuthStateError("OAuth state is invalid, expired, or already used")
+        return cast(dict[str, Any], raw)
+
+
+_registry_instance: MetaAppRegistry | None = None
+
+
+def get_meta_app_registry() -> MetaAppRegistry:
+    global _registry_instance
+    if _registry_instance is None:
+        _registry_instance = MetaAppRegistry()
+    return _registry_instance
+
+
+def reset_meta_app_registry_for_tests() -> None:
+    global _registry_instance
+    _registry_instance = None
+
+
+def get_meta_registry_readiness(
+    registry: MetaAppRegistry | None = None,
+) -> tuple[bool, dict[str, bool]]:
+    """Fail-closed readiness for enabling the encrypted multi-app router."""
+
+    checks: dict[str, bool] = {
+        "encryption_key_configured": len((os.getenv("META_CREDENTIAL_ENCRYPTION_KEY") or "").strip()) >= 32,
+        "app_a_configured": get_meta_app_configs()[APP_A_KEY].enabled,
+        "linas_facebook_app_a_active": False,
+        "linas_instagram_app_a_active": False,
+        "active_indexes_exclusive": True,
+        "active_credentials_valid": True,
+        "app_b_not_active_on_linas": True,
+    }
+    try:
+        current_registry = registry or get_meta_app_registry()
+        bindings = current_registry.list_bindings(include_inactive=False)
+        tenant_channels: set[tuple[str, MetaChannel]] = set()
+        channel_assets: set[tuple[MetaChannel, str]] = set()
+        now = int(time.time())
+        for binding in bindings:
+            tenant_key = (binding.tenant_id, binding.channel)
+            asset_key = (binding.channel, binding.asset_id)
+            if tenant_key in tenant_channels or asset_key in channel_assets:
+                checks["active_indexes_exclusive"] = False
+            tenant_channels.add(tenant_key)
+            channel_assets.add(asset_key)
+            if binding.app_key == APP_B_KEY and binding.asset_id in {
+                LINAS_PAGE_ID,
+                LINAS_INSTAGRAM_ACCOUNT_ID,
+            }:
+                checks["app_b_not_active_on_linas"] = False
+            try:
+                credential = current_registry.get_credential(binding)
+                app = get_meta_app_configs().get(binding.app_key)
+                if (
+                    app is None
+                    or not app.enabled
+                    or credential.token_app_id != app.app_id
+                    or credential.token_profile_id != binding.page_id
+                    or not META_CHANNEL_SCOPES[binding.channel].issubset(credential.scopes)
+                    or set(credential.scopes) & META_FORBIDDEN_SCOPES
+                    or (credential.expires_at is not None and credential.expires_at <= now)
+                ):
+                    checks["active_credentials_valid"] = False
+            except MetaRegistryError:
+                checks["active_credentials_valid"] = False
+            if (
+                binding.app_key == APP_A_KEY
+                and binding.tenant_id == "linas"
+                and binding.channel == "facebook"
+                and binding.asset_id == LINAS_PAGE_ID
+            ):
+                checks["linas_facebook_app_a_active"] = True
+            if (
+                binding.app_key == APP_A_KEY
+                and binding.tenant_id == "linas"
+                and binding.channel == "instagram"
+                and binding.asset_id == LINAS_INSTAGRAM_ACCOUNT_ID
+            ):
+                checks["linas_instagram_app_a_active"] = True
+    except MetaRegistryError:
+        checks["active_indexes_exclusive"] = False
+        checks["active_credentials_valid"] = False
+    return all(checks.values()), checks
