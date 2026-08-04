@@ -1087,6 +1087,33 @@ async def _process_and_respond(
     start_time = time.time()
     _dynamic_retrieval_flow_meta = None  # Set when dynamic retrieval is used (for Activity Flow)
 
+    if user_image_base64:
+        from services.ai_limits_enforcement import customer_image_limit_message, enforce_image_analysis_quota
+
+        image_quota = enforce_image_analysis_quota(user_id=user_id, user_data=user_data, amount=1, consume=True)
+        if not image_quota.allowed:
+            limit_msg = customer_image_limit_message(image_quota)
+            await send_message_func(user_id, limit_msg)
+            try:
+                from services.interaction_flow_logger import is_flow_logging_enabled, log_interaction
+
+                if is_flow_logging_enabled():
+                    log_interaction(
+                        user_id,
+                        user_input_to_process or "[صورة]",
+                        limit_msg,
+                        "rate_limit",
+                        user_name=user_name,
+                        user_data=user_data,
+                        message_type="image",
+                        outcome="ai_image_limit",
+                        ai_called=False,
+                        cost_status="none",
+                    )
+            except Exception:
+                pass
+            return
+
     current_gender = config.user_gender.get(user_id, "unknown")
     current_preferred_lang = user_data.get("user_preferred_lang", "ar")
     current_conversation_id = user_data.get("current_conversation_id")
@@ -2121,6 +2148,21 @@ async def _process_and_respond(
                 )
                 custom_context = merged if merged else None
                 print(f"[_process_and_respond] ✅ Selector ran: action={_act}, context_len={len(custom_context or '')}")
+                if custom_context:
+                    from services.ai_limits_enforcement import enforce_context_line_budget
+
+                    custom_context, ctx_decision = enforce_context_line_budget(
+                        user_id=user_id,
+                        user_data=user_data,
+                        text=custom_context,
+                        consume=True,
+                    )
+                    if not custom_context and not ctx_decision.allowed:
+                        custom_context = None
+                        print(
+                            f"[_process_and_respond] context_lines_blocked reason={ctx_decision.reason}",
+                            flush=True,
+                        )
 
             # Phase 3: Build operational context when resuming (Plan §10)
             operational_context = None

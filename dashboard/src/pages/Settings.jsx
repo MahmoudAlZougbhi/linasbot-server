@@ -14,10 +14,14 @@ import {
   EyeSlashIcon,
   UsersIcon,
   CalendarDaysIcon,
+  CurrencyDollarIcon,
+  AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import UserManagement from '../components/UserManagement/UserManagement';
+import AiLimitsPanel from '../components/Settings/AiLimitsPanel';
 import { authFetch } from '../utils/authFetch';
 import { errorMessage } from '../utils/apiValidate';
 
@@ -58,7 +62,7 @@ const Settings = () => {
 
   useEffect(() => {
     if (!isLinasTenant && activeTab === 'general') {
-      setActiveTab('api');
+      setActiveTab('wallet');
     }
   }, [activeTab, isLinasTenant]);
 
@@ -134,6 +138,8 @@ const Settings = () => {
 
   const tabs = [
     ...(isLinasTenant ? [{ id: 'general', name: 'General', icon: Cog6ToothIcon, color: 'from-blue-500 to-cyan-500' }] : []),
+    { id: 'wallet', name: 'Token Wallet', icon: CurrencyDollarIcon, color: 'from-emerald-500 to-teal-500' },
+    { id: 'ai-limits', name: 'AI Limits', icon: AdjustmentsHorizontalIcon, color: 'from-fuchsia-500 to-pink-500' },
     { id: 'security', name: 'Security', icon: LockClosedIcon, color: 'from-red-500 to-pink-500' },
     { id: 'api', name: 'Integrations', icon: KeyIcon, color: 'from-green-500 to-emerald-500' },
     ...(isLinasTenant ? [
@@ -424,6 +430,39 @@ const Settings = () => {
         transition={{ duration: 0.6, delay: 0.4 }}
         className="max-w-4xl mx-auto"
       >
+        {activeTab === 'wallet' && (
+          <div className="card space-y-4">
+            <h2 className="text-xl font-bold text-slate-800 font-display flex items-center">
+              <CurrencyDollarIcon className="w-6 h-6 mr-2 text-emerald-600" />
+              Token Wallet
+            </h2>
+            <p className="text-sm text-slate-600">
+              View remaining input and output AI tokens, buy recharge packs, and see spend analytics
+              (Facebook vs Instagram, top chats). Detailed per-message cost lives in Interaction Logs.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                to="/wallet"
+                className="inline-flex rounded-xl bg-gradient-to-r from-primary-600 to-secondary-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Open Token Wallet
+              </Link>
+              <Link
+                to="/activity-flow"
+                className="inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800"
+              >
+                Interaction Logs
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'ai-limits' && (
+          <div className="card">
+            <AiLimitsPanel />
+          </div>
+        )}
+
         {activeTab === 'general' && (
           <div className="card">
             <h2 className="text-xl font-bold text-slate-800 font-display mb-6 flex items-center">

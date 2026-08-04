@@ -8,7 +8,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from fastapi import Request
+
+from modules.api_security import require_permission, require_session
 from modules.core import app
+from services.ai_usage_limits import ai_usage_limits_service, recommended_defaults
 from services.settings_service import settings_service
 
 
@@ -26,6 +30,34 @@ async def get_settings() -> Any:
         print(f"❌ Error getting settings: {e}")
         return {"success": False, "error": str(e)}
 
+
+@app.get("/api/settings/ai-limits")
+async def get_ai_limits(request: Request) -> Any:
+    """Per-tenant AI capability limits (images + context lines per end-user)."""
+    session = require_session(request)
+    limits = ai_usage_limits_service.get_settings(session.tenant_id)
+    return {
+        "success": True,
+        "tenant_id": session.tenant_id,
+        "limits": limits.to_public_dict(),
+        "recommended": recommended_defaults(),
+    }
+
+
+@app.post("/api/settings/ai-limits")
+async def update_ai_limits(updates: dict[str, Any], request: Request) -> Any:
+    """Save per-tenant AI capability limits (settings permission required)."""
+    session = require_permission(request, "settings")
+    body = updates if isinstance(updates, dict) else {}
+    # Nested {limits: {...}} or flat body both accepted.
+    payload = body.get("limits") if isinstance(body.get("limits"), dict) else body
+    limits = ai_usage_limits_service.save_settings(session.tenant_id, payload)
+    return {
+        "success": True,
+        "tenant_id": session.tenant_id,
+        "limits": limits.to_public_dict(),
+        "message": "AI limits saved",
+    }
 
 @app.get("/api/settings/integrations")
 async def get_integration_status() -> Any:

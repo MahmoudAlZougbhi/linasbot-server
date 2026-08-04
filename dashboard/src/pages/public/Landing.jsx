@@ -80,7 +80,7 @@ const faqs = [
 
 const Landing = () => {
   const [packages, setPackages] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
-  const [pricingBasis, setPricingBasis] = useState('');
+  const [pricingSummary, setPricingSummary] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +90,7 @@ const Landing = () => {
         const data = await response.json();
         if (cancelled || !data?.success) return;
         if (Array.isArray(data.packages)) setPackages(data.packages);
-        if (typeof data.basis === 'string') setPricingBasis(data.basis);
+        if (typeof data.summary === 'string') setPricingSummary(data.summary);
       } catch {
         /* public pricing optional on static failure */
       }
@@ -211,23 +211,26 @@ const Landing = () => {
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <h2 className="font-display text-3xl font-bold text-slate-950">Pricing</h2>
             <p className="mt-3 max-w-3xl text-slate-600">
-              Prepaid AI token packs for new company workspaces. Prices include about 30% profit over OpenAI cost for
-              the production chat models. When your balance hits zero, AI replies pause until you recharge — FAQ-only
-              answers that do not call the model may still work.
+              Prepaid AI token packs for company workspaces. Each pack includes a separate input-token
+              allowance (what the AI reads) and output-token allowance (what the AI writes). AI replies
+              pause when either balance runs out until you recharge. FAQ-only answers that do not call
+              the model may still work. Usage depends on how much knowledge and message context you send
+              the AI to read and how you use messaging.
             </p>
-            {pricingBasis && <p className="mt-2 text-xs text-slate-500">{pricingBasis}</p>}
+            {pricingSummary && <p className="mt-2 text-xs text-slate-500">{pricingSummary}</p>}
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {packages.map((pack) => (
                 <article key={String(pack.id)} className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
                   <h3 className="font-display text-lg font-semibold text-slate-900">
-                    {String(pack.label || `${Number(pack.tokens || 0).toLocaleString()} tokens`)}
+                    {String(pack.label || 'Token pack')}
                   </h3>
                   <p className="mt-3 text-3xl font-bold text-primary-700">
                     ${Number(pack.sell_price_usd || 0).toFixed(2)}
                   </p>
-                  <p className="mt-2 text-sm text-slate-600">
-                    ${Number(pack.price_per_1k_usd || 0).toFixed(4)} per 1k tokens
-                  </p>
+                  <ul className="mt-3 space-y-1 text-sm text-slate-600">
+                    <li>{Number(pack.input_tokens || 0).toLocaleString()} input tokens</li>
+                    <li>{Number(pack.output_tokens || 0).toLocaleString()} output tokens</li>
+                  </ul>
                   <Link
                     to={PUBLIC_PATHS.register}
                     className="mt-5 inline-flex rounded-xl bg-gradient-to-r from-primary-600 to-secondary-600 px-4 py-2 text-sm font-semibold text-white"

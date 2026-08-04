@@ -60,8 +60,8 @@ const navigationItems = [
     badge: "Active",
     permissionKey: "smartMessaging",
   },
-  { name: "Token Wallet", href: "/wallet", icon: CurrencyDollarIcon, permissionKey: "settings" },
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, permissionKey: "settings" },
+  { name: "Token Wallet", href: "/wallet", icon: CurrencyDollarIcon, permissionKey: "settings" },
 ];
 
 const downloadItems = [
