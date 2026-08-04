@@ -15,8 +15,8 @@ export const FEATURES = {
   TRAINING: {
     key: 'training',
     path: '/training',
-    name: 'FAQ Authoring (legacy)',
-    description: 'Legacy FAQ surface — prefer Content Management → FAQ'
+    name: 'FAQ (legacy redirect)',
+    description: 'Legacy /training URL redirects to Content Managers → FAQ'
   },
   TESTING: {
     key: 'testing',
@@ -73,7 +73,7 @@ export const PATH_TO_PERMISSION = {
   '/': 'dashboard',
   '/live-chat': 'liveChat',
   '/mobile/live-chat': 'liveChat',
-  '/training': 'training',
+  '/training': 'contentManagers',
   '/testing': 'testing',
   '/analytics': 'dashboard',
   '/smart-messaging': 'smartMessaging',

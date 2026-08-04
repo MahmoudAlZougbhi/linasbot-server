@@ -9,3 +9,13 @@ describe("live chat permission routes", () => {
     expect(PATH_TO_PERMISSION["/mobile/live-chat"]).toBe("liveChat");
   });
 });
+
+describe("FAQ single entry routes", () => {
+  it("maps legacy /training to contentManagers (CM FAQ)", () => {
+    expect(PATH_TO_PERMISSION["/training"]).toBe("contentManagers");
+  });
+
+  it("maps Content Managers hub to contentManagers", () => {
+    expect(PATH_TO_PERMISSION["/content-managers"]).toBe("contentManagers");
+  });
+});

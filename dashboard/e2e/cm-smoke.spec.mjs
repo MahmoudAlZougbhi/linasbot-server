@@ -103,7 +103,7 @@ async function installCmApiMocks(page, options = {}) {
           publish_enabled: false,
           runtime_mode: "legacy",
           publish_disabled_message: PUBLISH_DISABLED_MESSAGE,
-          faq_canonical: false,
+          faq_canonical: true,
         }),
       });
       return;
