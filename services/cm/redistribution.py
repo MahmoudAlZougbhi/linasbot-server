@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from services.cm.paths import archive_dir
 from services.cm.schemas import (
@@ -296,7 +296,9 @@ def redistribute_knowledge_draft(
             )
         else:
             # Reactivate previously archived rows when classification says keep in Knowledge.
-            keep_status = "restricted" if article.status == "restricted" else "active"
+            keep_status: Literal["draft", "active", "archived", "restricted"] = (
+                "restricted" if article.status == "restricted" else "active"
+            )
             next_knowledge.append(
                 ArticleRecord(
                     id=article.id,
