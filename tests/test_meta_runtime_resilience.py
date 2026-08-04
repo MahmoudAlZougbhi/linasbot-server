@@ -25,6 +25,12 @@ def test_prod_runtime_diagnostic_recognizes_page_webhook_object() -> None:
     assert 'r"object=(facebook|instagram) parsed=' not in workflow
 
 
+def test_prod_runtime_diagnostic_still_runs_after_preflight_failure() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "prod-preflight-readonly.yml").read_text(encoding="utf-8")
+
+    assert "if: ${{ always() && inputs.include_meta_runtime_diagnostics }}" in workflow
+
+
 @pytest.mark.asyncio
 async def test_typing_failure_does_not_abort_customer_reply_pipeline(capsys: pytest.CaptureFixture[str]) -> None:
     user_id = "facebook:typing-failure-test"
