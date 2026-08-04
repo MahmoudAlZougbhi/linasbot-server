@@ -152,6 +152,55 @@ for f in files:
     seen.add(key)
     unique.append(f)
 
+# CM draft article metadata (titles/status/source only — never bodies)
+cm_articles = []
+draft_root = data_root / "tenants" / "linas" / "cm" / "draft"
+for section in ("knowledge", "care", "faq"):
+    path = draft_root / f"{section}.json"
+    if not path.is_file():
+        continue
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        continue
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        continue
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if section == "faq":
+            cm_articles.append({
+                "section": section,
+                "id": item.get("qa_group_id"),
+                "status": item.get("status"),
+                "tags": item.get("tags") or [],
+                "variant_languages": [
+                    str(v.get("language")) for v in (item.get("variants") or []) if isinstance(v, dict)
+                ],
+            })
+        else:
+            cm_articles.append({
+                "section": section,
+                "id": item.get("id"),
+                "title": item.get("title"),
+                "status": item.get("status"),
+                "source_filename": item.get("source_filename"),
+                "source_checksum": item.get("source_checksum"),
+                "tags": item.get("tags") or [],
+            })
+
+restricted_topics = []
+restricted_path = draft_root / "restricted.json"
+if restricted_path.is_file():
+    try:
+        restricted_payload = json.loads(restricted_path.read_text(encoding="utf-8"))
+        for topic in (restricted_payload.get("topics") or []):
+            if isinstance(topic, dict):
+                restricted_topics.append({"id": topic.get("id"), "active": topic.get("active")})
+    except json.JSONDecodeError:
+        pass
+
 ledger = {
     "schema": "cm_corpus_ledger_v1",
     "created_at": datetime.now(timezone.utc).isoformat(),
@@ -164,6 +213,8 @@ ledger = {
     "published_pointer_keys": sorted(pointer_info.keys()) if isinstance(pointer_info, dict) else [],
     "content_version_id": pointer_info.get("content_version_id") if isinstance(pointer_info, dict) else None,
     "index_version_id": pointer_info.get("index_version_id") if isinstance(pointer_info, dict) else None,
+    "cm_draft_articles": cm_articles,
+    "restricted_topics": restricted_topics,
     "files": unique,
 }
 out.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -174,7 +225,21 @@ print(json.dumps({
     "snapshot_count": len(snapshots),
     "content_version_id": ledger.get("content_version_id"),
     "index_version_id": ledger.get("index_version_id"),
+    "restricted_topics": restricted_topics,
+    "knowledge_titles": [
+        {"title": a.get("title"), "status": a.get("status"), "source_filename": a.get("source_filename")}
+        for a in cm_articles if a.get("section") == "knowledge"
+    ],
+    "faq_status_counts": {},
     "sample_filenames": [f["filename"] for f in unique[:60]],
 }, indent=2))
+# FAQ status summary
+faq_counts = {}
+for a in cm_articles:
+    if a.get("section") != "faq":
+        continue
+    st = str(a.get("status") or "unknown")
+    faq_counts[st] = faq_counts.get(st, 0) + 1
+print(json.dumps({"faq_status_counts": faq_counts, "cm_article_count": len(cm_articles)}, indent=2))
 print("[cm-inventory] COMPLETE_OK")
 PY
