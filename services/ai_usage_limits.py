@@ -58,8 +58,7 @@ class AiLimitSettings:
             "recommended": recommended_defaults(),
             "definitions": {
                 "image": (
-                    "Counts each image the AI analyzes for one Messenger/Instagram/"
-                    "WhatsApp end-user within the period."
+                    "Counts each image the AI analyzes for one Messenger/Instagram/WhatsApp end-user within the period."
                 ),
                 "context_line": (
                     "Counts non-empty lines of retrieved knowledge plus message/"
