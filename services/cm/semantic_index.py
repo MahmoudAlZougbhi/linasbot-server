@@ -6,6 +6,7 @@ publish time). Index files live only under ``{DATA_ROOT}/tenants/{tenant_id}/cm/
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -22,8 +23,33 @@ from services.cm.schemas import CareSection, FaqSection, KnowledgeSection
 
 INDEX_MANIFEST_FILE = "manifest.json"
 INDEX_VECTORS_FILE = "vectors.json"
+_PROVENANCE_PREFIX = "--- redistributed from "
+# Stay well under OpenAI embedding input limit (8192 tokens).
+_MAX_EMBED_CHARS = 24_000
 
 _RawEntry = tuple[str, str, str, str, dict[str, Any]]  # source_id, kind, language, text, metadata
+
+
+def _chunk_policy_text(policy: str) -> list[str]:
+    """Split redistributed policy blobs so embed calls stay under token limits."""
+    text = policy.strip()
+    if not text:
+        return []
+    if _PROVENANCE_PREFIX in text:
+        parts = re.split(rf"(?={re.escape(_PROVENANCE_PREFIX)})", text)
+        chunks = [part.strip() for part in parts if part.strip()]
+    else:
+        chunks = [text]
+    out: list[str] = []
+    for chunk in chunks:
+        if len(chunk) <= _MAX_EMBED_CHARS:
+            out.append(chunk)
+            continue
+        start = 0
+        while start < len(chunk):
+            out.append(chunk[start : start + _MAX_EMBED_CHARS])
+            start += _MAX_EMBED_CHARS
+    return out
 
 
 def _faq_entries(payload: dict[str, Any] | None) -> list[_RawEntry]:
@@ -73,14 +99,16 @@ def _section_notes_entries(section_name: str, payload: dict[str, Any] | None) ->
     if not payload or not isinstance(payload, dict):
         return out
     policy = payload.get("policy_text")
-    if isinstance(policy, str) and policy.strip():
+    if not isinstance(policy, str) or not policy.strip():
+        return out
+    for idx, chunk in enumerate(_chunk_policy_text(policy)):
         out.append(
             (
-                f"{section_name}:policy_text",
+                f"{section_name}:policy_text:{idx}",
                 section_name,
                 "",
-                policy.strip(),
-                {"title": f"{section_name} policy", "tags": ["section_policy", "cm_redistributed"]},
+                chunk,
+                {"title": f"{section_name} policy", "tags": ["section_policy", "cm_redistributed"], "chunk": idx},
             )
         )
     return out
