@@ -7,9 +7,11 @@ collects missing branch/gender one field at a time before returning a WhatsApp h
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import time
+import uuid
 from dataclasses import dataclass
 
 from services.conversation_router import get_gender_from_message, is_human_request
@@ -94,6 +96,18 @@ class SocialContactRouteResult:
     gender: str | None = None
     contact_env: str | None = None
     tattoo_removal: bool = False
+
+
+@dataclass(frozen=True)
+class SocialContactScope:
+    tenant_id: str
+    channel: str
+    business_asset_id: str
+    sender_id: str
+
+
+class SocialContactScopeError(RuntimeError):
+    """Raised when a social handoff cannot be isolated to one business and sender."""
 
 
 def is_social_channel(channel: str | None) -> bool:
@@ -204,7 +218,7 @@ def _ask_branch(language: str) -> str:
 
 def _ask_gender(language: str) -> str:
     if language == "en":
-        return "To give you the correct WhatsApp number, are you male or female?"
+        return "To give you the correct WhatsApp number: Men or Women?"
     if language == "fr":
         return "Pour vous donner le bon numéro WhatsApp, êtes-vous un homme ou une femme ?"
     return "تمام. كرمال أعطيك رقم الواتساب الصح، حضرتك شاب أو صبية؟"
@@ -277,45 +291,93 @@ def _explicit_handoff_intent(message: str) -> str | None:
     return None
 
 
+def _flow_scope(user_data: dict) -> SocialContactScope:
+    tenant_id = str(user_data.get("tenant_id") or user_data.get("workspace_id") or "").strip()
+    channel = str(user_data.get("channel") or "").strip().lower()
+    business_asset_id = str(user_data.get("meta_account_id") or "").strip()
+    sender_id = str(user_data.get("social_sender_id") or "").strip()
+    if not tenant_id or channel not in SOCIAL_CHANNELS or not business_asset_id or not sender_id:
+        raise SocialContactScopeError("Social handoff scope is incomplete")
+    return SocialContactScope(
+        tenant_id=tenant_id,
+        channel=channel,
+        business_asset_id=business_asset_id,
+        sender_id=sender_id,
+    )
+
+
+def _scope_fingerprint(scope: SocialContactScope) -> str:
+    components = (
+        scope.tenant_id,
+        scope.channel,
+        scope.business_asset_id,
+        scope.sender_id,
+    )
+    framed = "".join(f"{len(component)}:{component}" for component in components)
+    return hashlib.sha256(framed.encode("utf-8")).hexdigest()
+
+
+def _sender_fingerprint(sender_id: str) -> str:
+    return hashlib.sha256(sender_id.encode("utf-8")).hexdigest()
+
+
 def _flow_state_key(user_data: dict) -> str:
-    """Isolate pending handoff state by channel (+ meta account when present)."""
-    channel = str(user_data.get("channel") or "").strip().lower() or "unknown"
-    account = str(user_data.get("meta_account_id") or "").strip()
-    if account:
-        return f"social_contact_flow::{channel}::{account}"
-    return f"social_contact_flow::{channel}"
+    """Key active handoff state by tenant, channel, business asset, and sender."""
+    return f"social_contact_flow::v2::{_scope_fingerprint(_flow_scope(user_data))}"
+
+
+def _purge_legacy_flow_state(user_data: dict) -> None:
+    """Retire unsafe unscoped and pre-v2 flow blobs instead of migrating their fields."""
+    user_data.pop("social_contact_flow", None)
+    for key in list(user_data.keys()):
+        if str(key).startswith("social_contact_flow::") and not str(key).startswith("social_contact_flow::v2::"):
+            user_data.pop(key, None)
 
 
 def _get_flow_state(user_data: dict) -> dict:
+    _purge_legacy_flow_state(user_data)
+    scope = _flow_scope(user_data)
     key = _flow_state_key(user_data)
-    # Migrate legacy un-namespaced state once, only for the same channel.
-    legacy = user_data.get("social_contact_flow")
-    if isinstance(legacy, dict) and legacy.get("intent") and key not in user_data:
-        legacy_channel = str(legacy.get("channel") or "").strip().lower()
-        current = str(user_data.get("channel") or "").strip().lower()
-        if not legacy_channel or legacy_channel == current:
-            user_data[key] = dict(legacy)
-        user_data.pop("social_contact_flow", None)
     state = user_data.get(key)
-    return state if isinstance(state, dict) else {}
+    expected_fingerprint = key.rsplit("::", 1)[-1]
+    if not isinstance(state, dict):
+        return {}
+    if (
+        state.get("status") != "active"
+        or state.get("intent") not in {"booking", "human"}
+        or state.get("scope_fingerprint") != expected_fingerprint
+        or state.get("tenant_id") != scope.tenant_id
+        or state.get("channel") != scope.channel
+        or state.get("business_asset_id") != scope.business_asset_id
+        or state.get("sender_fingerprint") != _sender_fingerprint(scope.sender_id)
+        or not isinstance(state.get("flow_id"), str)
+        or not state.get("flow_id")
+    ):
+        user_data.pop(key, None)
+        return {}
+    return state
 
 
 def _set_flow_state(user_data: dict, state: dict) -> None:
+    scope = _flow_scope(user_data)
     key = _flow_state_key(user_data)
     state = dict(state)
-    state["channel"] = str(user_data.get("channel") or "").strip().lower()
-    state["meta_account_id"] = str(user_data.get("meta_account_id") or "").strip()
+    state["status"] = "active"
+    state["scope_fingerprint"] = key.rsplit("::", 1)[-1]
+    state["tenant_id"] = scope.tenant_id
+    state["channel"] = scope.channel
+    state["business_asset_id"] = scope.business_asset_id
+    state["sender_fingerprint"] = _sender_fingerprint(scope.sender_id)
     state["updated_at"] = time.time()
     if "started_at" not in state:
         state["started_at"] = state["updated_at"]
     user_data[key] = state
-    # Never keep a cross-channel legacy blob around.
-    user_data.pop("social_contact_flow", None)
+    _purge_legacy_flow_state(user_data)
 
 
 def _clear_flow_state(user_data: dict) -> None:
+    _purge_legacy_flow_state(user_data)
     user_data.pop(_flow_state_key(user_data), None)
-    user_data.pop("social_contact_flow", None)
 
 
 def _state_expired(state: dict) -> bool:
@@ -354,7 +416,6 @@ def _is_topic_change_during_handoff(message: str, state: dict) -> bool:
 def route_social_contact_request(
     message: str,
     user_data: dict,
-    known_gender: str | None,
     language: str | None = None,
     force_intent: str | None = None,
 ) -> SocialContactRouteResult | None:
@@ -362,15 +423,34 @@ def route_social_contact_request(
 
     ``force_intent`` (from GPT/router) cannot start a new handoff by itself. A new flow
     starts only when the user message explicitly requests booking/human/tattoo contact.
+    Persisted/profile gender is deliberately not an input: branch and gender must come
+    from the current explicit request or this same isolated active flow.
     Pending branch/gender collection continues only on valid answers; greetings, cancels,
     topic changes, and expired state return None so the canonical AI handles the message.
     """
-    state = _get_flow_state(user_data)
+    explicit = _explicit_handoff_intent(message)
+    try:
+        state = _get_flow_state(user_data)
+    except SocialContactScopeError:
+        clear_social_contact_flow(user_data)
+        if explicit:
+            raise
+        return None
     if state and _state_expired(state):
         _clear_flow_state(user_data)
         state = {}
 
-    explicit = _explicit_handoff_intent(message)
+    if explicit:
+        # A new user-authored booking/human request always replaces prior state.
+        # Only fields present in this message may seed the new active flow.
+        _clear_flow_state(user_data)
+        state = {
+            "flow_id": uuid.uuid4().hex,
+            "status": "active",
+            "intent": explicit,
+            "started_at": time.time(),
+        }
+
     active_intent = state.get("intent") if state.get("intent") in {"booking", "human"} else None
 
     # GPT/router hints may continue an already-open flow, but never open a new one alone.
@@ -400,7 +480,15 @@ def route_social_contact_request(
         _clear_flow_state(user_data)
         return None
 
-    state = dict(state) if state else {}
+    state = (
+        dict(state)
+        if state
+        else {
+            "flow_id": uuid.uuid4().hex,
+            "status": "active",
+            "started_at": time.time(),
+        }
+    )
     state["intent"] = detected_intent
 
     detected_branch = detect_branch(message)
@@ -411,11 +499,9 @@ def route_social_contact_request(
     state["tattoo_removal"] = tattoo
 
     detected_gender = get_gender_from_message(message)
-    gender = detected_gender or (known_gender if known_gender in {"male", "female"} else None)
     if detected_gender:
         state["gender"] = detected_gender
-    elif state.get("gender") in {"male", "female"}:
-        gender = state["gender"]
+    gender = state.get("gender") if state.get("gender") in {"male", "female"} else None
 
     lang = _language(language)
     _set_flow_state(user_data, state)
@@ -471,7 +557,18 @@ def expire_social_contact_flows_in_user_data(user_data: dict) -> int:
         if key != "social_contact_flow" and not str(key).startswith("social_contact_flow::"):
             continue
         state = user_data.get(key)
-        if not isinstance(state, dict) or not state.get("intent") or _state_expired(state):
+        key_text = str(key)
+        key_fingerprint = key_text.rsplit("::", 1)[-1]
+        if (
+            not key_text.startswith("social_contact_flow::v2::")
+            or not isinstance(state, dict)
+            or state.get("status") != "active"
+            or state.get("intent") not in {"booking", "human"}
+            or state.get("scope_fingerprint") != key_fingerprint
+            or not isinstance(state.get("flow_id"), str)
+            or not state.get("flow_id")
+            or _state_expired(state)
+        ):
             user_data.pop(key, None)
             cleared += 1
     return cleared

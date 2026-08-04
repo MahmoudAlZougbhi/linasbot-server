@@ -121,12 +121,12 @@ HUMAN_REQUEST_KEYWORDS = [
 
 # --- Gender answer patterns ---
 GENDER_MALE_PATTERNS = [
-    r"^(?:ذكر|male|homme|man|boy|شب|شاب|رجل|رجال|زلمة|أنا\s*شب|أنا\s*شاب|أنا\s*زلمة|انا\s*شب|انا\s*زلمة|ana\s*zalame|ana\s*zalameh|ana\s*shab|ana\s*rajol|i'm\s*male|i\s*am\s*male|je\s*suis\s*homme)",
-    r"\b(?:ذكر|male|homme|man|boy|m|شب|شاب|رجل|رجال|زلمة|zalame|zalameh|zalmeh|zalme|shab|rajol|zakar|manly)\b",
+    r"^(?:ذكر|male|homme|man|men|boy|شب|شاب|رجل|رجال|زلمة|أنا\s*شب|أنا\s*شاب|أنا\s*زلمة|انا\s*شب|انا\s*زلمة|ana\s*zalame|ana\s*zalameh|ana\s*shab|ana\s*rajol|i'm\s*male|i\s*am\s*male|je\s*suis\s*homme)",
+    r"\b(?:ذكر|male|homme|man|men|boy|m|شب|شاب|رجل|رجال|زلمة|zalame|zalameh|zalmeh|zalme|shab|rajol|zakar|manly)\b",
 ]
 GENDER_FEMALE_PATTERNS = [
-    r"^(?:أنثى|female|femme|woman|girl|صبية|بنت|امرأة|نساء|مرة|مرا|أنا\s*صبية|أنا\s*بنت|أنا\s*مرة|انا\s*بنت|انا\s*مرة|ana\s*bent|ana\s*mara|ana\s*sabeye|i'm\s*female|i\s*am\s*female|je\s*suis\s*femme)",
-    r"\b(?:أنثى|female|femme|woman|girl|f|صبية|بنت|مرة|مرا|mara|mra|bent|sabeye|sabya|onsa)\b",
+    r"^(?:أنثى|female|femme|woman|women|girl|صبية|بنت|امرأة|نساء|مرة|مرا|أنا\s*صبية|أنا\s*بنت|أنا\s*مرة|انا\s*بنت|انا\s*مرة|ana\s*(?:bent|binit)|ana\s*mara|ana\s*sabeye|i'm\s*female|i\s*am\s*female|je\s*suis\s*femme)",
+    r"\b(?:أنثى|female|femme|woman|women|girl|f|صبية|بنت|مرة|مرا|mara|mra|bent|binit|sabeye|sabya|onsa)\b",
 ]
 
 # --- Greeting-only patterns (no service/pricing/booking) ---
@@ -335,6 +335,7 @@ def get_gender_from_message(message: str) -> str | None:
     if short in (
         "male",
         "man",
+        "men",
         "boy",
         "m",
         "ذكر",
@@ -353,6 +354,7 @@ def get_gender_from_message(message: str) -> str | None:
     if short in (
         "female",
         "woman",
+        "women",
         "girl",
         "f",
         "أنثى",
@@ -364,6 +366,7 @@ def get_gender_from_message(message: str) -> str | None:
         "mara",
         "mra",
         "bent",
+        "binit",
         "sabeye",
         "sabya",
         "onsa",

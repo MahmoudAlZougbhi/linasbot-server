@@ -1145,7 +1145,6 @@ async def _process_and_respond(
         social_route = route_social_contact_request(
             user_input_to_process,
             user_data,
-            current_gender,
             current_preferred_lang,
         )
         if social_route:
@@ -1488,7 +1487,6 @@ async def _process_and_respond(
             social_route = route_social_contact_request(
                 user_input_to_process,
                 user_data,
-                current_gender,
                 current_preferred_lang,
                 force_intent="human",
             )
@@ -2464,7 +2462,6 @@ async def _process_and_respond(
             social_route = route_social_contact_request(
                 user_input_to_process,
                 user_data,
-                current_gender,
                 current_preferred_lang,
                 force_intent=social_force_intent,
             )
@@ -2969,7 +2966,6 @@ async def _process_and_respond(
             social_route = route_social_contact_request(
                 user_input_to_process,
                 user_data,
-                current_gender,
                 current_preferred_lang,
                 force_intent="human",
             )
