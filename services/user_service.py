@@ -141,6 +141,13 @@ class UserService:
         if business_name:
             user_doc["businessName"] = business_name[:120]
 
+        # SaaS public registration starts unverified; offline/provisioned admins default verified.
+        if "emailVerified" in user_data:
+            user_doc["emailVerified"] = bool(user_data.get("emailVerified"))
+        else:
+            created_by_norm = str(created_by or "").strip().lower()
+            user_doc["emailVerified"] = created_by_norm not in {"public-register", "public_register"}
+
         # Save to Firestore
         self.collection.document(user_id).set(
             user_doc,
@@ -511,6 +518,52 @@ class UserService:
         print(f"Password changed for user: {user['email']}")
         return True
 
+    def set_password_with_reset(self, user_id: str, new_password: str) -> bool:
+        """Set password after a validated reset token (bumps passwordEpoch)."""
+        from services.admin_provisioning_service import validate_provision_password
+
+        validate_provision_password(new_password)
+        user = self.get_user_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+        next_epoch = int(user.get("passwordEpoch") or user.get("password_epoch") or 0) + 1
+        self.collection.document(user_id).update(
+            {
+                "password": self._hash_password(new_password),
+                "passwordEpoch": next_epoch,
+                "updatedAt": datetime.utcnow().isoformat(),
+            },
+            timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+            retry=None,
+        )
+        return True
+
+    def mark_email_verified(self, user_id: str) -> dict[str, Any] | None:
+        user = self.get_user_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+        now = datetime.utcnow().isoformat()
+        self.collection.document(user_id).update(
+            {
+                "emailVerified": True,
+                "emailVerifiedAt": now,
+                "updatedAt": now,
+            },
+            timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+            retry=None,
+        )
+        user["emailVerified"] = True
+        user["emailVerifiedAt"] = now
+        return self._sanitize_user(user)
+
+    def is_email_verified(self, user: dict[str, Any] | None) -> bool:
+        if not user:
+            return False
+        # Legacy linas / pre-SaaS accounts without the field remain usable.
+        if "emailVerified" not in user:
+            return True
+        return bool(user.get("emailVerified"))
+
     # ==========================================
     # Helpers
     # ==========================================
@@ -545,6 +598,7 @@ class UserService:
         if not user:
             return None
 
+        email_verified = True if "emailVerified" not in user else bool(user.get("emailVerified"))
         return {
             "id": user.get("id"),
             "email": user.get("email"),
@@ -554,6 +608,7 @@ class UserService:
             "tenantId": self._normalize_tenant_id(user.get("tenantId")),
             "businessName": user.get("businessName"),
             "status": user.get("status"),
+            "emailVerified": email_verified,
             "passwordEpoch": int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
             "lastLogin": user.get("lastLogin"),
             "createdAt": user.get("createdAt"),

@@ -360,6 +360,30 @@ def log_interaction(
 
         entry["cost_basis"] = COST_BASIS_TOKEN_RATES
 
+    # Meter prepaid wallets using the same token fields as Interaction Logs.
+    try:
+        total_tokens = 0
+        if isinstance(tokens, int):
+            total_tokens = max(0, tokens)
+        else:
+            total_tokens = max(0, int(prompt_tokens or 0)) + max(0, int(completion_tokens or 0))
+        if total_tokens > 0:
+            from services.token_metering import debit_ai_usage, resolve_tenant_id
+
+            tid = resolve_tenant_id(user_data if isinstance(user_data, dict) else None)
+            debit_ai_usage(
+                tenant_id=tid,
+                prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
+                completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
+                tokens=total_tokens,
+                cost_usd=float(cost_usd) if isinstance(cost_usd, (int, float)) else None,
+                model=model,
+                reference=str(message_id) if message_id else None,
+            )
+    except Exception as exc:
+        # Never break interaction logging because of wallet accounting.
+        print(f"[interaction_flow] token debit skipped: {type(exc).__name__}", flush=True)
+
     _FLOW_BUFFER.append(entry)
     _append_to_file(entry)
 

@@ -109,6 +109,23 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str | None = None
+
+
 @app.on_event("startup")
 async def ensure_auth_secret_configured() -> None:
     """
@@ -225,6 +242,27 @@ async def register(request: RegisterRequest, response: Response) -> Any:
         return {"success": False, "error": "Registration failed"}
 
     user = result.user
+    # Issue email verification token + attempt delivery (SMTP env required in production).
+    try:
+        from services.auth_email_tokens import auth_email_token_service
+        from services.mail_service import public_app_base_url, send_email
+
+        raw_verify = auth_email_token_service.issue(
+            purpose="email_verify",
+            user_id=str(user["id"]),
+            email=str(user.get("email") or request.email),
+            tenant_id=str(result.tenant_id),
+        )
+        verify_url = f"{public_app_base_url()}/verify-email?token={raw_verify}"
+        send_email(
+            to_email=str(user.get("email") or request.email),
+            subject="Verify your Linas AI email",
+            text_body=f"Verify your Linas AI email:\n\n{verify_url}\n",
+            html_body=f'<p>Verify your Linas AI email:</p><p><a href="{verify_url}">Verify email</a></p>',
+        )
+    except Exception as exc:
+        print(f"[auth_api] register: verify email dispatch failed: {exc}", flush=True)
+
     record = session_service.create_session(
         user_id=str(user["id"]),
         email=str(user.get("email") or request.email),
@@ -240,7 +278,171 @@ async def register(request: RegisterRequest, response: Response) -> Any:
         "tenant_id": result.tenant_id,
         "business_name": result.business_name,
         "csrf_token": record.csrf_token,
+        "email_verification_required": not bool(user.get("emailVerified")),
     }
+
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest) -> Any:
+    """
+    Always return a generic success message (do not reveal whether email exists).
+    When SMTP is configured, send a time-limited reset link.
+    """
+    from services.auth_email_tokens import auth_email_token_service
+    from services.mail_service import mail_configured, public_app_base_url, send_email
+
+    email = (body.email or "").strip().lower()
+    generic = {
+        "success": True,
+        "message": "If an account exists for that email, a password reset link has been sent.",
+        "mail_configured": mail_configured(),
+    }
+    if not email or "@" not in email:
+        return generic
+
+    try:
+        user = await asyncio.wait_for(
+            asyncio.to_thread(user_service.get_user_by_email, email),
+            timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        return generic
+
+    if not user or user.get("status") != "active":
+        return generic
+
+    raw_token = auth_email_token_service.issue(
+        purpose="password_reset",
+        user_id=str(user["id"]),
+        email=str(user.get("email") or email),
+        tenant_id=str(user.get("tenantId") or "linas"),
+    )
+    reset_url = f"{public_app_base_url()}/reset-password?token={raw_token}"
+    text = (
+        "Reset your Linas AI password using this link (expires in 1 hour):\n\n"
+        f"{reset_url}\n\n"
+        "If you did not request this, you can ignore this email."
+    )
+    html = (
+        "<p>Reset your Linas AI password using this link (expires in 1 hour):</p>"
+        f'<p><a href="{reset_url}">Reset password</a></p>'
+        "<p>If you did not request this, you can ignore this email.</p>"
+    )
+    result = send_email(to_email=email, subject="Reset your Linas AI password", text_body=text, html_body=html)
+    payload = dict(generic)
+    payload["mail_sent"] = bool(result.sent)
+    if not result.sent and result.reason.startswith("smtp_not_configured"):
+        payload["message"] = (
+            "If an account exists for that email, a password reset was prepared. "
+            "Mail delivery requires SMTP configuration on the server."
+        )
+    return payload
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(body: ResetPasswordRequest, response: Response) -> Any:
+    from services.admin_provisioning_service import validate_provision_password
+    from services.auth_email_tokens import auth_email_token_service
+
+    token = (body.token or "").strip()
+    if not token:
+        return {"success": False, "error": "Reset token is required"}
+    try:
+        validate_provision_password(body.new_password or "")
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+
+    record = auth_email_token_service.consume(token, "password_reset")
+    if record is None:
+        return {"success": False, "error": "Invalid or expired reset link"}
+
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(user_service.set_password_with_reset, record.user_id, body.new_password),
+            timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
+        )
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        print(f"[auth_api] reset-password error: {e}", flush=True)
+        return {"success": False, "error": "Failed to reset password"}
+
+    session_service.revoke_all_for_user(record.user_id)
+    _clear_auth_cookies(response)
+    return {"success": True, "message": "Password updated. You can sign in with your new password."}
+
+
+@app.post("/api/auth/verify-email")
+async def verify_email(body: VerifyEmailRequest) -> Any:
+    from services.auth_email_tokens import auth_email_token_service
+
+    token = (body.token or "").strip()
+    if not token:
+        return {"success": False, "error": "Verification token is required"}
+    record = auth_email_token_service.consume(token, "email_verify")
+    if record is None:
+        return {"success": False, "error": "Invalid or expired verification link"}
+    try:
+        user = await asyncio.wait_for(
+            asyncio.to_thread(user_service.mark_email_verified, record.user_id),
+            timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
+        )
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        print(f"[auth_api] verify-email error: {e}", flush=True)
+        return {"success": False, "error": "Failed to verify email"}
+    return {"success": True, "message": "Email verified", "user": user}
+
+
+@app.post("/api/auth/resend-verification")
+async def resend_verification(body: ResendVerificationRequest, request: Request) -> Any:
+    from services.auth_email_tokens import auth_email_token_service
+    from services.mail_service import mail_configured, public_app_base_url, send_email
+
+    email = (body.email or "").strip().lower()
+    cookie = request.cookies.get(SESSION_COOKIE_NAME)
+    session = session_service.get_valid_session(cookie)
+
+    user = None
+    if session is not None:
+        user = user_service.get_user_by_id(session.user_id)
+    elif email:
+        user = user_service.get_user_by_email(email)
+
+    generic = {
+        "success": True,
+        "message": "If verification is required, a new email has been sent.",
+        "mail_configured": mail_configured(),
+    }
+    if not user or user.get("status") != "active":
+        return generic
+    if user_service.is_email_verified(user):
+        return {"success": True, "message": "Email is already verified", "mail_configured": mail_configured()}
+
+    auth_email_token_service.revoke_unused_for_user(str(user["id"]), "email_verify")
+    raw_token = auth_email_token_service.issue(
+        purpose="email_verify",
+        user_id=str(user["id"]),
+        email=str(user.get("email") or ""),
+        tenant_id=str(user.get("tenantId") or "linas"),
+    )
+    verify_url = f"{public_app_base_url()}/verify-email?token={raw_token}"
+    text = f"Verify your Linas AI email address:\n\n{verify_url}\n\nThis link expires in 48 hours."
+    html = (
+        "<p>Verify your Linas AI email address:</p>"
+        f'<p><a href="{verify_url}">Verify email</a></p>'
+        "<p>This link expires in 48 hours.</p>"
+    )
+    result = send_email(
+        to_email=str(user.get("email") or ""),
+        subject="Verify your Linas AI email",
+        text_body=text,
+        html_body=html,
+    )
+    payload = dict(generic)
+    payload["mail_sent"] = bool(result.sent)
+    return payload
 
 
 @app.post("/api/auth/logout")

@@ -3622,6 +3622,27 @@ async def get_bot_chat_response(
     }
     print(f"🤖 Model selected: {selected_model} | Reason: {model_metadata['reason']}")
 
+    # Prepaid wallet gate (FAQ/static paths never reach here). Unlimited tenants bypass.
+    try:
+        from services.token_metering import RECHARGE_REQUIRED_MESSAGE, assert_tenant_can_use_ai
+        from services.token_wallet_service import InsufficientTokenBalance
+
+        _ud = config.user_data_whatsapp.get(user_id) or {}
+        _tenant = str(_ud.get("tenant_id") or _ud.get("tenantId") or "linas")
+        assert_tenant_can_use_ai(_tenant)
+    except InsufficientTokenBalance:
+        return {
+            "action": "reply",
+            "reply": RECHARGE_REQUIRED_MESSAGE,
+            "source": "token_wallet_empty",
+            "_flow_meta": {
+                "source": "token_wallet_empty",
+                "ai_called": False,
+                "cost_status": "none",
+                "tokens": 0,
+            },
+        }
+
     try:
         final_response_model_used = selected_model
         response = await client.chat.completions.create(

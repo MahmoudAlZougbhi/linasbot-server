@@ -57,6 +57,7 @@ import modules.qa_api  # noqa: E402, F401
 import modules.settings_api  # noqa: E402, F401
 import modules.smart_messaging_api  # noqa: E402, F401
 import modules.training_files_api  # noqa: E402, F401
+import modules.wallet_api  # noqa: E402, F401
 import modules.webhook_handlers  # noqa: E402, F401
 import modules.whatsapp_adapters  # noqa: E402, F401
 

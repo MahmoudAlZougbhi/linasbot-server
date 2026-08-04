@@ -98,6 +98,12 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("GET", "/api/ready"),
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/register"),
+    ("POST", "/api/auth/forgot-password"),
+    ("POST", "/api/auth/reset-password"),
+    ("POST", "/api/auth/verify-email"),
+    ("POST", "/api/auth/resend-verification"),
+    ("GET", "/api/billing/packages"),
+    ("POST", "/api/billing/stripe/webhook"),
 }
 
 # Prefix public (rare)
@@ -133,6 +139,8 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "userManagement"
     if p.startswith("/api/auth/"):
         return None  # authenticated self-service (session/me/change-password/logout)
+    if p.startswith("/api/billing/"):
+        return None  # session-scoped wallet; admin-credit checks role/tenant internally
 
     if p.startswith("/api/analytics") or p == "/api/stats":
         return "analytics"
@@ -204,6 +212,14 @@ def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
         rules.append((f"login:{ip}", 10, 300))
     if path == "/api/auth/register":
         rules.append((f"register:{ip}", 5, 300))
+    if path == "/api/auth/forgot-password":
+        rules.append((f"forgot:{ip}", 5, 300))
+    if path == "/api/auth/reset-password":
+        rules.append((f"reset:{ip}", 10, 300))
+    if path == "/api/auth/verify-email":
+        rules.append((f"verify:{ip}", 20, 300))
+    if path == "/api/auth/resend-verification":
+        rules.append((f"resend-verify:{ip}", 5, 300))
     if path == "/api/auth/change-password":
         rules.append((f"pw:{ip}", 10, 300))
     if any(path.startswith(p) for p in _SENSITIVE_MUTATION_PREFIXES):
@@ -274,7 +290,10 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
         # Their self-service surface is Meta connection management, Content
         # Management (tenant-scoped drafts/publish), and authentication.
         if session.tenant_id != "linas" and not (
-            path.startswith("/api/auth/") or path.startswith("/api/meta/connections") or path.startswith("/api/cm")
+            path.startswith("/api/auth/")
+            or path.startswith("/api/meta/connections")
+            or path.startswith("/api/cm")
+            or path.startswith("/api/billing/")
         ):
             return JSONResponse(
                 status_code=403,
