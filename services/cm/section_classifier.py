@@ -261,6 +261,20 @@ def classify_article(
         base.rationale = "named treatment philosophy — service card + educational knowledge retained"
         return base
 
+    # Foundation KB stays in Knowledge even when the corpus mentions prep/aftercare topics.
+    source_l = (source_filename or "").lower()
+    if (
+        "knowledge base" in title_l
+        or category == "foundation"
+        or source_l.endswith("knowledge_base.txt")
+        or source_l == "knowledge_base.txt"
+    ):
+        base.targets = ["knowledge"]
+        base.keep_in_knowledge_active = True
+        base.archive_from_knowledge = False
+        base.rationale = "foundation / general clinic education"
+        return base
+
     # Explicit care tags win for prep/aftercare files (not treatment philosophies).
     if any(tag in {"prep", "aftercare", "care", "preparation"} for tag in tag_list) or _has_any(blob, _CARE_MARKERS):
         base.targets = ["care"]
@@ -350,13 +364,6 @@ def classify_article(
             return base
         base.targets = ["knowledge"]
         base.rationale = "educational treatment text without availability claim"
-        return base
-
-    if "knowledge base" in title_l or category == "foundation":
-        base.targets = ["knowledge"]
-        base.keep_in_knowledge_active = True
-        base.archive_from_knowledge = False
-        base.rationale = "foundation / general clinic education"
         return base
 
     base.rationale = "general clinic education"

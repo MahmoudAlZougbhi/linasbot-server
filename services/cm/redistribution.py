@@ -295,6 +295,8 @@ def redistribute_knowledge_draft(
                 )
             )
         else:
+            # Reactivate previously archived rows when classification says keep in Knowledge.
+            keep_status = "restricted" if article.status == "restricted" else "active"
             next_knowledge.append(
                 ArticleRecord(
                     id=article.id,
@@ -304,7 +306,7 @@ def redistribute_knowledge_draft(
                     language=article.language,
                     audience=article.audience,
                     category=article.category,
-                    status=article.status if article.status != "draft" else "active",
+                    status=keep_status,
                     source_filename=article.source_filename,
                     source_checksum=article.source_checksum,
                     linked_service_ids=linked_services,
