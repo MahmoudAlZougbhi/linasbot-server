@@ -160,9 +160,9 @@ class TestRouteInventory:
 
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
         # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
-        assert counts["total_api_routes"] == 152
+        assert counts["total_api_routes"] == 155
         assert counts["public"] == 10
-        assert counts["protected"] == 142
+        assert counts["protected"] == 145
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),
@@ -179,6 +179,9 @@ class TestRouteInventory:
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set
         assert ("GET", "/api/billing/wallet") not in public_set
+        assert ("GET", "/api/billing/wallet/analytics") not in public_set
+        assert ("GET", "/api/settings/ai-limits") not in public_set
+        assert ("POST", "/api/settings/ai-limits") not in public_set
 
     def test_public_allowlist_matches_api_security(self, auth_matrix: dict[str, Any]) -> None:
         discovered_public = set(auth_matrix["public"])
