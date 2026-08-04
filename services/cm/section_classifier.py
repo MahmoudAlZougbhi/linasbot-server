@@ -113,8 +113,10 @@ _PRICE_MARKERS = (
     "discount",
     "package price",
     "price_list",
-    "ll.",
     "ل.ل",
+    "l.l.",
+    "usd",
+    "$",
 )
 
 _STYLE_MARKERS = (
@@ -296,7 +298,40 @@ def classify_article(
         base.rationale = "greeting / new-user handling"
         return base
 
-    # Price narrative before booking so "pricing after appointment" lands in Prices (+handoff).
+    # Title/filename strong homes beat generic body price/booking language.
+    if "location_rules" in title_l or title_l.strip("<>/ ") == "location_rules":
+        base.targets = ["branches"]
+        base.notes_home = "branches"
+        base.keep_in_knowledge_active = False
+        base.archive_from_knowledge = True
+        base.rationale = "location/branch routing rules"
+        return base
+
+    if (
+        any(
+            marker in title_l or marker in source_l
+            for marker in (
+                "appointment_rules",
+                "appointment",
+                "booking_creation",
+                "booking",
+                "existing_appointment",
+                "operational_tool",
+                "marwa",
+                "handoff",
+            )
+        )
+        and "pricing after" not in title_l
+        and "price" not in title_l
+    ):
+        base.targets = ["handoff"]
+        base.notes_home = "handoff"
+        base.keep_in_knowledge_active = False
+        base.archive_from_knowledge = True
+        base.rationale = "appointment/booking/handoff operational rules"
+        return base
+
+    # Price narrative before generic booking body markers so "pricing after appointment" lands in Prices.
     if (
         _has_any(blob, _PRICE_MARKERS)
         or "pricing" in title_l
@@ -323,7 +358,7 @@ def classify_article(
         base.rationale = "appointment/booking/handoff operational rules"
         return base
 
-    if _has_any(blob, _LOCATION_MARKERS) or "location_rules" in title_l or title_l.strip("<>/ ") == "location_rules":
+    if _has_any(blob, _LOCATION_MARKERS):
         base.targets = ["branches"]
         base.notes_home = "branches"
         base.keep_in_knowledge_active = False
