@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -164,7 +164,7 @@ def test_unlimited_linas_unchanged(wallet_svc: TokenWalletService, monkeypatch: 
 
 
 def test_spend_analytics_fb_ig_and_top_conversation() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     entries = [
         {
             "timestamp": now.isoformat().replace("+00:00", "Z"),

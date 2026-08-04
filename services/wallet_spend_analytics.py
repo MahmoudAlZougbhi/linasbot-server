@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from services.interaction_flow_logger import FLOW_LOG_FILE, _tail_lines
@@ -31,8 +31,8 @@ def _parse_ts(raw: Any) -> datetime | None:
             text = text[:-1] + "+00:00"
         dt = datetime.fromisoformat(text)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
     except ValueError:
         return None
 
@@ -102,7 +102,7 @@ def _period_bucket() -> tuple[datetime, datetime, datetime, datetime]:
 
     Labels: trailing 12 months + prior 12 months (honest, not calendar-year).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     current_end = now
     current_start = now - timedelta(days=365)
     prior_end = current_start
@@ -200,7 +200,7 @@ def _summarize_period(
         reverse=True,
     )
 
-    for key, bucket in by_channel.items():
+    for _key, bucket in by_channel.items():
         bucket["cost_usd"] = round(float(bucket["cost_usd"]), 6)
         bucket["tokens"] = int(bucket["tokens"])
         bucket["interactions"] = int(bucket["interactions"])

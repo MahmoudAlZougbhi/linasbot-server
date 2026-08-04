@@ -8,8 +8,9 @@ import { useAuth } from '../contexts/AuthContext';
 /** @param {number | string | null | undefined} n */
 const formatTokens = (n) => Number(n || 0).toLocaleString();
 
-/** @param {Record<string, unknown> | null | undefined} channel */
+/** @param {string} key */
 const channelLabel = (key) => {
+  /** @type {Record<string, string>} */
   const map = {
     facebook: 'Facebook',
     instagram: 'Instagram',
@@ -18,7 +19,7 @@ const channelLabel = (key) => {
     unknown: 'Unknown',
     other: 'Other',
   };
-  return map[String(key)] || String(key);
+  return map[key] || key;
 };
 
 const Wallet = () => {
@@ -100,6 +101,7 @@ const Wallet = () => {
   const outputUsed = Number(wallet?.output_used ?? wallet?.lifetime_output_debited ?? 0);
   const spentUsd = Number(wallet?.lifetime_spent_usd ?? 0);
   const eitherEmpty = !unlimited && (inputRemaining <= 0 || outputRemaining <= 0);
+  const policyText = typeof wallet?.policy === 'string' ? wallet.policy : '';
 
   /** @type {Record<string, unknown> | null} */
   const trailing = analytics?.periods && typeof analytics.periods === 'object'
@@ -130,8 +132,8 @@ const Wallet = () => {
           </Link>
           .
         </p>
-        {summary && <p className="mt-2 text-sm text-slate-500">{summary}</p>}
-        {wallet?.policy && <p className="mt-1 text-xs text-slate-500">{String(wallet.policy)}</p>}
+        {summary ? <p className="mt-2 text-sm text-slate-500">{summary}</p> : null}
+        {policyText ? <p className="mt-1 text-xs text-slate-500">{policyText}</p> : null}
       </div>
 
       {checkoutMsg && (
@@ -201,8 +203,8 @@ const Wallet = () => {
                     ${Number(pack.sell_price_usd || 0).toFixed(2)}
                   </p>
                   <ul className="mt-3 space-y-1 text-sm text-slate-600">
-                    <li>{formatTokens(pack.input_tokens)} input tokens</li>
-                    <li>{formatTokens(pack.output_tokens)} output tokens</li>
+                    <li>{formatTokens(/** @type {number|string|null|undefined} */ (pack.input_tokens))} input tokens</li>
+                    <li>{formatTokens(/** @type {number|string|null|undefined} */ (pack.output_tokens))} output tokens</li>
                   </ul>
                   <button
                     type="button"
@@ -249,8 +251,8 @@ const Wallet = () => {
               <div key={String(p.label)} className="rounded-2xl border border-slate-200 bg-white/90 p-5">
                 <h3 className="font-semibold text-slate-900">{String(p.display_label || p.label)}</h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  {formatTokens(p.tokens)} tokens · ${Number(p.cost_usd || 0).toFixed(4)} recorded cost ·{' '}
-                  {Number(p.interactions || 0)} interactions
+                  {formatTokens(/** @type {number|string|null|undefined} */ (p.tokens))} tokens · $
+                  {Number(p.cost_usd || 0).toFixed(4)} recorded cost · {Number(p.interactions || 0)} interactions
                 </p>
                 {!p.cost_available && (
                   <p className="mt-1 text-xs text-amber-700">USD cost unavailable for this period.</p>
@@ -263,7 +265,8 @@ const Wallet = () => {
                       <div key={key} className="flex justify-between text-sm text-slate-700">
                         <span>{channelLabel(key)}</span>
                         <span>
-                          {formatTokens(row.tokens)} · ${Number(row.cost_usd || 0).toFixed(4)}
+                          {formatTokens(/** @type {number|string|null|undefined} */ (row.tokens))} · $
+                          {Number(row.cost_usd || 0).toFixed(4)}
                         </span>
                       </div>
                     );
@@ -275,7 +278,7 @@ const Wallet = () => {
                     <span className="font-medium text-slate-900">
                       {String(/** @type {Record<string, unknown>} */ (top[0]).conversation_id)}
                     </span>{' '}
-                    ({channelLabel(/** @type {Record<string, unknown>} */ (top[0]).channel)})
+                    ({channelLabel(String(/** @type {Record<string, unknown>} */ (top[0]).channel || 'unknown'))})
                   </p>
                 )}
               </div>

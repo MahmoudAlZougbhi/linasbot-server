@@ -12,7 +12,7 @@ import json
 import threading
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -127,10 +127,10 @@ def count_non_empty_lines(text: str | None) -> int:
 
 def _utc_now(now: datetime | None = None) -> datetime:
     if now is None:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
     if now.tzinfo is None:
-        return now.replace(tzinfo=timezone.utc)
-    return now.astimezone(timezone.utc)
+        return now.replace(tzinfo=UTC)
+    return now.astimezone(UTC)
 
 
 def day_period_key(now: datetime | None = None) -> str:

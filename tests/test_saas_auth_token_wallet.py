@@ -12,7 +12,6 @@ from modules.api_security import is_public_api
 from services.auth_email_tokens import AuthEmailTokenService
 from services.token_metering import assert_tenant_can_use_ai
 from services.token_package_catalog import (
-    PROFIT_MULTIPLIER,
     assert_public_payload_has_no_internal_economics,
     build_package,
     catalog_public_payload,
