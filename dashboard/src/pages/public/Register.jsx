@@ -63,6 +63,7 @@ const Register = () => {
           <h1 className="font-display text-3xl font-bold text-slate-950">Create Account</h1>
           <p className="mt-2 text-slate-600">
             Create an isolated {PUBLIC_SITE.productName} company workspace for Facebook Messenger and Instagram private messages.
+            You will need to verify your email, then buy prepaid AI tokens before AI replies start.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>

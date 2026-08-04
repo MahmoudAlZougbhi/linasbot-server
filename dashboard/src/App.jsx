@@ -8,6 +8,9 @@ import Header from './components/Layout/Header';
 import LoadingScreen from './components/Common/LoadingScreen';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
 import Landing from './pages/public/Landing';
 import Register from './pages/public/Register';
 import About from './pages/public/About';
@@ -44,6 +47,7 @@ const LiveChat = lazy(() => import('./pages/LiveChat'));
 const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
 const SmartMessaging = lazy(() => import('./pages/SmartMessaging'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Wallet = lazy(() => import('./pages/Wallet'));
 
 const RouteFallback = () => (
   <div className="flex items-center justify-center py-24 text-slate-600 text-sm">
@@ -127,6 +131,7 @@ function AppContent() {
                     <Route path="/live-chat" element={<LiveChat />} />
                     <Route path="/analytics" element={<Navigate to="/app" replace />} />
                     <Route path="/smart-messaging" element={<SmartMessaging />} />
+                    <Route path="/wallet" element={<Wallet />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
@@ -190,6 +195,9 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
 
             <Route
               path="/mobile/live-chat"

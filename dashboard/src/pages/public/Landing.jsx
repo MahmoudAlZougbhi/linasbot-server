@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   BuildingOffice2Icon,
@@ -78,6 +79,27 @@ const faqs = [
 ];
 
 const Landing = () => {
+  const [packages, setPackages] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
+  const [pricingBasis, setPricingBasis] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/billing/packages', { credentials: 'include' });
+        const data = await response.json();
+        if (cancelled || !data?.success) return;
+        if (Array.isArray(data.packages)) setPackages(data.packages);
+        if (typeof data.basis === 'string') setPricingBasis(data.basis);
+      } catch {
+        /* public pricing optional on static failure */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-fuchsia-50 text-slate-900">
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
@@ -181,6 +203,44 @@ const Landing = () => {
                   </article>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="border-y border-slate-200/70 bg-white/70 py-16">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <h2 className="font-display text-3xl font-bold text-slate-950">Pricing</h2>
+            <p className="mt-3 max-w-3xl text-slate-600">
+              Prepaid AI token packs for new company workspaces. Prices include about 30% profit over OpenAI cost for
+              the production chat models. When your balance hits zero, AI replies pause until you recharge — FAQ-only
+              answers that do not call the model may still work.
+            </p>
+            {pricingBasis && <p className="mt-2 text-xs text-slate-500">{pricingBasis}</p>}
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {packages.map((pack) => (
+                <article key={String(pack.id)} className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+                  <h3 className="font-display text-lg font-semibold text-slate-900">
+                    {String(pack.label || `${Number(pack.tokens || 0).toLocaleString()} tokens`)}
+                  </h3>
+                  <p className="mt-3 text-3xl font-bold text-primary-700">
+                    ${Number(pack.sell_price_usd || 0).toFixed(2)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    ${Number(pack.price_per_1k_usd || 0).toFixed(4)} per 1k tokens
+                  </p>
+                  <Link
+                    to={PUBLIC_PATHS.register}
+                    className="mt-5 inline-flex rounded-xl bg-gradient-to-r from-primary-600 to-secondary-600 px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Create Account
+                  </Link>
+                </article>
+              ))}
+              {!packages.length && (
+                <p className="text-sm text-slate-600 sm:col-span-2 lg:col-span-3">
+                  Pricing loads from the live catalog. Open this page on the deployed site or with the API running.
+                </p>
+              )}
             </div>
           </div>
         </section>

@@ -209,6 +209,11 @@ const Login = () => {
                   )}
                 </button>
               </div>
+              <div className="mt-2 text-right">
+                <a href="/forgot-password" className="text-sm font-medium text-primary-700 underline">
+                  Forgot password?
+                </a>
+              </div>
             </div>
 
             {/* Submit Button */}

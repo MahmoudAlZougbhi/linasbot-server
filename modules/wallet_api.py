@@ -1,0 +1,183 @@
+"""Token wallet + prepaid package APIs (catalog, checkout, webhook, admin credit)."""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from fastapi import HTTPException, Request, Response
+from pydantic import BaseModel, Field
+
+from modules.api_security import require_permission, require_session
+from modules.core import app
+from services.mail_service import public_app_base_url
+from services.stripe_checkout_service import stripe_checkout_service, stripe_configured
+from services.token_package_catalog import catalog_public_payload, get_package
+from services.token_wallet_service import is_unlimited_tenant, token_wallet_service
+
+
+class CheckoutRequest(BaseModel):
+    package_id: str
+
+
+class AdminCreditRequest(BaseModel):
+    tenant_id: str | None = None
+    tokens: int = Field(..., gt=0)
+    amount_usd: float = 0.0
+    reason: str = "admin_credit"
+    reference: str | None = None
+
+
+def _owner_admin_credit_allowed(session_tenant: str, session_role: str) -> bool:
+    """Only unlimited/owner tenants (or explicit env allowlist) may credit wallets."""
+    if (session_role or "").strip().lower() != "admin":
+        return False
+    if is_unlimited_tenant(session_tenant):
+        return True
+    allow = {
+        part.strip().lower()
+        for part in (os.getenv("TOKEN_WALLET_ADMIN_CREDIT_TENANT_IDS") or "linas").split(",")
+        if part.strip()
+    }
+    return session_tenant.strip().lower() in allow
+
+
+@app.get("/api/billing/packages")
+async def list_packages() -> Any:
+    """Public catalog of prepaid token packages."""
+    return catalog_public_payload()
+
+
+@app.get("/api/billing/wallet")
+async def get_wallet(request: Request) -> Any:
+    session = require_session(request)
+    snap = token_wallet_service.get_wallet(session.tenant_id)
+    ledger = token_wallet_service.recent_ledger(session.tenant_id, limit=40)
+    return {
+        "success": True,
+        "wallet": snap.to_public_dict(),
+        "ledger": ledger,
+        "stripe_configured": stripe_configured(),
+        "packages": catalog_public_payload()["packages"],
+    }
+
+
+@app.post("/api/billing/checkout")
+async def create_checkout(body: CheckoutRequest, request: Request) -> Any:
+    session = require_session(request)
+    if is_unlimited_tenant(session.tenant_id):
+        return {
+            "success": False,
+            "error": "This workspace has unlimited AI usage and does not need token packs.",
+        }
+    pack = get_package(body.package_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail="Unknown package")
+    if not stripe_configured():
+        return {
+            "success": False,
+            "error": "Card checkout is not enabled yet. Configure STRIPE_SECRET_KEY on the server, or ask an owner to credit tokens.",
+            "stripe_configured": False,
+            "package": pack.to_public_dict(),
+        }
+    base = public_app_base_url()
+    try:
+        session_out = stripe_checkout_service.create_checkout_session(
+            tenant_id=session.tenant_id,
+            package_id=pack.id,
+            tokens=pack.tokens,
+            amount_usd=pack.sell_price_usd,
+            success_url=f"{base}/wallet?checkout=success",
+            cancel_url=f"{base}/wallet?checkout=cancel",
+            customer_email=session.email,
+        )
+    except Exception as exc:
+        print(f"[wallet_api] checkout error: {exc}", flush=True)
+        return {"success": False, "error": "Unable to start checkout"}
+    return {
+        "success": True,
+        "checkout_url": session_out.get("url"),
+        "session_id": session_out.get("id"),
+        "package": pack.to_public_dict(),
+    }
+
+
+@app.post("/api/billing/admin-credit")
+async def admin_credit(body: AdminCreditRequest, request: Request) -> Any:
+    session = require_permission(request, "settings")
+    if not _owner_admin_credit_allowed(session.tenant_id, session.role):
+        raise HTTPException(status_code=403, detail="Admin credit forbidden for this tenant")
+    target = (body.tenant_id or session.tenant_id).strip().lower()
+    if not target:
+        raise HTTPException(status_code=400, detail="tenant_id required")
+    # Non-linas owners may only credit their own tenant.
+    if not is_unlimited_tenant(session.tenant_id) and target != session.tenant_id:
+        raise HTTPException(status_code=403, detail="Cross-tenant credit forbidden")
+    snap = token_wallet_service.credit(
+        target,
+        int(body.tokens),
+        amount_usd=float(body.amount_usd or 0.0),
+        reason=body.reason or "admin_credit",
+        reference=body.reference,
+        actor=session.user_id,
+    )
+    return {"success": True, "wallet": snap.to_public_dict()}
+
+
+@app.post("/api/billing/stripe/webhook")
+async def stripe_webhook(request: Request) -> Any:
+    """Stripe webhook — credits wallet on verified checkout.session.completed."""
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature")
+    try:
+        event = stripe_checkout_service.construct_event(payload, sig)
+    except Exception as exc:
+        print(f"[wallet_api] stripe webhook reject: {type(exc).__name__}", flush=True)
+        raise HTTPException(status_code=400, detail="Invalid webhook") from exc
+
+    event_id = str(event.get("id") or "")
+    if not event_id:
+        raise HTTPException(status_code=400, detail="Missing event id")
+    if stripe_checkout_service.already_processed(event_id):
+        return {"success": True, "duplicate": True}
+
+    etype = str(event.get("type") or "")
+    data_object = (event.get("data") or {}).get("object") or {}
+    if etype == "checkout.session.completed":
+        metadata = data_object.get("metadata") or {}
+        if str(metadata.get("product") or "") != "linas_token_pack":
+            stripe_checkout_service.mark_processed(event_id, {"skipped": "not_token_pack"})
+            return {"success": True, "skipped": True}
+        payment_status = str(data_object.get("payment_status") or "")
+        if payment_status and payment_status != "paid":
+            # Wait for paid; do not credit unpaid sessions.
+            return Response(status_code=200, content='{"success":true,"pending":true}')
+        tenant_id = str(metadata.get("tenant_id") or "").strip().lower()
+        package_id = str(metadata.get("package_id") or "")
+        try:
+            tokens = int(metadata.get("tokens") or 0)
+        except ValueError:
+            tokens = 0
+        try:
+            amount_usd = float(metadata.get("amount_usd") or 0)
+        except ValueError:
+            amount_usd = 0.0
+        if not tenant_id or tokens <= 0:
+            raise HTTPException(status_code=400, detail="Invalid metadata")
+        token_wallet_service.credit(
+            tenant_id,
+            tokens,
+            amount_usd=amount_usd,
+            reason="stripe_checkout",
+            reference=str(data_object.get("id") or event_id),
+            package_id=package_id or None,
+            actor="stripe",
+        )
+        stripe_checkout_service.mark_processed(
+            event_id,
+            {"tenant_id": tenant_id, "tokens": tokens, "package_id": package_id},
+        )
+        return {"success": True, "credited": True}
+
+    stripe_checkout_service.mark_processed(event_id, {"type": etype})
+    return {"success": True, "ignored": True}

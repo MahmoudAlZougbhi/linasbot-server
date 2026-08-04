@@ -30,6 +30,9 @@ const PublicSiteHeader = ({ compact = false }) => {
             <a href="#features" className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
               Features
             </a>
+            <a href="#pricing" className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
+              Pricing
+            </a>
             <a href="#faq" className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
               FAQ
             </a>

@@ -16,6 +16,9 @@ const PublicSiteFooter = () => {
           <Link className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded" to={PUBLIC_PATHS.about}>
             About
           </Link>
+          <a className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded" href="/#pricing">
+            Pricing
+          </a>
           <Link className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded" to={PUBLIC_PATHS.contact}>
             Contact
           </Link>

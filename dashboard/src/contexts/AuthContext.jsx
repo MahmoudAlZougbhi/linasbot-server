@@ -60,6 +60,7 @@ const buildUserData = (user) => {
     lastLogin: typeof record.lastLogin === 'string' ? record.lastLogin : null,
     createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
     tenantId: typeof record.tenantId === 'string' ? record.tenantId : 'linas',
+    emailVerified: record.emailVerified !== false,
   };
 };
 

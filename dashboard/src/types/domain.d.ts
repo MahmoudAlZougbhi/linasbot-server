@@ -23,6 +23,8 @@ interface AuthUser {
   lastLogin?: string | null;
   createdAt?: string | null;
   tenantId?: string;
+  emailVerified?: boolean;
+  businessName?: string;
 }
 
 interface AuthSessionData {
