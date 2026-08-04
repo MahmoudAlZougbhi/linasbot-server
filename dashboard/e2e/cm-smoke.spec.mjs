@@ -285,7 +285,7 @@ test.describe("Content Management browser smoke", () => {
     await page.goto("/content-managers");
 
     await expect(page.getByRole("heading", { name: "Content Managers" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Restricted/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Restricted \/ Unsupported/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Dynamic Messages/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Sources & Archive/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toBeVisible();

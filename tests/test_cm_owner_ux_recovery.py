@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from services.cm.schemas import ArticleRecord, CareSection, FaqRecord, FaqSection, FaqVariant, KnowledgeSection
+from services.cm.schemas import ArticleRecord, FaqRecord, FaqSection, FaqVariant, KnowledgeSection
 from services.cm.semantic_index import _article_entries, _faq_entries
 from services.cm.source_inventory import build_source_inventory
 
