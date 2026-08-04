@@ -108,9 +108,20 @@ const CmSectionShell = ({
             validation.ok ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-rose-200 bg-rose-50 text-rose-900"
           }`}
         >
-          {validation.ok
-            ? "Validation OK — ready for publish review."
-            : `${(validation.errors || []).length} validation error(s). Fix before publish.`}
+          {validation.ok ? (
+            "Validation OK — ready for publish review."
+          ) : (
+            <div className="space-y-1">
+              <p>{`${(validation.errors || []).length} validation error(s). Fix before publish.`}</p>
+              <ul className="list-disc pl-5">
+                {(validation.errors || []).slice(0, 5).map((err, idx) => (
+                  <li key={`${String(err.code || "err")}-${idx}`}>
+                    {String(err.message || err.code || "Validation error")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       ) : null}
 

@@ -314,7 +314,7 @@ test.describe("Content Management browser smoke", () => {
       ["/content-managers/branches", "Branches & Hours"],
     ]) {
       await page.goto(href);
-      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
       await expect(page.getByText("Section data (JSON)")).toHaveCount(0);
     }
   });
@@ -322,7 +322,7 @@ test.describe("Content Management browser smoke", () => {
   test("stale ETag conflict and validation errors are truthful", async ({ page }) => {
     await installCmApiMocks(page, { forceConflict: true, validateOk: false });
     await page.goto("/content-managers/knowledge");
-    await expect(page.getByRole("heading", { name: "Knowledge" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Knowledge", level: 1 })).toBeVisible();
     await expect(page.getByText("Loading…")).toBeHidden({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "Add" }).click();
@@ -330,7 +330,7 @@ test.describe("Content Management browser smoke", () => {
     await expect(page.getByText(/conflict|Stale version/i).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Validate" }).click();
-    await expect(page.getByText(/tattoo_removal/).first()).toBeVisible();
+    await expect(page.getByText(/tattoo_removal/i).first()).toBeVisible();
   });
 
   test("publish page shows disabled state and honest 403 path", async ({ page }) => {
