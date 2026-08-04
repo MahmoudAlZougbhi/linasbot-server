@@ -404,8 +404,7 @@ def detect_service_availability_conflicts(
                 {
                     "service_id": service_id,
                     "claims": [
-                        {"source_id": sid, "available": available, "title": title}
-                        for sid, available, title in claims
+                        {"source_id": sid, "available": available, "title": title} for sid, available, title in claims
                     ],
                     "message": (
                         f"Conflicting availability for service '{service_id}' across sources; "

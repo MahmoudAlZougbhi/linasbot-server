@@ -276,7 +276,9 @@ def redistribute_knowledge_draft(
         linked_services = list(
             dict.fromkeys([*article.linked_service_ids, *[s.id for s in classification.service_derivations]])
         )
-        tags = list(dict.fromkeys([*article.tags, _REDISTRIBUTED_TAG, *[f"target:{t}" for t in classification.targets]]))
+        tags = list(
+            dict.fromkeys([*article.tags, _REDISTRIBUTED_TAG, *[f"target:{t}" for t in classification.targets]])
+        )
         if classification.archive_from_knowledge and not classification.keep_in_knowledge_active:
             next_knowledge.append(
                 ArticleRecord(
@@ -391,7 +393,9 @@ def redistribute_knowledge_draft(
 def section_counts_snapshot(*, tenant_id: str) -> dict[str, Any]:
     """Before/after friendly counts for redistribution reports."""
     counts: dict[str, Any] = {}
-    knowledge = KnowledgeSection.model_validate(get_draft("knowledge", tenant_id=tenant_id, create_default=True).payload)
+    knowledge = KnowledgeSection.model_validate(
+        get_draft("knowledge", tenant_id=tenant_id, create_default=True).payload
+    )
     care = CareSection.model_validate(get_draft("care", tenant_id=tenant_id, create_default=True).payload)
     services = ServicesSection.model_validate(get_draft("services", tenant_id=tenant_id, create_default=True).payload)
     branches = BranchesSection.model_validate(get_draft("branches", tenant_id=tenant_id, create_default=True).payload)

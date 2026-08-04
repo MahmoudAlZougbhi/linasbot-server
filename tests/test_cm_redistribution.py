@@ -143,9 +143,7 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
         },
     }
     for name, payload in files.items():
-        (data_root / "content" / "knowledge_files" / name).write_text(
-            json.dumps(payload) + "\n", encoding="utf-8"
-        )
+        (data_root / "content" / "knowledge_files" / name).write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
     staging = tmp_path / "staging"
     tenant = "cm_redistrib_test"

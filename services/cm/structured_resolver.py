@@ -182,10 +182,9 @@ def resolve_service_catalog_facts(services: ServicesSection | dict[str, Any]) ->
             )
         )
         if service.notes:
-            facts.append(
-                AnswerFact(kind="service_notes", value=service.notes, source_id=f"service:{service.id}:notes")
-            )
+            facts.append(AnswerFact(kind="service_notes", value=service.notes, source_id=f"service:{service.id}:notes"))
     return facts
+
 
 def resolve_handoff_phone_facts(
     handoff: HandoffPolicy | dict[str, Any],
