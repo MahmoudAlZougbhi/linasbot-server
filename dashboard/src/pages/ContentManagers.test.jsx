@@ -29,9 +29,13 @@ describe("ContentManagers", () => {
       "href",
       "/content-managers/dynamic-messages"
     );
-    expect(screen.getByRole("link", { name: /Restricted/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^Restricted \/ Unsupported/i })).toHaveAttribute(
       "href",
       "/content-managers/restricted"
+    );
+    expect(screen.getByRole("link", { name: /Sources & Archive/i })).toHaveAttribute(
+      "href",
+      "/content-managers/sources"
     );
     expect(screen.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toHaveAttribute(
       "href",

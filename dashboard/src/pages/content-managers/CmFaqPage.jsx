@@ -75,7 +75,7 @@ const CmFaqPage = () => {
         q: query || undefined,
         status: statusFilter === "all" ? undefined : statusFilter,
         language: langFilter === "all" ? undefined : langFilter,
-        include_archived: statusFilter === "archived",
+        include_archived: statusFilter === "archived" || statusFilter === "restricted",
       }),
       getCmMeta(),
     ]);
@@ -205,6 +205,7 @@ const CmFaqPage = () => {
               <option value="draft">Draft</option>
               <option value="active">Active</option>
               <option value="archived">Archived</option>
+              <option value="restricted">Restricted</option>
             </select>
             <select
               value={langFilter}

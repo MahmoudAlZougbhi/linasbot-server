@@ -37,6 +37,10 @@ class LocalizedLabels(CmBaseModel):
 class AiBasics(CmBaseModel):
     assistant_name: str = "Linas"
     clinic_name: str = "Linas Laser"
+    ai_role: str = ""
+    business_purpose: str = ""
+    short_introduction: str = ""
+    greeting_behavior: str = ""
     identity_summary: str = ""
     advanced_instructions: str = ""
     notes: str | None = None
@@ -46,6 +50,8 @@ class LanguagePolicy(CmBaseModel):
     supported_languages: tuple[str, ...] = Field(default_factory=lambda: SUPPORTED_LANGUAGES)
     response_language_map: dict[str, str] = Field(default_factory=lambda: dict(RESPONSE_LANGUAGE_MAP))
     default_language: str = "ar"
+    mixed_language_behavior: str = ""
+    unknown_language_behavior: str = ""
     notes: str | None = None
 
     @field_validator("supported_languages")
@@ -61,6 +67,12 @@ class LanguagePolicy(CmBaseModel):
 class StylePolicy(CmBaseModel):
     tone: str = ""
     formality: str = ""
+    response_length: str = ""
+    emoji_level: str = ""
+    one_question_at_a_time: bool = True
+    use_customer_name: bool = False
+    preferred_terms: list[str] = Field(default_factory=list)
+    example_replies: list[str] = Field(default_factory=list)
     do_list: list[str] = Field(default_factory=list)
     dont_list: list[str] = Field(default_factory=list)
     style_body: str = ""
@@ -123,6 +135,12 @@ class ArticleRecord(CmBaseModel):
     tags: list[str] = Field(default_factory=list)
     language: str = ""
     audience: Audience = "general"
+    category: str = ""
+    status: Literal["draft", "active", "archived", "restricted"] = "active"
+    source_filename: str | None = None
+    source_checksum: str | None = None
+    linked_service_ids: list[str] = Field(default_factory=list)
+    linked_branch_ids: list[str] = Field(default_factory=list)
     notes: str | None = None
 
 
@@ -234,7 +252,7 @@ class FaqRecord(CmBaseModel):
     variants: list[FaqVariant] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
-    status: Literal["draft", "active", "archived"] = "draft"
+    status: Literal["draft", "active", "archived", "restricted"] = "draft"
     source_language: LangCode | None = None
     reviewed: bool = False
     provenance: str | None = None

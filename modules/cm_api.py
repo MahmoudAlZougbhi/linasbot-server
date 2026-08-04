@@ -288,3 +288,15 @@ async def cm_pricing_quote(request: Request, body: dict[str, Any] = Body(default
             content={"success": False, "error": "QUOTE_INCOMPLETE", "message": str(exc)},
         )
     return {"success": True, "data": quote.model_dump(mode="json")}
+
+
+@app.get("/api/cm/sources/inventory")
+async def cm_sources_inventory(request: Request) -> Any:
+    """Metadata-only inventory of CM drafts, article provenance, and staged legacy files."""
+    require_permission(request, "contentManagers")
+    from services.cm.source_inventory import build_source_inventory, write_inventory_report
+
+    report = build_source_inventory()
+    write_inventory_report(report)
+    # Never include file bodies — report is metadata only.
+    return {"success": True, "data": report}
