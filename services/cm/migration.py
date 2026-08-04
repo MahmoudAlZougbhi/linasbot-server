@@ -96,12 +96,21 @@ def _migrate_faq(qa_rows: list[dict[str, Any]], *, tenant_id: str, updated_by: s
 
         existing = grouped.get(group_id)
         if existing is None:
-            grouped[group_id] = FaqRecord(qa_group_id=group_id, variants=[variant], tags=["legacy_migration"])
+            grouped[group_id] = FaqRecord(
+                qa_group_id=group_id,
+                variants=[variant],
+                tags=["legacy_migration"],
+                status="active",
+            )
         else:
             variants = [v for v in existing.variants if v.language != language]
             variants.append(variant)
             grouped[group_id] = FaqRecord(
-                qa_group_id=group_id, variants=variants, tags=existing.tags, notes=existing.notes
+                qa_group_id=group_id,
+                variants=variants,
+                tags=existing.tags,
+                notes=existing.notes,
+                status=existing.status if existing.status != "draft" else "active",
             )
 
     records = list(grouped.values())
@@ -165,6 +174,9 @@ def _migrate_knowledge_and_care(
             tags = [*tags, "legacy_migration"]
         audience = entry.get("audience") if entry.get("audience") in {"men", "women", "general"} else "general"
         source_name = str(entry.get("filename") or entry.get("source") or entry.get("id") or "")
+        raw_status = str(entry.get("status") or "active").strip().lower()
+        # Honor explicit source status only; never infer restricted from topic/filename keywords.
+        status = raw_status if raw_status in {"draft", "active", "archived", "restricted"} else "active"
         article = ArticleRecord(
             id=_deterministic_id("knowledge_file", str(entry.get("id") or entry.get("title") or "")),
             title=str(entry.get("title") or ""),
@@ -173,7 +185,7 @@ def _migrate_knowledge_and_care(
             language=str(entry.get("language") or ""),
             audience=audience,  # type: ignore[arg-type]
             category=str(entry.get("category") or ""),
-            status="active",
+            status=status,  # type: ignore[arg-type]
             source_filename=source_name or None,
             source_checksum=str(entry.get("checksum") or "") or None,
             notes=None,
@@ -340,9 +352,15 @@ def migrate_legacy_fixture(
     if knowledge_files_dir.is_dir():
         for file_path in sorted(knowledge_files_dir.glob("*.json")):
             try:
-                knowledge_file_entries.append(json.loads(file_path.read_text(encoding="utf-8")))
-            except json.JSONDecodeError:
+                raw_bytes = file_path.read_bytes()
+                payload = json.loads(raw_bytes.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
                 continue
+            if not isinstance(payload, dict):
+                continue
+            payload.setdefault("filename", file_path.name)
+            payload.setdefault("checksum", _sha256_bytes(raw_bytes))
+            knowledge_file_entries.append(payload)
 
     faq_records = _migrate_faq(qa_rows, tenant_id=tenant_id, updated_by=updated_by)
     knowledge_items, care_items = _migrate_knowledge_and_care(

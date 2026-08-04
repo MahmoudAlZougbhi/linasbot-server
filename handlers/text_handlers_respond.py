@@ -1013,6 +1013,9 @@ async def _handle_published_cm_runtime(
         restricted_topic_active_ids=restricted_ids,
         regenerate_fn=make_regenerate_fn(message, packet),
     )
+    source_titles = [
+        {"source_id": chunk.source_id, "title": (chunk.text or "")[:120]} for chunk in (packet.chunks or [])[:20]
+    ]
     return result.text, {
         "reason": "packet_ready" if result.ok else "answer_validation_failed",
         "content_version_id": packet.content_version_id,
@@ -1020,6 +1023,8 @@ async def _handle_published_cm_runtime(
         "validated": result.ok,
         "regenerated": result.regenerated,
         "failed_rules": result.failed_rules,
+        "source_ids": list(packet.source_ids or []),
+        "retrieved_sources": source_titles,
     }
 
 
@@ -1269,6 +1274,15 @@ async def _process_and_respond(
             detected_language=current_preferred_lang,
             response_language=response_language,
         )
+        # Safe diagnostic view for Testing Lab (IDs/titles only — never customer PII).
+        if user_data.get("_dashboard_test_simulation"):
+            user_data["_dashboard_cm_diagnostics"] = {
+                "reason": cm_metadata.get("reason"),
+                "content_version_id": cm_metadata.get("content_version_id"),
+                "index_version_id": cm_metadata.get("index_version_id"),
+                "source_ids": list(cm_metadata.get("source_ids") or []),
+                "retrieved_sources": list(cm_metadata.get("retrieved_sources") or []),
+            }
         await send_message_func(user_id, cm_reply)
         await save_conversation_message_to_firestore(
             user_id,

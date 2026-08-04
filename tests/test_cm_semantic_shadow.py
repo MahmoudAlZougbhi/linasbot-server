@@ -106,7 +106,7 @@ def test_interpreter_llm_disabled_by_default(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_deterministic_interpreter_extracts_booking_and_restricted() -> None:
-    restricted = initial_restricted_policy()
+    restricted = initial_restricted_policy(active=True)
     services = ServicesSection(items=[])
     result = interpret_query_deterministic(
         "I want to book an appointment for tattoo removal",

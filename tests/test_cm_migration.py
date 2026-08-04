@@ -43,12 +43,42 @@ def test_migration_routes_prep_knowledge_file_into_care_section() -> None:
     assert not any("Laser prep" == item.title for item in knowledge_section.items)
 
 
-def test_migration_flags_tattoo_restricted_conflict() -> None:
-    """Fixture qa_pairs.jsonl affirms tattoo removal, which is an active Restricted default (D8)."""
+def test_migration_does_not_auto_flag_tattoo_content_as_restricted() -> None:
+    """Recovered tattoo FAQ/knowledge stays active unless the owner configures Restricted Topics."""
     tenant_id = "cm_migration_test_conflict"
     report = migrate_legacy_fixture(source_root=FIXTURE_ROOT, tenant_id=tenant_id)
 
-    assert report["conflict_count"] >= 1  # FAQ affirmation of tattoo removal (restricted)
+    assert report["conflict_count"] == 0
+    faq_env = get_draft("faq", tenant_id=tenant_id)
+    faq_section = FaqSection.model_validate(faq_env.payload)
+    tattoo_items = [
+        item
+        for item in faq_section.items
+        if any(
+            any(marker in f"{v.question} {v.answer}".lower() for marker in ("tattoo", "وشم", "تاتو"))
+            for v in item.variants
+        )
+    ]
+    assert tattoo_items
+    assert all(item.status == "active" for item in tattoo_items)
+
+
+def test_owner_restricted_policy_flags_tattoo_conflict() -> None:
+    from services.cm.schemas import initial_restricted_policy
+    from services.cm.storage import put_draft
+
+    tenant_id = "cm_migration_test_owner_restricted"
+    migrate_legacy_fixture(source_root=FIXTURE_ROOT, tenant_id=tenant_id)
+    env = get_draft("restricted", tenant_id=tenant_id, create_default=True)
+    put_draft(
+        "restricted",
+        payload=initial_restricted_policy(active=True).model_dump(mode="json"),
+        if_match=env.etag,
+        tenant_id=tenant_id,
+        updated_by="test",
+    )
+    report = migrate_legacy_fixture(source_root=FIXTURE_ROOT, tenant_id=tenant_id)
+    assert report["conflict_count"] >= 1
     codes = {c["code"] for c in report["conflicts"]}
     assert "RESTRICTED_FAQ_AFFIRMATION" in codes
 

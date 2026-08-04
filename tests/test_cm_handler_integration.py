@@ -35,8 +35,13 @@ async def test_no_published_version_returns_honest_failure_not_exception() -> No
 
 @pytest.mark.asyncio
 async def test_restricted_topic_short_circuits_without_calling_generate_answer() -> None:
+    from services.cm.schemas import initial_restricted_policy
+
     tenant_id = "cm_handler_test_restricted"
-    await publish_test_content(tenant_id)
+    await publish_test_content(
+        tenant_id,
+        {"restricted": initial_restricted_policy(active=True).model_dump(mode="json")},
+    )
 
     with patch("services.cm.answer_generation.generate_answer", new_callable=AsyncMock) as mock_gen:
         reply, metadata = await _handle_published_cm_runtime(

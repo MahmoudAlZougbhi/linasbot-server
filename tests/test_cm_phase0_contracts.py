@@ -53,8 +53,10 @@ def test_initial_restricted_topic_ids_match_labels() -> None:
 def test_initial_restricted_defaults_helpers() -> None:
     topics = initial_restricted_topics()
     assert [t.id for t in topics] == list(INITIAL_RESTRICTED_TOPIC_IDS)
-    assert all(t.active for t in topics)
-    policy = initial_restricted_policy()
+    assert all(t.active is False for t in topics)
+    active_topics = initial_restricted_topics(active=True)
+    assert all(t.active for t in active_topics)
+    policy = initial_restricted_policy(active=True)
     assert len(policy.topics) == 4
     tattoo = next(t for t in policy.topics if t.id == "tattoo_removal")
     assert tattoo.labels.en == "Tattoo removal"
