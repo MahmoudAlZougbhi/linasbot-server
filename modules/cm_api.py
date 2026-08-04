@@ -3,6 +3,7 @@ Content Management control-plane API.
 
 Draft CRUD with ETag concurrency, validate, publish (hard-403 when disabled),
 versions/rollback stubs, and safe Testing Lab preview packets.
+All storage operations use the authenticated session tenant — never a client-supplied tenant id.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from typing import Any
 from fastapi import Body, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from modules.api_security import require_permission
+from modules.api_security import require_permission, require_session
 from modules.core import app
 from services.cm.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, cm_faq_canonical, cm_runtime_mode
 from services.cm.preview_packet import build_preview_packet, list_versions
@@ -26,6 +27,7 @@ from services.cm.publish import (
 from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
 from services.cm.storage import ConflictError, UnknownSectionError, get_draft, put_draft
 from services.cm.validation import validate_cm
+from services.dashboard_session_service import SessionRecord
 
 
 def _publish_disabled_response(message: str | None = None) -> JSONResponse:
@@ -48,11 +50,20 @@ def _envelope_dict(envelope: Any) -> dict[str, Any]:
     return dict(envelope)
 
 
+def _session_tenant(session: SessionRecord) -> str:
+    tenant_id = str(session.tenant_id or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant context required")
+    return tenant_id
+
+
 @app.get("/api/cm/meta")
-async def cm_meta() -> Any:
+async def cm_meta(request: Request) -> Any:
+    session = require_session(request)
     status = publish_status()
     return {
         "success": True,
+        "tenant_id": _session_tenant(session),
         "sections": list(CM_SECTIONS),
         "publish_enabled": bool(status.get("publish_enabled")),
         "runtime_mode": cm_runtime_mode(),
@@ -62,10 +73,12 @@ async def cm_meta() -> Any:
 
 
 @app.get("/api/cm/draft/{section}")
-async def cm_get_draft(section: str) -> Any:
+async def cm_get_draft(section: str, request: Request) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     try:
         name = section.strip().replace("-", "_")
-        envelope = get_draft(name, create_default=True)
+        envelope = get_draft(name, tenant_id=tenant_id, create_default=True)
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     data = _envelope_dict(envelope)
@@ -83,6 +96,7 @@ async def cm_put_draft(
     if_match: str | None = Header(default=None, alias="If-Match"),
 ) -> Any:
     session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     name = section.strip().replace("-", "_")
 
     if not if_match or not str(if_match).strip():
@@ -100,6 +114,7 @@ async def cm_put_draft(
             payload=payload,
             if_match=if_match,
             updated_by=session.user_id or session.email,
+            tenant_id=tenant_id,
         )
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -126,7 +141,9 @@ async def cm_put_draft(
 
 
 @app.post("/api/cm/validate")
-async def cm_validate(body: dict[str, Any] = Body(default={})) -> Any:
+async def cm_validate(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     section = body.get("section")
     payload = body.get("payload")
     if payload is None and isinstance(body.get("data"), dict):
@@ -135,6 +152,7 @@ async def cm_validate(body: dict[str, Any] = Body(default={})) -> Any:
         result = validate_cm(
             section=str(section) if section else None,
             payload=payload if isinstance(payload, dict) else None,
+            tenant_id=tenant_id,
         )
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -144,6 +162,7 @@ async def cm_validate(body: dict[str, Any] = Body(default={})) -> Any:
 @app.post("/api/cm/publish")
 async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_permission(request, "contentPublish")
+    tenant_id = _session_tenant(session)
     try:
         ensure_publish_enabled()
     except PublishDisabledError as exc:
@@ -154,11 +173,13 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
     try:
         if scope in {"faq", "faq_only"}:
             result = await publish_faq_only(
+                tenant_id=tenant_id,
                 published_by=session.user_id or session.email,
                 notes=notes,
             )
         else:
             result = await publish_draft(
+                tenant_id=tenant_id,
                 published_by=session.user_id or session.email,
                 notes=notes,
             )
@@ -184,21 +205,24 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
 
 
 @app.get("/api/cm/versions")
-async def cm_list_versions() -> Any:
-    versions = list_versions()
+async def cm_list_versions(request: Request) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    versions = list_versions(tenant_id)
     return {"success": True, "data": versions, "count": len(versions)}
 
 
 @app.post("/api/cm/versions/{version_id}/rollback")
 async def cm_rollback(version_id: str, request: Request) -> Any:
-    require_permission(request, "contentPublish")
+    session = require_permission(request, "contentPublish")
+    tenant_id = _session_tenant(session)
     try:
         ensure_publish_enabled()
     except PublishDisabledError as exc:
         return _publish_disabled_response(exc.message)
 
     try:
-        result = rollback_to_version(content_version_id=version_id)
+        result = rollback_to_version(content_version_id=version_id, tenant_id=tenant_id)
     except RollbackTargetError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {
@@ -211,10 +235,12 @@ async def cm_rollback(version_id: str, request: Request) -> Any:
 
 
 @app.post("/api/cm/preview-packet")
-async def cm_preview_packet(body: dict[str, Any] = Body(default={})) -> Any:
+async def cm_preview_packet(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     source = str(body.get("source") or "draft")
     try:
-        packet = build_preview_packet(source=source)
+        packet = build_preview_packet(source=source, tenant_id=tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "data": packet}
@@ -223,10 +249,9 @@ async def cm_preview_packet(body: dict[str, Any] = Body(default={})) -> Any:
 @app.post("/api/cm/pricing/quote")
 async def cm_pricing_quote(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     """Deterministic Price Calculator Preview (draft or published). Never invents amounts."""
-    require_permission(request, "contentManagers")
+    session = require_permission(request, "contentManagers")
     from typing import cast
 
-    from services.cm.constants import DEFAULT_TENANT_ID
     from services.cm.pricing.engine import compute_quote
     from services.cm.pricing.schemas import AudienceScope, PricingContext, QuoteRequestLine
     from services.cm.pricing.section import (
@@ -238,9 +263,9 @@ async def cm_pricing_quote(request: Request, body: dict[str, Any] = Body(default
     from services.cm.storage import get_draft
     from services.cm.version_store import load_published_content
 
-    tenant_id = DEFAULT_TENANT_ID
-    # Never accept cross-tenant ids from the request body (session is single-tenant today).
-    if body.get("tenant_id") and str(body.get("tenant_id")).strip() not in {"", DEFAULT_TENANT_ID}:
+    tenant_id = _session_tenant(session)
+    # Never accept cross-tenant ids from the request body.
+    if body.get("tenant_id") and str(body.get("tenant_id")).strip() not in {"", tenant_id}:
         raise HTTPException(status_code=403, detail="tenant_id not authorized for this session")
     source = str(body.get("source") or "draft").strip().lower()
     content_version_id = None
@@ -293,10 +318,11 @@ async def cm_pricing_quote(request: Request, body: dict[str, Any] = Body(default
 @app.get("/api/cm/sources/inventory")
 async def cm_sources_inventory(request: Request) -> Any:
     """Metadata-only inventory of CM drafts, article provenance, and staged legacy files."""
-    require_permission(request, "contentManagers")
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
     from services.cm.source_inventory import build_source_inventory, write_inventory_report
 
-    report = build_source_inventory()
+    report = build_source_inventory(tenant_id=tenant_id)
     write_inventory_report(report)
     # Never include file bodies — report is metadata only.
     return {"success": True, "data": report}

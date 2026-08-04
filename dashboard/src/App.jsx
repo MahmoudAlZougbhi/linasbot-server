@@ -8,6 +8,10 @@ import Header from './components/Layout/Header';
 import LoadingScreen from './components/Common/LoadingScreen';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Login from './pages/Login';
+import Landing from './pages/public/Landing';
+import Register from './pages/public/Register';
+import About from './pages/public/About';
+import Contact from './pages/public/Contact';
 import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
@@ -98,7 +102,7 @@ function AppContent() {
               >
                 <Suspense fallback={<RouteFallback />}>
                   <Routes>
-                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/app" element={<Dashboard />} />
                     <Route path="/testing" element={<Testing />} />
                     <Route path="/api-debug" element={<SimpleApiTest />} />
                     <Route path="/training" element={<Training />} />
@@ -121,7 +125,7 @@ function AppContent() {
                     <Route path="/content-managers/:sectionSlug" element={<CmSectionPage />} />
                     <Route path="/activity-flow" element={<ActivityFlow />} />
                     <Route path="/live-chat" element={<LiveChat />} />
-                    <Route path="/analytics" element={<Navigate to="/" replace />} />
+                    <Route path="/analytics" element={<Navigate to="/app" replace />} />
                     <Route path="/smart-messaging" element={<SmartMessaging />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />
@@ -181,6 +185,10 @@ function App() {
       <AuthProvider>
         <PermissionsProvider>
           <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
             <Route path="/login" element={<Login />} />
 
             <Route

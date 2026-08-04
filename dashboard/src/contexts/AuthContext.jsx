@@ -204,7 +204,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (
     /** @type {string} */ email,
     /** @type {string} */ password,
-    /** @type {string} */ redirectTo = '/',
+    /** @type {string} */ redirectTo = '/app',
     /** @type {number} */ retryCount = 0
   ) => {
     const maxRetries = 2;
@@ -262,7 +262,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('auth_session', JSON.stringify(session));
       setUser(userData);
       toast.success('Welcome back!');
-      navigate(redirectTo || '/');
+      navigate(redirectTo || '/app');
       console.log('[AuthContext] login: setUser + localStorage + navigate completed');
 
       return userData;
@@ -271,6 +271,63 @@ export const AuthProvider = ({ children }) => {
         ? 'Connection timed out. Is the backend running on port 8003?'
         : (errorMessage(error) || 'Login failed');
       console.error('[AuthContext] login failed:', msg, error);
+      toast.error(msg);
+      throw new Error(msg);
+    }
+  };
+
+  /**
+   * Public company registration — creates an isolated tenant admin and signs in.
+   * @param {{ businessName: string; email: string; password: string; name?: string }} payload
+   */
+  const register = async (payload) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const response = await fetch(`${API_BASE}/register`, withAuthFetch({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          business_name: payload.businessName,
+          email: payload.email,
+          password: payload.password,
+          name: payload.name || null,
+        }),
+        signal: controller.signal,
+      }));
+      clearTimeout(timeoutId);
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Registration failed');
+      }
+      if (!data.user || typeof data.user !== 'object') {
+        throw new Error('Invalid registration response: missing user data');
+      }
+      const userData = buildUserData(data.user);
+      if (!userData) {
+        throw new Error('Invalid registration response: could not build user');
+      }
+      if (data.csrf_token) {
+        localStorage.setItem('csrf_token', data.csrf_token);
+      }
+      localStorage.setItem(
+        'auth_session',
+        JSON.stringify({
+          user: userData,
+          timestamp: new Date().toISOString(),
+          lastValidatedAt: new Date().toISOString(),
+        })
+      );
+      setUser(userData);
+      toast.success('Company account created');
+      return userData;
+    } catch (error) {
+      const msg =
+        error instanceof Error && error.name === 'AbortError'
+          ? 'Connection timed out. Is the backend running on port 8003?'
+          : errorMessage(error) || 'Registration failed';
       toast.error(msg);
       throw new Error(msg);
     }
@@ -490,6 +547,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     login,
+    register,
     logout,
     changePassword,
     loading,

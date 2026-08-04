@@ -137,6 +137,9 @@ class UserService:
             "createdBy": created_by,
             "updatedAt": now,
         }
+        business_name = str(user_data.get("businessName") or "").strip()
+        if business_name:
+            user_doc["businessName"] = business_name[:120]
 
         # Save to Firestore
         self.collection.document(user_id).set(
@@ -241,6 +244,18 @@ class UserService:
         except Exception as e:
             print(f"[auth:get_user_by_id] Error: {e}", flush=True)
             return None
+
+    def tenant_id_exists(self, tenant_id: str) -> bool:
+        """Return True when any dashboard user already uses this tenant id."""
+        tid = self._normalize_tenant_id(tenant_id)
+        try:
+            query = self.collection.where(filter=FieldFilter("tenantId", "==", tid)).limit(1)
+            docs = list(query.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS, retry=None))
+            return len(docs) > 0
+        except Exception as e:
+            print(f"[auth:tenant_id_exists] Error: {e}", flush=True)
+            # Fail closed: treat as taken so registration cannot collide on lookup failure.
+            return True
 
     def get_all_users(self) -> list[dict[str, Any]]:
         """Get all users (without passwords)"""
@@ -537,6 +552,7 @@ class UserService:
             "role": user.get("role"),
             "permissions": user.get("permissions"),
             "tenantId": self._normalize_tenant_id(user.get("tenantId")),
+            "businessName": user.get("businessName"),
             "status": user.get("status"),
             "passwordEpoch": int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
             "lastLogin": user.get("lastLogin"),

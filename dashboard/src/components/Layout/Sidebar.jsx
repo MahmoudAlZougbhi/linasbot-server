@@ -23,7 +23,7 @@ import { authFetch } from "../../utils/authFetch";
 // Navigation items with permission keys.
 // FAQ authoring is only under Content Managers → FAQ (no separate Bot Training nav).
 const navigationItems = [
-  { name: "Dashboard", href: "/", icon: HomeIcon, permissionKey: "dashboard" },
+  { name: "Dashboard", href: "/app", icon: HomeIcon, permissionKey: "dashboard" },
   {
     name: "Testing Lab",
     href: "/testing",

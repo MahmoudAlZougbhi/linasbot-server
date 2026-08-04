@@ -2,7 +2,7 @@
 export const FEATURES = {
   DASHBOARD: {
     key: 'dashboard',
-    path: '/',
+    path: '/app',
     name: 'Dashboard',
     description: 'View main dashboard and metrics'
   },
@@ -26,7 +26,7 @@ export const FEATURES = {
   },
   ANALYTICS: {
     key: 'analytics',
-    path: '/',
+    path: '/app',
     name: 'Analytics',
     description: 'View analytics and reports'
   },
@@ -70,7 +70,7 @@ export const FEATURES = {
 
 // Path to permission key mapping
 export const PATH_TO_PERMISSION = {
-  '/': 'dashboard',
+  '/app': 'dashboard',
   '/live-chat': 'liveChat',
   '/mobile/live-chat': 'liveChat',
   '/training': 'contentManagers',

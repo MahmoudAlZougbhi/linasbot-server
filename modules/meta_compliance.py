@@ -63,9 +63,12 @@ def _page(title: str, body: str) -> HTMLResponse:
 </head>
 <body><main>
   <nav aria-label="Compliance pages">
+    <a href="/">Home</a>
     <a href="/privacy-policy">Privacy Policy</a>
     <a href="/terms">Terms</a>
     <a href="/data-deletion">Data Deletion</a>
+    <a href="/about">About</a>
+    <a href="/contact">Contact</a>
   </nav>
   {body}
 </main></body></html>"""

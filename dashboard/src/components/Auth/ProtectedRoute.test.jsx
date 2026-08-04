@@ -58,7 +58,7 @@ describe("ProtectedRoute", () => {
       <MemoryRouter initialEntries={["/settings"]}>
         <Routes>
           <Route path="/settings" element={<ProtectedRoute><div>settings</div></ProtectedRoute>} />
-          <Route path="/" element={<div>dashboard-home</div>} />
+          <Route path="/app" element={<div>dashboard-home</div>} />
         </Routes>
       </MemoryRouter>
     );
@@ -84,7 +84,7 @@ describe("ProtectedRoute", () => {
               </ProtectedRoute>
             }
           />
-          <Route path="/" element={<div>dashboard-home</div>} />
+          <Route path="/app" element={<div>dashboard-home</div>} />
         </Routes>
       </MemoryRouter>
     );

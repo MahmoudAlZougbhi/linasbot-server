@@ -103,6 +103,7 @@ class TestRBACHelpers:
     def test_public_and_permissions(self):
         assert is_public_api("GET", "/api/health")
         assert is_public_api("POST", "/api/auth/login")
+        assert is_public_api("POST", "/api/auth/register")
         assert not is_public_api("POST", "/api/auth/logout")
         assert not is_public_api("POST", "/api/auth/bootstrap-admin")
         assert not is_public_api("GET", "/api/analytics/summary")

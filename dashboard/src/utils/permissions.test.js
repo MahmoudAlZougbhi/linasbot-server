@@ -34,7 +34,7 @@ describe("permissions utils", () => {
     const viewer = testUser({ role: "viewer" });
     expect(hasPermission(viewer, "liveChat")).toBe(false);
     expect(canAccessPath(viewer, "/live-chat")).toBe(false);
-    expect(getDefaultPath(viewer)).toBe("/");
+    expect(getDefaultPath(viewer)).toBe("/app");
   });
 
   it("allows admin to access content managers and activity flow", () => {
