@@ -143,24 +143,8 @@ def redistribute_knowledge_draft(
     next_knowledge: list[ArticleRecord] = []
 
     for article in knowledge.items:
-        # Already-archived redistributed rows: keep as-is, still emit ledger for parity.
-        if article.status == "archived" and _REDISTRIBUTED_TAG in article.tags:
-            next_knowledge.append(article)
-            target_tags = [t.split("target:", 1)[1] for t in article.tags if t.startswith("target:")]
-            ledger.append(
-                {
-                    "source_id": article.id,
-                    "title": article.title,
-                    "source_filename": article.source_filename,
-                    "source_checksum": article.source_checksum,
-                    "targets": target_tags or ["archived"],
-                    "derived_ids": [],
-                    "keep_in_knowledge_active": False,
-                    "archive_from_knowledge": True,
-                    "rationale": "already_redistributed_archived",
-                }
-            )
-            continue
+        # Re-classify even archived redistributed rows so philosophy fixes can reactivate.
+        already_archived = article.status == "archived" and _REDISTRIBUTED_TAG in article.tags
 
         classification = classify_article(
             article_id=article.id,

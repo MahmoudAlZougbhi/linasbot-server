@@ -51,7 +51,16 @@ def test_classifier_routes_known_misplaced_titles() -> None:
         assert result.targets == expected, (title, result.targets, result.rationale)
 
 
-def test_classifier_never_marks_restricted_by_topic_name() -> None:
+def test_classifier_philosophy_wins_over_booking_language_in_body() -> None:
+    result = classify_article(
+        article_id="t",
+        title="</Tattoo_Removal_Training_Philosophy>",
+        body="Tattoo removal training. Mention submit_booking_intent and appointment rules for this service.",
+    )
+    assert result.targets == ["services", "knowledge"]
+    assert result.keep_in_knowledge_active is True
+    assert result.archive_from_knowledge is False
+
     result = classify_article(
         article_id="t",
         title="</Tattoo_Removal_Training_Philosophy>",
