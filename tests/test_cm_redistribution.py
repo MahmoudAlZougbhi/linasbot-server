@@ -81,6 +81,21 @@ def test_classifier_routes_known_misplaced_titles() -> None:
     assert foundation.keep_in_knowledge_active is True
     assert foundation.archive_from_knowledge is False
 
+    # "ll." inside "will." must not force Prices (revoked over-broad currency marker).
+    will_body = classify_article(
+        article_id="ops",
+        title="operational_tool_handling_rules.md",
+        body="Operational tools. You will. call. submit_booking_intent.",
+    )
+    assert will_body.targets == ["handoff"]
+
+    location = classify_article(
+        article_id="loc",
+        title="<LOCATION_RULES>",
+        body="Antelias hours. You will. also mention submit_booking_intent for routing.",
+    )
+    assert location.targets == ["branches"]
+
 
 def test_classifier_philosophy_wins_over_booking_language_in_body() -> None:
     result = classify_article(
