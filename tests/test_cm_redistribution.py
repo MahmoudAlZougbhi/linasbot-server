@@ -259,3 +259,17 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     redistribute_knowledge_draft(tenant_id=tenant, updated_by="test")
     after = section_counts_snapshot(tenant_id=tenant)
     assert before == after
+
+
+def test_policy_text_is_chunked_for_embeddings() -> None:
+    from services.cm.semantic_index import _MAX_EMBED_CHARS, _chunk_policy_text, _section_notes_entries
+
+    prefix = "--- redistributed from "
+    policy = f"{prefix}id=a title=one ---\n" + ("alpha " * 200) + f"\n\n{prefix}id=b title=two ---\n" + ("beta " * 200)
+    chunks = _chunk_policy_text(policy)
+    assert len(chunks) == 2
+    oversized = prefix + "id=c ---\n" + ("z" * (_MAX_EMBED_CHARS + 10))
+    assert all(len(c) <= _MAX_EMBED_CHARS for c in _chunk_policy_text(oversized))
+    entries = _section_notes_entries("handoff", {"policy_text": policy})
+    assert len(entries) == 2
+    assert entries[0][0] == "handoff:policy_text:0"
