@@ -24,6 +24,47 @@ const SOURCE_LABELS = {
   dynamic_retrieval: { label: "Dynamic", color: "bg-amber-100 text-amber-700", icon: "📂" },
   rate_limit: { label: "Rate Limit", color: "bg-orange-100 text-orange-700", icon: "⏱" },
   moderation: { label: "Moderation", color: "bg-rose-100 text-rose-700", icon: "🛡" },
+  out_of_scope_guard: { label: "Out of scope", color: "bg-rose-100 text-rose-700", icon: "🚫" },
+  packet_ready: { label: "CM AI", color: "bg-cyan-100 text-cyan-700", icon: "📦" },
+  answer_validation_failed: { label: "CM fail", color: "bg-rose-100 text-rose-700", icon: "📦" },
+  cm_runtime: { label: "CM", color: "bg-cyan-100 text-cyan-700", icon: "📦" },
+};
+
+/** @type {Record<string, { label: string; color: string }>} */
+const CHANNEL_LABELS = {
+  whatsapp: { label: "WhatsApp", color: "bg-green-100 text-green-700" },
+  instagram: { label: "Instagram", color: "bg-fuchsia-100 text-fuchsia-700" },
+  facebook: { label: "Facebook", color: "bg-blue-100 text-blue-700" },
+  testing_lab: { label: "Testing Lab", color: "bg-indigo-100 text-indigo-700" },
+  unknown: { label: "Unknown", color: "bg-slate-100 text-slate-600" },
+};
+
+/** @param {number | null | undefined} n */
+const formatUsd = (n) => {
+  if (n == null || Number.isNaN(Number(n))) return null;
+  const v = Number(n);
+  if (v === 0) return "$0.0000";
+  if (Math.abs(v) < 0.01) return `$${v.toFixed(4)}`;
+  return `$${v.toFixed(4)}`;
+};
+
+/**
+ * @param {ActivityFlowEntry} entry
+ * @returns {{ label: string, detail: string | null, tone: string }}
+ */
+const costSummary = (entry) => {
+  const status = String(entry.cost_status || "").toLowerCase();
+  if (status === "none") {
+    return { label: "No AI cost", detail: null, tone: "bg-slate-100 text-slate-600" };
+  }
+  if (entry.cost_usd != null) {
+    return {
+      label: formatUsd(entry.cost_usd) || "—",
+      detail: status === "estimated" ? "est." : status || null,
+      tone: "bg-emerald-50 text-emerald-700",
+    };
+  }
+  return { label: "unavailable", detail: "historical or missing usage", tone: "bg-amber-50 text-amber-700" };
 };
 
 /** @type {Record<string, { label: string; color: string; icon: string }>} */
@@ -161,6 +202,12 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
   const displayPhone = entry.user_phone || entry.user_phone_masked || entry.user_id || entry.user_id_masked || "...";
 
   const isGptFlow = entry.source === "gpt";
+  const channelKey = (entry.channel || "unknown").toLowerCase();
+  const channelMeta = CHANNEL_LABELS[channelKey] ?? CHANNEL_LABELS.unknown;
+  const costMeta = costSummary(entry);
+  const cm = entry.cm_diagnostics;
+  const faq = entry.faq_match;
+  const [showRawJson, setShowRawJson] = useState(false);
   return (
     <div ref={cardRef} className="scroll-mt-24">
     <motion.div
@@ -174,13 +221,20 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
         onClick={onToggle}
       >
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-3 min-w-0 flex-1 flex-wrap">
             <div className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${meta.color}`}>
               {meta.icon} {meta.label}
+            </div>
+            <div className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${channelMeta?.color || "bg-slate-100 text-slate-600"}`}>
+              {channelMeta?.label || "Unknown"}
             </div>
             <div className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${msgTypeMeta.color}`}>
               {msgTypeMeta.icon} {msgTypeMeta.label}
             </div>
+            <span className={`shrink-0 px-2 py-1 rounded-lg text-xs font-semibold ${costMeta.tone}`} title={costMeta.detail || undefined}>
+              {costMeta.label}
+              {costMeta.detail ? <span className="font-normal opacity-80 ml-1">({costMeta.detail})</span> : null}
+            </span>
             <span className="text-xs font-semibold text-slate-700">{displayName}</span>
             <span className="text-xs text-slate-500">{displayPhone}</span>
             <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${genderMeta.color}`}>{genderMeta.label}</span>
@@ -226,6 +280,75 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                 <pre className="text-sm text-red-800 whitespace-pre-wrap m-0 font-sans" dir="auto">{entry.flow_error}</pre>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Where it went</p>
+                <p className="text-slate-700"><strong>Channel:</strong> {channelMeta?.label || entry.channel || "Unknown"}</p>
+                <p className="text-slate-700"><strong>Direction:</strong> {entry.direction || "inbound"}</p>
+                <p className="text-slate-700"><strong>Handler:</strong> {entry.handler_path || entry.source || "—"}</p>
+                <p className="text-slate-700 break-all"><strong>Conversation:</strong> {entry.conversation_id || "—"}</p>
+              </div>
+              <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">What happened</p>
+                <p className="text-slate-700"><strong>Outcome:</strong> {entry.outcome || entry.source || "—"}</p>
+                <p className="text-slate-700"><strong>Source:</strong> {meta.label}</p>
+                {faq ? (
+                  <p className="text-slate-700">
+                    <strong>FAQ:</strong> id={String(faq.faq_id ?? "—")} · {faq.tier || "match"}
+                    {faq.similarity != null ? ` · ${(Number(faq.similarity) * 100).toFixed(0)}%` : ""}
+                  </p>
+                ) : null}
+                {Array.isArray(entry.pipeline_decisions) && entry.pipeline_decisions.length > 0 ? (
+                  <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+                    {entry.pipeline_decisions.slice(0, 8).map((d, i) => (
+                      <li key={`${String(d.step)}-${i}`}>
+                        {String(d.step || "step")}: {String(d.decision ?? JSON.stringify(d))}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+              <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">What it read</p>
+                {cm ? (
+                  <>
+                    <p className="text-slate-700"><strong>CM reason:</strong> {cm.reason || "—"}</p>
+                    <p className="text-slate-700 break-all"><strong>Content ver:</strong> {cm.content_version_id || "—"}</p>
+                    <p className="text-slate-700"><strong>Sources:</strong> {(cm.source_ids || []).length}</p>
+                    {(cm.retrieved_sources || []).slice(0, 5).map((s) => (
+                      <p key={String(s.source_id)} className="text-xs text-slate-600 truncate" title={s.title || s.source_id}>
+                        · {s.source_id}{s.title ? ` — ${s.title}` : ""}
+                      </p>
+                    ))}
+                    {(cm.retrieved_sources || []).length > 5 ? (
+                      <p className="text-xs text-slate-400">+{(cm.retrieved_sources || []).length - 5} more</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-slate-500 text-xs">No CM retrieval diagnostics for this turn.</p>
+                )}
+              </div>
+              <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Cost & tokens</p>
+                {entry.cost_status === "none" ? (
+                  <p className="text-slate-600">No AI call — cost N/A</p>
+                ) : entry.cost_usd != null ? (
+                  <>
+                    <p className="font-semibold text-emerald-700">{formatUsd(entry.cost_usd)}</p>
+                    <p className="text-xs text-slate-500">Status: {entry.cost_status || "estimated"}</p>
+                    {entry.cost_basis ? <p className="text-[10px] text-slate-400 break-all">{entry.cost_basis}</p> : null}
+                  </>
+                ) : (
+                  <p className="text-amber-700 font-medium">unavailable</p>
+                )}
+                {entry.model ? <p className="text-slate-700 mt-1"><strong>Model:</strong> <code className="bg-slate-100 px-1 rounded">{entry.model}</code></p> : null}
+                {entry.prompt_tokens != null ? <p className="text-slate-700">In: {entry.prompt_tokens.toLocaleString()}{entry.input_cost_usd != null ? ` (${formatUsd(entry.input_cost_usd)})` : ""}</p> : null}
+                {entry.completion_tokens != null ? <p className="text-slate-700">Out: {entry.completion_tokens.toLocaleString()}{entry.output_cost_usd != null ? ` (${formatUsd(entry.output_cost_usd)})` : ""}</p> : null}
+                {entry.tokens != null ? <p className="text-slate-700">Total tokens: {entry.tokens.toLocaleString()}</p> : null}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="p-3 bg-white rounded-lg border border-slate-200 text-sm">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">User Info</p>
@@ -339,10 +462,10 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
               </div>
             )}
 
-            {(entry.source === "gpt" || entry.source === "dynamic_retrieval") && (entry.tokens != null || entry.prompt_tokens != null || entry.completion_tokens != null || entry.model) && (
+            {(entry.source === "gpt" || entry.source === "dynamic_retrieval" || entry.cost_usd != null || entry.prompt_tokens != null) && (
               <div className="mt-4 pt-4 border-t border-slate-200">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">GPT usage — tokens</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">GPT usage — tokens & cost</p>
                   {(entry.token_source || entry.prompt_tokens != null) && (
                     <span className={`text-xs px-2 py-0.5 rounded font-medium ${(entry.token_source || "backend") === "backend" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
                       {(entry.token_source || "backend") === "backend" ? "Backend (GPT API)" : (entry.token_source || "Backend (GPT API)")}
@@ -351,14 +474,36 @@ const FlowCard = ({ entry, isExpanded, onToggle }) => {
                 </div>
                 <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 text-sm text-slate-700 space-y-1">
                   {entry.model && <p>Model: <code className="bg-violet-100 px-1 rounded">{entry.model}</code></p>}
-                  {entry.prompt_tokens != null && <p>Input tokens: <strong>{entry.prompt_tokens.toLocaleString()}</strong>{entry.input_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.input_cost_usd.toFixed(6)})</span>}</p>}
-                  {entry.completion_tokens != null && <p>Output tokens: <strong>{entry.completion_tokens.toLocaleString()}</strong>{entry.output_cost_usd != null && <span className="text-emerald-600 ml-1">(${entry.output_cost_usd.toFixed(6)})</span>}</p>}
+                  {entry.prompt_tokens != null && <p>Input tokens: <strong>{entry.prompt_tokens.toLocaleString()}</strong>{entry.input_cost_usd != null && <span className="text-emerald-600 ml-1">({formatUsd(entry.input_cost_usd)})</span>}</p>}
+                  {entry.completion_tokens != null && <p>Output tokens: <strong>{entry.completion_tokens.toLocaleString()}</strong>{entry.output_cost_usd != null && <span className="text-emerald-600 ml-1">({formatUsd(entry.output_cost_usd)})</span>}</p>}
                   {entry.tokens != null && <p>Total tokens: <strong>{entry.tokens.toLocaleString()}</strong></p>}
-                  {entry.cost_usd != null && <p className="font-semibold text-emerald-700">Total cost: <strong>${entry.cost_usd.toFixed(6)}</strong></p>}
+                  {entry.cost_usd != null ? (
+                    <p className="font-semibold text-emerald-700">Total cost: <strong>{formatUsd(entry.cost_usd)}</strong></p>
+                  ) : entry.cost_status !== "none" ? (
+                    <p className="font-semibold text-amber-700">Total cost: unavailable</p>
+                  ) : null}
                   {entry.response_time_ms != null && <p>Response time: <strong>{Math.round(entry.response_time_ms)}ms</strong></p>}
                 </div>
               </div>
             )}
+
+            <div className="pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowRawJson((v) => !v);
+                }}
+                className="text-xs text-slate-500 hover:text-slate-700 font-medium"
+              >
+                {showRawJson ? "Hide technical JSON" : "Show technical JSON"}
+              </button>
+              {showRawJson ? (
+                <pre className="mt-2 p-3 bg-slate-900 text-slate-100 text-[10px] rounded-lg overflow-auto max-h-72 whitespace-pre-wrap">
+                  {JSON.stringify(entry, null, 2)}
+                </pre>
+              ) : null}
+            </div>
           </div>
         </motion.div>
       )}

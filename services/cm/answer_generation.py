@@ -11,11 +11,64 @@ default) until a future cutover phase.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import Any
 
 from services.cm.schemas import AnswerPacket
 from services.llm_core_service import client
+from services.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
 
 _MODEL = "gpt-4o-mini"
+
+
+@dataclass
+class AnswerGenerationResult:
+    text: str
+    model: str = _MODEL
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_usd: float | None = None
+    input_cost_usd: float | None = None
+    output_cost_usd: float | None = None
+    cost_status: str = "unavailable"
+    cost_basis: str | None = None
+    call_count: int = 1
+
+
+@dataclass
+class UsageAccumulator:
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    calls: int = 0
+    models: list[str] = field(default_factory=list)
+
+    def add_from_response(self, response: Any, model: str) -> None:
+        usage = getattr(response, "usage", None)
+        pt = int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0
+        ct = int(getattr(usage, "completion_tokens", 0) or 0) if usage else 0
+        self.prompt_tokens += pt
+        self.completion_tokens += ct
+        self.calls += 1
+        self.models.append(model)
+
+    def to_result(self, text: str, model: str) -> AnswerGenerationResult:
+        if self.calls == 0 or (self.prompt_tokens == 0 and self.completion_tokens == 0):
+            return AnswerGenerationResult(text=text, model=model, cost_status="unavailable", call_count=self.calls)
+        costs = compute_cost_from_usage(model, self.prompt_tokens, self.completion_tokens)
+        return AnswerGenerationResult(
+            text=text,
+            model=model,
+            prompt_tokens=self.prompt_tokens,
+            completion_tokens=self.completion_tokens,
+            total_tokens=self.prompt_tokens + self.completion_tokens,
+            cost_usd=costs["cost_usd"],
+            input_cost_usd=costs["input_cost_usd"],
+            output_cost_usd=costs["output_cost_usd"],
+            cost_status="estimated",
+            cost_basis=COST_BASIS_TOKEN_RATES,
+            call_count=self.calls,
+        )
 
 
 def _build_system_prompt(packet: AnswerPacket) -> str:
@@ -61,7 +114,17 @@ def _build_system_prompt(packet: AnswerPacket) -> str:
 
 
 async def generate_answer(message: str, packet: AnswerPacket) -> str:
-    """Call the LLM once with the packet as grounding context. No tool calls, no side effects."""
+    """Call the LLM once with the packet as grounding context. No tool calls, no side effects.
+
+    Returns reply text only (backward compatible). Prefer :func:`generate_answer_with_usage`
+    when Interaction Logs need token/cost fields.
+    """
+    result = await generate_answer_with_usage(message, packet)
+    return result.text
+
+
+async def generate_answer_with_usage(message: str, packet: AnswerPacket) -> AnswerGenerationResult:
+    """Call the LLM once and return text + real OpenAI usage tokens / estimated USD cost."""
     system_prompt = _build_system_prompt(packet)
     response = await client.chat.completions.create(
         model=_MODEL,
@@ -71,7 +134,10 @@ async def generate_answer(message: str, packet: AnswerPacket) -> str:
         ],
         temperature=0.3,
     )
-    return (response.choices[0].message.content or "").strip()
+    text = (response.choices[0].message.content or "").strip()
+    acc = UsageAccumulator()
+    acc.add_from_response(response, _MODEL)
+    return acc.to_result(text, _MODEL)
 
 
 def make_regenerate_fn(message: str, packet: AnswerPacket) -> Callable[[str, list[str]], Awaitable[str]]:
@@ -94,6 +160,36 @@ def make_regenerate_fn(message: str, packet: AnswerPacket) -> Callable[[str, lis
             ],
             temperature=0.2,
         )
+        return (response.choices[0].message.content or "").strip()
+
+    return _regenerate
+
+
+def make_regenerate_fn_with_usage(
+    message: str,
+    packet: AnswerPacket,
+    usage_acc: UsageAccumulator,
+) -> Callable[[str, list[str]], Awaitable[str]]:
+    """Like :func:`make_regenerate_fn` but accumulates OpenAI usage into ``usage_acc``."""
+
+    async def _regenerate(previous_text: str, failed_rules: list[str]) -> str:
+        constraint = (
+            "Your previous answer violated these rules: "
+            + ", ".join(failed_rules)
+            + ". Rewrite the answer, obeying every platform rule and only stating facts from KNOWN FACTS."
+        )
+        system_prompt = _build_system_prompt(packet) + "\n" + constraint
+        response = await client.chat.completions.create(
+            model=_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": previous_text},
+                {"role": "user", "content": constraint},
+            ],
+            temperature=0.2,
+        )
+        usage_acc.add_from_response(response, _MODEL)
         return (response.choices[0].message.content or "").strip()
 
     return _regenerate

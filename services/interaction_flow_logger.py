@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import deque
 from datetime import datetime
 from typing import Any
@@ -20,6 +21,8 @@ _BUFFER_MAXLEN = 500
 # In-memory buffer for dashboard (last N entries) - loaded from file on startup
 _FLOW_BUFFER: deque = deque(maxlen=_BUFFER_MAXLEN)
 _INITIALIZED = False
+
+_SECRET_RE = re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|bearer|authorization|secret|password)\b\s*[:=]\s*\S+")
 
 
 def _ensure_data_dir() -> None:
@@ -106,6 +109,97 @@ def _mask_user_id(user_id: Any) -> str:
     return f"...{s[-4:]}"
 
 
+def _redact_secrets(text: str | None, max_len: int) -> str | None:
+    if not text:
+        return None
+    cleaned = _SECRET_RE.sub(r"\1=[REDACTED]", str(text))
+    return cleaned[:max_len]
+
+
+def resolve_interaction_channel(user_data: dict[str, Any] | None) -> str:
+    """Normalize channel label for Interaction Logs (IG/FB/WA/Testing Lab)."""
+    ud = user_data or {}
+    if ud.get("_dashboard_test_simulation"):
+        return "testing_lab"
+    raw = str(ud.get("channel") or "").strip().lower()
+    if raw in ("instagram", "ig"):
+        return "instagram"
+    if raw in ("facebook", "messenger", "fb"):
+        return "facebook"
+    if raw in ("whatsapp", "wa", "360dialog", "dialog360"):
+        return "whatsapp"
+    if raw in ("testing_lab", "dashboard", "test"):
+        return "testing_lab"
+    # Phone-based WhatsApp sessions typically omit channel.
+    if ud.get("phone_number") or str(ud.get("provider") or "").lower() in ("whatsapp", "360dialog"):
+        return "whatsapp"
+    return raw or "unknown"
+
+
+def safe_cm_diagnostics(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Keep only safe CM diagnostic fields (IDs/titles — no prompts/secrets)."""
+    if not isinstance(metadata, dict) or not metadata:
+        return None
+    sources_raw = metadata.get("retrieved_sources")
+    sources: list[dict[str, str]] = []
+    if isinstance(sources_raw, list):
+        for item in sources_raw[:30]:
+            if isinstance(item, dict):
+                sid = str(item.get("source_id") or item.get("id") or "")[:120]
+                title = str(item.get("title") or item.get("text") or "")[:160]
+                if sid or title:
+                    sources.append({"source_id": sid, "title": title})
+            elif item is not None:
+                sources.append({"source_id": str(item)[:120], "title": ""})
+    source_ids = metadata.get("source_ids")
+    out: dict[str, Any] = {
+        "reason": (str(metadata.get("reason") or "")[:120] or None),
+        "content_version_id": (str(metadata.get("content_version_id") or "")[:120] or None),
+        "index_version_id": (str(metadata.get("index_version_id") or "")[:120] or None),
+        "validated": metadata.get("validated") if isinstance(metadata.get("validated"), bool) else None,
+        "regenerated": metadata.get("regenerated") if isinstance(metadata.get("regenerated"), bool) else None,
+        "source_ids": [str(x)[:120] for x in (source_ids or [])[:40]] if isinstance(source_ids, list) else [],
+        "retrieved_sources": sources,
+        "failed_rules": [str(x)[:80] for x in (metadata.get("failed_rules") or [])[:20]]
+        if isinstance(metadata.get("failed_rules"), list)
+        else [],
+    }
+    # Drop empty-only payloads
+    if not any(v not in (None, [], "") for k, v in out.items() if k != "failed_rules"):
+        return None
+    return out
+
+
+def _derive_cost_status(
+    *,
+    source: str,
+    cost_usd: float | None,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    tokens: int | None,
+    cost_status: str | None,
+    ai_called: bool | None,
+) -> str:
+    if cost_status in ("estimated", "unavailable", "none", "actual"):
+        return cost_status
+    src = (source or "").lower()
+    ai_sources = {
+        "gpt",
+        "dynamic_retrieval",
+        "cm_runtime",
+        "packet_ready",
+        "answer_validation_failed",
+    }
+    called = ai_called if ai_called is not None else (src in ai_sources or src.startswith("cm_") or "gpt" in src)
+    if not called:
+        return "none"
+    if cost_usd is not None:
+        return "estimated"
+    if prompt_tokens is not None or completion_tokens is not None or tokens is not None:
+        return "unavailable"
+    return "unavailable"
+
+
 def log_interaction(
     user_id: str,
     user_message: str,
@@ -135,6 +229,19 @@ def log_interaction(
     flow_error: str | None = None,
     token_source: str | None = None,
     message_type: str | None = None,
+    channel: str | None = None,
+    direction: str | None = None,
+    conversation_id: str | None = None,
+    message_id: str | None = None,
+    handler_path: str | None = None,
+    outcome: str | None = None,
+    pipeline_decisions: list[dict[str, Any]] | None = None,
+    cm_diagnostics: dict[str, Any] | None = None,
+    faq_match: dict[str, Any] | None = None,
+    cost_status: str | None = None,
+    cost_basis: str | None = None,
+    ai_called: bool | None = None,
+    user_data: dict[str, Any] | None = None,
 ) -> None:
     """
     Log one interaction in the User → Bot → AI → Bot → User flow.
@@ -164,6 +271,28 @@ def log_interaction(
         "yes",
         "on",
     }
+    resolved_channel = channel or resolve_interaction_channel(user_data)
+    resolved_cost_status = _derive_cost_status(
+        source=source,
+        cost_usd=cost_usd,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        tokens=tokens,
+        cost_status=cost_status,
+        ai_called=ai_called,
+    )
+    safe_diag = safe_cm_diagnostics(cm_diagnostics) if cm_diagnostics else None
+    safe_faq: dict[str, Any] | None = None
+    if isinstance(faq_match, dict) and faq_match:
+        safe_faq = {
+            "faq_id": faq_match.get("faq_id"),
+            "tier": (str(faq_match.get("tier") or "")[:40] or None),
+            "similarity": faq_match.get("similarity")
+            if isinstance(faq_match.get("similarity"), (int, float))
+            else None,
+            "stored_language": (str(faq_match.get("stored_language") or "")[:16] or None),
+        }
+
     # Default: mask phones and truncate prompts — do not persist full customer prompts.
     entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -175,21 +304,38 @@ def log_interaction(
         "user_gender": (user_gender or "").strip().lower() or "unknown",
         "customer_exists": customer_exists if isinstance(customer_exists, bool) else None,
         "customer_file_status": (customer_file_status or "").strip().lower() or None,
-        "user_message": (user_message or "")[:500],
-        "bot_to_user": (bot_to_user or "")[:1000],
+        "user_message": _redact_secrets(user_message, 500),
+        "bot_to_user": _redact_secrets(bot_to_user, 1000),
         "source": source,
+        "channel": resolved_channel,
+        "direction": (direction or "inbound").strip().lower()[:20],
+        "conversation_id": (str(conversation_id)[:120] if conversation_id else None),
+        "message_id": (str(message_id)[:120] if message_id else None),
+        "handler_path": (str(handler_path)[:200] if handler_path else None),
+        "outcome": (str(outcome or source)[:120] if (outcome or source) else None),
+        "pipeline_decisions": (pipeline_decisions or [])[:40] or None,
+        "cm_diagnostics": safe_diag,
+        "faq_match": safe_faq,
         "ai_query_summary": (
-            ((ai_query_summary or "")[:120000] if store_full_prompts else (ai_query_summary or "")[:500])
+            (
+                _redact_secrets(ai_query_summary, 120000)
+                if store_full_prompts
+                else _redact_secrets(ai_query_summary, 500)
+            )
             if ai_query_summary
             else None
         ),
         "bot_sent_to_ai_full": (
-            ((bot_sent_to_ai_full or "")[:250000] if store_full_prompts else None) if bot_sent_to_ai_full else None
+            (_redact_secrets(bot_sent_to_ai_full, 250000) if store_full_prompts else None)
+            if bot_sent_to_ai_full
+            else None
         ),
         "customer_context_sent": (
-            ((customer_context_sent or "")[:50000] if store_full_prompts else None) if customer_context_sent else None
+            (_redact_secrets(customer_context_sent, 50000) if store_full_prompts else None)
+            if customer_context_sent
+            else None
         ),
-        "ai_raw_response": (ai_raw_response or "")[:500] if ai_raw_response else None,
+        "ai_raw_response": _redact_secrets(ai_raw_response, 500) if ai_raw_response else None,
         "model": model,
         "tokens": tokens,
         "prompt_tokens": prompt_tokens,
@@ -197,14 +343,22 @@ def log_interaction(
         "cost_usd": round(cost_usd, 6) if cost_usd is not None else None,
         "input_cost_usd": round(input_cost_usd, 6) if input_cost_usd is not None else None,
         "output_cost_usd": round(output_cost_usd, 6) if output_cost_usd is not None else None,
+        "cost_status": resolved_cost_status,
+        "cost_basis": (cost_basis or None)
+        if resolved_cost_status == "estimated"
+        else (cost_basis if cost_basis else None),
         "response_time_ms": response_time_ms,
         "qa_match_score": qa_match_score,
         "tool_calls": tool_calls,
         "flow_steps": flow_steps[:50] if flow_steps else None,
-        "flow_error": (flow_error or "")[:2000] if flow_error else None,
+        "flow_error": _redact_secrets(flow_error, 2000) if flow_error else None,
         "token_source": (token_source or "")[:50] if token_source else None,
         "message_type": (message_type or "text").lower() if message_type else "text",
     }
+    if entry["cost_status"] == "estimated" and not entry.get("cost_basis"):
+        from services.model_pricing import COST_BASIS_TOKEN_RATES
+
+        entry["cost_basis"] = COST_BASIS_TOKEN_RATES
 
     _FLOW_BUFFER.append(entry)
     _append_to_file(entry)
@@ -222,8 +376,30 @@ def get_recent_flows(limit: int = 50, search_phone: str | None = None) -> list[d
                 for e in entries
                 if q in (e.get("user_phone") or "").replace(" ", "").replace("+", "").replace("-", "")
                 or q in (e.get("user_id") or "").replace(" ", "").replace("+", "").replace("-", "")
+                or q in (e.get("user_phone_masked") or "").replace(" ", "").replace("+", "").replace("-", "")
             ]
-    return entries[-limit:]
+    # Normalize historical rows for the UI (honest cost status).
+    out: list[dict[str, Any]] = []
+    for e in entries[-limit:]:
+        row = dict(e)
+        if "cost_status" not in row or not row.get("cost_status"):
+            row["cost_status"] = _derive_cost_status(
+                source=str(row.get("source") or ""),
+                cost_usd=row.get("cost_usd") if isinstance(row.get("cost_usd"), (int, float)) else None,
+                prompt_tokens=row.get("prompt_tokens") if isinstance(row.get("prompt_tokens"), int) else None,
+                completion_tokens=row.get("completion_tokens")
+                if isinstance(row.get("completion_tokens"), int)
+                else None,
+                tokens=row.get("tokens") if isinstance(row.get("tokens"), int) else None,
+                cost_status=None,
+                ai_called=None,
+            )
+        if "channel" not in row or not row.get("channel"):
+            row["channel"] = "unknown"
+        if "direction" not in row or not row.get("direction"):
+            row["direction"] = "inbound"
+        out.append(row)
+    return out
 
 
 def clear_flows() -> None:

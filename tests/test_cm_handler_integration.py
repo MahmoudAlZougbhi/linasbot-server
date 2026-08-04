@@ -1,8 +1,8 @@
 """CM Phase 6: minimal handler integration (`handlers.text_handlers_respond`).
 
 Verifies the ``CM_RUNTIME_MODE=published`` hook: FAQ/restricted short-circuits skip the large-AI
-call entirely, a FAQ-miss packet routes through ``generate_answer`` + validator, and a missing
-published pointer produces an honest failure message (never a silent legacy fallback).
+call entirely, a FAQ-miss packet routes through ``generate_answer_with_usage`` + validator, and a
+missing published pointer produces an honest failure message (never a silent legacy fallback).
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from handlers.text_handlers_respond import _handle_published_cm_runtime
+from services.cm.answer_generation import AnswerGenerationResult
 from services.local_qa_service import local_qa_service
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
@@ -43,7 +44,7 @@ async def test_restricted_topic_short_circuits_without_calling_generate_answer()
         {"restricted": initial_restricted_policy(active=True).model_dump(mode="json")},
     )
 
-    with patch("services.cm.answer_generation.generate_answer", new_callable=AsyncMock) as mock_gen:
+    with patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
             message="I want tattoo removal please",
@@ -53,6 +54,8 @@ async def test_restricted_topic_short_circuits_without_calling_generate_answer()
     mock_gen.assert_not_awaited()
     assert metadata["reason"] == "restricted"
     assert reply
+    assert metadata.get("ai_called") is False
+    assert metadata.get("cost_status") == "none"
 
 
 @pytest.mark.asyncio
@@ -73,7 +76,7 @@ async def test_faq_hit_short_circuits_without_calling_generate_answer() -> None:
         }
     )
     try:
-        with patch("services.cm.answer_generation.generate_answer", new_callable=AsyncMock) as mock_gen:
+        with patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
             reply, metadata = await _handle_published_cm_runtime(
                 tenant_id=tenant_id,
                 message="what are your opening hours",
@@ -92,9 +95,22 @@ async def test_packet_ready_calls_generate_answer_and_validates() -> None:
     tenant_id = "cm_handler_test_packet"
     await publish_test_content(tenant_id)
 
+    gen = AnswerGenerationResult(
+        text="A friendly, on-language answer with no invented facts.",
+        model="gpt-4o-mini",
+        prompt_tokens=100,
+        completion_tokens=40,
+        total_tokens=140,
+        cost_usd=0.000039,
+        input_cost_usd=0.000015,
+        output_cost_usd=0.000024,
+        cost_status="estimated",
+        cost_basis="openai_usage_tokens_x_configured_rates",
+    )
+
     with patch(
-        "services.cm.answer_generation.generate_answer",
-        new=AsyncMock(return_value="A friendly, on-language answer with no invented facts."),
+        "services.cm.answer_generation.generate_answer_with_usage",
+        new=AsyncMock(return_value=gen),
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
@@ -105,6 +121,10 @@ async def test_packet_ready_calls_generate_answer_and_validates() -> None:
     assert metadata["reason"] == "packet_ready"
     assert metadata["validated"] is True
     assert reply == "A friendly, on-language answer with no invented facts."
+    assert metadata["ai_called"] is True
+    assert metadata["prompt_tokens"] == 100
+    assert metadata["cost_status"] == "estimated"
+    assert metadata["cost_usd"] == 0.000039
 
 
 @pytest.mark.asyncio
@@ -115,14 +135,20 @@ async def test_packet_ready_validation_failure_returns_dynamic_message_and_no_re
     bad_reply = "Our price is $999 for that."
 
     async def _always_bad(_message, _packet):
+        return AnswerGenerationResult(text=bad_reply, cost_status="unavailable")
+
+    async def _regen_bad(_prev, _rules):
         return bad_reply
 
-    def _fake_make_regenerate_fn(_message, _packet):
-        return _always_bad
+    def _fake_make_regenerate_fn_with_usage(_message, _packet, _acc):
+        return _regen_bad
 
     with (
-        patch("services.cm.answer_generation.generate_answer", new=_always_bad),
-        patch("services.cm.answer_generation.make_regenerate_fn", new=_fake_make_regenerate_fn),
+        patch("services.cm.answer_generation.generate_answer_with_usage", new=_always_bad),
+        patch(
+            "services.cm.answer_generation.make_regenerate_fn_with_usage",
+            new=_fake_make_regenerate_fn_with_usage,
+        ),
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
