@@ -191,7 +191,9 @@ def parse_meta_messaging_events(
                 continue
             postback_raw = item.get("postback")
             postback: dict[str, Any] = postback_raw if isinstance(postback_raw, dict) else {}
-            sender_id = str((item.get("sender") or {}).get("id") or "").strip()
+            sender_candidate = item.get("sender")
+            sender_raw: dict[str, Any] = sender_candidate if isinstance(sender_candidate, dict) else {}
+            sender_id = str(sender_raw.get("id") or "").strip()
             recipient_id = str((item.get("recipient") or {}).get("id") or entry_id).strip()
             if not sender_id:
                 continue
@@ -217,19 +219,26 @@ def parse_meta_messaging_events(
                 if not _account_allowed_for_channel(channel, entry_id, recipient_id, page_id, instagram_account_id):
                     continue
 
-            events.append(
-                {
-                    "channel": channel,
-                    "sender_id": sender_id,
-                    "recipient_id": recipient_id,
-                    "account_id": entry_id or recipient_id,
-                    "message_id": message_id,
-                    "timestamp": item.get("timestamp"),
-                    "text": text,
-                    "attachments": attachments,
-                    "is_postback": bool(postback),
-                }
-            )
+            # Best-effort: some Meta payloads include participant labels on sender.
+            # Never invent; Graph User Profile remains the primary name source.
+            sender_name = str(sender_raw.get("name") or "").strip()
+            sender_username = str(sender_raw.get("username") or "").strip()
+            event: dict[str, Any] = {
+                "channel": channel,
+                "sender_id": sender_id,
+                "recipient_id": recipient_id,
+                "account_id": entry_id or recipient_id,
+                "message_id": message_id,
+                "timestamp": item.get("timestamp"),
+                "text": text,
+                "attachments": attachments,
+                "is_postback": bool(postback),
+            }
+            if sender_name:
+                event["sender_name"] = sender_name
+            if sender_username:
+                event["sender_username"] = sender_username
+            events.append(event)
     return events
 
 
@@ -246,6 +255,94 @@ def split_meta_text(text: str, limit: int = 950) -> Iterable[str]:
             cut = limit
         yield remaining[:cut].strip()
         remaining = remaining[cut:].strip()
+
+
+# Channel-scoped labels that must never be treated as a real Meta participant name.
+# Legacy hardcodes ("Instagram Customer" / "Facebook Customer") are included so
+# stored conversations refresh instead of greeting with the placeholder forever.
+UNRESOLVED_SOCIAL_DISPLAY_NAMES = frozenset(
+    {
+        "instagram customer",
+        "facebook customer",
+        "unknown customer",
+        "client",
+        "customer",
+        "guest",
+        "user",
+        "anonymous",
+        "not known",
+        "n/a",
+        "na",
+        "test user",
+        "new user",
+    }
+)
+SOCIAL_DISPLAY_NAME_FALLBACK = "Customer"
+
+
+def is_unresolved_social_display_name(name: str | None) -> bool:
+    """True when the value is empty or a non-personal placeholder label."""
+    cleaned = str(name or "").strip()
+    if not cleaned:
+        return True
+    lowered = cleaned.lower()
+    if lowered in UNRESOLVED_SOCIAL_DISPLAY_NAMES:
+        return True
+    if lowered.startswith("test user"):
+        return True
+    return False
+
+
+def pick_meta_participant_display_name(
+    *,
+    name: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    username: str | None = None,
+) -> str | None:
+    """
+    Choose a display name from Meta-provided profile fields only.
+
+    Prefer full name, then first(+last), then Instagram username. Never invent.
+    """
+    candidates: list[str] = []
+    full = str(name or "").strip()
+    if full:
+        candidates.append(full)
+    first = str(first_name or "").strip()
+    last = str(last_name or "").strip()
+    if first and last:
+        candidates.append(f"{first} {last}")
+    elif first:
+        candidates.append(first)
+    handle = str(username or "").strip().lstrip("@")
+    if handle:
+        candidates.append(handle)
+    for candidate in candidates:
+        if not is_unresolved_social_display_name(candidate):
+            return candidate
+    return None
+
+
+def normalize_social_display_name(name: str | None, *, fallback: str = SOCIAL_DISPLAY_NAME_FALLBACK) -> str:
+    """Map unresolved / legacy placeholders to an honest fallback for UI and prompts."""
+    cleaned = str(name or "").strip()
+    if is_unresolved_social_display_name(cleaned):
+        return fallback
+    return cleaned
+
+
+def scrub_legacy_meta_channel_placeholder(name: str | None) -> str:
+    """
+    Replace only the historical channel-branded labels in stored UI data.
+
+    Other unresolved labels (e.g. WhatsApp \"Unknown Customer\") are left intact
+    so Live Chat behavior outside Meta social stays unchanged.
+    """
+    cleaned = str(name or "").strip()
+    if cleaned.lower() in {"instagram customer", "facebook customer"}:
+        return SOCIAL_DISPLAY_NAME_FALLBACK
+    return cleaned
 
 
 class MetaMessagingAdapter:
@@ -316,6 +413,42 @@ class MetaMessagingAdapter:
         if self.channel != "facebook":
             return {"success": True, "skipped": True}
         return await self._post({"recipient": {"id": str(recipient_id)}, "sender_action": "typing_on"})
+
+    async def fetch_participant_profile(self, participant_id: str) -> dict[str, Any]:
+        """
+        Fetch messaging participant profile fields Meta exposes for this channel.
+
+        Facebook PSID: name / first_name / last_name (User Profile API).
+        Instagram IGSID: name / username.
+        Returns an empty dict when the profile is unavailable (privacy, permissions,
+        or transient Graph errors) — callers must use an honest fallback.
+        """
+        pid = str(participant_id or "").strip()
+        if not pid or not self.access_token:
+            return {}
+        fields = "name,username" if str(self.channel or "").lower() == "instagram" else "name,first_name,last_name"
+        url = f"https://graph.facebook.com/{self.graph_api_version}/{pid}"
+        try:
+            response = await self.client.get(
+                url,
+                params={"fields": fields, "access_token": self.access_token},
+            )
+            if response.status_code >= 400:
+                # Do not log body or participant id — may contain PII / identifiers.
+                return {}
+            payload = response.json()
+            if not isinstance(payload, dict):
+                return {}
+            if payload.get("error"):
+                return {}
+            return {
+                "name": str(payload.get("name") or "").strip() or None,
+                "first_name": str(payload.get("first_name") or "").strip() or None,
+                "last_name": str(payload.get("last_name") or "").strip() or None,
+                "username": str(payload.get("username") or "").strip() or None,
+            }
+        except (httpx.HTTPError, TypeError, ValueError):
+            return {}
 
     async def close(self) -> None:
         if self._owns_client:

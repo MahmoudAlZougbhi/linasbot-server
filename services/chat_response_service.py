@@ -2166,6 +2166,8 @@ def _is_placeholder_booking_customer_name(name: str | None) -> bool:
         "client",
         "unknown",
         "unknown customer",
+        "instagram customer",
+        "facebook customer",
         "test user",
         "guest",
         "user",
@@ -3046,7 +3048,15 @@ async def get_bot_chat_response(
 
     # CRITICAL: Sync CRM lookup when we have phone but no known name (fixes race: defer_external
     # runs in background, so AI was called before CRM name arrived - bot asked for name when customer has file)
-    _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
+    _placeholder_names = {
+        "client",
+        "unknown",
+        "unknown customer",
+        "instagram customer",
+        "facebook customer",
+        "customer",
+        "test user",
+    }
     _name_lower = (user_name or "").strip().lower()
     _name_unknown = (
         not user_name
@@ -3108,7 +3118,15 @@ async def get_bot_chat_response(
 
     # Authoritative server profile (after CRM sync) — booking FSM + prompts must not re-ask these
     user_name = config.user_names.get(user_id, "client")
-    _placeholder_names_profile = {"client", "unknown", "unknown customer", "test user"}
+    _placeholder_names_profile = {
+        "client",
+        "unknown",
+        "unknown customer",
+        "instagram customer",
+        "facebook customer",
+        "customer",
+        "test user",
+    }
     _name_lower_profile = (user_name or "").strip().lower()
     name_is_known = (
         user_name
@@ -3251,7 +3269,15 @@ async def get_bot_chat_response(
     customer_first_name = (
         (user_name.split()[0] if user_name and user_name != "client" else user_name) if user_name else None
     )
-    _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
+    _placeholder_names = {
+        "client",
+        "unknown",
+        "unknown customer",
+        "instagram customer",
+        "facebook customer",
+        "customer",
+        "test user",
+    }
     _name_lower = (user_name or "").strip().lower()
     current_local_time = now_in_bot_tz()
     current_date_str = current_local_time.strftime("%Y-%m-%d")
