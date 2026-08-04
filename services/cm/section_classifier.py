@@ -248,7 +248,29 @@ def classify_article(
         base.rationale = "prep/aftercare content"
         return base
 
-    if _has_any(blob, _LOCATION_MARKERS) or "location" in title_l:
+    # Treatment philosophies must win over booking/tool language inside the same body.
+    services = _matched_services(blob)
+    if services and philosophy:
+        availability = _availability_from_text(blob, philosophy=True)
+        derivations = [
+            ServiceDerivation(
+                id=service_id,
+                labels=labels,
+                available=True if availability is None else availability,
+                category=category_name,
+                aliases=aliases,
+                notes=f"Derived from training philosophy source {source_filename or article_id}.",
+            )
+            for service_id, labels, category_name, aliases in services
+        ]
+        base.targets = ["services", "knowledge"]
+        base.service_derivations = derivations
+        base.keep_in_knowledge_active = True
+        base.archive_from_knowledge = False
+        base.rationale = "named treatment philosophy — service card + educational knowledge retained"
+        return base
+
+    if _has_any(blob, _LOCATION_MARKERS) or "location_rules" in title_l or title_l.strip("<>/ ") == "location_rules":
         base.targets = ["branches"]
         base.notes_home = "branches"
         base.keep_in_knowledge_active = False
@@ -276,7 +298,7 @@ def classify_article(
         base.rationale = "appointment/booking/handoff operational rules"
         return base
 
-    if _has_any(blob, _STYLE_MARKERS) and not philosophy:
+    if _has_any(blob, _STYLE_MARKERS):
         base.targets = ["style"]
         base.notes_home = "style"
         base.keep_in_knowledge_active = False
@@ -284,7 +306,7 @@ def classify_article(
         base.rationale = "style/tone guidance"
         return base
 
-    # Price narrative (never invent amounts — notes/provenance only).
+    # Price narrative (never invent amounts — policy_text/provenance only).
     if (
         _has_any(blob, _PRICE_MARKERS)
         or "pricing" in title_l
@@ -292,7 +314,6 @@ def classify_article(
         or "price_list" in (source_filename or "").lower()
         or category == "pricing_source"
     ):
-        # Booking-linked pricing rules still belong with handoff/pricing notes; prefer prices.
         if "appointment" in blob and "pricing after" in blob:
             base.targets = ["prices", "handoff"]
             base.notes_home = "prices"
@@ -304,28 +325,10 @@ def classify_article(
         base.rationale = "price/provenance text (no invented amounts)"
         return base
 
-    services = _matched_services(blob)
     if services:
-        availability = _availability_from_text(blob, philosophy=philosophy)
-        derivations: list[ServiceDerivation] = []
+        availability = _availability_from_text(blob, philosophy=False)
+        derivations = []
         for service_id, labels, category_name, aliases in services:
-            if availability is None and not philosophy:
-                # Educational-only mention: keep knowledge, do not invent a service availability row
-                # unless this is clearly a named treatment philosophy/catalog entry.
-                if any(tok in title_l for tok in ("about ", "training", service_id.replace("_", " "))):
-                    # Still create a service only when title/body clearly names the treatment as a clinic service topic.
-                    if philosophy or "we offer" in blob or "service_id" in blob:
-                        derivations.append(
-                            ServiceDerivation(
-                                id=service_id,
-                                labels=labels,
-                                available=True,
-                                category=category_name,
-                                aliases=aliases,
-                                notes=f"Derived from source {source_filename or article_id} (training philosophy).",
-                            )
-                        )
-                continue
             if availability is None:
                 continue
             derivations.append(
@@ -338,31 +341,22 @@ def classify_article(
                     notes=f"Derived from source {source_filename or article_id}.",
                 )
             )
-
-        if philosophy or derivations:
-            # Training philosophy / offered service: Service card + keep full educational body in Knowledge.
-            if not derivations and philosophy and services:
-                for service_id, labels, category_name, aliases in services:
-                    derivations.append(
-                        ServiceDerivation(
-                            id=service_id,
-                            labels=labels,
-                            available=True,
-                            category=category_name,
-                            aliases=aliases,
-                            notes=f"Derived from training philosophy source {source_filename or article_id}.",
-                        )
-                    )
+        if derivations:
             base.targets = ["services", "knowledge"]
             base.service_derivations = derivations
             base.keep_in_knowledge_active = True
             base.archive_from_knowledge = False
             base.rationale = "named treatment — service card + educational knowledge retained"
             return base
-
-        # Educational mention without availability claim: knowledge only.
         base.targets = ["knowledge"]
         base.rationale = "educational treatment text without availability claim"
+        return base
+
+    if "knowledge base" in title_l or category == "foundation":
+        base.targets = ["knowledge"]
+        base.keep_in_knowledge_active = True
+        base.archive_from_knowledge = False
+        base.rationale = "foundation / general clinic education"
         return base
 
     base.rationale = "general clinic education"
