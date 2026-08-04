@@ -50,7 +50,8 @@ async def update_ai_limits(updates: dict[str, Any], request: Request) -> Any:
     session = require_permission(request, "settings")
     body = updates if isinstance(updates, dict) else {}
     # Nested {limits: {...}} or flat body both accepted.
-    payload = body.get("limits") if isinstance(body.get("limits"), dict) else body
+    raw_limits = body.get("limits")
+    payload: dict[str, Any] = raw_limits if isinstance(raw_limits, dict) else body
     limits = ai_usage_limits_service.save_settings(session.tenant_id, payload)
     return {
         "success": True,
