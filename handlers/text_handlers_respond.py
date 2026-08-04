@@ -1095,8 +1095,6 @@ async def _process_and_respond(
             limit_msg = customer_image_limit_message(image_quota)
             await send_message_func(user_id, limit_msg)
             try:
-                from services.interaction_flow_logger import is_flow_logging_enabled, log_interaction
-
                 if is_flow_logging_enabled():
                     log_interaction(
                         user_id,
