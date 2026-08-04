@@ -123,9 +123,9 @@ async def test_fetch_participant_profile_facebook_fields():
         client=client,
     )
     profile = await adapter.fetch_participant_profile("PSID99")
-    assert pick_meta_participant_display_name(**{k: profile.get(k) for k in ("name", "first_name", "last_name", "username")}) == (
-        "Omar Fares"
-    )
+    assert pick_meta_participant_display_name(
+        **{k: profile.get(k) for k in ("name", "first_name", "last_name", "username")}
+    ) == ("Omar Fares")
     _args, kwargs = client.get.await_args
     assert kwargs["params"]["fields"] == "name,first_name,last_name"
 
