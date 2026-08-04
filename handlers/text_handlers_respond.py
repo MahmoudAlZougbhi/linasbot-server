@@ -24,7 +24,7 @@ from services.conversation_router import (
     route as router_route,
 )
 from services.dynamic_messages_service import get_dynamic_message
-from services.interaction_flow_logger import log_interaction
+from services.interaction_flow_logger import is_flow_logging_enabled, log_interaction
 from services.language_detection_service import language_detection_service
 from services.local_qa_service import local_qa_service
 from services.user_persistence_service import user_persistence
