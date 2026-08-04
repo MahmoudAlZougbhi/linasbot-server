@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 from unittest import mock
 
@@ -23,7 +24,8 @@ async def test_typing_failure_does_not_abort_customer_reply_pipeline(capsys: pyt
         "phone_number": f"room:{user_id}",
         "_text_turn_epoch": 1,
     }
-    config.user_pending_messages[user_id] = ["I want to book an appointment."]
+    config.user_pending_messages[user_id].clear()
+    config.user_pending_messages[user_id].append("I want to book an appointment.")
     processed: list[str] = []
 
     async def failed_typing(_user_id: str) -> Any:
@@ -82,3 +84,11 @@ async def test_background_failure_log_omits_exception_message(caplog: pytest.Log
     rendered = "\n".join(record.getMessage() for record in caplog.records)
     assert "background_processing_failed type=RuntimeError" in rendered
     assert "sensitive-webhook-payload-must-not-be-logged" not in rendered
+
+
+def test_production_runtime_metric_parser_uses_real_meta_object_names() -> None:
+    source = (Path(__file__).resolve().parents[1] / ".github/workflows/prod-preflight-readonly.yml").read_text(
+        encoding="utf-8"
+    )
+    assert r"object=(page|instagram)" in source
+    assert r"object=(facebook|instagram)" not in source

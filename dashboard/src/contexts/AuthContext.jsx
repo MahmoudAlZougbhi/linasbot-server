@@ -59,6 +59,7 @@ const buildUserData = (user) => {
     status: typeof record.status === 'string' ? record.status : 'active',
     lastLogin: typeof record.lastLogin === 'string' ? record.lastLogin : null,
     createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
+    tenantId: typeof record.tenantId === 'string' ? record.tenantId : 'linas',
   };
 };
 

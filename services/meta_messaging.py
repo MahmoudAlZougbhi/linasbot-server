@@ -22,6 +22,10 @@ class MetaMessagingSettings:
     instagram_account_id: str
     verify_token: str
     graph_api_version: str
+    app_id: str = ""
+    app_key: str = "linas_first_party"
+    tenant_id: str = "linas"
+    binding_id: str = ""
 
 
 def get_meta_messaging_settings() -> MetaMessagingSettings:
@@ -36,6 +40,7 @@ def get_meta_messaging_settings() -> MetaMessagingSettings:
         instagram_account_id=(os.getenv("META_INSTAGRAM_ACCOUNT_ID") or "").strip(),
         verify_token=(os.getenv("META_WEBHOOK_VERIFY_TOKEN") or "").strip(),
         graph_api_version=version,
+        app_id=(os.getenv("META_APP_ID") or "").strip(),
     )
 
 

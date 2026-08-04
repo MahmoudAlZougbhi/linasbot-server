@@ -140,7 +140,7 @@ def wa_me_url(phone: str) -> str:
     return f"https://wa.me/{phone_digits(phone)}"
 
 
-def resolve_social_whatsapp_number(env_name: str) -> str | None:
+def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str = "linas") -> str | None:
     """Resolve public WhatsApp contact for a matrix key.
 
     Precedence:
@@ -149,19 +149,20 @@ def resolve_social_whatsapp_number(env_name: str) -> str | None:
        (``env_name.lower()``) — never silently fall back to code defaults.
     3. Tracked ``DEFAULT_SOCIAL_WHATSAPP_CONTACTS`` (legacy mode only).
     """
-    override = (os.getenv(env_name) or "").strip()
+    tenant = (tenant_id or "linas").strip() or "linas"
+    override = (os.getenv(env_name) or "").strip() if tenant == "linas" else ""
     if override:
         return override
 
     # CM AI CONTROL PLANE — published mode reads phones from published CM handoff only.
-    from services.cm.constants import DEFAULT_TENANT_ID, cm_runtime_mode
+    from services.cm.constants import cm_runtime_mode
 
     if cm_runtime_mode() == "published":
         try:
             from services.cm.schemas import HandoffPolicy
             from services.cm.version_store import load_published_content
 
-            _pointer, sections = load_published_content(DEFAULT_TENANT_ID)
+            _pointer, sections = load_published_content(tenant)
             policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
             contact_id = env_name.strip().lower()
             for contact in policy.contacts:
@@ -172,6 +173,10 @@ def resolve_social_whatsapp_number(env_name: str) -> str | None:
             return None
         return None
 
+    # Never leak Lina's deterministic contact matrix into a SaaS tenant that has
+    # not published its own handoff policy.
+    if tenant != "linas":
+        return None
     default = DEFAULT_SOCIAL_WHATSAPP_CONTACTS.get(env_name)
     return default.strip() if default else None
 
@@ -435,7 +440,10 @@ def route_social_contact_request(
         return SocialContactRouteResult(_ask_gender(lang), detected_intent, branch=branch)
 
     env_name = f"SOCIAL_WHATSAPP_{branch.upper()}_{gender.upper()}"
-    phone = resolve_social_whatsapp_number(env_name)
+    phone = resolve_social_whatsapp_number(
+        env_name,
+        tenant_id=str(user_data.get("tenant_id") or "linas"),
+    )
     if not phone:
         return SocialContactRouteResult(
             _missing_contact(lang),

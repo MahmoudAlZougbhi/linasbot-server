@@ -38,6 +38,7 @@ _ROUTE_MODULES = (
     "modules.training_files_api",
     "modules.chat_history_api",
     "modules.webhook_handlers",
+    "modules.meta_connections_api",
     "modules.meta_messaging_webhook",
 )
 
@@ -157,9 +158,9 @@ class TestRouteInventory:
         assert counts["protected_gets"] + counts["protected_mutations"] <= counts["protected"]
 
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
-        assert counts["total_api_routes"] == 137
+        assert counts["total_api_routes"] == 142
         assert counts["public"] == 3
-        assert counts["protected"] == 134
+        assert counts["protected"] == 139
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),

@@ -11,8 +11,17 @@ from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from modules.core import app
+from services.meta_app_registry import (
+    APP_A_KEY,
+    APP_B_KEY,
+    MetaAppConfig,
+    MetaRegistryError,
+    get_meta_app_configs,
+    get_meta_app_registry,
+)
 from services.meta_data_deletion import (
     MetaSignedRequestError,
+    VerifiedMetaDeletionRequest,
     delete_meta_social_user_data,
     read_deletion_status,
     verify_meta_deletion_signed_request,
@@ -72,7 +81,9 @@ async def privacy_policy() -> HTMLResponse:
 <p class="meta">Effective 2 August 2026</p>
 <p>Lina's Laser Clinics uses Linas AI to answer Facebook Messenger and Instagram direct
 messages that a person voluntarily sends to the official Lina's Laser Clinics Facebook Page
-or linked Instagram professional account.</p>
+or linked Instagram professional account. Linas AI also provides an optional business-messaging
+platform through which an independent business can explicitly connect its own Facebook Page and
+linked professional Instagram account using Meta Business Login.</p>
 
 <h2>Data we receive</h2>
 <p>Meta may send us a platform-scoped sender identifier, the destination Page or Instagram
@@ -81,9 +92,10 @@ attachment notifications or metadata. The current social bot does not fetch atta
 it asks the sender to describe what help they need in text.</p>
 
 <h2>How we use it</h2>
-<p>We use this information only to authenticate and deduplicate the webhook, preserve
-conversation context, answer clinic questions, maintain service security, and provide an
-explicit booking or human-support handoff when requested. We do not process public comments,
+<p>We use this information only to authenticate and deduplicate the webhook, bind the message
+to the business and assets that authorized the connection, preserve tenant-isolated conversation
+context, answer that business's configured service questions, maintain service security, and
+provide an explicit booking or human-support handoff when requested. We do not process public comments,
 publish content, run ads, send unsolicited marketing DMs, or book an appointment inside
 Facebook or Instagram.</p>
 
@@ -94,8 +106,10 @@ conversation records, and DigitalOcean hosts the application. These providers pr
 under their applicable contracts, security controls, and privacy terms.</p>
 
 <h2>Storage, retention, and security</h2>
-<p>Conversation records can include platform-scoped identifiers, message text, AI replies,
-timestamps, language, and routing state. Operational logs may contain pseudonymous identifiers,
+<p>Conversation records can include tenant and asset bindings, platform-scoped identifiers,
+message text, AI replies, timestamps, language, and routing state. OAuth credentials and Page
+tokens are encrypted server-side and are never entered or displayed to normal dashboard users.
+Operational logs may contain pseudonymous identifiers,
 status codes, and errors. The service does not currently apply a fixed automatic deletion date
 to conversation records; they remain while needed for continuity, security, troubleshooting,
 and the clinic's legitimate service records, unless a valid deletion request is completed or
@@ -131,8 +145,9 @@ async def terms_of_service() -> HTMLResponse:
         f"""
 <h1>Terms of Service</h1>
 <p class="meta">Effective 2 August 2026</p>
-<p>These terms cover the Linas AI replies available through the official Lina's Laser Clinics
-Facebook Messenger and Instagram direct-message accounts.</p>
+<p>These terms cover Linas AI replies available through the official Lina's Laser Clinics
+Facebook Messenger and Instagram direct-message accounts and, where enabled, through independent
+business accounts that the business owner connects to Linas AI using Meta Business Login.</p>
 
 <h2>Permitted use</h2>
 <p>You may voluntarily message the clinic to ask about services, prices, preparation, branches,
@@ -225,19 +240,50 @@ async def _extract_signed_request(request: Request) -> str:
     return str((values.get("signed_request") or [""])[0])
 
 
+def _verify_deletion_app(
+    signed_request: str,
+) -> tuple[MetaAppConfig, VerifiedMetaDeletionRequest]:
+    candidates = [config for config in get_meta_app_configs().values() if config.enabled]
+    if not candidates:
+        legacy_secret = (os.getenv("META_APP_SECRET") or "").strip()
+        if legacy_secret:
+            candidates = [
+                MetaAppConfig(
+                    key=APP_A_KEY,
+                    app_id=(os.getenv("META_APP_ID") or "legacy-app-a").strip(),
+                    app_secret=legacy_secret,
+                    verify_token="",
+                    graph_api_version=(os.getenv("META_GRAPH_API_VERSION") or "v24.0").strip(),
+                    classification="own_business",
+                    enabled=True,
+                )
+            ]
+    matches: list[tuple[MetaAppConfig, VerifiedMetaDeletionRequest]] = []
+    for config in candidates:
+        try:
+            matches.append((config, verify_meta_deletion_signed_request(signed_request, config.app_secret)))
+        except MetaSignedRequestError:
+            continue
+    if len(matches) != 1:
+        raise MetaSignedRequestError("Invalid signed deletion request")
+    return matches[0]
+
+
 @app.post("/data-deletion", response_class=JSONResponse)
 async def meta_data_deletion_callback(request: Request) -> JSONResponse:
-    app_secret = (os.getenv("META_APP_SECRET") or "").strip()
-    if not app_secret:
-        raise HTTPException(status_code=503, detail="Data deletion callback is not configured")
     try:
         signed_request = await _extract_signed_request(request)
-        verified = verify_meta_deletion_signed_request(signed_request, app_secret)
+        matched_app, verified = _verify_deletion_app(signed_request)
     except (MetaSignedRequestError, UnicodeDecodeError):
         raise HTTPException(status_code=401, detail="Invalid signed deletion request") from None
 
     try:
-        result = await asyncio.to_thread(delete_meta_social_user_data, verified.meta_user_id, app_secret)
+        result = await asyncio.to_thread(
+            delete_meta_social_user_data,
+            verified.meta_user_id,
+            matched_app.app_secret,
+            app_key=matched_app.key,
+        )
     except Exception:
         raise HTTPException(status_code=503, detail="Data deletion could not be completed") from None
 
@@ -246,3 +292,24 @@ async def meta_data_deletion_callback(request: Request) -> JSONResponse:
         {"url": status_url, "confirmation_code": result.confirmation_code},
         headers=_SECURITY_HEADERS,
     )
+
+
+@app.post("/meta/deauthorize", response_class=JSONResponse)
+async def meta_deauthorization_callback(request: Request) -> JSONResponse:
+    """Authenticate Meta deauthorization and revoke only matching App B tokens."""
+
+    try:
+        signed_request = await _extract_signed_request(request)
+        matched_app, verified = _verify_deletion_app(signed_request)
+    except (MetaSignedRequestError, UnicodeDecodeError):
+        raise HTTPException(status_code=401, detail="Invalid signed deauthorization request") from None
+
+    if matched_app.key == APP_B_KEY:
+        try:
+            get_meta_app_registry().revoke_authorization(
+                app_key=matched_app.key,
+                authorized_meta_user_id=verified.meta_user_id,
+            )
+        except MetaRegistryError:
+            raise HTTPException(status_code=503, detail="Meta deauthorization could not be completed") from None
+    return JSONResponse({"success": True}, headers=_SECURITY_HEADERS)

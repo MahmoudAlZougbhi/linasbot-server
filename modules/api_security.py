@@ -264,6 +264,20 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
                 content={"success": False, "error": "Authentication required"},
             )
 
+        # The legacy dashboard control planes still operate on Lina's production
+        # stores. External App B tenants are deliberately fail-closed to every
+        # legacy API until that surface has an explicit tenant-aware query path.
+        # Their current self-service surface is Meta connection management plus
+        # authentication; this prevents analytics, settings, conversation, or
+        # customer-history data from crossing tenant boundaries.
+        if session.tenant_id != "linas" and not (
+            path.startswith("/api/auth/") or path.startswith("/api/meta/connections")
+        ):
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "Tenant-isolated API unavailable"},
+            )
+
         # CSRF for cookie-authenticated mutations
         if method in {"POST", "PUT", "PATCH", "DELETE"}:
             header = request.headers.get(CSRF_HEADER_NAME) or request.headers.get(CSRF_HEADER_NAME.lower())
@@ -289,7 +303,10 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-_SOCIAL_USER_RE = re.compile(r"^(instagram|facebook):", re.I)
+_SOCIAL_USER_RE = re.compile(
+    r"^(?:[a-z0-9][a-z0-9_-]{0,63}:)?(?:instagram|facebook):",
+    re.I,
+)
 
 
 def is_social_user_id(user_id: str | None) -> bool:

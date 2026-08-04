@@ -65,6 +65,7 @@ class SessionRecord:
     email: str
     role: str
     permissions: dict[str, bool] | None
+    tenant_id: str
     csrf_token: str
     created_at: float
     expires_at: float
@@ -77,6 +78,7 @@ class SessionRecord:
             "email": self.email,
             "role": self.role,
             "permissions": self.permissions,
+            "tenantId": self.tenant_id,
             "status": "active",
         }
 
@@ -121,6 +123,7 @@ class DashboardSessionService:
         email: str,
         role: str,
         permissions: dict[str, bool] | None,
+        tenant_id: str = "linas",
         password_epoch: int = 0,
         ttl_seconds: int | None = None,
     ) -> SessionRecord:
@@ -132,6 +135,7 @@ class DashboardSessionService:
             email=email,
             role=role or "viewer",
             permissions=permissions,
+            tenant_id=(tenant_id or "linas").strip() or "linas",
             csrf_token=secrets.token_urlsafe(32),
             created_at=now,
             expires_at=now + ttl,
@@ -148,6 +152,7 @@ class DashboardSessionService:
             "email": record.email,
             "role": record.role,
             "permissions": record.permissions,
+            "tenant_id": record.tenant_id,
             "csrf_token": record.csrf_token,
             "created_at": record.created_at,
             "expires_at": record.expires_at,
@@ -240,6 +245,7 @@ class DashboardSessionService:
             email=str(data.get("email") or ""),
             role=str(data.get("role") or "viewer"),
             permissions=data.get("permissions"),
+            tenant_id=str(data.get("tenant_id") or "linas"),
             csrf_token=str(data.get("csrf_token") or ""),
             created_at=float(data.get("created_at") or 0),
             expires_at=float(data.get("expires_at") or 0),
@@ -261,6 +267,7 @@ class DashboardSessionService:
             email=str(data.get("email") or ""),
             role=str(data.get("role") or "viewer"),
             permissions=data.get("permissions"),
+            tenant_id=str(data.get("tenant_id") or "linas"),
             csrf_token=str(data.get("csrf_token") or ""),
             created_at=float(data.get("created_at") or 0),
             expires_at=float(data.get("expires_at") or 0),

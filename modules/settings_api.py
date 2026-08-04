@@ -34,6 +34,17 @@ async def get_integration_status() -> Any:
     Never returns secret values — only configured / missing flags.
     """
     try:
+        meta_registry_configured = False
+        try:
+            from services.meta_app_registry import (
+                get_meta_registry_readiness,
+                meta_multi_app_registry_enabled,
+            )
+
+            if meta_multi_app_registry_enabled():
+                meta_registry_configured = get_meta_registry_readiness()[0]
+        except Exception:
+            meta_registry_configured = False
         integrations: list[dict[str, Any]] = [
             {
                 "name": "OpenAI",
@@ -44,13 +55,14 @@ async def get_integration_status() -> Any:
             {
                 "name": "Meta Instagram / Facebook",
                 "service": "Social messaging webhooks",
-                "configured": _env_configured(
+                "configured": meta_registry_configured
+                or _env_configured(
                     "META_APP_SECRET",
                     "META_PAGE_ACCESS_TOKEN",
                     "FACEBOOK_PAGE_ACCESS_TOKEN",
                     "INSTAGRAM_PAGE_ACCESS_TOKEN",
                 ),
-                "notes": "Inbound AI channels only",
+                "notes": "First-party App A plus staged Tech Provider App B; inbound DMs only",
             },
             {
                 "name": "WhatsApp provider (outbound handoff / CRM)",

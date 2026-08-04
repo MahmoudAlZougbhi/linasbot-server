@@ -11,23 +11,53 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from modules.core import app
+from services.meta_app_registry import (
+    APP_A_KEY,
+    MetaAssetBinding,
+    MetaChannel,
+    identify_signed_meta_app,
+    meta_multi_app_registry_enabled,
+    verify_any_meta_challenge_token,
+)
 from services.meta_messaging import (
     InMemoryMessageDeduper,
     get_meta_messaging_settings,
     parse_meta_messaging_events,
     verify_meta_signature,
 )
+from services.meta_multi_app_router import ResolvedMetaEvent, resolve_registry_events
 from services.social_messaging_processor import process_meta_social_event
 
 _message_deduper = InMemoryMessageDeduper(ttl_seconds=300.0)
-_background_tasks: set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task[None]] = set()
 _runtime_logger = logging.getLogger("uvicorn.error")
 
 
-def _track_task(task: asyncio.Task) -> None:
+def _legacy_binding(settings: Any, channel: str) -> MetaAssetBinding:
+    """Represent the legacy single-app route without changing persisted state."""
+
+    normalized_channel: MetaChannel = "instagram" if channel == "instagram" else "facebook"
+    asset_id = settings.instagram_account_id if normalized_channel == "instagram" else settings.page_id
+    return MetaAssetBinding(
+        binding_id="legacy-single-app",
+        tenant_id="linas",
+        channel=normalized_channel,
+        asset_id=asset_id,
+        page_id=settings.page_id,
+        instagram_account_id=settings.instagram_account_id,
+        app_key=APP_A_KEY,
+        credential_id="legacy-environment",
+        status="active",
+        generation=1,
+        created_at=0.0,
+        updated_at=0.0,
+    )
+
+
+def _track_task(task: asyncio.Task[None]) -> None:
     _background_tasks.add(task)
 
-    def _done(completed: asyncio.Task) -> None:
+    def _done(completed: asyncio.Task[None]) -> None:
         _background_tasks.discard(completed)
         try:
             completed.result()
@@ -46,9 +76,11 @@ async def verify_meta_messaging_webhook(request: Request) -> Any:
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
-    if not settings.verify_token:
+    registry_enabled = meta_multi_app_registry_enabled()
+    if not settings.verify_token and not registry_enabled:
         raise HTTPException(status_code=503, detail="Meta webhook verify token is not configured")
-    if mode == "subscribe" and token == settings.verify_token and challenge is not None:
+    token_ok = verify_any_meta_challenge_token(token) if registry_enabled else token == settings.verify_token
+    if mode == "subscribe" and token_ok and challenge is not None:
         return PlainTextResponse(challenge)
     raise HTTPException(status_code=403, detail="Webhook verification failed")
 
@@ -60,14 +92,21 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
 
     # Never acknowledge an unauthenticated POST as valid. A missing server-side
     # secret is a readiness failure; a missing/wrong request signature is 401.
-    if not settings.app_secret:
-        raise HTTPException(status_code=503, detail="Meta App Secret is not configured")
-    if not verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    registry_enabled = meta_multi_app_registry_enabled()
+    signed_app = None
+    if registry_enabled:
+        signed_app = identify_signed_meta_app(raw_body, request.headers.get("X-Hub-Signature-256"))
+        if signed_app is None:
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    else:
+        if not settings.app_secret:
+            raise HTTPException(status_code=503, detail="Meta App Secret is not configured")
+        if not verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     if not settings.enabled:
         return JSONResponse({"status": "disabled"})
-    if (
+    if not registry_enabled and (
         not settings.app_secret
         or not settings.page_access_token
         or not settings.page_id
@@ -100,28 +139,51 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             }
         )
 
-    events = parse_meta_messaging_events(
-        payload,
-        instagram_account_id=settings.instagram_account_id,
-        page_id=settings.page_id,
-    )
+    resolved_events: list[ResolvedMetaEvent] = []
+    if registry_enabled:
+        if signed_app is None:  # pragma: no cover - guarded above
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        resolved_events = resolve_registry_events(payload, app_config=signed_app)
+    else:
+        legacy_events = parse_meta_messaging_events(
+            payload,
+            instagram_account_id=settings.instagram_account_id,
+            page_id=settings.page_id,
+        )
+        resolved_events = [
+            ResolvedMetaEvent(
+                event=event,
+                settings=settings,
+                binding=_legacy_binding(settings, str(event.get("channel") or "facebook")),
+            )
+            for event in legacy_events
+        ]
     accepted = 0
     duplicates = 0
 
-    async def _process_claimed(event: dict) -> None:
+    async def _process_claimed(resolved: ResolvedMetaEvent) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
 
-        mid = str(event.get("message_id") or "")
+        event = resolved.event
+        mid = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{str(event.get('message_id') or '')}"
         channel = str(event.get("channel") or "unknown").strip().lower()
-        _runtime_logger.info("[meta-social] event_processing_started channel=%s", channel)
+        _runtime_logger.info(
+            "[meta-social] event_processing_started channel=%s app_key=%s",
+            channel,
+            resolved.settings.app_key,
+        )
         try:
-            await process_meta_social_event(event, settings)
+            await process_meta_social_event(event, resolved.settings)
             await complete_event_claim(
                 "meta_messaging_mid",
                 mid,
                 firestore_collection="meta_messaging_mid_claims",
             )
-            _runtime_logger.info("[meta-social] event_processing_completed channel=%s", channel)
+            _runtime_logger.info(
+                "[meta-social] event_processing_completed channel=%s app_key=%s",
+                channel,
+                resolved.settings.app_key,
+            )
         except Exception as exc:
             _runtime_logger.error(
                 "[meta-social] event_processing_failed channel=%s type=%s",
@@ -135,8 +197,9 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             )
             raise
 
-    for event in events:
-        mid = str(event.get("message_id") or "")
+    for resolved in resolved_events:
+        event = resolved.event
+        mid = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{str(event.get('message_id') or '')}"
         # Fast local reject for same-process redeliveries
         if not _message_deduper.claim(mid):
             duplicates += 1
@@ -152,16 +215,16 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         if not claimed:
             duplicates += 1
             continue
-        _track_task(asyncio.create_task(_process_claimed(event)))
+        _track_task(asyncio.create_task(_process_claimed(resolved)))
         accepted += 1
     channel_counts = {
-        "facebook": sum(str(event.get("channel") or "") == "facebook" for event in events),
-        "instagram": sum(str(event.get("channel") or "") == "instagram" for event in events),
+        "facebook": sum(str(item.event.get("channel") or "") == "facebook" for item in resolved_events),
+        "instagram": sum(str(item.event.get("channel") or "") == "instagram" for item in resolved_events),
     }
     _runtime_logger.info(
         "[meta-social] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d facebook=%d instagram=%d",
         payload_object,
-        len(events),
+        len(resolved_events),
         accepted,
         duplicates,
         channel_counts["facebook"],

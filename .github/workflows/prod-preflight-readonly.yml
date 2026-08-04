@@ -207,7 +207,7 @@ jobs:
             for line in lines:
                 match = re.search(
                     r"\[meta-social\] webhook_authenticated "
-                    r"object=(facebook|instagram) parsed=(\d+) accepted=(\d+) "
+                    r"object=(page|instagram) parsed=(\d+) accepted=(\d+) "
                     r"duplicates=(\d+) facebook=(\d+) instagram=(\d+)",
                     line,
                 )

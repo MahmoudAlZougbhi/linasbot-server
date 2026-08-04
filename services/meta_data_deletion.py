@@ -201,7 +201,33 @@ def read_deletion_status(confirmation_code: str) -> dict[str, Any] | None:
     return cast(dict[str, Any], data)
 
 
-def delete_meta_social_user_data(meta_user_id: str, app_secret: str) -> MetaDeletionResult:
+def _candidate_social_user_ids(meta_user_id: str, app_key: str) -> tuple[str, ...]:
+    from services.meta_app_registry import APP_A_KEY, get_meta_app_registry
+
+    candidates: set[str] = set()
+    if app_key == APP_A_KEY:
+        candidates.update({f"facebook:{meta_user_id}", f"instagram:{meta_user_id}"})
+    try:
+        bindings = get_meta_app_registry().list_bindings()
+    except Exception:
+        if app_key != APP_A_KEY:
+            raise RuntimeError("Meta tenant registry is unavailable") from None
+        bindings = []
+    for binding in bindings:
+        if binding.app_key != app_key:
+            continue
+        candidates.add(f"{binding.tenant_id}:{binding.channel}:{meta_user_id}")
+        if binding.tenant_id == "linas":
+            candidates.add(f"{binding.channel}:{meta_user_id}")
+    return tuple(sorted(candidates))
+
+
+def delete_meta_social_user_data(
+    meta_user_id: str,
+    app_secret: str,
+    *,
+    app_key: str = "linas_first_party",
+) -> MetaDeletionResult:
     """Delete only the namespaced Facebook/Instagram user associated with Meta's ID."""
     raw_user_id = str(meta_user_id or "").strip()
     if not _META_USER_ID_RE.fullmatch(raw_user_id):
@@ -213,7 +239,7 @@ def delete_meta_social_user_data(meta_user_id: str, app_secret: str) -> MetaDele
     if db is None:
         raise RuntimeError("Firestore is unavailable")
 
-    candidates = (f"facebook:{raw_user_id}", f"instagram:{raw_user_id}")
+    candidates = _candidate_social_user_ids(raw_user_id, app_key)
     users = db.collection("artifacts").document(_FIRESTORE_APP_ID).collection("users")
     deleted_users = 0
     deleted_nested = 0

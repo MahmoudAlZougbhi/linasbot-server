@@ -54,7 +54,7 @@ export const isSocialChannelUser = (userId, channel) => {
   const ch = String(channel || "").toLowerCase();
   if (ch === "instagram" || ch === "facebook") return true;
   const id = String(userId || "");
-  return id.startsWith("instagram:") || id.startsWith("facebook:");
+  return /^(?:[a-z0-9][a-z0-9_-]{0,63}:)?(?:instagram|facebook):/i.test(id);
 };
 
 const CHAT_LIST_PAGE_SIZE = 30;

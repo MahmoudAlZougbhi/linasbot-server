@@ -206,10 +206,14 @@ async def ready() -> Any:
     if not openai_ok:
         overall_ok = False
 
+    from services.meta_app_registry import get_meta_registry_readiness, meta_multi_app_registry_enabled
     from services.meta_messaging import get_meta_messaging_readiness, get_meta_messaging_settings
 
     meta_settings = get_meta_messaging_settings()
-    meta_ok, meta_checks = get_meta_messaging_readiness(meta_settings)
+    if meta_multi_app_registry_enabled():
+        meta_ok, meta_checks = get_meta_registry_readiness()
+    else:
+        meta_ok, meta_checks = get_meta_messaging_readiness(meta_settings)
     checks["meta_social_messaging"] = {
         "ok": meta_ok if meta_settings.enabled else True,
         "enabled": meta_settings.enabled,
