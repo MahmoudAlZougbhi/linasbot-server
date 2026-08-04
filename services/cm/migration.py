@@ -136,6 +136,9 @@ def _migrate_knowledge_and_care(
                 tags=["legacy_migration", "unstructured"],
                 language="",
                 audience="general",
+                category="foundation",
+                status="active",
+                source_filename="knowledge_base.txt",
                 notes="Migrated verbatim from legacy knowledge_base.txt; review before authoritative use.",
             )
         )
@@ -149,6 +152,9 @@ def _migrate_knowledge_and_care(
                 tags=["legacy_migration", "unstructured", "needs_price_structuring"],
                 language="",
                 audience="general",
+                category="pricing_source",
+                status="active",
+                source_filename="price_list.txt",
                 notes="Legacy free-text pricing note; NOT authoritative. Use the structured Prices section for exact amounts.",
             )
         )
@@ -158,6 +164,7 @@ def _migrate_knowledge_and_care(
         if "legacy_migration" not in tags:
             tags = [*tags, "legacy_migration"]
         audience = entry.get("audience") if entry.get("audience") in {"men", "women", "general"} else "general"
+        source_name = str(entry.get("filename") or entry.get("source") or entry.get("id") or "")
         article = ArticleRecord(
             id=_deterministic_id("knowledge_file", str(entry.get("id") or entry.get("title") or "")),
             title=str(entry.get("title") or ""),
@@ -165,6 +172,10 @@ def _migrate_knowledge_and_care(
             tags=tags,
             language=str(entry.get("language") or ""),
             audience=audience,  # type: ignore[arg-type]
+            category=str(entry.get("category") or ""),
+            status="active",
+            source_filename=source_name or None,
+            source_checksum=str(entry.get("checksum") or "") or None,
             notes=None,
         )
         if any(tag in {"prep", "aftercare", "care"} for tag in tags):

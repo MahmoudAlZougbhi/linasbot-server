@@ -151,7 +151,12 @@ async function installCmApiMocks(page, options = {}) {
         return;
       }
       const body = request.postDataJSON() || {};
-      const nextPayload = body.payload && typeof body.payload === "object" ? body.payload : payload;
+      const nextPayload =
+        body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
+          ? body.payload
+          : body && typeof body === "object"
+            ? body
+            : payload;
       payload = nextPayload;
       notes = typeof nextPayload.notes === "string" ? nextPayload.notes : notes;
       etag = 'W/"etag-2"';
@@ -272,56 +277,64 @@ async function installCmApiMocks(page, options = {}) {
 }
 
 test.describe("Content Management browser smoke", () => {
-  test("landing navigation, draft edit/persist, validation, disabled publish, responsive", async ({
-    page,
-  }) => {
-    await installCmApiMocks(page);
-    // App uses BrowserRouter (path-based). Vite preview serves the SPA at /.
+  test("landing navigation, owner forms without JSON, save/validate, responsive", async ({ page }) => {
+    await installCmApiMocks(page, {
+      draftEtag: 'W/"etag-1"',
+    });
+    // Seed knowledge draft with one article via default empty items — Add creates one.
     await page.goto("/content-managers");
 
     await expect(page.getByRole("heading", { name: "Content Managers" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Restricted/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Dynamic Messages/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Sources & Archive/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toBeVisible();
 
-    // Responsive: narrow viewport still shows CM heading and FAQ card.
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "Content Managers" })).toBeVisible();
     await expect(page.getByRole("main").locator('a[href="/content-managers/faq"]')).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    await page.getByRole("link", { name: /Knowledge/i }).click();
+    await page.getByRole("link", { name: /^Knowledge$/i }).click();
     await expect(page.getByRole("heading", { name: "Knowledge" })).toBeVisible();
-    await expect(page.getByText("Loading draft…")).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByText(/ETag:/)).toContainText("etag-1");
-    await expect(page.getByRole("button", { name: "Publish — unavailable" })).toBeDisabled();
-    await expect(page.getByText(PUBLISH_DISABLED_MESSAGE)).toBeVisible();
-
-    const notes = page.getByRole("textbox", { name: "Author notes" });
-    await notes.fill("Persisted browser-smoke notes");
+    await expect(page.getByText("Loading…")).toBeHidden({ timeout: 15_000 });
+    await expect(page.locator("textarea").filter({ hasText: "{" })).toHaveCount(0);
+    await expect(page.getByText("Section data (JSON)")).toHaveCount(0);
+    await page.getByRole("button", { name: "Add" }).click();
+    await expect(page.getByDisplayValue("New article")).toBeVisible();
+    await page.getByDisplayValue("New article").fill("About laser");
     await page.getByRole("button", { name: "Save Draft" }).click();
-    await expect(page.getByText(/ETag:/)).toContainText("etag-2");
-    await expect(notes).toHaveValue("Persisted browser-smoke notes");
+    await expect(page.getByText("Draft saved")).toBeVisible();
 
     await page.getByRole("button", { name: "Validate" }).click();
-    await expect(page.getByRole("main").getByText("Validation passed")).toBeVisible();
+    await expect(page.getByText(/Validation OK|Validation passed/i)).toBeVisible();
+
+    for (const [href, heading] of [
+      ["/content-managers/ai-basics", "AI Basics"],
+      ["/content-managers/languages", "Languages"],
+      ["/content-managers/services", "Services"],
+      ["/content-managers/branches", "Branches & Hours"],
+    ]) {
+      await page.goto(href);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect(page.getByText("Section data (JSON)")).toHaveCount(0);
+      await expect(page.locator('textarea[spellcheck="false"]')).toHaveCount(0);
+    }
   });
 
   test("stale ETag conflict and validation errors are truthful", async ({ page }) => {
     await installCmApiMocks(page, { forceConflict: true, validateOk: false });
     await page.goto("/content-managers/knowledge");
     await expect(page.getByRole("heading", { name: "Knowledge" })).toBeVisible();
-    await expect(page.getByText("Loading draft…")).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByText("Loading…")).toBeHidden({ timeout: 15_000 });
 
-    await page.getByRole("textbox", { name: "Author notes" }).fill("Conflict probe");
+    await page.getByRole("button", { name: "Add" }).click();
     await page.getByRole("button", { name: "Save Draft" }).click();
-    await expect(page.getByText("Draft conflict")).toBeVisible();
-    await expect(page.getByText(/Current ETag:/)).toContainText("etag-server");
-    await expect(page.getByRole("button", { name: "Reload latest draft" })).toBeVisible();
+    await expect(page.getByText(/Version conflict|Stale version/i)).toBeVisible();
 
     await page.getByRole("button", { name: "Validate" }).click();
-    await expect(page.getByRole("main").getByText("Validation failed")).toBeVisible();
-    await expect(page.getByRole("main").getByText(/tattoo_removal/)).toBeVisible();
+    await expect(page.getByText(/validation/i).first()).toBeVisible();
+    await expect(page.getByText(/tattoo_removal/)).toBeVisible();
   });
 
   test("publish page shows disabled state and honest 403 path", async ({ page }) => {

@@ -209,7 +209,7 @@ def list_cm_faq(
     query = (q or "").strip().lower()
     out: list[dict[str, Any]] = []
     for item in section.items:
-        if not include_archived and item.status == "archived":
+        if not include_archived and item.status in {"archived", "restricted"}:
             continue
         if status and item.status != status:
             continue

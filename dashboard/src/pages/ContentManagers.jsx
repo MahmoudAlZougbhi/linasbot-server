@@ -34,6 +34,7 @@ const SECTION_ICONS = {
   "learning-inbox": InboxStackIcon,
   handoff: GlobeAltIcon,
   restricted: ExclamationTriangleIcon,
+  sources: ClockIcon,
   publish: RocketLaunchIcon,
 };
 

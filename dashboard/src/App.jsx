@@ -24,6 +24,17 @@ const CmPricesPage = lazy(() => import('./pages/content-managers/CmPricesPage'))
 const CmFaqPage = lazy(() => import('./pages/content-managers/CmFaqPage'));
 const CmLearningInboxPage = lazy(() => import('./pages/content-managers/CmLearningInboxPage'));
 const CmPublishPage = lazy(() => import('./pages/content-managers/CmPublishPage'));
+const CmAiBasicsPage = lazy(() => import('./pages/content-managers/CmAiBasicsPage'));
+const CmLanguagesPage = lazy(() => import('./pages/content-managers/CmLanguagesPage'));
+const CmStylePage = lazy(() => import('./pages/content-managers/CmStylePage'));
+const CmDynamicMessagesPage = lazy(() => import('./pages/content-managers/CmDynamicMessagesPage'));
+const CmServicesPage = lazy(() => import('./pages/content-managers/CmServicesPage'));
+const CmBranchesPage = lazy(() => import('./pages/content-managers/CmBranchesPage'));
+const CmKnowledgePage = lazy(() => import('./pages/content-managers/CmKnowledgePage'));
+const CmCarePage = lazy(() => import('./pages/content-managers/CmCarePage'));
+const CmHandoffPage = lazy(() => import('./pages/content-managers/CmHandoffPage'));
+const CmRestrictedPage = lazy(() => import('./pages/content-managers/CmRestrictedPage'));
+const CmSourcesPage = lazy(() => import('./pages/content-managers/CmSourcesPage'));
 const ActivityFlow = lazy(() => import('./pages/ActivityFlow'));
 const LiveChat = lazy(() => import('./pages/LiveChat'));
 const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
@@ -96,6 +107,17 @@ function AppContent() {
                     <Route path="/content-managers/prices" element={<CmPricesPage />} />
                     <Route path="/content-managers/faq" element={<CmFaqPage />} />
                     <Route path="/content-managers/learning-inbox" element={<CmLearningInboxPage />} />
+                    <Route path="/content-managers/ai-basics" element={<CmAiBasicsPage />} />
+                    <Route path="/content-managers/languages" element={<CmLanguagesPage />} />
+                    <Route path="/content-managers/style" element={<CmStylePage />} />
+                    <Route path="/content-managers/dynamic-messages" element={<CmDynamicMessagesPage />} />
+                    <Route path="/content-managers/services" element={<CmServicesPage />} />
+                    <Route path="/content-managers/branches" element={<CmBranchesPage />} />
+                    <Route path="/content-managers/knowledge" element={<CmKnowledgePage />} />
+                    <Route path="/content-managers/care" element={<CmCarePage />} />
+                    <Route path="/content-managers/handoff" element={<CmHandoffPage />} />
+                    <Route path="/content-managers/restricted" element={<CmRestrictedPage />} />
+                    <Route path="/content-managers/sources" element={<CmSourcesPage />} />
                     <Route path="/content-managers/:sectionSlug" element={<CmSectionPage />} />
                     <Route path="/activity-flow" element={<ActivityFlow />} />
                     <Route path="/live-chat" element={<LiveChat />} />

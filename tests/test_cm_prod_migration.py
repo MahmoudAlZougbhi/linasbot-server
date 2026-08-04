@@ -40,9 +40,12 @@ def test_stage_and_migrate_from_flat_sample_data(tmp_path: Path) -> None:
     assert report["scrub"]["faq_removed"]
     assert any(item["qa_group_id"] == "g_tattoo" for item in report["scrub"]["faq_removed"])
     faq = get_draft("faq", tenant_id="cm_prod_mig_test", create_default=True)
-    ids = {item["qa_group_id"] for item in faq.payload.get("items") or []}
-    assert "g_tattoo" not in ids
-    assert "g1" in ids
+    items = list(faq.payload.get("items") or [])
+    by_id = {item["qa_group_id"]: item for item in items if isinstance(item, dict)}
+    assert "g_tattoo" in by_id
+    assert by_id["g_tattoo"].get("status") == "restricted"
+    assert "g1" in by_id
+    assert by_id["g1"].get("status") != "restricted"
     handoff = get_draft("handoff", tenant_id="cm_prod_mig_test", create_default=True)
     assert all(row.get("topic_id") is None for row in (handoff.payload.get("matrix") or []))
     assert report["conflict_count"] == 0

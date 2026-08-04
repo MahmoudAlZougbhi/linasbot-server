@@ -204,6 +204,8 @@ def _check_faq(
 ) -> list[ValidationFailure]:
     out: list[ValidationFailure] = []
     for item in faq_items:
+        if item.status in {"archived", "restricted"}:
+            continue
         for variant in item.variants:
             blob = f"{variant.question}\n{variant.answer}"
             if _text_mentions(blob, markers) and _is_affirmation(variant.answer):
@@ -226,6 +228,8 @@ def _check_knowledge(
 ) -> list[ValidationFailure]:
     out: list[ValidationFailure] = []
     for article in articles:
+        if article.status in {"archived", "restricted"}:
+            continue
         blob = f"{article.title}\n{article.body}"
         if _text_mentions(blob, markers) and _is_affirmation(blob):
             out.append(

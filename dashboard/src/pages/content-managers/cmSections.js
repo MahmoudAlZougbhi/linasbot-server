@@ -88,6 +88,12 @@ export const CM_SECTION_CARDS = [
     description: "Topics that must never route to booking or WhatsApp handoff.",
   },
   {
+    slug: "sources",
+    section: null,
+    name: "Sources & Archive",
+    description: "Inventory of migrated files, checksums, and restricted archives.",
+  },
+  {
     slug: "publish",
     section: null,
     name: "Preview / Validate / Publish",

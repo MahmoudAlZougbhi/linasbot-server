@@ -1685,6 +1685,18 @@ export const useApi = () => {
     }
   }, []);
 
+  const getCmSourcesInventory = useCallback(async () => {
+    try {
+      const response = await api.get("/api/cm/sources/inventory");
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
   const listCmFaq = useCallback(async (/** @type {Record<string, unknown>} */ params = {}) => {
     try {
       const response = await api.get("/api/cm/faq", { params });
@@ -1897,6 +1909,7 @@ export const useApi = () => {
     putCmDraft,
     validateCmDraft,
     quoteCmPricing,
+    getCmSourcesInventory,
     listCmFaq,
     createCmFaq,
     archiveCmFaq,

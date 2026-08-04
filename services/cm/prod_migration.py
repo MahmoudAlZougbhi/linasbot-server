@@ -23,6 +23,7 @@ from services.cm.schemas import (
     BranchHours,
     BranchRecord,
     CareSection,
+    FaqRecord,
     FaqSection,
     GenderAudience,
     HandoffContact,
@@ -215,7 +216,11 @@ def _text_affirms_restricted(text: str) -> str | None:
 
 
 def scrub_restricted_affirmations(*, tenant_id: str, updated_by: str) -> dict[str, Any]:
-    """Archive FAQ/knowledge items that affirm restricted topics out of the active draft."""
+    """Mark FAQ/knowledge items that affirm restricted topics as restricted (visible, not AI-active).
+
+    Preserves original records in drafts with ``status=restricted`` and also writes a
+    timestamped file archive for provenance. Does not delete source bytes.
+    """
     from datetime import UTC, datetime
 
     from services.cm.paths import archive_dir, ensure_cm_dirs
@@ -233,14 +238,28 @@ def scrub_restricted_affirmations(*, tenant_id: str, updated_by: str) -> dict[st
 
     faq_env = get_draft("faq", tenant_id=tenant_id, create_default=True)
     faq = FaqSection.model_validate(faq_env.payload)
-    kept_faq = []
-    removed_faq = []
+    kept_faq: list[FaqRecord] = []
+    removed_faq: list[dict[str, Any]] = []
     for faq_item in faq.items:
         blob = " ".join(f"{v.question} {v.answer}" for v in faq_item.variants)
         topic = _text_affirms_restricted(blob)
-        if topic:
+        if topic and faq_item.status != "restricted":
             report["faq_removed"].append({"qa_group_id": faq_item.qa_group_id, "topic_id": topic})
             removed_faq.append(faq_item.model_dump(mode="json"))
+            tags = list(faq_item.tags)
+            if "restricted_scrub" not in tags:
+                tags.append("restricted_scrub")
+            if f"topic:{topic}" not in tags:
+                tags.append(f"topic:{topic}")
+            kept_faq.append(
+                faq_item.model_copy(
+                    update={
+                        "status": "restricted",
+                        "tags": tags,
+                        "notes": (f"{faq_item.notes or ''}\n[restricted] Not used by AI — topic={topic}").strip(),
+                    }
+                )
+            )
             continue
         kept_faq.append(faq_item)
     if removed_faq:
@@ -267,9 +286,23 @@ def scrub_restricted_affirmations(*, tenant_id: str, updated_by: str) -> dict[st
         removed_articles: list[dict[str, Any]] = []
         for article in section_model.items:
             topic = _text_affirms_restricted(f"{article.title}\n{article.body}")
-            if topic:
+            if topic and article.status != "restricted":
                 report[key].append({"id": article.id, "topic_id": topic})
                 removed_articles.append(article.model_dump(mode="json"))
+                tags = list(article.tags)
+                if "restricted_scrub" not in tags:
+                    tags.append("restricted_scrub")
+                if f"topic:{topic}" not in tags:
+                    tags.append(f"topic:{topic}")
+                kept_articles.append(
+                    article.model_copy(
+                        update={
+                            "status": "restricted",
+                            "tags": tags,
+                            "notes": (f"{article.notes or ''}\n[restricted] Not used by AI — topic={topic}").strip(),
+                        }
+                    )
+                )
                 continue
             kept_articles.append(article)
         if removed_articles:

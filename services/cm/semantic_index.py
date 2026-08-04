@@ -32,6 +32,8 @@ def _faq_entries(payload: dict[str, Any] | None) -> list[_RawEntry]:
         return out
     section = FaqSection.model_validate(payload)
     for item in section.items:
+        if item.status in {"archived", "restricted"}:
+            continue
         for variant in item.variants:
             if not variant.question:
                 continue
@@ -55,6 +57,8 @@ def _article_entries(payload: dict[str, Any] | None, kind: str) -> list[_RawEntr
     model_cls: type[KnowledgeSection] | type[CareSection] = KnowledgeSection if kind == "knowledge" else CareSection
     section = model_cls.model_validate(payload)
     for item in section.items:
+        if item.status in {"archived", "restricted"}:
+            continue
         text = f"{item.title}\n{item.body}".strip()
         if not text:
             continue
