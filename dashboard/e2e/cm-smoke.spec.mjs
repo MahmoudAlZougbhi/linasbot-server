@@ -300,8 +300,6 @@ test.describe("Content Management browser smoke", () => {
     await expect(page.getByText("Loading…")).toBeHidden({ timeout: 15_000 });
     await expect(page.getByText("Section data (JSON)")).toHaveCount(0);
     await page.getByRole("button", { name: "Add" }).click();
-    const titleInput = page.locator('input').filter({ hasText: "" }).first();
-    // Title field is the first labeled input in the editor panel.
     await page.getByLabel("Title").fill("About laser");
     await page.getByRole("button", { name: "Save Draft" }).click();
     await expect(page.getByText("Draft saved")).toBeVisible();
