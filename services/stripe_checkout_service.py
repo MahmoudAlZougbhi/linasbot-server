@@ -79,7 +79,6 @@ class StripeCheckoutService:
             mode="payment",
             success_url=success_url,
             cancel_url=cancel_url,
-            customer_email=customer_email or None,
             line_items=[
                 {
                     "quantity": 1,
@@ -100,6 +99,7 @@ class StripeCheckoutService:
                 "amount_usd": f"{float(amount_usd):.2f}",
                 "product": "linas_token_pack",
             },
+            **({"customer_email": customer_email} if customer_email else {}),
         )
         return {
             "id": session["id"],
