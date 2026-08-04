@@ -149,7 +149,7 @@ _SERVICE_SPECS: tuple[tuple[tuple[str, ...], str, LocalizedLabels, str, tuple[st
         ("dpl", "whitening", "تبييض", "pigmentation"),
     ),
     (
-        ("laser hair removal", "hair removal", "épilation", "إزالة الشعر"),
+        ("laser hair removal", "laser_hair_removal", "hair removal", "épilation", "إزالة الشعر"),
         "laser_hair_removal",
         LocalizedLabels(en="Laser hair removal", ar="إزالة الشعر بالليزر", fr="Épilation laser"),
         "laser",
