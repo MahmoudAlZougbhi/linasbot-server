@@ -29,8 +29,8 @@ from services.live_chat_contracts import (
     parse_timestamp_utc,
     utc_now,
 )
-from services.meta_messaging import scrub_legacy_meta_channel_placeholder
 from services.media_service import build_whatsapp_audio_delivery_url
+from services.meta_messaging import scrub_legacy_meta_channel_placeholder
 from utils.phone_utils import is_phone_like_user_id, normalize_phone, phone_match_key
 from utils.utils import get_canonical_user_id_and_phone, get_firestore_db, set_human_takeover_status
 
