@@ -125,9 +125,9 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
         if not _draft_exists(tid, section_name):
             continue
         env = get_draft(section_name, tenant_id=tid, create_default=False)
-        payload: dict[str, Any] = env.payload if isinstance(env.payload, dict) else {}
+        section_payload: dict[str, Any] = env.payload if isinstance(env.payload, dict) else {}
         if section_name in {"services", "branches", "dynamic_messages"}:
-            raw_items = payload.get("items")
+            raw_items = section_payload.get("items")
             items_list: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
             for item in items_list:
                 if not isinstance(item, dict):
@@ -147,8 +147,8 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
             {
                 "section": section_name,
                 "id": f"{section_name}:notes",
-                "notes_chars": len(str(payload.get("notes") or "")),
-                "has_notes": bool(str(payload.get("notes") or "").strip()),
+                "notes_chars": len(str(section_payload.get("notes") or "")),
+                "has_notes": bool(str(section_payload.get("notes") or "").strip()),
             }
         )
 
