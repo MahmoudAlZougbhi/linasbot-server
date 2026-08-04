@@ -145,7 +145,7 @@ export const canAccessPath = (user, path) => {
  * @param {AuthUser | DashboardUser | null | undefined} user
  */
 export const getDefaultPath = (user) => {
-  const paths = ['/app', '/live-chat', '/training', '/testing', '/smart-messaging', '/settings', '/content-managers', '/activity-flow'];
+  const paths = ['/app', '/live-chat', '/content-managers', '/testing', '/smart-messaging', '/settings', '/activity-flow'];
 
   for (const path of paths) {
     if (canAccessPath(user, path)) {

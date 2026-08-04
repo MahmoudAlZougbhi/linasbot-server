@@ -73,7 +73,7 @@ const CmHandoffPage = () => {
   return (
     <CmSectionShell
       title="Booking & Human Handoff"
-      description="WhatsApp routing by branch and audience. WhatsApp inbound AI stays disabled — this only controls handoff contacts for Instagram/Facebook booking intents."
+      description="WhatsApp routing by branch and audience, plus booking/appointment policy notes. WhatsApp inbound AI stays disabled — contacts control Instagram/Facebook handoff only."
       countLabel={`${contacts.length} contacts · ${matrix.length} routes`}
       loading={draft.loading}
       dirty={draft.dirty}
@@ -86,6 +86,20 @@ const CmHandoffPage = () => {
       onSave={() => void draft.save()}
       onValidate={() => void draft.validate()}
     >
+      <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+        <label className="block space-y-1">
+          <span className="text-sm font-medium text-slate-800">Booking & appointment policy notes</span>
+          <p className="text-xs text-slate-500">
+            Appointment, booking-creation, and operational CRM rules redistributed from Knowledge. Original wording is preserved.
+          </p>
+          <textarea
+            className={FIELD_CLASS}
+            rows={8}
+            value={String(draft.payload.notes || "")}
+            onChange={(e) => setSection({ notes: e.target.value || null })}
+          />
+        </label>
+      </div>
       <div className="flex gap-2 mb-3">
         <button
           type="button"

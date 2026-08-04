@@ -18,6 +18,22 @@ from storage.persistent_storage import QA_PAIRS_FILE, ensure_dirs
 
 QA_FILE_PATH = str(QA_PAIRS_FILE)
 
+_LEGACY_FAQ_WRITE_BLOCKED = {
+    "success": False,
+    "error": "CM_FAQ_CANONICAL",
+    "message": "Legacy Bot Training FAQ writes are disabled. Use Content Management → FAQ.",
+    "redirect": "/content-managers/faq",
+}
+
+
+def _legacy_faq_writes_blocked() -> dict[str, Any] | None:
+    """Block dashboard Bot Training writes when CM FAQ is the sole authoring entry."""
+    from services.cm.constants import cm_faq_canonical
+
+    if cm_faq_canonical():
+        return dict(_LEGACY_FAQ_WRITE_BLOCKED)
+    return None
+
 
 def ensure_qa_file_exists() -> None:
     """Ensure the Q&A file exists"""
@@ -261,6 +277,9 @@ async def list_local_qa_pairs(language: str | None = None) -> Any:
 @app.post("/api/local-qa/create")
 async def create_local_qa_pair(qa_data: dict) -> Any:
     """Create a new Q&A pair in local JSON file"""
+    blocked = _legacy_faq_writes_blocked()
+    if blocked is not None:
+        return blocked
     try:
         question = qa_data.get("question", "").strip()
         answer = qa_data.get("answer", "").strip()
@@ -283,6 +302,9 @@ async def create_local_qa_pair(qa_data: dict) -> Any:
 @app.put("/api/local-qa/{qa_id}")
 async def update_local_qa_pair(qa_id: int, updates: dict) -> Any:
     """Update an existing Q&A pair in local JSON file"""
+    blocked = _legacy_faq_writes_blocked()
+    if blocked is not None:
+        return blocked
     try:
         print(f"✏️ Updating Q&A pair ID: {qa_id}")
 
@@ -326,6 +348,9 @@ async def update_local_qa_pair(qa_id: int, updates: dict) -> Any:
 @app.delete("/api/local-qa/{qa_id}")
 async def delete_local_qa_pair(qa_id: int) -> Any:
     """Delete a Q&A pair from local JSON file"""
+    blocked = _legacy_faq_writes_blocked()
+    if blocked is not None:
+        return blocked
     try:
         print(f"🗑️ Deleting Q&A pair ID: {qa_id}")
 

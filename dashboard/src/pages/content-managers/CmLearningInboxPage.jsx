@@ -6,7 +6,7 @@ import { useApi } from "../../hooks/useApi";
 
 /**
  * Minimal Learning Inbox: review wrong/unclear feedback and open the same CM FAQ Add path.
- * Does not replace Bot Training until CM_FAQ_CANONICAL is enabled.
+ * Feeds the canonical Content Managers → FAQ pipeline (Bot Training UI removed).
  */
 const CmLearningInboxPage = () => {
   const { getWrongAnswers, getRecentFeedback, createCmFaq } = useApi();

@@ -9,11 +9,14 @@ import config
 from handlers.text_handlers import handle_message
 from handlers.text_handlers_firestore import _delayed_processing_tasks
 from services.meta_messaging import (
+    SOCIAL_DISPLAY_NAME_FALLBACK,
     MetaMessagingAdapter,
     MetaMessagingSettings,
+    is_unresolved_social_display_name,
+    pick_meta_participant_display_name,
     resolve_meta_send_account_id,
 )
-from utils.utils import get_user_state_from_firestore
+from utils.utils import get_user_state_from_firestore, save_user_name_to_firestore
 
 SendFunc = Callable[..., Awaitable[Any]]
 
@@ -26,6 +29,65 @@ async def _await_delayed_processing(user_id: str) -> None:
         await task
     finally:
         _delayed_processing_tasks.pop(user_id, None)
+
+
+async def _resolve_social_customer_display_name(
+    *,
+    user_id: str,
+    sender_id: str,
+    event: dict[str, Any],
+    adapter: MetaMessagingAdapter | None,
+    persisted_state: dict[str, Any] | None,
+    skip_persist: bool,
+) -> str:
+    """
+    Resolve the Meta participant's display name for Live Chat + AI context.
+
+    Order: webhook fields → in-memory → Firestore → Graph User Profile → honest fallback.
+    Never invent names. Never keep "Instagram Customer" / "Facebook Customer".
+    """
+    webhook_name = pick_meta_participant_display_name(
+        name=str(event.get("sender_name") or event.get("name") or ""),
+        username=str(event.get("sender_username") or event.get("username") or ""),
+    )
+    if webhook_name:
+        config.user_names[user_id] = webhook_name
+        if not skip_persist:
+            try:
+                await save_user_name_to_firestore(user_id, webhook_name)
+            except Exception as exc:
+                print(f"[meta-social] name_persist_skipped type={type(exc).__name__}")
+        return webhook_name
+
+    cached = str(config.user_names.get(user_id) or "").strip()
+    if cached and not is_unresolved_social_display_name(cached):
+        return cached
+
+    persisted_name = pick_meta_participant_display_name(name=(persisted_state or {}).get("name"))
+    if persisted_name:
+        config.user_names[user_id] = persisted_name
+        return persisted_name
+
+    if adapter is not None:
+        profile = await adapter.fetch_participant_profile(sender_id)
+        graph_name = pick_meta_participant_display_name(
+            name=profile.get("name"),
+            first_name=profile.get("first_name"),
+            last_name=profile.get("last_name"),
+            username=profile.get("username"),
+        )
+        if graph_name:
+            config.user_names[user_id] = graph_name
+            if not skip_persist:
+                try:
+                    await save_user_name_to_firestore(user_id, graph_name)
+                except Exception as exc:
+                    print(f"[meta-social] name_persist_skipped type={type(exc).__name__}")
+            return graph_name
+
+    # Honest temporary label — not channel-branded placeholders.
+    config.user_names[user_id] = SOCIAL_DISPLAY_NAME_FALLBACK
+    return SOCIAL_DISPLAY_NAME_FALLBACK
 
 
 async def process_meta_social_event(
@@ -87,19 +149,28 @@ async def process_meta_social_event(
         from services.social_contact_routing import expire_social_contact_flows_in_user_data
 
         expire_social_contact_flows_in_user_data(user_data)
-        if not config.user_names.get(user_id):
-            config.user_names[user_id] = "Instagram Customer" if channel == "instagram" else "Facebook Customer"
+
+        persisted_state: dict[str, Any] = {}
+        try:
+            persisted_state = await get_user_state_from_firestore(user_id) or {}
+        except Exception as exc:
+            # A social identity contains a platform-scoped sender ID. Keep it and
+            # exception text out of logs; the error type is sufficient to operate.
+            print(f"[meta-social] state_restore_skipped type={type(exc).__name__}")
+
+        display_name = await _resolve_social_customer_display_name(
+            user_id=user_id,
+            sender_id=sender_id,
+            event=event,
+            adapter=adapter,
+            persisted_state=persisted_state,
+            skip_persist=bool(simulation),
+        )
 
         if config.user_gender.get(user_id) not in {"male", "female"}:
-            try:
-                persisted = await get_user_state_from_firestore(user_id)
-                persisted_gender = (persisted or {}).get("gender")
-                if persisted_gender in {"male", "female"}:
-                    config.user_gender[user_id] = persisted_gender
-            except Exception as exc:
-                # A social identity contains a platform-scoped sender ID. Keep it and
-                # exception text out of logs; the error type is sufficient to operate.
-                print(f"[meta-social] state_restore_skipped type={type(exc).__name__}")
+            persisted_gender = persisted_state.get("gender")
+            if persisted_gender in {"male", "female"}:
+                config.user_gender[user_id] = persisted_gender
 
         text = str(event.get("text") or "").strip()
         if not text and event.get("attachments"):
@@ -138,7 +209,7 @@ async def process_meta_social_event(
 
         await handle_message(
             user_id=user_id,
-            user_name=config.user_names[user_id],
+            user_name=display_name,
             user_input_text=text,
             user_data=user_data,
             send_message_func=send_message,

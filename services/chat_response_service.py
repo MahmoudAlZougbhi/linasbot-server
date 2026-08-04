@@ -28,6 +28,7 @@ from services.booking.resolver import match_best_body_part_row, server_may_infer
 # Import dynamic model selector for cost optimization
 from services.gender_recognition_service import get_gender_from_gpt
 from services.llm_core_service import client
+from services.model_pricing import compute_cost_from_usage as _compute_cost_from_usage
 from services.moderation_service import check_rate_limits, get_rate_limit_response
 from utils.appointment_slot_rules import (
     extract_appointment_booking_fields,
@@ -61,33 +62,8 @@ from utils.utils import (
 # Fixed bot timezone (UTC+0200) for all booking day comparisons
 BOOKING_TZ = BOT_FIXED_TZ
 
-# Model pricing per 1M tokens (input, output) - update from OpenAI pricing page
-MODEL_PRICING = {
-    "gpt-5.1": {"input": 1.25, "output": 10.0},
-    "gpt-5.4": {"input": 1.25, "output": 10.0},
-    "gpt-5.4-mini": {"input": 0.25, "output": 2.0},
-    "gpt-5-mini": {"input": 0.25, "output": 2.0},
-    "gpt-4o": {"input": 2.50, "output": 10.0},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.0, "output": 30.0},
-}
-
 ORCHESTRATION_MODEL = "gpt-5.1"
 FINAL_RESPONSE_MODEL = "gpt-5.4-mini"
-
-
-def _compute_cost_from_usage(model: str, prompt_tokens: int, completion_tokens: int) -> dict:
-    """Compute input_cost_usd, output_cost_usd, cost_usd from token counts."""
-    pricing = MODEL_PRICING.get(model, MODEL_PRICING.get("gpt-5.1", {"input": 1.25, "output": 10.0}))
-    pt = prompt_tokens or 0
-    ct = completion_tokens or 0
-    input_cost = (pt / 1_000_000) * pricing["input"]
-    output_cost = (ct / 1_000_000) * pricing["output"]
-    return {
-        "input_cost_usd": round(input_cost, 6),
-        "output_cost_usd": round(output_cost, 6),
-        "cost_usd": round(input_cost + output_cost, 6),
-    }
 
 
 _TOOL_ROUND_ARGS_MAX = 48_000
@@ -2190,6 +2166,8 @@ def _is_placeholder_booking_customer_name(name: str | None) -> bool:
         "client",
         "unknown",
         "unknown customer",
+        "instagram customer",
+        "facebook customer",
         "test user",
         "guest",
         "user",
@@ -3070,7 +3048,15 @@ async def get_bot_chat_response(
 
     # CRITICAL: Sync CRM lookup when we have phone but no known name (fixes race: defer_external
     # runs in background, so AI was called before CRM name arrived - bot asked for name when customer has file)
-    _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
+    _placeholder_names = {
+        "client",
+        "unknown",
+        "unknown customer",
+        "instagram customer",
+        "facebook customer",
+        "customer",
+        "test user",
+    }
     _name_lower = (user_name or "").strip().lower()
     _name_unknown = (
         not user_name
@@ -3132,7 +3118,15 @@ async def get_bot_chat_response(
 
     # Authoritative server profile (after CRM sync) — booking FSM + prompts must not re-ask these
     user_name = config.user_names.get(user_id, "client")
-    _placeholder_names_profile = {"client", "unknown", "unknown customer", "test user"}
+    _placeholder_names_profile = {
+        "client",
+        "unknown",
+        "unknown customer",
+        "instagram customer",
+        "facebook customer",
+        "customer",
+        "test user",
+    }
     _name_lower_profile = (user_name or "").strip().lower()
     name_is_known = (
         user_name
@@ -3275,7 +3269,15 @@ async def get_bot_chat_response(
     customer_first_name = (
         (user_name.split()[0] if user_name and user_name != "client" else user_name) if user_name else None
     )
-    _placeholder_names = {"client", "unknown", "unknown customer", "test user"}
+    _placeholder_names = {
+        "client",
+        "unknown",
+        "unknown customer",
+        "instagram customer",
+        "facebook customer",
+        "customer",
+        "test user",
+    }
     _name_lower = (user_name or "").strip().lower()
     current_local_time = now_in_bot_tz()
     current_date_str = current_local_time.strftime("%Y-%m-%d")

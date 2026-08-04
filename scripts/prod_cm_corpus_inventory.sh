@@ -152,54 +152,78 @@ for f in files:
     seen.add(key)
     unique.append(f)
 
-# CM draft article metadata (titles/status/source only — never bodies)
+# CM draft / published article metadata (titles/status/source only — never bodies)
 cm_articles = []
-draft_root = data_root / "tenants" / "linas" / "cm" / "draft"
-for section in ("knowledge", "care", "faq"):
-    path = draft_root / f"{section}.json"
+
+def _load_section_items(path: Path) -> list:
     if not path.is_file():
-        continue
+        return []
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        continue
-    items = payload.get("items") if isinstance(payload, dict) else None
-    if not isinstance(items, list):
-        continue
-    for item in items:
-        if not isinstance(item, dict):
+        return []
+    if not isinstance(raw, dict):
+        return []
+    # Draft envelopes wrap section data under "payload"; published version files are bare.
+    section_obj = raw.get("payload") if isinstance(raw.get("payload"), dict) else raw
+    items = section_obj.get("items") if isinstance(section_obj, dict) else None
+    return list(items) if isinstance(items, list) else []
+
+draft_root = data_root / "tenants" / "linas" / "cm" / "draft"
+published_content_root = None
+if isinstance(pointer_info, dict) and pointer_info.get("content_version_id"):
+    published_content_root = (
+        data_root / "tenants" / "linas" / "cm" / "versions" / str(pointer_info["content_version_id"]) / "content"
+    )
+
+for section in ("knowledge", "care", "faq"):
+    for label, path in (
+        ("draft", draft_root / f"{section}.json"),
+        ("published", (published_content_root / f"{section}.json") if published_content_root else None),
+    ):
+        if path is None:
             continue
-        if section == "faq":
-            cm_articles.append({
-                "section": section,
-                "id": item.get("qa_group_id"),
-                "status": item.get("status"),
-                "tags": item.get("tags") or [],
-                "variant_languages": [
-                    str(v.get("language")) for v in (item.get("variants") or []) if isinstance(v, dict)
-                ],
-            })
-        else:
-            cm_articles.append({
-                "section": section,
-                "id": item.get("id"),
-                "title": item.get("title"),
-                "status": item.get("status"),
-                "source_filename": item.get("source_filename"),
-                "source_checksum": item.get("source_checksum"),
-                "tags": item.get("tags") or [],
-            })
+        for item in _load_section_items(path):
+            if not isinstance(item, dict):
+                continue
+            if section == "faq":
+                cm_articles.append({
+                    "origin": label,
+                    "section": section,
+                    "id": item.get("qa_group_id"),
+                    "status": item.get("status"),
+                    "tags": item.get("tags") or [],
+                    "variant_languages": [
+                        str(v.get("language")) for v in (item.get("variants") or []) if isinstance(v, dict)
+                    ],
+                })
+            else:
+                cm_articles.append({
+                    "origin": label,
+                    "section": section,
+                    "id": item.get("id"),
+                    "title": item.get("title"),
+                    "status": item.get("status"),
+                    "source_filename": item.get("source_filename"),
+                    "source_checksum": item.get("source_checksum"),
+                    "tags": item.get("tags") or [],
+                })
 
 restricted_topics = []
-restricted_path = draft_root / "restricted.json"
-if restricted_path.is_file():
+for label, path in (
+    ("draft", draft_root / "restricted.json"),
+    ("published", (published_content_root / "restricted.json") if published_content_root else None),
+):
+    if path is None or not path.is_file():
+        continue
     try:
-        restricted_payload = json.loads(restricted_path.read_text(encoding="utf-8"))
-        for topic in (restricted_payload.get("topics") or []):
-            if isinstance(topic, dict):
-                restricted_topics.append({"id": topic.get("id"), "active": topic.get("active")})
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        pass
+        continue
+    section_obj = raw.get("payload") if isinstance(raw.get("payload"), dict) else raw
+    for topic in ((section_obj or {}).get("topics") or []):
+        if isinstance(topic, dict):
+            restricted_topics.append({"origin": label, "id": topic.get("id"), "active": topic.get("active")})
 
 ledger = {
     "schema": "cm_corpus_ledger_v1",
@@ -227,7 +251,7 @@ print(json.dumps({
     "index_version_id": ledger.get("index_version_id"),
     "restricted_topics": restricted_topics,
     "knowledge_titles": [
-        {"title": a.get("title"), "status": a.get("status"), "source_filename": a.get("source_filename")}
+        {"origin": a.get("origin"), "title": a.get("title"), "status": a.get("status"), "source_filename": a.get("source_filename")}
         for a in cm_articles if a.get("section") == "knowledge"
     ],
     "faq_status_counts": {},

@@ -63,9 +63,12 @@ def cm_publish_enabled() -> bool:
 
 
 def cm_faq_canonical() -> bool:
-    """When true, the dashboard's legacy Training page points authors to Content Management
-    for FAQ authoring instead. Defaults to false (no change to existing Training UX)."""
-    return os.getenv("CM_FAQ_CANONICAL", "false").strip().lower() in {"1", "true", "yes"}
+    """When true (default), Content Managers → FAQ is the only FAQ writer.
+
+    Legacy `/training` redirects to CM FAQ, and legacy Bot Training write APIs are disabled.
+    Set CM_FAQ_CANONICAL=false only for emergency rollback of write gating.
+    """
+    return os.getenv("CM_FAQ_CANONICAL", "true").strip().lower() in {"1", "true", "yes"}
 
 
 FAQ_EXACT_THRESHOLD: Final[float] = 0.90

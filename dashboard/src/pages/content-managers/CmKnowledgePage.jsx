@@ -15,7 +15,7 @@ export const CmArticlesPage = ({ section, title, description }) => {
   const items = asRecordList(draft.payload.items);
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(section === "knowledge" ? "active" : "all");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -250,7 +250,7 @@ const CmKnowledgePage = () => (
   <CmArticlesPage
     section="knowledge"
     title="Knowledge"
-    description="Searchable articles the AI can use after FAQ miss. Restricted/archived articles stay visible here but are not used by AI."
+    description="Educational clinic articles for AI retrieval after FAQ miss. Location, booking, greeting, and price rules live in their dedicated sections (archived copies stay filterable here)."
   />
 );
 

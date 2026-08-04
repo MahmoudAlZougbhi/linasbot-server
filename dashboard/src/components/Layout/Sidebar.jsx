@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import {
   HomeIcon,
   BeakerIcon,
-  AcademicCapIcon,
   FolderIcon,
   ChatBubbleLeftRightIcon,
   ArrowDownTrayIcon,
@@ -21,7 +20,8 @@ import { hasPermission } from "../../utils/permissions";
 import { buildDisplayLabel } from "../../utils/buildInfo";
 import { authFetch } from "../../utils/authFetch";
 
-// Navigation items with permission keys
+// Navigation items with permission keys.
+// FAQ authoring is only under Content Managers → FAQ (no separate Bot Training nav).
 const navigationItems = [
   { name: "Dashboard", href: "/app", icon: HomeIcon, permissionKey: "dashboard" },
   {
@@ -30,20 +30,6 @@ const navigationItems = [
     icon: BeakerIcon,
     badge: "Active",
     permissionKey: "testing",
-  },
-  {
-    name: "FAQ / Bot Training",
-    href: "/content-managers/faq",
-    icon: AcademicCapIcon,
-    badge: "CM",
-    permissionKey: "contentManagers",
-  },
-  {
-    name: "Legacy FAQ",
-    href: "/training",
-    icon: AcademicCapIcon,
-    permissionKey: "training",
-    hideWhenFaqCanonical: true,
   },
   {
     name: "Content Managers",
@@ -89,31 +75,10 @@ const downloadItems = [
 /** @param {{ collapsed: boolean; onToggleCollapse: () => void; onClose?: () => void }} props */
 const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const { user } = useAuth();
-  const [faqCanonical, setFaqCanonical] = useState(false);
   const [healthState, setHealthState] = useState({
     status: "unknown",
     detail: "Checking…",
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadMeta = async () => {
-      try {
-        const res = await authFetch("/api/cm/meta");
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (!cancelled) {
-          setFaqCanonical(Boolean(data?.faq_canonical));
-        }
-      } catch {
-        // Keep Legacy FAQ visible if meta is unavailable.
-      }
-    };
-    void loadMeta();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,14 +124,13 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
 
     /** @param {typeof navigationItems[number]} item */
     const keepItem = (item) => {
-      if (item.hideWhenFaqCanonical && faqCanonical) return false;
       if (!item.permissionKey) return true;
       if (user.role === "admin") return true;
       return hasPermission(user, item.permissionKey);
     };
 
     return navigationItems.filter(keepItem);
-  }, [user, faqCanonical]);
+  }, [user]);
 
   const downloads = useMemo(() => {
     if (!user) return [];

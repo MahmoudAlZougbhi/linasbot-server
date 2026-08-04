@@ -507,6 +507,31 @@ interface ActivityFlowEntry {
   input_cost_usd?: number;
   output_cost_usd?: number;
   cost_usd?: number;
+  cost_status?: "estimated" | "unavailable" | "none" | "actual" | string;
+  cost_basis?: string;
+  channel?: string;
+  direction?: string;
+  conversation_id?: string;
+  message_id?: string;
+  handler_path?: string;
+  outcome?: string;
+  pipeline_decisions?: Array<Record<string, unknown>>;
+  cm_diagnostics?: {
+    reason?: string | null;
+    content_version_id?: string | null;
+    index_version_id?: string | null;
+    source_ids?: string[];
+    retrieved_sources?: Array<{ source_id?: string; title?: string }>;
+    validated?: boolean | null;
+    regenerated?: boolean | null;
+    failed_rules?: string[];
+  } | null;
+  faq_match?: {
+    faq_id?: string | number | null;
+    tier?: string | null;
+    similarity?: number | null;
+    stored_language?: string | null;
+  } | null;
   [key: string]: unknown;
 }
 
