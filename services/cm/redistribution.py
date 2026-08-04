@@ -138,16 +138,8 @@ def redistribute_knowledge_draft(
 
     services_by_id = {item.id: item for item in services.items}
     # Drop prior redistributed Care rows so remigrate can re-home (e.g. Marwa → handoff).
-    care_by_id = {
-        item.id: item
-        for item in care.items
-        if _REDISTRIBUTED_TAG not in (item.tags or [])
-    }
-    dyn_by_id = {
-        item.id: item
-        for item in dyn.items
-        if not str(item.id).startswith("redistributed_")
-    }
+    care_by_id = {item.id: item for item in care.items if _REDISTRIBUTED_TAG not in (item.tags or [])}
+    dyn_by_id = {item.id: item for item in dyn.items if not str(item.id).startswith("redistributed_")}
 
     # Rebuild redistributed policy blocks from current classification (avoid stale homes).
     branches = BranchesSection(
