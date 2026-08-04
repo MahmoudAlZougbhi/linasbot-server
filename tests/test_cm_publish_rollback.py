@@ -45,12 +45,22 @@ async def test_second_publish_creates_new_immutable_version_and_records_previous
 
 @pytest.mark.asyncio
 async def test_publish_blocked_on_restricted_conflict_validation_error() -> None:
+    from services.cm.schemas import initial_restricted_policy
+
     tenant_id = f"cm_publish_test_blocked_{uuid.uuid4().hex[:8]}"
 
     restricted_env = get_draft("restricted", tenant_id=tenant_id, create_default=True)
+    put_draft(
+        "restricted",
+        payload=initial_restricted_policy(active=True).model_dump(mode="json"),
+        if_match=restricted_env.etag,
+        tenant_id=tenant_id,
+        updated_by="test",
+    )
+    restricted_env = get_draft("restricted", tenant_id=tenant_id, create_default=False)
     restricted_payload = dict(restricted_env.payload)
     topics = list(restricted_payload.get("topics") or [])
-    assert topics, "expected default restricted topics (tattoo_removal etc.)"
+    assert topics, "expected owner-activated restricted topics (tattoo_removal etc.)"
     conflicting_topic_id = topics[0]["id"]
 
     prices_env = get_draft("prices", tenant_id=tenant_id, create_default=True)

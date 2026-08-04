@@ -261,6 +261,10 @@ const Testing = () => {
         userPhone: phoneForTest,
         provider: selectedProvider,
         channel: activeChannel,
+        metadata:
+          result.cm_diagnostics && typeof result.cm_diagnostics === "object"
+            ? /** @type {Record<string, unknown>} */ (result.cm_diagnostics)
+            : undefined,
       };
 
       appendLabTurn(testResult, phoneForTest);
@@ -1511,6 +1515,42 @@ const Testing = () => {
                                         {result.metadata.detectedLanguage}
                                       </p>
                                     )}
+                                    {typeof result.metadata.content_version_id === "string" &&
+                                      result.metadata.content_version_id && (
+                                        <p>Content version: {result.metadata.content_version_id}</p>
+                                      )}
+                                    {typeof result.metadata.index_version_id === "string" &&
+                                      result.metadata.index_version_id && (
+                                        <p>Index version: {result.metadata.index_version_id}</p>
+                                      )}
+                                    {Array.isArray(result.metadata.source_ids) &&
+                                      result.metadata.source_ids.length > 0 && (
+                                        <p>
+                                          Sources:{" "}
+                                          {result.metadata.source_ids
+                                            .map((id) => String(id))
+                                            .join(", ")}
+                                        </p>
+                                      )}
+                                    {Array.isArray(result.metadata.retrieved_sources) &&
+                                      result.metadata.retrieved_sources.length > 0 && (
+                                        <ul className="list-disc pl-4 space-y-0.5">
+                                          {result.metadata.retrieved_sources
+                                            .slice(0, 8)
+                                            .map((src, idx) => {
+                                              const row =
+                                                src && typeof src === "object"
+                                                  ? /** @type {Record<string, unknown>} */ (src)
+                                                  : {};
+                                              return (
+                                                <li key={`src-${idx}`}>
+                                                  {String(row.source_id || "source")}
+                                                  {row.title ? ` — ${String(row.title)}` : ""}
+                                                </li>
+                                              );
+                                            })}
+                                        </ul>
+                                      )}
                                   </div>
                                 )}
                               </div>

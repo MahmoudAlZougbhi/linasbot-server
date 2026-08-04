@@ -1,20 +1,24 @@
 """Production Content Management migration helpers (copy-first, no invented facts).
 
 Stages live ``LINASBOT_DATA_ROOT`` content into the fixture-shaped ``legacy/`` tree expected by
-:func:`services.cm.migration.migrate_legacy_fixture`, then applies owner-confirmed Lina's
-business-truth seeding (supported laser service, branches, laser-only handoff, restricted
-scrubbing, preparation guidance) without inventing prices/hours/phones.
+:func:`services.cm.migration.migrate_legacy_fixture`, then applies owner-confirmed Lina
+structured seeding (branches, laser handoff contacts, preparation guidance) without inventing
+prices/hours/phones.
+
+Keyword topic scrub is revoked: recovered Lina files stay active/visible/AI-usable based on
+actual content status, not filename/topic keywords.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
 from typing import Any
 
 from services.cm.conflict_validation import validate_restricted_conflicts
-from services.cm.constants import DEFAULT_TENANT_ID, INITIAL_RESTRICTED_TOPIC_IDS
+from services.cm.constants import DEFAULT_TENANT_ID
 from services.cm.migration import migrate_legacy_fixture
 from services.cm.schemas import (
     AiBasics,
@@ -23,30 +27,22 @@ from services.cm.schemas import (
     BranchHours,
     BranchRecord,
     CareSection,
-    FaqRecord,
-    FaqSection,
+    DynamicMessageRecord,
+    DynamicMessagesSection,
     GenderAudience,
     HandoffContact,
     HandoffMatrixRow,
     HandoffPolicy,
-    KnowledgeSection,
     LanguagePolicy,
     LocalizedLabels,
+    RestrictedPolicy,
     ServiceRecord,
     ServicesSection,
     StylePolicy,
-    initial_restricted_policy,
 )
+from services.cm.scrub_restore import restore_keyword_scrubbed_content
 from services.cm.storage import get_draft, put_draft
 from services.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
-
-# Owner-confirmed unsupported services — never offered, priced, or WhatsApp-routed.
-UNSUPPORTED_TOPIC_MARKERS: dict[str, tuple[str, ...]] = {
-    "tattoo_removal": ("tattoo", "تاتو", "وشم", "détatouage", "detatouage", "tatouage"),
-    "co2_laser": ("co2", "co₂", "سي او تو", "سي أو تو"),
-    "pigmentation_removal": ("pigmentation", "تصبغ", "تصبغات", "melasma"),
-    "facial_skin_cleaning": ("facial", "فيشل", "تنظيف البشرة", "skin cleaning", "skin-cleaning"),
-}
 
 SHAVE_CARE_BODY = (
     "Customers are advised to shave at home one day before a laser hair-removal session. "
@@ -77,6 +73,7 @@ def stage_live_data_for_migration(
         shutil.rmtree(staging_root)
     legacy.mkdir(parents=True, exist_ok=True)
     (legacy / "knowledge_files").mkdir(parents=True, exist_ok=True)
+    (legacy / "style_files").mkdir(parents=True, exist_ok=True)
 
     copied: list[dict[str, str]] = []
     missing: list[str] = []
@@ -151,6 +148,17 @@ def stage_live_data_for_migration(
             for path in sorted(kf_root.glob("*.json")):
                 _copy(path, legacy / "knowledge_files" / path.name)
 
+    for sf_root in (
+        data_root / "content" / "style_files",
+        data_root / "style_files",
+        app_data / "style_files",
+        app_data / "content" / "style_files",
+    ):
+        if sf_root.is_dir():
+            for path in sorted(sf_root.iterdir()):
+                if path.is_file():
+                    _copy(path, legacy / "style_files" / path.name)
+
     for pf_root in (
         data_root / "content" / "price_files",
         data_root / "price_files",
@@ -169,7 +177,9 @@ def stage_live_data_for_migration(
         app_data / "settings" / "dynamic_messages.json",
         app_data / "dynamic_messages.json",
     ]
-    dyn_src = next((p for p in dyn_candidates if p.exists()), None)
+    dyn_src = next((p for p in dyn_candidates if p.exists() and p.is_file() and p.stat().st_size > 0), None)
+    if dyn_src is None:
+        dyn_src = next((p for p in dyn_candidates if p.exists()), None)
     if dyn_src is not None:
         _copy(dyn_src, legacy / "dynamic_messages.json")
 
@@ -201,136 +211,143 @@ def _put_section(section: str, payload: dict[str, Any], *, tenant_id: str, updat
     put_draft(section, payload=payload, if_match=env.etag, tenant_id=tenant_id, updated_by=updated_by)
 
 
-def _text_affirms_restricted(text: str) -> str | None:
-    lowered = (text or "").lower()
-    for topic_id, markers in UNSUPPORTED_TOPIC_MARKERS.items():
-        if topic_id not in INITIAL_RESTRICTED_TOPIC_IDS:
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _import_dynamic_messages(*, staging_root: Path, tenant_id: str, updated_by: str) -> dict[str, Any]:
+    path = staging_root / "legacy" / "dynamic_messages.json"
+    if not path.is_file() or path.stat().st_size == 0:
+        return {"imported": 0, "skipped": "missing_or_empty"}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"imported": 0, "skipped": "invalid_json"}
+
+    items: list[DynamicMessageRecord] = []
+    if isinstance(raw, dict):
+        # Shape A: {"messages": [...]} or {"items": [...]}
+        rows = raw.get("items") if isinstance(raw.get("items"), list) else raw.get("messages")
+        if isinstance(rows, list):
+            source_rows = rows
+        else:
+            # Shape B: {id: {ar,en,fr,name}} or {id: "text"}
+            source_rows = [
+                {"id": key, **(value if isinstance(value, dict) else {"en": str(value)})} for key, value in raw.items()
+            ]
+    elif isinstance(raw, list):
+        source_rows = raw
+    else:
+        return {"imported": 0, "skipped": "unsupported_shape"}
+
+    for row in source_rows:
+        if not isinstance(row, dict):
             continue
-        for marker in markers:
-            if marker.lower() in lowered:
-                # Any mention of an unsupported service in active FAQ/knowledge is archived.
-                # Restricted Topics remain the internal blocklist; active published copy must not
-                # affirm or advertise these services.
-                return topic_id
-    return None
-
-
-def scrub_restricted_affirmations(*, tenant_id: str, updated_by: str) -> dict[str, Any]:
-    """Mark FAQ/knowledge items that affirm restricted topics as restricted (visible, not AI-active).
-
-    Preserves original records in drafts with ``status=restricted`` and also writes a
-    timestamped file archive for provenance. Does not delete source bytes.
-    """
-    from datetime import UTC, datetime
-
-    from services.cm.paths import archive_dir, ensure_cm_dirs
-
-    report: dict[str, Any] = {
-        "faq_removed": [],
-        "knowledge_archived_ids": [],
-        "care_archived_ids": [],
-        "archive_rel": None,
-    }
-    ensure_cm_dirs(tenant_id)
-    archive_bucket = archive_dir(tenant_id) / "restricted_scrub" / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    archive_bucket.mkdir(parents=True, exist_ok=True)
-    report["archive_rel"] = str(archive_bucket)
-
-    faq_env = get_draft("faq", tenant_id=tenant_id, create_default=True)
-    faq = FaqSection.model_validate(faq_env.payload)
-    kept_faq: list[FaqRecord] = []
-    removed_faq: list[dict[str, Any]] = []
-    for faq_item in faq.items:
-        blob = " ".join(f"{v.question} {v.answer}" for v in faq_item.variants)
-        topic = _text_affirms_restricted(blob)
-        if topic and faq_item.status != "restricted":
-            report["faq_removed"].append({"qa_group_id": faq_item.qa_group_id, "topic_id": topic})
-            removed_faq.append(faq_item.model_dump(mode="json"))
-            tags = list(faq_item.tags)
-            if "restricted_scrub" not in tags:
-                tags.append("restricted_scrub")
-            if f"topic:{topic}" not in tags:
-                tags.append(f"topic:{topic}")
-            kept_faq.append(
-                faq_item.model_copy(
-                    update={
-                        "status": "restricted",
-                        "tags": tags,
-                        "notes": (f"{faq_item.notes or ''}\n[restricted] Not used by AI — topic={topic}").strip(),
-                    }
-                )
+        msg_id = str(row.get("id") or row.get("key") or row.get("name") or "").strip()
+        if not msg_id:
+            continue
+        items.append(
+            DynamicMessageRecord(
+                id=msg_id,
+                name=str(row.get("name") or row.get("label") or msg_id),
+                ar=str(row.get("ar") or row.get("arabic") or ""),
+                en=str(row.get("en") or row.get("english") or ""),
+                fr=str(row.get("fr") or row.get("french") or ""),
+                notes=str(row.get("notes") or "") or None,
             )
-            continue
-        kept_faq.append(faq_item)
-    if removed_faq:
-        (archive_bucket / "faq_removed.json").write_text(
-            json.dumps(removed_faq, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
+
     _put_section(
-        "faq",
-        FaqSection(items=kept_faq, notes=faq.notes).model_dump(mode="json"),
+        "dynamic_messages",
+        DynamicMessagesSection(items=items, notes="Imported from legacy dynamic_messages.json").model_dump(mode="json"),
         tenant_id=tenant_id,
         updated_by=updated_by,
     )
+    return {"imported": len(items)}
 
-    for section_name, key in (
-        ("knowledge", "knowledge_archived_ids"),
-        ("care", "care_archived_ids"),
-    ):
-        env = get_draft(section_name, tenant_id=tenant_id, create_default=True)
-        if section_name == "knowledge":
-            section_model: KnowledgeSection | CareSection = KnowledgeSection.model_validate(env.payload)
-        else:
-            section_model = CareSection.model_validate(env.payload)
-        kept_articles: list[ArticleRecord] = []
-        removed_articles: list[dict[str, Any]] = []
-        for article in section_model.items:
-            topic = _text_affirms_restricted(f"{article.title}\n{article.body}")
-            if topic and article.status != "restricted":
-                report[key].append({"id": article.id, "topic_id": topic})
-                removed_articles.append(article.model_dump(mode="json"))
-                tags = list(article.tags)
-                if "restricted_scrub" not in tags:
-                    tags.append("restricted_scrub")
-                if f"topic:{topic}" not in tags:
-                    tags.append(f"topic:{topic}")
-                kept_articles.append(
-                    article.model_copy(
-                        update={
-                            "status": "restricted",
-                            "tags": tags,
-                            "notes": (f"{article.notes or ''}\n[restricted] Not used by AI — topic={topic}").strip(),
-                        }
-                    )
-                )
+
+def _import_style_files(*, staging_root: Path, tenant_id: str, updated_by: str) -> dict[str, Any]:
+    style_path = staging_root / "legacy" / "style_guide.txt"
+    style_body = style_path.read_text(encoding="utf-8").strip() if style_path.exists() else ""
+    style_files_dir = staging_root / "legacy" / "style_files"
+    appended: list[str] = []
+    if style_files_dir.is_dir():
+        for path in sorted(style_files_dir.iterdir()):
+            if not path.is_file():
                 continue
-            kept_articles.append(article)
-        if removed_articles:
-            (archive_bucket / f"{section_name}_removed.json").write_text(
-                json.dumps(removed_articles, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-            )
-        if section_name == "knowledge":
-            payload = KnowledgeSection(items=kept_articles, notes=section_model.notes).model_dump(mode="json")
-        else:
-            payload = CareSection(items=kept_articles, notes=section_model.notes).model_dump(mode="json")
-        _put_section(section_name, payload, tenant_id=tenant_id, updated_by=updated_by)
-    return report
+            text = path.read_text(encoding="utf-8", errors="replace").strip()
+            if not text:
+                continue
+            block = f"\n\n--- style_files/{path.name} ---\n{text}"
+            style_body = f"{style_body}{block}".strip()
+            appended.append(path.name)
+    style = StylePolicy(
+        style_body=style_body,
+        tone="friendly professional",
+        formality="warm",
+        notes=("Includes style_files: " + ", ".join(appended)) if appended else None,
+    )
+    _put_section("style", style.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
+    return {"style_chars": len(style_body), "style_files": appended}
+
+
+def _import_ai_basics_from_prompt(*, staging_root: Path, tenant_id: str, updated_by: str) -> dict[str, Any]:
+    prompt_path = staging_root / "legacy" / "system_prompt_template.txt"
+    prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
+    settings_path = staging_root / "legacy" / "app_settings.json"
+    settings_notes: list[str] = []
+    if settings_path.is_file():
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            settings = None
+        if isinstance(settings, dict):
+            for key in (
+                "clinic_name",
+                "business_name",
+                "assistant_name",
+                "default_language",
+                "timezone",
+                "booking_enabled",
+            ):
+                if key in settings and settings[key] not in (None, ""):
+                    settings_notes.append(f"{key}={settings[key]!r}")
+
+    ai = AiBasics(
+        assistant_name="Linas",
+        clinic_name="Linas Laser",
+        identity_summary="Linas Laser clinic assistant. Answer from published Content Management facts only.",
+        advanced_instructions=prompt_text,
+        notes=("app_settings: " + "; ".join(settings_notes)) if settings_notes else None,
+    )
+    _put_section("ai_basics", ai.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
+    return {
+        "prompt_chars": len(prompt_text),
+        "prompt_sha256": _sha256_text(prompt_text) if prompt_text else None,
+        "app_settings_keys_noted": len(settings_notes),
+    }
 
 
 def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, staging_root: Path) -> dict[str, Any]:
-    """Seed structured CM sections from proven contacts + owner-confirmed service truth."""
+    """Seed structured CM sections from proven contacts + owner-confirmed service truth.
+
+    Does NOT auto-apply INITIAL_RESTRICTED_TOPIC_IDS. Restricted Topics remain an owner-configured
+    platform feature only.
+    """
     seeded: dict[str, Any] = {}
 
-    # Restricted defaults (already in schemas) — force-refresh to owner-confirmed set.
+    # Empty restricted policy on migrate — owner configures Restricted Topics explicitly.
     _put_section(
         "restricted",
-        initial_restricted_policy().model_dump(mode="json"),
+        RestrictedPolicy(
+            topics=[],
+            notes="Restricted Topics are owner-configured. Migration does not auto-restrict recovered Lina files by topic keywords.",
+        ).model_dump(mode="json"),
         tenant_id=tenant_id,
         updated_by=updated_by,
     )
-    seeded["restricted_topics"] = list(INITIAL_RESTRICTED_TOPIC_IDS)
+    seeded["restricted_topics"] = []
 
-    # Languages frozen contract.
     _put_section(
         "languages",
         LanguagePolicy().model_dump(mode="json"),
@@ -338,7 +355,6 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
         updated_by=updated_by,
     )
 
-    # Supported service: laser hair removal only (owner-confirmed).
     services = ServicesSection(
         items=[
             ServiceRecord(
@@ -358,7 +374,6 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
     _put_section("services", services.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
     seeded["services"] = ["laser_hair_removal"]
 
-    # Branches proven by active social handoff matrix (no invented addresses/hours).
     branches = BranchesSection(
         items=[
             BranchRecord(
@@ -382,7 +397,6 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
     _put_section("branches", branches.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
     seeded["branches"] = ["beirut", "antelias"]
 
-    # Handoff: laser contacts only (tattoo route removed per owner truth).
     contacts: list[HandoffContact] = []
     matrix: list[HandoffMatrixRow] = []
     mapping = {
@@ -418,31 +432,14 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
     _put_section("handoff", handoff.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
     seeded["handoff_contacts"] = [c.id for c in contacts]
 
-    # Style from staged style_guide if present.
-    style_path = staging_root / "legacy" / "style_guide.txt"
-    style_body = style_path.read_text(encoding="utf-8").strip() if style_path.exists() else ""
-    style = StylePolicy(style_body=style_body, tone="friendly professional", formality="warm")
-    _put_section("style", style.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
-    seeded["style_chars"] = len(style_body)
-
-    # AI basics — identity only; advanced instructions get system prompt as narrative archive note.
-    prompt_path = staging_root / "legacy" / "system_prompt_template.txt"
-    prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
-    ai = AiBasics(
-        assistant_name="Linas",
-        clinic_name="Linas Laser",
-        identity_summary="Linas Laser clinic assistant for laser hair removal and related approved information.",
-        advanced_instructions=(
-            "Answer only from published Content Management facts. "
-            "Never invent prices, hours, branches, or WhatsApp numbers. "
-            "Never offer tattoo removal, CO2 laser, pigmentation removal, or facial/skin-cleaning."
-        ),
-        notes=(prompt_text[:4000] if prompt_text else None),
+    seeded["style"] = _import_style_files(staging_root=staging_root, tenant_id=tenant_id, updated_by=updated_by)
+    seeded["ai_basics"] = _import_ai_basics_from_prompt(
+        staging_root=staging_root, tenant_id=tenant_id, updated_by=updated_by
     )
-    _put_section("ai_basics", ai.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
-    seeded["ai_basics"] = True
+    seeded["dynamic_messages"] = _import_dynamic_messages(
+        staging_root=staging_root, tenant_id=tenant_id, updated_by=updated_by
+    )
 
-    # Preparation care article (owner-confirmed).
     care_env = get_draft("care", tenant_id=tenant_id, create_default=True)
     care = CareSection.model_validate(care_env.payload)
     care_items = [item for item in care.items if item.id != "care_shave_before_laser"]
@@ -453,6 +450,7 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
             body=SHAVE_CARE_BODY,
             language="en",
             tags=["preparation", "laser_hair_removal", "owner_confirmed"],
+            status="active",
         )
     )
     _put_section(
@@ -463,8 +461,6 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
     )
     seeded["care_shave"] = True
 
-    # Prices: import proven numeric rows from staged price JSON into generic catalog.
-    # Never invent amounts. Lina body areas are tenant catalog data (item_type=body_area), not code.
     from services.cm.pricing.migration import migrate_staged_price_files_to_catalog
 
     pricing_import = migrate_staged_price_files_to_catalog(
@@ -492,7 +488,7 @@ def run_production_content_migration(
     updated_by: str = "prod_cm_migration",
     app_data_root: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Full production draft migration: stage → fixture migrate → seed truth → scrub conflicts."""
+    """Full production draft migration: stage → fixture migrate → seed → restore scrub."""
     tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
     root = resolve_live_data_root(data_root)
     staging = Path(staging_root)
@@ -503,7 +499,7 @@ def run_production_content_migration(
     )
     migrate_report = migrate_legacy_fixture(source_root=staging, tenant_id=tid, updated_by=updated_by)
     seeded = seed_owner_confirmed_structured_truth(tenant_id=tid, updated_by=updated_by, staging_root=staging)
-    scrub = scrub_restricted_affirmations(tenant_id=tid, updated_by=updated_by)
+    restore = restore_keyword_scrubbed_content(tenant_id=tid, updated_by=updated_by)
 
     qa_path = staging / "legacy" / "qa_pairs.jsonl"
     qa_stats: dict[str, Any] = {
@@ -553,7 +549,14 @@ def run_production_content_migration(
         "stage": stage_report,
         "migrate": migrate_report,
         "seeded": seeded,
-        "scrub": scrub,
+        "scrub": {
+            "faq_removed": [],
+            "knowledge_archived_ids": [],
+            "care_archived_ids": [],
+            "disabled": True,
+            "reason": "keyword_topic_scrub_revoked",
+        },
+        "restore": restore,
         "qa_stats": qa_stats,
         "conflicts": conflicts,
         "conflict_count": len(conflicts),

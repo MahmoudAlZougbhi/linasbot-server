@@ -352,8 +352,12 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def initial_restricted_topics() -> list[RestrictedTopic]:
-    """Initial Restricted defaults (plan D8) — owner may change before first publish."""
+def initial_restricted_topics(*, active: bool = False) -> list[RestrictedTopic]:
+    """Catalog of optional Restricted Topics for owner configuration.
+
+    Topics are inactive by default. Migration must not auto-restrict recovered Lina files
+    from this hardcoded list; the owner activates topics explicitly in the Restricted UI.
+    """
     topics: list[RestrictedTopic] = []
     for topic_id in INITIAL_RESTRICTED_TOPIC_IDS:
         labels_raw = INITIAL_RESTRICTED_LABELS[topic_id]
@@ -368,14 +372,15 @@ def initial_restricted_topics() -> list[RestrictedTopic]:
                 id=topic_id,
                 labels=labels,
                 keywords=keywords,
-                active=True,
+                active=active,
             )
         )
     return topics
 
 
-def initial_restricted_policy() -> RestrictedPolicy:
-    return RestrictedPolicy(topics=initial_restricted_topics())
+def initial_restricted_policy(*, active: bool = False) -> RestrictedPolicy:
+    """Optional topic catalog. Defaults inactive so content is not auto-restricted."""
+    return RestrictedPolicy(topics=initial_restricted_topics(active=active))
 
 
 def default_section_payload(section: str) -> dict[str, object]:
@@ -392,7 +397,8 @@ def default_section_payload(section: str) -> dict[str, object]:
         "knowledge": KnowledgeSection(),
         "faq": FaqSection(),
         "handoff": HandoffPolicy(),
-        "restricted": initial_restricted_policy(),
+        # Empty by default — Restricted Topics are owner-configured, not auto-seeded.
+        "restricted": RestrictedPolicy(),
     }
     model = builders.get(section)
     if model is None:

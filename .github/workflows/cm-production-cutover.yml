@@ -23,6 +23,7 @@ on:
           - price_line_shape_probe
           - enable_faq_canonical
           - sot_audit_published
+          - corpus_inventory
       confirmation:
         description: "Type CM_CUTOVER_CONFIRMED"
         required: true
@@ -103,6 +104,8 @@ jobs:
               sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
             elif [ "${PHASE}" = "sot_audit_published" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_sot_audit.sh
+            elif [ "${PHASE}" = "corpus_inventory" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_corpus_inventory.sh
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1

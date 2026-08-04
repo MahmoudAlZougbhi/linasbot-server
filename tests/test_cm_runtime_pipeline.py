@@ -42,8 +42,16 @@ async def test_no_published_version_is_honest_failure() -> None:
 @pytest.mark.asyncio
 async def test_restricted_topic_refused_and_never_offers_handoff_number() -> None:
     """T7/T23: restricted + booking intent together must NEVER return a WhatsApp number."""
+    from services.cm.schemas import initial_restricted_policy
+
     tenant_id = "cm_runtime_test_restricted_booking"
-    await publish_test_content(tenant_id, {"handoff": _handoff_with_default_contact()})
+    await publish_test_content(
+        tenant_id,
+        {
+            "handoff": _handoff_with_default_contact(),
+            "restricted": initial_restricted_policy(active=True).model_dump(mode="json"),
+        },
+    )
 
     outcome = await prepare_response(
         tenant_id=tenant_id,

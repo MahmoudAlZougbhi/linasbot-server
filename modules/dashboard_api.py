@@ -563,6 +563,7 @@ async def test_message(request: TestMessageRequest) -> Any:
 
             _test_ud = config.user_data_whatsapp.get(user_id) or {}
             processing_exception = _test_ud.pop("_dashboard_processing_error", None)
+            cm_diagnostics = _test_ud.pop("_dashboard_cm_diagnostics", None)
 
             if captured_responses:
                 bot_response = "\n\n".join(captured_responses)
@@ -606,6 +607,7 @@ async def test_message(request: TestMessageRequest) -> Any:
                 "handler_error": handle_err,
                 "delayed_task_note": delayed_diag,
                 "processing_exception": processing_exception,
+                "cm_diagnostics": cm_diagnostics,
                 "provider_info": {
                     "provider": request.provider,
                     "user_id_used": user_id,
