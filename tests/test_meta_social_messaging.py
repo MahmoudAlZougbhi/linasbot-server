@@ -16,8 +16,12 @@ from services.meta_messaging import (
 )
 from services.social_contact_routing import (
     DEFAULT_SOCIAL_WHATSAPP_CONTACTS,
+    SOCIAL_BOOKING_PREFERENCES_FIELD,
     SocialContactScopeError,
+    get_social_booking_preference,
+    restore_social_booking_preference,
     route_social_contact_request,
+    social_booking_preference_key,
     wa_me_url,
 )
 
@@ -515,17 +519,114 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         self.assertIn("https://wa.me/96178847527", completed.reply)
         self.assertFalse(self._flow_keys(ud))
 
-    def test_completed_male_flow_is_not_reused_by_new_booking(self):
+    def test_completed_male_flow_is_reused_only_as_scoped_durable_preference(self):
         ud = self._fb()
         first = route_social_contact_request("Book a Beirut appointment for men", ud, "en")
         self.assertIn("https://wa.me/96171534928", first.reply)
+        self.assertEqual(first.preference_to_persist, "male")
         self.assertFalse(self._flow_keys(ud))
 
         started = route_social_contact_request("I want to book an appointment with a human", ud, "en")
         self.assertIn(self.BRANCH_EN, started.reply)
         after_branch = route_social_contact_request("Beirut", ud, "en")
-        self.assertIn("men or women", after_branch.reply.lower())
-        self.assertNotIn("71534928", after_branch.reply)
+        self.assertIn("https://wa.me/96171534928", after_branch.reply)
+        self.assertNotIn("men or women", after_branch.reply.lower())
+
+    @staticmethod
+    def _persisted_preference(user_data, preference):
+        return {SOCIAL_BOOKING_PREFERENCES_FIELD: {social_booking_preference_key(user_data): {"value": preference}}}
+
+    def test_new_facebook_customer_saves_explicit_preference_and_returns_women_beirut_once(self):
+        ud = self._fb(sender="new-facebook-customer")
+        self.assertIn(self.BRANCH_EN, route_social_contact_request("book appointment", ud, "en").reply)
+        self.assertIn("men or women", route_social_contact_request("Beirut", ud, "en").reply.lower())
+
+        completed = route_social_contact_request("Women", ud, "en")
+        self.assertIn("https://wa.me/96178847527", completed.reply)
+        self.assertEqual(completed.preference_to_persist, "female")
+        self.assertEqual(get_social_booking_preference(ud), "female")
+        self.assertFalse(self._flow_keys(ud))
+        self.assertIsNone(route_social_contact_request("Women", ud, "en"))
+
+    def test_returning_facebook_customer_reuses_durable_preference_but_starts_fresh_flow(self):
+        original = self._fb(sender="returning-facebook-customer")
+        persisted = self._persisted_preference(original, "female")
+        returning = self._fb(sender="returning-facebook-customer")
+        self.assertEqual(restore_social_booking_preference(returning, persisted), "female")
+
+        started = route_social_contact_request("I want to book an appointment", returning, "en")
+        self.assertIn(self.BRANCH_EN, started.reply)
+        completed = route_social_contact_request("Beirut", returning, "en")
+        self.assertIn("https://wa.me/96178847527", completed.reply)
+        self.assertNotIn("men or women", completed.reply.lower())
+        self.assertFalse(self._flow_keys(returning))
+
+    def test_durable_preference_isolated_by_sender_workspace_channel_and_asset(self):
+        source = self._fb(sender="isolated-customer")
+        persisted = self._persisted_preference(source, "female")
+        variants = (
+            self._fb(sender="different-customer"),
+            _social_user_data("facebook", sender="isolated-customer", tenant="other-workspace"),
+            self._ig(sender="isolated-customer"),
+            _social_user_data("facebook", sender="isolated-customer", account="other-page"),
+        )
+        for variant in variants:
+            self.assertIsNone(restore_social_booking_preference(variant, persisted))
+            waiting_for_gender = route_social_contact_request("Book in Beirut", variant, "en")
+            self.assertIn("men or women", waiting_for_gender.reply.lower())
+
+    def test_cancellation_and_ttl_clear_flow_but_keep_durable_preference(self):
+        ud = self._fb(sender="flow-cleanup-customer")
+        restore_social_booking_preference(ud, self._persisted_preference(ud, "female"))
+        route_social_contact_request("Book appointment", ud, "en")
+        self.assertIsNone(route_social_contact_request("cancel", ud, "en"))
+        self.assertEqual(get_social_booking_preference(ud), "female")
+
+        route_social_contact_request("Book appointment", ud, "en")
+        key = self._flow_keys(ud)[0]
+        ud[key]["updated_at"] = 0
+        self.assertIsNone(route_social_contact_request("Beirut", ud, "en"))
+        self.assertEqual(get_social_booking_preference(ud), "female")
+
+    def test_explicit_preference_change_updates_future_booking(self):
+        initial = self._fb(sender="change-preference-customer")
+        restore_social_booking_preference(initial, self._persisted_preference(initial, "male"))
+        changed = route_social_contact_request("Change my preference to Women.", initial, "en")
+        self.assertIsNotNone(changed)
+        self.assertEqual(changed.intent, "preference")
+        self.assertEqual(changed.preference_to_persist, "female")
+
+        returning = self._fb(sender="change-preference-customer")
+        persisted = self._persisted_preference(returning, "female")
+        restore_social_booking_preference(returning, persisted)
+        self.assertIn(
+            "https://wa.me/96178847527",
+            route_social_contact_request("Book in Beirut", returning, "en").reply,
+        )
+
+    def test_natural_preference_change_phrases_normalize_to_canonical_values(self):
+        men = self._fb(sender="phrase-men")
+        men_change = route_social_contact_request("I am Men.", men, "en")
+        self.assertEqual(men_change.preference_to_persist, "male")
+        self.assertEqual(get_social_booking_preference(men), "male")
+
+        women = self._fb(sender="phrase-women")
+        women_change = route_social_contact_request("Use Women from now on.", women, "en")
+        self.assertEqual(women_change.preference_to_persist, "female")
+        self.assertEqual(get_social_booking_preference(women), "female")
+
+    def test_booking_for_another_person_overrides_current_flow_without_replacing_default(self):
+        ud = self._fb(sender="other-person-customer")
+        restore_social_booking_preference(ud, self._persisted_preference(ud, "male"))
+        self.assertIn(self.BRANCH_EN, route_social_contact_request("Book an appointment", ud, "en").reply)
+        self.assertIn(self.BRANCH_EN, route_social_contact_request("for my wife", ud, "en").reply)
+        override = route_social_contact_request("Beirut", ud, "en")
+        self.assertIn("https://wa.me/96178847527", override.reply)
+        self.assertIsNone(override.preference_to_persist)
+        self.assertEqual(get_social_booking_preference(ud), "male")
+
+        later = route_social_contact_request("Book in Beirut", ud, "en")
+        self.assertIn("https://wa.me/96171534928", later.reply)
 
     def test_new_explicit_request_replaces_partial_flow_fields(self):
         ud = self._fb()

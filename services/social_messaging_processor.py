@@ -146,7 +146,10 @@ async def process_meta_social_event(
         if simulation:
             user_data["_meta_social_lab_simulation"] = True
         # Bounded handoff TTL: drop expired channel-scoped social_contact_flow blobs.
-        from services.social_contact_routing import expire_social_contact_flows_in_user_data
+        from services.social_contact_routing import (
+            expire_social_contact_flows_in_user_data,
+            restore_social_booking_preference,
+        )
 
         expire_social_contact_flows_in_user_data(user_data)
 
@@ -158,6 +161,8 @@ async def process_meta_social_event(
             # exception text out of logs; the error type is sufficient to operate.
             print(f"[meta-social] state_restore_skipped type={type(exc).__name__}")
 
+        restore_social_booking_preference(user_data, persisted_state)
+
         display_name = await _resolve_social_customer_display_name(
             user_id=user_id,
             sender_id=sender_id,
@@ -167,10 +172,8 @@ async def process_meta_social_event(
             skip_persist=bool(simulation),
         )
 
-        if config.user_gender.get(user_id) not in {"male", "female"}:
-            persisted_gender = persisted_state.get("gender")
-            if persisted_gender in {"male", "female"}:
-                config.user_gender[user_id] = persisted_gender
+        # Social booking uses only the scope-isolated customer-selected preference
+        # restored above.  Do not restore the legacy unscoped profile gender here.
 
         text = str(event.get("text") or "").strip()
         attachments = event.get("attachments") or []
