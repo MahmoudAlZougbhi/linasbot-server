@@ -38,7 +38,7 @@ jobs:
             sudo bash /opt/linasbot/scripts/prod_preflight_readonly.sh
 
       - name: Collect redacted Meta social runtime diagnostics
-        if: ${{ inputs.include_meta_runtime_diagnostics }}
+        if: ${{ always() && inputs.include_meta_runtime_diagnostics }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
