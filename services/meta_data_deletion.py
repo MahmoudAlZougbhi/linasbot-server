@@ -269,8 +269,6 @@ def _candidate_social_user_ids(meta_user_id: str, app_key: str) -> tuple[str, ..
     try:
         bindings = get_meta_app_registry().list_bindings(include_superseded=False)
     except Exception:
-        if app_key != APP_A_KEY:
-            raise RuntimeError("Meta tenant registry is unavailable") from None
         bindings = []
     for binding in bindings:
         if binding.app_key != app_key:
