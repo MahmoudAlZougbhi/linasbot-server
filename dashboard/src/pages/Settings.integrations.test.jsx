@@ -159,7 +159,7 @@ describe("Settings integrations", () => {
     render(<Settings />);
     fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
 
-    expect(await screen.findByRole("button", { name: "Connect Facebook" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Add / Manage Pages" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeEnabled();
     expect(screen.getByText("Lina Meta app")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();

@@ -460,7 +460,9 @@ class MetaAppRegistry:
             superseded_by_binding_id=str(raw.get("superseded_by_binding_id") or ""),
         )
 
-    def list_bindings(self, *, include_inactive: bool = True, include_superseded: bool = True) -> list[MetaAssetBinding]:
+    def list_bindings(
+        self, *, include_inactive: bool = True, include_superseded: bool = True
+    ) -> list[MetaAssetBinding]:
         with self._locked():
             state = self._read_unlocked()
         bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
@@ -481,9 +483,7 @@ class MetaAppRegistry:
     ) -> list[MetaAssetBinding]:
         key = binding_asset_key(tenant_id, app_key, channel, asset_id)
         matches = [
-            binding
-            for binding in self.list_bindings(include_superseded=include_superseded)
-            if binding.asset_key == key
+            binding for binding in self.list_bindings(include_superseded=include_superseded) if binding.asset_key == key
         ]
         return sorted(matches, key=lambda item: item.updated_at, reverse=True)
 
