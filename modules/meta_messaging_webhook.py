@@ -263,9 +263,9 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             )
             raise
 
-    for resolved in resolved_comment_events:
-        comment_id = str(resolved.event.get("comment_id") or "")
-        claim_key = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{comment_id}"
+    for resolved_comment in resolved_comment_events:
+        comment_id = str(resolved_comment.event.get("comment_id") or "")
+        claim_key = f"{resolved_comment.settings.app_key}:{resolved_comment.binding.binding_id}:{comment_id}"
         if not _comment_deduper.claim(claim_key):
             comment_duplicates += 1
             continue
@@ -280,7 +280,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         if not claimed:
             comment_duplicates += 1
             continue
-        _track_task(asyncio.create_task(_process_comment_claimed(resolved)))
+        _track_task(asyncio.create_task(_process_comment_claimed(resolved_comment)))
         comment_accepted += 1
 
     channel_counts = {

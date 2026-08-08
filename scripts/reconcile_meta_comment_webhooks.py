@@ -93,7 +93,8 @@ def main() -> None:
     base_url = f"https://graph.facebook.com/{version}/{app_id}/subscriptions"
     fields_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
     before = _request_json(f"{base_url}?{fields_query}", bearer=app_token, stage="read_before")
-    subscriptions = before.get("data")
+    subscriptions_raw = before.get("data")
+    subscriptions = subscriptions_raw if isinstance(subscriptions_raw, list) else []
     by_object = {str(row.get("object") or "").strip().lower(): row for row in subscriptions if isinstance(row, dict)}
     page_before = _field_names(_mapping(by_object.get(PAGE_OBJECT)).get("fields"))
     ig_before = _field_names(_mapping(by_object.get(INSTAGRAM_OBJECT)).get("fields"))
