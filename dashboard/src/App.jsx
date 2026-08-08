@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 
@@ -18,6 +18,7 @@ import Contact from './pages/public/Contact';
 import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
+import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
 import { OperatorStatusProvider } from './contexts/OperatorStatusContext';
 import { useApi } from './hooks/useApi';
 
@@ -184,16 +185,26 @@ function MobileLiveChatRoute() {
   );
 }
 
+function PublicMarketingShell() {
+  return (
+    <PublicLandingLocaleProvider>
+      <Outlet />
+    </PublicLandingLocaleProvider>
+  );
+}
+
 function App() {
   return (
     <Router>
       <AuthProvider>
         <PermissionsProvider>
           <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
+            <Route element={<PublicMarketingShell />}>
+              <Route path="/" element={<Landing />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
+            </Route>
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
