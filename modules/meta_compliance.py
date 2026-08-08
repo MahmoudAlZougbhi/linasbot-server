@@ -237,7 +237,9 @@ context, answer that business's configured service questions, maintain service s
 provide an explicit booking or human-support handoff when requested. When a business enables
 optional AI comment replies in Settings, we may also receive public Facebook Page or Instagram
 comment text and reply publicly under that comment using the business's approved content.
-We do not publish posts, run ads, send unsolicited marketing DMs, hide or delete comments,
+When a business user explicitly creates a post in the dashboard, we publish only after that user
+reviews the caption, previews it, and confirms publishing. We do not publish posts automatically,
+run ads, send unsolicited marketing DMs, hide or delete comments,
 or book an appointment inside Facebook or Instagram.</p>
 
 <h2>Service providers</h2>
@@ -330,7 +332,9 @@ async def data_deletion_page() -> HTMLResponse:
 <h1>User Data Deletion</h1>
 <p>You may request deletion of information associated with your Facebook Messenger or Instagram
 DM interaction with Linas AI, and—when a business enabled optional AI comment replies—public
-comment text we processed to generate a public reply.</p>
+comment text we processed to generate a public reply. Social posts published through the
+dashboard are created only after explicit business-user confirmation; we do not retain separate
+public-post copies beyond what Meta stores on the connected Page or Instagram account.</p>
 
 <h2>Request through Meta</h2>
 <p>Remove the app or request deletion through the applicable Facebook or Instagram app settings.

@@ -48,6 +48,7 @@ const LiveChat = lazy(() => import('./pages/LiveChat'));
 const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
 const SmartMessaging = lazy(() => import('./pages/SmartMessaging'));
 const Settings = lazy(() => import('./pages/Settings'));
+const SocialPostCreator = lazy(() => import('./pages/SocialPostCreator'));
 const Wallet = lazy(() => import('./pages/Wallet'));
 
 const RouteFallback = () => (
@@ -132,6 +133,7 @@ function AppContent() {
                     <Route path="/live-chat" element={<LiveChat />} />
                     <Route path="/analytics" element={<Navigate to="/app" replace />} />
                     <Route path="/smart-messaging" element={<SmartMessaging />} />
+                    <Route path="/social-posts" element={<SocialPostCreator />} />
                     <Route path="/wallet" element={<Wallet />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />

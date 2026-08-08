@@ -56,11 +56,13 @@ META_COMMENT_SCOPES: dict[MetaChannel, frozenset[str]] = {
     "facebook": frozenset({"pages_read_user_content", "pages_manage_engagement"}),
     "instagram": frozenset({"instagram_manage_comments"}),
 }
+META_PUBLISH_SCOPES: dict[MetaChannel, frozenset[str]] = {
+    "facebook": frozenset({"pages_manage_posts"}),
+    "instagram": frozenset({"instagram_content_publish"}),
+}
 META_FORBIDDEN_SCOPES = frozenset(
     {
         "business_management",
-        "instagram_content_publish",
-        "pages_manage_posts",
         "pages_manage_ads",
         "ads_management",
         "ads_read",
