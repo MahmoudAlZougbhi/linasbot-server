@@ -1,0 +1,35 @@
+name: Meta App A Scope Audit
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Read-only App A scope audit on production
+    environment: meta-social-cutover
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Audit binding scopes on production server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /opt/linasbot
+            set -a
+            source /opt/linasbot/.env
+            set +a
+            sudo -E python3 scripts/audit_meta_app_a_scopes.py
