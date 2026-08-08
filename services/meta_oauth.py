@@ -58,9 +58,7 @@ def meta_oauth_app_key() -> str:
     app = get_meta_app_configs()[APP_A_KEY]
     if app.enabled and app.oauth_config_id:
         return APP_A_KEY
-    raise MetaOAuthError(
-        "Meta Business Login is not configured. Ask ops to set META_APP_A_LOGIN_CONFIG_ID for App A."
-    )
+    raise MetaOAuthError("Meta Business Login is not configured. Ask ops to set META_APP_A_LOGIN_CONFIG_ID for App A.")
 
 
 def begin_meta_business_login(

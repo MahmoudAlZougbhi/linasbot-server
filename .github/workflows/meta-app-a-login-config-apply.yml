@@ -18,6 +18,19 @@ jobs:
     timeout-minutes: 15
     environment: meta-social-cutover
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy apply script to production
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: scripts/prod_apply_meta_app_a_login_config.sh
+          target: /tmp/linasbot-meta-login-config
+
       - name: Set META_APP_A_LOGIN_CONFIG_ID on production
         uses: appleboy/ssh-action@v1.2.0
         env:
@@ -37,5 +50,9 @@ jobs:
               echo "[meta-login-config] missing GitHub secret META_APP_A_LOGIN_CONFIG_ID" >&2
               exit 1
             fi
-            test -f /opt/linasbot/scripts/prod_apply_meta_app_a_login_config.sh
-            sudo -E bash /opt/linasbot/scripts/prod_apply_meta_app_a_login_config.sh
+            APPLY_SCRIPT="/tmp/linasbot-meta-login-config/scripts/prod_apply_meta_app_a_login_config.sh"
+            if [ ! -f "$APPLY_SCRIPT" ] && [ -f /opt/linasbot/scripts/prod_apply_meta_app_a_login_config.sh ]; then
+              APPLY_SCRIPT="/opt/linasbot/scripts/prod_apply_meta_app_a_login_config.sh"
+            fi
+            test -f "$APPLY_SCRIPT"
+            sudo -E bash "$APPLY_SCRIPT"
