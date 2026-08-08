@@ -421,7 +421,6 @@ def test_tenant_namespaced_deletion_does_not_touch_unrelated_user(
     tmp_path: Path,
 ) -> None:
     import config
-    import services.meta_app_registry as registry_service
     import services.meta_data_deletion as deletion_service
     import utils.utils
 
@@ -440,15 +439,16 @@ def test_tenant_namespaced_deletion_does_not_touch_unrelated_user(
     config.user_data_whatsapp["tenant-a:facebook:123456789"] = {"temporary": True}
 
     fake_registry = SimpleNamespace(
-        list_bindings=lambda: [
+        list_bindings=lambda *args, **kwargs: [
             SimpleNamespace(
                 app_key=APP_A_KEY,
                 tenant_id="tenant-a",
                 channel="facebook",
+                asset_id="page-tenant-a",
             )
         ]
     )
-    monkeypatch.setattr(registry_service, "get_meta_app_registry", lambda: fake_registry)
+    monkeypatch.setattr(deletion_service, "get_meta_app_registry", lambda: fake_registry)
     monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
     monkeypatch.setattr(deletion_service, "_STATUS_DIR", tmp_path / "status")
     monkeypatch.setattr(deletion_service, "_INDEX_DIR", tmp_path / "index")

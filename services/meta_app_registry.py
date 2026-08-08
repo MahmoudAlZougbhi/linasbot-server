@@ -1105,6 +1105,11 @@ class MetaAppRegistry:
                     changed["status"] = "inactive"
                     changed["updated_at"] = time.time()
                     state["bindings"][other.binding_id] = changed
+            current_raw = dict(raw)
+            current_raw["status"] = "inactive"
+            current_raw["generation"] = current.generation + 1
+            current_raw["updated_at"] = time.time()
+            state["bindings"][binding_id] = current_raw
             previous_raw = dict(previous_raw)
             previous_raw["status"] = "active"
             previous_raw["generation"] = previous.generation + 1

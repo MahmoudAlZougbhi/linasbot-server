@@ -274,15 +274,17 @@ def _candidate_social_user_ids(meta_user_id: str, app_key: str) -> tuple[str, ..
         if binding.app_key != app_key:
             continue
         candidates.add(f"{binding.tenant_id}:{binding.channel}:{meta_user_id}")
-        candidates.add(
-            compose_social_user_id(
-                tenant_id=binding.tenant_id,
-                channel=binding.channel,
-                asset_id=binding.asset_id,
-                sender_id=meta_user_id,
-                multi_asset_channel=True,
+        asset_id = str(getattr(binding, "asset_id", "") or "")
+        if asset_id:
+            candidates.add(
+                compose_social_user_id(
+                    tenant_id=binding.tenant_id,
+                    channel=binding.channel,
+                    asset_id=asset_id,
+                    sender_id=meta_user_id,
+                    multi_asset_channel=True,
+                )
             )
-        )
         if binding.tenant_id == "linas":
             candidates.add(f"{binding.channel}:{meta_user_id}")
             candidates.add(f"{binding.channel}:{binding.asset_id}:{meta_user_id}")
