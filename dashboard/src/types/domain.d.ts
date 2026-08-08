@@ -609,6 +609,7 @@ interface MetaAuthorizationGroup {
   authorized_meta_user_id_hash: string;
   app_key?: string;
   app_label?: string;
+  authorization_title?: string;
   assets: MetaConnectionStatus[];
 }
 

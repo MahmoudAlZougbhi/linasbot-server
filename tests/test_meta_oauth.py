@@ -19,6 +19,7 @@ from services.meta_oauth import (
     MetaOAuthError,
     begin_meta_business_login,
     complete_meta_business_login,
+    normalize_oauth_flow_channel,
 )
 
 SCOPES = [
@@ -120,6 +121,12 @@ def _transport(
     return httpx.MockTransport(handler)
 
 
+def test_legacy_instagram_start_aliases_to_unified_flow() -> None:
+    assert normalize_oauth_flow_channel("instagram") == "unified"
+    assert normalize_oauth_flow_channel("facebook") == "unified"
+    assert normalize_oauth_flow_channel("unified") == "unified"
+
+
 def test_business_login_url_uses_config_id_and_never_scope_or_secret(registry: MetaAppRegistry) -> None:
     url = begin_meta_business_login(
         tenant_id="tenant-a",
@@ -161,6 +168,10 @@ async def test_external_page_login_inspects_encrypts_and_activates_with_subscrip
     assert result.binding.status == "active"
     assert result.binding.app_key == APP_A_KEY
     assert result.binding.tenant_id == "tenant-a"
+    facebook_bindings = [item for item in result.bindings if item.channel == "facebook"]
+    instagram_bindings = [item for item in result.bindings if item.channel == "instagram"]
+    assert len(facebook_bindings) == 1
+    assert len(instagram_bindings) == 1
     stored = registry.store_path.read_text(encoding="utf-8")
     assert "page-token-private" not in stored
     assert "single-use-code" not in stored
@@ -187,9 +198,13 @@ async def test_instagram_login_resolves_linked_professional_account(registry: Me
             registry=registry,
             client=client,
         )
-    assert result.binding.channel == "instagram"
-    assert result.binding.asset_id == "17840000123456789"
-    assert result.binding.instagram_account_id == "17840000123456789"
+    assert result.binding.status == "active"
+    instagram_binding = next(item for item in result.bindings if item.channel == "instagram")
+    assert instagram_binding.channel == "instagram"
+    assert instagram_binding.asset_id == "17840000123456789"
+    assert instagram_binding.instagram_account_id == "17840000123456789"
+    instagram_bindings = [item for item in result.bindings if item.channel == "instagram"]
+    assert len(instagram_bindings) == 1
 
 
 @pytest.mark.asyncio

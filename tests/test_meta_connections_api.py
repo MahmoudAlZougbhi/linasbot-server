@@ -125,8 +125,61 @@ async def test_connect_start_derives_tenant_from_session_not_request_body(
     )
     assert response["success"] is True
     assert captured["tenant_id"] == "tenant-a"
-    assert captured["channel"] == "instagram"
+    assert captured["channel"] == "unified"
     assert "app_id" not in captured
+
+
+@pytest.mark.asyncio
+async def test_connect_start_defaults_to_unified_flow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def begin(**kwargs: Any) -> str:
+        captured.update(kwargs)
+        return "https://www.facebook.com/v24.0/dialog/oauth?state=opaque"
+
+    monkeypatch.setattr(meta_connections_api, "begin_meta_business_login", begin)
+    response = await meta_connections_api.start_meta_connection(_request("tenant-a"), {})
+    assert response["success"] is True
+    assert captured["channel"] == "unified"
+
+
+@pytest.mark.asyncio
+async def test_authorization_title_is_returned_for_app_a(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = MetaAppRegistry(
+        store_path=tmp_path / "registry-title.json",
+        audit_path=tmp_path / "audit-title.jsonl",
+        master_secret="connection-api-title-secret-tests-123456789",
+    )
+    registry.authorize_oauth_asset(
+        tenant_id="tenant-a",
+        channel="facebook",
+        asset_id="111222333",
+        page_id="111222333",
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="private-token-a",
+            token_app_id="2963733803971681",
+            token_profile_id="111222333",
+            scopes=SCOPES,
+            expires_at=int(time.time()) + 3600,
+            authorized_meta_user_id="123456789",
+        ),
+        actor_id="owner",
+        page_name="Clinic Page",
+        status="active",
+    )
+    monkeypatch.setattr(meta_connections_api, "meta_multi_app_registry_enabled", lambda: True)
+    monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
+
+    response = await meta_connections_api.list_meta_connections(_request("tenant-a"))
+    assert response["authorizations"][0]["authorization_title"] == "Meta authorization — App A"
+    assert "unknown" not in json.dumps(response["authorizations"])
 
 
 @pytest.mark.asyncio

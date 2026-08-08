@@ -25,6 +25,7 @@ from services.meta_oauth import (
     begin_meta_business_login,
     complete_meta_business_login,
     disconnect_binding_webhook,
+    normalize_oauth_flow_channel,
     subscribe_binding_webhook,
     unsubscribe_binding_webhook,
 )
@@ -58,6 +59,12 @@ def _active_conflict(binding: MetaAssetBinding) -> MetaAssetBinding | None:
     if len(matches) > 1:
         raise MetaRegistryError("Active Meta binding indexes are inconsistent")
     return matches[0] if matches else None
+
+
+def _authorization_title(app_key: str | None) -> str:
+    if app_key == APP_A_KEY:
+        return "Meta authorization — App A"
+    return "Connected through Linas Clinic AI Social Bot"
 
 
 @app.get("/api/meta/connections")
@@ -102,9 +109,10 @@ async def list_meta_connections(request: Request) -> Any:
         bucket = authorizations.setdefault(
             auth_key,
             {
-                "authorized_meta_user_id_hash": auth_key,
+                "authorized_meta_user_id_hash": auth_key if auth_key != "unknown" else "",
                 "app_key": connection.get("app_key"),
                 "app_label": connection.get("app_label"),
+                "authorization_title": _authorization_title(connection.get("app_key")),
                 "assets": [],
             },
         )
@@ -124,13 +132,13 @@ async def start_meta_connection(
     body: dict[str, Any] = Body(default={}),
 ) -> Any:
     session = require_permission(request, "settings")
-    channel = str(body.get("channel") or "").strip().lower()
-    if channel not in {"facebook", "instagram"}:
-        raise HTTPException(status_code=400, detail="channel must be facebook or instagram")
+    channel = str(body.get("channel") or "unified").strip().lower()
+    if channel not in {"facebook", "instagram", "unified", "meta", ""}:
+        raise HTTPException(status_code=400, detail="channel must be facebook, instagram, or unified")
     try:
         login_url = begin_meta_business_login(
             tenant_id=session.tenant_id,
-            channel=channel,  # type: ignore[arg-type]
+            channel=normalize_oauth_flow_channel(channel),
             actor_id=session.user_id or session.email,
         )
     except (MetaOAuthError, MetaRegistryError) as exc:
@@ -197,7 +205,7 @@ async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
             status_code=409,
             detail=(
                 "Reconnect is only for stored Lina Meta app bindings. "
-                "Use Connect Facebook / Instagram to authorize a Page again."
+                "Use Add / Manage Facebook & Instagram to authorize a Page again."
             ),
         )
     if binding.status not in {"disconnected", "inactive"}:
