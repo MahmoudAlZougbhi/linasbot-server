@@ -1,0 +1,48 @@
+# Subscribe the allowlisted Facebook Page to App A DM webhook fields only.
+name: Meta Page Subscription Subscribe
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type PAGE_SUBSCRIBE_APP_A_DM"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  subscribe:
+    name: Page subscribed_apps status and subscribe
+    if: inputs.confirmation == 'PAGE_SUBSCRIBE_APP_A_DM'
+    environment: meta-social-cutover
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Status then subscribe on production server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 5m
+          script: |
+            set -e
+            MANAGER=/opt/linasbot/scripts/manage_meta_page_subscription.py
+            test -f "$MANAGER"
+            echo "[page-subscribe] phase=status_before_empty_expectation"
+            sudo python3 "$MANAGER" status --expect empty || true
+            echo "[page-subscribe] phase=status_before_current_only_expectation"
+            sudo python3 "$MANAGER" status --expect current-only || true
+            echo "[page-subscribe] phase=subscribe"
+            sudo python3 "$MANAGER" subscribe --allow-present
+            echo "[page-subscribe] phase=status_after"
+            sudo python3 "$MANAGER" status --expect current-only
+            echo "[page-subscribe] SUCCESS"
