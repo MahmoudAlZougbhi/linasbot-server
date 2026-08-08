@@ -167,4 +167,47 @@ describe("Settings integrations", () => {
     expect(screen.queryByLabelText(/app secret/i)).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue(/998877665544/)).not.toBeInTheDocument();
   });
+
+  it("explains disabled Connect buttons when App B OAuth is not configured", async () => {
+    authFetchMock.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path === "/api/meta/connections") {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            registry_enabled: true,
+            apps: [
+              {
+                key: "saas_tech_provider",
+                app_id: "",
+                classification: "tech_provider",
+                enabled: false,
+                oauth_configured: false,
+                advanced_access_approved: false,
+              },
+            ],
+            connections: [],
+          }),
+        };
+      }
+      if (path.includes("/api/settings/integrations")) {
+        return { ok: true, json: async () => ({ success: true, integrations: [] }) };
+      }
+      if (path.includes("/api/settings")) {
+        return {
+          ok: true,
+          json: async () => ({ success: true, settings: { general: {}, notifications: {}, clinic: {} } }),
+        };
+      }
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+
+    render(<Settings />);
+    fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
+
+    expect(await screen.findByRole("button", { name: "Connect Facebook" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeDisabled();
+    expect(screen.getByText(/Tech Provider \(App B\) Facebook Login for Business/i)).toBeInTheDocument();
+  });
 });

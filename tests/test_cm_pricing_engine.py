@@ -548,3 +548,19 @@ def test_fixed_final_total_and_category_condition() -> None:
     )
     assert quote.subtotal == 120.0
     assert quote.final_total == 100.0
+
+
+def test_validate_pricing_section_invalid_discount_is_failure_not_exception() -> None:
+    failures = validate_pricing_section(
+        categories=[],
+        catalog=[],
+        price_entries=[],
+        discount_rules=[
+            {
+                "id": "bad_rule",
+                "then": {"kind": "percent_off", "percent": 150},
+                "when": {"op": "and", "conditions": [], "groups": []},
+            }
+        ],
+    )
+    assert any(f.code == "PRICING_INVALID_DISCOUNT_RULE" for f in failures)

@@ -59,6 +59,10 @@ const Settings = () => {
   const [metaRegistryEnabled, setMetaRegistryEnabled] = useState(false);
   const [metaConnectionError, setMetaConnectionError] = useState(/** @type {string | null} */ (null));
   const [metaConnectionBusy, setMetaConnectionBusy] = useState('');
+  const metaTechProviderReady = metaApps.some(
+    (item) => item.key === 'saas_tech_provider' && item.enabled && item.oauth_configured
+  );
+  const canStartMetaConnect = metaRegistryEnabled && metaTechProviderReady && metaConnectionBusy === '';
 
   useEffect(() => {
     if (!isLinasTenant && activeTab === 'general') {
@@ -738,7 +742,7 @@ const Settings = () => {
                   <button
                     type="button"
                     className="btn-primary text-sm"
-                    disabled={!metaRegistryEnabled || metaConnectionBusy !== '' || !metaApps.some((item) => item.key === 'saas_tech_provider' && item.enabled && item.oauth_configured)}
+                    disabled={!canStartMetaConnect}
                     onClick={() => handleConnectMeta('facebook')}
                   >
                     {metaConnectionBusy === 'facebook' ? 'Opening Meta…' : 'Connect Facebook'}
@@ -746,7 +750,7 @@ const Settings = () => {
                   <button
                     type="button"
                     className="btn-primary text-sm"
-                    disabled={!metaRegistryEnabled || metaConnectionBusy !== '' || !metaApps.some((item) => item.key === 'saas_tech_provider' && item.enabled && item.oauth_configured)}
+                    disabled={!canStartMetaConnect}
                     onClick={() => handleConnectMeta('instagram')}
                   >
                     {metaConnectionBusy === 'instagram' ? 'Opening Meta…' : 'Connect Instagram'}
@@ -758,6 +762,15 @@ const Settings = () => {
               ) : null}
               {!metaRegistryEnabled ? (
                 <p className="mt-3 text-xs text-blue-700">Multi-app onboarding is staged but not enabled on this deployment.</p>
+              ) : null}
+              {metaRegistryEnabled && !metaTechProviderReady ? (
+                <p className="mt-3 text-xs text-amber-800">
+                  Connect Facebook / Instagram is disabled because the Tech Provider (App B) Facebook Login for Business
+                  is not configured on this server (missing App B ID/secret/verify token/login config). Lina&apos;s own
+                  Page and Instagram use the first-party App A bindings — not these Connect buttons. Ask ops to apply
+                  App B credentials only when onboarding independent businesses; for Lina messaging, restore the App A
+                  Facebook binding if `/api/ready` reports it inactive.
+                </p>
               ) : null}
               {metaConnections.length > 0 ? (
                 <div className="mt-4 space-y-2">
