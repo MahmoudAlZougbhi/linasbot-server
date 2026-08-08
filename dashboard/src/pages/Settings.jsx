@@ -872,7 +872,7 @@ const Settings = () => {
               ) : null}
               {(metaAuthorizations.length > 0 || metaConnections.length > 0) ? (
                 <div className="mt-4 space-y-4">
-                  {(metaAuthorizations.length > 0 ? metaAuthorizations : [{ authorized_meta_user_id_hash: '', app_label: 'Lina Meta app', authorization_title: 'Meta authorization — App A', assets: metaConnections }]).map((authorization) => (
+                  {(metaAuthorizations.length > 0 ? metaAuthorizations : [{ authorized_meta_user_id_hash: '', app_key: 'linas_first_party', app_label: 'Lina Meta app', authorization_title: 'Meta authorization — App A', assets: metaConnections }]).map((authorization) => (
                     <div key={authorization.authorized_meta_user_id_hash || authorization.authorization_title || 'meta-auth'} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div>

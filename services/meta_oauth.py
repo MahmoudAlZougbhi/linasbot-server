@@ -14,8 +14,6 @@ import secrets
 import time
 from dataclasses import dataclass
 from typing import Any, Literal, cast
-
-MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 from urllib.parse import urlencode
 
 import httpx
@@ -34,6 +32,8 @@ from services.meta_app_registry import (
     get_meta_app_registry,
     normalize_meta_tenant_id,
 )
+
+MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 
 META_OAUTH_STATE_TTL_SECONDS = 10 * 60
 META_GRAPH_BASE_URL = "https://graph.facebook.com"
