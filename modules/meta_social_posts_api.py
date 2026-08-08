@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import time
 import binascii
+import time
 from typing import Any
 
 from fastapi import Body, HTTPException, Query, Request
@@ -182,9 +182,7 @@ async def preview_social_post(request: Request, body: dict[str, Any] = Body(defa
                 _tenant_binding(facebook_binding_id, session.tenant_id).page_name if publish_facebook else ""
             ),
             "instagram_username": (
-                _tenant_binding(instagram_binding_id, session.tenant_id).instagram_username
-                if publish_instagram
-                else ""
+                _tenant_binding(instagram_binding_id, session.tenant_id).instagram_username if publish_instagram else ""
             ),
         },
     }
@@ -208,7 +206,9 @@ async def publish_social_post(request: Request, body: dict[str, Any] = Body(defa
     if preview.actor_id != (session.user_id or session.email):
         raise HTTPException(status_code=403, detail="Preview token actor mismatch")
 
-    media_path = resolve_media_path(tenant_id=session.tenant_id, media_id=preview.media_id) if preview.media_id else None
+    media_path = (
+        resolve_media_path(tenant_id=session.tenant_id, media_id=preview.media_id) if preview.media_id else None
+    )
     results: list[dict[str, Any]] = []
 
     if preview.publish_facebook:

@@ -29,7 +29,11 @@ async def generate_social_caption(
     )
 
     if cm_runtime_mode() == "published":
-        from services.cm.answer_generation import generate_answer_with_usage, make_regenerate_fn_with_usage, UsageAccumulator
+        from services.cm.answer_generation import (
+            UsageAccumulator,
+            generate_answer_with_usage,
+            make_regenerate_fn_with_usage,
+        )
         from services.cm.runtime_pipeline import finalize_response, prepare_response
 
         seed = (topic or "social post caption").strip()

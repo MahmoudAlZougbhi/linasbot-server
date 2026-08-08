@@ -14,7 +14,6 @@ from services.cm.constants import cm_runtime_mode
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
-from services.meta_messaging import MetaMessagingSettings
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
@@ -172,7 +171,11 @@ async def _generate_comment_reply_text(
     )
 
     if cm_runtime_mode() == "published":
-        from services.cm.answer_generation import generate_answer_with_usage, make_regenerate_fn_with_usage, UsageAccumulator
+        from services.cm.answer_generation import (
+            UsageAccumulator,
+            generate_answer_with_usage,
+            make_regenerate_fn_with_usage,
+        )
         from services.cm.runtime_pipeline import finalize_response, prepare_response
 
         outcome = await prepare_response(

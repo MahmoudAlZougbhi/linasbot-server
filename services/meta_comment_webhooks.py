@@ -51,7 +51,9 @@ async def ensure_page_comment_webhook_subscription(
     credential = current_registry.get_credential(binding)
     app = get_meta_app_configs()[binding.app_key]
     owns_client = client is None
-    http_client = client or httpx.AsyncClient(base_url=f"https://graph.facebook.com/{app.graph_api_version}", timeout=20.0)
+    http_client = client or httpx.AsyncClient(
+        base_url=f"https://graph.facebook.com/{app.graph_api_version}", timeout=20.0
+    )
     try:
         response = await http_client.post(
             f"{binding.page_id}/subscribed_apps",
@@ -77,7 +79,9 @@ async def ensure_instagram_comment_app_webhook(
     if app_key != APP_A_KEY:
         raise MetaOAuthError("Instagram comment app webhooks are only supported for App A")
     owns_client = client is None
-    http_client = client or httpx.AsyncClient(base_url=f"https://graph.facebook.com/{app.graph_api_version}", timeout=20.0)
+    http_client = client or httpx.AsyncClient(
+        base_url=f"https://graph.facebook.com/{app.graph_api_version}", timeout=20.0
+    )
     try:
         response = await http_client.post(
             f"{app.app_id}/subscriptions",

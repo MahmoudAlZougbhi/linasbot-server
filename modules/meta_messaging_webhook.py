@@ -19,14 +19,14 @@ from services.meta_app_registry import (
     meta_multi_app_registry_enabled,
     verify_any_meta_challenge_token,
 )
+from services.meta_comment_events import ResolvedMetaCommentEvent, resolve_registry_comment_events
+from services.meta_comment_replies import process_meta_comment_event
 from services.meta_messaging import (
     InMemoryMessageDeduper,
     get_meta_messaging_settings,
     parse_meta_messaging_events,
     verify_meta_signature,
 )
-from services.meta_comment_events import ResolvedMetaCommentEvent, resolve_registry_comment_events
-from services.meta_comment_replies import process_meta_comment_event
 from services.meta_multi_app_router import ResolvedMetaEvent, resolve_registry_events
 from services.social_messaging_processor import process_meta_social_event
 

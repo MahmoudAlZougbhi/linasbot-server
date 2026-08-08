@@ -21,6 +21,24 @@ import { errorMessage } from "../utils/apiValidate";
  * @property {boolean} publish_scopes_ready
  */
 
+/**
+ * @typedef {Object} PreviewData
+ * @property {string} caption
+ * @property {boolean} publish_facebook
+ * @property {boolean} publish_instagram
+ * @property {string} [facebook_page_name]
+ * @property {string} [instagram_username]
+ */
+
+/**
+ * @typedef {Object} PublishResultRow
+ * @property {string} platform
+ * @property {boolean} success
+ * @property {string} [post_id]
+ * @property {string} [permalink]
+ * @property {string} [error]
+ */
+
 export default function SocialPostCreator() {
   const [loadingAssets, setLoadingAssets] = useState(true);
   /** @type {[SocialAsset[], Function]} */
@@ -40,8 +58,8 @@ export default function SocialPostCreator() {
   const [previewing, setPreviewing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [previewToken, setPreviewToken] = useState("");
-  const [previewData, setPreviewData] = useState(null);
-  const [publishResults, setPublishResults] = useState(null);
+  const [previewData, setPreviewData] = useState(/** @type {PreviewData | null} */ (null));
+  const [publishResults, setPublishResults] = useState(/** @type {PublishResultRow[] | null} */ (null));
   const [confirmPublish, setConfirmPublish] = useState(false);
 
   const loadAssets = useCallback(async () => {
@@ -110,6 +128,7 @@ export default function SocialPostCreator() {
     }
   };
 
+  /** @param {File} file */
   const fileToBase64 = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -122,6 +141,7 @@ export default function SocialPostCreator() {
       reader.readAsDataURL(file);
     });
 
+  /** @param {React.ChangeEvent<HTMLInputElement>} event */
   const handleMediaChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -178,7 +198,7 @@ export default function SocialPostCreator() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Preview failed");
       setPreviewToken(data.preview_token || "");
-      setPreviewData(data.preview || null);
+      setPreviewData(/** @type {PreviewData} */ (data.preview || {}));
       toast.success("Preview ready — confirm to publish");
     } catch (error) {
       toast.error(errorMessage(error) || "Preview failed");
@@ -198,7 +218,7 @@ export default function SocialPostCreator() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Publish failed");
-      setPublishResults(data.results || []);
+      setPublishResults(/** @type {PublishResultRow[]} */ (data.results || []));
       if (data.success) {
         toast.success("Post published");
       } else {

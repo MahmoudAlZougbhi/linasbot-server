@@ -64,10 +64,7 @@ _PREVIEW_TTL_SECONDS = 600
 
 def _signing_secret() -> bytes:
     secret = (
-        os.getenv("META_APP_A_SECRET")
-        or os.getenv("META_APP_SECRET")
-        or os.getenv("DASHBOARD_SESSION_SECRET")
-        or ""
+        os.getenv("META_APP_A_SECRET") or os.getenv("META_APP_SECRET") or os.getenv("DASHBOARD_SESSION_SECRET") or ""
     ).strip()
     if not secret:
         raise SocialPostConfirmError("Social post signing secret is not configured")

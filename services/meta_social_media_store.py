@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import mimetypes
 import os
-import secrets
 import time
 import uuid
 from pathlib import Path
@@ -21,10 +20,7 @@ _ALLOWED_MIME = {"image/jpeg", "image/png"}
 
 def _signing_secret() -> bytes:
     secret = (
-        os.getenv("META_APP_A_SECRET")
-        or os.getenv("META_APP_SECRET")
-        or os.getenv("DASHBOARD_SESSION_SECRET")
-        or ""
+        os.getenv("META_APP_A_SECRET") or os.getenv("META_APP_SECRET") or os.getenv("DASHBOARD_SESSION_SECRET") or ""
     ).strip()
     if not secret:
         raise RuntimeError("Meta social media signing secret is not configured")

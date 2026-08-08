@@ -94,11 +94,7 @@ def main() -> None:
     fields_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
     before = _request_json(f"{base_url}?{fields_query}", bearer=app_token, stage="read_before")
     subscriptions = before.get("data")
-    by_object = {
-        str(row.get("object") or "").strip().lower(): row
-        for row in subscriptions
-        if isinstance(row, dict)
-    }
+    by_object = {str(row.get("object") or "").strip().lower(): row for row in subscriptions if isinstance(row, dict)}
     page_before = _field_names(_mapping(by_object.get(PAGE_OBJECT)).get("fields"))
     ig_before = _field_names(_mapping(by_object.get(INSTAGRAM_OBJECT)).get("fields"))
     page_target = _merge_fields(page_before, PAGE_FIELDS)
@@ -126,9 +122,7 @@ def main() -> None:
     after = _request_json(f"{base_url}?{fields_query}", bearer=app_token, stage="read_after")
     subscriptions_after = after.get("data")
     by_object_after = {
-        str(row.get("object") or "").strip().lower(): row
-        for row in subscriptions_after
-        if isinstance(row, dict)
+        str(row.get("object") or "").strip().lower(): row for row in subscriptions_after if isinstance(row, dict)
     }
     page_after = _field_names(_mapping(by_object_after.get(PAGE_OBJECT)).get("fields"))
     ig_after = _field_names(_mapping(by_object_after.get(INSTAGRAM_OBJECT)).get("fields"))

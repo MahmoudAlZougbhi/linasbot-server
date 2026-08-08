@@ -116,7 +116,9 @@ async def list_meta_connections(request: Request) -> Any:
         )
         public["comment_replies"] = {
             **comment_setting.public_dict(),
-            "scopes_granted": sorted(required_comment_scopes(binding.channel) & set(public.get("granted_permissions") or [])),
+            "scopes_granted": sorted(
+                required_comment_scopes(binding.channel) & set(public.get("granted_permissions") or [])
+            ),
             "scopes_required": sorted(required_comment_scopes(binding.channel)),
             "scopes_ready": credential_has_comment_scopes(binding, registry),
         }

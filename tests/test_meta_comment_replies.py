@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,15 +12,17 @@ from services.meta_app_registry import (
     APP_B_KEY,
     MetaAssetBinding,
     MetaBindingCredential,
-    MetaAppRegistry,
 )
-from services.meta_comment_events import parse_meta_comment_events, resolve_registry_comment_events
+from services.meta_comment_events import (
+    ResolvedMetaCommentEvent,
+    parse_meta_comment_events,
+    resolve_registry_comment_events,
+)
+from services.meta_comment_replies import _is_self_comment, process_meta_comment_event
 from services.meta_comment_reply_settings import (
     get_comment_reply_setting,
     set_comment_reply_setting,
 )
-from services.meta_comment_replies import CommentReplyResult, _is_self_comment, process_meta_comment_event
-from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_messaging import MetaMessagingSettings, parse_meta_messaging_events
 
 
@@ -128,7 +129,9 @@ class MetaCommentEventParserTests(unittest.TestCase):
         self.assertEqual(events[0]["channel"], "facebook")
 
     def test_instagram_comment_parsed(self):
-        events = parse_meta_comment_events(_instagram_comment_payload(), channel="instagram", instagram_account_id="222")
+        events = parse_meta_comment_events(
+            _instagram_comment_payload(), channel="instagram", instagram_account_id="222"
+        )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["comment_id"], "igc1")
 
@@ -239,7 +242,9 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reason, "feature_disabled")
 
     @mock.patch("services.meta_comment_replies._generate_comment_reply_text", new_callable=mock.AsyncMock)
-    @mock.patch("services.meta_comment_replies._comment_has_page_reply", new_callable=mock.AsyncMock, return_value=False)
+    @mock.patch(
+        "services.meta_comment_replies._comment_has_page_reply", new_callable=mock.AsyncMock, return_value=False
+    )
     async def test_toggle_on_sends_one_public_reply(self, _manual_mock, generate_mock):
         generate_mock.return_value = "Thanks for your question."
         binding = _binding()
@@ -286,8 +291,12 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
         result = await process_meta_comment_event(resolved, simulation=True)
         self.assertEqual(result.reason, "binding_not_active")
 
-    @mock.patch("services.meta_comment_replies._generate_comment_reply_text", new_callable=mock.AsyncMock, return_value="Hi")
-    @mock.patch("services.meta_comment_replies._comment_has_page_reply", new_callable=mock.AsyncMock, return_value=False)
+    @mock.patch(
+        "services.meta_comment_replies._generate_comment_reply_text", new_callable=mock.AsyncMock, return_value="Hi"
+    )
+    @mock.patch(
+        "services.meta_comment_replies._comment_has_page_reply", new_callable=mock.AsyncMock, return_value=False
+    )
     async def test_duplicate_comment_not_replied_twice(self, _manual_mock, _generate_mock):
         binding = _binding()
         set_comment_reply_setting(

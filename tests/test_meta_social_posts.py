@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from services.meta_app_registry import APP_A_KEY, MetaAssetBinding, MetaBindingCredential, MetaAppRegistry
+from services.meta_app_registry import APP_A_KEY, MetaAssetBinding, MetaBindingCredential
 from services.meta_social_media_store import save_uploaded_media
 from services.meta_social_post_confirm import SocialPostConfirmError, build_preview, verify_preview_token
 from services.meta_social_publish import credential_has_publish_scopes, required_publish_scopes

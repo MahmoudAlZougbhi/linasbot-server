@@ -6,7 +6,6 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -19,7 +18,7 @@ from services.meta_app_registry import (
     get_meta_app_registry,
 )
 from services.meta_oauth import MetaOAuthError, _safe_json
-from services.meta_social_media_store import media_content_type, public_media_url, tenant_media_hash
+from services.meta_social_media_store import media_content_type, public_media_url
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 _PUBLIC_BASE_URL = "https://www.linasaibot.com"
