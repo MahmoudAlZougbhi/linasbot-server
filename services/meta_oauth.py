@@ -13,7 +13,9 @@ import os
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Literal, cast
+
+MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 from urllib.parse import urlencode
 
 import httpx
@@ -65,19 +67,52 @@ def meta_oauth_app_key() -> str:
     raise MetaOAuthError("Meta Business Login is not configured. Ask ops to set META_APP_A_LOGIN_CONFIG_ID for App A.")
 
 
+def normalize_oauth_flow_channel(channel: str) -> MetaOAuthFlowMode:
+    """Map dashboard connect requests to the unified Business Login flow."""
+
+    normalized = (channel or "unified").strip().lower()
+    if normalized in {"unified", "meta", "facebook", "instagram", ""}:
+        return "unified"
+    raise MetaOAuthError("Unsupported Meta channel")
+
+
+def _resolve_oauth_flow_channel(state_channel: str) -> MetaOAuthFlowMode:
+    normalized = (state_channel or "").strip().lower()
+    if normalized in {"facebook", "instagram", "unified"}:
+        return cast(MetaOAuthFlowMode, normalized)
+    raise MetaOAuthStateError("OAuth state binding is invalid")
+
+
+def _channels_for_authorization(
+    *,
+    flow_mode: MetaOAuthFlowMode,
+    scopes: tuple[str, ...],
+    instagram_id: str,
+) -> tuple[MetaChannel, ...]:
+    if flow_mode == "facebook":
+        return ("facebook",)
+    if flow_mode == "instagram":
+        return ("instagram",)
+    channels: list[MetaChannel] = []
+    if META_CHANNEL_SCOPES["facebook"].issubset(scopes):
+        channels.append("facebook")
+    if instagram_id and META_CHANNEL_SCOPES["instagram"].issubset(scopes):
+        channels.append("instagram")
+    return tuple(channels)
+
+
 def begin_meta_business_login(
     *,
     tenant_id: str,
-    channel: MetaChannel,
+    channel: str = "unified",
     actor_id: str,
     registry: MetaAppRegistry | None = None,
 ) -> str:
     """Create a one-time state and return App A's Business Login URL."""
 
+    flow_mode = normalize_oauth_flow_channel(channel)
     app_key = meta_oauth_app_key()
     app = get_meta_app_configs()[app_key]
-    if channel not in {"facebook", "instagram"}:
-        raise MetaOAuthError("Unsupported Meta channel")
     try:
         tenant = normalize_meta_tenant_id(tenant_id)
     except MetaBindingConflictError as exc:
@@ -91,7 +126,7 @@ def begin_meta_business_login(
         nonce_hash,
         {
             "tenant_id": tenant,
-            "channel": channel,
+            "channel": flow_mode,
             "actor_id": f"oauth:{actor_reference}",
             "app_key": app_key,
             "redirect_uri": meta_oauth_redirect_uri(),
@@ -215,7 +250,7 @@ def _granular_targets_are_allowlisted(
     return page_id in observed_targets
 
 
-def _eligible_pages(pages: list[dict[str, Any]], *, channel: MetaChannel) -> list[dict[str, Any]]:
+def _eligible_pages(pages: list[dict[str, Any]], *, flow_mode: MetaOAuthFlowMode) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for page in pages:
         page_id = str(page.get("id") or "").strip()
@@ -223,7 +258,7 @@ def _eligible_pages(pages: list[dict[str, Any]], *, channel: MetaChannel) -> lis
         instagram = page.get("instagram_business_account")
         if not page_id or not page_token:
             continue
-        if channel == "instagram" and not isinstance(instagram, dict):
+        if flow_mode == "instagram" and not isinstance(instagram, dict):
             continue
         candidates.append(page)
     if not candidates:
@@ -251,9 +286,9 @@ async def complete_meta_business_login(
     if redirect_uri != meta_oauth_redirect_uri():
         raise MetaOAuthStateError("OAuth redirect does not match")
     tenant_id = str(state_data.get("tenant_id") or "").strip()
-    channel = cast(MetaChannel, str(state_data.get("channel") or ""))
+    flow_mode = _resolve_oauth_flow_channel(str(state_data.get("channel") or ""))
     actor_id = str(state_data.get("actor_id") or "oauth")
-    if not tenant_id or channel not in {"facebook", "instagram"}:
+    if not tenant_id:
         raise MetaOAuthStateError("OAuth state binding is invalid")
 
     app_key = meta_oauth_app_key()
@@ -303,7 +338,7 @@ async def complete_meta_business_login(
         if not isinstance(raw_pages, list):
             raise MetaOAuthError("Meta Page discovery response is incomplete")
         pages = [cast(dict[str, Any], page) for page in raw_pages if isinstance(page, dict)]
-        selected_pages = _eligible_pages(pages, channel=channel)
+        selected_pages = _eligible_pages(pages, flow_mode=flow_mode)
         authorized_bindings: list[MetaAssetBinding] = []
         primary_page_name = ""
         primary_instagram_username = ""
@@ -326,12 +361,9 @@ async def complete_meta_business_login(
             if str(page_debug.get("type") or "").upper() != "PAGE":
                 raise MetaOAuthError("Meta token is not a Page access token")
             scopes = _scope_tuple(page_debug) or _scope_tuple(integration_debug)
-            required = META_CHANNEL_SCOPES[channel]
-            if not required.issubset(scopes):
-                raise MetaOAuthError("Meta token is missing required private-messaging permissions")
             if set(scopes) & META_FORBIDDEN_SCOPES:
                 raise MetaOAuthError("Meta token includes a prohibited non-messaging permission")
-            if channel == "instagram" and not instagram_id:
+            if flow_mode == "instagram" and not instagram_id:
                 raise MetaOAuthError("The selected Page has no linked professional Instagram account")
             if not _granular_targets_are_allowlisted(
                 page_debug,
@@ -340,32 +372,51 @@ async def complete_meta_business_login(
             ):
                 continue
 
-            asset_id = page_id if channel == "facebook" else instagram_id
-            binding = current_registry.authorize_oauth_asset(
-                tenant_id=tenant_id,
-                channel=channel,
-                asset_id=asset_id,
-                page_id=page_id,
-                instagram_account_id=instagram_id,
-                app_key=app_key,
-                credential=MetaBindingCredential(
-                    access_token=page_token,
-                    token_app_id=app.app_id,
-                    token_profile_id=page_id,
-                    scopes=scopes,
-                    expires_at=int(page_debug["expires_at"]) if page_debug.get("expires_at") else None,
-                    authorized_meta_user_id=authorized_meta_user_id,
-                ),
-                actor_id=actor_id,
-                page_name=page_name,
-                instagram_username=instagram_username,
-                status="active",
+            channels_to_authorize = _channels_for_authorization(
+                flow_mode=flow_mode,
+                scopes=scopes,
+                instagram_id=instagram_id,
             )
-            await subscribe_binding_webhook(binding, registry=current_registry, client=client)
-            authorized_bindings.append(binding)
-            if not primary_page_name:
-                primary_page_name = page_name
-                primary_instagram_username = instagram_username
+            if flow_mode in {"facebook", "instagram"}:
+                required = META_CHANNEL_SCOPES[flow_mode]
+                if not required.issubset(scopes):
+                    raise MetaOAuthError("Meta token is missing required private-messaging permissions")
+            elif not channels_to_authorize:
+                continue
+
+            credential = MetaBindingCredential(
+                access_token=page_token,
+                token_app_id=app.app_id,
+                token_profile_id=page_id,
+                scopes=scopes,
+                expires_at=int(page_debug["expires_at"]) if page_debug.get("expires_at") else None,
+                authorized_meta_user_id=authorized_meta_user_id,
+            )
+            subscribed = False
+            for authorize_channel in channels_to_authorize:
+                if authorize_channel == "instagram" and not instagram_id:
+                    continue
+                asset_id = page_id if authorize_channel == "facebook" else instagram_id
+                binding = current_registry.authorize_oauth_asset(
+                    tenant_id=tenant_id,
+                    channel=authorize_channel,
+                    asset_id=asset_id,
+                    page_id=page_id,
+                    instagram_account_id=instagram_id,
+                    app_key=app_key,
+                    credential=credential,
+                    actor_id=actor_id,
+                    page_name=page_name,
+                    instagram_username=instagram_username,
+                    status="active",
+                )
+                authorized_bindings.append(binding)
+                if not subscribed:
+                    await subscribe_binding_webhook(binding, registry=current_registry, client=client)
+                    subscribed = True
+                if not primary_page_name:
+                    primary_page_name = page_name
+                    primary_instagram_username = instagram_username
 
         if not authorized_bindings:
             raise MetaOAuthError("Meta token granular targets are missing or include another asset")

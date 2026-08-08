@@ -286,13 +286,12 @@ const Settings = () => {
     }
   };
 
-  /** @param {'facebook' | 'instagram'} channel */
-  const handleConnectMeta = async (channel) => {
-    setMetaConnectionBusy(channel);
+  const handleConnectMeta = async () => {
+    setMetaConnectionBusy('meta-oauth');
     try {
       const res = await authFetch('/api/meta/connections/start', {
         method: 'POST',
-        body: JSON.stringify({ channel }),
+        body: JSON.stringify({ channel: 'unified' }),
       });
       const data = await res.json();
       if (!res.ok || !data.success || typeof data.authorization_url !== 'string') {
@@ -848,25 +847,12 @@ const Settings = () => {
                     disabled={!canStartMetaConnect}
                     title={
                       canStartMetaConnect
-                        ? 'Add or manage Facebook Pages using the Linas Meta app'
+                        ? 'Add or manage Facebook Pages and linked Instagram professional accounts using App A'
                         : 'Requires Facebook Login for Business on App A (META_APP_A_LOGIN_CONFIG_ID)'
                     }
-                    onClick={() => handleConnectMeta('facebook')}
+                    onClick={() => handleConnectMeta()}
                   >
-                    {metaConnectionBusy === 'facebook' ? 'Opening Meta…' : 'Add / Manage Pages'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!canStartMetaConnect}
-                    title={
-                      canStartMetaConnect
-                        ? 'Connect your Instagram professional account using the Linas Meta app'
-                        : 'Requires Facebook Login for Business on App A (META_APP_A_LOGIN_CONFIG_ID)'
-                    }
-                    onClick={() => handleConnectMeta('instagram')}
-                  >
-                    {metaConnectionBusy === 'instagram' ? 'Opening Meta…' : 'Connect Instagram'}
+                    {metaConnectionBusy === 'meta-oauth' ? 'Opening Meta…' : 'Add / Manage Facebook & Instagram'}
                   </button>
                 </div>
               </div>
@@ -878,23 +864,29 @@ const Settings = () => {
               ) : null}
               {metaRegistryEnabled && !metaOAuthReady ? (
                 <p className="mt-3 text-xs text-amber-800">
-                  Connect Facebook / Instagram is disabled because Facebook Login for Business is not configured
+                  Add / Manage Facebook &amp; Instagram is disabled because Facebook Login for Business is not configured
                   for your Meta app on this server (missing <code className="font-mono">META_APP_A_LOGIN_CONFIG_ID</code>).
                   Lina uses one Meta app only — ask ops to add the Login configuration ID from the Meta Developer
-                  console, then use Connect or Reconnect below.
+                  console, then use Add / Manage below.
                 </p>
               ) : null}
               {(metaAuthorizations.length > 0 || metaConnections.length > 0) ? (
                 <div className="mt-4 space-y-4">
-                  {(metaAuthorizations.length > 0 ? metaAuthorizations : [{ authorized_meta_user_id_hash: 'default', app_label: 'Lina Meta app', assets: metaConnections }]).map((authorization) => (
-                    <div key={authorization.authorized_meta_user_id_hash} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                  {(metaAuthorizations.length > 0 ? metaAuthorizations : [{ authorized_meta_user_id_hash: '', app_label: 'Lina Meta app', authorization_title: 'Meta authorization — App A', assets: metaConnections }]).map((authorization) => (
+                    <div key={authorization.authorized_meta_user_id_hash || authorization.authorization_title || 'meta-auth'} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <div className="text-sm font-semibold text-slate-900">Meta authorization</div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {authorization.authorization_title
+                              || (authorization.app_key === 'linas_first_party'
+                                ? 'Meta authorization — App A'
+                                : 'Connected through Linas Clinic AI Social Bot')}
+                          </div>
                           <div className="text-xs text-slate-500">
                             {authorization.app_label || 'Lina Meta app'}
-                            {' · '}
-                            auth {authorization.authorized_meta_user_id_hash || 'unknown'}
+                            {authorization.authorized_meta_user_id_hash
+                              ? ` · auth ${authorization.authorized_meta_user_id_hash.slice(0, 8)}…`
+                              : ''}
                           </div>
                         </div>
                       </div>

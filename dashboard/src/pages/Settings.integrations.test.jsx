@@ -147,7 +147,9 @@ describe("Settings integrations", () => {
             authorizations: [
               {
                 authorized_meta_user_id_hash: "auth-hash",
+                app_key: "linas_first_party",
                 app_label: "Lina Meta app",
+                authorization_title: "Meta authorization — App A",
                 assets: [
                   {
                     binding_id: "binding-one",
@@ -183,16 +185,77 @@ describe("Settings integrations", () => {
     render(<Settings />);
     fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
 
-    expect(await screen.findByRole("button", { name: "Add / Manage Pages" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeEnabled();
-    expect(screen.getByText("Lina Meta app")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add / Manage Facebook & Instagram" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Connect Instagram" })).not.toBeInTheDocument();
+    expect(screen.getByText("Meta authorization — App A")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/app secret/i)).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue(/998877665544/)).not.toBeInTheDocument();
   });
 
-  it("explains disabled Connect buttons when App A Login config is missing", async () => {
+  it("starts unified Meta OAuth when the primary button is clicked", async () => {
+    authFetchMock.mockImplementation(async (url, options) => {
+      const path = String(url);
+      if (path === "/api/meta/connections/start") {
+        expect(options?.body).toBe(JSON.stringify({ channel: "unified" }));
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            authorization_url: "https://www.facebook.com/v24.0/dialog/oauth?state=opaque",
+          }),
+        };
+      }
+      if (path === "/api/meta/connections") {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            registry_enabled: true,
+            apps: [
+              {
+                key: "linas_first_party",
+                app_id: "2963733803971681",
+                classification: "own_business",
+                enabled: true,
+                oauth_configured: true,
+                advanced_access_approved: true,
+              },
+            ],
+            connections: [],
+            authorizations: [],
+          }),
+        };
+      }
+      if (path.includes("/api/settings/integrations")) {
+        return { ok: true, json: async () => ({ success: true, integrations: [] }) };
+      }
+      if (path.includes("/api/settings")) {
+        return {
+          ok: true,
+          json: async () => ({ success: true, settings: { general: {}, notifications: {}, clinic: {} } }),
+        };
+      }
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+
+    render(<Settings />);
+    fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add / Manage Facebook & Instagram" }));
+
+    await waitFor(() => {
+      expect(authFetchMock).toHaveBeenCalledWith(
+        "/api/meta/connections/start",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ channel: "unified" }),
+        }),
+      );
+    });
+  });
+
+  it("explains disabled Connect button when App A Login config is missing", async () => {
     authFetchMock.mockImplementation(async (url) => {
       const path = String(url);
       if (path === "/api/meta/connections") {
@@ -230,8 +293,8 @@ describe("Settings integrations", () => {
     render(<Settings />);
     fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
 
-    expect(await screen.findByRole("button", { name: "Add / Manage Pages" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Add / Manage Facebook & Instagram" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Connect Instagram" })).not.toBeInTheDocument();
     expect(screen.getByText(/META_APP_A_LOGIN_CONFIG_ID/i)).toBeInTheDocument();
   });
 
@@ -268,7 +331,9 @@ describe("Settings integrations", () => {
             authorizations: [
               {
                 authorized_meta_user_id_hash: "auth-hash",
+                app_key: "linas_first_party",
                 app_label: "Lina Meta app",
+                authorization_title: "Meta authorization — App A",
                 assets: [
                   {
                     binding_id: "fb-lina",
