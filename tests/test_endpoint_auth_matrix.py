@@ -160,9 +160,10 @@ class TestRouteInventory:
 
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
         # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
-        assert counts["total_api_routes"] == 155
+        # +meta reconnect endpoint for first-party bindings.
+        assert counts["total_api_routes"] == 156
         assert counts["public"] == 10
-        assert counts["protected"] == 145
+        assert counts["protected"] == 146
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),
