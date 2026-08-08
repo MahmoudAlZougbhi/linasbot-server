@@ -60,6 +60,15 @@ systemctl restart linasbot
 sleep 5
 systemctl is-active --quiet linasbot
 
+APP_ENV="/opt/linasbot/.env"
+if [ -f /opt/linasbot/linaslaserbot-2.7.22/.env ]; then
+  APP_ENV="/opt/linasbot/linaslaserbot-2.7.22/.env"
+fi
+set -a
+# shellcheck disable=SC1090
+source "$APP_ENV"
+set +a
+
 APP_DIR="/opt/linasbot"
 if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then
   APP_DIR="/opt/linasbot/linaslaserbot-2.7.22"
