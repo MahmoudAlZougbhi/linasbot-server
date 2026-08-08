@@ -172,7 +172,7 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
               {!collapsed && (
                 <div>
                   <h1 className="text-xl font-bold gradient-text font-display">
-                    Lina{"'"}s AI
+                    Linas AI
                   </h1>
                   <p className="text-sm text-slate-500">Laser Center Bot</p>
                 </div>

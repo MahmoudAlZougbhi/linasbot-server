@@ -326,7 +326,7 @@ async def data_deletion_page() -> HTMLResponse:
         f"""
 <h1>User Data Deletion</h1>
 <p>You may request deletion of information associated with your Facebook Messenger or Instagram
-DM interaction with the Linas AI social bot.</p>
+DM interaction with Linas AI.</p>
 
 <h2>Request through Meta</h2>
 <p>Remove the app or request deletion through the applicable Facebook or Instagram app settings.
