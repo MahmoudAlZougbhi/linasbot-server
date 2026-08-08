@@ -385,6 +385,7 @@ const Settings = () => {
     }
   };
 
+  /** @param {number | undefined} unixSeconds */
   const formatConnectedAt = (unixSeconds) => {
     if (!unixSeconds) return '—';
     return new Date(unixSeconds * 1000).toLocaleString();

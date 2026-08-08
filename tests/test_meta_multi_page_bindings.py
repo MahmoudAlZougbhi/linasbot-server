@@ -107,7 +107,9 @@ def test_second_facebook_page_adds_new_binding(registry: MetaAppRegistry) -> Non
         actor_id="owner",
         page_name="Second Branch",
     )
-    active = [row for row in registry.list_bindings(include_superseded=False) if row.channel == "facebook" and row.active]
+    active = [
+        row for row in registry.list_bindings(include_superseded=False) if row.channel == "facebook" and row.active
+    ]
     assert len(active) == 2
     assert {row.asset_id for row in active} == {first_page, second_page}
 
@@ -191,12 +193,15 @@ def test_compose_user_id_scopes_by_asset_only_when_multiple_pages(registry: Meta
         credential=_credential(page_a),
         actor_id="owner",
     )
-    assert compose_social_user_id(
-        tenant_id="linas",
-        channel="facebook",
-        asset_id=page_a,
-        sender_id="999",
-    ) == "facebook:999"
+    assert (
+        compose_social_user_id(
+            tenant_id="linas",
+            channel="facebook",
+            asset_id=page_a,
+            sender_id="999",
+        )
+        == "facebook:999"
+    )
     registry.authorize_oauth_asset(
         tenant_id="linas",
         channel="facebook",
@@ -208,12 +213,15 @@ def test_compose_user_id_scopes_by_asset_only_when_multiple_pages(registry: Meta
         actor_id="owner",
     )
     assert tenant_channel_has_multiple_active_assets("linas", "facebook") is True
-    assert compose_social_user_id(
-        tenant_id="linas",
-        channel="facebook",
-        asset_id=page_a,
-        sender_id="999",
-    ) == "facebook:111222333444:999"
+    assert (
+        compose_social_user_id(
+            tenant_id="linas",
+            channel="facebook",
+            asset_id=page_a,
+            sender_id="999",
+        )
+        == "facebook:111222333444:999"
+    )
 
 
 def test_cross_workspace_asset_conflict_is_rejected(registry: MetaAppRegistry) -> None:
