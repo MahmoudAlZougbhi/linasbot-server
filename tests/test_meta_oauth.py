@@ -131,8 +131,11 @@ def test_business_login_url_uses_config_id_and_never_scope_or_secret(registry: M
     query = parse_qs(parsed.query)
     assert parsed.hostname == "www.facebook.com"
     assert query["config_id"] == ["business-login-config-tests"]
+    assert query["client_id"] == ["2963733803971681"]
+    assert query["redirect_uri"] == ["https://www.linasaibot.com/oauth/meta/callback"]
     assert query["response_type"] == ["code"]
     assert query["override_default_response_type"] == ["true"]
+    assert query["state"]
     assert "scope" not in query
     assert "app-b-secret-tests" not in url
     assert "business_management" not in url

@@ -82,6 +82,7 @@ updates.update(
     }
 )
 for key in (
+    "META_APP_A_LOGIN_CONFIG_ID",
     "META_APP_B_ID",
     "META_APP_B_SECRET",
     "META_APP_B_WEBHOOK_VERIFY_TOKEN",
