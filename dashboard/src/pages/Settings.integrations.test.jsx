@@ -210,4 +210,55 @@ describe("Settings integrations", () => {
     expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeDisabled();
     expect(screen.getByText(/Tech Provider \(App B\) Facebook Login for Business/i)).toBeInTheDocument();
   });
+
+  it("shows Reconnect for disconnected Lina first-party bindings with a valid token", async () => {
+    authFetchMock.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path === "/api/meta/connections") {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            registry_enabled: true,
+            apps: [
+              {
+                key: "saas_tech_provider",
+                app_id: "",
+                classification: "tech_provider",
+                enabled: false,
+                oauth_configured: false,
+                advanced_access_approved: false,
+              },
+            ],
+            connections: [
+              {
+                binding_id: "fb-lina",
+                tenant_id: "linas",
+                channel: "facebook",
+                app_key: "linas_first_party",
+                status: "disconnected",
+                token_status: "valid",
+              },
+            ],
+          }),
+        };
+      }
+      if (path.includes("/api/settings/integrations")) {
+        return { ok: true, json: async () => ({ success: true, integrations: [] }) };
+      }
+      if (path.includes("/api/settings")) {
+        return {
+          ok: true,
+          json: async () => ({ success: true, settings: { general: {}, notifications: {}, clinic: {} } }),
+        };
+      }
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+
+    render(<Settings />);
+    fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
+
+    expect(await screen.findByRole("button", { name: "Reconnect" })).toBeEnabled();
+    expect(screen.getByText("disconnected")).toBeInTheDocument();
+  });
 });

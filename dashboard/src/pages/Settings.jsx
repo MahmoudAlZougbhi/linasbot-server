@@ -330,6 +330,28 @@ const Settings = () => {
   };
 
   /** @param {MetaConnectionStatus} connection */
+  const handleReconnectMeta = async (connection) => {
+    setMetaConnectionBusy(connection.binding_id);
+    try {
+      const res = await authFetch(`/api/meta/connections/${connection.binding_id}/reconnect`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || data.error || 'Reconnect failed');
+      }
+      setMetaConnections((rows) => rows.map((row) => (
+        row.binding_id === connection.binding_id ? { ...row, status: 'active' } : row
+      )));
+      toast.success(`${connection.channel === 'facebook' ? 'Facebook' : 'Instagram'} reconnected`);
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Reconnect failed');
+    } finally {
+      setMetaConnectionBusy('');
+    }
+  };
+
+  /** @param {MetaConnectionStatus} connection */
   const handleActivateMeta = async (connection) => {
     setMetaConnectionBusy(connection.binding_id);
     try {
@@ -741,16 +763,26 @@ const Settings = () => {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="btn-primary text-sm"
+                    className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canStartMetaConnect}
+                    title={
+                      canStartMetaConnect
+                        ? 'Connect a new business Facebook Page via Tech Provider onboarding'
+                        : 'Requires Tech Provider (App B) configuration on the server'
+                    }
                     onClick={() => handleConnectMeta('facebook')}
                   >
                     {metaConnectionBusy === 'facebook' ? 'Opening Meta…' : 'Connect Facebook'}
                   </button>
                   <button
                     type="button"
-                    className="btn-primary text-sm"
+                    className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canStartMetaConnect}
+                    title={
+                      canStartMetaConnect
+                        ? 'Connect a linked Instagram professional account via Tech Provider onboarding'
+                        : 'Requires Tech Provider (App B) configuration on the server'
+                    }
                     onClick={() => handleConnectMeta('instagram')}
                   >
                     {metaConnectionBusy === 'instagram' ? 'Opening Meta…' : 'Connect Instagram'}
@@ -783,6 +815,18 @@ const Settings = () => {
                         <span className="ml-2 text-xs text-slate-500">token {connection.token_status || 'unknown'}</span>
                       </div>
                       <div className="flex gap-2">
+                        {connection.app_key === 'linas_first_party'
+                        && (connection.status === 'disconnected' || connection.status === 'inactive')
+                        && connection.token_status === 'valid' ? (
+                          <button
+                            type="button"
+                            className="btn-primary px-3 py-1 text-sm"
+                            disabled={metaConnectionBusy !== ''}
+                            onClick={() => handleReconnectMeta(connection)}
+                          >
+                            {metaConnectionBusy === connection.binding_id ? 'Reconnecting…' : 'Reconnect'}
+                          </button>
+                        ) : null}
                         {connection.status === 'testing' && connection.tenant_id !== 'linas' && metaApps.some((item) => item.key === 'saas_tech_provider' && item.advanced_access_approved) ? (
                           <button
                             type="button"
