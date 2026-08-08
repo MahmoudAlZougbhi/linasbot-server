@@ -43,6 +43,8 @@ def test_meta_webhook_and_oauth_routes_still_registered() -> None:
     assert "/webhook" in paths
     assert "/webhook/meta-messaging" in paths
     assert "/oauth/meta/callback" in paths
+    assert "/oauth/meta/deauthorize" in paths
+    assert "/oauth/meta/data-deletion" in paths
     assert "/meta/deauthorize" in paths
     assert "/privacy-policy" in paths
     assert "/terms" in paths
@@ -55,6 +57,7 @@ def test_nginx_proxies_oauth_and_deauthorize() -> None:
     text = conf.read_text(encoding="utf-8")
     assert "location ^~ /oauth/" in text
     assert "location = /meta/deauthorize" in text
+    assert "location ^~ /data-deletion/status/" in text
     assert "location = /privacy-policy" in text
     assert "location ^~ /webhook" in text
 

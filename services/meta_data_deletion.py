@@ -8,20 +8,24 @@ import hmac
 import json
 import os
 import re
+import secrets
 import time
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import config
 from storage.persistent_storage import _DATA_ROOT
 
 _META_USER_ID_RE = re.compile(r"^[0-9]{3,64}$")
+_CONFIRMATION_CODE_RE = re.compile(r"^[0-9a-f]{32}$")
 _MAX_SIGNED_REQUEST_AGE_SECONDS = 7 * 24 * 60 * 60
 _MAX_FUTURE_SKEW_SECONDS = 5 * 60
 _STATUS_DIR = Path(_DATA_ROOT) / "meta_deletion_status"
+_INDEX_DIR = Path(_DATA_ROOT) / "meta_deletion_index"
 _FIRESTORE_APP_ID = "linas-ai-bot-backend"
+DeletionStatus = Literal["received", "pending", "completed", "no_data", "failed"]
 
 
 @dataclass(frozen=True)
@@ -102,7 +106,13 @@ def verify_meta_deletion_signed_request(
     return VerifiedMetaDeletionRequest(meta_user_id=meta_user_id, issued_at=issued_at)
 
 
+def generate_opaque_confirmation_code() -> str:
+    """Return a random 32-character hex code that does not embed user identifiers."""
+    return secrets.token_hex(16)
+
+
 def deletion_confirmation_code(meta_user_id: str, app_secret: str) -> str:
+    """Legacy deterministic helper retained for unit tests only."""
     if not _META_USER_ID_RE.fullmatch(str(meta_user_id or "").strip()):
         raise ValueError("Invalid Meta user identifier")
     digest = hmac.new(
@@ -111,6 +121,43 @@ def deletion_confirmation_code(meta_user_id: str, app_secret: str) -> str:
         hashlib.sha256,
     ).hexdigest()
     return digest[:32]
+
+
+def _index_path(app_key: str, meta_user_id: str) -> Path:
+    digest = hashlib.sha256(f"{app_key}:{meta_user_id}".encode("utf-8")).hexdigest()
+    return _INDEX_DIR / f"{digest}.json"
+
+
+def _lookup_existing_confirmation_code(app_key: str, meta_user_id: str) -> str | None:
+    path = _index_path(app_key, meta_user_id)
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    code = str(payload.get("confirmation_code") or "").strip().lower()
+    if not _CONFIRMATION_CODE_RE.fullmatch(code):
+        return None
+    return code
+
+
+def _remember_confirmation_code(app_key: str, meta_user_id: str, confirmation_code: str) -> None:
+    _INDEX_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(_INDEX_DIR, 0o700)
+    path = _index_path(app_key, meta_user_id)
+    payload = {
+        "confirmation_code": confirmation_code,
+        "app_key": app_key,
+        "created_at": int(time.time()),
+    }
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(path)
+    os.chmod(path, 0o600)
 
 
 def _delete_document_tree(document_ref: Any) -> int:
@@ -166,18 +213,29 @@ def _clear_in_memory_social_state(candidate_user_ids: tuple[str, ...]) -> None:
         user_persistence.clear_cache(candidate)
 
 
-def _write_deletion_status(result: MetaDeletionResult) -> None:
+def _write_deletion_status(
+    confirmation_code: str,
+    *,
+    status: DeletionStatus,
+    requested_at: int,
+    completed_at: int | None = None,
+    deleted_user_documents: int = 0,
+    deleted_nested_documents: int = 0,
+    deleted_index_documents: int = 0,
+) -> None:
     _STATUS_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(_STATUS_DIR, 0o700)
-    status_path = _STATUS_DIR / f"{result.confirmation_code}.json"
-    payload = {
-        "confirmation_code": result.confirmation_code,
-        "status": "completed",
-        "completed_at": int(time.time()),
-        "deleted_user_documents": result.deleted_user_documents,
-        "deleted_nested_documents": result.deleted_nested_documents,
-        "deleted_index_documents": result.deleted_index_documents,
+    status_path = _STATUS_DIR / f"{confirmation_code}.json"
+    payload: dict[str, Any] = {
+        "confirmation_code": confirmation_code,
+        "status": status,
+        "requested_at": requested_at,
+        "deleted_user_documents": deleted_user_documents,
+        "deleted_nested_documents": deleted_nested_documents,
+        "deleted_index_documents": deleted_index_documents,
     }
+    if completed_at is not None:
+        payload["completed_at"] = completed_at
     temporary = status_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     os.chmod(temporary, 0o600)
@@ -187,7 +245,7 @@ def _write_deletion_status(result: MetaDeletionResult) -> None:
 
 def read_deletion_status(confirmation_code: str) -> dict[str, Any] | None:
     code = str(confirmation_code or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{32}", code):
+    if not _CONFIRMATION_CODE_RE.fullmatch(code):
         return None
     status_path = _STATUS_DIR / f"{code}.json"
     if not status_path.is_file():
@@ -232,11 +290,22 @@ def delete_meta_social_user_data(
     raw_user_id = str(meta_user_id or "").strip()
     if not _META_USER_ID_RE.fullmatch(raw_user_id):
         raise ValueError("Invalid Meta user identifier")
+    if not str(app_secret or "").strip():
+        raise ValueError("App secret is required")
+
+    existing_code = _lookup_existing_confirmation_code(app_key, raw_user_id)
+    confirmation_code = existing_code or generate_opaque_confirmation_code()
+    requested_at = int(time.time())
+    if existing_code is None:
+        _remember_confirmation_code(app_key, raw_user_id, confirmation_code)
+    _write_deletion_status(confirmation_code, status="received", requested_at=requested_at)
+    _write_deletion_status(confirmation_code, status="pending", requested_at=requested_at)
 
     from utils.utils import get_firestore_db
 
     db = get_firestore_db()
     if db is None:
+        _write_deletion_status(confirmation_code, status="failed", requested_at=requested_at)
         raise RuntimeError("Firestore is unavailable")
 
     candidates = _candidate_social_user_ids(raw_user_id, app_key)
@@ -254,11 +323,20 @@ def delete_meta_social_user_data(
 
     deleted_indexes = _delete_live_chat_index_rows(db, candidates)
     _clear_in_memory_social_state(candidates)
-    result = MetaDeletionResult(
-        confirmation_code=deletion_confirmation_code(raw_user_id, app_secret),
+    completed_at = int(time.time())
+    final_status: DeletionStatus = "completed" if (deleted_users or deleted_indexes) else "no_data"
+    _write_deletion_status(
+        confirmation_code,
+        status=final_status,
+        requested_at=requested_at,
+        completed_at=completed_at,
         deleted_user_documents=deleted_users,
         deleted_nested_documents=deleted_nested,
         deleted_index_documents=deleted_indexes,
     )
-    _write_deletion_status(result)
-    return result
+    return MetaDeletionResult(
+        confirmation_code=confirmation_code,
+        deleted_user_documents=deleted_users,
+        deleted_nested_documents=deleted_nested,
+        deleted_index_documents=deleted_indexes,
+    )
