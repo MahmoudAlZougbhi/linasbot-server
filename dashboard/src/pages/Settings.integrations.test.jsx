@@ -135,10 +135,34 @@ describe("Settings integrations", () => {
                 tenant_id: "linas",
                 channel: "facebook",
                 asset_id: "378696005334409",
+                asset_id_masked: "378…409",
                 app_key: "linas_first_party",
+                app_label: "Lina Meta app",
                 status: "active",
                 generation: 1,
                 token_status: "valid",
+                page_name: "Lina's Laser Clinics",
+              },
+            ],
+            authorizations: [
+              {
+                authorized_meta_user_id_hash: "auth-hash",
+                app_label: "Lina Meta app",
+                assets: [
+                  {
+                    binding_id: "binding-one",
+                    tenant_id: "linas",
+                    channel: "facebook",
+                    asset_id: "378696005334409",
+                    asset_id_masked: "378…409",
+                    app_key: "linas_first_party",
+                    app_label: "Lina Meta app",
+                    status: "active",
+                    generation: 1,
+                    token_status: "valid",
+                    page_name: "Lina's Laser Clinics",
+                  },
+                ],
               },
             ],
           }),
@@ -159,7 +183,7 @@ describe("Settings integrations", () => {
     render(<Settings />);
     fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
 
-    expect(await screen.findByRole("button", { name: "Connect Facebook" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Add / Manage Pages" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeEnabled();
     expect(screen.getByText("Lina Meta app")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
@@ -206,7 +230,7 @@ describe("Settings integrations", () => {
     render(<Settings />);
     fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
 
-    expect(await screen.findByRole("button", { name: "Connect Facebook" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Add / Manage Pages" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeDisabled();
     expect(screen.getByText(/META_APP_A_LOGIN_CONFIG_ID/i)).toBeInTheDocument();
   });
@@ -236,8 +260,26 @@ describe("Settings integrations", () => {
                 tenant_id: "linas",
                 channel: "facebook",
                 app_key: "linas_first_party",
+                app_label: "Lina Meta app",
                 status: "disconnected",
                 token_status: "valid",
+              },
+            ],
+            authorizations: [
+              {
+                authorized_meta_user_id_hash: "auth-hash",
+                app_label: "Lina Meta app",
+                assets: [
+                  {
+                    binding_id: "fb-lina",
+                    tenant_id: "linas",
+                    channel: "facebook",
+                    app_key: "linas_first_party",
+                    app_label: "Lina Meta app",
+                    status: "disconnected",
+                    token_status: "valid",
+                  },
+                ],
               },
             ],
           }),

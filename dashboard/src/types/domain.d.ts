@@ -583,12 +583,33 @@ interface MetaConnectionStatus {
   tenant_id: string;
   channel: "facebook" | "instagram";
   asset_id: string;
+  asset_id_masked?: string;
+  page_id?: string;
+  page_id_masked?: string;
+  instagram_account_id?: string;
+  instagram_account_id_masked?: string;
+  page_name?: string;
+  instagram_username?: string;
   app_key: string;
+  app_label?: string;
   status: "active" | "inactive" | "testing" | "disconnected";
   generation: number;
   token_status?: "valid" | "expired" | "unavailable";
   expires_at?: number | null;
   granted_permissions?: string[];
+  connected_at?: number;
+  created_at?: number;
+  updated_at?: number;
+  authorized_meta_user_id_hash?: string;
+  superseded_by_binding_id?: string;
+  asset_key?: string;
+}
+
+interface MetaAuthorizationGroup {
+  authorized_meta_user_id_hash: string;
+  app_key?: string;
+  app_label?: string;
+  assets: MetaConnectionStatus[];
 }
 
 interface TrainingQAPair {

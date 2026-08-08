@@ -440,11 +440,12 @@ def test_tenant_namespaced_deletion_does_not_touch_unrelated_user(
     config.user_data_whatsapp["tenant-a:facebook:123456789"] = {"temporary": True}
 
     fake_registry = SimpleNamespace(
-        list_bindings=lambda: [
+        list_bindings=lambda *args, **kwargs: [
             SimpleNamespace(
                 app_key=APP_A_KEY,
                 tenant_id="tenant-a",
                 channel="facebook",
+                asset_id="page-tenant-a",
             )
         ]
     )

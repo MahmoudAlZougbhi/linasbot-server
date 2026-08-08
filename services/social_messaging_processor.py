@@ -107,10 +107,16 @@ async def process_meta_social_event(
     channel = str(event["channel"])
     sender_id = str(event["sender_id"])
     tenant_id = str(event.get("tenant_id") or settings.tenant_id or "linas").strip()
-    # Preserve Lina's established identities/state while namespacing every future
-    # SaaS tenant so two businesses can never share customer state.
-    user_id = f"{channel}:{sender_id}" if tenant_id == "linas" else f"{tenant_id}:{channel}:{sender_id}"
     account_id = resolve_meta_send_account_id(channel, event, settings)
+    asset_id = settings.instagram_account_id if channel == "instagram" else settings.page_id
+    from services.social_user_id import compose_social_user_id
+
+    user_id = compose_social_user_id(
+        tenant_id=tenant_id,
+        channel=channel,
+        asset_id=asset_id,
+        sender_id=sender_id,
+    )
 
     adapter = None
     if not simulation:
