@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import html
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
 from fastapi import HTTPException, Request
@@ -92,7 +92,7 @@ def _status_url(confirmation_code: str) -> str:
 def _format_unix_date(timestamp: int | None) -> str:
     if not timestamp:
         return ""
-    return datetime.fromtimestamp(int(timestamp), tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return datetime.fromtimestamp(int(timestamp), tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _enforce_rate_limit(request: Request, route: str, *, limit: int, window_seconds: int) -> None:

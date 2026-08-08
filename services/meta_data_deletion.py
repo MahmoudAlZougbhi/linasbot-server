@@ -124,7 +124,7 @@ def deletion_confirmation_code(meta_user_id: str, app_secret: str) -> str:
 
 
 def _index_path(app_key: str, meta_user_id: str) -> Path:
-    digest = hashlib.sha256(f"{app_key}:{meta_user_id}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{app_key}:{meta_user_id}".encode()).hexdigest()
     return _INDEX_DIR / f"{digest}.json"
 
 
