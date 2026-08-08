@@ -147,9 +147,14 @@ async def test_connect_start_defaults_to_unified_flow(
 
 @pytest.mark.asyncio
 async def test_authorization_title_is_returned_for_app_a(
-    registry: MetaAppRegistry,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    registry = MetaAppRegistry(
+        store_path=tmp_path / "registry-title.json",
+        audit_path=tmp_path / "audit-title.jsonl",
+        master_secret="connection-api-title-secret-tests-123456789",
+    )
     registry.authorize_oauth_asset(
         tenant_id="tenant-a",
         channel="facebook",

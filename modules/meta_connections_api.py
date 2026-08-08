@@ -25,6 +25,7 @@ from services.meta_oauth import (
     begin_meta_business_login,
     complete_meta_business_login,
     disconnect_binding_webhook,
+    normalize_oauth_flow_channel,
     subscribe_binding_webhook,
     unsubscribe_binding_webhook,
 )
@@ -137,7 +138,7 @@ async def start_meta_connection(
     try:
         login_url = begin_meta_business_login(
             tenant_id=session.tenant_id,
-            channel=channel,
+            channel=normalize_oauth_flow_channel(channel),
             actor_id=session.user_id or session.email,
         )
     except (MetaOAuthError, MetaRegistryError) as exc:
