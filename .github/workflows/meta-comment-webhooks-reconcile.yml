@@ -33,4 +33,4 @@ jobs:
           META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
           META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
           META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
-        run: python scripts/reconcile_meta_comment_webhooks.py
+        run: PYTHONPATH=${{ github.workspace }} python scripts/reconcile_meta_comment_webhooks.py
