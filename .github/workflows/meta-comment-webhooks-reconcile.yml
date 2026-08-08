@@ -1,0 +1,36 @@
+name: Meta Comment Webhooks Reconcile
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type RECONCILE_META_COMMENT_WEBHOOKS"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    name: Reconcile comment webhook fields (preserve DM fields)
+    if: inputs.confirmation == 'RECONCILE_META_COMMENT_WEBHOOKS'
+    environment: meta-social-cutover
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Reconcile comment fields without removing DM subscriptions
+        env:
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
+          META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
+        run: python scripts/reconcile_meta_comment_webhooks.py
