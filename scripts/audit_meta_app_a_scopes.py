@@ -40,10 +40,7 @@ def main() -> None:
         credential = registry.get_credential(binding)
         granted = set(credential.scopes)
         masked = binding.asset_id[-6:] if binding.asset_id else "unknown"
-        print(
-            f"[scope-audit] channel={binding.channel} asset_suffix={masked} "
-            f"binding_suffix={binding.binding_id[-6:]}"
-        )
+        print(f"[scope-audit] channel={binding.channel} asset_suffix={masked} binding_suffix={binding.binding_id[-6:]}")
         for scope in DM_SCOPES:
             print(f"[scope-audit] dm_scope_{scope}={scope in granted}")
         for scope in COMMENT_SCOPES.get(binding.channel, ()):
