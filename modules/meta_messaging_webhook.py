@@ -25,10 +25,13 @@ from services.meta_messaging import (
     parse_meta_messaging_events,
     verify_meta_signature,
 )
+from services.meta_comment_events import ResolvedMetaCommentEvent, resolve_registry_comment_events
+from services.meta_comment_replies import process_meta_comment_event
 from services.meta_multi_app_router import ResolvedMetaEvent, resolve_registry_events
 from services.social_messaging_processor import process_meta_social_event
 
 _message_deduper = InMemoryMessageDeduper(ttl_seconds=300.0)
+_comment_deduper = InMemoryMessageDeduper(ttl_seconds=600.0)
 _background_tasks: set[asyncio.Task[None]] = set()
 _runtime_logger = logging.getLogger("uvicorn.error")
 
@@ -217,6 +220,69 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             continue
         _track_task(asyncio.create_task(_process_claimed(resolved)))
         accepted += 1
+
+    comment_accepted = 0
+    comment_duplicates = 0
+    resolved_comment_events: list[ResolvedMetaCommentEvent] = []
+    if registry_enabled and signed_app is not None and signed_app.key == APP_A_KEY:
+        resolved_comment_events = resolve_registry_comment_events(payload, app_config=signed_app)
+
+    async def _process_comment_claimed(resolved: ResolvedMetaCommentEvent) -> None:
+        from services.durable_event_claim import complete_event_claim, release_event_claim
+
+        comment_id = str(resolved.event.get("comment_id") or "")
+        claim_key = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{comment_id}"
+        _runtime_logger.info(
+            "[meta-comment] event_processing_started channel=%s tenant=%s",
+            resolved.binding.channel,
+            resolved.binding.tenant_id,
+        )
+        try:
+            result = await process_meta_comment_event(resolved)
+            await complete_event_claim(
+                "meta_comment_id",
+                claim_key,
+                firestore_collection="meta_comment_claims",
+            )
+            _runtime_logger.info(
+                "[meta-comment] event_processing_completed channel=%s status=%s reason=%s",
+                resolved.binding.channel,
+                result.status,
+                result.reason,
+            )
+        except Exception as exc:
+            _runtime_logger.error(
+                "[meta-comment] event_processing_failed channel=%s type=%s",
+                resolved.binding.channel,
+                type(exc).__name__,
+            )
+            await release_event_claim(
+                "meta_comment_id",
+                claim_key,
+                firestore_collection="meta_comment_claims",
+            )
+            raise
+
+    for resolved in resolved_comment_events:
+        comment_id = str(resolved.event.get("comment_id") or "")
+        claim_key = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{comment_id}"
+        if not _comment_deduper.claim(claim_key):
+            comment_duplicates += 1
+            continue
+        from services.durable_event_claim import try_claim_event
+
+        claimed = await try_claim_event(
+            "meta_comment_id",
+            claim_key,
+            ttl_seconds=86400.0,
+            firestore_collection="meta_comment_claims",
+        )
+        if not claimed:
+            comment_duplicates += 1
+            continue
+        _track_task(asyncio.create_task(_process_comment_claimed(resolved)))
+        comment_accepted += 1
+
     channel_counts = {
         "facebook": sum(str(item.event.get("channel") or "") == "facebook" for item in resolved_events),
         "instagram": sum(str(item.event.get("channel") or "") == "instagram" for item in resolved_events),
@@ -230,10 +296,20 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         channel_counts["facebook"],
         channel_counts["instagram"],
     )
+    if resolved_comment_events:
+        _runtime_logger.info(
+            "[meta-comment] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d",
+            payload_object,
+            len(resolved_comment_events),
+            comment_accepted,
+            comment_duplicates,
+        )
     return JSONResponse(
         {
             "status": "received",
             "accepted": accepted,
             "duplicates": duplicates,
+            "comments_accepted": comment_accepted,
+            "comments_duplicates": comment_duplicates,
         }
     )

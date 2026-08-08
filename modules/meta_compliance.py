@@ -234,9 +234,11 @@ it asks the sender to describe what help they need in text.</p>
 <p>We use this information only to authenticate and deduplicate the webhook, bind the message
 to the business and assets that authorized the connection, preserve tenant-isolated conversation
 context, answer that business's configured service questions, maintain service security, and
-provide an explicit booking or human-support handoff when requested. We do not process public comments,
-publish content, run ads, send unsolicited marketing DMs, or book an appointment inside
-Facebook or Instagram.</p>
+provide an explicit booking or human-support handoff when requested. When a business enables
+optional AI comment replies in Settings, we may also receive public Facebook Page or Instagram
+comment text and reply publicly under that comment using the business's approved content.
+We do not publish posts, run ads, send unsolicited marketing DMs, hide or delete comments,
+or book an appointment inside Facebook or Instagram.</p>
 
 <h2>Service providers</h2>
 <p>Meta delivers and sends the messages. OpenAI processes message text and relevant
@@ -308,7 +310,8 @@ booking process.</p>
 
 <h2>Messaging limits</h2>
 <p>The bot responds to customer-initiated direct messages within Meta's permitted messaging
-window. It does not process comments or send unsolicited marketing messages. Availability may
+window. Optional AI comment replies are off by default and only run when enabled per Page or
+Instagram account in Settings. Availability may
 be interrupted for maintenance, platform limits, or security reasons.</p>
 
 <h2>Privacy and changes</h2>
@@ -326,7 +329,8 @@ async def data_deletion_page() -> HTMLResponse:
         f"""
 <h1>User Data Deletion</h1>
 <p>You may request deletion of information associated with your Facebook Messenger or Instagram
-DM interaction with Linas AI.</p>
+DM interaction with Linas AI, and—when a business enabled optional AI comment replies—public
+comment text we processed to generate a public reply.</p>
 
 <h2>Request through Meta</h2>
 <p>Remove the app or request deletion through the applicable Facebook or Instagram app settings.
@@ -345,7 +349,8 @@ information. We may reply with a minimal verification step so we delete the corr
 
 <h2>What deletion covers</h2>
 <p>Deletion covers the social bot's platform-scoped identifier, stored DM text and AI replies,
-conversation state, timestamps, and matching social-chat index entries under our control. It
+optional comment-derived processing records, conversation state, timestamps, and matching
+social-chat index entries under our control. It
 does not delete records held independently by Meta, OpenAI, or another provider under its own
 legal obligations, nor records the clinic must retain to meet a legal obligation. We will explain
 any narrow exception that applies to a manual request.</p>
