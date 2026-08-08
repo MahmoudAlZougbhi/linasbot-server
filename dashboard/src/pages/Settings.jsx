@@ -59,10 +59,10 @@ const Settings = () => {
   const [metaRegistryEnabled, setMetaRegistryEnabled] = useState(false);
   const [metaConnectionError, setMetaConnectionError] = useState(/** @type {string | null} */ (null));
   const [metaConnectionBusy, setMetaConnectionBusy] = useState('');
-  const metaTechProviderReady = metaApps.some(
-    (item) => item.key === 'saas_tech_provider' && item.enabled && item.oauth_configured
+  const metaOAuthReady = metaApps.some(
+    (item) => item.key === 'linas_first_party' && item.enabled && item.oauth_configured
   );
-  const canStartMetaConnect = metaRegistryEnabled && metaTechProviderReady && metaConnectionBusy === '';
+  const canStartMetaConnect = metaRegistryEnabled && metaOAuthReady && metaConnectionBusy === '';
 
   useEffect(() => {
     if (!isLinasTenant && activeTab === 'general') {
@@ -324,6 +324,28 @@ const Settings = () => {
       toast.success(`${connection.channel === 'facebook' ? 'Facebook' : 'Instagram'} disconnected`);
     } catch (e) {
       toast.error(errorMessage(e) || 'Disconnect failed');
+    } finally {
+      setMetaConnectionBusy('');
+    }
+  };
+
+  /** @param {MetaConnectionStatus} connection */
+  const handleReconnectMeta = async (connection) => {
+    setMetaConnectionBusy(connection.binding_id);
+    try {
+      const res = await authFetch(`/api/meta/connections/${connection.binding_id}/reconnect`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || data.error || 'Reconnect failed');
+      }
+      setMetaConnections((rows) => rows.map((row) => (
+        row.binding_id === connection.binding_id ? { ...row, status: 'active' } : row
+      )));
+      toast.success(`${connection.channel === 'facebook' ? 'Facebook' : 'Instagram'} reconnected`);
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Reconnect failed');
     } finally {
       setMetaConnectionBusy('');
     }
@@ -741,16 +763,26 @@ const Settings = () => {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="btn-primary text-sm"
+                    className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canStartMetaConnect}
+                    title={
+                      canStartMetaConnect
+                        ? 'Connect your Facebook Page using the Linas Meta app'
+                        : 'Requires Facebook Login for Business on App A (META_APP_A_LOGIN_CONFIG_ID)'
+                    }
                     onClick={() => handleConnectMeta('facebook')}
                   >
                     {metaConnectionBusy === 'facebook' ? 'Opening Meta…' : 'Connect Facebook'}
                   </button>
                   <button
                     type="button"
-                    className="btn-primary text-sm"
+                    className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canStartMetaConnect}
+                    title={
+                      canStartMetaConnect
+                        ? 'Connect your Instagram professional account using the Linas Meta app'
+                        : 'Requires Facebook Login for Business on App A (META_APP_A_LOGIN_CONFIG_ID)'
+                    }
                     onClick={() => handleConnectMeta('instagram')}
                   >
                     {metaConnectionBusy === 'instagram' ? 'Opening Meta…' : 'Connect Instagram'}
@@ -763,13 +795,12 @@ const Settings = () => {
               {!metaRegistryEnabled ? (
                 <p className="mt-3 text-xs text-blue-700">Multi-app onboarding is staged but not enabled on this deployment.</p>
               ) : null}
-              {metaRegistryEnabled && !metaTechProviderReady ? (
+              {metaRegistryEnabled && !metaOAuthReady ? (
                 <p className="mt-3 text-xs text-amber-800">
-                  Connect Facebook / Instagram is disabled because the Tech Provider (App B) Facebook Login for Business
-                  is not configured on this server (missing App B ID/secret/verify token/login config). Lina&apos;s own
-                  Page and Instagram use the first-party App A bindings — not these Connect buttons. Ask ops to apply
-                  App B credentials only when onboarding independent businesses; for Lina messaging, restore the App A
-                  Facebook binding if `/api/ready` reports it inactive.
+                  Connect Facebook / Instagram is disabled because Facebook Login for Business is not configured
+                  for your Meta app on this server (missing <code className="font-mono">META_APP_A_LOGIN_CONFIG_ID</code>).
+                  Lina uses one Meta app only — ask ops to add the Login configuration ID from the Meta Developer
+                  console, then use Connect or Reconnect below.
                 </p>
               ) : null}
               {metaConnections.length > 0 ? (
@@ -778,12 +809,24 @@ const Settings = () => {
                     <div key={connection.binding_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm">
                       <div>
                         <span className="font-medium capitalize text-slate-800">{connection.channel}</span>
-                        <span className="ml-2 text-slate-500">{connection.app_key === 'linas_first_party' ? 'Lina first-party' : 'Tech Provider'}</span>
+                        <span className="ml-2 text-slate-500">{connection.app_key === 'linas_first_party' ? 'Lina Meta app' : 'Legacy provider'}</span>
                         <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{connection.status}</span>
                         <span className="ml-2 text-xs text-slate-500">token {connection.token_status || 'unknown'}</span>
                       </div>
                       <div className="flex gap-2">
-                        {connection.status === 'testing' && connection.tenant_id !== 'linas' && metaApps.some((item) => item.key === 'saas_tech_provider' && item.advanced_access_approved) ? (
+                        {connection.app_key === 'linas_first_party'
+                        && (connection.status === 'disconnected' || connection.status === 'inactive')
+                        && connection.token_status === 'valid' ? (
+                          <button
+                            type="button"
+                            className="btn-primary px-3 py-1 text-sm"
+                            disabled={metaConnectionBusy !== ''}
+                            onClick={() => handleReconnectMeta(connection)}
+                          >
+                            {metaConnectionBusy === connection.binding_id ? 'Reconnecting…' : 'Reconnect'}
+                          </button>
+                        ) : null}
+                        {connection.status === 'testing' && metaApps.some((item) => item.key === 'linas_first_party' && item.oauth_configured) ? (
                           <button
                             type="button"
                             className="btn-primary px-3 py-1 text-sm"

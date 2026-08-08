@@ -121,12 +121,12 @@ describe("Settings integrations", () => {
             registry_enabled: true,
             apps: [
               {
-                key: "saas_tech_provider",
-                app_id: "998877665544",
-                classification: "tech_provider",
+                key: "linas_first_party",
+                app_id: "2963733803971681",
+                classification: "own_business",
                 enabled: true,
                 oauth_configured: true,
-                advanced_access_approved: false,
+                advanced_access_approved: true,
               },
             ],
             connections: [
@@ -161,14 +161,14 @@ describe("Settings integrations", () => {
 
     expect(await screen.findByRole("button", { name: "Connect Facebook" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeEnabled();
-    expect(screen.getByText("Lina first-party")).toBeInTheDocument();
+    expect(screen.getByText("Lina Meta app")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/app secret/i)).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue(/998877665544/)).not.toBeInTheDocument();
   });
 
-  it("explains disabled Connect buttons when App B OAuth is not configured", async () => {
+  it("explains disabled Connect buttons when App A Login config is missing", async () => {
     authFetchMock.mockImplementation(async (url) => {
       const path = String(url);
       if (path === "/api/meta/connections") {
@@ -179,12 +179,12 @@ describe("Settings integrations", () => {
             registry_enabled: true,
             apps: [
               {
-                key: "saas_tech_provider",
-                app_id: "",
-                classification: "tech_provider",
-                enabled: false,
+                key: "linas_first_party",
+                app_id: "2963733803971681",
+                classification: "own_business",
+                enabled: true,
                 oauth_configured: false,
-                advanced_access_approved: false,
+                advanced_access_approved: true,
               },
             ],
             connections: [],
@@ -208,6 +208,57 @@ describe("Settings integrations", () => {
 
     expect(await screen.findByRole("button", { name: "Connect Facebook" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Connect Instagram" })).toBeDisabled();
-    expect(screen.getByText(/Tech Provider \(App B\) Facebook Login for Business/i)).toBeInTheDocument();
+    expect(screen.getByText(/META_APP_A_LOGIN_CONFIG_ID/i)).toBeInTheDocument();
+  });
+
+  it("shows Reconnect for disconnected Lina first-party bindings with a valid token", async () => {
+    authFetchMock.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path === "/api/meta/connections") {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            registry_enabled: true,
+            apps: [
+              {
+                key: "saas_tech_provider",
+                app_id: "",
+                classification: "tech_provider",
+                enabled: false,
+                oauth_configured: false,
+                advanced_access_approved: false,
+              },
+            ],
+            connections: [
+              {
+                binding_id: "fb-lina",
+                tenant_id: "linas",
+                channel: "facebook",
+                app_key: "linas_first_party",
+                status: "disconnected",
+                token_status: "valid",
+              },
+            ],
+          }),
+        };
+      }
+      if (path.includes("/api/settings/integrations")) {
+        return { ok: true, json: async () => ({ success: true, integrations: [] }) };
+      }
+      if (path.includes("/api/settings")) {
+        return {
+          ok: true,
+          json: async () => ({ success: true, settings: { general: {}, notifications: {}, clinic: {} } }),
+        };
+      }
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+
+    render(<Settings />);
+    fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
+
+    expect(await screen.findByRole("button", { name: "Reconnect" })).toBeEnabled();
+    expect(screen.getByText("disconnected")).toBeInTheDocument();
   });
 });

@@ -224,3 +224,51 @@ async def test_reconnect_atomically_replaces_provider_then_removes_old_subscript
     assert calls == [("subscribe", APP_B_KEY), ("unsubscribe", APP_A_KEY)]
     inactive_old = next(item for item in registry.list_bindings() if item.binding_id == old.binding_id)
     assert inactive_old.status == "inactive"
+
+
+@pytest.mark.asyncio
+async def test_reconnect_first_party_disconnected_binding(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page_id = "378696005334409"
+    binding = registry.activate_binding(
+        tenant_id="linas",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="private-lina-page-token",
+            token_app_id="2963733803971681",
+            token_profile_id=page_id,
+            scopes=SCOPES,
+            expires_at=int(time.time()) + 3600,
+        ),
+        actor_id="owner",
+    )
+    disconnected = registry.set_binding_status(
+        binding.binding_id,
+        status="disconnected",
+        actor_id="owner",
+    )
+    subscribed = False
+
+    async def subscribe(*_args: Any, **_kwargs: Any) -> None:
+        nonlocal subscribed
+        subscribed = True
+
+    monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr(meta_connections_api, "subscribe_binding_webhook", subscribe)
+
+    response = await meta_connections_api.reconnect_meta_connection(
+        disconnected.binding_id,
+        _request("linas"),
+    )
+
+    assert response["success"] is True
+    assert response["connection"]["status"] == "active"
+    assert subscribed is True
+    refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert refreshed.status == "active"

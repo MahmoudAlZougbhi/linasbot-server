@@ -1,4 +1,4 @@
-"""Server-side Facebook Login for Business onboarding for Meta App B.
+"""Server-side Facebook Login for Business onboarding for the single Meta app (App A).
 
 OAuth codes and tokens never reach the dashboard. The callback validates a one-time
 server-side state record, exchanges the code with Meta, inspects the resulting Page
@@ -19,10 +19,9 @@ from urllib.parse import urlencode
 import httpx
 
 from services.meta_app_registry import (
-    APP_B_KEY,
+    APP_A_KEY,
     META_CHANNEL_SCOPES,
     META_FORBIDDEN_SCOPES,
-    BindingStatus,
     MetaAppRegistry,
     MetaAssetBinding,
     MetaBindingConflictError,
@@ -53,6 +52,17 @@ def meta_oauth_redirect_uri() -> str:
     return (os.getenv("META_OAUTH_REDIRECT_URI") or "https://www.linasaibot.com/oauth/meta/callback").strip()
 
 
+def meta_oauth_app_key() -> str:
+    """Return the configured Meta app used for dashboard Connect (App A only)."""
+
+    app = get_meta_app_configs()[APP_A_KEY]
+    if app.enabled and app.oauth_config_id:
+        return APP_A_KEY
+    raise MetaOAuthError(
+        "Meta Business Login is not configured. Ask ops to set META_APP_A_LOGIN_CONFIG_ID for App A."
+    )
+
+
 def begin_meta_business_login(
     *,
     tenant_id: str,
@@ -60,11 +70,10 @@ def begin_meta_business_login(
     actor_id: str,
     registry: MetaAppRegistry | None = None,
 ) -> str:
-    """Create a one-time state and return App B's Business Login URL."""
+    """Create a one-time state and return App A's Business Login URL."""
 
-    app = get_meta_app_configs()[APP_B_KEY]
-    if not app.enabled or not app.oauth_config_id:
-        raise MetaOAuthError("Meta Tech Provider login is not configured")
+    app_key = meta_oauth_app_key()
+    app = get_meta_app_configs()[app_key]
     if channel not in {"facebook", "instagram"}:
         raise MetaOAuthError("Unsupported Meta channel")
     try:
@@ -82,7 +91,7 @@ def begin_meta_business_login(
             "tenant_id": tenant,
             "channel": channel,
             "actor_id": f"oauth:{actor_reference}",
-            "app_key": APP_B_KEY,
+            "app_key": app_key,
             "redirect_uri": meta_oauth_redirect_uri(),
             "expires_at": time.time() + META_OAUTH_STATE_TTL_SECONDS,
         },
@@ -234,7 +243,7 @@ async def complete_meta_business_login(
     current_registry = registry or get_meta_app_registry()
     state_hash = hashlib.sha256(state.encode("utf-8")).hexdigest()
     state_data = current_registry.consume_oauth_state(state_hash)
-    if state_data.get("app_key") != APP_B_KEY:
+    if state_data.get("app_key") != APP_A_KEY:
         raise MetaOAuthStateError("OAuth state app does not match")
     redirect_uri = str(state_data.get("redirect_uri") or "")
     if redirect_uri != meta_oauth_redirect_uri():
@@ -245,9 +254,8 @@ async def complete_meta_business_login(
     if not tenant_id or channel not in {"facebook", "instagram"}:
         raise MetaOAuthStateError("OAuth state binding is invalid")
 
-    app = get_meta_app_configs()[APP_B_KEY]
-    if not app.enabled or not app.oauth_config_id:
-        raise MetaOAuthError("Meta Tech Provider login is not configured")
+    app_key = meta_oauth_app_key()
+    app = get_meta_app_configs()[app_key]
     owns_client = client is None
     http_client = client or httpx.AsyncClient(
         base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}",
@@ -327,16 +335,13 @@ async def complete_meta_business_login(
             raise MetaOAuthError("Meta token granular targets are missing or include another asset")
 
         asset_id = page_id if channel == "facebook" else instagram_id
-        # Every new tenant connection is staged. App B approval, tenant content,
-        # webhook subscription, and exclusive activation are separate operations.
-        status: BindingStatus = "testing"
         binding = current_registry.activate_binding(
             tenant_id=tenant_id,
             channel=channel,
             asset_id=asset_id,
             page_id=page_id,
             instagram_account_id=instagram_id,
-            app_key=APP_B_KEY,
+            app_key=app_key,
             credential=MetaBindingCredential(
                 access_token=page_token,
                 token_app_id=app.app_id,
@@ -346,8 +351,10 @@ async def complete_meta_business_login(
                 authorized_meta_user_id=authorized_meta_user_id,
             ),
             actor_id=actor_id,
-            status=status,
+            status="active",
+            replace_existing=True,
         )
+        await subscribe_binding_webhook(binding, registry=current_registry, client=client)
         return MetaOAuthResult(
             binding=binding,
             page_name=page_name,

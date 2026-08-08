@@ -12,6 +12,7 @@ from fastapi.responses import RedirectResponse
 from modules.api_security import require_permission
 from modules.core import app
 from services.meta_app_registry import (
+    APP_A_KEY,
     APP_B_KEY,
     MetaAssetBinding,
     MetaRegistryError,
@@ -164,11 +165,62 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
     return {"success": True, "connection": updated.public_dict()}
 
 
+@app.post("/api/meta/connections/{binding_id}/reconnect")
+async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
+    """Re-enable a disconnected first-party (App A) binding when its token is still valid."""
+
+    session = require_permission(request, "settings")
+    binding = _tenant_binding(binding_id, session.tenant_id)
+    if binding.app_key != APP_A_KEY:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Reconnect is only for stored Lina Meta app bindings. "
+                "Use Connect Facebook / Instagram to authorize a Page again."
+            ),
+        )
+    if binding.status not in {"disconnected", "inactive"}:
+        raise HTTPException(status_code=409, detail="Connection is already active or cannot be reconnected here")
+    registry = get_meta_app_registry()
+    try:
+        credential = registry.get_credential(binding)
+        now = int(time.time())
+        if credential.expires_at is not None and credential.expires_at <= now:
+            raise HTTPException(
+                status_code=409,
+                detail="Stored Meta token expired. Ask ops to re-apply App A credentials.",
+            )
+    except MetaRegistryError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Stored Meta token is unavailable. Ask ops to re-apply App A credentials.",
+        ) from exc
+    try:
+        previous = _active_conflict(binding)
+        if previous is not None:
+            raise HTTPException(status_code=409, detail="Another active binding owns this channel or asset")
+        staged = MetaAssetBinding(**{**binding.__dict__, "status": "active"})
+        await subscribe_binding_webhook(staged, registry=registry)
+        try:
+            updated = registry.set_binding_status(
+                binding.binding_id,
+                status="active",
+                actor_id=session.user_id or session.email,
+                expected_generation=binding.generation,
+            )
+        except MetaRegistryError:
+            await unsubscribe_binding_webhook(staged, registry=registry)
+            raise
+    except (MetaOAuthError, MetaRegistryError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"success": True, "connection": updated.public_dict()}
+
+
 @app.post("/api/meta/connections/{binding_id}/activate")
 async def activate_meta_connection(binding_id: str, request: Request) -> Any:
     session = require_permission(request, "settings")
     binding = _tenant_binding(binding_id, session.tenant_id)
-    if binding.app_key != APP_B_KEY or binding.status not in {"testing", "inactive"}:
+    if binding.app_key not in {APP_A_KEY, APP_B_KEY} or binding.status not in {"testing", "inactive"}:
         raise HTTPException(status_code=409, detail="Connection is not eligible for activation")
     if session.tenant_id != "linas":
         from services.cm.constants import cm_runtime_mode
