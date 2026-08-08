@@ -10,18 +10,13 @@ import urllib.parse
 import urllib.request
 from typing import cast
 
-from services.meta_comment_webhooks import (
-    INSTAGRAM_APP_COMMENT_FIELDS,
-    PAGE_COMMENT_FIELDS,
-)
-
 EXPECTED_APP_ID = "2963733803971681"
 EXPECTED_GRAPH_VERSION = "v24.0"
 EXPECTED_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
 PAGE_OBJECT = "page"
 INSTAGRAM_OBJECT = "instagram"
-PAGE_FIELDS = set(PAGE_COMMENT_FIELDS)
-INSTAGRAM_FIELDS = set(INSTAGRAM_APP_COMMENT_FIELDS)
+PAGE_FIELDS = {"messages", "messaging_postbacks", "feed"}
+INSTAGRAM_FIELDS = {"comments", "messages", "messaging_postbacks"}
 DM_FIELDS = {"messages", "messaging_postbacks"}
 
 
