@@ -175,8 +175,8 @@ async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
         raise HTTPException(
             status_code=409,
             detail=(
-                "Reconnect is only for Lina first-party bindings. "
-                "Connect Facebook / Instagram uses Tech Provider (App B) onboarding."
+                "Reconnect is only for stored Lina Meta app bindings. "
+                "Use Connect Facebook / Instagram to authorize a Page again."
             ),
         )
     if binding.status not in {"disconnected", "inactive"}:
@@ -220,7 +220,7 @@ async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
 async def activate_meta_connection(binding_id: str, request: Request) -> Any:
     session = require_permission(request, "settings")
     binding = _tenant_binding(binding_id, session.tenant_id)
-    if binding.app_key != APP_B_KEY or binding.status not in {"testing", "inactive"}:
+    if binding.app_key not in {APP_A_KEY, APP_B_KEY} or binding.status not in {"testing", "inactive"}:
         raise HTTPException(status_code=409, detail="Connection is not eligible for activation")
     if session.tenant_id != "linas":
         from services.cm.constants import cm_runtime_mode

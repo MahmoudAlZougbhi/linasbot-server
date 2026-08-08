@@ -1,4 +1,4 @@
-"""Meta App B Business Login security and asset-validation tests."""
+"""Meta App A Business Login security and asset-validation tests."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from services.meta_app_registry import (
-    APP_B_KEY,
+    APP_A_KEY,
     MetaAppRegistry,
     MetaOAuthStateError,
 )
@@ -39,7 +39,7 @@ def oauth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_B_ID", "998877665544")
     monkeypatch.setenv("META_APP_B_SECRET", "app-b-secret-tests")
     monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "verify-b-tests")
-    monkeypatch.setenv("META_APP_B_LOGIN_CONFIG_ID", "business-login-config-tests")
+    monkeypatch.setenv("META_APP_A_LOGIN_CONFIG_ID", "business-login-config-tests")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     monkeypatch.setenv("META_OAUTH_REDIRECT_URI", "https://www.linasaibot.com/oauth/meta/callback")
 
@@ -83,7 +83,7 @@ def _transport(
             inspected = request.url.params.get("input_token")
             data: dict[str, Any] = {
                 "is_valid": True,
-                "app_id": "000000000000" if wrong_app else "998877665544",
+                "app_id": "000000000000" if wrong_app else "2963733803971681",
                 "scopes": SCOPES,
                 "expires_at": 4102444800,
                 "user_id": "112233445566",
@@ -140,7 +140,7 @@ def test_business_login_url_uses_config_id_and_never_scope_or_secret(registry: M
 
 
 @pytest.mark.asyncio
-async def test_external_page_login_inspects_encrypts_and_stages_without_subscription(
+async def test_external_page_login_inspects_encrypts_and_activates_with_subscription(
     registry: MetaAppRegistry,
 ) -> None:
     state = _start_state(registry)
@@ -155,18 +155,18 @@ async def test_external_page_login_inspects_encrypts_and_stages_without_subscrip
             registry=registry,
             client=client,
         )
-    assert result.binding.status == "testing"
-    assert result.binding.app_key == APP_B_KEY
+    assert result.binding.status == "active"
+    assert result.binding.app_key == APP_A_KEY
     assert result.binding.tenant_id == "tenant-a"
     stored = registry.store_path.read_text(encoding="utf-8")
     assert "page-token-private" not in stored
     assert "single-use-code" not in stored
     credential = registry.get_credential(result.binding)
-    assert credential.token_app_id == "998877665544"
+    assert credential.token_app_id == "2963733803971681"
     assert set(SCOPES).issubset(credential.scopes)
     assert credential.authorized_meta_user_id == "112233445566"
     assert "112233445566" not in stored
-    assert all("app-b-secret-tests" not in str(request.url) for request in observed_requests)
+    assert any(request.url.path.endswith("/subscribed_apps") for request in observed_requests)
     token_exchange = next(request for request in observed_requests if request.url.path.endswith("/oauth/access_token"))
     assert token_exchange.method == "POST"
 
@@ -190,8 +190,8 @@ async def test_instagram_login_resolves_linked_professional_account(registry: Me
 
 
 @pytest.mark.asyncio
-async def test_lina_on_app_b_is_testing_only_and_not_subscribed(registry: MetaAppRegistry) -> None:
-    state = _start_state(registry)
+async def test_lina_page_connect_activates_and_subscribes(registry: MetaAppRegistry) -> None:
+    state = _start_state(registry, channel="facebook")
     requests: list[str] = []
     base_transport = _transport(page_id="378696005334409", instagram_id="17841413184256533")
 
@@ -209,8 +209,9 @@ async def test_lina_on_app_b_is_testing_only_and_not_subscribed(registry: MetaAp
             registry=registry,
             client=client,
         )
-    assert result.binding.status == "testing"
-    assert not any(path.endswith("/subscribed_apps") for path in requests)
+    assert result.binding.status == "active"
+    assert result.binding.app_key == APP_A_KEY
+    assert any(path.endswith("/subscribed_apps") for path in requests)
 
 
 @pytest.mark.asyncio
