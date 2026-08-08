@@ -163,8 +163,8 @@ class TestRouteInventory:
         # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
         # +meta reconnect endpoint for first-party bindings.
         assert counts["total_api_routes"] == 163
-        assert counts["public"] == 11
-        assert counts["protected"] == 152
+        assert counts["public"] == 10
+        assert counts["protected"] == 153
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),

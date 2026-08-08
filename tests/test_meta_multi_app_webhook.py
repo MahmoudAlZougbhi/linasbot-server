@@ -170,9 +170,27 @@ async def test_receiving_app_and_asset_binding_route_exactly_once(
     await asyncio.sleep(0)
     await asyncio.sleep(0)
 
-    assert json.loads(first.body) == {"status": "received", "accepted": 1, "duplicates": 0}
-    assert json.loads(duplicate.body) == {"status": "received", "accepted": 0, "duplicates": 1}
-    assert json.loads(app_b.body) == {"status": "received", "accepted": 0, "duplicates": 0}
+    assert json.loads(first.body) == {
+        "status": "received",
+        "accepted": 1,
+        "duplicates": 0,
+        "comments_accepted": 0,
+        "comments_duplicates": 0,
+    }
+    assert json.loads(duplicate.body) == {
+        "status": "received",
+        "accepted": 0,
+        "duplicates": 1,
+        "comments_accepted": 0,
+        "comments_duplicates": 0,
+    }
+    assert json.loads(app_b.body) == {
+        "status": "received",
+        "accepted": 0,
+        "duplicates": 0,
+        "comments_accepted": 0,
+        "comments_duplicates": 0,
+    }
     assert processed == [(APP_A_KEY, "linas", "multi-mid-1")]
 
 
