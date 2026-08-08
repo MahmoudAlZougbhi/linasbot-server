@@ -94,7 +94,9 @@ def main() -> None:
     fields_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
     before = _request_json(f"{base_url}?{fields_query}", bearer=app_token, stage="read_before")
     subscriptions_raw = before.get("data")
-    subscriptions = subscriptions_raw if isinstance(subscriptions_raw, list) else []
+    subscriptions: list[dict[str, object]] = (
+        cast(list[dict[str, object]], subscriptions_raw) if isinstance(subscriptions_raw, list) else []
+    )
     by_object = {str(row.get("object") or "").strip().lower(): row for row in subscriptions if isinstance(row, dict)}
     page_before = _field_names(_mapping(by_object.get(PAGE_OBJECT)).get("fields"))
     ig_before = _field_names(_mapping(by_object.get(INSTAGRAM_OBJECT)).get("fields"))
@@ -121,7 +123,10 @@ def main() -> None:
         print(f"[meta-comment-webhooks] reconciled_{object_name}=true fields={','.join(sorted(target_fields))}")
 
     after = _request_json(f"{base_url}?{fields_query}", bearer=app_token, stage="read_after")
-    subscriptions_after = after.get("data")
+    subscriptions_after_raw = after.get("data")
+    subscriptions_after: list[dict[str, object]] = (
+        cast(list[dict[str, object]], subscriptions_after_raw) if isinstance(subscriptions_after_raw, list) else []
+    )
     by_object_after = {
         str(row.get("object") or "").strip().lower(): row for row in subscriptions_after if isinstance(row, dict)
     }
