@@ -62,7 +62,7 @@ const Settings = () => {
   const metaOAuthReady = metaApps.some(
     (item) => item.key === 'linas_first_party' && item.enabled && item.oauth_configured
   );
-  const canStartMetaConnect = metaRegistryEnabled && metaOAuthReady && metaConnectionBusy === '';
+  const canStartMetaConnect = metaOAuthReady && metaConnectionBusy === '';
 
   useEffect(() => {
     if (!isLinasTenant && activeTab === 'general') {
