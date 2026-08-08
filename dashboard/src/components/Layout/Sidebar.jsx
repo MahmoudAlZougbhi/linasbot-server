@@ -15,6 +15,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CurrencyDollarIcon,
+  PhotoIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../contexts/AuthContext";
 import { hasPermission } from "../../utils/permissions";
@@ -59,6 +60,13 @@ const navigationItems = [
     icon: BellIcon,
     badge: "Active",
     permissionKey: "smartMessaging",
+  },
+  {
+    name: "Create Post",
+    href: "/social-posts",
+    icon: PhotoIcon,
+    badge: "New",
+    permissionKey: "settings",
   },
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, permissionKey: "settings" },
   { name: "Token Wallet", href: "/wallet", icon: CurrencyDollarIcon, permissionKey: "settings" },

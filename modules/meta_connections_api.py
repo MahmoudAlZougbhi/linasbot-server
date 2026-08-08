@@ -20,6 +20,13 @@ from services.meta_app_registry import (
     get_meta_app_registry,
     meta_multi_app_registry_enabled,
 )
+from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
+from services.meta_comment_webhooks import (
+    credential_has_comment_scopes,
+    ensure_instagram_comment_app_webhook,
+    ensure_page_comment_webhook_subscription,
+    required_comment_scopes,
+)
 from services.meta_oauth import (
     MetaOAuthError,
     begin_meta_business_login,
@@ -101,6 +108,20 @@ async def list_meta_connections(request: Request) -> Any:
             public["token_status"] = "unavailable"
             public["expires_at"] = None
             public["granted_permissions"] = []
+        comment_setting = get_comment_reply_setting(
+            tenant_id=binding.tenant_id,
+            app_key=binding.app_key,
+            channel=binding.channel,
+            asset_id=binding.asset_id,
+        )
+        public["comment_replies"] = {
+            **comment_setting.public_dict(),
+            "scopes_granted": sorted(
+                required_comment_scopes(binding.channel) & set(public.get("granted_permissions") or [])
+            ),
+            "scopes_required": sorted(required_comment_scopes(binding.channel)),
+            "scopes_ready": credential_has_comment_scopes(binding, registry),
+        }
         connections.append(public)
 
     authorizations: dict[str, dict[str, Any]] = {}
@@ -350,3 +371,82 @@ async def rollback_meta_connection(binding_id: str, request: Request) -> Any:
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"success": True, "connection": restored.public_dict()}
+
+
+@app.patch("/api/meta/connections/{binding_id}/comment-replies")
+async def update_meta_comment_replies(
+    binding_id: str,
+    request: Request,
+    body: dict[str, Any] = Body(default={}),
+) -> Any:
+    session = require_permission(request, "settings")
+    binding = _tenant_binding(binding_id, session.tenant_id)
+    if binding.app_key != APP_A_KEY:
+        raise HTTPException(status_code=409, detail="Comment replies are only available for App A connections")
+    if binding.status != "active":
+        raise HTTPException(status_code=409, detail="Only active connections can change comment reply settings")
+
+    enabled = bool(body.get("enabled"))
+    instructions = str(body.get("instructions") or "").strip()
+    if enabled and not credential_has_comment_scopes(binding):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Missing Meta comment permissions. Re-authorize with Add / Manage Facebook & Instagram "
+                "after the new permissions are added to Login Configuration 1057282070324984."
+            ),
+        )
+
+    previous = get_comment_reply_setting(
+        tenant_id=binding.tenant_id,
+        app_key=binding.app_key,
+        channel=binding.channel,
+        asset_id=binding.asset_id,
+    )
+    updated_setting = set_comment_reply_setting(
+        tenant_id=binding.tenant_id,
+        app_key=binding.app_key,
+        channel=binding.channel,
+        asset_id=binding.asset_id,
+        enabled=enabled,
+        instructions=instructions,
+    )
+    registry = get_meta_app_registry()
+    registry._append_audit(
+        {
+            "event": "comment_replies_setting_changed",
+            "tenant_id": binding.tenant_id,
+            "binding_id": binding.binding_id,
+            "channel": binding.channel,
+            "asset_id_masked": binding.asset_id[-6:],
+            "enabled": enabled,
+            "previous_enabled": previous.enabled,
+            "actor_id": session.user_id or session.email,
+            "timestamp": time.time(),
+        }
+    )
+
+    if enabled:
+        try:
+            if binding.channel == "facebook":
+                await ensure_page_comment_webhook_subscription(binding, registry=registry)
+            else:
+                await ensure_instagram_comment_app_webhook(app_key=binding.app_key)
+        except MetaOAuthError as exc:
+            set_comment_reply_setting(
+                tenant_id=binding.tenant_id,
+                app_key=binding.app_key,
+                channel=binding.channel,
+                asset_id=binding.asset_id,
+                enabled=False,
+                instructions=instructions,
+            )
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    public = binding.public_dict()
+    public["comment_replies"] = {
+        **updated_setting.public_dict(),
+        "scopes_required": sorted(required_comment_scopes(binding.channel)),
+        "scopes_ready": credential_has_comment_scopes(binding, registry),
+    }
+    return {"success": True, "comment_replies": public["comment_replies"]}

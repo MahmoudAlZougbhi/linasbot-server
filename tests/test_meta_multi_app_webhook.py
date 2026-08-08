@@ -67,6 +67,7 @@ def configured_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Meta
     monkeypatch.setenv("META_APP_B_SECRET", "multi-app-b-secret")
     monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "verify-b")
     monkeypatch.setenv("META_APP_B_LOGIN_CONFIG_ID", "config-b")
+    monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "webhook-registry-credential-encryption-key-tests")
     registry = MetaAppRegistry(
         store_path=tmp_path / "registry.json",
         audit_path=tmp_path / "audit.jsonl",
@@ -169,9 +170,27 @@ async def test_receiving_app_and_asset_binding_route_exactly_once(
     await asyncio.sleep(0)
     await asyncio.sleep(0)
 
-    assert json.loads(first.body) == {"status": "received", "accepted": 1, "duplicates": 0}
-    assert json.loads(duplicate.body) == {"status": "received", "accepted": 0, "duplicates": 1}
-    assert json.loads(app_b.body) == {"status": "received", "accepted": 0, "duplicates": 0}
+    assert json.loads(first.body) == {
+        "status": "received",
+        "accepted": 1,
+        "duplicates": 0,
+        "comments_accepted": 0,
+        "comments_duplicates": 0,
+    }
+    assert json.loads(duplicate.body) == {
+        "status": "received",
+        "accepted": 0,
+        "duplicates": 1,
+        "comments_accepted": 0,
+        "comments_duplicates": 0,
+    }
+    assert json.loads(app_b.body) == {
+        "status": "received",
+        "accepted": 0,
+        "duplicates": 0,
+        "comments_accepted": 0,
+        "comments_duplicates": 0,
+    }
     assert processed == [(APP_A_KEY, "linas", "multi-mid-1")]
 
 

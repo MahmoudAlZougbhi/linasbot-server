@@ -603,6 +603,14 @@ interface MetaConnectionStatus {
   authorized_meta_user_id_hash?: string;
   superseded_by_binding_id?: string;
   asset_key?: string;
+  comment_replies?: {
+    enabled: boolean;
+    instructions?: string;
+    scopes_ready?: boolean;
+    scopes_required?: string[];
+    scopes_granted?: string[];
+    updated_at?: number;
+  };
 }
 
 interface MetaAuthorizationGroup {

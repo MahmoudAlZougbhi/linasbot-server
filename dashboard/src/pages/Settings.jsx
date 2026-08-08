@@ -390,8 +390,54 @@ const Settings = () => {
     return new Date(unixSeconds * 1000).toLocaleString();
   };
 
+  /**
+   * @param {MetaConnectionStatus} connection
+   * @param {boolean} enabled
+   * @param {string} [instructions]
+   */
+  const handleUpdateCommentReplies = async (connection, enabled, instructions = '') => {
+    setMetaConnectionBusy(`comment-${connection.binding_id}`);
+    try {
+      const res = await authFetch(`/api/meta/connections/${connection.binding_id}/comment-replies`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled, instructions }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || data.error || 'Comment reply settings could not be saved');
+      }
+      setMetaConnections((rows) => rows.map((row) => (
+        row.binding_id === connection.binding_id
+          ? { ...row, comment_replies: data.comment_replies }
+          : row
+      )));
+      setMetaAuthorizations((groups) => groups.map((group) => ({
+        ...group,
+        assets: (group.assets || []).map((row) => (
+          row.binding_id === connection.binding_id
+            ? { ...row, comment_replies: data.comment_replies }
+            : row
+        )),
+      })));
+      toast.success(enabled ? 'AI comment replies enabled' : 'AI comment replies disabled');
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Comment reply settings could not be saved');
+    } finally {
+      setMetaConnectionBusy('');
+    }
+  };
+
   /** @param {MetaConnectionStatus} connection */
-  const renderMetaAssetRow = (connection) => (
+  const renderMetaAssetRow = (connection) => {
+    /** @type {NonNullable<MetaConnectionStatus['comment_replies']>} */
+    const commentReplies = connection.comment_replies || { enabled: false, instructions: '' };
+    const commentSwitchLabel = connection.channel === 'facebook'
+      ? 'Enable AI replies to Facebook comments'
+      : 'Enable AI replies to Instagram comments';
+    const commentBusy = metaConnectionBusy === `comment-${connection.binding_id}`;
+    const canConfigureComments = connection.app_key === 'linas_first_party' && connection.status === 'active';
+
+    return (
     <div key={connection.binding_id} className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
@@ -450,8 +496,58 @@ const Settings = () => {
           ) : null}
         </div>
       </div>
+      {canConfigureComments ? (
+        <div className="mt-3 border-t border-slate-100 pt-3 space-y-3">
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm text-slate-700">{commentSwitchLabel}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(commentReplies.enabled)}
+              disabled={commentBusy || metaConnectionBusy !== ''}
+              onClick={() => handleUpdateCommentReplies(
+                connection,
+                !commentReplies.enabled,
+                commentReplies.instructions || '',
+              )}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition ${
+                commentReplies.enabled ? 'bg-primary-600' : 'bg-slate-200'
+              } ${commentBusy ? 'opacity-60' : ''}`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                  commentReplies.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                } mt-0.5`}
+              />
+            </button>
+          </label>
+          {!commentReplies.scopes_ready ? (
+            <p className="text-xs text-amber-700">
+              Re-authorize with Add / Manage Facebook &amp; Instagram after comment permissions are added to Login
+              Configuration 1057282070324984.
+            </p>
+          ) : null}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Comment reply instructions (optional)</label>
+            <textarea
+              rows={2}
+              className="input-field w-full text-sm"
+              placeholder="Short guidance for public comment replies"
+              defaultValue={commentReplies.instructions || ''}
+              disabled={commentBusy || metaConnectionBusy !== ''}
+              onBlur={(e) => {
+                const next = e.target.value.trim();
+                if (next !== (commentReplies.instructions || '')) {
+                  handleUpdateCommentReplies(connection, Boolean(commentReplies.enabled), next);
+                }
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
-  );
+    );
+  };
 
   /** @param {import('react').FormEvent<HTMLFormElement>} e */
   const handleChangePassword = async (e) => {
