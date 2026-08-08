@@ -38,6 +38,7 @@ describe("public SaaS landing routes", () => {
       PUBLIC_PATHS.login
     );
     expect(screen.queryByText("login-page")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Linas, the friendly AI assistant character/i })).toBeInTheDocument();
   });
 
   it("keeps privacy/terms/data-deletion footer targets", () => {

@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import PublicSiteHeader from '../../components/landing/PublicSiteHeader';
 import PublicSiteFooter from '../../components/landing/PublicSiteFooter';
+import LinasBotMascot from '../../components/landing/LinasBotMascot';
 import { PUBLIC_PATHS, PUBLIC_SITE } from '../../constants/publicSite';
 
 const steps = [
@@ -364,6 +365,7 @@ const Landing = () => {
       </main>
 
       <PublicSiteFooter />
+      <LinasBotMascot />
     </div>
   );
 };

@@ -266,3 +266,28 @@
   width: 300px;
   height: 300px;
 }
+
+@keyframes linas-arm-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  35% {
+    transform: rotate(16deg);
+  }
+  70% {
+    transform: rotate(-8deg);
+  }
+}
+
+.linas-arm-wave {
+  transform-box: fill-box;
+  transform-origin: 18px 56px;
+  animation: linas-arm-wave 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .linas-arm-wave {
+    animation: none;
+  }
+}
