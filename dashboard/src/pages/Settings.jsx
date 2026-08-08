@@ -880,7 +880,7 @@ const Settings = () => {
                             {authorization.authorization_title
                               || (authorization.app_key === 'linas_first_party'
                                 ? 'Meta authorization — App A'
-                                : 'Connected through Linas Clinic AI Social Bot')}
+                                : 'Connected through Linas AI')}
                           </div>
                           <div className="text-xs text-slate-500">
                             {authorization.app_label || 'Lina Meta app'}

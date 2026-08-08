@@ -64,7 +64,7 @@ def _active_conflict(binding: MetaAssetBinding) -> MetaAssetBinding | None:
 def _authorization_title(app_key: str | None) -> str:
     if app_key == APP_A_KEY:
         return "Meta authorization — App A"
-    return "Connected through Linas Clinic AI Social Bot"
+    return "Connected through Linas AI"
 
 
 @app.get("/api/meta/connections")
