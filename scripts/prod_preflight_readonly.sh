@@ -320,4 +320,8 @@ if [ -f scripts/prod_verify_webhook_challenge.sh ]; then
   echo "[preflight] starting webhook challenge verify"
   bash scripts/prod_verify_webhook_challenge.sh
 fi
+if [ -f scripts/audit_meta_bindings_readonly.py ]; then
+  echo "[preflight] starting meta binding audit"
+  "$PYTHON_BIN" scripts/audit_meta_bindings_readonly.py || true
+fi
 echo "[preflight] COMPLETE_OK"

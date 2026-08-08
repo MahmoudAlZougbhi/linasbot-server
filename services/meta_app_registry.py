@@ -1,9 +1,9 @@
 """Encrypted registry for Meta apps, tenant assets, OAuth state, and rollback.
 
 The registry intentionally stores application secrets in the process environment and
-tenant/Page tokens only as AES-GCM ciphertext.  Active bindings are exclusive across
-both tenant/channel and channel/asset indexes, so two Meta apps can never answer the
-same Page or Instagram account at the same time.
+tenant/Page tokens only as AES-GCM ciphertext. Active bindings are exclusive per
+channel/asset_id globally, so two Meta apps can never answer the same Page or
+Instagram account at the same time. A workspace may own multiple assets per channel.
 """
 
 from __future__ import annotations
@@ -117,6 +117,25 @@ def normalize_meta_tenant_id(value: str) -> str:
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", tenant):
         raise MetaBindingConflictError("tenant identifier is invalid")
     return tenant
+
+
+def binding_asset_key(tenant_id: str, app_key: str, channel: str, asset_id: str) -> str:
+    tenant = normalize_meta_tenant_id(tenant_id)
+    return f"{tenant}:{app_key}:{channel}:{str(asset_id or '').strip()}"
+
+
+def authorized_meta_user_id_hash(meta_user_id: str) -> str:
+    raw = str(meta_user_id or "").strip()
+    if not raw:
+        return ""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def mask_asset_id(asset_id: str) -> str:
+    raw = str(asset_id or "").strip()
+    if len(raw) <= 6:
+        return "***"
+    return f"{raw[:3]}…{raw[-3:]}"
 
 
 @dataclass(frozen=True)
@@ -268,10 +287,22 @@ class MetaAssetBinding:
     created_at: float
     updated_at: float
     previous_binding_id: str = ""
+    page_name: str = ""
+    instagram_username: str = ""
+    authorized_meta_user_id_hash: str = ""
+    superseded_by_binding_id: str = ""
 
     @property
     def active(self) -> bool:
         return self.status == "active"
+
+    @property
+    def asset_key(self) -> str:
+        return binding_asset_key(self.tenant_id, self.app_key, self.channel, self.asset_id)
+
+    @property
+    def visible_in_dashboard(self) -> bool:
+        return not self.superseded_by_binding_id
 
     def public_dict(self) -> dict[str, Any]:
         return {
@@ -279,14 +310,24 @@ class MetaAssetBinding:
             "tenant_id": self.tenant_id,
             "channel": self.channel,
             "asset_id": self.asset_id,
+            "asset_id_masked": mask_asset_id(self.asset_id),
             "page_id": self.page_id,
+            "page_id_masked": mask_asset_id(self.page_id),
             "instagram_account_id": self.instagram_account_id,
+            "instagram_account_id_masked": mask_asset_id(self.instagram_account_id),
+            "page_name": self.page_name,
+            "instagram_username": self.instagram_username,
             "app_key": self.app_key,
+            "app_label": "Lina Meta app" if self.app_key == APP_A_KEY else "Legacy provider",
             "status": self.status,
             "generation": self.generation,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "connected_at": self.created_at,
             "previous_binding_id": self.previous_binding_id,
+            "authorized_meta_user_id_hash": self.authorized_meta_user_id_hash,
+            "superseded_by_binding_id": self.superseded_by_binding_id,
+            "asset_key": self.asset_key,
         }
 
 
@@ -413,15 +454,259 @@ class MetaAppRegistry:
             created_at=float(raw.get("created_at") or 0),
             updated_at=float(raw.get("updated_at") or 0),
             previous_binding_id=str(raw.get("previous_binding_id") or ""),
+            page_name=str(raw.get("page_name") or ""),
+            instagram_username=str(raw.get("instagram_username") or ""),
+            authorized_meta_user_id_hash=str(raw.get("authorized_meta_user_id_hash") or ""),
+            superseded_by_binding_id=str(raw.get("superseded_by_binding_id") or ""),
         )
 
-    def list_bindings(self, *, include_inactive: bool = True) -> list[MetaAssetBinding]:
+    def list_bindings(self, *, include_inactive: bool = True, include_superseded: bool = True) -> list[MetaAssetBinding]:
         with self._locked():
             state = self._read_unlocked()
         bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
+        if not include_superseded:
+            bindings = [binding for binding in bindings if binding.visible_in_dashboard]
         if not include_inactive:
             bindings = [binding for binding in bindings if binding.active]
         return sorted(bindings, key=lambda item: (item.tenant_id, item.channel, item.asset_id, item.created_at))
+
+    def find_bindings_for_asset_key(
+        self,
+        *,
+        tenant_id: str,
+        app_key: str,
+        channel: MetaChannel,
+        asset_id: str,
+        include_superseded: bool = True,
+    ) -> list[MetaAssetBinding]:
+        key = binding_asset_key(tenant_id, app_key, channel, asset_id)
+        matches = [
+            binding
+            for binding in self.list_bindings(include_superseded=include_superseded)
+            if binding.asset_key == key
+        ]
+        return sorted(matches, key=lambda item: item.updated_at, reverse=True)
+
+    def _write_credential_unlocked(
+        self,
+        state: dict[str, Any],
+        *,
+        binding_id: str,
+        credential_id: str,
+        tenant: str,
+        channel: MetaChannel,
+        asset: str,
+        app_key: str,
+        credential: MetaBindingCredential,
+        now: float,
+    ) -> str:
+        resolved_id = credential_id or uuid.uuid4().hex
+        aad = f"{binding_id}:{resolved_id}:{tenant}:{channel}:{asset}:{app_key}"
+        state["credentials"][resolved_id] = {
+            "binding_id": binding_id,
+            "aad": aad,
+            "sealed": self._cipher.seal(credential.as_secret_dict(), aad=aad),
+            "created_at": now,
+        }
+        return resolved_id
+
+    def authorize_oauth_asset(
+        self,
+        *,
+        tenant_id: str,
+        channel: MetaChannel,
+        asset_id: str,
+        page_id: str,
+        instagram_account_id: str,
+        app_key: str,
+        credential: MetaBindingCredential,
+        actor_id: str,
+        page_name: str = "",
+        instagram_username: str = "",
+        status: BindingStatus = "active",
+    ) -> MetaAssetBinding:
+        """Upsert one workspace asset binding without disconnecting unrelated assets."""
+
+        tenant = normalize_meta_tenant_id(tenant_id)
+        asset = asset_id.strip()
+        if not asset:
+            raise MetaBindingConflictError("asset is required")
+        auth_hash = authorized_meta_user_id_hash(credential.authorized_meta_user_id)
+        now = time.time()
+        with self._locked():
+            state = self._read_unlocked()
+            all_bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
+            for other in all_bindings:
+                if (
+                    other.active
+                    and other.channel == channel
+                    and other.asset_id == asset
+                    and (other.tenant_id != tenant or other.app_key != app_key)
+                ):
+                    raise MetaBindingConflictError("asset is already active for another workspace")
+
+            same_key = [
+                binding
+                for binding in all_bindings
+                if binding.asset_key == binding_asset_key(tenant, app_key, channel, asset)
+                and not binding.superseded_by_binding_id
+            ]
+            canonical = (
+                max(
+                    same_key,
+                    key=lambda item: (
+                        {"active": 3, "disconnected": 2, "inactive": 1, "testing": 0}.get(item.status, 0),
+                        item.updated_at,
+                    ),
+                )
+                if same_key
+                else None
+            )
+
+            if canonical is not None:
+                binding_id = canonical.binding_id
+                generation = canonical.generation + 1
+                created_at = canonical.created_at
+                credential_id = self._write_credential_unlocked(
+                    state,
+                    binding_id=binding_id,
+                    credential_id=canonical.credential_id,
+                    tenant=tenant,
+                    channel=channel,
+                    asset=asset,
+                    app_key=app_key,
+                    credential=credential,
+                    now=now,
+                )
+                updated = MetaAssetBinding(
+                    binding_id=binding_id,
+                    tenant_id=tenant,
+                    channel=channel,
+                    asset_id=asset,
+                    page_id=page_id.strip(),
+                    instagram_account_id=instagram_account_id.strip(),
+                    app_key=app_key,
+                    credential_id=credential_id,
+                    status=status,
+                    generation=generation,
+                    created_at=created_at,
+                    updated_at=now,
+                    previous_binding_id=canonical.previous_binding_id,
+                    page_name=page_name.strip(),
+                    instagram_username=instagram_username.strip(),
+                    authorized_meta_user_id_hash=auth_hash,
+                    superseded_by_binding_id="",
+                )
+                state["bindings"][binding_id] = asdict(updated)
+                for duplicate in same_key:
+                    if duplicate.binding_id == binding_id:
+                        continue
+                    raw = dict(state["bindings"][duplicate.binding_id])
+                    raw["superseded_by_binding_id"] = binding_id
+                    raw["updated_at"] = now
+                    state["bindings"][duplicate.binding_id] = raw
+                self._write_unlocked(state)
+                self._append_audit(
+                    {
+                        "event": "binding_reauthorized",
+                        "actor_id": actor_id,
+                        "tenant_id": tenant,
+                        "channel": channel,
+                        "asset_id": asset,
+                        "app_key": app_key,
+                        "binding_id": binding_id,
+                    }
+                )
+                return updated
+
+            binding_id = uuid.uuid4().hex
+            credential_id = self._write_credential_unlocked(
+                state,
+                binding_id=binding_id,
+                credential_id="",
+                tenant=tenant,
+                channel=channel,
+                asset=asset,
+                app_key=app_key,
+                credential=credential,
+                now=now,
+            )
+            binding = MetaAssetBinding(
+                binding_id=binding_id,
+                tenant_id=tenant,
+                channel=channel,
+                asset_id=asset,
+                page_id=page_id.strip(),
+                instagram_account_id=instagram_account_id.strip(),
+                app_key=app_key,
+                credential_id=credential_id,
+                status=status,
+                generation=1,
+                created_at=now,
+                updated_at=now,
+                page_name=page_name.strip(),
+                instagram_username=instagram_username.strip(),
+                authorized_meta_user_id_hash=auth_hash,
+            )
+            state["bindings"][binding_id] = asdict(binding)
+            self._write_unlocked(state)
+            self._append_audit(
+                {
+                    "event": "binding_authorized",
+                    "actor_id": actor_id,
+                    "tenant_id": tenant,
+                    "channel": channel,
+                    "asset_id": asset,
+                    "app_key": app_key,
+                    "binding_id": binding_id,
+                }
+            )
+            return binding
+
+    def archive_superseded_duplicate_bindings(self, *, actor_id: str = "binding-archive") -> int:
+        """Mark older duplicate rows superseded when a newer active row exists for the same asset key."""
+
+        archived = 0
+        with self._locked():
+            state = self._read_unlocked()
+            bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
+            groups: dict[str, list[MetaAssetBinding]] = {}
+            for binding in bindings:
+                groups.setdefault(binding.asset_key, []).append(binding)
+            now = time.time()
+            for group in groups.values():
+                if len(group) < 2:
+                    continue
+                visible = [item for item in group if not item.superseded_by_binding_id]
+                if len(visible) < 2:
+                    continue
+                active_rows = [item for item in visible if item.active]
+                keeper = active_rows[0] if active_rows else max(visible, key=lambda item: item.updated_at)
+                for duplicate in visible:
+                    if duplicate.binding_id == keeper.binding_id:
+                        continue
+                    raw = dict(state["bindings"][duplicate.binding_id])
+                    if raw.get("superseded_by_binding_id"):
+                        continue
+                    raw["superseded_by_binding_id"] = keeper.binding_id
+                    raw["updated_at"] = now
+                    state["bindings"][duplicate.binding_id] = raw
+                    archived += 1
+            if archived:
+                self._write_unlocked(state)
+                self._append_audit(
+                    {
+                        "event": "binding_duplicates_archived",
+                        "actor_id": actor_id,
+                        "tenant_id": "",
+                        "channel": "",
+                        "asset_id": "",
+                        "app_key": "",
+                        "binding_id": "",
+                        "result": str(archived),
+                    }
+                )
+        return archived
 
     def _validate_activation_unlocked(
         self,
@@ -445,10 +730,8 @@ class MetaAppRegistry:
             other = self._binding_from_dict(value)
             if other.binding_id in {current.binding_id, replacing_binding_id} or not other.active:
                 continue
-            if (other.tenant_id == current.tenant_id and other.channel == current.channel) or (
-                other.channel == current.channel and other.asset_id == current.asset_id
-            ):
-                raise MetaBindingConflictError("another active binding owns this tenant/channel or asset")
+            if other.channel == current.channel and other.asset_id == current.asset_id:
+                raise MetaBindingConflictError("another active binding owns this asset")
 
     def assert_binding_can_activate(
         self,
@@ -525,11 +808,7 @@ class MetaAppRegistry:
             active_candidates = [
                 existing
                 for existing in all_bindings
-                if existing.active
-                and (
-                    (existing.tenant_id == tenant and existing.channel == channel)
-                    or (existing.channel == channel and existing.asset_id == asset)
-                )
+                if existing.active and existing.channel == channel and existing.asset_id == asset
             ]
             if len({candidate.binding_id for candidate in active_candidates}) > 1:
                 raise MetaBindingConflictError("active binding indexes are inconsistent")
@@ -548,7 +827,7 @@ class MetaAppRegistry:
             if identical and expected_generation is not None and identical.generation != expected_generation:
                 raise MetaBindingConflictError("binding generation changed")
             if conflicts and not replace_existing and identical is None:
-                raise MetaBindingConflictError("an active binding already owns this tenant/channel or asset")
+                raise MetaBindingConflictError("an active binding already owns this asset")
 
             previous_binding_id = (
                 identical.binding_id if identical else (active_candidates[0].binding_id if active_candidates else "")
@@ -677,15 +956,13 @@ class MetaAppRegistry:
                 other = self._binding_from_dict(value)
                 if not other.active:
                     continue
-                if (other.tenant_id == current.tenant_id and other.channel == current.channel) or (
-                    other.channel == current.channel and other.asset_id == current.asset_id
-                ):
+                if other.channel == current.channel and other.asset_id == current.asset_id:
                     conflicts.append(other)
             conflict_ids = {conflict.binding_id for conflict in conflicts}
             if len(conflict_ids) > 1:
                 raise MetaBindingConflictError("active binding indexes are inconsistent")
             if conflicts and not replace_existing:
-                raise MetaBindingConflictError("another active binding owns this tenant/channel or asset")
+                raise MetaBindingConflictError("another active binding owns this asset")
             replacement_id = conflicts[0].binding_id if conflicts else ""
             self._validate_activation_unlocked(
                 state,
@@ -812,8 +1089,10 @@ class MetaAppRegistry:
                 other = self._binding_from_dict(value)
                 if not other.active:
                     continue
-                if (other.tenant_id == previous.tenant_id and other.channel == previous.channel) or (
-                    other.channel == previous.channel and other.asset_id == previous.asset_id
+                if (
+                    other.channel == previous.channel
+                    and other.asset_id == previous.asset_id
+                    and other.binding_id != current.binding_id
                 ):
                     changed = dict(state["bindings"][other.binding_id])
                     changed["status"] = "inactive"

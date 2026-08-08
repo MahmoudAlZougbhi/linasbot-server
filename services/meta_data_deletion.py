@@ -261,12 +261,13 @@ def read_deletion_status(confirmation_code: str) -> dict[str, Any] | None:
 
 def _candidate_social_user_ids(meta_user_id: str, app_key: str) -> tuple[str, ...]:
     from services.meta_app_registry import APP_A_KEY, get_meta_app_registry
+    from services.social_user_id import compose_social_user_id
 
     candidates: set[str] = set()
     if app_key == APP_A_KEY:
         candidates.update({f"facebook:{meta_user_id}", f"instagram:{meta_user_id}"})
     try:
-        bindings = get_meta_app_registry().list_bindings()
+        bindings = get_meta_app_registry().list_bindings(include_superseded=False)
     except Exception:
         if app_key != APP_A_KEY:
             raise RuntimeError("Meta tenant registry is unavailable") from None
@@ -274,9 +275,18 @@ def _candidate_social_user_ids(meta_user_id: str, app_key: str) -> tuple[str, ..
     for binding in bindings:
         if binding.app_key != app_key:
             continue
-        candidates.add(f"{binding.tenant_id}:{binding.channel}:{meta_user_id}")
+        candidates.add(
+            compose_social_user_id(
+                tenant_id=binding.tenant_id,
+                channel=binding.channel,
+                asset_id=binding.asset_id,
+                sender_id=meta_user_id,
+                multi_asset_channel=True,
+            )
+        )
         if binding.tenant_id == "linas":
             candidates.add(f"{binding.channel}:{meta_user_id}")
+            candidates.add(f"{binding.tenant_id}:{binding.channel}:{meta_user_id}")
     return tuple(sorted(candidates))
 
 

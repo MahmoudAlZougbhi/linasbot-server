@@ -50,12 +50,10 @@ def _subscription_identity(binding: MetaAssetBinding) -> tuple[str, str]:
 def _active_conflict(binding: MetaAssetBinding) -> MetaAssetBinding | None:
     matches = [
         item
-        for item in get_meta_app_registry().list_bindings(include_inactive=False)
+        for item in get_meta_app_registry().list_bindings(include_inactive=False, include_superseded=False)
         if item.binding_id != binding.binding_id
-        and (
-            (item.tenant_id == binding.tenant_id and item.channel == binding.channel)
-            or (item.channel == binding.channel and item.asset_id == binding.asset_id)
-        )
+        and item.channel == binding.channel
+        and item.asset_id == binding.asset_id
     ]
     if len(matches) > 1:
         raise MetaRegistryError("Active Meta binding indexes are inconsistent")
@@ -73,8 +71,9 @@ async def list_meta_connections(request: Request) -> Any:
             "connections": [],
         }
     registry = get_meta_app_registry()
+    registry.archive_superseded_duplicate_bindings(actor_id=session.user_id or session.email)
     connections: list[dict[str, Any]] = []
-    for binding in registry.list_bindings():
+    for binding in registry.list_bindings(include_superseded=False):
         if binding.tenant_id != session.tenant_id:
             continue
         public = binding.public_dict()
@@ -85,16 +84,37 @@ async def list_meta_connections(request: Request) -> Any:
             )
             public["expires_at"] = credential.expires_at
             public["granted_permissions"] = sorted(credential.scopes)
+            if not public.get("authorized_meta_user_id_hash"):
+                from services.meta_app_registry import authorized_meta_user_id_hash
+
+                public["authorized_meta_user_id_hash"] = authorized_meta_user_id_hash(
+                    credential.authorized_meta_user_id
+                )
         except MetaRegistryError:
             public["token_status"] = "unavailable"
             public["expires_at"] = None
             public["granted_permissions"] = []
         connections.append(public)
+
+    authorizations: dict[str, dict[str, Any]] = {}
+    for connection in connections:
+        auth_key = str(connection.get("authorized_meta_user_id_hash") or "unknown")
+        bucket = authorizations.setdefault(
+            auth_key,
+            {
+                "authorized_meta_user_id_hash": auth_key,
+                "app_key": connection.get("app_key"),
+                "app_label": connection.get("app_label"),
+                "assets": [],
+            },
+        )
+        bucket["assets"].append(connection)
     return {
         "success": True,
         "registry_enabled": True,
         "apps": [config.public_dict() for config in get_meta_app_configs().values()],
         "connections": connections,
+        "authorizations": list(authorizations.values()),
     }
 
 
@@ -136,6 +156,7 @@ async def meta_oauth_callback(
                 "meta_connection": "connected",
                 "channel": result.binding.channel,
                 "status": result.binding.status,
+                "connected_count": str(len(result.bindings)),
             }
         )
     except (MetaOAuthError, MetaRegistryError):
