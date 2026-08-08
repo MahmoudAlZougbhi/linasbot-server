@@ -837,6 +837,18 @@ class MetaAppRegistry:
                 raw["status"] = "inactive"
                 raw["updated_at"] = now
                 state["bindings"][existing.binding_id] = raw
+            if status == "active" and replace_existing:
+                for existing in all_bindings:
+                    if (
+                        existing.active
+                        and existing.channel == channel
+                        and existing.asset_id == asset
+                        and existing.binding_id not in {item.binding_id for item in conflicts}
+                    ):
+                        raw = dict(state["bindings"][existing.binding_id])
+                        raw["status"] = "inactive"
+                        raw["updated_at"] = now
+                        state["bindings"][existing.binding_id] = raw
             if status == "testing":
                 for existing in all_bindings:
                     if (

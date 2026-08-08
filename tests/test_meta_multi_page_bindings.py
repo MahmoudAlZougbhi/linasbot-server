@@ -180,7 +180,11 @@ def test_archive_hides_legacy_duplicate_for_same_asset(registry: MetaAppRegistry
     assert raw_old.superseded_by_binding_id == new.binding_id
 
 
-def test_compose_user_id_scopes_by_asset_only_when_multiple_pages(registry: MetaAppRegistry) -> None:
+def test_compose_user_id_scopes_by_asset_only_when_multiple_pages(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("services.social_user_id.get_meta_app_registry", lambda: registry)
     page_a = "111222333444"
     page_b = "555666777888"
     registry.authorize_oauth_asset(
