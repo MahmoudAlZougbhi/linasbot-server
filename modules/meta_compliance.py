@@ -390,15 +390,12 @@ Meta or contact <a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a> if you ne
     message = status_messages.get(status_value, status_messages["pending"])
     timeline = ""
     if requested_at:
-        timeline += f"<p class=\"meta\">Request received: {html.escape(requested_at)}</p>"
+        timeline += f'<p class="meta">Request received: {html.escape(requested_at)}</p>'
     if completed_at:
-        timeline += f"<p class=\"meta\">Last updated: {html.escape(completed_at)}</p>"
+        timeline += f'<p class="meta">Last updated: {html.escape(completed_at)}</p>'
     support = ""
     if status_value == "failed":
-        support = (
-            f"<p>If this problem continues, email "
-            f"<a href=\"mailto:{_CONTACT_EMAIL}\">{_CONTACT_EMAIL}</a>.</p>"
-        )
+        support = f'<p>If this problem continues, email <a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>.</p>'
     body = f"""
 <h1>Deletion Request Status</h1>
 <p class="meta">Confirmation code: <code>{safe_code}</code></p>
