@@ -421,6 +421,7 @@ def test_tenant_namespaced_deletion_does_not_touch_unrelated_user(
     tmp_path: Path,
 ) -> None:
     import config
+    import services.meta_app_registry as registry_service
     import services.meta_data_deletion as deletion_service
     import utils.utils
 
@@ -448,7 +449,7 @@ def test_tenant_namespaced_deletion_does_not_touch_unrelated_user(
             )
         ]
     )
-    monkeypatch.setattr(deletion_service, "get_meta_app_registry", lambda: fake_registry)
+    monkeypatch.setattr(registry_service, "get_meta_app_registry", lambda: fake_registry)
     monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
     monkeypatch.setattr(deletion_service, "_STATUS_DIR", tmp_path / "status")
     monkeypatch.setattr(deletion_service, "_INDEX_DIR", tmp_path / "index")
