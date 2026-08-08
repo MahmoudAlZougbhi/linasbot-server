@@ -56,6 +56,10 @@ const CmPricesPage = () => {
   const [discountRules, setDiscountRules] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [resources, setResources] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [dimensions, setDimensions] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
+  const [legacyItems, setLegacyItems] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
+  const [priceBooks, setPriceBooks] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
+  const [ruleSets, setRuleSets] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
+  const [packageRules, setPackageRules] = useState(/** @type {Array<Record<string, unknown>>} */ ([]));
   const [validation, setValidation] = useState(
     /** @type {{ ok?: boolean; error_count?: number; errors?: Array<Record<string, unknown>> } | null} */ (null)
   );
@@ -80,11 +84,28 @@ const CmPricesPage = () => {
       discount_rules: discountRules,
       resources,
       dimension_definitions: dimensions,
-      items: [],
+      // Preserve redistributed / advanced fields — never wipe on discount edits.
+      items: legacyItems,
+      price_books: priceBooks,
+      rule_sets: ruleSets,
+      package_rules: packageRules,
       policy_text: policyText || "",
       notes: notes || null,
     }),
-    [categories, catalog, priceEntries, discountRules, resources, dimensions, policyText, notes]
+    [
+      categories,
+      catalog,
+      priceEntries,
+      discountRules,
+      resources,
+      dimensions,
+      legacyItems,
+      priceBooks,
+      ruleSets,
+      packageRules,
+      policyText,
+      notes,
+    ]
   );
 
   const load = useCallback(async () => {
@@ -122,6 +143,22 @@ const CmPricesPage = () => {
       setDimensions(
         Array.isArray(section.dimension_definitions)
           ? /** @type {Array<Record<string, unknown>>} */ (section.dimension_definitions)
+          : []
+      );
+      setLegacyItems(
+        Array.isArray(section.items) ? /** @type {Array<Record<string, unknown>>} */ (section.items) : []
+      );
+      setPriceBooks(
+        Array.isArray(section.price_books)
+          ? /** @type {Array<Record<string, unknown>>} */ (section.price_books)
+          : []
+      );
+      setRuleSets(
+        Array.isArray(section.rule_sets) ? /** @type {Array<Record<string, unknown>>} */ (section.rule_sets) : []
+      );
+      setPackageRules(
+        Array.isArray(section.package_rules)
+          ? /** @type {Array<Record<string, unknown>>} */ (section.package_rules)
           : []
       );
       const firstCatalog = Array.isArray(section.catalog) ? section.catalog[0] : null;
@@ -167,8 +204,20 @@ const CmPricesPage = () => {
   const handleValidate = async () => {
     const result = await validateCmDraft({ section: "prices", payload });
     setValidation(result);
-    if (result?.ok) toast.success("Validation passed");
-    else toast.error(`${result?.error_count || 0} validation error(s)`);
+    if (result?.ok) {
+      toast.success("Validation passed");
+      return;
+    }
+    const first = Array.isArray(result?.errors) ? result.errors[0] : null;
+    const detail =
+      first && typeof first === "object"
+        ? String(/** @type {{ message?: unknown }} */ (first).message || "")
+        : "";
+    toast.error(
+      detail
+        ? `Validation failed: ${detail}`
+        : `${result?.error_count || 0} validation error(s) — open Validation tab for details`
+    );
   };
 
   const handlePreviewQuote = async () => {

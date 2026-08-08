@@ -64,31 +64,51 @@ def validate_cm(
         if payload is not None:
             drafts[name] = payload
 
-    for name, section_payload in drafts.items():
+    # Section-scoped validate (e.g. Prices page) should not fail because another
+    # section still has notes issues. Full-draft validate keeps all sections.
+    notes_targets = [section.strip().replace("-", "_")] if section else list(drafts.keys())
+    for name in notes_targets:
+        section_payload = drafts.get(name) or {}
+        if not isinstance(section_payload, dict):
+            continue
         for issue in _notes_failures(name, section_payload):
             (errors if issue["level"] == "error" else warnings).append(issue)
 
-    conflict_failures = validate_restricted_conflicts(
-        restricted=drafts.get("restricted") or {},
-        services=drafts.get("services"),
-        prices=drafts.get("prices"),
-        faq=drafts.get("faq"),
-        knowledge=drafts.get("knowledge"),
-        handoff=drafts.get("handoff"),
-    )
-    for failure in conflict_failures:
-        item = _conflict_dict(failure, section="restricted")
-        if failure.severity == "warning":
-            warnings.append(item)
-        else:
-            errors.append(item)
+    run_restricted = section is None or section.strip().replace("-", "_") in {
+        "restricted",
+        "services",
+        "prices",
+        "faq",
+        "knowledge",
+        "handoff",
+    }
+    if run_restricted:
+        conflict_failures = validate_restricted_conflicts(
+            restricted=drafts.get("restricted") or {},
+            services=drafts.get("services"),
+            prices=drafts.get("prices"),
+            faq=drafts.get("faq"),
+            knowledge=drafts.get("knowledge"),
+            handoff=drafts.get("handoff"),
+        )
+        for failure in conflict_failures:
+            item = _conflict_dict(failure, section="restricted")
+            if failure.severity == "warning":
+                warnings.append(item)
+            else:
+                errors.append(item)
 
     prices_payload = drafts.get("prices") or {}
-    if isinstance(prices_payload, dict) and (
-        prices_payload.get("catalog")
-        or prices_payload.get("price_entries")
-        or prices_payload.get("discount_rules")
-        or prices_payload.get("categories")
+    run_pricing = section is None or section.strip().replace("-", "_") == "prices"
+    if (
+        run_pricing
+        and isinstance(prices_payload, dict)
+        and (
+            prices_payload.get("catalog")
+            or prices_payload.get("price_entries")
+            or prices_payload.get("discount_rules")
+            or prices_payload.get("categories")
+        )
     ):
         from services.cm.pricing.validation import validate_pricing_section
 

@@ -2,10 +2,47 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
+
+from pydantic import BaseModel, ValidationError
 
 from services.cm.conflict_validation import ValidationFailure
 from services.cm.pricing.schemas import CatalogItem, DiscountRule, PriceEntry
+
+TModel = TypeVar("TModel", bound=BaseModel)
+
+
+def _parse_pricing_rows(
+    rows: list[dict[str, Any]] | list[Any],
+    model: type[TModel],
+    *,
+    path_prefix: str,
+    code: str,
+) -> tuple[list[TModel], list[ValidationFailure]]:
+    """Parse pricing rows into models; invalid rows become failures instead of 500s."""
+
+    parsed: list[TModel] = []
+    failures: list[ValidationFailure] = []
+    for index, row in enumerate(rows):
+        if isinstance(row, model):
+            parsed.append(row)
+            continue
+        row_id = ""
+        if isinstance(row, dict):
+            row_id = str(row.get("id") or "")
+        label = row_id or str(index)
+        try:
+            parsed.append(model.model_validate(row))
+        except ValidationError as exc:
+            failures.append(
+                ValidationFailure(
+                    code=code,
+                    message=f"Invalid {model.__name__} at {path_prefix}[{label}]: {exc.errors()[0]['msg']}",
+                    path=f"{path_prefix}[{label}]",
+                    details={"index": str(index), "row_id": row_id},
+                )
+            )
+    return parsed, failures
 
 
 def validate_pricing_section(
@@ -17,14 +54,28 @@ def validate_pricing_section(
 ) -> list[ValidationFailure]:
     failures: list[ValidationFailure] = []
     cat_ids = {str(c.get("id") if isinstance(c, dict) else c.id) for c in categories}
-    items: list[CatalogItem] = [c if isinstance(c, CatalogItem) else CatalogItem.model_validate(c) for c in catalog]
+    items, item_failures = _parse_pricing_rows(
+        catalog,
+        CatalogItem,
+        path_prefix="prices.catalog",
+        code="PRICING_INVALID_CATALOG_ITEM",
+    )
+    failures.extend(item_failures)
     item_ids = {i.id for i in items}
-    entries: list[PriceEntry] = [
-        e if isinstance(e, PriceEntry) else PriceEntry.model_validate(e) for e in price_entries
-    ]
-    rules: list[DiscountRule] = [
-        r if isinstance(r, DiscountRule) else DiscountRule.model_validate(r) for r in discount_rules
-    ]
+    entries, entry_failures = _parse_pricing_rows(
+        price_entries,
+        PriceEntry,
+        path_prefix="prices.price_entries",
+        code="PRICING_INVALID_PRICE_ENTRY",
+    )
+    failures.extend(entry_failures)
+    rules, rule_failures = _parse_pricing_rows(
+        discount_rules,
+        DiscountRule,
+        path_prefix="prices.discount_rules",
+        code="PRICING_INVALID_DISCOUNT_RULE",
+    )
+    failures.extend(rule_failures)
 
     for item in items:
         for cid in item.category_ids:
