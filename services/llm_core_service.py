@@ -10,6 +10,10 @@ import config
 # تهيئة عميل OpenAI
 client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
 
+# Reasoning models burn invisible tokens inside max_completion_tokens; too-low caps
+# return HTTP 200 with empty message content (seen on prod as guest_llm_empty_reply).
+_REASONING_MIN_COMPLETION_TOKENS = 2048
+
 
 def _model_family(model: str) -> str:
     return (model or "").strip().lower()
@@ -32,6 +36,17 @@ def temperature_supported(model: str) -> bool:
     return True
 
 
+def reasoning_effort_for_model(model: str) -> str | None:
+    """Prefer low effort for short conversational turns on reasoning models."""
+    m = _model_family(model)
+    if m.startswith(("o1", "o3", "o4")):
+        return "low"
+    # gpt-5-mini / gpt-5 / gpt-5-nano — keep reasoning cheap so visible text fits.
+    if m.startswith("gpt-5") and not m.startswith("gpt-5.4"):
+        return "low"
+    return None
+
+
 def build_chat_completion_kwargs(
     *,
     model: str,
@@ -45,7 +60,12 @@ def build_chat_completion_kwargs(
         "messages": messages,
     }
     if uses_max_completion_tokens(model):
-        kwargs["max_completion_tokens"] = int(max_tokens)
+        # Floor budget so reasoning tokens don't consume the entire cap before text.
+        budget = max(int(max_tokens), _REASONING_MIN_COMPLETION_TOKENS)
+        kwargs["max_completion_tokens"] = budget
+        effort = reasoning_effort_for_model(model)
+        if effort:
+            kwargs["reasoning_effort"] = effort
     else:
         kwargs["max_tokens"] = int(max_tokens)
 
