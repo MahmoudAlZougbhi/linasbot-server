@@ -73,9 +73,7 @@ async def generate_owner_conversational_reply(
             temperature=0.65,
         )
     except Exception as exc:  # noqa: BLE001
-        raise OwnerAIModelError(
-            f"owner_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}"
-        ) from exc
+        raise OwnerAIModelError(f"owner_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}") from exc
 
     try:
         reply = (response.choices[0].message.content or "").strip()

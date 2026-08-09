@@ -166,9 +166,7 @@ async def compose_guest_reply(
             temperature=0.75,
         )
     except Exception as exc:  # noqa: BLE001 — surface provider/network failures honestly
-        raise GuestAIModelError(
-            f"guest_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}"
-        ) from exc
+        raise GuestAIModelError(f"guest_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}") from exc
 
     reply = ""
     try:
