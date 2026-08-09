@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { API_BASE } from '../../../api/client';
+import { appendLocalFile } from '../../../api/formDataFile';
 import { tokenStore } from '../../../auth/tokenStore';
 
 export type StreamStatus = { id: string; text: string };
@@ -212,11 +213,8 @@ export async function uploadOwnerAttachment(file: {
   const access = await tokenStore.getAccessToken();
   if (!access) throw new Error('Not authenticated');
   const form = new FormData();
-  form.append('file', {
-    uri: file.uri,
-    name: file.name,
-    type: file.mimeType,
-  } as unknown as Blob);
+  // Expo SDK 57 fetch rejects RN { uri, name, type } FormData parts.
+  appendLocalFile(form, 'file', file.uri, { name: file.name });
   const res = await fetch(`${API_BASE}/api/owner-ai/v2/attachments`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
