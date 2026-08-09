@@ -126,6 +126,23 @@ async def run_probes() -> None:
             report["failures"].append(f"probe_montymobile:{kind}")
         if kind == "handoff" and not (probe["has_wa_me"] or probe["has_expected_phone_tail"]):
             report["failures"].append("handoff_missing_destination")
+        if kind == "price":
+            # Structured prices should yield a numeric amount, not a refuse/contact-only reply.
+            has_amount = bool(re.search(r"\b\d{2,}\b", str(text or "")))
+            refuse = any(
+                token in low
+                for token in (
+                    "cannot provide pricing",
+                    "i cannot provide",
+                    "don't have pricing",
+                    "do not have pricing",
+                    "no pricing",
+                )
+            )
+            probe["has_numeric_amount"] = has_amount
+            probe["pricing_refused"] = refuse
+            if refuse or not has_amount:
+                report["failures"].append("price_answer_missing_amount")
         report["probes"].append(probe)
 
 

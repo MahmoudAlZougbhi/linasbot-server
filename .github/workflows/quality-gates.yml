@@ -114,12 +114,33 @@ jobs:
     needs: [backend, frontend, secret-scan]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend deps for readiness unit checks
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Durable bridge-flag readiness (unit)
+        env:
+          PYTHONPATH: .
+          LINASBOT_DATA_ROOT: /tmp/linasbot_readiness_data
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_cm_durable_bridge_flags.py
+          echo "Durable CM_DISABLE_LINAS_LEGACY_BRIDGE preserve/readiness contracts passed."
       - name: Document readiness gate (no production deploy)
         run: |
           set -euo pipefail
           echo "Quality gates passed. Production deploy is NOT executed in this workflow."
           echo "Required release check: GET /api/ready must return ok=true after deploy."
+          echo "Required: deploy.sh must call scripts/prod_cm_preserve_durable_flags.sh so"
+          echo "CM_DISABLE_LINAS_LEGACY_BRIDGE survives dual-.env / systemd EnvironmentFile reloads."
           echo "Rollback artifact: previous container image tag / previous git SHA on main."
+          echo "Emergency legacy rollback flag: CM_EMERGENCY_FORCE_LEGACY=true (EnvironmentFile)."
           test -f docs/AUDIT_CLOSURE_LEDGER.md
           test -f docs/DEPLOY_AUTH_MIGRATION_CHECKLIST.md
           test -f .github/workflows/deploy.yml
+          test -f scripts/prod_cm_preserve_durable_flags.sh
+          test -f services/cm/durable_flags.py
+          grep -q 'prod_cm_preserve_durable_flags.sh' deploy.sh
