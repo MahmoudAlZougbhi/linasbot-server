@@ -26,6 +26,7 @@ const COPY = {
     wordLimit: 'Each guest question can be at most 50 words.',
     retry: 'Couldn’t start guest chat. Try again.',
     failed: 'Message failed. Please try again.',
+    unavailable: 'Linas AI is temporarily unavailable. Please try again in a moment.',
     continueInApp: 'Continue in the app',
   },
   ar: {
@@ -38,6 +39,7 @@ const COPY = {
     wordLimit: 'كل سؤال ضيف بحد أقصى 50 كلمة.',
     retry: 'تعذّر بدء الدردشة. حاول مجدداً.',
     failed: 'فشل الإرسال. حاول مجدداً.',
+    unavailable: 'Linas AI غير متاح مؤقتاً. حاول مرة أخرى بعد لحظات.',
     continueInApp: 'تابع في التطبيق',
   },
   fr: {
@@ -50,6 +52,7 @@ const COPY = {
     wordLimit: 'Chaque question invité fait au plus 50 mots.',
     retry: 'Impossible de démarrer le chat. Réessayez.',
     failed: 'Échec de l’envoi. Réessayez.',
+    unavailable: 'Linas AI est temporairement indisponible. Réessayez dans un instant.',
     continueInApp: 'Continuer dans l’app',
   },
 };
@@ -144,8 +147,12 @@ export default function GuestChatPanel() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
+      const status =
+        err && typeof err === 'object' && 'status' in err ? Number(/** @type {{status?: number}} */ (err).status) : 0;
       if (message === 'word_limit') {
         setError(copy.wordLimit);
+      } else if (status === 503) {
+        setError(copy.unavailable);
       } else {
         setError(copy.failed);
       }

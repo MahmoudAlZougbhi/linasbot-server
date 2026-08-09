@@ -157,16 +157,18 @@ async def compose_guest_reply(
 
     model = guest_model_name()
     try:
-        from services.llm_core_service import client
+        from services.llm_core_service import create_chat_completion, sanitize_llm_error
 
-        response = await client.chat.completions.create(
+        response = await create_chat_completion(
             model=model,
-            temperature=0.75,
+            messages=messages,
             max_tokens=320,
-            messages=messages,  # type: ignore[arg-type]
+            temperature=0.75,
         )
     except Exception as exc:  # noqa: BLE001 — surface provider/network failures honestly
-        raise GuestAIModelError(f"guest_llm_unavailable:{type(exc).__name__}") from exc
+        raise GuestAIModelError(
+            f"guest_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}"
+        ) from exc
 
     reply = ""
     try:

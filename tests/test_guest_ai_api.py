@@ -213,10 +213,61 @@ def test_guest_llm_failure_surfaces_error_no_canned_fallback(guest_client):
     detail = r.json().get("detail") or {}
     assert detail.get("error") == "guest_model_unavailable"
     assert "business AI platform: connect channels" not in str(detail).lower()
+    assert "sales_intro" not in str(detail).lower()
     session = store.get(sid)
     assert session is not None
     assert session.questions_used == 0
     assert len([m for m in session.messages if m.role == "user"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_guest_llm_uses_gpt5_safe_params_not_legacy_max_tokens():
+    """gpt-5-mini rejects max_tokens + non-default temperature (prod BadRequest root cause)."""
+    from services.guest_ai_service import compose_guest_reply
+
+    captured: dict[str, Any] = {}
+
+    async def _create(**kwargs: Any) -> _FakeResponse:
+        captured.update(kwargs)
+        return _FakeResponse("Instagram DMs connect via Meta Integrations after you subscribe.")
+
+    fake = type(
+        "C",
+        (),
+        {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()},
+    )()
+    with patch("services.llm_core_service.client", fake):
+        with patch.dict("os.environ", {"LINAS_GUEST_MODEL": "gpt-5-mini"}, clear=False):
+            result = await compose_guest_reply("How do Instagram DMs work?", language="en")
+    assert "Instagram" in result["reply_text"]
+    assert "max_tokens" not in captured
+    assert captured.get("max_completion_tokens") == 320
+    assert "temperature" not in captured
+    assert captured.get("model") == "gpt-5-mini"
+
+
+def test_build_chat_completion_kwargs_gpt5_vs_legacy():
+    from services.llm_core_service import build_chat_completion_kwargs
+
+    gpt5 = build_chat_completion_kwargs(
+        model="gpt-5-mini",
+        messages=[{"role": "user", "content": "hi"}],
+        max_tokens=100,
+        temperature=0.7,
+    )
+    assert gpt5["max_completion_tokens"] == 100
+    assert "max_tokens" not in gpt5
+    assert "temperature" not in gpt5
+
+    legacy = build_chat_completion_kwargs(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "hi"}],
+        max_tokens=100,
+        temperature=0.7,
+    )
+    assert legacy["max_tokens"] == 100
+    assert legacy["temperature"] == 0.7
+    assert "max_completion_tokens" not in legacy
 
 
 def test_guest_routes_are_public():

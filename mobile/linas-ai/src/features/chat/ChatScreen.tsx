@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   Text,
   TextInput,
   View,
 } from 'react-native';
+
+import { linasAssets } from '../linas/avatarAssets';
 
 import { EmptyState } from '../../components/EmptyState';
 import { GradientBackground } from '../../components/GradientBackground';
@@ -139,6 +142,11 @@ export function ChatScreen({
     return (
       <GradientBackground>
         <View style={styles.center}>
+          <Image
+            source={linasAssets.icon}
+            style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 16 }}
+          />
+          <Text style={{ color: colors.accentDeep, fontSize: 18, marginBottom: 12 }}>Linas AI</Text>
           <ActivityIndicator color={colors.accent} />
         </View>
       </GradientBackground>
@@ -199,7 +207,9 @@ export function ChatScreen({
                 ? 'retry'
                 : error === 'guestWordLimit'
                   ? 'guestWordLimit'
-                  : 'messageFailed',
+                  : error === 'guestModelUnavailable'
+                    ? 'guestModelUnavailable'
+                    : 'messageFailed',
             )}
           </Text>
         </Pressable>

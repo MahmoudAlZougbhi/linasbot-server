@@ -93,6 +93,9 @@ export function useGuestChatSession(enabled = true) {
     } catch (err) {
       if (err instanceof ApiError && err.status === 400) {
         setError('guestWordLimit');
+      } else if (err instanceof ApiError && err.status === 503) {
+        // Honest model-down signal — do not invent a canned assistant bubble.
+        setError('guestModelUnavailable');
       } else {
         setError('messageFailed');
       }
