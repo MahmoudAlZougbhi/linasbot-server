@@ -8,8 +8,8 @@ from services.cm.durable_flags import (
     CM_DISABLE_LINAS_LEGACY_BRIDGE,
     parse_env_bool,
     preserve_disable_linas_legacy_bridge,
-    readiness_requires_disable_bridge,
     read_env_file_map,
+    readiness_requires_disable_bridge,
     resolve_disable_bridge_value,
 )
 
