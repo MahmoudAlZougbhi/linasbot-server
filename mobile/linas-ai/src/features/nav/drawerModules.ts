@@ -16,6 +16,7 @@ export type DrawerModule = {
 export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'dashboard', title: 'Dashboard', guestVisible: true },
   { id: 'cm', title: 'Content Management', guestVisible: true },
+  { id: 'faq', title: 'Smart Answers / FAQ', guestVisible: true },
   { id: 'livechat', title: 'Live Chat', guestVisible: true },
   { id: 'integrations', title: 'Integrations', guestVisible: true },
   { id: 'users', title: 'Users', guestVisible: true, entitlement: 'users' },

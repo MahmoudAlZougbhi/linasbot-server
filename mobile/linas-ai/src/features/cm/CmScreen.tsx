@@ -14,7 +14,7 @@ import { StatusChip } from '../../components/StatusChip';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { fetchCmMeta, type CmMeta } from './cmApi';
-import { CM_SECTION_CARDS, getCmSection, type CmSectionId } from './cmSections';
+import { CM_HUB_CARDS, type CmSectionId } from './cmSections';
 
 type Props = {
   onBack: () => void;
@@ -46,21 +46,12 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
   }, []);
 
   const tiles = useMemo(() => {
-    const apiSections = (meta?.sections ?? []).map((s) => s.replace(/-/g, '_'));
+    const apiSections = new Set((meta?.sections ?? []).map((s) => s.replace(/-/g, '_')));
+    // Hub shows only mobile CM sections — never Actions/AI Limits/FAQ/web hubs.
     const base =
-      apiSections.length === 0
-        ? CM_SECTION_CARDS
-        : apiSections.map((id) => {
-            const known = getCmSection(id);
-            if (known) return known;
-            return {
-              id: id as CmSectionId,
-              title: id.replace(/_/g, ' '),
-              description: 'Backend section',
-              mobileSupported: false,
-              disabledReason: 'No mobile editor for this section yet.',
-            };
-          });
+      apiSections.size === 0
+        ? CM_HUB_CARDS
+        : CM_HUB_CARDS.filter((card) => apiSections.has(card.id));
     const q = query.trim().toLowerCase();
     return base.filter((t) => {
       if (q && !`${t.title} ${t.description}`.toLowerCase().includes(q)) return false;
@@ -139,10 +130,6 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
         <View style={styles.grid}>
           {tiles.map((tile) => {
             const supported = tile.mobileSupported !== false;
-            const title =
-              tile.id === 'faq' || tile.title.toLowerCase().includes('smart')
-                ? tile.title.replace(/Smart Answers/gi, 'Answers').replace(/FAQ & Smart Answers/gi, 'FAQ')
-                : tile.title;
             return (
               <Pressable
                 key={tile.id}
@@ -156,10 +143,10 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
                 ]}
                 disabled={!supported}
                 onPress={() => supported && onOpenSection(tile.id)}
-                accessibilityLabel={title}
+                accessibilityLabel={tile.title}
               >
                 <Text style={{ color: colors.accentDeep, fontFamily: fonts.bodyMedium, fontSize: 14 }}>
-                  {title}
+                  {tile.title}
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 4 }}>
                   {supported ? tile.description : tile.disabledReason || tile.description}

@@ -8,18 +8,14 @@ import { cmFormStyles } from './cmFormStyles';
 import { getCmSection, type CmSectionId } from './cmSections';
 import { AiBasicsEditor } from './editors/AiBasicsEditor';
 import { ArticlesEditor } from './editors/ArticlesEditor';
+import { BranchesEditor } from './editors/BranchesEditor';
+import { DynamicMessagesEditor } from './editors/DynamicMessagesEditor';
 import { HandoffEditor } from './editors/HandoffEditor';
 import { LanguagesEditor } from './editors/LanguagesEditor';
+import { OffDaysEditor } from './editors/OffDaysEditor';
+import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
+import { ActionsEditor, AiLimitsEditor, RestrictedEditor } from './editors/PolicyEditors';
 import { PricesEditor } from './editors/PricesEditor';
-import {
-  ActionsEditor,
-  AiLimitsEditor,
-  BranchesEditor,
-  DynamicMessagesEditor,
-  FaqEditor,
-  OffDaysEditor,
-  RestrictedEditor,
-} from './editors/RemainingEditors';
 import { ServicesEditor } from './editors/ServicesEditor';
 import { StyleEditor } from './editors/StyleEditor';
 import { useCmDraft } from './useCmDraft';
@@ -27,6 +23,7 @@ import { useCmDraft } from './useCmDraft';
 type Props = {
   section: CmSectionId;
   onBack: () => void;
+  backLabel?: string;
 };
 
 function SectionBody({
@@ -59,8 +56,8 @@ function SectionBody({
       return <DynamicMessagesEditor payload={payload} onChange={onChange} />;
     case 'branches':
       return <BranchesEditor payload={payload} onChange={onChange} />;
-    case 'faq':
-      return <FaqEditor payload={payload} onChange={onChange} />;
+    case 'opening_hours':
+      return <OpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
       return <RestrictedEditor payload={payload} onChange={onChange} />;
     case 'actions':
@@ -74,7 +71,7 @@ function SectionBody({
   }
 }
 
-export function CmSectionScreen({ section, onBack }: Props) {
+export function CmSectionScreen({ section, onBack, backLabel }: Props) {
   const meta = getCmSection(section);
   const draft = useCmDraft(section);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -92,7 +89,7 @@ export function CmSectionScreen({ section, onBack }: Props) {
       title={meta?.title ?? section}
       subtitle={meta?.description}
       onBack={onBack}
-      backLabel="← Back to Content Management"
+      backLabel={backLabel ?? '← Back to Content Management'}
     >
       {draft.loading ? <ActivityIndicator color={colors.accent} /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}

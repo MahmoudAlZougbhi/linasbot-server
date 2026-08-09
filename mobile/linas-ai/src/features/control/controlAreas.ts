@@ -1,5 +1,6 @@
 export type ControlArea =
   | 'cm'
+  | 'faq'
   | 'integrations'
   | 'usage'
   | 'subscription'
@@ -22,6 +23,12 @@ export type ControlItem = {
 export const CONTROL_ITEMS: ControlItem[] = [
   { id: 'dashboard', title: 'Dashboard / Status', subtitle: 'Metrics & health', group: 'operate' },
   { id: 'cm', title: 'Content Management', subtitle: 'What your customer AI knows', group: 'operate' },
+  {
+    id: 'faq',
+    title: 'Smart Answers / FAQ',
+    subtitle: 'Saved Q&A with auto-translate',
+    group: 'operate',
+  },
   { id: 'livechat', title: 'Live Chat', subtitle: 'Read-only IG/FB inbox', group: 'operate' },
   { id: 'integrations', title: 'Integrations', subtitle: 'Instagram & Facebook (App A)', group: 'operate' },
   { id: 'users', title: 'Users', subtitle: 'Members & permissions', group: 'account' },

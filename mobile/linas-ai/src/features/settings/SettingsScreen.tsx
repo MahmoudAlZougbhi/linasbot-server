@@ -10,14 +10,16 @@ import { ScreenChrome } from '../shared/ScreenChrome';
 type Props = {
   onBack: () => void;
   onLogout: () => void;
+  onOpenActions?: () => void;
+  onOpenAiLimits?: () => void;
 };
 
 async function open(url: string) {
   await Linking.openURL(url);
 }
 
-/** ST-01 — grouped Settings; no duplicate AI Basics / CM knowledge store. */
-export function SettingsScreen({ onBack, onLogout }: Props) {
+/** ST-01 — grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
+export function SettingsScreen({ onBack, onLogout, onOpenActions, onOpenAiLimits }: Props) {
   const { tr, language, setLanguage } = useI18n();
   const { colors, mode, setMode } = useTheme();
 
@@ -77,6 +79,26 @@ export function SettingsScreen({ onBack, onLogout }: Props) {
           </Pressable>
         ))}
       </View>
+
+      {onOpenActions || onOpenAiLimits ? (
+        <>
+          <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsAiSection')}</Text>
+          {onOpenActions ? (
+            <Row
+              title={tr('settingsActions')}
+              subtitle={tr('settingsActionsSub')}
+              onPress={onOpenActions}
+            />
+          ) : null}
+          {onOpenAiLimits ? (
+            <Row
+              title={tr('settingsAiLimits')}
+              subtitle={tr('settingsAiLimitsSub')}
+              onPress={onOpenAiLimits}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       <Text style={[styles.group, { color: colors.textDim }]}>Security & Support</Text>
       <Row title="Privacy & Data" onPress={() => void open(LEGAL_URLS.privacy)} />

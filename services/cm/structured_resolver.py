@@ -14,6 +14,7 @@ from services.cm.schemas import (
     BranchesSection,
     HandoffMatrixRow,
     HandoffPolicy,
+    OpeningHoursSection,
     PricesSection,
     RestrictedPolicy,
     RestrictedTopic,
@@ -174,7 +175,18 @@ def resolve_branch_facts(branches: BranchesSection | dict[str, Any], branch_id: 
     for branch in section.items:
         if branch.id != branch_id:
             continue
-        facts = [AnswerFact(kind="branch_address", value=branch.address, source_id=f"branch:{branch.id}")]
+        address_value = branch.composed_address()
+        facts: list[AnswerFact] = []
+        if address_value:
+            facts.append(AnswerFact(kind="branch_address", value=address_value, source_id=f"branch:{branch.id}"))
+        if (branch.maps_url or "").strip():
+            facts.append(
+                AnswerFact(
+                    kind="branch_maps_url",
+                    value=branch.maps_url.strip(),
+                    source_id=f"branch:{branch.id}:maps",
+                )
+            )
         if branch.hours.summary:
             facts.append(AnswerFact(kind="branch_hours", value=branch.hours.summary, source_id=f"branch:{branch.id}"))
         if branch.notes:
@@ -185,6 +197,39 @@ def resolve_branch_facts(branches: BranchesSection | dict[str, Any], branch_id: 
             )
         return facts
     return []
+
+
+def resolve_opening_hours_facts(opening_hours: OpeningHoursSection | dict[str, Any]) -> list[AnswerFact]:
+    """Expose named opening-hours schedules as grounded facts for the AI."""
+    section = (
+        opening_hours
+        if isinstance(opening_hours, OpeningHoursSection)
+        else OpeningHoursSection.model_validate(opening_hours or {})
+    )
+    facts: list[AnswerFact] = []
+    for schedule in section.items:
+        summary = schedule.summary_line()
+        if summary:
+            facts.append(
+                AnswerFact(
+                    kind="opening_hours",
+                    value=summary,
+                    source_id=f"opening_hours:{schedule.id}",
+                )
+            )
+        if schedule.notes:
+            facts.append(
+                AnswerFact(
+                    kind="opening_hours_notes",
+                    value=schedule.notes,
+                    source_id=f"opening_hours:{schedule.id}:notes",
+                )
+            )
+    if section.notes:
+        facts.append(
+            AnswerFact(kind="opening_hours_section_notes", value=section.notes, source_id="opening_hours:notes")
+        )
+    return facts
 
 
 def resolve_service_catalog_facts(services: ServicesSection | dict[str, Any]) -> list[AnswerFact]:
