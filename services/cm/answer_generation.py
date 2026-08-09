@@ -24,7 +24,9 @@ DEFAULT_CM_ANSWER_MODEL = "gpt-5.6-luna"
 
 
 def cm_answer_model() -> str:
-    return (os.getenv("LINAS_CM_ANSWER_MODEL") or os.getenv("LINAS_MODEL_CUSTOMER_DM") or DEFAULT_CM_ANSWER_MODEL).strip() or DEFAULT_CM_ANSWER_MODEL
+    return (
+        os.getenv("LINAS_CM_ANSWER_MODEL") or os.getenv("LINAS_MODEL_CUSTOMER_DM") or DEFAULT_CM_ANSWER_MODEL
+    ).strip() or DEFAULT_CM_ANSWER_MODEL
 
 
 @dataclass
