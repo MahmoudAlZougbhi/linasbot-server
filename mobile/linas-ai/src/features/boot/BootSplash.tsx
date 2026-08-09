@@ -27,7 +27,7 @@ export function BootSplash({ onDone }: Props) {
       <View style={styles.center}>
         <Animated.View style={{ opacity, transform: [{ scale }] }}>
           <BrandMark size="lg" showWordmark />
-          <Text style={styles.hint}>Opening your workspace…</Text>
+          <Text style={styles.hint}>Opening Linas AI…</Text>
         </Animated.View>
       </View>
     </GradientBackground>

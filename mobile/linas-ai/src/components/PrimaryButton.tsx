@@ -38,7 +38,7 @@ export function PrimaryButton({
       disabled={disabled || loading}
     >
       {loading ? (
-        <ActivityIndicator color={isPrimary ? colors.bg : colors.accent} />
+        <ActivityIndicator color={isPrimary ? colors.onAccent : colors.accent} />
       ) : (
         <>
           {icon}
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.5 },
   label: { fontFamily: fonts.bodyMedium, fontSize: 16 },
-  labelOnPrimary: { color: colors.bg, fontWeight: '700' },
+  labelOnPrimary: { color: colors.onAccent, fontWeight: '700' },
   labelGhost: { color: colors.text },
   labelDanger: { color: colors.danger, fontWeight: '700' },
 });

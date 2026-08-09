@@ -13,41 +13,69 @@ import { GradientBackground } from '../../components/GradientBackground';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
+import { AuthGateModal } from '../auth/AuthGateModal';
 import { ControlCenterDrawer } from '../control/ControlCenterDrawer';
 import type { ControlArea } from '../control/controlAreas';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
+import { GuestBanner } from './GuestBanner';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useChatSession } from './useChatSession';
+import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
 import { useVoiceDraft } from './useVoiceDraft';
 
 type Props = {
+  isAuthenticated: boolean;
   isPlatformOwner: boolean;
   onOpenArea: (area: ControlArea) => void;
   onLogout: () => void;
+  onRequestLogin: () => void;
+  onRequestRegister: () => void;
 };
 
-export function ChatScreen({ isPlatformOwner, onOpenArea, onLogout }: Props) {
+export function ChatScreen({
+  isAuthenticated,
+  isPlatformOwner,
+  onOpenArea,
+  onLogout,
+  onRequestLogin,
+  onRequestRegister,
+}: Props) {
   const { tr } = useI18n();
-  const session = useChatSession();
+  const owner = useChatSession(isAuthenticated);
+  const guest = useGuestChatSession(!isAuthenticated);
+  const session = isAuthenticated ? owner : null;
   const [userId, setUserId] = useState<string | null>(null);
   const { pinnedIds, togglePin } = usePinnedChats(userId);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [controlOpen, setControlOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
+  const [authGate, setAuthGate] = useState(false);
   const [draft, setDraft] = useState('');
   const { voiceState, voiceError, toggleVoice } = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
   });
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setUserId(null);
+      return;
+    }
     void tokenStore.getUser().then((u) => setUserId(u?.id ?? null));
-  }, []);
+  }, [isAuthenticated]);
+
+  function requireAuth() {
+    setAuthGate(true);
+  }
 
   function handlePlus(action: PlusAction) {
+    if (!isAuthenticated) {
+      requireAuth();
+      return;
+    }
     if (action === 'create_post') {
       onOpenArea('create');
       return;
@@ -61,7 +89,13 @@ export function ChatScreen({ isPlatformOwner, onOpenArea, onLogout }: Props) {
     }
   }
 
-  if (session.loading) {
+  const loading = isAuthenticated ? owner.loading : guest.loading;
+  const messages = isAuthenticated ? owner.messages : guest.messages;
+  const sending = isAuthenticated ? owner.sending : guest.sending;
+  const error = isAuthenticated ? owner.error : guest.error;
+  const title = isAuthenticated ? owner.title : guest.title;
+
+  if (loading) {
     return (
       <GradientBackground>
         <View style={styles.center}>
@@ -71,7 +105,7 @@ export function ChatScreen({ isPlatformOwner, onOpenArea, onLogout }: Props) {
     );
   }
 
-  const preview = session.proposedPatch?.preview;
+  const preview = session?.proposedPatch?.preview;
   const changedKeys = Array.isArray(preview?.changed_keys)
     ? (preview?.changed_keys as string[]).join(', ')
     : '';
@@ -79,29 +113,66 @@ export function ChatScreen({ isPlatformOwner, onOpenArea, onLogout }: Props) {
   return (
     <GradientBackground>
       <ChatHeader
-        title={session.title}
-        onOpenHistory={() => setHistoryOpen(true)}
-        onOpenControl={() => setControlOpen(true)}
+        title={title}
+        onOpenHistory={() => {
+          if (!isAuthenticated) {
+            requireAuth();
+            return;
+          }
+          setHistoryOpen(true);
+        }}
+        onOpenControl={() => {
+          if (!isAuthenticated) {
+            requireAuth();
+            return;
+          }
+          setControlOpen(true);
+        }}
       />
 
-      {session.error ? (
-        <Pressable onPress={() => void session.bootstrap()}>
-          <Text style={styles.error}>{tr(session.error === 'retry' ? 'retry' : 'messageFailed')}</Text>
+      {!isAuthenticated ? (
+        <GuestBanner
+          remaining={guest.questionsRemaining}
+          max={guest.maxQuestions}
+          gated={guest.gated}
+          onLogin={onRequestLogin}
+        />
+      ) : null}
+
+      {error ? (
+        <Pressable
+          onPress={() => void (isAuthenticated ? owner.bootstrap() : guest.bootstrap())}
+        >
+          <Text style={styles.error}>
+            {tr(
+              error === 'retry'
+                ? 'retry'
+                : error === 'guestWordLimit'
+                  ? 'guestWordLimit'
+                  : 'messageFailed',
+            )}
+          </Text>
         </Pressable>
       ) : null}
       {voiceError ? <Text style={styles.error}>{voiceError}</Text> : null}
+      {!isAuthenticated && guest.gateText ? (
+        <Text style={styles.gate}>{guest.gateText}</Text>
+      ) : null}
 
       <FlatList
-        data={session.messages}
+        data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <EmptyState title={tr('chatEmptyTitle')} body={tr('chatEmptyBody')} />
+          <EmptyState
+            title={tr(isAuthenticated ? 'chatEmptyTitle' : 'guestChatEmptyTitle')}
+            body={tr(isAuthenticated ? 'chatEmptyBody' : 'guestChatEmptyBody')}
+          />
         }
         renderItem={({ item }) => <ChatBubble message={item} />}
       />
 
-      {session.quickActions.length ? (
+      {isAuthenticated && session?.quickActions.length ? (
         <View style={styles.chips}>
           {session.quickActions.slice(0, 4).map((a) => (
             <Pressable
@@ -115,7 +186,7 @@ export function ChatScreen({ isPlatformOwner, onOpenArea, onLogout }: Props) {
         </View>
       ) : null}
 
-      {session.proposedPatch?.confirmation_token ? (
+      {isAuthenticated && session?.proposedPatch?.confirmation_token ? (
         <View style={styles.patchCard}>
           <Text style={styles.patchTitle}>{tr('proposedCmPatch')}</Text>
           {changedKeys ? <Text style={styles.patchBody}>Keys: {changedKeys}</Text> : null}
@@ -141,7 +212,7 @@ export function ChatScreen({ isPlatformOwner, onOpenArea, onLogout }: Props) {
         </View>
       ) : null}
 
-      {session.pendingConfirm && !session.proposedPatch ? (
+      {isAuthenticated && session?.pendingConfirm && !session.proposedPatch ? (
         <Pressable
           style={styles.confirm}
           onPress={() => void session.send('', session.pendingConfirm ?? undefined)}
@@ -155,47 +226,82 @@ export function ChatScreen({ isPlatformOwner, onOpenArea, onLogout }: Props) {
       <ChatComposer
         draft={draft}
         onChangeDraft={setDraft}
-        sending={session.sending}
-        voiceState={voiceState}
-        onPlus={() => setPlusOpen(true)}
-        onToggleVoice={() => void toggleVoice()}
+        sending={sending || (!isAuthenticated && guest.gated)}
+        voiceState={isAuthenticated ? voiceState : 'idle'}
+        onPlus={() => {
+          if (!isAuthenticated) {
+            requireAuth();
+            return;
+          }
+          setPlusOpen(true);
+        }}
+        onToggleVoice={() => {
+          if (!isAuthenticated) {
+            requireAuth();
+            return;
+          }
+          void toggleVoice();
+        }}
         onSend={() => {
+          if (!isAuthenticated && guest.gated) {
+            onRequestLogin();
+            return;
+          }
           const text = draft;
           setDraft('');
-          void session.send(text);
+          if (isAuthenticated) {
+            void owner.send(text);
+          } else {
+            void guest.send(text);
+          }
         }}
       />
 
-      <HistoryDrawer
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        history={session.history}
-        pinnedIds={pinnedIds}
-        activeId={session.conversationId}
-        onNewChat={() => {
-          void session.newChat().then(() => setHistoryOpen(false));
-        }}
-        onOpen={(id) => {
-          void session.openConversation(id).then(() => setHistoryOpen(false));
-        }}
-        onTogglePin={(id) => void togglePin(id)}
-      />
+      {isAuthenticated ? (
+        <>
+          <HistoryDrawer
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+            history={owner.history}
+            pinnedIds={pinnedIds}
+            activeId={owner.conversationId}
+            onNewChat={() => {
+              void owner.newChat().then(() => setHistoryOpen(false));
+            }}
+            onOpen={(id) => {
+              void owner.openConversation(id).then(() => setHistoryOpen(false));
+            }}
+            onTogglePin={(id) => void togglePin(id)}
+          />
+          <ControlCenterDrawer
+            open={controlOpen}
+            onClose={() => setControlOpen(false)}
+            isPlatformOwner={isPlatformOwner}
+            onOpen={(area) => {
+              setControlOpen(false);
+              onOpenArea(area);
+            }}
+            onLogout={onLogout}
+          />
+          <ComposerPlusSheet
+            open={plusOpen}
+            onClose={() => setPlusOpen(false)}
+            onAction={handlePlus}
+          />
+        </>
+      ) : null}
 
-      <ControlCenterDrawer
-        open={controlOpen}
-        onClose={() => setControlOpen(false)}
-        isPlatformOwner={isPlatformOwner}
-        onOpen={(area) => {
-          setControlOpen(false);
-          onOpenArea(area);
+      <AuthGateModal
+        visible={authGate}
+        onClose={() => setAuthGate(false)}
+        onLogin={() => {
+          setAuthGate(false);
+          onRequestLogin();
         }}
-        onLogout={onLogout}
-      />
-
-      <ComposerPlusSheet
-        open={plusOpen}
-        onClose={() => setPlusOpen(false)}
-        onAction={handlePlus}
+        onRegister={() => {
+          setAuthGate(false);
+          onRequestRegister();
+        }}
       />
     </GradientBackground>
   );
@@ -209,6 +315,13 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     paddingHorizontal: 16,
     paddingTop: 8,
+  },
+  gate: {
+    color: colors.warning,
+    fontFamily: fonts.body,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    fontSize: 13,
   },
   chips: {
     flexDirection: 'row',
@@ -241,7 +354,7 @@ const styles = StyleSheet.create({
   patchActions: { flexDirection: 'row', gap: 8 },
   confirm: {
     flex: 1,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.accentSoft,
     borderRadius: 14,
     padding: 12,
     borderColor: colors.accent,

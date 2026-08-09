@@ -26,6 +26,7 @@ _ROUTE_MODULES = (
     "modules.auth_api",
     "modules.mobile_auth_api",
     "modules.owner_ai_api",
+    "modules.guest_ai_api",
     "modules.entitlements_api",
     "modules.creative_api",
     "modules.schedule_api",

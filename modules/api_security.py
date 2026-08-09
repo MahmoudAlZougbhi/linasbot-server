@@ -124,8 +124,8 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/entitlements/google/notifications"),
 }
 
-# Prefix public (rare)
-_PUBLIC_PREFIX: tuple[str, ...] = ()
+# Prefix public (rare) — guest sales chat is intentionally unauthenticated + rate-limited.
+_PUBLIC_PREFIX: tuple[str, ...] = ("/api/guest-ai/",)
 
 
 def _normalize_path(path: str) -> str:
@@ -240,6 +240,8 @@ def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
         rules.append((f"resend-verify:{ip}", 5, 300))
     if path == "/api/auth/change-password":
         rules.append((f"pw:{ip}", 10, 300))
+    if path.startswith("/api/guest-ai/"):
+        rules.append((f"guest-ai:{ip}", 60, 300))
     if any(path.startswith(p) for p in _SENSITIVE_MUTATION_PREFIXES):
         rules.append((f"mut:{ip}:{path.split('?')[0]}", 60, 60))
     for key, limit, window in rules:

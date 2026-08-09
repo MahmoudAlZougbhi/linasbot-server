@@ -54,12 +54,12 @@ export type ProposedPatch = {
   preview?: Record<string, unknown>;
 };
 
-export function useChatSession() {
+export function useChatSession(enabled = true) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [title, setTitle] = useState('Linas AI');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<{ id: string; title: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
@@ -67,6 +67,10 @@ export function useChatSession() {
   const [quickActions, setQuickActions] = useState<{ id: string; label: string }[]>([]);
 
   const bootstrap = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -95,7 +99,7 @@ export function useChatSession() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     void bootstrap();

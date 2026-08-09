@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "scheme": "linasai",
     "ios": {
       "supportsTablet": true,
@@ -20,7 +20,7 @@
       "package": "com.linasai.app",
       "versionCode": 4,
       "adaptiveIcon": {
-        "backgroundColor": "#0C1424",
+        "backgroundColor": "#F7F8FA",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -49,7 +49,7 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0C1424"
+          "backgroundColor": "#F7F8FA"
         }
       ],
       "expo-status-bar"

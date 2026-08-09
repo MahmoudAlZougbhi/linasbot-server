@@ -15,7 +15,9 @@ export function ChatBubble({ message }: Props) {
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
       {!isUser ? <Text style={styles.aiLabel}>Linas</Text> : null}
       <View style={[styles.bubble, isUser ? styles.user : styles.ai]}>
-        <Text style={[styles.text, isRtl && styles.rtl]}>{message.content}</Text>
+        <Text style={[styles.text, isUser && styles.userText, isRtl && styles.rtl]}>
+          {message.content}
+        </Text>
       </View>
     </View>
   );
@@ -44,7 +46,7 @@ const styles = StyleSheet.create({
   ai: {
     backgroundColor: colors.bubbleAi,
     borderWidth: 1,
-    borderColor: colors.borderSoft,
+    borderColor: colors.border,
     borderBottomLeftRadius: 6,
   },
   text: {
@@ -53,5 +55,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
   },
+  userText: { color: colors.bubbleUserText },
   rtl: { textAlign: 'right', writingDirection: 'rtl' },
 });

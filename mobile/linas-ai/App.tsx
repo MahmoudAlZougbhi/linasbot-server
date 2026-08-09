@@ -65,14 +65,15 @@ export default function App() {
     if (!authReady) {
       return;
     }
-    setScreen(hasAccess ? { name: 'chat' } : { name: 'login' });
-  }, [authReady, hasAccess]);
+    // App-first: always open main chat (guest or authenticated).
+    setScreen({ name: 'chat' });
+  }, [authReady]);
 
   useEffect(() => {
     if (bootDone && authReady) {
-      setScreen(hasAccess ? { name: 'chat' } : { name: 'login' });
+      setScreen({ name: 'chat' });
     }
-  }, [bootDone, authReady, hasAccess]);
+  }, [bootDone, authReady]);
 
   async function afterLogin() {
     const user = await tokenStore.getUser();
@@ -96,10 +97,14 @@ export default function App() {
     await tokenStore.clear();
     setIsPlatformOwner(false);
     setHasAccess(false);
-    setScreen({ name: 'login' });
+    setScreen({ name: 'chat' });
   }
 
   function openArea(area: ControlArea) {
+    if (!hasAccess) {
+      setScreen({ name: 'login' });
+      return;
+    }
     if (area === 'settings') {
       setScreen({ name: 'settings' });
       return;
@@ -146,7 +151,7 @@ export default function App() {
     return (
       <LanguageProvider>
         <SafeAreaProvider>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <BootSplash onDone={finishBoot} />
         </SafeAreaProvider>
       </LanguageProvider>
@@ -156,16 +161,28 @@ export default function App() {
   return (
     <LanguageProvider>
       <SafeAreaProvider>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         {screen.name === 'login' ? (
-          <LoginScreen onLoggedIn={() => void afterLogin()} onGoRegister={() => setScreen({ name: 'register' })} />
+          <LoginScreen
+            onLoggedIn={() => void afterLogin()}
+            onGoRegister={() => setScreen({ name: 'register' })}
+            onBack={() => setScreen({ name: 'chat' })}
+          />
         ) : null}
-        {screen.name === 'register' ? <RegisterScreen onBack={() => setScreen({ name: 'login' })} /> : null}
+        {screen.name === 'register' ? (
+          <RegisterScreen
+            onBack={() => setScreen({ name: 'login' })}
+            onDone={() => setScreen({ name: 'login' })}
+          />
+        ) : null}
         {screen.name === 'chat' ? (
           <ChatScreen
+            isAuthenticated={hasAccess}
             isPlatformOwner={isPlatformOwner}
             onOpenArea={openArea}
             onLogout={() => void logout()}
+            onRequestLogin={() => setScreen({ name: 'login' })}
+            onRequestRegister={() => setScreen({ name: 'register' })}
           />
         ) : null}
         {screen.name === 'settings' ? (

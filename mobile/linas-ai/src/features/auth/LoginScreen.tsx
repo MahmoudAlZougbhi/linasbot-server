@@ -23,9 +23,10 @@ import { SocialAuthButtons } from './SocialAuthButtons';
 type Props = {
   onLoggedIn: () => void;
   onGoRegister: () => void;
+  onBack?: () => void;
 };
 
-export function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
+export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,6 +67,11 @@ export function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
           ]}
           keyboardShouldPersistTaps="handled"
         >
+          {onBack ? (
+            <Pressable onPress={onBack}>
+              <Text style={styles.back}>← Continue as guest</Text>
+            </Pressable>
+          ) : null}
           <BrandMark size="lg" showWordmark />
           <Text style={styles.sub}>Log in to operate your business AI</Text>
 
@@ -110,6 +116,7 @@ export function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: spacing.xl, justifyContent: 'center', flexGrow: 1 },
+  back: { color: colors.accent, fontFamily: fonts.bodyMedium, marginBottom: spacing.md },
   sub: { ...typography.subtitle, color: colors.textMuted, marginTop: spacing.lg, marginBottom: spacing.xl },
   error: { color: colors.danger, fontFamily: fonts.body, marginBottom: spacing.sm },
   link: { color: colors.accent, fontFamily: fonts.body, marginTop: spacing.lg, fontSize: 15 },

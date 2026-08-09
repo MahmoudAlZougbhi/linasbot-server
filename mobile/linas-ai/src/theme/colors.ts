@@ -1,30 +1,34 @@
 /**
- * Soft futuristic Linas palette — aligned to the electric-blue mark.
- * Not pure black, not plain white, not neon spam.
+ * Soft light Linas palette — calm premium AI (ChatGPT/Claude-inspired surfaces).
+ * Refined blue accent, no black heaviness, no neon.
  */
 export const colors = {
-  bg: '#0C1424',
-  bgElevated: '#101A2E',
-  surface: '#162033',
-  surfaceAlt: '#1C2A42',
-  surfaceGlass: 'rgba(22, 32, 51, 0.92)',
-  text: '#E8EEF8',
-  textMuted: '#8B9BB8',
-  textDim: '#5E6E8A',
-  accent: '#3B8EF0',
-  accentSoft: '#1A4A7A',
-  accentGlow: 'rgba(59, 142, 240, 0.22)',
-  mint: '#5EE0B5',
-  mintSoft: '#1F5C4A',
-  danger: '#F07178',
-  warning: '#E8C468',
-  border: '#243248',
-  borderSoft: '#1A2740',
-  input: '#0F1828',
-  bubbleUser: '#1E4D8C',
-  bubbleAi: '#1A2438',
-  overlay: 'rgba(6, 10, 18, 0.55)',
-  success: '#5EE0B5',
+  bg: '#F7F8FA',
+  bgElevated: '#FFFFFF',
+  surface: '#FFFFFF',
+  surfaceAlt: '#EEF2F7',
+  surfaceGlass: 'rgba(255, 255, 255, 0.92)',
+  text: '#0F172A',
+  textMuted: '#64748B',
+  textDim: '#94A3B8',
+  accent: '#2563EB',
+  accentSoft: '#DBEAFE',
+  accentGlow: 'rgba(37, 99, 235, 0.10)',
+  onAccent: '#FFFFFF',
+  mint: '#0D9488',
+  mintSoft: '#CCFBF1',
+  danger: '#DC2626',
+  warning: '#D97706',
+  border: '#E2E8F0',
+  borderSoft: '#EEF2F7',
+  input: '#F1F5F9',
+  bubbleUser: '#2563EB',
+  bubbleUserText: '#FFFFFF',
+  bubbleAi: '#FFFFFF',
+  overlay: 'rgba(15, 23, 42, 0.40)',
+  success: '#0D9488',
+  banner: '#EFF6FF',
+  bannerBorder: '#BFDBFE',
 } as const;
 
 export type ColorName = keyof typeof colors;

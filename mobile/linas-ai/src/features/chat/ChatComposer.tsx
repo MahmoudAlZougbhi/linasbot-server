@@ -53,7 +53,7 @@ export function ChatComposer({
         disabled={sending || !draft.trim()}
       >
         {sending ? (
-          <ActivityIndicator color={colors.bg} />
+          <ActivityIndicator color={colors.onAccent} />
         ) : (
           <Text style={styles.sendText}>↑</Text>
         )}
@@ -107,5 +107,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendDisabled: { opacity: 0.45 },
-  sendText: { color: colors.bg, fontSize: 20, fontWeight: '800' },
+  sendText: { color: colors.onAccent, fontSize: 20, fontWeight: '800' },
 });
