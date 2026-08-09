@@ -74,7 +74,7 @@ async def handle_creative_expensive(job: QueueJob) -> dict[str, Any]:
             raise PermanentJobError(f"Image provider not configured: {route['provider']}")
         _throttle(route["provider"], 30)
         try:
-            result = await generate_openai_image(
+            image_result = await generate_openai_image(
                 prompt=prompt,
                 model=route["model"],
                 tenant_id=job.tenant_id,
@@ -85,15 +85,15 @@ async def handle_creative_expensive(job: QueueJob) -> dict[str, Any]:
         credit_ledger_service.capture(
             tenant_id=job.tenant_id,
             reservation_id=reservation_id,
-            provider_cost_usd=result.provider_cost_usd,
-            model_provider=f"{result.provider}:{result.model}",
+            provider_cost_usd=image_result.provider_cost_usd,
+            model_provider=f"{image_result.provider}:{image_result.model}",
         )
         return {
             "kind": kind,
             "status": "completed",
-            "model": result.model,
-            "asset_url": result.asset_url,
-            "provider_cost_usd": result.provider_cost_usd,
+            "model": image_result.model,
+            "asset_url": image_result.asset_url,
+            "provider_cost_usd": image_result.provider_cost_usd,
         }
 
     if kind == "video":
@@ -107,21 +107,21 @@ async def handle_creative_expensive(job: QueueJob) -> dict[str, Any]:
             )
         _throttle(route["provider"], 5)
         try:
-            result = await start_openai_video(prompt=prompt, model=model)
+            video_result = await start_openai_video(prompt=prompt, model=model)
         except Exception as exc:  # noqa: BLE001
             raise PermanentJobError(f"video_generation_failed:{type(exc).__name__}:{exc}") from exc
         credit_ledger_service.capture(
             tenant_id=job.tenant_id,
             reservation_id=reservation_id,
-            provider_cost_usd=result.provider_cost_usd,
-            model_provider=f"{result.provider}:{result.model}",
+            provider_cost_usd=video_result.provider_cost_usd,
+            model_provider=f"{video_result.provider}:{video_result.model}",
         )
         return {
             "kind": kind,
-            "status": result.status,
-            "model": result.model,
-            "provider_job_id": result.job_id,
-            "provider_cost_usd": result.provider_cost_usd,
+            "status": video_result.status,
+            "model": video_result.model,
+            "provider_job_id": video_result.job_id,
+            "provider_cost_usd": video_result.provider_cost_usd,
         }
 
     raise PermanentJobError(f"unsupported creative kind: {kind}")
