@@ -91,18 +91,25 @@ def test_landing_pricing_has_no_profit_copy() -> None:
     assert "output tokens" in text
 
 
-def test_settings_has_wallet_and_ai_limits_moved_to_cm() -> None:
+def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:
     root = Path(__file__).resolve().parents[1]
     settings = root / "dashboard" / "src" / "pages" / "Settings.jsx"
     cm_limits = root / "dashboard" / "src" / "pages" / "content-managers" / "CmAiLimitsPage.jsx"
     text = settings.read_text(encoding="utf-8")
-    assert "Token Wallet" in text
-    assert "/wallet" in text
+    # Token Wallet lives in the sidebar nav, not inside Settings tabs.
+    assert "id: 'wallet'" not in text
+    assert "Token Wallet" not in text
+    assert "id: 'api'" not in text
+    assert "Human Takeover" not in text
+    assert "System language" in text
     # AI Limits live in Content Managers (not Settings tabs) for SaaS self-service.
     assert "ai-limits" not in text
     assert "AiLimitsPanel" not in text
     assert cm_limits.is_file()
-    assert "ai_limits" in cm_limits.read_text(encoding="utf-8")
+    limits_text = cm_limits.read_text(encoding="utf-8")
+    assert "ai_limits" in limits_text
+    assert "voice_processing_enabled" in limits_text
+    assert "image_analysis_enabled" in limits_text
 
 
 def test_dual_balance_credit_debit(wallet_svc: TokenWalletService) -> None:

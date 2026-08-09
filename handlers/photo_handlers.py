@@ -22,22 +22,13 @@ from utils.utils import (  # NEW: Import Firestore utilities
 
 
 def _photo_analysis_enabled_for_tenant(tenant_id: str) -> bool:
-    """True only when published CM actions enable photo_analysis (default off)."""
+    """True when published CM AI Limits enable image analysis."""
     try:
-        from services.cm.constants import tenant_uses_cm_runtime
-        from services.cm.schemas import ActionsSection
-        from services.cm.version_store import load_published_content
+        from services.cm.capability_gates import image_analysis_enabled
 
-        if not tenant_uses_cm_runtime(tenant_id):
-            # Legacy bridge (linas unpublished): keep previous behavior for Wave 6 cutover.
-            return tenant_id == "linas"
-        _pointer, sections = load_published_content(tenant_id)
-        actions = ActionsSection.model_validate(sections.get("actions") or {})
-        for item in actions.items:
-            if item.id == "photo_analysis":
-                return bool(item.enabled)
+        return image_analysis_enabled(tenant_id)
     except Exception as exc:
-        print(f"[photo_handlers] actions lookup failed for {tenant_id}: {exc}")
+        print(f"[photo_handlers] ai_limits lookup failed for {tenant_id}: {exc}")
     return False
 
 

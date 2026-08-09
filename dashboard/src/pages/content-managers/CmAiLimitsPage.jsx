@@ -16,7 +16,7 @@ const CmAiLimitsPage = () => {
   return (
     <CmSectionShell
       title="AI Limits"
-      description="Per-customer usage limits for this business. Absolute platform clamps still apply in code."
+      description="Enable or disable AI capabilities and set per-customer usage limits. Absolute platform clamps still apply in code."
       loading={draft.loading}
       dirty={draft.dirty}
       saving={draft.saving}
@@ -29,6 +29,25 @@ const CmAiLimitsPage = () => {
       onValidate={() => void draft.validate()}
     >
       <div className="space-y-4 max-w-xl rounded-2xl border border-slate-200 bg-white p-5">
+        <h3 className="text-sm font-semibold text-slate-800">Capabilities</h3>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={p.voice_processing_enabled !== false}
+            onChange={(e) => setField("voice_processing_enabled", e.target.checked)}
+          />
+          Voice message processing
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={p.image_analysis_enabled !== false}
+            onChange={(e) => setField("image_analysis_enabled", e.target.checked)}
+          />
+          Image analysis
+        </label>
+
+        <h3 className="text-sm font-semibold text-slate-800 pt-2">Usage limits</h3>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={Boolean(p.unlimited)} onChange={(e) => setField("unlimited", e.target.checked)} />
           Unlimited (disable enforcement)
