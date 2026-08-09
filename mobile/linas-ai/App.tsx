@@ -102,16 +102,17 @@ export default function App() {
   }
 
   function openArea(area: ControlArea) {
+    if (area === 'integrations') {
+      // Guests land on Integrations → AuthGate (not a fake connect surface).
+      setScreen({ name: 'integrations' });
+      return;
+    }
     if (!hasAccess) {
       setScreen({ name: 'login' });
       return;
     }
     if (area === 'settings') {
       setScreen({ name: 'settings' });
-      return;
-    }
-    if (area === 'integrations') {
-      setScreen({ name: 'integrations' });
       return;
     }
     if (area === 'create') {
@@ -186,7 +187,11 @@ export default function App() {
           <SettingsScreen onBack={() => setScreen({ name: 'chat' })} onLogout={() => void logout()} />
         ) : null}
         {screen.name === 'integrations' ? (
-          <IntegrationsScreen onBack={() => setScreen({ name: 'chat' })} />
+          <IntegrationsScreen
+            onBack={() => setScreen({ name: 'chat' })}
+            onRequestLogin={() => setScreen({ name: 'login' })}
+            onRequestRegister={() => setScreen({ name: 'register' })}
+          />
         ) : null}
         {screen.name === 'creative' ? (
           <CreativeStudioScreen onBack={() => setScreen({ name: 'chat' })} />
