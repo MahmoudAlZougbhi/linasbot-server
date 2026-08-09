@@ -57,14 +57,15 @@ class OwnerPushTokenStore:
         with self._lock:
             data = self._load(tid)
             data["tenant_id"] = tid
-            data["tokens"][uid] = {
+            row: dict[str, Any] = {
                 "token": tok,
                 "platform": (platform or "").strip() or None,
                 "expo_project_id": (expo_project_id or "").strip() or None,
                 "updated_at": time.time(),
             }
+            data["tokens"][uid] = row
             self._path(tid).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            return data["tokens"][uid]
+            return row
 
     def list_tokens(self, *, tenant_id: str) -> list[dict[str, Any]]:
         data = self._load(tenant_id)

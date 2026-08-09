@@ -745,11 +745,11 @@ def route_social_contact_request(
         )
 
     env_name = f"SOCIAL_WHATSAPP_{branch.upper()}_{gender.upper()}"
-    phone = resolve_social_whatsapp_number(
+    wa_phone = resolve_social_whatsapp_number(
         env_name,
         tenant_id=str(user_data.get("tenant_id") or "linas"),
     )
-    if not phone:
+    if not wa_phone:
         return SocialContactRouteResult(
             _missing_contact(lang),
             detected_intent,
@@ -759,7 +759,7 @@ def route_social_contact_request(
             preference_to_persist=preference_to_persist,
         )
 
-    reply = _laser_contact_reply(lang, branch, phone)
+    reply = _laser_contact_reply(lang, branch, wa_phone)
     _clear_flow_state(user_data)
     return SocialContactRouteResult(
         reply,
