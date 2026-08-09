@@ -2037,8 +2037,7 @@ async def _process_and_respond(
                 print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (exact match)")
             elif match_tier == "safe_semantic":
                 print(
-                    f"[_process_and_respond] 📊 Safe semantic score: "
-                    f"{match_result.get('safe_score', match_score):.0%}"
+                    f"[_process_and_respond] 📊 Safe semantic score: {match_result.get('safe_score', match_score):.0%}"
                 )
             else:
                 print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥90% threshold)")
@@ -2050,9 +2049,7 @@ async def _process_and_respond(
                 try:
                     from services.faq_metrics import faq_metrics_store
 
-                    faq_metrics_store.record_lookup(
-                        tenant_id=_faq_tenant, hit=True, generation_avoided=True
-                    )
+                    faq_metrics_store.record_lookup(tenant_id=_faq_tenant, hit=True, generation_avoided=True)
                 except Exception:
                     pass
 

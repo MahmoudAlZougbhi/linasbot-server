@@ -48,7 +48,9 @@ class DiagnosisProposalStore:
 
     def create(self, prop: DiagnosisProposal) -> DiagnosisProposal:
         with self._lock:
-            self._path(prop.tenant_id, prop.id).write_text(json.dumps(asdict(prop), ensure_ascii=False), encoding="utf-8")
+            self._path(prop.tenant_id, prop.id).write_text(
+                json.dumps(asdict(prop), ensure_ascii=False), encoding="utf-8"
+            )
         return prop
 
     def get(self, *, tenant_id: str, proposal_id: str) -> DiagnosisProposal | None:
@@ -62,7 +64,9 @@ class DiagnosisProposalStore:
         prop.status = status
         prop.result = result
         with self._lock:
-            self._path(prop.tenant_id, prop.id).write_text(json.dumps(asdict(prop), ensure_ascii=False), encoding="utf-8")
+            self._path(prop.tenant_id, prop.id).write_text(
+                json.dumps(asdict(prop), ensure_ascii=False), encoding="utf-8"
+            )
         return prop
 
 

@@ -122,9 +122,7 @@ class GuestChatStore:
             if session is None:
                 raise KeyError("session not found")
             now = time.time()
-            session.messages.append(
-                GuestMessage(id=uuid.uuid4().hex, role="user", content=user_text, created_at=now)
-            )
+            session.messages.append(GuestMessage(id=uuid.uuid4().hex, role="user", content=user_text, created_at=now))
             session.messages.append(
                 GuestMessage(
                     id=uuid.uuid4().hex,

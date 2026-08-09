@@ -85,8 +85,7 @@ def compose_guest_reply(user_text: str, *, language: str | None = None) -> dict[
         if titles:
             body += " نقدّم مثلاً: " + "، ".join(titles) + "."
         body += (
-            " كضيف يمكنك الاستفسار فقط — لإنشاء مساحة عمل أو تعديل Content Management "
-            "يلزم تسجيل الدخول أو الاشتراك."
+            " كضيف يمكنك الاستفسار فقط — لإنشاء مساحة عمل أو تعديل Content Management يلزم تسجيل الدخول أو الاشتراك."
         )
     elif lang == "fr":
         body = _sales_intro(lang)

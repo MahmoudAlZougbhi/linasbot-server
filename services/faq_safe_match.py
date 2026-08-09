@@ -101,15 +101,7 @@ def score_candidate(
         + 0.05 * (1.0 if service_ok else 0.0)
         + 0.05 * (1.0 if location_ok else 0.0)
     )
-    accept = (
-        _is_fresh(entry)
-        and lang_ok
-        and intent_ok
-        and service_ok
-        and location_ok
-        and sim >= 0.82
-        and score >= 0.78
-    )
+    accept = _is_fresh(entry) and lang_ok and intent_ok and service_ok and location_ok and sim >= 0.82 and score >= 0.78
     return {
         "score": round(score, 4),
         "similarity": round(sim, 4),

@@ -127,10 +127,7 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
         return f"Diagnosis fix applied: {result_data.get('applied')}"
     if name == "read_faq_quota":
         ent = result_data.get("entitlement") or {}
-        return (
-            f"Smart Answers quota: {ent.get('quota_display')} "
-            f"(enabled={ent.get('faq_enabled')})."
-        )
+        return f"Smart Answers quota: {ent.get('quota_display')} (enabled={ent.get('faq_enabled')})."
     if name == "propose_smart_answer":
         return "Proposed Smart Answer ready for approval."
     if name == "approve_smart_answer":
