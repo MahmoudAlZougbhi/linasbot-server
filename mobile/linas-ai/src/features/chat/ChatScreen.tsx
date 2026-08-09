@@ -4,8 +4,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -21,6 +19,7 @@ import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
 import { chatScreenStyles as styles } from './chatScreenStyles';
+import { ChatStatusBanners } from './ChatStatusBanners';
 import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
 import { GuestBanner } from './GuestBanner';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
@@ -96,6 +95,15 @@ export function ChatScreen({
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
   }, []);
 
+  /** Open / switch chat: always land on latest after layout (RN scrollToEnd is flaky on mount). */
+  const armOpenAtLatest = useCallback(() => {
+    stickToBottomRef.current = true;
+    const run = (animated: boolean) => listRef.current?.scrollToEnd({ animated });
+    requestAnimationFrame(() => run(false));
+    setTimeout(() => run(false), 50);
+    setTimeout(() => run(false), 180);
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) {
       setUserId(null);
@@ -130,6 +138,12 @@ export function ChatScreen({
   const messages = isAuthenticated ? owner.messages : guest.messages;
   const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
+  const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
+
+  useEffect(() => {
+    if (loading) return;
+    armOpenAtLatest();
+  }, [armOpenAtLatest, loading, listKey]);
 
   useEffect(() => {
     if (!stickToBottomRef.current) return;
@@ -194,7 +208,10 @@ export function ChatScreen({
           workspaceLabel={workspaceLabel}
           onOpenMenu={() => setDrawerOpen(true)}
           onSignIn={() => openAuthPreservingDraft(false)}
-          onNewChat={() => void owner.newChat()}
+          onNewChat={() => {
+            stickToBottomRef.current = true;
+            void owner.newChat();
+          }}
         />
 
         {!isAuthenticated ? (
@@ -206,39 +223,28 @@ export function ChatScreen({
           />
         ) : null}
 
-        {offline ? (
-          <Text style={[styles.error, { color: colors.warning }]}>
-            Offline — your draft is preserved. Retry when connected.
-          </Text>
-        ) : null}
-
-        {error ? (
-          <Pressable
-            onPress={() => {
-              setOffline(false);
-              if (isAuthenticated) {
-                owner.setError(null);
-                void owner.bootstrap();
-              } else {
-                guest.setError(null);
-                void guest.bootstrap();
-              }
-            }}
-          >
-            <Text style={styles.error}>
-              {tr(
-                error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
-                  ? error
-                  : 'messageFailed',
-              )}{' '}
-              · Tap to retry
-            </Text>
-          </Pressable>
-        ) : null}
-        {voiceError ? <Text style={styles.error}>{voiceError}</Text> : null}
+        <ChatStatusBanners
+          offline={offline}
+          errorLabel={
+            error
+              ? tr(
+                  error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
+                    ? error
+                    : 'messageFailed',
+                )
+              : null
+          }
+          voiceError={voiceError}
+          onRetry={() => {
+            setOffline(false);
+            if (isAuthenticated) { owner.setError(null); void owner.bootstrap(); }
+            else { guest.setError(null); void guest.bootstrap(); }
+          }}
+        />
 
         <ChatMessageList
           listRef={listRef}
+          listKey={listKey}
           messages={messages}
           isAuthenticated={isAuthenticated}
           stickToBottomRef={stickToBottomRef}
@@ -248,6 +254,11 @@ export function ChatScreen({
           liveText={turn.liveText}
           cards={turn.cards}
           proposedPatch={isAuthenticated ? owner.proposedPatch : null}
+          hasMore={isAuthenticated ? owner.hasMore : false}
+          loadingMore={isAuthenticated ? owner.loadingMore : false}
+          onLoadOlder={() => {
+            if (isAuthenticated) void owner.loadOlder();
+          }}
           onRetryAssistant={(content) => void turn.send(content)}
           onApproveDraft={(token) => void turn.send('', { confirm_tool: token })}
           onDiscardProposal={() => {
@@ -343,7 +354,10 @@ export function ChatScreen({
           if (isAuthenticated) void owner.newChat();
           else setDrawerOpen(false);
         }}
-        onOpenChat={(id) => void owner.openConversation(id)}
+        onOpenChat={(id) => {
+          stickToBottomRef.current = true;
+          void owner.openConversation(id).then(() => armOpenAtLatest());
+        }}
         onTogglePin={(id) => void togglePin(id)}
         onArchive={(id) => void owner.setArchived(id, true)}
         onUnarchive={(id) => void owner.setArchived(id, false)}

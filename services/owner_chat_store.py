@@ -165,6 +165,31 @@ class OwnerChatStore:
             messages=messages,
         )
 
+    @staticmethod
+    def slice_messages(
+        messages: list[OwnerChatMessage] | None,
+        *,
+        limit: int = 25,
+        before_id: str | None = None,
+    ) -> tuple[list[OwnerChatMessage], bool, int]:
+        """Return the latest ``limit`` messages ending before ``before_id`` (exclusive).
+
+        Chronological ascending. ``has_more`` is True when older messages remain.
+        """
+        msgs = list(messages or [])
+        total = len(msgs)
+        safe_limit = max(1, min(int(limit or 25), 100))
+        end = total
+        if before_id:
+            for i, msg in enumerate(msgs):
+                if msg.id == before_id:
+                    end = i
+                    break
+            else:
+                return [], False, total
+        start = max(0, end - safe_limit)
+        return msgs[start:end], start > 0, total
+
     def append_message(
         self,
         *,

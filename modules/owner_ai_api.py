@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from modules.api_security import require_session
 from modules.core import app
 from services.owner_ai_orchestrator import run_owner_turn
 from services.owner_chat_store import owner_chat_store
+
+# Mobile opens at latest; older messages load via before= cursor.
+DEFAULT_MESSAGE_PAGE = 25
+MAX_MESSAGE_PAGE = 100
 
 
 class CreateConversationBody(BaseModel):
@@ -91,7 +95,12 @@ async def create_owner_conversation(body: CreateConversationBody, request: Reque
 
 
 @app.get("/api/owner-ai/conversations/{conversation_id}")
-async def get_owner_conversation(conversation_id: str, request: Request) -> Any:
+async def get_owner_conversation(
+    conversation_id: str,
+    request: Request,
+    limit: int = Query(default=DEFAULT_MESSAGE_PAGE, ge=1, le=MAX_MESSAGE_PAGE),
+    before: str | None = Query(default=None, min_length=1, max_length=64),
+) -> Any:
     session = require_session(request)
     conv = owner_chat_store.get_conversation(
         tenant_id=session.tenant_id,
@@ -100,6 +109,11 @@ async def get_owner_conversation(conversation_id: str, request: Request) -> Any:
     )
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    page, has_more, total = owner_chat_store.slice_messages(
+        conv.messages,
+        limit=limit,
+        before_id=before,
+    )
     return {
         "success": True,
         "conversation": {
@@ -107,7 +121,9 @@ async def get_owner_conversation(conversation_id: str, request: Request) -> Any:
             "title": conv.title,
             "created_at": conv.created_at,
             "updated_at": conv.updated_at,
-            "messages": [m.__dict__ for m in (conv.messages or [])],
+            "messages": [m.__dict__ for m in page],
+            "has_more": has_more,
+            "total_messages": total,
         },
     }
 
