@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { HIT, fonts, spacing, useTheme } from '../../theme';
+import { MenuIcon, NewChatIcon } from './ChatHeaderIcons';
 
 type Props = {
   isAuthenticated: boolean;
@@ -21,6 +22,7 @@ export function ChatHeader({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const iconColor = colors.text;
 
   return (
     <View
@@ -35,11 +37,12 @@ export function ChatHeader({
     >
       <Pressable
         onPress={onOpenMenu}
-        style={[styles.hit, { borderColor: colors.border, backgroundColor: colors.surface }]}
+        style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
         accessibilityLabel="Open menu"
         accessibilityRole="button"
+        hitSlop={4}
       >
-        <Text style={{ color: colors.accent, fontSize: 18, fontWeight: '700' }}>☰</Text>
+        <MenuIcon color={iconColor} />
       </Pressable>
 
       <View style={styles.center}>
@@ -54,16 +57,17 @@ export function ChatHeader({
       {isAuthenticated ? (
         <Pressable
           onPress={onNewChat}
-          style={[styles.hit, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
           accessibilityLabel="New chat"
           accessibilityRole="button"
+          hitSlop={4}
         >
-          <Text style={{ color: colors.accent, fontSize: 16 }}>✎</Text>
+          <NewChatIcon color={iconColor} />
         </Pressable>
       ) : (
         <Pressable
           onPress={onSignIn}
-          style={styles.signIn}
+          style={({ pressed }) => [styles.signIn, pressed && styles.pressed]}
           accessibilityLabel="Sign in"
           accessibilityRole="button"
           hitSlop={8}
@@ -79,7 +83,7 @@ export function ChatHeader({
 
 const styles = StyleSheet.create({
   bar: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -89,8 +93,9 @@ const styles = StyleSheet.create({
     height: HIT,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
+  },
+  pressed: {
+    opacity: 0.55,
   },
   center: {
     flex: 1,
