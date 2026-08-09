@@ -168,17 +168,20 @@ class TestRouteInventory:
         ENDPOINT_AUTH_COUNTS.update(counts)
 
         assert counts["total_api_routes"] >= 100
-        assert counts["public"] == len(_PUBLIC_EXACT)
+        public_set = set(auth_matrix["public"])
+        # Exact allowlist + prefix-public guest sales chat routes.
+        assert counts["public"] == len(public_set)
+        assert counts["public"] >= len(_PUBLIC_EXACT)
         assert counts["protected"] == counts["total_api_routes"] - counts["public"]
         assert counts["protected_gets"] + counts["protected_mutations"] <= counts["protected"]
 
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
         # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
         # +meta reconnect endpoint for first-party bindings.
-        assert counts["total_api_routes"] == 196
-        assert counts["public"] == 15
-        assert counts["protected"] == 181
-        public_set = set(auth_matrix["public"])
+        # +guest-ai session/messages (prefix-public, rate-limited).
+        assert counts["total_api_routes"] == 205
+        assert counts["public"] == 18
+        assert counts["protected"] == 187
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
@@ -195,6 +198,9 @@ class TestRouteInventory:
             ("POST", "/api/auth/mobile/refresh"),
             ("POST", "/api/entitlements/apple/notifications"),
             ("POST", "/api/entitlements/google/notifications"),
+            ("POST", "/api/guest-ai/session"),
+            ("GET", "/api/guest-ai/session"),
+            ("POST", "/api/guest-ai/session/messages"),
         }
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set

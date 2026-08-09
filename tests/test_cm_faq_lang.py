@@ -16,6 +16,8 @@ from services.cm.faq_integration import (
 )
 from services.local_qa_service import local_qa_service
 
+pytestmark = pytest.mark.usefixtures("enable_faq_plan")
+
 FAKE_TRANSLATIONS: dict[str, dict[str, str]] = {
     "ar": {"question": "شو سعر الليزر؟", "answer": "السعر عشرين دولار."},
     "en": {"question": "What is the laser price?", "answer": "The price is twenty dollars."},

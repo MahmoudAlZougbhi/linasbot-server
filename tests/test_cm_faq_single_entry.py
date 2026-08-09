@@ -6,6 +6,8 @@ import pytest
 
 from services.cm.constants import cm_faq_canonical
 
+pytestmark = pytest.mark.usefixtures("enable_faq_plan")
+
 
 def test_cm_faq_canonical_defaults_true(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CM_FAQ_CANONICAL", raising=False)

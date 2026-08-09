@@ -30,6 +30,8 @@ from services.cm.pricing.schemas import (
 from services.cm.pricing.section import normalize_prices_section
 from services.cm.schemas import LocalizedLabels, PricesSection
 
+pytestmark = pytest.mark.usefixtures("enable_faq_plan")
+
 
 def _labels(en: str) -> LocalizedLabels:
     return LocalizedLabels(en=en)
