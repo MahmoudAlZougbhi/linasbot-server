@@ -183,9 +183,10 @@ class TestRouteInventory:
         # +meta reconnect endpoint for first-party bindings.
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
-        assert counts["total_api_routes"] == 212
+        # +owner-ai v2 flags/attachment-types/attachments/stream/choices (protected).
+        assert counts["total_api_routes"] == 217
         assert counts["public"] == 18
-        assert counts["protected"] == 194
+        assert counts["protected"] == 199
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),

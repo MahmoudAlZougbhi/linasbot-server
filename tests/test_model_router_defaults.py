@@ -41,7 +41,7 @@ def test_owner_router_defaults_sol_and_luna(monkeypatch) -> None:
         monkeypatch.delenv(key, raising=False)
 
     cfg = router_config()
-    assert cfg["owner_help"]["model"] == "gpt-5.6-luna"
+    assert cfg["owner_help"]["model"] == "gpt-5.6-sol"
     assert cfg["owner_complex_cm"]["model"] == "gpt-5.6-sol"
     assert cfg["creative"]["model"] == "gpt-5.6-sol"
     assert cfg["customer_high_volume"]["model"] == "gpt-5.6-luna"
