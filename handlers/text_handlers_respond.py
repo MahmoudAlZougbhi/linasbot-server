@@ -1153,8 +1153,8 @@ async def _process_and_respond(
 
     if is_social_channel(user_data.get("channel")):
         _social_tenant = user_data.get("tenant_id") or _CM_DEFAULT_TENANT
-        _use_legacy_social_router = (
-            _tenant_allows_legacy_bridge(_social_tenant) and not _tenant_uses_cm_runtime(_social_tenant)
+        _use_legacy_social_router = _tenant_allows_legacy_bridge(_social_tenant) and not _tenant_uses_cm_runtime(
+            _social_tenant
         )
         if _use_legacy_social_router:
             if user_data.get("user_preferred_lang") != current_preferred_lang:

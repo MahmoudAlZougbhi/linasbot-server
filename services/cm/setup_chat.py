@@ -231,7 +231,17 @@ def _heuristic_patch(section: str, message: str) -> dict[str, Any] | None:
             if "dm" in item["id"] or "handoff" in item["id"]:
                 item["enabled"] = True
         return {"items": items}
-    if section in {"services", "branches", "knowledge", "care", "faq", "prices", "restricted", "dynamic_messages", "languages"}:
+    if section in {
+        "services",
+        "branches",
+        "knowledge",
+        "care",
+        "faq",
+        "prices",
+        "restricted",
+        "dynamic_messages",
+        "languages",
+    }:
         return {"notes": text[:1000]}
     return {"notes": text[:1000]}
 

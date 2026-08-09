@@ -290,6 +290,7 @@ class TestDebugAndSimulationEndpoints:
         assert response.status_code == 403
         body = response.json()
         assert body.get("code") == "PRODUCT_MODULE_DISABLED"
+
     def test_debug_webhook_status_requires_auth(self, client: TestClient) -> None:
         _clear_client_auth(client)
         response = client.get("/api/debug/webhook-status")

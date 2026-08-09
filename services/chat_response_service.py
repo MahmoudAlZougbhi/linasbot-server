@@ -3651,9 +3651,7 @@ async def get_bot_chat_response(
             temperature=0.7,
             tools=cast(
                 list[ChatCompletionToolParam],
-                get_openai_tools_schema(
-                    excluded_tool_names=set(LEGACY_BOOKING_TOOL_NAMES)
-                ),
+                get_openai_tools_schema(excluded_tool_names=set(LEGACY_BOOKING_TOOL_NAMES)),
             ),
             tool_choice="auto",
             response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),

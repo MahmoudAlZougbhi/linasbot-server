@@ -36,10 +36,7 @@ async def main() -> int:
 
     ensure_defaults(tenant_id=args.tenant_id)
     result = await publish_draft(tenant_id=args.tenant_id, published_by=args.published_by)
-    print(
-        f"[published] tenant={result.tenant_id} "
-        f"content={result.content_version_id} index={result.index_version_id}"
-    )
+    print(f"[published] tenant={result.tenant_id} content={result.content_version_id} index={result.index_version_id}")
     return 0
 
 
