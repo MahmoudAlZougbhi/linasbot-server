@@ -9,16 +9,17 @@ type Props = {
   title: string;
   subtitle?: string;
   onBack: () => void;
+  backLabel?: string;
   children: ReactNode;
 };
 
-export function ScreenChrome({ title, subtitle, onBack, children }: Props) {
+export function ScreenChrome({ title, subtitle, onBack, backLabel, children }: Props) {
   const insets = useSafeAreaInsets();
   return (
     <GradientBackground>
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={onBack}>
-          <Text style={styles.back}>← Back to chat</Text>
+          <Text style={styles.back}>{backLabel ?? '← Back to chat'}</Text>
         </Pressable>
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}

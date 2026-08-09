@@ -11,6 +11,8 @@ import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
 import { CmScreen } from './src/features/cm/CmScreen';
+import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
+import type { CmSectionId } from './src/features/cm/cmSections';
 import type { ControlArea } from './src/features/control/controlAreas';
 import { CreativeStudioScreen } from './src/features/creative/CreativeStudioScreen';
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
@@ -33,6 +35,7 @@ type Screen =
   | { name: 'usage' }
   | { name: 'livechat' }
   | { name: 'cm' }
+  | { name: 'cm_section'; section: CmSectionId }
   | { name: 'resource'; title: string; path: string };
 
 const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
@@ -194,7 +197,15 @@ export default function App() {
         {screen.name === 'billing' ? <BillingScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
         {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
         {screen.name === 'livechat' ? <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
-        {screen.name === 'cm' ? <CmScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+        {screen.name === 'cm' ? (
+          <CmScreen
+            onBack={() => setScreen({ name: 'chat' })}
+            onOpenSection={(section) => setScreen({ name: 'cm_section', section })}
+          />
+        ) : null}
+        {screen.name === 'cm_section' ? (
+          <CmSectionScreen section={screen.section} onBack={() => setScreen({ name: 'cm' })} />
+        ) : null}
         {screen.name === 'resource' ? (
           <SimpleResourceScreen
             title={screen.title}
