@@ -28,7 +28,8 @@ FORBIDDEN_GUEST_TOOLS = frozenset(
 
 MAX_HISTORY_MESSAGES = 12
 MAX_HISTORY_CHARS = 700
-DEFAULT_GUEST_MODEL = "gpt-5-mini"
+# gpt-4o-mini: reliable short replies + temperature variety (gpt-5-mini often returns empty text under low completion caps).
+DEFAULT_GUEST_MODEL = "gpt-4o-mini"
 
 
 class GuestAIModelError(RuntimeError):
@@ -175,7 +176,12 @@ async def compose_guest_reply(
         raise GuestAIModelError(f"guest_llm_bad_response:{type(exc).__name__}") from exc
 
     if not reply:
-        raise GuestAIModelError("guest_llm_empty_reply")
+        finish = None
+        try:
+            finish = getattr(response.choices[0], "finish_reason", None)
+        except Exception:  # noqa: BLE001
+            finish = None
+        raise GuestAIModelError(f"guest_llm_empty_reply:finish={finish}")
 
     usage = getattr(response, "usage", None)
     return {

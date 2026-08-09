@@ -35,7 +35,7 @@ def _env_model(key: str, default: str) -> str:
 def router_config() -> dict[str, Any]:
     return {
         "owner_help": {
-            "model": _env_model("LINAS_OWNER_HELP_MODEL", "gpt-5-mini"),
+            "model": _env_model("LINAS_OWNER_HELP_MODEL", "gpt-4o-mini"),
             "max_context_tokens": int(os.getenv("LINAS_OWNER_HELP_MAX_CTX", "3500")),
         },
         "owner_complex_cm": {

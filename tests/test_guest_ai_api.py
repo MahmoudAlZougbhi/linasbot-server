@@ -241,7 +241,9 @@ async def test_guest_llm_uses_gpt5_safe_params_not_legacy_max_tokens():
             result = await compose_guest_reply("How do Instagram DMs work?", language="en")
     assert "Instagram" in result["reply_text"]
     assert "max_tokens" not in captured
-    assert captured.get("max_completion_tokens") == 320
+    # Reasoning models need a high completion floor or OpenAI returns empty content.
+    assert int(captured.get("max_completion_tokens") or 0) >= 2048
+    assert captured.get("reasoning_effort") == "low"
     assert "temperature" not in captured
     assert captured.get("model") == "gpt-5-mini"
 
@@ -255,7 +257,8 @@ def test_build_chat_completion_kwargs_gpt5_vs_legacy():
         max_tokens=100,
         temperature=0.7,
     )
-    assert gpt5["max_completion_tokens"] == 100
+    assert gpt5["max_completion_tokens"] >= 2048
+    assert gpt5.get("reasoning_effort") == "low"
     assert "max_tokens" not in gpt5
     assert "temperature" not in gpt5
 
@@ -268,6 +271,7 @@ def test_build_chat_completion_kwargs_gpt5_vs_legacy():
     assert legacy["max_tokens"] == 100
     assert legacy["temperature"] == 0.7
     assert "max_completion_tokens" not in legacy
+    assert "reasoning_effort" not in legacy
 
 
 def test_guest_routes_are_public():
