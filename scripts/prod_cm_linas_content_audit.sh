@@ -101,7 +101,21 @@ def summarize_section(name: str, payload: dict) -> dict:
             ]
     elif name == "prices":
         items = payload.get("items") or payload.get("prices") or []
+        catalog = payload.get("catalog") or []
+        price_entries = payload.get("price_entries") or []
         out["count"] = len(items) if isinstance(items, list) else None
+        out["catalog_count"] = len(catalog) if isinstance(catalog, list) else None
+        out["price_entry_count"] = len(price_entries) if isinstance(price_entries, list) else None
+        if isinstance(catalog, list):
+            out["catalog_labels_sample"] = [
+                (
+                    (i.get("labels") or {}).get("en")
+                    if isinstance(i.get("labels"), dict)
+                    else i.get("id")
+                )
+                for i in catalog[:20]
+                if isinstance(i, dict)
+            ]
     elif name in {"knowledge", "care", "faq"}:
         items = payload.get("items") or payload.get("articles") or payload.get("qa_groups") or payload.get("groups") or []
         out["count"] = len(items) if isinstance(items, list) else None

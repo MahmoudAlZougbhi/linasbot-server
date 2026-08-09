@@ -78,14 +78,31 @@ if "marwa" in an or "marwa" in cn:
 if "linas" not in an and "lina" not in an:
     report["failures"].append("assistant_name_not_linas")
 
+# Prefer an authoritative catalog label for the price probe when structured prices exist.
+price_probe = "How much is underarm laser?"
+try:
+    from services.cm.pricing.section import normalize_prices_section, section_catalog_items
+
+    _prices = normalize_prices_section(sections.get("prices") or {})
+    _catalog = section_catalog_items(_prices)
+    if _catalog:
+        _item = next((i for i in _catalog if i.active), _catalog[0])
+        _label = (_item.labels.en or _item.labels.ar or _item.id or "").strip()
+        if _label:
+            price_probe = f"How much is {_label}?"
+            report["price_probe_source"] = {"catalog_item_id": _item.id, "label": _label}
+except Exception as exc:
+    report["price_probe_source_error"] = type(exc).__name__
+
 probes = [
     ("business", "What laser services do you offer?"),
     ("branch", "Where is your Beirut branch?"),
     ("service", "Do you offer laser hair removal?"),
-    ("price", "How much is underarm laser?"),
+    ("price", price_probe),
     ("handoff", "I want to book an appointment with a human."),
     ("off_day", "Are you open today?"),
 ]
+report["price_probe_message"] = price_probe
 
 
 async def run_probes() -> None:

@@ -32,6 +32,7 @@ on:
           - preserve_durable_flags
           - verify_durable_bridge
           - import_prices
+          - repair_linas_prices_publish
       confirmation:
         description: "Type CM_CUTOVER_CONFIRMED"
         required: true
@@ -134,6 +135,8 @@ jobs:
               sudo -E bash /opt/linasbot/scripts/prod_cm_verify_durable_bridge.sh
             elif [ "${PHASE}" = "import_prices" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_import_prices.sh
+            elif [ "${PHASE}" = "repair_linas_prices_publish" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_repair_linas_prices_publish.sh
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1
