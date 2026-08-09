@@ -82,15 +82,24 @@ def test_public_catalog_omits_margin_and_shows_dual_allotments() -> None:
 
 
 def test_landing_pricing_has_no_profit_copy() -> None:
-    landing = Path(__file__).resolve().parents[1] / "dashboard" / "src" / "pages" / "public" / "Landing.jsx"
-    text = landing.read_text(encoding="utf-8")
+    pricing = (
+        Path(__file__).resolve().parents[1]
+        / "dashboard"
+        / "src"
+        / "components"
+        / "landing"
+        / "sections"
+        / "LandingPricing.jsx"
+    )
+    text = pricing.read_text(encoding="utf-8")
     assert 'id="pricing"' in text
     assert "30% profit" not in text
     assert "OpenAI cost" not in text
-    # Cost-model jargon stays off the marketing landing; billing detail lives in-app / pricing page.
+    # Cost-model jargon stays off the marketing landing; live amounts come from in-app checkout.
     assert "input tokens" not in text
     assert "output tokens" not in text
-    assert "Subscriptions and usage credits are managed in the Linas AI mobile app" in text
+    assert "billing catalog" in text.lower()
+    assert "checkout" in text.lower()
 
 
 def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:

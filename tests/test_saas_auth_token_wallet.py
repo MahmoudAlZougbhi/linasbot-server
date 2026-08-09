@@ -109,14 +109,20 @@ def test_public_packages_endpoint() -> None:
 
 
 def test_landing_pricing_section_in_source() -> None:
-    landing = Path(__file__).resolve().parents[1] / "dashboard" / "src" / "pages" / "public" / "Landing.jsx"
-    text = landing.read_text(encoding="utf-8")
-    assert 'id="pricing"' in text
-    # Marketing landing points to pricing page + app subscribe CTAs (no wallet packages fetch).
-    assert "pricing page" in text
-    assert "subscribe in the app" in text.lower() or "Subscribe" in text or "mobile app" in text
-    assert "/api/billing/packages" not in text
-    assert "30% profit" not in text
+    root = Path(__file__).resolve().parents[1]
+    landing = root / "dashboard" / "src" / "pages" / "public" / "Landing.jsx"
+    pricing = root / "dashboard" / "src" / "components" / "landing" / "sections" / "LandingPricing.jsx"
+    landing_text = landing.read_text(encoding="utf-8")
+    pricing_text = pricing.read_text(encoding="utf-8")
+    # Design ZIP moved the pricing section into LandingPricing; Landing composes it.
+    assert "LandingPricing" in landing_text
+    assert 'id="pricing"' in pricing_text
+    # Marketing pricing preview points to in-app billing catalog (no wallet packages fetch).
+    assert "billing catalog" in pricing_text.lower()
+    assert "app" in pricing_text.lower()
+    assert "/api/billing/packages" not in pricing_text
+    assert "/api/billing/packages" not in landing_text
+    assert "30% profit" not in pricing_text
 
 
 def test_unlimited_linas_bypass(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
