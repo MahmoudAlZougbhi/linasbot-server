@@ -1,5 +1,6 @@
 export type ControlArea =
   | 'cm'
+  | 'faq'
   | 'create'
   | 'integrations'
   | 'usage'
@@ -25,6 +26,12 @@ export const CONTROL_ITEMS: ControlItem[] = [
     id: 'cm',
     title: 'Content Management',
     subtitle: 'Manual AI configuration',
+    group: 'operate',
+  },
+  {
+    id: 'faq',
+    title: 'FAQ',
+    subtitle: 'Saved Q&A with auto-translate',
     group: 'operate',
   },
   {

@@ -174,7 +174,20 @@ def resolve_branch_facts(branches: BranchesSection | dict[str, Any], branch_id: 
     for branch in section.items:
         if branch.id != branch_id:
             continue
-        facts = [AnswerFact(kind="branch_address", value=branch.address, source_id=f"branch:{branch.id}")]
+        address_value = branch.composed_address()
+        facts: list[AnswerFact] = []
+        if address_value:
+            facts.append(
+                AnswerFact(kind="branch_address", value=address_value, source_id=f"branch:{branch.id}")
+            )
+        if (branch.maps_url or "").strip():
+            facts.append(
+                AnswerFact(
+                    kind="branch_maps_url",
+                    value=branch.maps_url.strip(),
+                    source_id=f"branch:{branch.id}:maps",
+                )
+            )
         if branch.hours.summary:
             facts.append(AnswerFact(kind="branch_hours", value=branch.hours.summary, source_id=f"branch:{branch.id}"))
         if branch.notes:

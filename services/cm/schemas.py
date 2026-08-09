@@ -103,10 +103,22 @@ class BranchHours(CmBaseModel):
 class BranchRecord(CmBaseModel):
     id: str
     labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
-    address: str = ""
+    address: str = ""  # Legacy / composed display line used by answer facts.
+    street: str = ""
+    building: str = ""
+    floor: str = ""
+    country: str = ""
+    maps_url: str = ""
     hours: BranchHours = Field(default_factory=BranchHours)
     available: bool = True
     notes: str | None = None
+
+    def composed_address(self) -> str:
+        """Prefer structured parts when present; fall back to legacy address."""
+        parts = [p.strip() for p in (self.street, self.building, self.floor, self.country) if p and p.strip()]
+        if parts:
+            return ", ".join(parts)
+        return (self.address or "").strip()
 
 
 class PriceRecord(CmBaseModel):

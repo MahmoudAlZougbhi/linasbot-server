@@ -1,4 +1,4 @@
-/** Mobile CM section catalog — mirrors dashboard cmSections.js + backend CM_SECTIONS. */
+/** Mobile CM section catalog — mirrors backend CM_SECTIONS (subset shown in app CM hub). */
 
 export type CmSectionId =
   | 'ai_basics'
@@ -10,12 +10,12 @@ export type CmSectionId =
   | 'prices'
   | 'care'
   | 'knowledge'
-  | 'faq'
   | 'handoff'
   | 'restricted'
+  | 'off_days'
+  /** Settings-hosted (not listed in CM hub). */
   | 'actions'
-  | 'ai_limits'
-  | 'off_days';
+  | 'ai_limits';
 
 export type CmSectionCard = {
   id: CmSectionId;
@@ -24,73 +24,69 @@ export type CmSectionCard = {
   /** false = show row but disabled with reason. */
   mobileSupported: boolean;
   disabledReason?: string;
+  /** When false, hide from Content Management hub (still editable elsewhere). */
+  showInCmHub?: boolean;
 };
 
 export const CM_SECTION_CARDS: CmSectionCard[] = [
   {
     id: 'ai_basics',
     title: 'AI Basics',
-    description: 'Business identity, persona, and core AI grounding.',
+    description: 'Role, business purpose, and short introduction.',
     mobileSupported: true,
   },
   {
     id: 'languages',
     title: 'Languages',
-    description: 'Language policy and Franco → Arabic (RTL) answer map.',
+    description: 'Enable Arabic, English, French, Franco-Arabic.',
     mobileSupported: true,
   },
   {
     id: 'style',
     title: 'Style & Tone',
-    description: 'Voice, tone, and writing guidelines.',
+    description: 'Tone, formality, and emoji level.',
     mobileSupported: true,
   },
   {
     id: 'dynamic_messages',
-    title: 'Dynamic Messages',
+    title: 'Greetings & Messages',
     description: 'Greeting and system message templates.',
     mobileSupported: true,
   },
   {
     id: 'services',
     title: 'Services',
-    description: 'Service / product catalog used by answers.',
+    description: 'Service catalog: name, note, available.',
     mobileSupported: true,
   },
   {
     id: 'branches',
     title: 'Locations',
-    description: 'Branches, hours, and availability.',
+    description: 'Branches with address and Maps link.',
     mobileSupported: true,
   },
   {
     id: 'prices',
     title: 'Prices',
-    description: 'Catalog prices, policy text, and legacy price rows.',
+    description: 'Build reusable price list catalogs.',
     mobileSupported: true,
   },
   {
     id: 'care',
-    title: 'Care / Instructions',
+    title: 'Care',
     description: 'Preparation and aftercare articles.',
     mobileSupported: true,
   },
   {
     id: 'knowledge',
     title: 'Knowledge',
-    description: 'Narrative knowledge articles for retrieval.',
-    mobileSupported: true,
-  },
-  {
-    id: 'faq',
-    title: 'FAQ',
-    description: 'Linked Q&A groups (edit EN/AR on mobile).',
+    description: 'Knowledge articles: title and note.',
     mobileSupported: true,
   },
   {
     id: 'handoff',
     title: 'Human Handoff',
-    description: 'Contacts and routing for human handoff.',
+    description: 'Contacts for when customers ask for a human.',
     mobileSupported: true,
   },
   {
@@ -100,43 +96,30 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     mobileSupported: true,
   },
   {
+    id: 'off_days',
+    title: 'Off Days',
+    description: 'Tap calendar days the business is closed.',
+    mobileSupported: true,
+  },
+  {
     id: 'actions',
     title: 'Actions',
-    description: 'Enable or disable AI capabilities.',
+    description: 'Enable Instagram, Facebook, handoff, and more.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'ai_limits',
     title: 'AI Limits',
-    description: 'Per-customer image and context limits.',
+    description: 'Image and context usage limits.',
     mobileSupported: true,
-  },
-  {
-    id: 'off_days',
-    title: 'Off Days',
-    description: 'Closed weekdays and date ranges.',
-    mobileSupported: true,
+    showInCmHub: false,
   },
 ];
 
-/** Hub-only surfaces that exist on web but have no draft section API. */
-export const CM_HUB_DISABLED = [
-  {
-    id: 'learning_inbox',
-    title: 'Learning Inbox',
-    reason: 'Available on the web dashboard only.',
-  },
-  {
-    id: 'sources',
-    title: 'Sources & Archive',
-    reason: 'Available on the web dashboard only.',
-  },
-  {
-    id: 'publish',
-    title: 'Preview / Publish',
-    reason: 'Validate and publish from the web dashboard or chat tools.',
-  },
-] as const;
+export const CM_HUB_CARDS: CmSectionCard[] = CM_SECTION_CARDS.filter(
+  (c) => c.showInCmHub !== false,
+);
 
 const BY_ID = Object.fromEntries(CM_SECTION_CARDS.map((c) => [c.id, c])) as Record<
   CmSectionId,
@@ -151,10 +134,10 @@ export function isCmSectionId(id: string): id is CmSectionId {
   return id in BY_ID;
 }
 
-/** Alias used by CmScreen hub tiles (parallel CM agent). */
+/** Alias used by CmScreen hub tiles. */
 export type CmSectionMeta = CmSectionCard & { short: string };
 
-export const CM_SECTION_TILES: CmSectionMeta[] = CM_SECTION_CARDS.map((c) => ({
+export const CM_SECTION_TILES: CmSectionMeta[] = CM_HUB_CARDS.map((c) => ({
   ...c,
   short: c.description,
 }));

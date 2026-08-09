@@ -21,6 +21,7 @@ import { IntegrationsScreen } from './src/features/integrations/IntegrationsScre
 import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
 import { NotificationsScreen } from './src/features/notifications/NotificationsScreen';
 import { tryRegisterOwnerPushScaffold } from './src/features/notifications/pushScaffold';
+import { FaqScreen } from './src/features/faq/FaqScreen';
 import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
 import { UsersScreen } from './src/features/users/UsersScreen';
@@ -43,7 +44,8 @@ type Screen =
   | { name: 'livechat'; open?: LiveChatOpen | null }
   | { name: 'notifications' }
   | { name: 'cm' }
-  | { name: 'cm_section'; section: CmSectionId }
+  | { name: 'cm_section'; section: CmSectionId; backTo?: 'cm' | 'settings' }
+  | { name: 'faq' }
   | { name: 'resource'; title: string; path: string };
 
 const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
@@ -183,6 +185,10 @@ export default function App() {
       setScreen({ name: 'cm' });
       return;
     }
+    if (area === 'faq') {
+      setScreen({ name: 'faq' });
+      return;
+    }
     const target = RESOURCE_MAP[area];
     if (target) {
       setScreen({ name: 'resource', ...target });
@@ -273,7 +279,16 @@ export default function App() {
           />
         ) : null}
         {screen.name === 'settings' ? (
-          <SettingsScreen onBack={() => setScreen({ name: 'chat' })} onLogout={() => void logout()} />
+          <SettingsScreen
+            onBack={() => setScreen({ name: 'chat' })}
+            onLogout={() => void logout()}
+            onOpenActions={() =>
+              setScreen({ name: 'cm_section', section: 'actions', backTo: 'settings' })
+            }
+            onOpenAiLimits={() =>
+              setScreen({ name: 'cm_section', section: 'ai_limits', backTo: 'settings' })
+            }
+          />
         ) : null}
         {screen.name === 'integrations' ? (
           <IntegrationsScreen
@@ -318,12 +333,29 @@ export default function App() {
         {screen.name === 'cm' ? (
           <CmScreen
             onBack={() => setScreen({ name: 'chat' })}
-            onOpenSection={(section) => setScreen({ name: 'cm_section', section })}
+            onOpenSection={(section) =>
+              setScreen({ name: 'cm_section', section, backTo: 'cm' })
+            }
           />
         ) : null}
         {screen.name === 'cm_section' ? (
-          <CmSectionScreen section={screen.section} onBack={() => setScreen({ name: 'cm' })} />
+          <CmSectionScreen
+            section={screen.section}
+            onBack={() => {
+              if (screen.backTo === 'settings') {
+                setScreen({ name: 'settings' });
+                return;
+              }
+              setScreen({ name: 'cm' });
+            }}
+            backLabel={
+              screen.backTo === 'settings'
+                ? '← Back to Settings'
+                : '← Back to Content Management'
+            }
+          />
         ) : null}
+        {screen.name === 'faq' ? <FaqScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
         {screen.name === 'resource' ? (
           <SimpleResourceScreen
             title={screen.title}

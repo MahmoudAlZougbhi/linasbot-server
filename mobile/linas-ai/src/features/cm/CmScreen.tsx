@@ -13,7 +13,7 @@ import { StatusChip } from '../../components/StatusChip';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { fetchCmMeta, type CmMeta } from './cmApi';
-import { CM_HUB_DISABLED, CM_SECTION_CARDS, getCmSection, type CmSectionId } from './cmSections';
+import { CM_HUB_CARDS, getCmSection, type CmSectionId } from './cmSections';
 
 type Props = {
   onBack: () => void;
@@ -40,19 +40,9 @@ export function CmScreen({ onBack, onOpenSection }: Props) {
   }, []);
 
   const tiles = useMemo(() => {
-    const apiSections = (meta?.sections ?? []).map((s) => s.replace(/-/g, '_'));
-    if (apiSections.length === 0) return CM_SECTION_CARDS;
-    return apiSections.map((id) => {
-      const known = getCmSection(id);
-      if (known) return known;
-      return {
-        id: id as CmSectionId,
-        title: id.replace(/_/g, ' '),
-        description: 'Backend section',
-        mobileSupported: false,
-        disabledReason: 'No mobile editor for this section yet.',
-      };
-    });
+    const apiSections = new Set((meta?.sections ?? []).map((s) => s.replace(/-/g, '_')));
+    // Hub shows only mobile CM sections — never Actions/AI Limits/FAQ/web hubs.
+    return CM_HUB_CARDS.filter((card) => apiSections.size === 0 || apiSections.has(card.id));
   }, [meta]);
 
   return (
@@ -85,7 +75,8 @@ export function CmScreen({ onBack, onOpenSection }: Props) {
         <Text style={styles.gridLabel}>Sections</Text>
         <View style={styles.grid}>
           {tiles.map((tile) => {
-            const supported = tile.mobileSupported !== false;
+            const known = getCmSection(tile.id);
+            const supported = known?.mobileSupported !== false;
             return (
               <Pressable
                 key={tile.id}
@@ -96,22 +87,10 @@ export function CmScreen({ onBack, onOpenSection }: Props) {
                 }}
               >
                 <Text style={styles.tileTitle}>{tile.title}</Text>
-                <Text style={styles.tileSub}>
-                  {supported ? tile.description : tile.disabledReason || tile.description}
-                </Text>
+                <Text style={styles.tileSub}>{tile.description}</Text>
               </Pressable>
             );
           })}
-        </View>
-
-        <Text style={styles.gridLabel}>Web-only hubs</Text>
-        <View style={styles.grid}>
-          {CM_HUB_DISABLED.map((hub) => (
-            <View key={hub.id} style={[styles.tile, styles.tileDisabled]}>
-              <Text style={styles.tileTitle}>{hub.title}</Text>
-              <Text style={styles.tileSub}>{hub.reason}</Text>
-            </View>
-          ))}
         </View>
 
         {!loading && !meta && !error ? (

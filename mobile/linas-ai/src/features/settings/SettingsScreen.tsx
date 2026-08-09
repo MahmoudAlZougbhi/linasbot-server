@@ -10,13 +10,15 @@ import { ScreenChrome } from '../shared/ScreenChrome';
 type Props = {
   onBack: () => void;
   onLogout: () => void;
+  onOpenActions: () => void;
+  onOpenAiLimits: () => void;
 };
 
 async function open(url: string) {
   await Linking.openURL(url);
 }
 
-export function SettingsScreen({ onBack, onLogout }: Props) {
+export function SettingsScreen({ onBack, onLogout, onOpenActions, onOpenAiLimits }: Props) {
   const { tr, language, setLanguage } = useI18n();
 
   return (
@@ -38,6 +40,17 @@ export function SettingsScreen({ onBack, onLogout }: Props) {
         ))}
       </View>
 
+      <Text style={styles.section}>{tr('settingsAiSection')}</Text>
+      <Pressable style={styles.row} onPress={onOpenActions}>
+        <Text style={styles.rowTitle}>{tr('settingsActions')}</Text>
+        <Text style={styles.rowSub}>{tr('settingsActionsSub')}</Text>
+      </Pressable>
+      <Pressable style={styles.row} onPress={onOpenAiLimits}>
+        <Text style={styles.rowTitle}>{tr('settingsAiLimits')}</Text>
+        <Text style={styles.rowSub}>{tr('settingsAiLimitsSub')}</Text>
+      </Pressable>
+
+      <Text style={styles.section}>{tr('settingsLegalSection')}</Text>
       <Pressable style={styles.row} onPress={() => void open(LEGAL_URLS.privacy)}>
         <Text style={styles.rowTitle}>{tr('privacy')}</Text>
       </Pressable>
@@ -61,6 +74,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
     marginBottom: spacing.sm,
+    marginTop: spacing.md,
   },
   chips: { flexDirection: 'row', gap: 8, marginBottom: spacing.lg },
   chip: {
@@ -82,5 +96,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   rowTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 },
+  rowSub: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
   logout: { marginTop: spacing.xxl },
 });

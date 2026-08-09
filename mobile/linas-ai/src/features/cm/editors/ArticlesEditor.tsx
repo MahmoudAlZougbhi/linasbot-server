@@ -26,13 +26,13 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
     setItems([
       {
         id,
-        title: 'New article',
+        title: '',
         body: '',
         tags: [],
-        language: 'en',
+        language: '',
         audience: 'general',
         category: '',
-        status: 'draft',
+        status: 'active',
         source_filename: null,
         source_checksum: null,
         linked_service_ids: [],
@@ -49,7 +49,6 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
 
   return (
     <View>
-      <Text style={cmFormStyles.hint}>{items.length} articles in draft.</Text>
       <PrimaryButton label="Add article" onPress={add} variant="ghost" />
       <View style={{ height: 12 }} />
       {items.map((item) => {
@@ -62,7 +61,6 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
             onPress={() => setSelectedId(id)}
           >
             <Text style={cmFormStyles.itemTitle}>{String(item.title || id)}</Text>
-            <Text style={cmFormStyles.itemSub}>{String(item.status || 'active')}</Text>
           </Pressable>
         );
       })}
@@ -74,26 +72,11 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
             onChange={(v) => patch(String(selected.id), { title: v })}
           />
           <Field
-            label="Body"
+            label="Note"
             value={String(selected.body || '')}
             onChange={(v) => patch(String(selected.id), { body: v })}
             multiline
-          />
-          <Field
-            label="Language"
-            value={String(selected.language || '')}
-            onChange={(v) => patch(String(selected.id), { language: v })}
-          />
-          <Field
-            label="Status (draft / active / archived)"
-            value={String(selected.status || 'active')}
-            onChange={(v) => patch(String(selected.id), { status: v })}
-          />
-          <Field
-            label="Notes"
-            value={String(selected.notes || '')}
-            onChange={(v) => patch(String(selected.id), { notes: v })}
-            multiline
+            hint="Stored as article body in the CM draft."
           />
         </View>
       ) : (
