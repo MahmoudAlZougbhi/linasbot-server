@@ -52,7 +52,7 @@ export const en = {
   attachSoon: 'Not wired for production yet',
   addToChat: 'Add to chat',
   settings: 'Settings',
-  settingsSub: 'Language, AI controls, legal & app info',
+  settingsSub: 'Language, notifications, AI controls, legal & app info',
   settingsAiSection: 'AI controls',
   settingsLegalSection: 'Legal',
   settingsActions: 'Actions',

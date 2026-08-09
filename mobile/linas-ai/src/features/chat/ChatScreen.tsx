@@ -46,7 +46,6 @@ type Props = {
   isAuthenticated: boolean;
   isPlatformOwner: boolean;
   onOpenArea: (area: ControlArea) => void;
-  onLogout: () => void;
   onRequestLogin: () => void;
   onRequestRegister: () => void;
 };
@@ -54,7 +53,6 @@ type Props = {
 export function ChatScreen({
   isAuthenticated,
   onOpenArea,
-  onLogout,
   onRequestLogin,
   onRequestRegister,
 }: Props) {
@@ -363,10 +361,8 @@ export function ChatScreen({
         onUnarchive={(id) => void owner.setArchived(id, false)}
         onRename={(id, title) => void owner.renameConversation(id, title)}
         onDelete={(id) => void owner.deleteConversation(id)}
-        onLogout={onLogout}
         onLogin={() => openAuthPreservingDraft(false)}
         onRegister={onRequestRegister}
-        onOpenNotifications={isAuthenticated ? () => onOpenArea('notifications') : undefined}
       />
 
       {isAuthenticated ? (

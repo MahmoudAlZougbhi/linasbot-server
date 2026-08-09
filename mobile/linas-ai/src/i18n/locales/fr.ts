@@ -57,7 +57,7 @@ export const fr: Record<StringKey, string> = {
   attachSoon: 'Pas encore branché en production',
   addToChat: 'Ajouter au chat',
   settings: 'Paramètres',
-  settingsSub: 'Langue, contrôles IA, mentions légales et infos app',
+  settingsSub: 'Langue, notifications, contrôles IA, mentions légales et infos app',
   logout: 'Déconnexion',
   privacy: 'Politique de confidentialité',
   terms: 'Conditions',

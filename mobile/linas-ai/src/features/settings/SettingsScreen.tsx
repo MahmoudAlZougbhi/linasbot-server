@@ -10,6 +10,7 @@ import { ScreenChrome } from '../shared/ScreenChrome';
 type Props = {
   onBack: () => void;
   onLogout: () => void;
+  onOpenNotifications?: () => void;
   onOpenActions?: () => void;
   onOpenAiLimits?: () => void;
 };
@@ -19,7 +20,13 @@ async function open(url: string) {
 }
 
 /** ST-01 — grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
-export function SettingsScreen({ onBack, onLogout, onOpenActions, onOpenAiLimits }: Props) {
+export function SettingsScreen({
+  onBack,
+  onLogout,
+  onOpenNotifications,
+  onOpenActions,
+  onOpenAiLimits,
+}: Props) {
   const { tr, language, setLanguage } = useI18n();
   const { colors, mode, setMode } = useTheme();
 
@@ -29,7 +36,7 @@ export function SettingsScreen({ onBack, onLogout, onOpenActions, onOpenAiLimits
         Linas AI {APP_VERSION} ({APP_ENV}) · iOS build {IOS_BUILD}
       </Text>
 
-      <Text style={[styles.group, { color: colors.textDim }]}>Account</Text>
+      <Text style={[styles.group, { color: colors.textDim }]}>{tr('groupAccount')}</Text>
       <Row
         title="Signed-in profile"
         subtitle="Account email and workspace membership"
@@ -43,6 +50,13 @@ export function SettingsScreen({ onBack, onLogout, onOpenActions, onOpenAiLimits
         onPress={onBack}
         note="Open Content Management for AI Basics"
       />
+      {onOpenNotifications ? (
+        <Row
+          title={tr('notificationsTitle')}
+          subtitle={tr('notificationsSub')}
+          onPress={onOpenNotifications}
+        />
+      ) : null}
 
       <Text style={[styles.group, { color: colors.textDim }]}>Preferences</Text>
       <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')} (app UI)</Text>
@@ -109,7 +123,7 @@ export function SettingsScreen({ onBack, onLogout, onOpenActions, onOpenAiLimits
       <Row title={tr('dataDeletion')} onPress={() => void open(LEGAL_URLS.dataDeletion)} />
 
       <View style={styles.logout}>
-        <PrimaryButton label="Log out" variant="danger" onPress={onLogout} />
+        <PrimaryButton label={tr('logout')} variant="danger" onPress={onLogout} />
       </View>
     </ScreenChrome>
   );

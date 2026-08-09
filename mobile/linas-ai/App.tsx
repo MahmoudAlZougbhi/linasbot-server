@@ -41,7 +41,7 @@ type Screen =
   | { name: 'billing' }
   | { name: 'usage' }
   | { name: 'livechat'; open?: LiveChatOpen | null }
-  | { name: 'notifications' }
+  | { name: 'notifications'; backTo?: 'chat' | 'settings' }
   | { name: 'cm' }
   | { name: 'cm_section'; section: CmSectionId; backTo?: 'cm' | 'settings' }
   | { name: 'faq' }
@@ -183,7 +183,7 @@ function AppBody() {
       return;
     }
     if (area === 'notifications') {
-      setScreen({ name: 'notifications' });
+      setScreen({ name: 'notifications', backTo: 'chat' });
       return;
     }
     if (area === 'cm') {
@@ -234,7 +234,7 @@ function AppBody() {
     }
     if (area === 'notifications') {
       // Guests land on Notifications → AuthGate (no owner alerts for guests).
-      setScreen({ name: 'notifications' });
+      setScreen({ name: 'notifications', backTo: 'chat' });
       return;
     }
     if (!hasAccess) {
@@ -275,7 +275,6 @@ function AppBody() {
           isAuthenticated={hasAccess}
           isPlatformOwner={isPlatformOwner}
           onOpenArea={openArea}
-          onLogout={() => void logout()}
           onRequestLogin={() => setScreen({ name: 'login' })}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
@@ -284,6 +283,7 @@ function AppBody() {
         <SettingsScreen
           onBack={() => setScreen({ name: 'chat' })}
           onLogout={() => void logout()}
+          onOpenNotifications={() => setScreen({ name: 'notifications', backTo: 'settings' })}
           onOpenActions={() =>
             setScreen({ name: 'cm_section', section: 'actions', backTo: 'settings' })
           }
@@ -320,7 +320,9 @@ function AppBody() {
       {screen.name === 'notifications' ? (
         <NotificationsScreen
           isAuthenticated={hasAccess}
-          onBack={() => setScreen({ name: 'chat' })}
+          onBack={() =>
+            setScreen({ name: screen.backTo === 'settings' ? 'settings' : 'chat' })
+          }
           onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
           onRequestLogin={() => {
             setResumeArea('notifications');

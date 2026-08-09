@@ -22,7 +22,6 @@ export const MODULE_ICONS: Record<ControlArea, AppIconName> = {
 
 export const DRAWER_TOOL_ICONS = {
   search: feather('search'),
-  notifications: feather('bell'),
   logout: feather('log-out'),
   close: feather('x'),
   pin: feather('bookmark'),

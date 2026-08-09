@@ -13,7 +13,6 @@ import { AppIcon } from '../../components/AppIcon';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { SideDrawer } from '../../components/SideDrawer';
 import { LEGAL_URLS } from '../../config';
-import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
 import { NewChatIcon } from '../chat/ChatHeaderIcons';
 import type { ControlArea } from '../control/controlAreas';
@@ -31,7 +30,6 @@ type Props = {
   pinnedIds: string[];
   activeId: string | null;
   workspaceLabel?: string | null;
-  notificationCount?: number;
   onOpenArea: (area: ControlArea) => void;
   onNewChat: () => void;
   onOpenChat: (id: string) => void;
@@ -40,15 +38,12 @@ type Props = {
   onUnarchive: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
-  onLogout?: () => void;
   onLogin?: () => void;
   onRegister?: () => void;
-  onOpenNotifications?: () => void;
 };
 
 export function NavDrawer(props: Props) {
   const { colors } = useTheme();
-  const { tr } = useI18n();
   const [query, setQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const modules = visibleDrawerModules({ showUsers: props.showUsers });
@@ -179,48 +174,9 @@ export function NavDrawer(props: Props) {
 
       <View style={[styles.footer, { borderTopColor: colors.borderSoft }]}>
         {props.isAuthenticated ? (
-          <>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-              {props.workspaceLabel || 'Workspace'}
-            </Text>
-            {props.onOpenNotifications ? (
-              <Pressable
-                onPress={() => {
-                  props.onClose();
-                  props.onOpenNotifications?.();
-                }}
-                style={styles.footerRow}
-                accessibilityRole="button"
-                accessibilityLabel="Notifications"
-              >
-                <View style={styles.footerLabel}>
-                  <AppIcon icon={DRAWER_TOOL_ICONS.notifications} size={18} color={colors.text} />
-                  <Text style={{ color: colors.text }}>Notifications</Text>
-                </View>
-                {props.notificationCount ? (
-                  <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-                    <Text style={{ color: colors.onAccent, fontSize: 11 }}>
-                      {props.notificationCount}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={() => {
-                props.onClose();
-                props.onLogout?.();
-              }}
-              style={styles.footerRow}
-              accessibilityRole="button"
-              accessibilityLabel={tr('logout')}
-            >
-              <View style={styles.footerLabel}>
-                <AppIcon icon={DRAWER_TOOL_ICONS.logout} size={18} color={colors.danger} />
-                <Text style={{ color: colors.danger, fontFamily: fonts.bodyMedium }}>Log out</Text>
-              </View>
-            </Pressable>
-          </>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+            {props.workspaceLabel || 'Workspace'}
+          </Text>
         ) : (
           <>
             <Pressable
@@ -330,14 +286,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  footerLabel: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  badge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
   },
 });
