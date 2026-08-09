@@ -21,6 +21,7 @@ from services.cm.schemas import (
     AiLimitsSection,
     BranchesSection,
     CareSection,
+    CmBaseModel,
     DynamicMessagesSection,
     FaqSection,
     HandoffPolicy,
@@ -35,7 +36,7 @@ from services.cm.schemas import (
 )
 from services.cm.storage import ConflictError, get_draft, put_draft
 
-SECTION_MODELS: dict[str, type] = {
+SECTION_MODELS: dict[str, type[CmBaseModel]] = {
     "ai_basics": AiBasics,
     "languages": LanguagePolicy,
     "style": StylePolicy,

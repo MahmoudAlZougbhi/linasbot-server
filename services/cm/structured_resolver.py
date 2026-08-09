@@ -109,13 +109,13 @@ def resolve_handoff(
 
     candidates.sort(key=_score, reverse=True)
     best = candidates[0]
-    contact = contacts_by_id.get(best.contact_id)
-    if contact is None:
+    matched = contacts_by_id.get(best.contact_id)
+    if matched is None:
         return HandoffResolution(None, None, "", best.id, missing_reason="CONTACT_NOT_FOUND")
-    dtype, value = contact.resolved_destination()
+    dtype, value = matched.resolved_destination()
     if not value:
         return HandoffResolution(None, None, "", best.id, missing_reason="CONTACT_NOT_FOUND")
-    return HandoffResolution(dtype, value, contact.label or contact.id, best.id)
+    return HandoffResolution(dtype, value, matched.label or matched.id, best.id)
 
 
 def resolve_service_facts(services: ServicesSection | dict[str, Any], service_id: str) -> list[AnswerFact]:

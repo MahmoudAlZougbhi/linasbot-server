@@ -29,7 +29,7 @@ def main() -> int:
 
     tenant_id = (args.tenant or "linas").strip()
     pointer = read_published_pointer(tenant_id)
-    report = {
+    report: dict[str, object] = {
         "tenant_id": tenant_id,
         "has_published_pointer": pointer is not None,
         "tenant_uses_cm_runtime": tenant_uses_cm_runtime(tenant_id),
