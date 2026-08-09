@@ -124,6 +124,22 @@ test('Live Chat thread remains read-only', () => {
   assert.doesNotMatch(thread, /function\s+takeover|pauseAi|humanTakeover/i);
 });
 
+test('Settings hosts Notifications and Logout; drawer does not', () => {
+  const settings = read('features/settings/SettingsScreen.tsx');
+  const nav = read('features/nav/NavDrawer.tsx');
+  const chat = read('features/chat/ChatScreen.tsx');
+  const app = readFileSync(join(root, 'App.tsx'), 'utf8');
+  assert.match(settings, /onOpenNotifications/);
+  assert.match(settings, /notificationsTitle/);
+  assert.match(settings, /tr\('logout'\)/);
+  assert.doesNotMatch(nav, /onOpenNotifications/);
+  assert.doesNotMatch(nav, /onLogout/);
+  assert.doesNotMatch(nav, /Notifications/);
+  assert.doesNotMatch(nav, /Log out/);
+  assert.doesNotMatch(chat, /onLogout/);
+  assert.match(app, /onOpenNotifications=\{\(\) => setScreen\(\{ name: 'notifications', backTo: 'settings' \}\)\}/);
+});
+
 test('Settings does not duplicate AI Basics CM store', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
   assert.match(settings, /Content Management for AI Basics/);

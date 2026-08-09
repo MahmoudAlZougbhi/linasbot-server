@@ -11,7 +11,7 @@ export type DrawerModule = {
 
 /**
  * Binding product-module order (Mahmoud prompt §6).
- * Notifications live in the drawer footer, not this grid.
+ * Notifications and Logout live in Settings, not this grid or the drawer footer.
  */
 export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'dashboard', title: 'Dashboard', guestVisible: true },
