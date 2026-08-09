@@ -1,17 +1,51 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, fonts, radii, spacing } from '../../../theme';
+import { fonts, radii, spacing, useTheme } from '../../../theme';
 import type { StreamCard } from './useOwnerStream';
+import { ProposalCard } from './ProposalCard';
 
-type Props = { card: StreamCard };
+type Props = {
+  card: StreamCard;
+  onApproveDraft?: (token: string) => void;
+  onDiscard?: () => void;
+  onOpenCm?: (section?: string) => void;
+  onRetry?: () => void;
+};
 
-export function ActivityCard({ card }: Props) {
+export function ActivityCard(props: Props) {
+  const { card } = props;
+  if (card.kind === 'proposal') {
+    return <ProposalCard {...props} />;
+  }
+  return <GenericActivityCard card={card} />;
+}
+
+function GenericActivityCard({ card }: { card: StreamCard }) {
+  const { colors } = useTheme();
+  const kindLabel =
+    card.kind === 'diagnosis'
+      ? 'Diagnosis'
+      : card.kind === 'setup'
+        ? 'Setup'
+        : card.kind === 'progress'
+          ? 'Activity'
+          : card.kind === 'success'
+            ? 'Applied'
+            : card.kind === 'failure'
+              ? 'Failed'
+              : card.kind;
+
   return (
-    <View style={styles.card} accessibilityLabel={`${card.kind} card: ${card.title}`}>
-      <Text style={styles.kind}>{card.kind}</Text>
-      <Text style={styles.title}>{card.title}</Text>
-      {card.body ? <Text style={styles.body}>{card.body}</Text> : null}
-      {card.status ? <Text style={styles.status}>{card.status}</Text> : null}
+    <View
+      style={[styles.card, { backgroundColor: colors.bgElevated, borderColor: colors.border }]}
+      accessibilityLabel={`${kindLabel} card: ${card.title}`}
+    >
+      <Text style={[styles.kind, { color: colors.textDim }]}>{kindLabel}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{card.title}</Text>
+      {card.body ? <Text style={[styles.body, { color: colors.textMuted }]}>{card.body}</Text> : null}
+      {card.status ? (
+        <Text style={[styles.status, { color: colors.accent }]}>{card.status.replace(/_/g, ' ')}</Text>
+      ) : null}
     </View>
   );
 }
@@ -22,18 +56,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: radii.md,
-    backgroundColor: colors.bgElevated,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   kind: {
-    color: colors.textDim,
     fontFamily: fonts.bodyMedium,
     fontSize: 11,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
-  title: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 15 },
-  body: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13, marginTop: 4 },
-  status: { color: colors.accent, fontFamily: fonts.body, fontSize: 12, marginTop: 6 },
+  title: { fontFamily: fonts.bodyMedium, fontSize: 15 },
+  body: { fontFamily: fonts.body, fontSize: 13, marginTop: 4 },
+  status: { fontFamily: fonts.body, fontSize: 12, marginTop: 6, textTransform: 'capitalize' },
 });

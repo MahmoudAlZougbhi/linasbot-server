@@ -1,35 +1,56 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import type { ChatMessage } from '../../api/types';
-import { linasAssets } from '../linas/avatarAssets';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { fonts, radii, spacing, useTheme } from '../../theme';
+import { MessageActions } from './MessageActions';
 
 type Props = {
   message: ChatMessage;
+  onRetry?: () => void;
+  showActions?: boolean;
 };
 
-export function ChatBubble({ message }: Props) {
+function detectRtl(text: string): boolean {
+  return /[\u0600-\u06FF]/.test(text) && !/^[A-Za-z0-9\s.,!?'"()-]+$/.test(text.trim());
+}
+
+export function ChatBubble({ message, onRetry, showActions = true }: Props) {
   const { isRtl } = useI18n();
+  const { colors } = useTheme();
   const isUser = message.role === 'user';
+  const rtl = isRtl || detectRtl(message.content);
+
   return (
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
       {!isUser ? (
-        <Image source={linasAssets.portrait} style={styles.avatar} />
+        <Text style={{ color: colors.accent, fontSize: 14, marginBottom: 4 }}>✦</Text>
       ) : null}
       <View style={[styles.col, isUser && styles.colUser]}>
-        {!isUser ? <Text style={styles.aiLabel}>Linas</Text> : null}
-        <View style={[styles.bubble, isUser ? styles.user : styles.ai]}>
+        {!isUser ? (
+          <Text style={[styles.aiLabel, { color: colors.textDim }]}>Linas</Text>
+        ) : null}
+        <View
+          style={[
+            styles.bubble,
+            isUser
+              ? { backgroundColor: colors.bubbleUser, borderBottomRightRadius: 6 }
+              : { backgroundColor: colors.bubbleAi, borderBottomLeftRadius: 6, borderColor: colors.border, borderWidth: 1 },
+          ]}
+        >
           <Text
             style={[
               styles.text,
-              isUser ? styles.userText : styles.aiText,
-              isRtl && styles.rtl,
+              { color: isUser ? colors.bubbleUserText : colors.bubbleAiText },
+              rtl && styles.rtl,
             ]}
           >
             {message.content}
           </Text>
         </View>
+        {!isUser && showActions ? (
+          <MessageActions text={message.content} onRetry={onRetry} />
+        ) : null}
       </View>
     </View>
   );
@@ -45,16 +66,9 @@ const styles = StyleSheet.create({
   },
   rowUser: { alignSelf: 'flex-end' },
   rowAi: { alignSelf: 'flex-start' },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginBottom: 2,
-  },
   col: { flexShrink: 1 },
   colUser: { alignItems: 'flex-end' },
   aiLabel: {
-    color: colors.textDim,
     fontFamily: fonts.bodyMedium,
     fontSize: 11,
     marginBottom: 4,
@@ -65,20 +79,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg - 2,
     paddingVertical: spacing.md,
   },
-  user: {
-    backgroundColor: colors.bubbleUser,
-    borderBottomRightRadius: 6,
-  },
-  ai: {
-    backgroundColor: colors.bubbleAi,
-    borderBottomLeftRadius: 6,
-  },
   text: {
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: 23,
   },
-  aiText: { color: colors.bubbleAiText },
-  userText: { color: colors.bubbleUserText },
   rtl: { textAlign: 'right', writingDirection: 'rtl' },
 });

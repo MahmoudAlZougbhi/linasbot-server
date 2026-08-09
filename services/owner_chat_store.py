@@ -185,6 +185,17 @@ class OwnerChatStore:
         self._write(conv)
         return True
 
+    def set_archived(
+        self, *, tenant_id: str, user_id: str, conversation_id: str, archived: bool
+    ) -> bool:
+        conv = self.get_conversation(tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id)
+        if conv is None:
+            return False
+        conv.archived = bool(archived)
+        conv.updated_at = time.time()
+        self._write(conv)
+        return True
+
     def soft_delete(self, *, tenant_id: str, user_id: str, conversation_id: str) -> bool:
         conv = self.get_conversation(tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id)
         if conv is None:

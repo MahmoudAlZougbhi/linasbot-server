@@ -6,6 +6,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "^57.0.11",
     "expo-audio": "~57.0.3",
+    "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.9",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.2",
@@ -31,7 +32,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint:lines": "node ../../scripts/check_source_line_limit.mjs mobile/linas-ai/src mobile/linas-ai/App.tsx",
-    "test": "npm run typecheck",
+    "test": "npm run typecheck && node --test tests/*.test.mjs",
     "prebuild:check": "npm run typecheck && npm run lint:lines",
     "secret-scan": "node ../../scripts/scan_mobile_bundle_secrets.mjs"
   },

@@ -13,14 +13,8 @@ type Props = {
   isPlatformOwner: boolean;
 };
 
-const ORDER: ControlItem['group'][] = ['operate', 'insights', 'account', 'owner'];
-
-const GROUP_I18N = {
-  operate: 'groupOperate',
-  insights: 'groupInsights',
-  account: 'groupAccount',
-  owner: 'groupOwner',
-} as const;
+/** @deprecated Prefer NavDrawer (single physical-left drawer). Kept for rare deep-links. */
+const ORDER: ControlItem['group'][] = ['operate', 'account', 'owner'];
 
 export function ControlCenterDrawer({
   open,
@@ -29,22 +23,20 @@ export function ControlCenterDrawer({
   onLogout,
   isPlatformOwner,
 }: Props) {
-  const { tr, isRtl } = useI18n();
+  const { tr } = useI18n();
   const items = CONTROL_ITEMS.filter((a) => !a.ownerOnly || isPlatformOwner);
 
   return (
-    <SideDrawer open={open} side={isRtl ? 'left' : 'right'} onClose={onClose} widthRatio={0.86}>
+    <SideDrawer open={open} side="left" onClose={onClose} widthRatio={0.86}>
       <Text style={styles.heading}>{tr('controlCenter')}</Text>
-      <Text style={styles.sub}>Linas AI System Copilot</Text>
+      <Text style={styles.sub}>Use the main menu for navigation</Text>
       <ScrollView contentContainerStyle={styles.list}>
         {ORDER.map((group) => {
           const rows = items.filter((i) => i.group === group);
-          if (rows.length === 0) {
-            return null;
-          }
+          if (rows.length === 0) return null;
           return (
             <View key={group} style={styles.group}>
-              <Text style={styles.groupLabel}>{tr(GROUP_I18N[group])}</Text>
+              <Text style={styles.groupLabel}>{GROUP_LABELS_SAFE[group]}</Text>
               {rows.map((area) => (
                 <Pressable key={area.id} style={styles.row} onPress={() => onOpen(area.id)}>
                   <Text style={styles.rowTitle}>{area.title}</Text>
@@ -61,6 +53,12 @@ export function ControlCenterDrawer({
     </SideDrawer>
   );
 }
+
+const GROUP_LABELS_SAFE: Record<ControlItem['group'], string> = {
+  operate: 'Product',
+  account: 'Account',
+  owner: 'Platform',
+};
 
 const styles = StyleSheet.create({
   heading: { color: colors.text, fontFamily: fonts.display, fontSize: 24 },

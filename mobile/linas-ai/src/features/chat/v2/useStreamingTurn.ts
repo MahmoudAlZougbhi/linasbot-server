@@ -32,14 +32,14 @@ export function useStreamingTurn(conversationId: string | null, bootstrap: Boots
         attachment_ids?: string[];
         confirm_tool?: string | null;
       },
-    ) => {
-      if (!conversationId) return;
+    ): Promise<'done' | 'error' | 'cancelled' | 'skipped'> => {
+      if (!conversationId) return 'skipped';
       resetUi();
       setCards([]);
       setChoices([]);
       setChoiceSetId(null);
       setThinking(true);
-      await stream.sendStream(
+      const result = await stream.sendStream(
         conversationId,
         {
           content: text,
@@ -77,6 +77,7 @@ export function useStreamingTurn(conversationId: string | null, bootstrap: Boots
           },
         },
       );
+      return result;
     },
     [bootstrap, conversationId, resetUi, stream],
   );

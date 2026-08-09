@@ -68,7 +68,7 @@ export function useOwnerStream() {
   }, []);
 
   const sendStream = useCallback(
-    async (
+    (
       conversationId: string,
       body: {
         content?: string;
@@ -79,69 +79,106 @@ export function useOwnerStream() {
         attachment_ids?: string[];
       },
       handlers: StreamHandlers,
-    ) => {
+    ): Promise<'done' | 'error' | 'cancelled'> => {
       stop();
-      const access = await tokenStore.getAccessToken();
-      if (!access) {
-        handlers.onError?.('Not authenticated');
-        return;
-      }
-
-      setStreaming(true);
-      const xhr = new XMLHttpRequest();
-      xhrRef.current = xhr;
-      let seen = 0;
-      let carry = '';
-
-      xhr.open('POST', `${API_BASE}/api/owner-ai/conversations/${conversationId}/messages/stream`);
-      xhr.setRequestHeader('Authorization', `Bearer ${access}`);
-      xhr.setRequestHeader('Accept', 'text/event-stream');
-      xhr.setRequestHeader('Content-Type', 'application/json');
-
-      xhr.onprogress = () => {
-        const chunk = xhr.responseText.slice(seen);
-        seen = xhr.responseText.length;
-        carry += chunk;
-        const parts = carry.split('\n\n');
-        carry = parts.pop() || '';
-        for (const part of parts) {
-          const line = part
-            .split('\n')
-            .map((l) => l.trim())
-            .find((l) => l.startsWith('data:'));
-          if (!line) continue;
-          dispatchEvent(line.slice(5).trim(), handlers);
+      return (async () => {
+        const access = await tokenStore.getAccessToken();
+        if (!access) {
+          handlers.onError?.('Not authenticated');
+          return 'error' as const;
         }
-      };
 
-      xhr.onerror = () => {
-        handlers.onError?.('stream_network_error');
-        setStreaming(false);
-        xhrRef.current = null;
-      };
+        setStreaming(true);
+        const xhr = new XMLHttpRequest();
+        xhrRef.current = xhr;
+        let seen = 0;
+        let carry = '';
+        let terminal: 'done' | 'error' | 'cancelled' = 'done';
+        let settled = false;
 
-      xhr.onabort = () => {
-        handlers.onCancelled?.();
-        setStreaming(false);
-        xhrRef.current = null;
-      };
+        return await new Promise<'done' | 'error' | 'cancelled'>((resolve) => {
+          const finish = (result: 'done' | 'error' | 'cancelled') => {
+            if (settled) return;
+            settled = true;
+            setStreaming(false);
+            if (xhrRef.current === xhr) xhrRef.current = null;
+            resolve(result);
+          };
 
-      xhr.onload = () => {
-        if (carry.trim()) {
-          const line = carry
-            .split('\n')
-            .map((l) => l.trim())
-            .find((l) => l.startsWith('data:'));
-          if (line) dispatchEvent(line.slice(5).trim(), handlers);
-        }
-        if (xhr.status >= 400) {
-          handlers.onError?.(`stream_http_${xhr.status}`);
-        }
-        setStreaming(false);
-        xhrRef.current = null;
-      };
+          xhr.open(
+            'POST',
+            `${API_BASE}/api/owner-ai/conversations/${conversationId}/messages/stream`,
+          );
+          xhr.setRequestHeader('Authorization', `Bearer ${access}`);
+          xhr.setRequestHeader('Accept', 'text/event-stream');
+          xhr.setRequestHeader('Content-Type', 'application/json');
 
-      xhr.send(JSON.stringify(body));
+          xhr.onprogress = () => {
+            const chunk = xhr.responseText.slice(seen);
+            seen = xhr.responseText.length;
+            carry += chunk;
+            const parts = carry.split('\n\n');
+            carry = parts.pop() || '';
+            for (const part of parts) {
+              const line = part
+                .split('\n')
+                .map((l) => l.trim())
+                .find((l) => l.startsWith('data:'));
+              if (!line) continue;
+              const raw = line.slice(5).trim();
+              let evType = '';
+              try {
+                evType = String((JSON.parse(raw) as { type?: string }).type || '');
+              } catch {
+                evType = '';
+              }
+              if (evType === 'error') terminal = 'error';
+              else if (evType === 'cancelled') terminal = 'cancelled';
+              else if (evType === 'done') terminal = 'done';
+              dispatchEvent(raw, handlers);
+            }
+          };
+
+          xhr.onerror = () => {
+            handlers.onError?.('stream_network_error');
+            finish('error');
+          };
+
+          xhr.onabort = () => {
+            handlers.onCancelled?.();
+            finish('cancelled');
+          };
+
+          xhr.onload = () => {
+            if (carry.trim()) {
+              const line = carry
+                .split('\n')
+                .map((l) => l.trim())
+                .find((l) => l.startsWith('data:'));
+              if (line) {
+                const raw = line.slice(5).trim();
+                try {
+                  const evType = String((JSON.parse(raw) as { type?: string }).type || '');
+                  if (evType === 'error') terminal = 'error';
+                  else if (evType === 'cancelled') terminal = 'cancelled';
+                  else if (evType === 'done') terminal = 'done';
+                } catch {
+                  /* ignore */
+                }
+                dispatchEvent(raw, handlers);
+              }
+            }
+            if (xhr.status >= 400) {
+              handlers.onError?.(`stream_http_${xhr.status}`);
+              finish('error');
+              return;
+            }
+            finish(terminal);
+          };
+
+          xhr.send(JSON.stringify(body));
+        });
+      })();
     },
     [stop],
   );

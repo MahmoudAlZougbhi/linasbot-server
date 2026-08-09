@@ -27,7 +27,8 @@ class SendMessageBody(BaseModel):
 
 
 class RenameBody(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    archived: bool | None = None
 
 
 class ProfileUpdateBody(BaseModel):
@@ -178,12 +179,23 @@ async def send_owner_message(conversation_id: str, body: SendMessageBody, reques
 @app.patch("/api/owner-ai/conversations/{conversation_id}")
 async def rename_owner_conversation(conversation_id: str, body: RenameBody, request: Request) -> Any:
     session = require_session(request)
-    ok = owner_chat_store.rename(
-        tenant_id=session.tenant_id,
-        user_id=session.user_id,
-        conversation_id=conversation_id,
-        title=body.title,
-    )
+    if body.title is None and body.archived is None:
+        raise HTTPException(status_code=400, detail="Provide title and/or archived")
+    ok = True
+    if body.title is not None:
+        ok = owner_chat_store.rename(
+            tenant_id=session.tenant_id,
+            user_id=session.user_id,
+            conversation_id=conversation_id,
+            title=body.title,
+        )
+    if ok and body.archived is not None:
+        ok = owner_chat_store.set_archived(
+            tenant_id=session.tenant_id,
+            user_id=session.user_id,
+            conversation_id=conversation_id,
+            archived=body.archived,
+        )
     if not ok:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"success": True}

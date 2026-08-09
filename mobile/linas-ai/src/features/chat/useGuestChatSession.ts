@@ -48,14 +48,17 @@ export function useGuestChatSession(enabled = true) {
     void bootstrap();
   }, [bootstrap]);
 
-  async function send(content: string) {
+  async function send(content: string): Promise<'done' | 'gated' | 'rejected' | 'error' | 'skipped'> {
     if (!guestId || !content.trim() || gated) {
-      return;
+      return 'skipped';
     }
-    const words = content.trim().split(/\s+/).filter(Boolean).length;
-    if (words > maxWords) {
-      setError('guestWordLimit');
-      return;
+    // Server enforces word ceiling (raised for V2); client does not invent a 50-word gate.
+    if (maxWords > 0) {
+      const words = content.trim().split(/\s+/).filter(Boolean).length;
+      if (words > maxWords) {
+        setError('guestWordLimit');
+        return 'rejected';
+      }
     }
     setSending(true);
     setError(null);
@@ -83,13 +86,14 @@ export function useGuestChatSession(enabled = true) {
           tr('guestLimitReached');
         setGateText(msg);
         setMessages(result.session.messages);
-        return;
+        return 'gated';
       }
       setMessages(result.session.messages);
       if (result.session.questions_remaining <= 0) {
         setGated(true);
         setGateText(tr('guestLimitReached'));
       }
+      return 'done';
     } catch (err) {
       if (err instanceof ApiError && err.status === 400) {
         setError('guestWordLimit');
@@ -111,6 +115,7 @@ export function useGuestChatSession(enabled = true) {
       } catch {
         setMessages((prev) => prev.filter((m) => !String(m.id).startsWith('local-')));
       }
+      return 'error';
     } finally {
       setSending(false);
     }

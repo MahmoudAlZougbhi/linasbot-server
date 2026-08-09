@@ -24,6 +24,7 @@ import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
 import { UsersScreen } from './src/features/users/UsersScreen';
 import { LanguageProvider } from './src/i18n/LanguageContext';
+import { ThemeProvider, useTheme } from './src/theme';
 
 type LiveChatOpen = { userId: string; conversationId: string };
 
@@ -74,6 +75,17 @@ function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
 }
 
 export default function App() {
+  return (
+    <ThemeProvider>
+      <LanguageProvider>
+        <AppBody />
+      </LanguageProvider>
+    </ThemeProvider>
+  );
+}
+
+function AppBody() {
+  const { resolved } = useTheme();
   const [screen, setScreen] = useState<Screen>({ name: 'boot' });
   const [bootDone, setBootDone] = useState(false);
   const [authReady, setAuthReady] = useState(false);
@@ -229,99 +241,96 @@ export default function App() {
 
   if (!bootDone || !authReady || screen.name === 'boot') {
     return (
-      <LanguageProvider>
-        <SafeAreaProvider>
-          <StatusBar style="dark" />
-          <BootSplash onDone={finishBoot} />
-        </SafeAreaProvider>
-      </LanguageProvider>
+      <SafeAreaProvider>
+        <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
+        <BootSplash onDone={finishBoot} />
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <LanguageProvider>
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        {screen.name === 'login' ? (
-          <LoginScreen
-            onLoggedIn={() => void afterLogin()}
-            onGoRegister={() => setScreen({ name: 'register' })}
-            onBack={() => setScreen({ name: 'chat' })}
-          />
-        ) : null}
-        {screen.name === 'register' ? (
-          <RegisterScreen
-            onBack={() => setScreen({ name: 'login' })}
-            onDone={() => setScreen({ name: 'login' })}
-          />
-        ) : null}
-        {screen.name === 'chat' ? (
-          <ChatScreen
-            isAuthenticated={hasAccess}
-            isPlatformOwner={isPlatformOwner}
-            onOpenArea={openArea}
-            onLogout={() => void logout()}
-            onRequestLogin={() => setScreen({ name: 'login' })}
-            onRequestRegister={() => setScreen({ name: 'register' })}
-          />
-        ) : null}
-        {screen.name === 'settings' ? (
-          <SettingsScreen onBack={() => setScreen({ name: 'chat' })} onLogout={() => void logout()} />
-        ) : null}
-        {screen.name === 'integrations' ? (
-          <IntegrationsScreen
-            onBack={() => setScreen({ name: 'chat' })}
-            onRequestLogin={() => setScreen({ name: 'login' })}
-            onRequestRegister={() => setScreen({ name: 'register' })}
-          />
-        ) : null}
-        {screen.name === 'users' ? (
-          <UsersScreen
-            onBack={() => setScreen({ name: 'chat' })}
-            onRequestLogin={() => {
-              setResumeArea('users');
-              setScreen({ name: 'login' });
-            }}
-            onRequestRegister={() => setScreen({ name: 'register' })}
-          />
-        ) : null}
-        {screen.name === 'dashboard' ? (
-          <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />
-        ) : null}
-        {screen.name === 'billing' ? <BillingScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
-        {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
-        {screen.name === 'livechat' ? (
-          <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} initialOpen={screen.open ?? null} />
-        ) : null}
-        {screen.name === 'notifications' ? (
-          <NotificationsScreen
-            isAuthenticated={hasAccess}
-            onBack={() => setScreen({ name: 'chat' })}
-            onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
-            onRequestLogin={() => {
-              setResumeArea('notifications');
-              setScreen({ name: 'login' });
-            }}
-            onRequestRegister={() => setScreen({ name: 'register' })}
-          />
-        ) : null}
-        {screen.name === 'cm' ? (
-          <CmScreen
-            onBack={() => setScreen({ name: 'chat' })}
-            onOpenSection={(section) => setScreen({ name: 'cm_section', section })}
-          />
-        ) : null}
-        {screen.name === 'cm_section' ? (
-          <CmSectionScreen section={screen.section} onBack={() => setScreen({ name: 'cm' })} />
-        ) : null}
-        {screen.name === 'resource' ? (
-          <SimpleResourceScreen
-            title={screen.title}
-            path={screen.path}
-            onBack={() => setScreen({ name: 'chat' })}
-          />
-        ) : null}
-      </SafeAreaProvider>
-    </LanguageProvider>
+    <SafeAreaProvider>
+      <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
+      {screen.name === 'login' ? (
+        <LoginScreen
+          onLoggedIn={() => void afterLogin()}
+          onGoRegister={() => setScreen({ name: 'register' })}
+          onBack={() => setScreen({ name: 'chat' })}
+        />
+      ) : null}
+      {screen.name === 'register' ? (
+        <RegisterScreen
+          onBack={() => setScreen({ name: 'login' })}
+          onDone={() => setScreen({ name: 'login' })}
+        />
+      ) : null}
+      {screen.name === 'chat' ? (
+        <ChatScreen
+          isAuthenticated={hasAccess}
+          isPlatformOwner={isPlatformOwner}
+          onOpenArea={openArea}
+          onLogout={() => void logout()}
+          onRequestLogin={() => setScreen({ name: 'login' })}
+          onRequestRegister={() => setScreen({ name: 'register' })}
+        />
+      ) : null}
+      {screen.name === 'settings' ? (
+        <SettingsScreen onBack={() => setScreen({ name: 'chat' })} onLogout={() => void logout()} />
+      ) : null}
+      {screen.name === 'integrations' ? (
+        <IntegrationsScreen
+          onBack={() => setScreen({ name: 'chat' })}
+          onRequestLogin={() => setScreen({ name: 'login' })}
+          onRequestRegister={() => setScreen({ name: 'register' })}
+        />
+      ) : null}
+      {screen.name === 'users' ? (
+        <UsersScreen
+          onBack={() => setScreen({ name: 'chat' })}
+          onRequestLogin={() => {
+            setResumeArea('users');
+            setScreen({ name: 'login' });
+          }}
+          onRequestRegister={() => setScreen({ name: 'register' })}
+        />
+      ) : null}
+      {screen.name === 'dashboard' ? (
+        <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />
+      ) : null}
+      {screen.name === 'billing' ? <BillingScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'livechat' ? (
+        <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} initialOpen={screen.open ?? null} />
+      ) : null}
+      {screen.name === 'notifications' ? (
+        <NotificationsScreen
+          isAuthenticated={hasAccess}
+          onBack={() => setScreen({ name: 'chat' })}
+          onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
+          onRequestLogin={() => {
+            setResumeArea('notifications');
+            setScreen({ name: 'login' });
+          }}
+          onRequestRegister={() => setScreen({ name: 'register' })}
+        />
+      ) : null}
+      {screen.name === 'cm' ? (
+        <CmScreen
+          onBack={() => setScreen({ name: 'chat' })}
+          onOpenSection={(section) => setScreen({ name: 'cm_section', section })}
+          onContinueSetup={() => setScreen({ name: 'chat' })}
+        />
+      ) : null}
+      {screen.name === 'cm_section' ? (
+        <CmSectionScreen section={screen.section} onBack={() => setScreen({ name: 'cm' })} />
+      ) : null}
+      {screen.name === 'resource' ? (
+        <SimpleResourceScreen
+          title={screen.title}
+          path={screen.path}
+          onBack={() => setScreen({ name: 'chat' })}
+        />
+      ) : null}
+    </SafeAreaProvider>
   );
 }
