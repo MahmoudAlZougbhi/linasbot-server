@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
-  StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -12,13 +12,14 @@ import { EmptyState } from '../../components/EmptyState';
 import { GradientBackground } from '../../components/GradientBackground';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { colors } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
 import { ControlCenterDrawer } from '../control/ControlCenterDrawer';
 import type { ControlArea } from '../control/controlAreas';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
+import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
 import { GuestBanner } from './GuestBanner';
 import { HistoryDrawer } from './HistoryDrawer';
@@ -55,8 +56,11 @@ export function ChatScreen({
   const [plusOpen, setPlusOpen] = useState(false);
   const [authGate, setAuthGate] = useState(false);
   const [draft, setDraft] = useState('');
-  const { voiceState, voiceError, toggleVoice } = useVoiceDraft((text) => {
+  const composerInputRef = useRef<TextInput>(null);
+  const { voiceState, voiceError, toggleVoice, metering } = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
+    // ChatGPT-style: land transcript in composer; user taps Send.
+    requestAnimationFrame(() => composerInputRef.current?.focus());
   });
 
   useEffect(() => {
@@ -231,6 +235,8 @@ export function ChatScreen({
         onChangeDraft={setDraft}
         sending={sending || (!isAuthenticated && guest.gated)}
         voiceState={isAuthenticated ? voiceState : 'idle'}
+        metering={isAuthenticated ? metering : null}
+        inputRef={composerInputRef}
         onPlus={() => {
           if (!isAuthenticated) {
             requireAuth();
@@ -248,6 +254,9 @@ export function ChatScreen({
         onSend={() => {
           if (!isAuthenticated && guest.gated) {
             onRequestLogin();
+            return;
+          }
+          if (voiceState === 'recording' || voiceState === 'transcribing') {
             return;
           }
           const text = draft;
@@ -309,76 +318,3 @@ export function ChatScreen({
     </GradientBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { padding: 16, paddingBottom: 28, flexGrow: 1 },
-  error: {
-    color: colors.danger,
-    fontFamily: fonts.body,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  gate: {
-    color: colors.warning,
-    fontFamily: fonts.body,
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    fontSize: 13,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgElevated,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  chipText: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  patchCard: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    borderColor: colors.accent,
-    borderWidth: 1,
-    gap: 8,
-  },
-  patchTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 14 },
-  patchBody: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },
-  patchActions: { flexDirection: 'row', gap: 8 },
-  confirm: {
-    flex: 1,
-    backgroundColor: colors.accentSoft,
-    borderRadius: 14,
-    padding: 12,
-    borderColor: colors.accent,
-    borderWidth: 1,
-  },
-  confirmText: {
-    color: colors.accent,
-    fontFamily: fonts.bodyMedium,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  reject: {
-    flex: 1,
-    borderRadius: 14,
-    padding: 12,
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  rejectText: {
-    color: colors.textMuted,
-    fontFamily: fonts.bodyMedium,
-    textAlign: 'center',
-  },
-});

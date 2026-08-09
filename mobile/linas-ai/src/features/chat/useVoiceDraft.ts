@@ -3,18 +3,59 @@ import {
   RecordingPresets,
   setAudioModeAsync,
   useAudioRecorder,
+  useAudioRecorderState,
 } from 'expo-audio';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
-import { tokenStore } from '../../auth/tokenStore';
-import { API_BASE } from '../../config';
+import { apiUpload, ApiError } from '../../api/client';
 
 export type VoiceState = 'idle' | 'recording' | 'transcribing';
 
+const VOICE_PRESET = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+  numberOfChannels: 1,
+  bitRate: 64000,
+};
+
+function extensionForUri(uri: string): string {
+  const match = /\.([a-z0-9]+)(?:\?|$)/i.exec(uri);
+  return match?.[1]?.toLowerCase() ?? 'm4a';
+}
+
+function mimeForExtension(ext: string): string {
+  if (ext === 'm4a' || ext === 'mp4' || ext === 'aac') return 'audio/mp4';
+  if (ext === '3gp' || ext === '3gpp') return 'audio/3gpp';
+  if (ext === 'webm') return 'audio/webm';
+  if (ext === 'wav') return 'audio/wav';
+  if (ext === 'caf') return 'audio/x-caf';
+  return 'audio/mp4';
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    const body = err.body as { detail?: string; error?: string } | null;
+    if (body?.detail) return String(body.detail);
+    if (body?.error) return String(body.error);
+    if (err.status === 401) return 'Please sign in again to use voice.';
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'Could not transcribe. Try again or type your message.';
+}
+
 export function useVoiceDraft(onText: (text: string) => void) {
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder(VOICE_PRESET);
+  const recorderState = useAudioRecorderState(recorder, 120);
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const stateRef = useRef<VoiceState>('idle');
+  const busyRef = useRef(false);
+  const startedAtRef = useRef(0);
+
+  function setState(next: VoiceState) {
+    stateRef.current = next;
+    setVoiceState(next);
+  }
 
   async function startRecording() {
     setVoiceError(null);
@@ -26,57 +67,108 @@ export function useVoiceDraft(onText: (text: string) => void) {
     await setAudioModeAsync({
       playsInSilentMode: true,
       allowsRecording: true,
+      interruptionMode: 'doNotMix',
     });
     await recorder.prepareToRecordAsync();
     recorder.record();
-    setVoiceState('recording');
+    if (!recorder.isRecording) {
+      throw new Error('Could not start microphone. Check permission and try again.');
+    }
+    startedAtRef.current = Date.now();
+    setState('recording');
   }
 
   async function stopAndTranscribe() {
-    setVoiceState('transcribing');
+    setState('transcribing');
     try {
+      const elapsed = Date.now() - startedAtRef.current;
+      if (elapsed < 400) {
+        await new Promise((r) => setTimeout(r, 400 - elapsed));
+      }
       await recorder.stop();
-      const uri = recorder.uri;
+      const status = recorder.getStatus();
+      const uri = (recorder.uri || status.url || '').trim();
       if (!uri) {
-        throw new Error('No recording');
+        throw new Error('No recording captured. Hold a moment longer, then stop.');
       }
-      const access = await tokenStore.getAccessToken();
-      if (!access) {
-        throw new Error('Not authenticated');
+      const ext = extensionForUri(uri);
+      const buildForm = () => {
+        const form = new FormData();
+        form.append('audio', {
+          uri,
+          name: `voice.${ext}`,
+          type: mimeForExtension(ext),
+        } as unknown as Blob);
+        return form;
+      };
+
+      const response = await apiUpload('/api/mobile/transcribe', buildForm);
+      let body: { success?: boolean; text?: string; detail?: string; error?: string } = {};
+      try {
+        body = (await response.json()) as typeof body;
+      } catch {
+        throw new Error('Transcription server returned an invalid response.');
       }
-      const form = new FormData();
-      form.append('audio', {
-        uri,
-        name: 'voice.m4a',
-        type: 'audio/m4a',
-      } as unknown as Blob);
-      const response = await fetch(`${API_BASE}/api/mobile/transcribe`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
-        body: form,
-      });
-      const body = (await response.json()) as { success?: boolean; text?: string; detail?: string };
-      if (!response.ok || !body.text) {
-        throw new Error(body.detail ?? 'Transcription failed');
+      if (!response.ok) {
+        throw new ApiError(
+          body.detail || body.error || 'Transcription failed',
+          response.status,
+          body,
+        );
       }
-      onText(body.text);
-    } catch {
-      setVoiceError('Could not transcribe. Try again or type your message.');
+      const text = (body.text || '').trim();
+      if (!text) {
+        throw new Error('No speech detected. Try again.');
+      }
+      // Insert into composer only — never auto-send.
+      onText(text);
     } finally {
-      setVoiceState('idle');
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      setState('idle');
+      try {
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+          interruptionMode: 'mixWithOthers',
+        });
+      } catch {
+        // ignore mode reset failures
+      }
     }
   }
 
   async function toggleVoice() {
-    if (voiceState === 'recording') {
-      await stopAndTranscribe();
+    if (busyRef.current || stateRef.current === 'transcribing') {
       return;
     }
-    if (voiceState === 'idle') {
-      await startRecording();
+    busyRef.current = true;
+    try {
+      if (stateRef.current === 'recording') {
+        await stopAndTranscribe();
+        return;
+      }
+      if (stateRef.current === 'idle') {
+        await startRecording();
+      }
+    } catch (err) {
+      setState('idle');
+      setVoiceError(errorMessage(err));
+      try {
+        if (recorder.isRecording) {
+          await recorder.stop();
+        }
+      } catch {
+        // ignore cleanup
+      }
+    } finally {
+      busyRef.current = false;
     }
   }
 
-  return { voiceState, voiceError, toggleVoice };
+  return {
+    voiceState,
+    voiceError,
+    toggleVoice,
+    metering: voiceState === 'recording' ? (recorderState.metering ?? null) : null,
+    isRecording: voiceState === 'recording' || recorderState.isRecording,
+  };
 }
