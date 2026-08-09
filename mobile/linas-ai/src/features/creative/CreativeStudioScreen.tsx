@@ -5,20 +5,23 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { z } from 'zod';
 
 import { apiFetch, ApiError } from '../../api/client';
-import { colors } from '../../theme/colors';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { StatusChip } from '../../components/StatusChip';
+import { TextField } from '../../components/TextField';
+import { colors, fonts, radii, spacing } from '../../theme';
+import { ScreenChrome } from '../shared/ScreenChrome';
 
 const KINDS = [
   { id: 'caption', label: 'Caption' },
   { id: 'post', label: 'Post' },
   { id: 'rewrite', label: 'Rewrite' },
   { id: 'campaign_ideas', label: 'Campaign ideas' },
-  { id: 'image', label: 'Image (queued)' },
+  { id: 'image', label: 'Image', note: 'Queued when provider available' },
   { id: 'video', label: 'Video', disabled: true, note: 'Coming later — no production video provider' },
 ] as const;
 
@@ -34,7 +37,7 @@ export function CreativeStudioScreen({ onBack }: Props) {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [output, setOutput] = useState<string>('');
+  const [output, setOutput] = useState('');
 
   async function generate() {
     const selected = KINDS.find((k) => k.id === kind);
@@ -59,76 +62,63 @@ export function CreativeStudioScreen({ onBack }: Props) {
   }
 
   return (
-    <View style={styles.root}>
-      <Pressable onPress={onBack}>
-        <Text style={styles.link}>Back</Text>
-      </Pressable>
-      <Text style={styles.title}>Creative Studio</Text>
-      <ScrollView horizontal contentContainerStyle={styles.kinds}>
-        {KINDS.map((item) => (
-          <Pressable
-            key={item.id}
-            style={[styles.chip, kind === item.id && styles.chipOn, 'disabled' in item && item.disabled && styles.chipOff]}
-            onPress={() => setKind(item.id)}
-          >
-            <Text style={styles.chipText}>{item.label}</Text>
-          </Pressable>
-        ))}
+    <ScreenChrome title="Create Post" subtitle="Creative Studio" onBack={onBack}>
+      <ScrollView horizontal contentContainerStyle={styles.kinds} showsHorizontalScrollIndicator={false}>
+        {KINDS.map((item) => {
+          const disabled = 'disabled' in item && item.disabled;
+          return (
+            <Pressable
+              key={item.id}
+              style={[styles.chip, kind === item.id && styles.chipOn, disabled && styles.chipOff]}
+              onPress={() => setKind(item.id)}
+            >
+              <Text style={styles.chipText}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
       </ScrollView>
-      <TextInput
-        style={styles.input}
+      {kind === 'video' ? <StatusChip label="Coming later" tone="soon" /> : null}
+      <TextField
         multiline
         placeholder="Describe what you want to create"
-        placeholderTextColor={colors.textMuted}
         value={prompt}
         onChangeText={setPrompt}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.button} onPress={() => void generate()} disabled={loading || !prompt.trim()}>
-        {loading ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.buttonText}>Generate</Text>}
-      </Pressable>
-      <ScrollView>
+      <PrimaryButton
+        label="Generate"
+        onPress={() => void generate()}
+        loading={loading}
+        disabled={!prompt.trim()}
+      />
+      <ScrollView style={styles.outScroll}>
         <Text style={styles.out}>{output}</Text>
       </ScrollView>
-    </View>
+      {loading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.accent} />
+        </View>
+      ) : null}
+    </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingTop: 56, paddingHorizontal: 16 },
-  link: { color: colors.accent, marginBottom: 8 },
-  title: { color: colors.text, fontSize: 28, fontWeight: '700', marginBottom: 12 },
-  kinds: { gap: 8, paddingBottom: 12 },
+  kinds: { gap: 8, paddingBottom: spacing.md },
   chip: {
     backgroundColor: colors.surface,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderColor: colors.border,
     borderWidth: 1,
     marginRight: 8,
   },
-  chipOn: { borderColor: colors.accent },
+  chipOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   chipOff: { opacity: 0.5 },
-  chipText: { color: colors.text, fontWeight: '600' },
-  input: {
-    minHeight: 100,
-    backgroundColor: colors.input,
-    borderRadius: 12,
-    color: colors.text,
-    padding: 12,
-    marginBottom: 12,
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  buttonText: { color: colors.bg, fontWeight: '700' },
+  chipText: { color: colors.text, fontFamily: fonts.bodyMedium },
+  outScroll: { marginTop: spacing.lg },
   out: { color: colors.textMuted, fontFamily: 'Courier', fontSize: 12 },
-  error: { color: colors.danger, marginBottom: 8 },
+  error: { color: colors.danger, marginBottom: spacing.sm, fontFamily: fonts.body },
+  loading: { marginTop: spacing.md },
 });

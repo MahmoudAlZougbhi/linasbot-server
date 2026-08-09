@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { tokenStore } from '../../auth/tokenStore';
 import { API_BASE } from '../../config';
 
-type VoiceState = 'idle' | 'recording' | 'transcribing';
+export type VoiceState = 'idle' | 'recording' | 'transcribing';
 
 export function useVoiceDraft(onText: (text: string) => void) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);

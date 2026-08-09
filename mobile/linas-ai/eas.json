@@ -61,13 +61,12 @@
   "submit": {
     "testflight": {
       "ios": {
-        "ascAppId": "REPLACE_WITH_NUMERIC_APP_STORE_CONNECT_APP_ID",
-        "appleId": "REPLACE_WITH_APPLE_ID_EMAIL_OPTIONAL"
+        "ascAppId": "6799678918"
       }
     },
     "production": {
       "ios": {
-        "ascAppId": "REPLACE_WITH_NUMERIC_APP_STORE_CONNECT_APP_ID"
+        "ascAppId": "6799678918"
       }
     }
   }

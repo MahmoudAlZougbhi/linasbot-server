@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
-import { colors } from '../../theme/colors';
+import { StatusChip } from '../../components/StatusChip';
+import { colors, fonts, radii, spacing } from '../../theme';
+import { ScreenChrome } from '../shared/ScreenChrome';
 
 const CapSchema = z
   .object({
@@ -28,24 +30,26 @@ const Schema = z.object({
 
 type Props = { onBack: () => void };
 
-function statusLabel(value: unknown): string {
+function capTone(value: unknown): 'ok' | 'warn' | 'soon' | 'neutral' {
   if (typeof value === 'string') {
-    return value;
+    if (value === 'live' || value === 'connected') return 'ok';
+    if (value.includes('coming')) return 'soon';
+    return 'neutral';
   }
   if (value && typeof value === 'object') {
     const cap = value as z.infer<typeof CapSchema>;
-    if (cap.live_verified) {
-      return 'live';
-    }
-    if (cap.level === 'connected') {
-      return 'connected';
-    }
-    if (cap.level === 'needs_permission') {
-      return 'needs permission';
-    }
-    if (cap.level === 'coming_later') {
-      return 'coming later';
-    }
+    if (cap.live_verified) return 'ok';
+    if (cap.level === 'needs_permission') return 'warn';
+    if (cap.level === 'coming_later') return 'soon';
+  }
+  return 'neutral';
+}
+
+function statusLabel(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const cap = value as z.infer<typeof CapSchema>;
+    if (cap.live_verified) return 'live';
     return cap.level ?? 'unavailable';
   }
   return 'unavailable';
@@ -72,44 +76,60 @@ export function IntegrationsScreen({ onBack }: Props) {
   }, []);
 
   return (
-    <View style={styles.root}>
-      <Pressable onPress={onBack}>
-        <Text style={styles.link}>Back</Text>
-      </Pressable>
-      <Text style={styles.title}>Integrations</Text>
+    <ScreenChrome
+      title="Integrations"
+      subtitle="Truthful Meta readiness — never fake connected"
+      onBack={onBack}
+    >
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView contentContainerStyle={styles.list}>
         {rows.map((row) => (
           <View key={row.platform} style={styles.card}>
-            <Text style={styles.cardTitle}>
-              {row.label} · {row.connected ? 'connected' : 'not connected'}
-            </Text>
+            <View style={styles.head}>
+              <Text style={styles.cardTitle}>{row.label}</Text>
+              <StatusChip
+                label={row.connected ? 'Connected' : 'Not connected'}
+                tone={row.connected ? 'ok' : 'soon'}
+              />
+            </View>
             {Object.entries(row.capabilities).map(([key, value]) => (
-              <Text key={key} style={styles.cap}>
-                {key}: {statusLabel(value)}
-              </Text>
+              <View key={key} style={styles.capRow}>
+                <Text style={styles.capKey}>{key}</Text>
+                <StatusChip label={statusLabel(value)} tone={capTone(value)} />
+              </View>
             ))}
           </View>
         ))}
       </ScrollView>
-    </View>
+    </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingTop: 56, paddingHorizontal: 16 },
-  link: { color: colors.accent, marginBottom: 8 },
-  title: { color: colors.text, fontSize: 28, fontWeight: '700', marginBottom: 16 },
-  list: { paddingBottom: 40, gap: 12 },
+  list: { paddingBottom: 40, gap: spacing.md },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
     borderColor: colors.border,
     borderWidth: 1,
   },
-  cardTitle: { color: colors.text, fontWeight: '700', marginBottom: 8 },
-  cap: { color: colors.textMuted, marginBottom: 4 },
-  error: { color: colors.danger, marginBottom: 12 },
+  head: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  cardTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 17 },
+  capRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSoft,
+  },
+  capKey: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13, flex: 1 },
+  error: { color: colors.danger, marginBottom: spacing.md, fontFamily: fonts.body },
 });

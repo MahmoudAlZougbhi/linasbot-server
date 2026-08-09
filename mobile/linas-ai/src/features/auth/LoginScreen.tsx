@@ -1,17 +1,24 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, mobileLogin } from '../../api/client';
+import { BrandMark } from '../../components/BrandMark';
+import { GradientBackground } from '../../components/GradientBackground';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { TextField } from '../../components/TextField';
 import { LEGAL_URLS } from '../../config';
-import { colors } from '../../theme/colors';
+import { colors, fonts, spacing, typography } from '../../theme';
+import { SocialAuthButtons } from './SocialAuthButtons';
 
 type Props = {
   onLoggedIn: () => void;
@@ -19,6 +26,7 @@ type Props = {
 };
 
 export function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -46,63 +54,71 @@ export function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
   }
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.brand}>Linas AI</Text>
-      <Text style={styles.sub}>Sign in to operate your business AI</Text>
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholder="Email"
-        placeholderTextColor={colors.textMuted}
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        placeholder="Password"
-        placeholderTextColor={colors.textMuted}
-        value={password}
-        onChangeText={setPassword}
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.button} onPress={() => void onSubmit()} disabled={loading}>
-        {loading ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.buttonText}>Sign in</Text>}
-      </Pressable>
-      <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.forgotPassword)}>
-        <Text style={styles.link}>Forgot password</Text>
-      </Pressable>
-      <Pressable onPress={onGoRegister}>
-        <Text style={styles.link}>Create account</Text>
-      </Pressable>
-    </View>
+    <GradientBackground>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: insets.top + 36, paddingBottom: insets.bottom + 24 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <BrandMark size="lg" showWordmark />
+          <Text style={styles.sub}>Log in to operate your business AI</Text>
+
+          <TextField
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+          />
+          <TextField
+            secureTextEntry
+            autoComplete="password"
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <PrimaryButton label="Log in" onPress={() => void onSubmit()} loading={loading} />
+
+          <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.forgotPassword)}>
+            <Text style={styles.link}>Forgot password</Text>
+          </Pressable>
+          <Pressable onPress={onGoRegister}>
+            <Text style={styles.linkStrong}>Create account</Text>
+          </Pressable>
+
+          <SocialAuthButtons />
+          <View style={styles.legal}>
+            <Text style={styles.legalText}>
+              By continuing you agree to our Terms and Privacy Policy.
+            </Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, padding: 24, justifyContent: 'center' },
-  brand: { color: colors.text, fontSize: 40, fontWeight: '700', marginBottom: 8 },
-  sub: { color: colors.textMuted, marginBottom: 28, fontSize: 16 },
-  input: {
-    backgroundColor: colors.input,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 12,
-    color: colors.text,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 12,
+  flex: { flex: 1 },
+  content: { paddingHorizontal: spacing.xl, justifyContent: 'center', flexGrow: 1 },
+  sub: { ...typography.subtitle, color: colors.textMuted, marginTop: spacing.lg, marginBottom: spacing.xl },
+  error: { color: colors.danger, fontFamily: fonts.body, marginBottom: spacing.sm },
+  link: { color: colors.accent, fontFamily: fonts.body, marginTop: spacing.lg, fontSize: 15 },
+  linkStrong: {
+    color: colors.mint,
+    fontFamily: fonts.bodyMedium,
+    marginTop: spacing.md,
+    fontSize: 15,
   },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  buttonText: { color: colors.bg, fontWeight: '700', fontSize: 16 },
-  link: { color: colors.accent, marginTop: 10, fontSize: 15 },
-  error: { color: colors.danger, marginBottom: 8 },
+  legal: { marginTop: spacing.xl },
+  legalText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
 });

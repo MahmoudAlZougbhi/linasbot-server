@@ -5,55 +5,41 @@ import { z } from 'zod';
 import { apiFetch } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
 import { colors, fonts, spacing } from '../../theme';
-import { ScreenChrome } from './ScreenChrome';
+import { ScreenChrome } from '../shared/ScreenChrome';
 
-type Props = {
-  title: string;
-  path: string;
-  onBack: () => void;
-};
+const UsageSchema = z.object({ success: z.literal(true) }).passthrough();
 
-const LooseSchema = z.object({ success: z.boolean() }).passthrough();
+type Props = { onBack: () => void };
 
-export function SimpleResourceScreen({ title, path, onBack }: Props) {
+export function UsageScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
     void (async () => {
       setLoading(true);
-      setError(null);
       try {
-        const data = await apiFetch(path, { schema: LooseSchema });
-        if (!cancelled) {
-          setPayload(JSON.stringify(data, null, 2));
-        }
+        const data = await apiFetch('/api/mobile/usage', { schema: UsageSchema });
+        setPayload(JSON.stringify(data, null, 2));
+        setError(null);
       } catch {
-        if (!cancelled) {
-          setError('Failed to load. Go back and open again to retry.');
-        }
+        setError('Could not load usage.');
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
+  }, []);
 
   return (
-    <ScreenChrome title={title} onBack={onBack}>
+    <ScreenChrome title="Usage & Credits" subtitle="Included period balance" onBack={onBack}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView>
         {payload ? (
           <Text style={styles.mono}>{payload}</Text>
-        ) : !loading && !error ? (
-          <EmptyState title="No data" />
+        ) : !loading ? (
+          <EmptyState title="No usage data" />
         ) : null}
       </ScrollView>
     </ScreenChrome>

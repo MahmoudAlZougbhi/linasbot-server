@@ -20,7 +20,7 @@
       "package": "com.linasai.app",
       "versionCode": 2,
       "adaptiveIcon": {
-        "backgroundColor": "#0B1220",
+        "backgroundColor": "#0C1424",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -49,7 +49,7 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0B1220"
+          "backgroundColor": "#0C1424"
         }
       ],
       "expo-status-bar"

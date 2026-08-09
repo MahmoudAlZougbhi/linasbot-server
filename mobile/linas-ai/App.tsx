@@ -1,35 +1,42 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { API_BASE } from './src/config';
 import { tokenStore } from './src/auth/tokenStore';
 import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
+import { BillingScreen } from './src/features/billing/BillingScreen';
+import { UsageScreen } from './src/features/billing/UsageScreen';
+import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
-import { ControlCenterScreen, type ControlArea } from './src/features/control/ControlCenterScreen';
+import { CmScreen } from './src/features/cm/CmScreen';
+import { CommentsScreen } from './src/features/control/CommentsScreen';
+import type { ControlArea } from './src/features/control/controlAreas';
 import { CreativeStudioScreen } from './src/features/creative/CreativeStudioScreen';
+import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
 import { IntegrationsScreen } from './src/features/integrations/IntegrationsScreen';
+import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
 import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
-import { colors } from './src/theme/colors';
 
 type Screen =
   | { name: 'boot' }
   | { name: 'login' }
   | { name: 'register' }
   | { name: 'chat' }
-  | { name: 'control' }
   | { name: 'settings' }
   | { name: 'integrations' }
   | { name: 'creative' }
+  | { name: 'dashboard' }
+  | { name: 'billing' }
+  | { name: 'usage' }
+  | { name: 'livechat' }
+  | { name: 'cm' }
+  | { name: 'comments' }
   | { name: 'resource'; title: string; path: string };
 
 const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
-  cm: { title: 'Content Management', path: '/api/cm/sections' },
-  usage: { title: 'Usage & Credits', path: '/api/mobile/usage' },
-  subscription: { title: 'Subscription', path: '/api/entitlements/me' },
   users: { title: 'Users', path: '/api/auth/users' },
   scheduled: { title: 'Scheduled', path: '/api/schedule/posts' },
   owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
@@ -37,20 +44,39 @@ const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'boot' });
+  const [bootDone, setBootDone] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
   const [isPlatformOwner, setIsPlatformOwner] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       const access = await tokenStore.getAccessToken();
       const user = await tokenStore.getUser();
       setIsPlatformOwner(user?.role === 'platform_owner');
-      setScreen(access ? { name: 'chat' } : { name: 'login' });
+      setHasAccess(Boolean(access));
+      setAuthReady(true);
     })();
   }, []);
+
+  const finishBoot = useCallback(() => {
+    setBootDone(true);
+    if (!authReady) {
+      return;
+    }
+    setScreen(hasAccess ? { name: 'chat' } : { name: 'login' });
+  }, [authReady, hasAccess]);
+
+  useEffect(() => {
+    if (bootDone && authReady) {
+      setScreen(hasAccess ? { name: 'chat' } : { name: 'login' });
+    }
+  }, [bootDone, authReady, hasAccess]);
 
   async function afterLogin() {
     const user = await tokenStore.getUser();
     setIsPlatformOwner(user?.role === 'platform_owner');
+    setHasAccess(true);
     setScreen({ name: 'chat' });
   }
 
@@ -64,18 +90,63 @@ export default function App() {
         });
       }
     } catch {
-      // Local clear still proceeds — network logout is best-effort.
+      // Local clear still proceeds.
     }
     await tokenStore.clear();
     setIsPlatformOwner(false);
+    setHasAccess(false);
     setScreen({ name: 'login' });
   }
 
-  if (screen.name === 'boot') {
+  function openArea(area: ControlArea) {
+    if (area === 'settings') {
+      setScreen({ name: 'settings' });
+      return;
+    }
+    if (area === 'integrations') {
+      setScreen({ name: 'integrations' });
+      return;
+    }
+    if (area === 'create') {
+      setScreen({ name: 'creative' });
+      return;
+    }
+    if (area === 'dashboard') {
+      setScreen({ name: 'dashboard' });
+      return;
+    }
+    if (area === 'subscription') {
+      setScreen({ name: 'billing' });
+      return;
+    }
+    if (area === 'usage') {
+      setScreen({ name: 'usage' });
+      return;
+    }
+    if (area === 'livechat') {
+      setScreen({ name: 'livechat' });
+      return;
+    }
+    if (area === 'cm') {
+      setScreen({ name: 'cm' });
+      return;
+    }
+    if (area === 'comments') {
+      setScreen({ name: 'comments' });
+      return;
+    }
+    const target = RESOURCE_MAP[area];
+    if (target) {
+      setScreen({ name: 'resource', ...target });
+    }
+  }
+
+  if (!bootDone || !authReady || screen.name === 'boot') {
     return (
-      <View style={styles.boot}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <BootSplash onDone={finishBoot} />
+      </SafeAreaProvider>
     );
   }
 
@@ -87,53 +158,36 @@ export default function App() {
       ) : null}
       {screen.name === 'register' ? <RegisterScreen onBack={() => setScreen({ name: 'login' })} /> : null}
       {screen.name === 'chat' ? (
-        <ChatScreen onOpenControlCenter={() => setScreen({ name: 'control' })} />
-      ) : null}
-      {screen.name === 'control' ? (
-        <ControlCenterScreen
+        <ChatScreen
           isPlatformOwner={isPlatformOwner}
-          onBack={() => setScreen({ name: 'chat' })}
-          onOpen={(area) => {
-            if (area === 'settings') {
-              setScreen({ name: 'settings' });
-              return;
-            }
-            if (area === 'integrations') {
-              setScreen({ name: 'integrations' });
-              return;
-            }
-            if (area === 'create') {
-              setScreen({ name: 'creative' });
-              return;
-            }
-            const target = RESOURCE_MAP[area];
-            if (target) {
-              setScreen({ name: 'resource', ...target });
-            }
-          }}
+          onOpenArea={openArea}
           onLogout={() => void logout()}
         />
       ) : null}
       {screen.name === 'settings' ? (
-        <SettingsScreen onBack={() => setScreen({ name: 'control' })} onLogout={() => void logout()} />
+        <SettingsScreen onBack={() => setScreen({ name: 'chat' })} onLogout={() => void logout()} />
       ) : null}
       {screen.name === 'integrations' ? (
-        <IntegrationsScreen onBack={() => setScreen({ name: 'control' })} />
+        <IntegrationsScreen onBack={() => setScreen({ name: 'chat' })} />
       ) : null}
       {screen.name === 'creative' ? (
-        <CreativeStudioScreen onBack={() => setScreen({ name: 'control' })} />
+        <CreativeStudioScreen onBack={() => setScreen({ name: 'chat' })} />
       ) : null}
+      {screen.name === 'dashboard' ? (
+        <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />
+      ) : null}
+      {screen.name === 'billing' ? <BillingScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'livechat' ? <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'cm' ? <CmScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'comments' ? <CommentsScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
       {screen.name === 'resource' ? (
         <SimpleResourceScreen
           title={screen.title}
           path={screen.path}
-          onBack={() => setScreen({ name: 'control' })}
+          onBack={() => setScreen({ name: 'chat' })}
         />
       ) : null}
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  boot: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
-});

@@ -1,7 +1,9 @@
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { APP_ENV, APP_VERSION, IOS_BUILD, LEGAL_URLS } from '../../config';
-import { colors } from '../../theme/colors';
+import { colors, fonts, radii, spacing } from '../../theme';
+import { ScreenChrome } from '../shared/ScreenChrome';
 
 type Props = {
   onBack: () => void;
@@ -14,15 +16,10 @@ async function open(url: string) {
 
 export function SettingsScreen({ onBack, onLogout }: Props) {
   return (
-    <View style={styles.root}>
-      <Pressable onPress={onBack}>
-        <Text style={styles.link}>Back</Text>
-      </Pressable>
-      <Text style={styles.title}>Settings</Text>
+    <ScreenChrome title="Settings" subtitle="Legal & app info" onBack={onBack}>
       <Text style={styles.meta}>
         Linas AI {APP_VERSION} ({APP_ENV}) · iOS build {IOS_BUILD}
       </Text>
-
       <Pressable style={styles.row} onPress={() => void open(LEGAL_URLS.privacy)}>
         <Text style={styles.rowTitle}>Privacy Policy</Text>
       </Pressable>
@@ -32,28 +29,23 @@ export function SettingsScreen({ onBack, onLogout }: Props) {
       <Pressable style={styles.row} onPress={() => void open(LEGAL_URLS.dataDeletion)}>
         <Text style={styles.rowTitle}>Data Deletion</Text>
       </Pressable>
-
-      <Pressable style={styles.logout} onPress={onLogout}>
-        <Text style={styles.logoutText}>Log out</Text>
-      </Pressable>
-    </View>
+      <View style={styles.logout}>
+        <PrimaryButton label="Log out" variant="danger" onPress={onLogout} />
+      </View>
+    </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingTop: 56, paddingHorizontal: 16 },
-  link: { color: colors.accent, marginBottom: 8 },
-  title: { color: colors.text, fontSize: 28, fontWeight: '700', marginBottom: 8 },
-  meta: { color: colors.textMuted, marginBottom: 20 },
+  meta: { color: colors.textMuted, fontFamily: fonts.body, marginBottom: spacing.lg },
   row: {
     backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: radii.md,
+    padding: spacing.lg,
     borderColor: colors.border,
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
-  rowTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
-  logout: { marginTop: 28, alignItems: 'center', padding: 16 },
-  logoutText: { color: colors.danger, fontWeight: '700' },
+  rowTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 },
+  logout: { marginTop: spacing.xxl },
 });

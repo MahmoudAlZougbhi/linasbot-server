@@ -1,0 +1,45 @@
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { StatusChip } from '../../components/StatusChip';
+import { colors, fonts, radii, spacing } from '../../theme';
+
+/** Truthful placeholders — Google/Apple not wired in mobile auth API. */
+export function SocialAuthButtons() {
+  return (
+    <View style={styles.wrap}>
+      <View style={styles.dividerRow}>
+        <View style={styles.line} />
+        <Text style={styles.or}>or continue with</Text>
+        <View style={styles.line} />
+      </View>
+      <Pressable style={styles.btn} disabled>
+        <Text style={styles.btnText}>Continue with Google</Text>
+        <StatusChip label="Coming soon" tone="soon" />
+      </Pressable>
+      <Pressable style={styles.btn} disabled>
+        <Text style={styles.btnText}>Continue with Apple</Text>
+        <StatusChip label="Coming soon" tone="soon" />
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { marginTop: spacing.xl, gap: spacing.sm },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
+  line: { flex: 1, height: 1, backgroundColor: colors.border },
+  or: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12 },
+  btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md + 2,
+    opacity: 0.72,
+  },
+  btnText: { color: colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 15 },
+});
