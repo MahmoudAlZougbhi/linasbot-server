@@ -47,18 +47,18 @@ def build_guest_greeting(*, language: str = "en") -> str:
         return (
             "مرحباً — أنا Linas AI. أساعدك تفهم كيف نُشغّل ذكاء أعمال لمشروعك: "
             "ردود العملاء، إدارة المحتوى، التكاملات، والاستخدام. "
-            "اسألني ماذا نقدّم — وبعد تسجيل الدخول تحصل على مساعد النظام الكامل."
+            "اسألني ماذا نقدّم — وبعد تحميل التطبيق والاشتراك تحصل على المساعد الكامل."
         )
     if language == "fr":
         return (
             "Bonjour — je suis Linas AI. Je vous explique comment nous aidons les entreprises : "
             "réponses clients, Content Management, intégrations et usage. "
-            "Demandez ce que nous offrons ; après connexion, le copilote système complet s’ouvre."
+            "Demandez ce que nous offrons ; après téléchargement de l’app et abonnement, le copilote complet s’ouvre."
         )
     return (
         "Hi — I’m Linas AI. I help businesses run customer AI: smart replies, "
-        "Content Management, Meta integrations, usage, and a System Copilot after you sign in. "
-        "Ask what we offer — guest chat is explanatory only."
+        "Content Management, Meta integrations, usage, and a System Copilot in the app. "
+        "Ask what we offer — guest chat is explanatory only; download the app to subscribe."
     )
 
 
@@ -73,17 +73,17 @@ def _product_primer(lang: str) -> str:
     if lang == "ar":
         return (
             "Linas AI منصة ذكاء اصطناعي للأعمال: تربط قنواتك، تضبط معرفة نشاطك عبر Content Management، "
-            "وترد على العملاء بأسلوب علامتك، مع System Copilot بعد تسجيل الدخول للإعداد والاستخدام والتكاملات."
+            "وترد على العملاء بأسلوب علامتك، مع System Copilot داخل التطبيق بعد الاشتراك."
         )
     if lang == "fr":
         return (
             "Linas AI est une plateforme d’IA métier : canaux, Content Management (ce que l’IA sait), "
-            "réponses clients dans la voix de la marque, et System Copilot après connexion."
+            "réponses clients dans la voix de la marque, et System Copilot dans l’app après abonnement."
         )
     return (
         "Linas AI is a business AI platform: connect channels, configure what your AI knows "
         "(Content Management), reply to customers in your brand voice, and use System Copilot "
-        "after sign-in for setup, usage, integrations, creative, and ops."
+        "in the mobile app after you subscribe — for setup, usage, integrations, creative, and ops."
     )
 
 
@@ -96,7 +96,7 @@ def build_guest_system_prompt(*, language: str, knowledge_block: str) -> str:
         "Stay sales-oriented about Linas AI, but never paste the same pitch twice.\n"
         "Guest constraints (hard): no tools, no CM writes, no tenant mutation, no claiming you changed anything.\n"
         "Do not invent live Meta comment automation, verified publish, or store IAP if knowledge marks them gated/partial.\n"
-        "If you don't know a detail, say so briefly and invite them to sign in for System Copilot.\n"
+        "If you don't know a detail, say so briefly and invite them to download the Linas AI app and subscribe.\n"
         f"Reply language: {lang} (match the user if they write in another of en/ar/fr).\n"
         "Keep replies concise (about 40–120 words) unless the user asks for more detail.\n"
         f"Product primer: {_product_primer(lang)}\n"

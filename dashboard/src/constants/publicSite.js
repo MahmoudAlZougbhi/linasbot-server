@@ -3,11 +3,35 @@ export const PUBLIC_SITE = {
   productName: 'Linas AI',
   publicBaseUrl: 'https://www.linasaibot.com',
   contactEmail: 'Mahmoudalzougbhi@gmail.com',
-  heroTitle: 'Your business AI — in the Linas AI app',
+  heroTitle: 'Linas AI',
+  heroHeadline: 'Your business AI, in your pocket',
   heroSupport:
-    'Configure, operate, and create with Linas AI from iOS and Android. The website is for product info, pricing, and legal pages — day-to-day work happens in the app.',
+    'Meet Linas — configure Content Management, reply to Messenger & Instagram DMs, and create for your brand from iOS and Android. This site is marketing + a short guest chat. Day-to-day work happens in the app.',
   metaPlatformDataUse:
     'Our business provides a software platform that helps businesses respond to customer inquiries received on their Facebook Pages and Instagram professional accounts. With each client’s permission, we use the account details and customer messages provided by Meta only to receive inquiries, send automated replies using information approved by the client, and direct customers to the client’s chosen contact channel when booking or human assistance is needed. Each client connects only business accounts it owns or is authorized to manage.',
+};
+
+/**
+ * Store listing status — do not invent App Store / Play IDs.
+ * Update `url` when ASC / Play Console listings are live.
+ */
+export const STORE_LINKS = {
+  appStore: {
+    label: 'Download on the App Store',
+    status: 'pending',
+    /** Set to full https://apps.apple.com/app/id… when ASC listing is public. */
+    url: null,
+    blocker:
+      'No public App Store URL or numeric Apple ID is committed in-repo yet (TestFlight / ASC gate still pending).',
+  },
+  playStore: {
+    label: 'Get it on Google Play',
+    status: 'pending',
+    /** Set to https://play.google.com/store/apps/details?id=com.linasai.app when live. */
+    url: null,
+    packageName: 'com.linasai.app',
+    blocker: 'Google Play listing for com.linasai.app is not live yet.',
+  },
 };
 
 export const PUBLIC_PATHS = {
@@ -26,6 +50,6 @@ export const PUBLIC_PATHS = {
   dataDeletion: '/data-deletion',
   appHome: '/app',
   wallet: '/wallet',
-  appStore: 'https://apps.apple.com/',
-  playStore: 'https://play.google.com/store',
+  getApp: '/#get-app',
+  guestChat: '/#talk-to-linas',
 };

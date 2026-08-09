@@ -12,7 +12,6 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import Landing from './pages/public/Landing';
-import Register from './pages/public/Register';
 import About from './pages/public/About';
 import Contact from './pages/public/Contact';
 import Pricing from './pages/public/Pricing';
@@ -207,12 +206,14 @@ function App() {
           <Routes>
             <Route element={<PublicMarketingShell />}>
               <Route path="/" element={<Landing />} />
-              <Route path="/register" element={<Register />} />
+              {/* Public web is marketing-only — no Create Account. Ops login stays at /login. */}
+              <Route path="/register" element={<Navigate to="/#get-app" replace />} />
               <Route path="/about" element={<About />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/features" element={<Features />} />
             </Route>
+            {/* Operator dashboard auth — not linked from marketing CTAs. */}
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />

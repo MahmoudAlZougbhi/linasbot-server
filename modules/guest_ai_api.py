@@ -143,9 +143,9 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
             "code": "GUEST_QUESTION_LIMIT",
             "session": _session_payload(session),
             "message": {
-                "en": "You’ve reached the guest limit (10 questions). Log in or create an account to continue.",
-                "ar": "وصلت إلى حد الضيف (10 أسئلة). سجّل الدخول أو أنشئ حساباً للمتابعة.",
-                "fr": "Limite invité atteinte (10 questions). Connectez-vous ou créez un compte.",
+                "en": "You’ve reached the guest limit (10 questions). Download the Linas AI app and subscribe to continue.",
+                "ar": "وصلت إلى حد الضيف (10 أسئلة). حمّل تطبيق Linas AI واشترك للمتابعة.",
+                "fr": "Limite invité atteinte (10 questions). Téléchargez l’app Linas AI et abonnez-vous pour continuer.",
             },
         }
 
