@@ -4,22 +4,27 @@ import type { ChatMessage } from '../../api/types';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { MessageActions } from './MessageActions';
+import { MessageImageThumbs } from './MessageImageThumbs';
 
 type Props = {
   message: ChatMessage;
   onRetry?: () => void;
   showActions?: boolean;
+  /** Extra local preview URIs (e.g. after bootstrap rematch). */
+  imageUris?: string[];
 };
 
 function detectRtl(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text) && !/^[A-Za-z0-9\s.,!?'"()-]+$/.test(text.trim());
 }
 
-export function ChatBubble({ message, onRetry, showActions = true }: Props) {
+export function ChatBubble({ message, onRetry, showActions = true, imageUris }: Props) {
   const { isRtl } = useI18n();
   const { colors } = useTheme();
   const isUser = message.role === 'user';
   const rtl = isRtl || detectRtl(message.content);
+  const thumbs = imageUris?.length ? imageUris : message.local_image_uris;
+  const hasText = Boolean(message.content?.trim());
 
   return (
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
@@ -38,15 +43,18 @@ export function ChatBubble({ message, onRetry, showActions = true }: Props) {
               : { backgroundColor: colors.bubbleAi, borderBottomLeftRadius: 6, borderColor: colors.border, borderWidth: 1 },
           ]}
         >
-          <Text
-            style={[
-              styles.text,
-              { color: isUser ? colors.bubbleUserText : colors.bubbleAiText },
-              rtl && styles.rtl,
-            ]}
-          >
-            {message.content}
-          </Text>
+          {thumbs?.length ? <MessageImageThumbs uris={thumbs} /> : null}
+          {hasText ? (
+            <Text
+              style={[
+                styles.text,
+                { color: isUser ? colors.bubbleUserText : colors.bubbleAiText },
+                rtl && styles.rtl,
+              ]}
+            >
+              {message.content}
+            </Text>
+          ) : null}
         </View>
         {!isUser && showActions ? (
           <MessageActions text={message.content} onRetry={onRetry} />

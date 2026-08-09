@@ -182,7 +182,7 @@ export function useChatSession(enabled = true) {
     if (id === conversationId) await newChat();
   }
 
-  function appendOptimisticUser(content: string) {
+  function appendOptimisticUser(content: string, localImageUris?: string[]) {
     const id = `local-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
@@ -191,6 +191,7 @@ export function useChatSession(enabled = true) {
         role: 'user',
         content,
         created_at: Date.now() / 1000,
+        local_image_uris: localImageUris?.length ? localImageUris : undefined,
       },
     ]);
     return id;

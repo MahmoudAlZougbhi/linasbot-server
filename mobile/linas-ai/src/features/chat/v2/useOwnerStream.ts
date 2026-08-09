@@ -59,13 +59,21 @@ function dispatchEvent(raw: string, handlers: StreamHandlers) {
  */
 export function useOwnerStream() {
   const xhrRef = useRef<XMLHttpRequest | null>(null);
+  const notifyCancelRef = useRef(false);
   const [streaming, setStreaming] = useState(false);
 
-  const stop = useCallback(() => {
-    xhrRef.current?.abort();
+  const abortActive = useCallback((notifyCancel: boolean) => {
+    notifyCancelRef.current = notifyCancel;
+    const xhr = xhrRef.current;
     xhrRef.current = null;
-    setStreaming(false);
+    if (xhr) xhr.abort();
+    else setStreaming(false);
+    if (notifyCancel) setStreaming(false);
   }, []);
+
+  const stop = useCallback(() => {
+    abortActive(true);
+  }, [abortActive]);
 
   const sendStream = useCallback(
     (
@@ -80,7 +88,8 @@ export function useOwnerStream() {
       },
       handlers: StreamHandlers,
     ): Promise<'done' | 'error' | 'cancelled'> => {
-      stop();
+      // Replace any in-flight stream quietly (do not fire onCancelled for the new turn).
+      abortActive(false);
       return (async () => {
         const access = await tokenStore.getAccessToken();
         if (!access) {
@@ -100,8 +109,10 @@ export function useOwnerStream() {
           const finish = (result: 'done' | 'error' | 'cancelled') => {
             if (settled) return;
             settled = true;
-            setStreaming(false);
-            if (xhrRef.current === xhr) xhrRef.current = null;
+            if (xhrRef.current === xhr) {
+              xhrRef.current = null;
+              setStreaming(false);
+            }
             resolve(result);
           };
 
@@ -126,15 +137,14 @@ export function useOwnerStream() {
                 .find((l) => l.startsWith('data:'));
               if (!line) continue;
               const raw = line.slice(5).trim();
-              let evType = '';
               try {
-                evType = String((JSON.parse(raw) as { type?: string }).type || '');
+                const evType = String((JSON.parse(raw) as { type?: string }).type || '');
+                if (evType === 'error') terminal = 'error';
+                else if (evType === 'cancelled') terminal = 'cancelled';
+                else if (evType === 'done') terminal = 'done';
               } catch {
-                evType = '';
+                /* ignore parse for terminal tracking */
               }
-              if (evType === 'error') terminal = 'error';
-              else if (evType === 'cancelled') terminal = 'cancelled';
-              else if (evType === 'done') terminal = 'done';
               dispatchEvent(raw, handlers);
             }
           };
@@ -145,7 +155,10 @@ export function useOwnerStream() {
           };
 
           xhr.onabort = () => {
-            handlers.onCancelled?.();
+            if (notifyCancelRef.current) {
+              notifyCancelRef.current = false;
+              handlers.onCancelled?.();
+            }
             finish('cancelled');
           };
 
@@ -180,10 +193,10 @@ export function useOwnerStream() {
         });
       })();
     },
-    [stop],
+    [abortActive],
   );
 
-  useEffect(() => () => stop(), [stop]);
+  useEffect(() => () => abortActive(false), [abortActive]);
 
   return { sendStream, stop, streaming };
 }

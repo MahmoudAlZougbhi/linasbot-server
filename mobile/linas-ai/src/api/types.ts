@@ -38,6 +38,8 @@ export const ChatMessageSchema = z.object({
   content: z.string(),
   created_at: z.number(),
   tool_calls: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
+  /** Client-only local preview URIs (not persisted by server). */
+  local_image_uris: z.array(z.string()).optional(),
 });
 
 export type PublicUser = z.infer<typeof PublicUserSchema>;

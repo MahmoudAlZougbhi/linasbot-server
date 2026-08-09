@@ -43,7 +43,7 @@ export function ChatComposer({
   sending,
   canSendWithAttachment = false,
   voiceState = 'idle',
-  metering,
+  metering: _metering,
   inputRef,
   showPlus = false,
   showMic = false,
