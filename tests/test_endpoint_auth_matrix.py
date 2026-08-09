@@ -180,9 +180,10 @@ class TestRouteInventory:
         # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
         # +meta reconnect endpoint for first-party bindings.
         # +guest-ai session/messages (prefix-public, rate-limited).
-        assert counts["total_api_routes"] == 205
+        # +owner-notifications inbox/read/device-token + mobile STT (protected).
+        assert counts["total_api_routes"] == 211
         assert counts["public"] == 18
-        assert counts["protected"] == 187
+        assert counts["protected"] == 193
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),

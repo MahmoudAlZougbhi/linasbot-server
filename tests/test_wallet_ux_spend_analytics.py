@@ -87,8 +87,10 @@ def test_landing_pricing_has_no_profit_copy() -> None:
     assert 'id="pricing"' in text
     assert "30% profit" not in text
     assert "OpenAI cost" not in text
-    assert "input tokens" in text
-    assert "output tokens" in text
+    # Cost-model jargon stays off the marketing landing; billing detail lives in-app / pricing page.
+    assert "input tokens" not in text
+    assert "output tokens" not in text
+    assert "Subscriptions and usage credits are managed in the Linas AI mobile app" in text
 
 
 def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:

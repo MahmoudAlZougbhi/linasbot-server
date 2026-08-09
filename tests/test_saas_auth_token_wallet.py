@@ -112,7 +112,10 @@ def test_landing_pricing_section_in_source() -> None:
     landing = Path(__file__).resolve().parents[1] / "dashboard" / "src" / "pages" / "public" / "Landing.jsx"
     text = landing.read_text(encoding="utf-8")
     assert 'id="pricing"' in text
-    assert "/api/billing/packages" in text
+    # Marketing landing points to pricing page + app subscribe CTAs (no wallet packages fetch).
+    assert "pricing page" in text
+    assert "subscribe in the app" in text.lower() or "Subscribe" in text or "mobile app" in text
+    assert "/api/billing/packages" not in text
     assert "30% profit" not in text
 
 
