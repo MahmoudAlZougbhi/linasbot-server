@@ -45,12 +45,30 @@
       "ios": {
         "resourceClass": "m-medium"
       }
+    },
+    "testflight": {
+      "extends": "production",
+      "distribution": "store",
+      "channel": "testflight",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://linasaibot.com",
+        "EXPO_PUBLIC_APP_ENV": "preview"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     }
   },
   "submit": {
+    "testflight": {
+      "ios": {
+        "ascAppId": "REPLACE_WITH_NUMERIC_APP_STORE_CONNECT_APP_ID",
+        "appleId": "REPLACE_WITH_APPLE_ID_EMAIL_OPTIONAL"
+      }
+    },
     "production": {
       "ios": {
-        "ascAppId": "REPLACE_AFTER_APP_STORE_CONNECT"
+        "ascAppId": "REPLACE_WITH_NUMERIC_APP_STORE_CONNECT_APP_ID"
       }
     }
   }
