@@ -41,6 +41,10 @@ test('drawer and CM module tiles expose design handoff icons', () => {
   assert.match(modules, /dashboard: feather\('grid'\)/);
   assert.match(modules, /cm: feather\('book-open'\)/);
   assert.match(modules, /livechat: feather\('message-square'\)/);
+  assert.match(modules, /integrations: mci\('power-plug-outline'\)/);
+  assert.match(modules, /usage: feather\('upload-cloud'\)/);
+  assert.match(modules, /subscription: feather\('credit-card'\)/);
+  assert.match(modules, /settings: feather\('settings'\)/);
   assert.match(cm, /CM_SECTION_ICONS/);
   assert.match(cmIcons, /ai_basics: feather\('book-open'\)/);
   assert.match(cmIcons, /languages: feather\('globe'\)/);
