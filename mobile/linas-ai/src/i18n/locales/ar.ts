@@ -45,4 +45,8 @@ export const ar: Record<StringKey, string> = {
   groupGrow: 'الإنشاء والرؤى',
   groupAccount: 'الحساب',
   groupOwner: 'المنصة',
+  smartAnswers: 'الإجابات الذكية',
+  faqQuota: 'حصة الأسئلة الشائعة',
+  faqQuotaUpgrade: 'تم بلوغ حد الإجابات الذكية. قم بترقية خطتك لحد أعلى.',
+  diagnoseBadReply: 'تشخيص رد غير صحيح',
 };

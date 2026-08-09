@@ -83,9 +83,16 @@ async def tool_approve_cm_patch(
             confirmation_token=f"approve_cm_patch:{proposal_id}",
             error="Confirmation required",
         )
-    from services.owner_ai_cm_approval import approve_cm_patch
+    from services.owner_ai_cm_approval import approve_cm_patch_and_activate
 
-    data = approve_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=proposal_id, actor_id=user_id)
+    # Approve → validate → save → activate internally when published base exists.
+    # Never returns a user-facing Publish confirmation after approval.
+    data = await approve_cm_patch_and_activate(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        proposal_id=proposal_id,
+        actor_id=user_id,
+    )
     return ToolResult(ok=True, name="approve_cm_patch", data=data)
 
 

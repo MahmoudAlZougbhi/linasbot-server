@@ -151,6 +151,51 @@ def propose_cm_patch(
     }
 
 
+async def activate_cm_after_save(
+    *,
+    tenant_id: str,
+    section: str,
+    actor_id: str,
+) -> dict[str, Any]:
+    """If a published version already exists, publish the updated section safely (versioned).
+
+    Never prompts the owner with a Publish question — activation is internal only.
+    """
+    from services.cm.constants import tenant_has_published_cm
+    from services.cm.publish import PublishBlockedError, publish_draft_sections
+
+    if not tenant_has_published_cm(tenant_id):
+        return {"activated": False, "reason": "no_published_base", "section": section}
+    try:
+        result = await publish_draft_sections(
+            tenant_id=tenant_id,
+            published_by=actor_id or "owner_ai",
+            notes=f"owner_ai_auto_activate:{section}",
+            section_names=[section],
+        )
+        return {
+            "activated": True,
+            "section": section,
+            "content_version_id": getattr(result, "content_version_id", None),
+            "index_version_id": getattr(result, "index_version_id", None),
+        }
+    except PublishBlockedError as exc:
+        return {
+            "activated": False,
+            "reason": "publish_blocked",
+            "section": section,
+            "errors": list(getattr(exc, "errors", []) or [])[:20],
+            "message": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "activated": False,
+            "reason": f"{type(exc).__name__}",
+            "section": section,
+            "message": str(exc)[:200],
+        }
+
+
 def approve_cm_patch(
     *,
     tenant_id: str,
@@ -168,6 +213,7 @@ def approve_cm_patch(
 
     from services.cm.setup_chat import apply_section_patch
     from services.cm.validation import validate_cm
+    from services.faq_cm_invalidation import invalidate_faq_for_cm_patch
 
     saved = apply_section_patch(
         tenant_id=tenant_id,
@@ -176,7 +222,13 @@ def approve_cm_patch(
         actor_id=actor_id or user_id,
     )
     report = validate_cm(tenant_id=tenant_id, section=prop.section)
-    result = {"saved": saved, "validation": report}
+    invalidation = invalidate_faq_for_cm_patch(
+        tenant_id=tenant_id,
+        section=prop.section,
+        patch=prop.patch,
+        cm_revision=saved.get("revision"),
+    )
+    result = {"saved": saved, "validation": report, "faq_invalidation": invalidation}
     cm_patch_proposal_store.mark(prop, status="approved", result=result)
     return {
         "proposal_id": prop.id,
@@ -192,7 +244,35 @@ def approve_cm_patch(
             "error_count": len((report or {}).get("errors") or []),
             "warning_count": len((report or {}).get("warnings") or []),
         },
+        "faq_invalidation": invalidation,
+        "publish_prompt": False,
+        "activation_pending": True,
     }
+
+
+async def approve_cm_patch_and_activate(
+    *,
+    tenant_id: str,
+    user_id: str,
+    proposal_id: str,
+    actor_id: str | None = None,
+) -> dict[str, Any]:
+    """Approve → validate → save → auto-activate when published base exists. No Publish UX."""
+    base = approve_cm_patch(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        proposal_id=proposal_id,
+        actor_id=actor_id,
+    )
+    activation = await activate_cm_after_save(
+        tenant_id=tenant_id,
+        section=str(base.get("section") or ""),
+        actor_id=actor_id or user_id,
+    )
+    base["activation"] = activation
+    base["activation_pending"] = False
+    base["publish_prompt"] = False
+    return base
 
 
 def reject_cm_patch(*, tenant_id: str, user_id: str, proposal_id: str) -> dict[str, Any]:

@@ -113,6 +113,12 @@ entitlements_store = EntitlementsStore()
 def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     ent = entitlements_store.get(tenant_id)
     price = PLAN_PRICES_USD.get(ent.plan_id)
+    from services.faq_entitlements import get_faq_entitlement
+    from services.plan_economics import PLAN_FAQ_MAX_ENTRIES
+
+    faq = get_faq_entitlement(tenant_id)
+    features = dict(ent.features)
+    features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
     return {
         "tenant_id": ent.tenant_id,
         "plan_id": ent.plan_id,
@@ -122,7 +128,11 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "current_period_end": ent.current_period_end,
         "included_credits": ent.included_credits,
         "extra_credits": ent.extra_credits,
-        "features": ent.features,
+        "features": features,
+        "faq_enabled": faq.get("faq_enabled"),
+        "faq_max_entries": faq.get("faq_max_entries", PLAN_FAQ_MAX_ENTRIES.get(ent.plan_id, 0)),
+        "faq_used_entries": faq.get("faq_used_entries"),
+        "faq_quota_display": faq.get("quota_display"),
         "updated_at": ent.updated_at,
     }
 

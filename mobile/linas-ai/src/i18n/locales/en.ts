@@ -43,6 +43,10 @@ export const en = {
   groupGrow: 'Create & insights',
   groupAccount: 'Account',
   groupOwner: 'Platform',
+  smartAnswers: 'Smart Answers',
+  faqQuota: 'FAQ quota',
+  faqQuotaUpgrade: 'Smart Answers quota reached. Upgrade your plan for a higher limit.',
+  diagnoseBadReply: 'Diagnose a bad reply',
 } as const;
 
 export type StringKey = keyof typeof en;

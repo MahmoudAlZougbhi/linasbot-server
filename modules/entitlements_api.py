@@ -15,7 +15,7 @@ from services.entitlements_service import (
     entitlements_store,
     get_tenant_entitlement_public,
 )
-from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
+from services.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 
 
 class StoreNotificationBody(BaseModel):
@@ -43,6 +43,8 @@ async def list_plans() -> Any:
                 "plan_id": plan_id,
                 "price_usd": price,
                 "features": PLAN_FEATURES[plan_id],
+                "faq_enabled": bool(PLAN_FEATURES[plan_id].get("faq_enabled")),
+                "faq_max_entries": int(PLAN_FAQ_MAX_ENTRIES.get(plan_id, 0)),
                 "included_credits": allowance.included_credits,
                 "included_dm_replies": allowance.included_dm_replies,
                 "included_images": allowance.included_images,

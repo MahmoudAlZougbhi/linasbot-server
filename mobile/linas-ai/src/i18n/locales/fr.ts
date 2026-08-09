@@ -46,4 +46,8 @@ export const fr: Record<StringKey, string> = {
   groupGrow: 'Création & insights',
   groupAccount: 'Compte',
   groupOwner: 'Plateforme',
+  smartAnswers: 'Réponses intelligentes',
+  faqQuota: 'Quota FAQ',
+  faqQuotaUpgrade: 'Quota de réponses intelligentes atteint. Passez à un plan supérieur.',
+  diagnoseBadReply: 'Diagnostiquer une mauvaise réponse',
 };

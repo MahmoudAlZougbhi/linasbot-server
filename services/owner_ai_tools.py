@@ -1,7 +1,7 @@
 """Typed, authorized tools for the owner Linas AI System Copilot.
 
 LLM / heuristic output never writes storage directly — tools call service APIs only.
-CM writes go through propose → approve (human confirmation).
+CM writes go through propose → approve (human confirmation) then safe internal activation.
 """
 
 from __future__ import annotations
@@ -10,6 +10,17 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from services.owner_ai_tools_base import ToolResult
+from services.owner_ai_tools_diagnosis import (
+    tool_approve_diagnosis_fix,
+    tool_get_interaction_trace,
+    tool_get_recent_customer_interactions,
+    tool_propose_diagnosis_fix,
+)
+from services.owner_ai_tools_faq import (
+    tool_approve_smart_answer,
+    tool_propose_smart_answer,
+    tool_read_faq_quota,
+)
 from services.owner_ai_tools_read import (
     tool_help,
     tool_read_account_summary,
@@ -46,6 +57,13 @@ TOOL_HANDLERS: dict[str, Callable[..., Awaitable[ToolResult]]] = {
     "read_scheduled_posts": tool_read_scheduled_posts,
     "read_jobs_errors": tool_read_jobs_errors,
     "update_profile": tool_update_profile,
+    "get_recent_customer_interactions": tool_get_recent_customer_interactions,
+    "get_interaction_trace": tool_get_interaction_trace,
+    "propose_diagnosis_fix": tool_propose_diagnosis_fix,
+    "approve_diagnosis_fix": tool_approve_diagnosis_fix,
+    "read_faq_quota": tool_read_faq_quota,
+    "propose_smart_answer": tool_propose_smart_answer,
+    "approve_smart_answer": tool_approve_smart_answer,
 }
 
 HIGH_IMPACT_TOOLS: frozenset[str] = frozenset(
@@ -53,6 +71,10 @@ HIGH_IMPACT_TOOLS: frozenset[str] = frozenset(
         "publish_cm",
         "approve_cm_patch",
         "propose_cm_patch",
+        "propose_diagnosis_fix",
+        "approve_diagnosis_fix",
+        "propose_smart_answer",
+        "approve_smart_answer",
     }
 )
 
@@ -104,5 +126,44 @@ async def dispatch_tool(
         return await handler(tenant_id=tenant_id, role=role, user_id=user_id, updates=a)
     if name == "read_dashboard_metrics":
         return await handler(tenant_id=tenant_id, role=role, user_id=user_id)
+    if name == "get_recent_customer_interactions":
+        return await handler(tenant_id=tenant_id, role=role, limit=int(a.get("limit") or 20))
+    if name == "get_interaction_trace":
+        return await handler(tenant_id=tenant_id, role=role, trace_id=str(a.get("trace_id") or ""))
+    if name == "propose_diagnosis_fix":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            trace_id=str(a.get("trace_id") or ""),
+            correction=dict(a.get("correction") or {}) or None,
+        )
+    if name == "approve_diagnosis_fix":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            proposal_id=str(a.get("proposal_id") or ""),
+            confirmed=confirmed,
+        )
+    if name == "read_faq_quota":
+        return await handler(tenant_id=tenant_id, role=role)
+    if name == "propose_smart_answer":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            question=str(a.get("question") or ""),
+            answer=str(a.get("answer") or ""),
+            language=str(a.get("language") or "ar"),
+        )
+    if name == "approve_smart_answer":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            proposal_id=str(a.get("proposal_id") or ""),
+            confirmed=confirmed,
+        )
     # Generic read tools
     return await handler(tenant_id=tenant_id, role=role)

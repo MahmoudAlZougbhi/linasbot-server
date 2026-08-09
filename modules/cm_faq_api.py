@@ -44,6 +44,8 @@ async def cm_list_faq(
 ) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
+    from services.faq_entitlements import get_faq_entitlement
+
     items = list_cm_faq(
         tenant_id=tenant_id,
         status=status,
@@ -52,7 +54,14 @@ async def cm_list_faq(
         reviewed=reviewed,
         include_archived=include_archived,
     )
-    return {"success": True, "data": items, "count": len(items)}
+    entitlement = get_faq_entitlement(tenant_id)
+    return {
+        "success": True,
+        "data": items,
+        "count": len(items),
+        "entitlement": entitlement,
+        "quota_display": entitlement.get("quota_display"),
+    }
 
 
 @app.get("/api/cm/faq/duplicates")
@@ -80,6 +89,14 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
     if not question or not answer:
         raise HTTPException(status_code=400, detail="question and answer are required")
 
+    from services.faq_entitlements import FaqEntitlementError, assert_can_create_faq
+
+    try:
+        assert_can_create_faq(tenant_id)
+    except FaqEntitlementError as exc:
+        status = 403 if exc.code == "FAQ_DISABLED" else 402
+        raise HTTPException(status_code=status, detail={"code": exc.code, **exc.payload}) from exc
+
     try:
         duplicates = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
         result = await create_faq_pair(
@@ -93,7 +110,14 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return {"success": True, "duplicates": duplicates, **result}
+    from services.faq_entitlements import get_faq_entitlement
+
+    return {
+        "success": True,
+        "duplicates": duplicates,
+        "entitlement": get_faq_entitlement(tenant_id),
+        **result,
+    }
 
 
 @app.post("/api/cm/faq/from-livechat")

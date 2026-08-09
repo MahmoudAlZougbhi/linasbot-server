@@ -41,6 +41,21 @@ _INTENT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(jobs|errors|queue|worker)\b", re.I), "read_jobs_errors"),
     (re.compile(r"\b(my profile|who am i|address me|ملفي)\b", re.I), "read_profile"),
     (re.compile(r"\b(account summary|status|أين وصلنا)\b", re.I), "read_account_summary"),
+    (
+        re.compile(
+            r"\b(bad reply|wrong answer|diagnos|why did|incorrect|خطأ|تشخيص|mauvaise réponse)\b",
+            re.I,
+        ),
+        "get_recent_customer_interactions",
+    ),
+    (
+        re.compile(r"\b(faq quota|smart answers?|faq limit|حصة|réponses intelligentes)\b", re.I),
+        "read_faq_quota",
+    ),
+    (
+        re.compile(r"\b(save smart answer|add faq|حفظ إجابة|enregistrer faq)\b", re.I),
+        "propose_smart_answer",
+    ),
 ]
 
 
@@ -82,14 +97,44 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
     if name == "publish_cm":
         return "Publish completed successfully."
     if name == "approve_cm_patch":
-        return f"CM patch saved and validated: {result_data.get('validation')}"
+        activation = result_data.get("activation") or {}
+        act = "activated" if activation.get("activated") else "saved to draft"
+        return (
+            f"CM patch {act} and validated: {result_data.get('validation')}. "
+            "No separate Publish step is required after approval."
+        )
     if name == "propose_cm_patch":
         preview = result_data.get("preview") or {}
         return (
             "Proposed CM change ready for your review "
             f"(section={preview.get('section')}, keys={preview.get('changed_keys')}). "
-            "Approve in the app to validate and save to the same draft."
+            "Approve in the app to validate and save; if already live, it activates safely."
         )
+    if name == "get_recent_customer_interactions":
+        return (
+            f"Found {result_data.get('count', 0)} recent customer interactions. "
+            "Pick one to diagnose (share the trace id) or say what went wrong."
+        )
+    if name == "get_interaction_trace":
+        diag = result_data.get("diagnosis") or {}
+        return (
+            f"Root cause: {diag.get('root_cause')}. {diag.get('explanation')} "
+            "I can propose a correction for your approval."
+        )
+    if name == "propose_diagnosis_fix":
+        return "Proposed diagnosis fix ready for approval. Confirm to apply immediately (no Publish step)."
+    if name == "approve_diagnosis_fix":
+        return f"Diagnosis fix applied: {result_data.get('applied')}"
+    if name == "read_faq_quota":
+        ent = result_data.get("entitlement") or {}
+        return (
+            f"Smart Answers quota: {ent.get('quota_display')} "
+            f"(enabled={ent.get('faq_enabled')})."
+        )
+    if name == "propose_smart_answer":
+        return "Proposed Smart Answer ready for approval."
+    if name == "approve_smart_answer":
+        return f"Smart Answer saved (qa_group_id={result_data.get('qa_group_id')})."
     if name == "read_cm":
         if "sections" in result_data:
             return (
@@ -155,6 +200,14 @@ async def run_owner_turn(
     if confirm_tool:
         if confirm_tool.startswith("approve_cm_patch:"):
             intent = "approve_cm_patch"
+            args["proposal_id"] = confirm_tool.split(":", 1)[1]
+            confirmed = True
+        elif confirm_tool.startswith("approve_diagnosis_fix:"):
+            intent = "approve_diagnosis_fix"
+            args["proposal_id"] = confirm_tool.split(":", 1)[1]
+            confirmed = True
+        elif confirm_tool.startswith("approve_smart_answer:"):
+            intent = "approve_smart_answer"
             args["proposal_id"] = confirm_tool.split(":", 1)[1]
             confirmed = True
         else:

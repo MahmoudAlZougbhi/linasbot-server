@@ -132,12 +132,17 @@ async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) 
         "services.cm.validation.validate_cm",
         lambda **_: {"errors": [], "warnings": []},
     )
+    monkeypatch.setattr(
+        "services.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:style"},
+    )
 
     # Without going through approve, draft is not saved
     assert saved_calls == []
 
     result = approve_cm_patch(tenant_id="t1", user_id="u1", proposal_id=pid, actor_id="u1")
     assert result["status"] == "approved"
+    assert result["publish_prompt"] is False
     assert len(saved_calls) == 1
     assert saved_calls[0]["section"] == "style"
 

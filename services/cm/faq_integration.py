@@ -54,8 +54,9 @@ def _build_entry(
     qa_group_id: str,
     source_language: str,
     is_auto_translated: bool,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    entry: dict[str, Any] = {
         "question": question,
         "answer": answer,
         "language": language_detection_service.normalize_training_language(language),
@@ -64,7 +65,12 @@ def _build_entry(
         "qa_group_id": qa_group_id,
         "source_language": language_detection_service.normalize_training_language(source_language),
         "is_auto_translated": bool(is_auto_translated),
+        "is_active": True,
+        "status": "active",
     }
+    if tenant_id:
+        entry["tenant_id"] = str(tenant_id).strip().lower()
+    return entry
 
 
 async def create_faq_pair(
@@ -85,6 +91,13 @@ async def create_faq_pair(
     answer = (answer or "").strip()
     if not question or not answer:
         raise FaqIntegrationError("Question and answer are required")
+    if tenant_id:
+        from services.faq_entitlements import FaqEntitlementError, assert_can_create_faq
+
+        try:
+            assert_can_create_faq(str(tenant_id))
+        except FaqEntitlementError as exc:
+            raise FaqIntegrationError(str(exc)) from exc
 
     detected_language = language_detection_service.normalize_training_language(
         language,
@@ -133,7 +146,16 @@ async def create_faq_pair(
             continue  # never store an AR row with Franco-script question
 
         created_entries.append(
-            _build_entry(q_text, a_text, lang, category, qa_group_id, detected_language, lang != detected_language)
+            _build_entry(
+                q_text,
+                a_text,
+                lang,
+                category,
+                qa_group_id,
+                detected_language,
+                lang != detected_language,
+                tenant_id=tenant_id,
+            )
         )
         variants.append(FaqVariant(language=cast(LangCode, lang), question=q_text, answer=a_text))
 

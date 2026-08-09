@@ -29,6 +29,7 @@ PLAN_FEATURES: Final[dict[str, dict[str, bool]]] = {
         "ai_setup": True,
         "customer_dm_automation": True,
         "basic_integrations": True,
+        "faq_enabled": True,
         "comment_automation": False,
         "creative_studio": False,
         "scheduling": False,
@@ -41,6 +42,7 @@ PLAN_FEATURES: Final[dict[str, dict[str, bool]]] = {
         "ai_setup": True,
         "customer_dm_automation": True,
         "basic_integrations": True,
+        "faq_enabled": True,
         "comment_automation": True,
         "creative_studio": False,
         "scheduling": False,
@@ -53,6 +55,7 @@ PLAN_FEATURES: Final[dict[str, dict[str, bool]]] = {
         "ai_setup": True,
         "customer_dm_automation": True,
         "basic_integrations": True,
+        "faq_enabled": True,
         "comment_automation": True,
         "creative_studio": True,
         "scheduling": True,
@@ -65,6 +68,7 @@ PLAN_FEATURES: Final[dict[str, dict[str, bool]]] = {
         "ai_setup": True,
         "customer_dm_automation": True,
         "basic_integrations": True,
+        "faq_enabled": True,
         "comment_automation": True,
         "creative_studio": True,
         "scheduling": True,
@@ -72,6 +76,16 @@ PLAN_FEATURES: Final[dict[str, dict[str, bool]]] = {
         "video_generation": True,
         "advanced_capabilities": True,
     },
+}
+
+# Smart Answers / FAQ entry caps — central plan config (not scattered constants).
+# Policy: no paid plan → disabled; entry plans ~200; higher tiers ~1000.
+PLAN_FAQ_MAX_ENTRIES: Final[dict[str, int]] = {
+    "none": 0,
+    "starter": 200,
+    "growth": 200,
+    "pro": 1000,
+    "max": 1000,
 }
 
 # Assumed unit costs (USD) — image/video from typical production list prices; text from MODEL_PRICING.

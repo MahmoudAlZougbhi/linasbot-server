@@ -100,6 +100,13 @@ class PlatformOwnerService:
             plan = str(t.get("plan_id") or "none")
             plan_mix[plan] = plan_mix.get(plan, 0) + 1
             mrr += float(PLAN_PRICES_USD.get(plan, 0.0))
+        faq_analytics: dict[str, Any] = {}
+        try:
+            from services.faq_metrics import platform_owner_faq_analytics
+
+            faq_analytics = platform_owner_faq_analytics()
+        except Exception:
+            faq_analytics = {"tenants": [], "totals": {}}
         return {
             "total_tenants_with_entitlement_file": len(tenants),
             "active_subscriptions": len(active),
@@ -108,6 +115,7 @@ class PlatformOwnerService:
             "arr_estimate_usd": round(mrr * 12, 2),
             "plan_mix": plan_mix,
             "suspended_tenants": sorted(self._suspended),
+            "faq_smart_answers": faq_analytics,
         }
 
     def tenant_detail(self, tenant_id: str) -> dict[str, Any]:

@@ -328,7 +328,7 @@ class FaqRecord(CmBaseModel):
     variants: list[FaqVariant] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
-    status: Literal["draft", "active", "archived", "restricted"] = "draft"
+    status: Literal["draft", "active", "archived", "restricted", "needs_review"] = "draft"
     source_language: LangCode | None = None
     reviewed: bool = False
     provenance: str | None = None
