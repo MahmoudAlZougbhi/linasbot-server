@@ -17,7 +17,7 @@ vi.mock("../../utils/authFetch", () => ({
 }));
 
 describe("Sidebar APK download gating", () => {
-  it("never shows Live Chat APK — module disabled for all tenants", async () => {
+  it("shows Live Chat APK for admin", async () => {
     mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin" }) });
 
     render(
@@ -26,7 +26,7 @@ describe("Sidebar APK download gating", () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByRole("link", { name: /Download Live Chat APK/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Download Live Chat APK/i })).toBeInTheDocument();
   });
 
   it("hides APK download for viewers without liveChat permission", async () => {

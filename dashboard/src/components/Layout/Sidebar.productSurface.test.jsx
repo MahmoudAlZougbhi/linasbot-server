@@ -16,8 +16,8 @@ vi.mock("../../utils/authFetch", () => ({
   })),
 }));
 
-describe("Sidebar Wave 1 product surface", () => {
-  it("hides disabled modules for admin including linas", async () => {
+describe("Sidebar product surface", () => {
+  it("restores Live Chat + Interaction Logs for linas and keeps Wave-1 modules hidden", async () => {
     mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin", tenantId: "linas" }) });
 
     render(
@@ -29,13 +29,28 @@ describe("Sidebar Wave 1 product surface", () => {
     expect(screen.getByRole("link", { name: /Content Managers/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^Settings$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Token Wallet/i })).toBeInTheDocument();
+    expect(document.querySelector('a[href="/live-chat"]')).toBeTruthy();
+    expect(document.querySelector('a[href="/activity-flow"]')).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Download Live Chat APK/i })).toBeInTheDocument();
 
     expect(screen.queryByRole("link", { name: /Testing Lab/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Smart Messaging/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /^Live Chat$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Interaction Logs/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Create Post/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Download Live Chat APK/i })).not.toBeInTheDocument();
     expect(screen.getByText(/Business AI Platform/i)).toBeInTheDocument();
+  });
+
+  it("hides Live Chat ops surface for non-linas SaaS tenants", async () => {
+    mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin", tenantId: "acme-gym" }) });
+
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} onToggleCollapse={() => {}} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("link", { name: /Content Managers/i })).toBeInTheDocument();
+    expect(document.querySelector('a[href="/live-chat"]')).toBeNull();
+    expect(document.querySelector('a[href="/activity-flow"]')).toBeNull();
+    expect(screen.queryByRole("link", { name: /Download Live Chat APK/i })).not.toBeInTheDocument();
   });
 });

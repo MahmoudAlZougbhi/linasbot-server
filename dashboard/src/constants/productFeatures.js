@@ -1,23 +1,23 @@
 /**
- * Frontend mirror of services/product_features.py — Wave 1 disabled product surface.
+ * Frontend mirror of services/product_features.py — disabled product surface.
  * Keep in sync when adding/removing disabled modules.
+ * Live Chat + Interaction Logs are enabled again.
  */
 
 export const DISABLED_FRONTEND_ROUTES = [
   "/testing",
   "/api-debug",
-  "/live-chat",
-  "/mobile/live-chat",
   "/smart-messaging",
-  "/activity-flow",
   "/social-posts",
   "/analytics",
 ];
 
-/** Active SaaS navigation (Content Management + settings/wallet). */
+/** Primary SaaS navigation (plus Live Chat / Interaction Logs in Sidebar). */
 export const SAAS_NAV_ITEMS = [
   { name: "Dashboard", href: "/app", permissionKey: "dashboard" },
   { name: "Content Managers", href: "/content-managers", permissionKey: "contentManagers" },
+  { name: "Interaction Logs", href: "/activity-flow", permissionKey: "activityFlow" },
+  { name: "Live Chat", href: "/live-chat", permissionKey: "liveChat" },
   { name: "Settings", href: "/settings", permissionKey: "settings" },
   { name: "Token Wallet", href: "/wallet", permissionKey: "settings" },
 ];

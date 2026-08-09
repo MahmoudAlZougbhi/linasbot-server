@@ -19,6 +19,7 @@ import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
+import { OperatorStatusProvider } from './contexts/OperatorStatusContext';
 import { useApi } from './hooks/useApi';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -43,6 +44,9 @@ const CmSourcesPage = lazy(() => import('./pages/content-managers/CmSourcesPage'
 const CmActionsPage = lazy(() => import('./pages/content-managers/CmActionsPage'));
 const CmAiLimitsPage = lazy(() => import('./pages/content-managers/CmAiLimitsPage'));
 const CmOffDaysPage = lazy(() => import('./pages/content-managers/CmOffDaysPage'));
+const ActivityFlow = lazy(() => import('./pages/ActivityFlow'));
+const LiveChat = lazy(() => import('./pages/LiveChat'));
+const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Wallet = lazy(() => import('./pages/Wallet'));
 
@@ -66,6 +70,7 @@ function AppContent() {
   }
 
   return (
+    <OperatorStatusProvider>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse-slow"></div>
@@ -126,8 +131,8 @@ function AppContent() {
                     <Route path="/content-managers/off-days" element={<CmOffDaysPage />} />
                     <Route path="/content-managers/sources" element={<CmSourcesPage />} />
                     <Route path="/content-managers/:sectionSlug" element={<CmSectionPage />} />
-                    <Route path="/activity-flow" element={<Navigate to="/content-managers" replace />} />
-                    <Route path="/live-chat" element={<Navigate to="/content-managers" replace />} />
+                    <Route path="/activity-flow" element={<ActivityFlow />} />
+                    <Route path="/live-chat" element={<LiveChat />} />
                     <Route path="/analytics" element={<Navigate to="/app" replace />} />
                     <Route path="/smart-messaging" element={<Navigate to="/content-managers" replace />} />
                     <Route path="/social-posts" element={<Navigate to="/content-managers" replace />} />
@@ -168,6 +173,19 @@ function AppContent() {
           }}
         />
       </div>
+    </OperatorStatusProvider>
+  );
+}
+
+function MobileLiveChatRoute() {
+  return (
+    <OperatorStatusProvider>
+      <div className="h-[100dvh] overflow-hidden bg-slate-950">
+        <Suspense fallback={<RouteFallback />}>
+          <MobileLiveChat />
+        </Suspense>
+      </div>
+    </OperatorStatusProvider>
   );
 }
 
@@ -200,7 +218,7 @@ function App() {
               path="/mobile/live-chat"
               element={
                 <ProtectedRoute>
-                  <Navigate to="/content-managers" replace />
+                  <MobileLiveChatRoute />
                 </ProtectedRoute>
               }
             />

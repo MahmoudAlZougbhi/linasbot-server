@@ -178,9 +178,8 @@ class TestAPIAuthEnforcement:
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r2 = client.get("/api/media/audio", params={"url": "http://127.0.0.1:9/"})
-        # Wave 1: media module disabled for all tenants (including after auth).
-        assert r2.status_code == 403
-        assert r2.json().get("code") == "PRODUCT_MODULE_DISABLED"
+        # Live Chat media is enabled; SSRF guard must still reject loopback.
+        assert r2.status_code == 400
 
     def test_simulate_webhook_disabled(self, client):
         rec = session_service.create_session(user_id="t1", email="t@example.com", role="admin", permissions=None)
