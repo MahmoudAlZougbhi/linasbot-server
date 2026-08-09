@@ -19,9 +19,7 @@ def _fill(store: OwnerChatStore, *, tenant_id: str, user_id: str, n: int) -> str
 
 
 def test_slice_messages_latest_window() -> None:
-    msgs = [
-        OwnerChatMessage(id=f"id{i}", role="user", content=str(i), created_at=float(i)) for i in range(10)
-    ]
+    msgs = [OwnerChatMessage(id=f"id{i}", role="user", content=str(i), created_at=float(i)) for i in range(10)]
     page, has_more, total = OwnerChatStore.slice_messages(msgs, limit=3)
     assert total == 10
     assert has_more is True
@@ -29,9 +27,7 @@ def test_slice_messages_latest_window() -> None:
 
 
 def test_slice_messages_before_cursor() -> None:
-    msgs = [
-        OwnerChatMessage(id=f"id{i}", role="user", content=str(i), created_at=float(i)) for i in range(10)
-    ]
+    msgs = [OwnerChatMessage(id=f"id{i}", role="user", content=str(i), created_at=float(i)) for i in range(10)]
     page, has_more, total = OwnerChatStore.slice_messages(msgs, limit=3, before_id="id7")
     assert total == 10
     assert has_more is True
