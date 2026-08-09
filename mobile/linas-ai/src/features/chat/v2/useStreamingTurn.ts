@@ -48,7 +48,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
         attachment_ids?: string[];
         confirm_tool?: string | null;
       },
-    ): Promise<'done' | 'error' | 'cancelled' | 'skipped'> => {
+    ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped'> => {
       if (!conversationId) return 'skipped';
       resetUi();
       setCards([]);

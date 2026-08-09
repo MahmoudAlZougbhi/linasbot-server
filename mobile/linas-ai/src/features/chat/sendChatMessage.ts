@@ -1,3 +1,4 @@
+import { isNetworkFailure } from '../../api/networkError';
 import type { PendingFile } from './v2/pickAttachment';
 import { isImageMime } from './v2/pickAttachment';
 import { uploadOwnerAttachment } from './v2/useOwnerStream';
@@ -5,12 +6,12 @@ import type { VoiceState } from './useVoiceDraft';
 
 type GuestSend = (
   content: string,
-) => Promise<'done' | 'gated' | 'rejected' | 'error' | 'skipped'>;
+) => Promise<'done' | 'gated' | 'rejected' | 'error' | 'network_error' | 'skipped'>;
 
 type OwnerTurnSend = (
   text: string,
   opts?: { attachment_ids?: string[] },
-) => Promise<'done' | 'error' | 'cancelled' | 'skipped'>;
+) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped'>;
 
 type Args = {
   isAuthenticated: boolean;
@@ -29,9 +30,20 @@ type Args = {
   autoTitleFromOutgoing: (content: string) => void;
   openAuthPreservingDraft: (hard?: boolean) => void;
   setOffline: (v: boolean) => void;
+  setSendError: (v: string | null) => void;
   scrollToBottom: () => void;
   imagePreviewByContent: { current: Record<string, string[]> };
 };
+
+function restoreDraft(
+  setDraft: (v: string) => void,
+  text: string,
+  setPendingFiles: Args['setPendingFiles'],
+  files: PendingFile[],
+) {
+  setDraft(text);
+  setPendingFiles(files);
+}
 
 export async function sendChatMessage(args: Args): Promise<void> {
   const {
@@ -51,6 +63,7 @@ export async function sendChatMessage(args: Args): Promise<void> {
     autoTitleFromOutgoing,
     openAuthPreservingDraft,
     setOffline,
+    setSendError,
     scrollToBottom,
     imagePreviewByContent,
   } = args;
@@ -65,16 +78,29 @@ export async function sendChatMessage(args: Args): Promise<void> {
     setDraft('');
     scrollToBottom();
     const result = await guestSend(text);
-    if (result === 'skipped' || result === 'rejected' || result === 'error') {
+    if (result === 'skipped' || result === 'rejected' || result === 'error' || result === 'network_error') {
       setDraft(text);
-      if (result === 'error') setOffline(true);
+      if (result === 'network_error') {
+        setSendError(null);
+        setOffline(true);
+      } else if (result === 'error') {
+        setOffline(false);
+        // Guest session already set a typed error (word limit / model / messageFailed).
+      } else {
+        setOffline(false);
+      }
+      return;
     }
+    setOffline(false);
+    setSendError(null);
     return;
   }
 
   if (voiceState === 'recording' || voiceState === 'transcribing') return;
   if (!conversationId) {
-    setOffline(true);
+    // Session not ready — not a connectivity claim.
+    setOffline(false);
+    setSendError('retry');
     return;
   }
 
@@ -95,10 +121,15 @@ export async function sendChatMessage(args: Args): Promise<void> {
     try {
       const uploaded = await Promise.all(files.map((f) => uploadOwnerAttachment(f)));
       attachmentIds = uploaded.map((u) => u.attachment_id);
-    } catch {
-      setDraft(text);
-      setPendingFiles(files);
-      setOffline(true);
+    } catch (err) {
+      restoreDraft(setDraft, text, setPendingFiles, files);
+      if (isNetworkFailure(err)) {
+        setSendError(null);
+        setOffline(true);
+      } else {
+        setOffline(false);
+        setSendError('messageFailed');
+      }
       return;
     }
   }
@@ -110,12 +141,27 @@ export async function sendChatMessage(args: Args): Promise<void> {
 
   const optimisticId = appendOptimisticUser(outgoing, imageUris.length ? imageUris : undefined);
   const result = await ownerSend(outgoing, { attachment_ids: attachmentIds });
-  if (result === 'skipped' || result === 'error') {
+  if (result === 'skipped' || result === 'error' || result === 'network_error') {
     removeOptimisticUser(optimisticId);
-    setDraft(text);
-    setPendingFiles(files);
-    if (result === 'error') setOffline(true);
+    restoreDraft(setDraft, text, setPendingFiles, files);
+    if (result === 'network_error') {
+      setSendError(null);
+      setOffline(true);
+    } else if (result === 'error') {
+      setOffline(false);
+      setSendError('messageFailed');
+    } else {
+      setOffline(false);
+      setSendError('retry');
+    }
     return;
   }
+  if (result === 'cancelled') {
+    // Stop leaves partial turn; keep draft cleared (user chose stop).
+    setOffline(false);
+    return;
+  }
+  setOffline(false);
+  setSendError(null);
   scrollToBottom();
 }

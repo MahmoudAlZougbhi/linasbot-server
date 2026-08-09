@@ -90,7 +90,7 @@ export function useOwnerStream() {
         attachment_ids?: string[];
       },
       handlers: StreamHandlers,
-    ): Promise<'done' | 'error' | 'cancelled'> => {
+    ): Promise<'done' | 'error' | 'network_error' | 'cancelled'> => {
       // Replace any in-flight stream quietly (do not fire onCancelled for the new turn).
       abortActive(false);
       return (async () => {
@@ -105,11 +105,11 @@ export function useOwnerStream() {
         xhrRef.current = xhr;
         let seen = 0;
         let carry = '';
-        let terminal: 'done' | 'error' | 'cancelled' = 'done';
+        let terminal: 'done' | 'error' | 'network_error' | 'cancelled' = 'done';
         let settled = false;
 
-        return await new Promise<'done' | 'error' | 'cancelled'>((resolve) => {
-          const finish = (result: 'done' | 'error' | 'cancelled') => {
+        return await new Promise<'done' | 'error' | 'network_error' | 'cancelled'>((resolve) => {
+          const finish = (result: 'done' | 'error' | 'network_error' | 'cancelled') => {
             if (settled) return;
             settled = true;
             if (xhrRef.current === xhr) {
@@ -154,7 +154,7 @@ export function useOwnerStream() {
 
           xhr.onerror = () => {
             handlers.onError?.('stream_network_error');
-            finish('error');
+            finish('network_error');
           };
 
           xhr.onabort = () => {

@@ -216,7 +216,13 @@ export function ChatScreen({
           <Pressable
             onPress={() => {
               setOffline(false);
-              void (isAuthenticated ? owner.bootstrap() : guest.bootstrap());
+              if (isAuthenticated) {
+                owner.setError(null);
+                void owner.bootstrap();
+              } else {
+                guest.setError(null);
+                void guest.bootstrap();
+              }
             }}
           >
             <Text style={styles.error}>
@@ -311,6 +317,10 @@ export function ChatScreen({
               autoTitleFromOutgoing: owner.autoTitleFromOutgoing,
               openAuthPreservingDraft,
               setOffline,
+              setSendError: (v) => {
+                if (isAuthenticated) owner.setError(v);
+                else guest.setError(v);
+              },
               scrollToBottom,
               imagePreviewByContent,
             })
