@@ -33,22 +33,25 @@ def _env_model(key: str, default: str) -> str:
 
 
 def router_config() -> dict[str, Any]:
-    """Owner/CM/creative route models (OpenAI API ids).
+    """Owner/CM/customer route models (OpenAI API ids).
 
-    Content Manager / owner CM / creative → gpt-5.6-sol
+    Owner Copilot V2: single brain LINAS_OWNER_MODEL=gpt-5.6-sol (help + CM).
+    Creative routing retained only for dormant legacy paths (unreachable under V2).
     Customer high-volume → gpt-5.6-luna
     """
+    owner_model = _env_model("LINAS_OWNER_MODEL", "gpt-5.6-sol")
     return {
         "owner_help": {
-            "model": _env_model("LINAS_OWNER_HELP_MODEL", "gpt-5.6-luna"),
-            "max_context_tokens": int(os.getenv("LINAS_OWNER_HELP_MAX_CTX", "3500")),
+            "model": _env_model("LINAS_OWNER_HELP_MODEL", owner_model),
+            "max_context_tokens": int(os.getenv("LINAS_OWNER_HELP_MAX_CTX", "6000")),
         },
         "owner_complex_cm": {
-            "model": _env_model("LINAS_OWNER_CM_MODEL", "gpt-5.6-sol"),
+            "model": _env_model("LINAS_OWNER_CM_MODEL", owner_model),
             "max_context_tokens": int(os.getenv("LINAS_OWNER_CM_MAX_CTX", "6000")),
         },
         "creative": {
-            "model": _env_model("LINAS_CREATIVE_MODEL", "gpt-5.6-sol"),
+            # Dormant: V2 refuses creative tools; keep key for legacy tests only.
+            "model": _env_model("LINAS_CREATIVE_MODEL", owner_model),
             "max_context_tokens": int(os.getenv("LINAS_CREATIVE_MAX_CTX", "4000")),
         },
         "customer_high_volume": {

@@ -33,6 +33,7 @@ def test_cm_sections_include_dynamic_messages_and_restricted() -> None:
     assert "restricted" in CM_SECTIONS
     assert "faq" in CM_SECTIONS
     assert "handoff" in CM_SECTIONS
+    assert "opening_hours" in CM_SECTIONS
     assert CM_SECTIONS[0] == "ai_basics"
 
 

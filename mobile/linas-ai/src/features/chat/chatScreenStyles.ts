@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { colors, fonts, radii, spacing } from '../../theme';
 
 export const chatScreenStyles = StyleSheet.create({
+  flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { padding: 16, paddingBottom: 28, flexGrow: 1 },
   error: {

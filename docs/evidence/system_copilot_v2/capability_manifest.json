@@ -1,0 +1,79 @@
+{
+  "version": "2.0.0",
+  "deployed_sha_note": "Recorded at branch creation from origin/main d36c841 (PR #104). Update on each release.",
+  "owner_model": "gpt-5.6-sol",
+  "guest_model": "gpt-5.6-luna",
+  "customer_hv_model": "gpt-5.6-luna",
+  "flags": {
+    "OWNER_COPILOT_V2": true,
+    "OWNER_COPILOT_WRITES": false,
+    "OWNER_COPILOT_META_ACTIONS": false
+  },
+  "customer_scope": ["instagram_dms", "facebook_messenger", "instagram_comments", "facebook_comments"],
+  "active_tools": [
+    "help",
+    "read_account_summary",
+    "read_profile",
+    "read_cm",
+    "validate_cm",
+    "propose_cm_patch",
+    "publish_cm",
+    "read_usage",
+    "read_subscription",
+    "read_integrations",
+    "diagnose_meta_health",
+    "read_dashboard_metrics",
+    "get_recent_customer_interactions",
+    "get_interaction_trace",
+    "propose_diagnosis_fix",
+    "read_faq_quota",
+    "propose_smart_answer",
+    "update_profile",
+    "setup_next_step",
+    "extract_price_list"
+  ],
+  "capabilities": [
+    {
+      "id": "system_copilot",
+      "feature": "System Copilot",
+      "status": "available",
+      "route": "chat",
+      "source_files": ["services/owner_copilot_v2/", "modules/owner_ai_api.py", "modules/owner_ai_v2_api.py"]
+    },
+    {
+      "id": "content_management",
+      "feature": "Content Management",
+      "status": "available",
+      "route": "cm",
+      "source_files": ["services/cm/", "services/owner_ai_tools_write.py"]
+    },
+    {
+      "id": "integrations_meta",
+      "feature": "Instagram/Facebook",
+      "status": "partial",
+      "route": "integrations",
+      "source_files": ["services/owner_copilot_v2/diagnosis_health.py"]
+    },
+    {
+      "id": "live_chat",
+      "feature": "Live Chat (read-only)",
+      "status": "available",
+      "route": "livechat",
+      "source_files": ["mobile/linas-ai/src/features/livechat/LiveChatThread.tsx"]
+    },
+    {
+      "id": "creative_studio",
+      "feature": "Creative Studio",
+      "status": "unavailable",
+      "route": "create",
+      "source_files": ["services/owner_copilot_v2/creative_policy.py"]
+    },
+    {
+      "id": "price_list_vision",
+      "feature": "Price list image import",
+      "status": "available",
+      "route": "chat",
+      "source_files": ["services/owner_copilot_v2/vision_import.py", "services/owner_copilot_v2/attachments.py"]
+    }
+  ]
+}

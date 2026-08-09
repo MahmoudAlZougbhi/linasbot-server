@@ -46,6 +46,12 @@ export const CM_SECTION_CARDS = [
     description: "Branches, stores, offices, hours, and availability (optional).",
   },
   {
+    slug: "opening-hours",
+    section: "opening_hours",
+    name: "Opening Hours",
+    description: "Named hour calendars (Men / Women / Branch) with Mon–Sun open or off.",
+  },
+  {
     slug: "prices",
     section: "prices",
     name: "Prices",

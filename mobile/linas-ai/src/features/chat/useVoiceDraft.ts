@@ -5,7 +5,8 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
-import { useRef, useState } from 'react';
+import { getInfoAsync } from 'expo-file-system/legacy';
+import { useEffect, useRef, useState } from 'react';
 
 import { apiUpload, ApiError } from '../../api/client';
 
@@ -38,9 +39,14 @@ function errorMessage(err: unknown): string {
     if (body?.detail) return String(body.detail);
     if (body?.error) return String(body.error);
     if (err.status === 401) return 'Please sign in again to use voice.';
+    if (err.message) return err.message;
   }
   if (err instanceof Error && err.message) return err.message;
   return 'Could not transcribe. Try again or type your message.';
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 export function useVoiceDraft(onText: (text: string) => void) {
@@ -51,10 +57,36 @@ export function useVoiceDraft(onText: (text: string) => void) {
   const stateRef = useRef<VoiceState>('idle');
   const busyRef = useRef(false);
   const startedAtRef = useRef(0);
+  const onTextRef = useRef(onText);
+
+  useEffect(() => {
+    onTextRef.current = onText;
+  }, [onText]);
 
   function setState(next: VoiceState) {
     stateRef.current = next;
     setVoiceState(next);
+  }
+
+  async function resolveRecordingUri(): Promise<string> {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const status = recorder.getStatus();
+      const uri = (recorder.uri || status.url || '').trim();
+      if (uri) {
+        try {
+          const info = await getInfoAsync(uri);
+          if (info.exists && !info.isDirectory) {
+            const size = 'size' in info && typeof info.size === 'number' ? info.size : 0;
+            if (size > 0) return uri;
+          }
+        } catch {
+          // URI may still be valid for FormData even if getInfoAsync fails.
+          return uri;
+        }
+      }
+      await sleep(60);
+    }
+    throw new Error('No recording captured. Hold a moment longer, then stop.');
   }
 
   async function startRecording() {
@@ -71,6 +103,10 @@ export function useVoiceDraft(onText: (text: string) => void) {
     });
     await recorder.prepareToRecordAsync();
     recorder.record();
+    // Native isRecording can lag a tick after record().
+    for (let i = 0; i < 10 && !recorder.isRecording; i++) {
+      await sleep(30);
+    }
     if (!recorder.isRecording) {
       throw new Error('Could not start microphone. Check permission and try again.');
     }
@@ -82,15 +118,11 @@ export function useVoiceDraft(onText: (text: string) => void) {
     setState('transcribing');
     try {
       const elapsed = Date.now() - startedAtRef.current;
-      if (elapsed < 400) {
-        await new Promise((r) => setTimeout(r, 400 - elapsed));
+      if (elapsed < 500) {
+        await sleep(500 - elapsed);
       }
       await recorder.stop();
-      const status = recorder.getStatus();
-      const uri = (recorder.uri || status.url || '').trim();
-      if (!uri) {
-        throw new Error('No recording captured. Hold a moment longer, then stop.');
-      }
+      const uri = await resolveRecordingUri();
       const ext = extensionForUri(uri);
       const buildForm = () => {
         const form = new FormData();
@@ -121,7 +153,8 @@ export function useVoiceDraft(onText: (text: string) => void) {
         throw new Error('No speech detected. Try again.');
       }
       // Insert into composer only — never auto-send.
-      onText(text);
+      setVoiceError(null);
+      onTextRef.current(text);
     } finally {
       setState('idle');
       try {

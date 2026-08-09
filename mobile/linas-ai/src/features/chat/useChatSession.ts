@@ -37,38 +37,12 @@ const ProposedPatchSchema = z
   .nullable()
   .optional();
 
-const CreativeDraftSchema = z
-  .object({
-    status: z.string().optional(),
-    kind: z.string().optional(),
-    text: z.string().optional(),
-    prompt: z.string().optional(),
-    reason: z.string().optional(),
-    job_id: z.string().optional(),
-    model: z.string().optional(),
-    task_options: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
-    actions: z
-      .object({
-        edit: z.boolean().optional(),
-        regenerate: z.boolean().optional(),
-        schedule: z.boolean().optional(),
-        publish: z.boolean().optional(),
-        publish_reason: z.string().optional(),
-      })
-      .optional(),
-  })
-  .nullable()
-  .optional();
-
 const SendSchema = z.object({
   success: z.literal(true),
   message: ChatMessageSchema.nullable(),
   pending_confirmation: z.string().nullable().optional(),
   proposed_patch: ProposedPatchSchema,
-  creative_draft: CreativeDraftSchema,
-  quick_actions: z
-    .array(z.object({ id: z.string(), label: z.string() }))
-    .optional(),
+  quick_actions: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
   setup_stage: z.string().nullable().optional(),
 });
 
@@ -78,6 +52,7 @@ export type ProposedPatch = {
   preview?: Record<string, unknown>;
 };
 
+/** @deprecated Creative Studio cancelled — type retained only so dead UI files typecheck. */
 export type CreativeDraft = {
   status?: string;
   kind?: string;
@@ -96,17 +71,36 @@ export type CreativeDraft = {
   };
 };
 
+export type HistoryEntry = { id: string; title: string; archived?: boolean };
+
+const DEFAULT_TITLES = new Set(['New chat', 'Chat', 'Untitled', 'Linas AI', '']);
+
+export function isDefaultConversationTitle(title: string | null | undefined): boolean {
+  return DEFAULT_TITLES.has((title || '').trim());
+}
+
+/** Match server auto_title_from_first_message — first user text, single line, max 60. */
+export function autoTitleFromFirstMessage(content: string, maxLen = 60): string {
+  const cleaned = String(content || '')
+    .replace(/\r/g, '\n')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
+  if (!cleaned) return 'New chat';
+  if (cleaned.length <= maxLen) return cleaned;
+  return cleaned.slice(0, maxLen).trimEnd();
+}
+
 export function useChatSession(enabled = true) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [title, setTitle] = useState('Linas AI');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [history, setHistory] = useState<{ id: string; title: string }[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(enabled);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
   const [proposedPatch, setProposedPatch] = useState<ProposedPatch | null>(null);
-  const [creativeDraft, setCreativeDraft] = useState<CreativeDraft | null>(null);
   const [quickActions, setQuickActions] = useState<{ id: string; label: string }[]>([]);
 
   const bootstrap = useCallback(async () => {
@@ -118,9 +112,16 @@ export function useChatSession(enabled = true) {
     setError(null);
     try {
       const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-      setHistory(listed.conversations.map((c) => ({ id: c.id, title: c.title })));
-      if (listed.conversations[0]) {
-        const full = await apiFetch(`/api/owner-ai/conversations/${listed.conversations[0].id}`, {
+      setHistory(
+        listed.conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          archived: Boolean(c.archived),
+        })),
+      );
+      const active = listed.conversations.find((c) => !c.archived) || listed.conversations[0];
+      if (active) {
+        const full = await apiFetch(`/api/owner-ai/conversations/${active.id}`, {
           schema: GetConvSchema,
         });
         setConversationId(full.conversation.id);
@@ -144,6 +145,71 @@ export function useChatSession(enabled = true) {
     }
   }, [enabled]);
 
+  /** Soft sync after a stream turn — refresh history + active thread without full-screen loading. */
+  const syncAfterTurn = useCallback(async () => {
+    if (!enabled) return;
+    const activeId = conversationId;
+    if (!activeId) return;
+    try {
+      const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
+      setHistory(
+        listed.conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          archived: Boolean(c.archived),
+        })),
+      );
+      const full = await apiFetch(`/api/owner-ai/conversations/${activeId}`, {
+        schema: GetConvSchema,
+      });
+      // Ignore if user switched chats while the request was in flight.
+      setConversationId((current) => {
+        if (current === activeId) {
+          setTitle(full.conversation.title);
+          setMessages(full.conversation.messages);
+        }
+        return current;
+      });
+    } catch {
+      /* keep optimistic UI; user can retry via error banner */
+    }
+  }, [conversationId, enabled]);
+
+  const applyConversationTitle = useCallback(
+    (id: string, nextTitle: string, opts?: { onlyIfDefault?: boolean }) => {
+      const cleaned = (nextTitle || '').trim();
+      if (!cleaned) return;
+      setHistory((prev) =>
+        prev.map((h) => {
+          if (h.id !== id) return h;
+          if (opts?.onlyIfDefault && !isDefaultConversationTitle(h.title)) return h;
+          return { ...h, title: cleaned };
+        }),
+      );
+      setConversationId((current) => {
+        if (current === id) {
+          setTitle((prevTitle) => {
+            if (opts?.onlyIfDefault && !isDefaultConversationTitle(prevTitle)) return prevTitle;
+            return cleaned;
+          });
+        }
+        return current;
+      });
+    },
+    [],
+  );
+
+  /** Optimistic ChatGPT-style title from first user message while still untitled. */
+  const autoTitleFromOutgoing = useCallback(
+    (content: string) => {
+      if (!conversationId || !isDefaultConversationTitle(title)) return;
+      const next = autoTitleFromFirstMessage(content);
+      if (isDefaultConversationTitle(next)) return;
+      applyConversationTitle(conversationId, next);
+    },
+    [applyConversationTitle, conversationId, title],
+  );
+
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
@@ -155,7 +221,6 @@ export function useChatSession(enabled = true) {
     setMessages(full.conversation.messages);
     setPendingConfirm(null);
     setProposedPatch(null);
-    setCreativeDraft(null);
   }
 
   async function newChat() {
@@ -170,61 +235,53 @@ export function useChatSession(enabled = true) {
     setHistory((prev) => [{ id: created.conversation.id, title: created.conversation.title }, ...prev]);
     setPendingConfirm(null);
     setProposedPatch(null);
-    setCreativeDraft(null);
   }
 
-  async function send(
-    content: string,
-    confirmTool?: string,
-    toolArgs?: Record<string, unknown>,
-  ) {
-    if (!conversationId || (!content.trim() && !confirmTool)) {
-      return;
-    }
-    setSending(true);
-    setError(null);
-    const trimmed = content.trim();
-    // High-impact confirms keep a visible "Confirm: …" line; tool-only actions may send empty content.
-    const apiContent = confirmTool
-      ? trimmed || (confirmTool.startsWith('approve_') || confirmTool === 'publish_cm' ? `Confirm: ${confirmTool}` : '')
-      : trimmed;
-    if (!confirmTool && trimmed) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `local-${Date.now()}`,
-          role: 'user',
-          content: trimmed,
-          created_at: Date.now() / 1000,
-        },
-      ]);
-    }
-    try {
-      const result = await apiFetch(`/api/owner-ai/conversations/${conversationId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({
-          content: apiContent,
-          confirm_tool: confirmTool ?? null,
-          tool_args: toolArgs ?? null,
-        }),
-        schema: SendSchema,
-      });
-      if (result.message) {
-        setMessages((prev) => [...prev, result.message as ChatMessage]);
-      }
-      setPendingConfirm(result.pending_confirmation ?? null);
-      setProposedPatch(result.proposed_patch ?? null);
-      if (result.creative_draft) {
-        setCreativeDraft(result.creative_draft);
-      }
-      if (result.quick_actions?.length) {
-        setQuickActions(result.quick_actions);
-      }
-    } catch {
-      setError('messageFailed');
-    } finally {
-      setSending(false);
-    }
+  async function renameConversation(id: string, nextTitle: string) {
+    await apiFetch(`/api/owner-ai/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: nextTitle }),
+      schema: z.object({ success: z.literal(true) }),
+    });
+    setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, title: nextTitle } : h)));
+    if (id === conversationId) setTitle(nextTitle);
+  }
+
+  async function setArchived(id: string, archived: boolean) {
+    await apiFetch(`/api/owner-ai/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ archived }),
+      schema: z.object({ success: z.literal(true) }),
+    });
+    setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, archived } : h)));
+  }
+
+  async function deleteConversation(id: string) {
+    await apiFetch(`/api/owner-ai/conversations/${id}`, {
+      method: 'DELETE',
+      schema: z.object({ success: z.literal(true) }),
+    });
+    setHistory((prev) => prev.filter((h) => h.id !== id));
+    if (id === conversationId) await newChat();
+  }
+
+  function appendOptimisticUser(content: string, localImageUris?: string[]) {
+    const id = `local-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id,
+        role: 'user',
+        content,
+        created_at: Date.now() / 1000,
+        local_image_uris: localImageUris?.length ? localImageUris : undefined,
+      },
+    ]);
+    return id;
+  }
+
+  function removeOptimisticUser(id: string) {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
   }
 
   return {
@@ -237,15 +294,22 @@ export function useChatSession(enabled = true) {
     error,
     pendingConfirm,
     proposedPatch,
-    creativeDraft,
     quickActions,
     bootstrap,
+    syncAfterTurn,
+    applyConversationTitle,
+    autoTitleFromOutgoing,
     openConversation,
     newChat,
-    send,
+    renameConversation,
+    setArchived,
+    deleteConversation,
+    appendOptimisticUser,
+    removeOptimisticUser,
     setError,
     setProposedPatch,
     setPendingConfirm,
-    setCreativeDraft,
+    setSending,
+    setQuickActions,
   };
 }

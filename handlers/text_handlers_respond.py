@@ -976,11 +976,20 @@ async def _handle_published_cm_runtime(
     message: str,
     detected_language: str,
     response_language: str,
+    user_id: str | None = None,
+    conversation_id: str | None = None,
+    channel: str | None = None,
+    asset_id: str | None = None,
+    provider_display_name: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Run the CM published-mode pipeline end-to-end and return ``(reply_text, metadata)``.
 
     Never raises for expected "no published version" cases — returns an honest clarify/contact
     message instead (no silent fallback to the legacy pipeline, per plan §12).
+
+    When ``CUSTOMER_REPLY_AI_V2`` is enabled, runs Retrieval Luna + Answer Luna. Shadow mode
+    (``CUSTOMER_REPLY_AI_V2_LIVE=false``) records V2 metadata but still returns the classic
+    published CM reply so customer-visible behavior is unchanged until live send is approved.
     """
     from services.cm.answer_generation import (
         UsageAccumulator,
@@ -990,6 +999,56 @@ async def _handle_published_cm_runtime(
     from services.cm.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
     from services.cm.runtime_pipeline import finalize_response, prepare_response
     from services.dynamic_messages_service import get_dynamic_message
+
+    v2_meta: dict[str, Any] = {}
+    try:
+        from services.customer_reply_v2.flags import (
+            customer_reply_ai_v2_enabled,
+            customer_reply_ai_v2_live_send,
+        )
+
+        if customer_reply_ai_v2_enabled():
+            from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+
+            social_channel = "instagram_dm"
+            ch = (channel or "").strip().lower()
+            if "facebook" in ch or ch in {"messenger", "page"}:
+                social_channel = "facebook_dm"
+            elif "instagram" in ch:
+                social_channel = "instagram_dm"
+
+            v2_outcome = await run_customer_reply_v2_dm(
+                tenant_id=tenant_id,
+                message=message,
+                detected_language=detected_language,
+                response_language=response_language,
+                channel=social_channel,
+                asset_id=asset_id or "",
+                provider_sender_id=user_id or "",
+                provider_display_name=provider_display_name or "",
+                user_id=user_id or "",
+                conversation_id=conversation_id or "",
+            )
+            v2_meta = {
+                "customer_reply_ai_v2": True,
+                "v2_reason": v2_outcome.reason,
+                "v2_shadow_only": v2_outcome.shadow_only,
+                "v2_evidence_status": v2_outcome.evidence_status,
+                **(v2_outcome.metadata or {}),
+            }
+            if customer_reply_ai_v2_live_send() and v2_outcome.reply:
+                return v2_outcome.reply, {
+                    "reason": v2_outcome.reason,
+                    "ai_called": True,
+                    "cost_status": "estimated",
+                    **v2_meta,
+                    "pipeline_decisions": [
+                        {"step": "customer_reply_v2", "decision": v2_outcome.reason, "ai_called": True},
+                    ],
+                }
+    except Exception as v2_exc:
+        v2_meta = {"customer_reply_ai_v2": True, "v2_error": str(v2_exc)[:200]}
+        print(f"[_handle_published_cm_runtime] ⚠️ customer_reply_v2 shadow/live failed: {v2_exc}")
 
     outcome = await prepare_response(
         tenant_id=tenant_id,
@@ -1003,6 +1062,7 @@ async def _handle_published_cm_runtime(
         return reply, {
             "reason": outcome.reason,
             **outcome.metadata,
+            **v2_meta,
             "ai_called": False,
             "cost_status": "none",
             "pipeline_decisions": [
@@ -1035,7 +1095,7 @@ async def _handle_published_cm_runtime(
     source_titles = [
         {"source_id": chunk.source_id, "title": (chunk.text or "")[:120]} for chunk in (packet.chunks or [])[:20]
     ]
-    usage_summary = usage_acc.to_result(result.text, usage_acc.models[-1] if usage_acc.models else "gpt-4o-mini")
+    usage_summary = usage_acc.to_result(result.text, usage_acc.models[-1] if usage_acc.models else "gpt-5.6-luna")
     return result.text, {
         "reason": "packet_ready" if result.ok else "answer_validation_failed",
         "content_version_id": packet.content_version_id,
@@ -1055,6 +1115,7 @@ async def _handle_published_cm_runtime(
         "output_cost_usd": usage_summary.output_cost_usd,
         "cost_status": usage_summary.cost_status,
         "cost_basis": usage_summary.cost_basis,
+        **v2_meta,
         "pipeline_decisions": [
             {"step": "cm_prepare", "decision": "packet_ready", "ai_called": True},
             {
@@ -1379,6 +1440,11 @@ async def _process_and_respond(
             message=user_input_to_process,
             detected_language=current_preferred_lang,
             response_language=response_language,
+            user_id=str(user_id or ""),
+            conversation_id=str(user_data.get("conversation_id") or user_data.get("active_conversation_id") or ""),
+            channel=str(user_data.get("channel") or user_data.get("platform") or ""),
+            asset_id=str(user_data.get("asset_id") or user_data.get("page_id") or ""),
+            provider_display_name=str(user_data.get("display_name") or user_data.get("name") or ""),
         )
         # Safe diagnostic view for Testing Lab + Interaction Logs (IDs/titles only).
         cm_diag = {

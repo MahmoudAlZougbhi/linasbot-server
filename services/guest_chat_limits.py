@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 
 GUEST_MAX_QUESTIONS = 10
-GUEST_MAX_WORDS = 50
+# V2: remove artificial 50-word ceiling; keep a generous abuse guard only.
+GUEST_MAX_WORDS = 2000
 
 _WORD_RE = re.compile(r"\S+", re.UNICODE)
 

@@ -25,9 +25,9 @@ export function ServicesEditor({ payload, onChange }: Props) {
     setItems([
       {
         id,
-        labels: emptyLabels(),
+        labels: { ...emptyLabels(), en: '' },
         available: true,
-        category: '',
+        category: null,
         aliases: [],
         audience: 'general',
         notes: null,
@@ -42,7 +42,6 @@ export function ServicesEditor({ payload, onChange }: Props) {
 
   return (
     <View>
-      <Text style={cmFormStyles.hint}>{items.length} services in draft catalog.</Text>
       <PrimaryButton label="Add service" onPress={add} variant="ghost" />
       <View style={{ height: 12 }} />
       {items.map((item) => {
@@ -56,29 +55,27 @@ export function ServicesEditor({ payload, onChange }: Props) {
           >
             <Text style={cmFormStyles.itemTitle}>{primaryLabel(item.labels) || id}</Text>
             <Text style={cmFormStyles.itemSub}>
-              {item.available === false ? 'Unavailable' : 'Available'}
+              {item.available === false ? 'Off' : 'Available'}
             </Text>
           </Pressable>
         );
       })}
       {selected ? (
         <View style={cmFormStyles.card}>
-          {(['en', 'ar', 'fr', 'franco'] as const).map((lang) => (
-            <Field
-              key={lang}
-              label={`Name (${lang})`}
-              value={String(asRecord(selected.labels)[lang] || '')}
-              onChange={(v) =>
-                patch(String(selected.id), {
-                  labels: { ...emptyLabels(), ...asRecord(selected.labels), [lang]: v },
-                })
-              }
-            />
-          ))}
           <Field
-            label="Category"
-            value={String(selected.category || '')}
-            onChange={(v) => patch(String(selected.id), { category: v })}
+            label="Name"
+            value={String(asRecord(selected.labels).en || '')}
+            onChange={(v) =>
+              patch(String(selected.id), {
+                labels: { ...emptyLabels(), ...asRecord(selected.labels), en: v },
+              })
+            }
+          />
+          <Field
+            label="Note"
+            value={String(selected.notes || '')}
+            onChange={(v) => patch(String(selected.id), { notes: v || null })}
+            multiline
           />
           <Pressable
             style={cmFormStyles.row}
@@ -91,12 +88,6 @@ export function ServicesEditor({ payload, onChange }: Props) {
               {selected.available === false ? 'Off' : 'On'}
             </Text>
           </Pressable>
-          <Field
-            label="Notes"
-            value={String(selected.notes || '')}
-            onChange={(v) => patch(String(selected.id), { notes: v })}
-            multiline
-          />
         </View>
       ) : (
         <Text style={cmFormStyles.hint}>No services yet — tap Add service.</Text>

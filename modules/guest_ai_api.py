@@ -27,7 +27,7 @@ class GuestSessionBody(BaseModel):
 
 class GuestMessageBody(BaseModel):
     guest_session_id: str = Field(min_length=8, max_length=80)
-    content: str = Field(min_length=1, max_length=2000)
+    content: str = Field(min_length=1, max_length=16000)
     language: str | None = None
 
 

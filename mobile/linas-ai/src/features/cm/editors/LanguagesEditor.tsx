@@ -2,20 +2,20 @@ import { Pressable, Text, View } from 'react-native';
 
 import { useI18n } from '../../../i18n/LanguageContext';
 import { cmFormStyles } from '../cmFormStyles';
-import { Field } from './Field';
 
 const LANGS = [
-  { id: 'ar', label: 'Arabic (RTL)' },
+  { id: 'ar', label: 'Arabic' },
   { id: 'en', label: 'English' },
   { id: 'fr', label: 'French' },
-  { id: 'franco', label: 'Franco / Arabizi' },
+  { id: 'franco', label: 'French-Arabic (Franco)' },
 ] as const;
 
+/** Frozen answer map (matches backend RESPONSE_LANGUAGE_MAP). */
 const RESPONSE_ROWS = [
   { fromLabel: 'Arabic', toLabel: 'Arabic' },
   { fromLabel: 'English', toLabel: 'English' },
   { fromLabel: 'French', toLabel: 'French' },
-  { fromLabel: 'Franco / Arabizi', toLabel: 'Arabic script (RTL)' },
+  { fromLabel: 'French-Arabic (Franco)', toLabel: 'Arabic (RTL)' },
 ];
 
 type Props = {
@@ -33,13 +33,19 @@ export function LanguagesEditor({ payload, onChange }: Props) {
     const next = supported.includes(lang)
       ? supported.filter((x) => x !== lang)
       : [...supported, lang];
+    // Keep at least one language enabled.
+    if (next.length === 0) return;
     onChange({ ...payload, supported_languages: next });
   };
 
   return (
     <View style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
       <View style={cmFormStyles.card}>
-        <Text style={cmFormStyles.label}>Supported languages</Text>
+        <Text style={cmFormStyles.label}>Languages the AI uses</Text>
+        <Text style={cmFormStyles.hint}>
+          Toggle off a language so the AI does not reply in it. Customers are answered only in enabled
+          languages.
+        </Text>
         <View style={cmFormStyles.chipRow}>
           {LANGS.map((lang) => {
             const on = supported.includes(lang.id);
@@ -54,9 +60,6 @@ export function LanguagesEditor({ payload, onChange }: Props) {
             );
           })}
         </View>
-        <Text style={cmFormStyles.hint}>
-          Franco questions always get Arabic-script answers. Arabic UI uses RTL layout.
-        </Text>
       </View>
 
       <View style={cmFormStyles.card}>
@@ -68,42 +71,7 @@ export function LanguagesEditor({ payload, onChange }: Props) {
             </Text>
           </View>
         ))}
-      </View>
-
-      <View style={cmFormStyles.card}>
-        <Text style={cmFormStyles.label}>Default / unknown language</Text>
-        <View style={cmFormStyles.chipRow}>
-          {LANGS.map((lang) => {
-            const on = String(payload.default_language || 'ar') === lang.id;
-            return (
-              <Pressable
-                key={lang.id}
-                style={[cmFormStyles.chip, on && cmFormStyles.chipOn]}
-                onPress={() => onChange({ ...payload, default_language: lang.id })}
-              >
-                <Text style={cmFormStyles.chipText}>{lang.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <Field
-          label="Mixed-language behavior"
-          value={String(payload.mixed_language_behavior || '')}
-          onChange={(v) => onChange({ ...payload, mixed_language_behavior: v })}
-          multiline
-        />
-        <Field
-          label="Unknown-language behavior"
-          value={String(payload.unknown_language_behavior || '')}
-          onChange={(v) => onChange({ ...payload, unknown_language_behavior: v })}
-          multiline
-        />
-        <Field
-          label="Notes"
-          value={String(payload.notes || '')}
-          onChange={(v) => onChange({ ...payload, notes: v })}
-          multiline
-        />
+        <Text style={cmFormStyles.hint}>French-Arabic (Franco) questions always get Arabic-script answers.</Text>
       </View>
     </View>
   );

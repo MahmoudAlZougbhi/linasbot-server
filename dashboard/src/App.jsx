@@ -45,6 +45,7 @@ const CmSourcesPage = lazy(() => import('./pages/content-managers/CmSourcesPage'
 const CmActionsPage = lazy(() => import('./pages/content-managers/CmActionsPage'));
 const CmAiLimitsPage = lazy(() => import('./pages/content-managers/CmAiLimitsPage'));
 const CmOffDaysPage = lazy(() => import('./pages/content-managers/CmOffDaysPage'));
+const CmOpeningHoursPage = lazy(() => import('./pages/content-managers/CmOpeningHoursPage'));
 const ActivityFlow = lazy(() => import('./pages/ActivityFlow'));
 const LiveChat = lazy(() => import('./pages/LiveChat'));
 const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
@@ -130,6 +131,7 @@ function AppContent() {
                     <Route path="/content-managers/actions" element={<CmActionsPage />} />
                     <Route path="/content-managers/ai-limits" element={<CmAiLimitsPage />} />
                     <Route path="/content-managers/off-days" element={<CmOffDaysPage />} />
+                    <Route path="/content-managers/opening-hours" element={<CmOpeningHoursPage />} />
                     <Route path="/content-managers/sources" element={<CmSourcesPage />} />
                     <Route path="/content-managers/:sectionSlug" element={<CmSectionPage />} />
                     <Route path="/activity-flow" element={<ActivityFlow />} />

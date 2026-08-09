@@ -1,51 +1,78 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, fonts, spacing } from '../../theme';
-import { LinasAvatar } from '../linas/LinasAvatar';
-import type { LinasAvatarState } from '../linas/avatarAssets';
+import { LinasStarMark } from '../../components/LinasStarMark';
+import { HIT, fonts, spacing, useTheme } from '../../theme';
 
 type Props = {
-  title: string;
-  online?: boolean;
-  avatarState?: LinasAvatarState;
-  onOpenHistory: () => void;
-  onOpenControl: () => void;
+  isAuthenticated: boolean;
+  workspaceLabel?: string | null;
+  onOpenMenu: () => void;
+  onSignIn?: () => void;
+  onNewChat?: () => void;
 };
 
 export function ChatHeader({
-  title,
-  online = true,
-  avatarState = 'idle',
-  onOpenHistory,
-  onOpenControl,
+  isAuthenticated,
+  workspaceLabel,
+  onOpenMenu,
+  onSignIn,
+  onNewChat,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + 8 }]}>
-      <Pressable onPress={onOpenHistory} hitSlop={12} style={styles.hit} accessibilityLabel="Chat history">
-        <Text style={styles.icon}>☰</Text>
-      </Pressable>
-      <View style={styles.center}>
-        <LinasAvatar state={avatarState} size={36} active />
-        <View style={styles.copy}>
-          <Text style={styles.brand}>Linas AI</Text>
-          <View style={styles.statusRow}>
-            <View style={[styles.dot, !online && styles.dotOff]} />
-            <Text style={styles.status} numberOfLines={1}>
-              {online ? 'Online' : title}
-            </Text>
-          </View>
-        </View>
-      </View>
+    <View
+      style={[
+        styles.bar,
+        {
+          paddingTop: insets.top + 8,
+          borderBottomColor: colors.borderSoft,
+          backgroundColor: colors.bgElevated,
+        },
+      ]}
+    >
       <Pressable
-        onPress={onOpenControl}
-        hitSlop={12}
-        style={styles.hit}
-        accessibilityLabel="Control Center"
+        onPress={onOpenMenu}
+        style={[styles.hit, { borderColor: colors.border, backgroundColor: colors.surface }]}
+        accessibilityLabel="Open menu"
+        accessibilityRole="button"
       >
-        <Text style={styles.icon}>◈</Text>
+        <Text style={{ color: colors.accent, fontSize: 18, fontWeight: '700' }}>☰</Text>
       </Pressable>
+
+      <View style={styles.center}>
+        <LinasStarMark labeled size={18} />
+        {isAuthenticated && workspaceLabel ? (
+          <Text style={[styles.workspace, { color: colors.textMuted }]} numberOfLines={1}>
+            {workspaceLabel}
+          </Text>
+        ) : null}
+      </View>
+
+      {isAuthenticated ? (
+        <Pressable
+          onPress={onNewChat}
+          style={[styles.hit, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          accessibilityLabel="New chat"
+          accessibilityRole="button"
+        >
+          <Text style={{ color: colors.accent, fontSize: 16 }}>✎</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={onSignIn}
+          style={styles.signIn}
+          accessibilityLabel="Sign in"
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 15 }}>
+            Sign in
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -56,33 +83,32 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSoft,
-    backgroundColor: colors.bgElevated,
   },
   hit: {
-    width: 40,
-    height: 40,
+    width: HIT,
+    height: HIT,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
   },
-  icon: { color: colors.accent, fontSize: 16, fontWeight: '700' },
   center: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    paddingHorizontal: 8,
+    gap: 2,
+  },
+  workspace: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    maxWidth: 180,
+  },
+  signIn: {
+    minWidth: HIT,
+    minHeight: HIT,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 8,
   },
-  copy: { alignItems: 'flex-start', maxWidth: '70%' },
-  brand: { color: colors.accentDeep, fontFamily: fonts.bodyMedium, fontSize: 15 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
-  dotOff: { backgroundColor: colors.textDim },
-  status: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 11, maxWidth: 160 },
 });

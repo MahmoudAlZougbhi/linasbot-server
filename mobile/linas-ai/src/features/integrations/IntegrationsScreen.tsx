@@ -249,8 +249,20 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
     <ScreenChrome title={tr('integrations')} subtitle={tr('integrationsSub')} onBack={onBack}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <PrimaryButton
+        label="Test connection (read-only refresh)"
+        onPress={() => void load()}
+        loading={loading}
+        variant="ghost"
+      />
+      <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: spacing.md }}>
+        App A only. Test connection reloads verified state — it does not reconnect, change webhooks,
+        subscriptions, or credentials.
+      </Text>
       <ScrollView contentContainerStyle={styles.list}>
-        {rows.map((row) => {
+        {rows
+          .filter((row) => row.platform === 'instagram' || row.platform === 'facebook')
+          .map((row) => {
           const soon = isComingSoon(row);
           const busy = busyPlatform === row.platform;
           const showToggles = !soon && (row.platform === 'instagram' || row.platform === 'facebook');

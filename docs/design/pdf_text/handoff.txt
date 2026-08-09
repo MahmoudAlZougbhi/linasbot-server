@@ -1,0 +1,497 @@
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+
+IMPLEMENTATION-READY MOBILE UI
+
+
+Linas AI - Screen-by-Screen Design Handoff
+One implementation page per approved mobile screen, with light/dark designs, control behavior, route ownership, backend dependencies, and acceptance
+checks.
+
+             8 approved screens                 2 theme variants                    1 physical-left drawer                              10 guest prompts
+                                                                                         BINDING PRODUCT DECISION
+                                                                                             •   Chat opens first. Guests can complete 10 server-accepted prompts; unique
+                                                                                                 attempt 11 is gated before send and resumes after authentication.
+                                                                                             •   Linas controls the AI that answers Facebook/Instagram DMs and
+                                                                                                 comments. There is no post, Story, Reel, video, generated-media,
+                                                                                                 scheduling, queue, or publishing workflow.
+                                                                                             •   One physical-left drawer contains all modules and chat history. There are
+                                                                                                 no bottom tabs or right-side navigation.
+                                                                                             •   Mobile and web use the same canonical authentication, tenant/RBAC,
+                                                                                                 configuration, Meta, conversation, billing, usage, and settings services.
+                                                                                             •   The star is the only assistant brand object. No mascot, face, robot avatar,
+                                                                                                 or copied OpenAI/ChatGPT identity asset is permitted.
+
+                                                                                             Cursor implementation rule: Treat each following page as the visual
+                                                                                             contract for that representative screen. The full 83-screen registry and 530-
+                                                                                             control matrix in the master specification remain the normative route and
+                                                                                             edge-state source of truth.
+
+                                                                                         AI EXECUTION
+                                                                                         Keep provider keys and model names in a server-side registry. Select the strongest
+                                                                                         evaluated model per task, and require typed deterministic tools plus dedicated
+                                                                                         review/confirmation for every protected mutation.
+
+
+
+
+                                                                                                                                                                     Page 1 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+01 Guest Chat
+ ROUTE GCH-01                                      ACCESS Public root                                   THEMES Light + Dark parity                             SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                        PURPOSE
+                                                                        Let a visitor understand and try Linas immediately. This is the default post-launch route unless a valid authenticated session
+                                                                        can be restored. The experience is useful before account creation without pretending to know protected business data.
+                                                                        SCREEN ANATOMY
+
+                                                                           Header                     Physical-left Menu, labeled Linas micro mark, and Sign in on the physical right.
+
+                                                                           Empty state                Primary star-and-signal mark, clear value statement, and three public-safe starter cards.
+
+                                                                           Composer                   Plus, Message Linas input, Mic while empty, and the standard accuracy disclaimer.
+
+                                                                        CONTROL AND ROUTE CONTRACT
+                                                           DARK
+                                                                           Control                     Required behavior                                                            Route / result
+                                                          PARITY
+
+                                                                           Menu                        Open the single full navigation and history drawer.                          DRW-01
+                                                                           Sign in                     Open the gate, then start authentication while preserving the current        AGT-01 -> AUT-01
+                                                                                                       guest thread and draft.
+                                                                           Starter cards               Send the exact public-safe explanation prompt; never infer tenant context.   Stay in GCH-01
+                                                                           Plus                        Open only registered guest-safe tools or supported attachments.              CMP-02
+                                                                           Composer / Send             Use a unique request ID. ArrowUp appears only when sendable; Square          GCH-01 response stream
+                                                                                                       replaces it while streaming.
+                                                                           Mic                         Capture voice, show transcription review, and return the transcript to the   CMP-01
+                                                                                                       same draft.
+
+                                                                        BACKEND AND STATE CONTRACT
+
+                                                                           Canonical behavior: The server atomically accepts and counts exactly 10 unique guest prompts. Prompt 10 completes
+                                                                           normally. Unique attempt 11 is not accepted and opens AGT-01 with the exact draft preserved. Retries reuse the same
+                                                                           idempotency key; offline or recoverable errors never consume another prompt.
+
+                                                                        ACCEPTANCE CHECKS
+                                                                           •      No mascot, character, fake tenant knowledge, bottom tabs, or right-side navigation.
+                LIGHT - PRIMARY REFERENCE
+                                                                           •      All controls expose 48 x 48 minimum targets, accessible names, keyboard safety, and RTL-correct layout.
+    STATE SHOWN                                                            •      Successful authentication resumes this exact thread, draft, and pending intent after workspace resolution.
+    Signed out; new guest thread; empty composer; no tenant data;
+    no active stream.
+
+ THEME CONTRACT Light and dark use identical content, layout, state,
+ routes, and accessibility. Only approved theme tokens change.
+
+
+
+
+                                                                                                                                                                                                             Page 2 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+02 Guest Limit and Authentication Gate
+ ROUTE AGT-01                                      ACCESS Public hard gate                          THEMES Light + Dark parity                               SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                       PURPOSE
+                                                                       Gate the eleventh unique guest send attempt without losing context. The sheet explains the limit, offers login and account
+                                                                       creation, and guarantees a secure return to the same conversation.
+                                                                       SCREEN ANATOMY
+
+                                                                          Preserved context       The dimmed chat remains visible so the user understands what will resume.
+
+                                                                          Hard-limit sheet        Close, labeled Linas mark, exact quota copy, and two 48 px email actions.
+
+                                                                          Trust links             Independent Privacy and Terms links plus explicit resume and protected-data copy.
+
+                                                                       CONTROL AND ROUTE CONTRACT
+                                                           DARK
+                                                                          Control                   Required behavior                                                           Route / result
+                                                          PARITY
+
+                                                                          Close                     Return to the preserved draft without sending it; the hard limit remains    GCH-01
+                                                                                                    enforced.
+                                                                          Log in with email         Authenticate using the signed resume token.                                 AUT-01
+                                                                          Create account with       Create the account using the same signed resume token.                      AUT-02
+                                                                          email
+                                                                          Configured provider       Render only when enabled by server auth configuration and only with the     Configured AUT route
+                                                                                                    approved provider asset.
+                                                                          Privacy                   Open the trusted current policy, then return to the intact gate.            ST-11#privacy
+                                                                          Terms                     Open the trusted current terms, then return to the intact gate.             ST-11#terms
+
+                                                                       BACKEND AND STATE CONTRACT
+
+                                                                          Canonical behavior: After authentication, resolve the active business in WSP-01 when required, restore the exact guest
+                                                                          thread and draft, then submit the pending prompt once. Platform Back or the scrim cannot bypass a true hard limit.
+                                                                          Protected workspace data stays hidden until authentication and authorization finish.
+
+                                                                       ACCEPTANCE CHECKS
+                                                                          •   The user-facing title stays Keep chatting with Linas AI and states that 10 guest prompts were used.
+                LIGHT - PRIMARY REFERENCE
+                                                                          •   No unavailable provider is hard-coded or shown with a generic unofficial mark.
+    STATE SHOWN                                                           •   Login, account creation, legal detours, cancellation, and retry all preserve the exact draft.
+    Ten prompts accepted; prompt 11 is still unsent; underlying
+    chat is visible but inert.
+
+ THEME CONTRACT Light and dark use identical content, layout, state,
+ routes, and accessibility. Only approved theme tokens change.
+
+
+
+
+                                                                                                                                                                                                       Page 3 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+03 Authenticated Owner Copilot Proposal
+ ROUTE CHT-01 + CRD-01                                ACCESS Authenticated owner                       THEMES Light + Dark parity                              SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                       PURPOSE
+                                                                       Show how natural-language owner work becomes a controlled, reviewable business change. Linas may prepare a proposal,
+                                                                       but prose alone never authorizes a protected write.
+                                                                       SCREEN ANATOMY
+
+                                                                          Chat shell                 Menu, labeled Linas mark, workspace chip, New chat, message thread, and composer.
+
+                                                                          Proposal card              Object name, Draft state, affected channels, proposed customer text, and not-applied status.
+
+                                                                          Decision actions           Review in Content Management and Discard are visually distinct and explicit.
+
+                                                                       CONTROL AND ROUTE CONTRACT
+                                                              DARK
+                                                                          Control                     Required behavior                                                           Route / result
+                                                             PARITY
+
+                                                                          Menu                        Open the only navigation and history drawer.                                DRW-01
+                                                                          Workspace / title           Open authorized workspace selection. Preserve this chat and Draft, and      WSP-01
+                                                                                                      never switch tenant silently.
+                                                                          New chat                    Create a clean authenticated Owner Copilot conversation.                    New CHT-01
+                                                                          Review in Content           Open CRD-01 typed review without writing. Only the explicit Save to Draft   CRD-01 -> CM-02 after Save to
+                                                                          Management                  inside CRD-01 versions the Draft, then continues to Content Management;     Draft
+                                                                                                      it never activates.
+                                                                          Discard                     Remove the proposed card without changing Active configuration.             Return to CHT-01
+                                                                          Plus                        Open registered analysis tools and supported owner attachments.             CMP-02
+                                                                          Composer / Send             Send another owner request with one idempotency key; show ArrowUp           CHT-01
+                                                                                                      only when sendable and Square while streaming.
+                                                                          Mic                         Capture voice, require transcription review, and return the transcript to   CMP-01
+                                                                                                      this same draft.
+
+                                                                       BACKEND AND STATE CONTRACT
+
+                                                                          Canonical behavior: The server model router selects the strongest evaluated model for the task; model names and keys
+                                                                          never ship in the app. Typed deterministic tools supply IDs, permissions, channel state, and revisions. Save uses an
+                LIGHT - PRIMARY REFERENCE
+                                                                          idempotent versioned Draft; only CM-02 can activate after fresh validation and explicit owner action.
+    STATE SHOWN
+    Sample Studio is active; a greeting proposal exists as Draft for   ACCEPTANCE CHECKS
+    two channels; nothing is applied.                                     •      The card always keeps Draft, affected channels, proposed text, and not applied yet visible together.
+                                                                          •      Active state is shown only after authoritative backend confirmation; conflicts show comparison, not false success.
+ THEME CONTRACT Light and dark use identical content, layout, state,
+ routes, and accessibility. Only approved theme tokens change.            •      Owner chat remains separate from customer conversation/audit storage and permissions.
+
+
+
+
+                                                                                                                                                                                                              Page 4 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+04 Single Left Navigation and Chat History Drawer
+ ROUTE DRW-01                                      ACCESS Guest and authenticated variants          THEMES Light + Dark parity                              SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                       PURPOSE
+                                                                       Provide the complete mobile sitemap and conversation history in one physical-left drawer. It replaces bottom tabs, a right
+                                                                       drawer, and any duplicated module launcher.
+                                                                       SCREEN ANATOMY
+
+                                                                          Navigation first        Linas identity, Close, and the eight-module two-column grid.
+
+                                                                          Chat tools              New chat, Search, Pinned, Recent, active-row treatment, timestamps, and row overflow.
+
+                                                                          Account footer          Workspace/account, Notifications, and Log out stay below the scrollable history.
+
+                                                                       CONTROL AND ROUTE CONTRACT
+                                                           DARK
+                                                                          Control                   Required behavior                                                            Route / result
+                                                          PARITY
+
+                                                                          Close                     Dismiss and restore focus to the Menu opener.                                Retained GCH-01 or CHT-01
+                                                                          Module grid               Dashboard -> DSH-01; Content Management -> CM-01; Integrations ->            Canonical module roots
+                                                                                                    IN-01; Live Chat -> LC-01; Team -> TM-01; Subscription -> SB-01; Usage &
+                                                                                                    Credits -> US-01; Settings -> ST-01.
+                                                                          New chat                  Start a clean chat for the current access state.                             GCH-01 or CHT-01
+                                                                          Search                    Search only the current authorized owner-chat scope.                         SCH-01
+                                                                          Pinned / Recent row       Open the chosen conversation and restore its last authoritative state.       GCH-01 or CHT-01
+                                                                          Row overflow              Open an anchored menu for that exact thread: Pin/unpin and supported         DRW-01 inline actions
+                                                                                                    Archive stay in DRW-01; Rename opens an inline field; Delete opens a
+                                                                                                    named guarded confirmation. Opening the menu changes nothing.
+                                                                          Account / workspace       Open profile and authorized workspace switching.                             WSP-01
+                                                                          Notifications             Open the operational notification inbox.                                     NTF-01
+                                                                          Log out                   Open explicit logout confirmation; successful logout returns signed out.     ST-12 -> GCH-01
+                                                                          Signed-out footer         Log in -> AUT-01; Create account -> AUT-02; Help -> ST-10; About -> ST-11;   Exact guest routes
+                                                                          variant                   Privacy -> ST-11#privacy; Terms -> ST-11#terms. Preserve the current guest
+                                                                                                    chat and draft through every detour.
+
+                LIGHT - PRIMARY REFERENCE                              BACKEND AND STATE CONTRACT
+    STATE SHOWN                                                           Canonical behavior: Guests see the same eight module names, but protected taps gate before tenant data is read. Guest
+    Authenticated Owner; Sample Studio; Update greeting selected;
+                                                                          history is session-scoped; authenticated history is server-backed and tenant-safe. Search, pagination, row mutations,
+    three notifications.
+                                                                          workspace switch, and notification count all reload from the canonical web-backed services.
+ THEME CONTRACT Light and dark use identical content, layout, state,
+                                                                       ACCEPTANCE CHECKS
+ routes, and accessibility. Only approved theme tokens change.
+                                                                          •   Stable order: modules, New chat/Search, Pinned/Recent, then account actions.
+                                                                          •   Every history row owns an overflow control; the active row has text plus teal indicator, not color alone.
+                                                                          •   No bottom tab bar, physical-right drawer, Control Center, sliders trigger, or second navigation surface.
+
+                                                                                                                                                                                                             Page 5 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+05 Content Management
+ ROUTE CM-01                                        ACCESS Authenticated and authorized                     THEMES Light + Dark parity                                     SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                        PURPOSE
+                                                                        Provide the precise configuration surface for the AI that answers Facebook and Instagram DMs and comments. It configures
+                                                                        replies; it does not create or schedule social content.
+                                                                        SCREEN ANATOMY
+
+                                                                           Readiness                      Authoritative Active badge, exact section readiness, progress, and issue state.
+
+                                                                           Guided setup                   Continue setup with Linas AI passes incomplete-section references to Owner Copilot.
+
+                                                                           Configuration list             Stateful section rows and a sticky Review & Activate action only when Draft work exists.
+
+                                                                        CONTROL AND ROUTE CONTRACT
+                                                            DARK
+                                                                           Control                         Required behavior                                                                   Route / result
+                                                           PARITY
+                                                                           Menu                            Open the single navigation and history drawer.                                      DRW-01
+                                                                           Search                          Search only authorized AI configuration sections and items.                         CM-01
+                                                                           Help                            Open contextual Content Management support without copying protected field          ST-10
+                                                                                                           values.
+                                                                           View 2 issues                   Filter this overview to the two authoritative blocking issues or warnings.          CM-01
+                                                                           Continue setup with Linas AI    Resume owner chat with opaque references to incomplete sections. Suggestions        CHT-01
+                                                                                                           remain proposals.
+                                                                           AI Basics                       Open the versioned business identity and core-facts editor.                         CM-03
+                                                                           Languages                       Open the supported customer-reply language configuration.                           CM-04
+                                                                           Style and tone                  Open the versioned customer-facing voice configuration.                             CM-05
+                                                                           Dynamic Messages                Open versioned greeting, absence, and fallback messages.                            CM-06
+                                                                           Services                        Open the independently persisted services list.                                     CM-07
+                                                                           Locations                       Open the independently persisted locations list.                                    CM-09
+                                                                           Prices                          Open price rules and validated customer-facing price facts.                         CM-11
+                                                                           Care                            Open safety and care instructions.                                                  CM-13
+                                                                           Knowledge                       Open indexed knowledge sources and health.                                          CM-15
+                                                                           FAQ & Smart Answers             Open versioned questions, variants, and smart answers.                              CM-17
+                                                                           Review & Activate AI            Load exact Draft and Active revisions, validate, confirm, then run one idempotent   CM-02
+                                                                           Configuration                   activation job.
+
+                                                                        BACKEND AND STATE CONTRACT
+
+                LIGHT - PRIMARY REFERENCE                                  Canonical behavior: Readiness, counts, locks, dependencies, Draft revision, and Active revision come from the canonical
+                                                                           backend. The reference viewport shows ten independently wired rows; production exposes all 16 independently wired
+    STATE SHOWN
+                                                                           configuration sections. Lifecycle is Draft -> Review & Activate AI Configuration -> Active.
+    Active configuration is 14 of 16 ready; two sections need review;
+    pending Draft work exists.
+                                                                        ACCEPTANCE CHECKS
+ THEME CONTRACT Light and dark use identical content, layout, state,       •    The existing Active configuration and pending Draft are never visually conflated.
+ routes, and accessibility. Only approved theme tokens change.             •    The sticky activation CTA is absent or disabled with an exact reason when there is no activatable Draft.
+                                                                           •    No post, Story, Reel, caption, generated media, calendar, scheduling, queue, or publishing control exists.
+
+
+
+
+                                                                                                                                                                                                                Page 6 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+06 Meta Integration Details
+ ROUTE IN-02                                       ACCESS Authenticated and authorized                THEMES Light + Dark parity                              SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                       PURPOSE
+                                                                       Show the verified Meta connection, authorized assets, and DM/comment capability health without ever exposing tokens or
+                                                                       credentials.
+                                                                       SCREEN ANATOMY
+
+                                                                          Canonical header          Back returns to the Integrations root; Help opens contextual support.
+
+                                                                          Connection card           Meta Business identity, Connected state, last verified time, Test connection, and Connection activity.
+
+                                                                          Channel cards             Facebook Messenger and Instagram show Direct messages and Comments independently.
+
+                                                                          Safety states             Actionable warning plus an explicit credentials-are-never-shown statement.
+                                                           DARK
+                                                          PARITY       CONTROL AND ROUTE CONTRACT
+
+                                                                          Control                    Required behavior                                                           Route / result
+
+                                                                          Back                       Return to the Integrations catalog without changing connection state.       IN-01
+                                                                          Help                       Open contextual integration support without copying protected data.         ST-10
+                                                                          Test connection            Run one idempotent server refresh/reconciliation and reload authoritative   IN-02
+                                                                                                     connection state; do not imply connection.
+                                                                          Activity                   Open the redacted, tenant-scoped connection activity when the role          IN-02
+                                                                                                     permits it.
+                                                                          Facebook Messenger         Open the exact authorized Page and its independent capability controls.     IN-05
+                                                                          row
+                                                                          Instagram row              Open the exact authorized professional account and its independent          IN-05
+                                                                                                     capability controls.
+                                                                          Review warning             Open the affected capability and its dedicated safe setup or repair flow.   IN-06
+
+                                                                       BACKEND AND STATE CONTRACT
+
+                                                                          Canonical behavior: OAuth state, PKCE, token exchange, secrets, raw permission payloads, webhook validation, and refresh
+                                                                          stay server-side. Connected is displayed only after provider/server verification. App resume from OAuth or device settings
+                LIGHT - PRIMARY REFERENCE                                 triggers a refresh; DM and comment capabilities are enabled and audited separately. IN-02 owns the Back, Help, refresh,
+                                                                          activity, and asset-list surface; an asset opens IN-05 and a capability issue opens IN-06.
+    STATE SHOWN
+    Two connected assets; one needs attention; DMs active;
+                                                                       ACCEPTANCE CHECKS
+    comments independently Off.
+                                                                          •      IN-02 uses Back to IN-01; it never shows the module-root Menu control.
+ THEME CONTRACT Light and dark use identical content, layout, state,      •      No raw token, secret, verify token, internal app choice, or optimistic Connected state renders.
+ routes, and accessibility. Only approved theme tokens change.            •      Production uses current approved Meta/Facebook/Instagram identity assets; mockup monograms are placeholders only.
+                                                                          •      Disconnect is available only through IN-08 after a tested reconnect path and explicit impact confirmation.
+
+
+
+
+                                                                                                                                                                                                             Page 7 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+07 Live Chat Read-only Audit
+ ROUTE LC-01 + LC-02                               ACCESS Authorized audit roles                    THEMES Light + Dark parity                              SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                       PURPOSE
+                                                                       Let an authorized owner inspect customer DMs/comments, Linas replies, activity events, and delivery problems. This is an
+                                                                       audit surface, not a human reply or takeover product.
+                                                                       SCREEN ANATOMY
+
+                                                                          Inbox context           Search, filter, open count, channel-safe identity, preview, time, unread and selected state.
+
+                                                                          Selected thread         Customer message, labeled Linas reply, channel identity, timestamps, and Audit mode.
+
+                                                                          Activity and privacy    Structured AI activity row and explicit read-only, authorized-team footer.
+
+                                                                       CONTROL AND ROUTE CONTRACT
+                                                           DARK
+                                                                          Control                  Required behavior                                                           Route / result
+                                                          PARITY
+
+                                                                          Menu                     Open the one navigation drawer without changing the selected audit          DRW-01
+                                                                                                   thread.
+                                                                          Search                   Debounced search across the active tenant's authorized conversation         LC-01
+                                                                                                   ledger.
+                                                                          Filter                   Apply channel, asset, state, and bounded date filters.                      LC-01
+                                                                          Conversation row         Open the authorized chronological read-only thread.                         LC-02
+                                                                          AI activity row          Open authorized conversation and event information without exposing         LC-03
+                                                                                                   hidden metadata.
+                                                                          Copy message             Long press and copy only the visible message text; remain in the selected   LC-02
+                                                                                                   audit thread.
+                                                                          Report message issue     Open contextual support with an opaque event reference; never auto-         ST-10
+                                                                                                   attach message bodies.
+
+                                                                       BACKEND AND STATE CONTRACT
+
+                                                                          Canonical behavior: Use the same tenant-scoped conversation ledger, message delivery events, and capability health as
+                                                                          web. Enforce membership, role, object scope, retention, redaction, and attachment scanning on the server. Pagination and
+                                                                          search must not leak deleted or unauthorized thread metadata. The reference visual combines inbox and selected thread
+                LIGHT - PRIMARY REFERENCE                                 context; production phone navigation preserves LC-01 and LC-02 as separate canonical routes.
+    STATE SHOWN
+                                                                       ACCEPTANCE CHECKS
+    Maya thread selected; Instagram AI handled; branch
+    clarification sent; no handoff sent.                                  •    Render no composer, Send, attachment upload, microphone, pause-AI, takeover, or disabled composer shell.
+                                                                          •    Owner Copilot chat data and customer Live Chat data remain separate stores and search scopes.
+ THEME CONTRACT Light and dark use identical content, layout, state,      •    Audit mode, channel, identity, event state, and privacy are announced to assistive technology.
+ routes, and accessibility. Only approved theme tokens change.
+
+
+
+
+                                                                                                                                                                                                 Page 8 of 9
+LINAS AI | MOBILE SCREEN DESIGN HANDOFF
+
+
+
+08 Settings and Account
+ ROUTE ST-01                                       ACCESS Authenticated root                             THEMES Light + Dark parity                                     SOURCE Approved mobile visual set
+
+
+
+ APPROVED VISUAL                                                       PURPOSE
+                                                                       Group personal, business, preference, security, support, and logout controls without turning Settings into a duplicate product
+                                                                       home.
+                                                                       SCREEN ANATOMY
+
+                                                                          Identity                     Signed-in profile and workspace card with active-account state.
+
+                                                                          Groups                       Account, Preferences, and Security & Support use consistent labeled rows and chevrons.
+
+                                                                          Session footer               Separated red Log out action and visible build version.
+
+                                                                       CONTROL AND ROUTE CONTRACT
+                                                             DARK
+                                                                          Control                       Required behavior                                                                     Route / result
+                                                             PARITY
+                                                                          Menu                          Open the single navigation and history drawer.                                        DRW-01
+                                                                          Signed-in profile card        Open the authenticated personal profile.                                              ST-02
+                                                                          Business profile              Open authoritative business profile fields.                                           ST-03
+                                                                          Notifications                 Open app and operating-system notification preferences.                               ST-04
+                                                                          App Language & Appearance     Open local UI language and theme preference; never alter customer-AI language.        ST-05
+                                                                          Privacy & Data                Open retention, export, and guarded destructive-action hub.                           ST-08
+                                                                          Security                      Open implemented MFA, passkey, recovery, and session lifecycle.                       ST-06
+                                                                          Help & Support                Open contextual support without copying protected data.                               ST-10
+                                                                          About & Legal                 Open product information and the legal-document index.                                ST-11
+                                                                          Terms                         Open the exact Terms anchor on a validated trusted host.                              ST-11#terms
+                                                                          Privacy Policy                Open the exact Privacy anchor on a validated trusted host.                            ST-11#privacy
+                                                                          Data Deletion Instructions    Open public deletion instructions; deletion itself remains guarded.                   ST-11#data-deletion
+                                                                          Log out                       Open explicit confirmation; on success clear protected cache and return signed out.   ST-12 -> GCH-01
+
+                                                                       BACKEND AND STATE CONTRACT
+
+                                                                          Canonical behavior: Server settings, identity, business membership, security, and notification registration remain canonical;
+                                                                          theme and UI language may also persist locally. Logout revokes the session as supported, purges tenant-scoped caches and
+                                                                          push association, and never lands on an authenticated route.
+
+                                                                       ACCEPTANCE CHECKS
+                LIGHT - PRIMARY REFERENCE
+                                                                          •    Use exact Log out wording; account deletion remains a separate, recently authenticated destructive flow.
+    STATE SHOWN                                                           •    Team, Integrations, Subscription, and Usage & Credits remain first-class drawer modules and are not duplicated.
+    Active Owner account in Sample Studio; English locale;                •    Privacy policy, Terms, data export, and deletion instructions stay reachable and use validated trusted hosts.
+    Appearance follows System.
+
+ THEME CONTRACT Light and dark use identical content, layout, state,
+ routes, and accessibility. Only approved theme tokens change.
+
+
+
+
+                                                                                                                                                                                                                    Page 9 of 9
+

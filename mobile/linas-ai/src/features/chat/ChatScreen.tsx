@@ -1,35 +1,47 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   Text,
   TextInput,
   View,
 } from 'react-native';
 
-import { EmptyState } from '../../components/EmptyState';
 import { GradientBackground } from '../../components/GradientBackground';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors } from '../../theme';
+import { useTheme } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
-import { ControlCenterDrawer } from '../control/ControlCenterDrawer';
 import type { ControlArea } from '../control/controlAreas';
-import { ChatBubble } from './ChatBubble';
+import { NavDrawer } from '../nav/NavDrawer';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
+import { ChatMessageList } from './ChatMessageList';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
-import { CreatePostTaskChips } from './CreatePostTaskChips';
-import { CreativeDraftCard } from './CreativeDraftCard';
-import { looksLikeCreatePostIntent, type CreatePostTaskId } from './createPostTasks';
 import { GuestBanner } from './GuestBanner';
-import { HistoryDrawer } from './HistoryDrawer';
+import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
+import {
+  clearPendingGuestDraft,
+  loadPendingGuestDraft,
+  savePendingGuestDraft,
+} from './pendingGuestDraft';
+import { sendChatMessage } from './sendChatMessage';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
 import { useVoiceDraft } from './useVoiceDraft';
+import { ChoiceChips } from './v2/ChoiceChips';
+import {
+  MAX_IMAGES,
+  pickDocumentAttachment,
+  pickImageAttachments,
+  type PendingFile,
+} from './v2/pickAttachment';
+import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
   isAuthenticated: boolean;
@@ -42,98 +54,123 @@ type Props = {
 
 export function ChatScreen({
   isAuthenticated,
-  isPlatformOwner,
   onOpenArea,
   onLogout,
   onRequestLogin,
   onRequestRegister,
 }: Props) {
   const { tr } = useI18n();
+  const { colors } = useTheme();
   const owner = useChatSession(isAuthenticated);
   const guest = useGuestChatSession(!isAuthenticated);
-  const session = isAuthenticated ? owner : null;
+  const turn = useStreamingTurn(owner.conversationId, {
+    onTerminal: () => owner.syncAfterTurn(),
+    onTitleUpdated: (title) => {
+      if (owner.conversationId) {
+        owner.applyConversationTitle(owner.conversationId, title, { onlyIfDefault: true });
+      }
+    },
+  });
   const [userId, setUserId] = useState<string | null>(null);
+  const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(null);
   const { pinnedIds, togglePin } = usePinnedChats(userId);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [controlOpen, setControlOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [authGate, setAuthGate] = useState(false);
-  const [authGateReason, setAuthGateReason] = useState<string | undefined>(undefined);
-  const [createPostMode, setCreatePostMode] = useState(false);
-  const [createPostTask, setCreatePostTask] = useState<CreatePostTaskId>('auto');
+  const [hardLimit, setHardLimit] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [draft, setDraft] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const imagePreviewByContent = useRef<Record<string, string[]>>({});
+  const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList>(null);
+  const stickToBottomRef = useRef(true);
   const { voiceState, voiceError, toggleVoice, metering } = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
-    // ChatGPT-style: land transcript in composer; user taps Send.
     requestAnimationFrame(() => composerInputRef.current?.focus());
   });
+
+  const scrollToBottom = useCallback((animated = true) => {
+    stickToBottomRef.current = true;
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setUserId(null);
+      setWorkspaceLabel(null);
       return;
     }
-    void tokenStore.getUser().then((u) => setUserId(u?.id ?? null));
+    void tokenStore.getUser().then((u) => {
+      setUserId(u?.id ?? null);
+      setWorkspaceLabel(u?.tenantId || u?.tenant_id || u?.email || null);
+    });
+    void loadPendingGuestDraft().then((pending) => {
+      if (pending?.text) {
+        setDraft(pending.text);
+        void clearPendingGuestDraft();
+      }
+    });
   }, [isAuthenticated]);
 
-  function requireAuth(reason?: string) {
-    setAuthGateReason(reason);
-    setAuthGate(true);
-  }
-
-  function enterCreatePostMode() {
-    setCreatePostMode(true);
-    setCreatePostTask('auto');
-    void owner.send(tr('createPostStart'), undefined, { creative_kind: 'auto' });
-  }
-
-  function handlePlus(action: PlusAction) {
-    if (!isAuthenticated) {
-      requireAuth(action === 'create_post' ? tr('authGateCreatePost') : undefined);
-      return;
+  useEffect(() => {
+    if (guest.gated) {
+      setHardLimit(true);
+      setAuthGate(true);
     }
-    if (action === 'create_post') {
-      enterCreatePostMode();
-      return;
-    }
+  }, [guest.gated]);
+
+  const archivedIds = useMemo(
+    () => owner.history.filter((h) => h.archived).map((h) => h.id),
+    [owner.history],
+  );
+
+  const loading = isAuthenticated ? owner.loading : guest.loading;
+  const messages = isAuthenticated ? owner.messages : guest.messages;
+  const sending = isAuthenticated ? turn.streaming : guest.sending;
+  const error = isAuthenticated ? owner.error : guest.error;
+
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    scrollToBottom(false);
+  }, [
+    messages.length,
+    turn.liveText,
+    turn.statusRows.length,
+    turn.cards.length,
+    turn.choices.length,
+    scrollToBottom,
+  ]);
+
+  async function handlePlus(action: PlusAction) {
+    if (!isAuthenticated) return;
     if (action === 'add_cm' || action === 'review_setup') {
       onOpenArea('cm');
       return;
     }
     if (action === 'check_usage') {
       onOpenArea('usage');
-    }
-  }
-
-  function handleQuickAction(id: string) {
-    if (id === 'create') {
-      enterCreatePostMode();
       return;
     }
-    onOpenArea(id as ControlArea);
-  }
-
-  function sendAuthenticated(text: string) {
-    const toolArgs =
-      createPostMode || looksLikeCreatePostIntent(text)
-        ? {
-            creative_kind: createPostTask,
-            compress: createPostTask === 'compress',
-            prompt: text,
-          }
-        : undefined;
-    if (looksLikeCreatePostIntent(text)) {
-      setCreatePostMode(true);
+    if (action === 'attach_image') {
+      const picked = await pickImageAttachments(pendingFiles.length);
+      if (!picked.length) return;
+      setPendingFiles((prev) => [...prev, ...picked].slice(0, MAX_IMAGES));
+      return;
     }
-    void owner.send(text, undefined, toolArgs);
+    if (action === 'attach_document') {
+      if (pendingFiles.length >= MAX_IMAGES) return;
+      const doc = await pickDocumentAttachment();
+      if (doc) setPendingFiles((prev) => [...prev, doc].slice(0, MAX_IMAGES));
+    }
   }
 
-  const loading = isAuthenticated ? owner.loading : guest.loading;
-  const messages = isAuthenticated ? owner.messages : guest.messages;
-  const sending = isAuthenticated ? owner.sending : guest.sending;
-  const error = isAuthenticated ? owner.error : guest.error;
-  const title = isAuthenticated ? owner.title : guest.title;
+  function openAuthPreservingDraft(hard = false) {
+    void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
+    setHardLimit(hard);
+    setAuthGate(true);
+  }
 
   if (loading) {
     return (
@@ -145,251 +182,189 @@ export function ChatScreen({
     );
   }
 
-  const preview = session?.proposedPatch?.preview;
-  const changedKeys = Array.isArray(preview?.changed_keys)
-    ? (preview?.changed_keys as string[]).join(', ')
-    : '';
-
   return (
     <GradientBackground>
-      <ChatHeader
-        title={title}
-        online
-        avatarState={
-          voiceState === 'recording'
-            ? 'listening'
-            : sending
-              ? 'typing'
-              : voiceState === 'transcribing'
-                ? 'thinking'
-                : 'idle'
-        }
-        onOpenHistory={() => {
-          if (!isAuthenticated) {
-            requireAuth();
-            return;
-          }
-          setHistoryOpen(true);
-        }}
-        onOpenControl={() => {
-          if (!isAuthenticated) {
-            requireAuth();
-            return;
-          }
-          setControlOpen(true);
-        }}
-      />
-
-      {!isAuthenticated ? (
-        <GuestBanner
-          remaining={guest.questionsRemaining}
-          max={guest.maxQuestions}
-          gated={guest.gated}
-          onLogin={onRequestLogin}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <ChatHeader
+          isAuthenticated={isAuthenticated}
+          workspaceLabel={workspaceLabel}
+          onOpenMenu={() => setDrawerOpen(true)}
+          onSignIn={() => openAuthPreservingDraft(false)}
+          onNewChat={() => void owner.newChat()}
         />
-      ) : null}
 
-      {error ? (
-        <Pressable
-          onPress={() => void (isAuthenticated ? owner.bootstrap() : guest.bootstrap())}
-        >
-          <Text style={styles.error}>
-            {tr(
-              error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
-                ? error
-                : 'messageFailed',
-            )}
-          </Text>
-        </Pressable>
-      ) : null}
-      {voiceError ? <Text style={styles.error}>{voiceError}</Text> : null}
-      {!isAuthenticated && guest.gateText ? (
-        <Text style={styles.gate}>{guest.gateText}</Text>
-      ) : null}
-
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <EmptyState
-            showMascot
-            title={tr(isAuthenticated ? 'chatEmptyTitle' : 'guestChatEmptyTitle')}
-            body={tr(isAuthenticated ? 'chatEmptyBody' : 'guestChatEmptyBody')}
+        {!isAuthenticated ? (
+          <GuestBanner
+            remaining={guest.questionsRemaining}
+            max={guest.maxQuestions}
+            gated={guest.gated}
+            onLogin={() => openAuthPreservingDraft(true)}
           />
-        }
-        renderItem={({ item }) => <ChatBubble message={item} />}
-      />
+        ) : null}
 
-      {isAuthenticated && session?.quickActions.length ? (
-        <View style={styles.chips}>
-          {session.quickActions
-            .filter((a) => a.id !== 'comments')
-            .slice(0, 4)
-            .map((a) => (
-              <Pressable key={a.id} style={styles.chip} onPress={() => handleQuickAction(a.id)}>
-                <Text style={styles.chipText}>{a.label}</Text>
-              </Pressable>
-            ))}
-        </View>
-      ) : null}
-
-      {isAuthenticated && createPostMode ? (
-        <CreatePostTaskChips
-          selected={createPostTask}
-          onSelect={setCreatePostTask}
-          onDismiss={() => setCreatePostMode(false)}
-        />
-      ) : null}
-
-      {isAuthenticated && session?.creativeDraft ? (
-        <CreativeDraftCard
-          draft={session.creativeDraft}
-          busy={sending}
-          onEdit={() => {
-            const text = session.creativeDraft?.text || session.creativeDraft?.prompt || '';
-            setDraft(text);
-            setCreatePostMode(true);
-            requestAnimationFrame(() => composerInputRef.current?.focus());
-          }}
-          onRegenerate={() => {
-            const prompt =
-              session.creativeDraft?.prompt ||
-              session.creativeDraft?.text ||
-              'Regenerate the last post draft';
-            setCreatePostMode(true);
-            void owner.send(prompt, undefined, {
-              creative_kind: createPostTask,
-              compress: createPostTask === 'compress',
-              prompt,
-            });
-          }}
-          onSchedule={() => {
-            const text = session.creativeDraft?.text || '';
-            if (!text.trim()) return;
-            void owner.send('', 'schedule_creative_draft', {
-              text,
-              kind: session.creativeDraft?.kind || 'post',
-            });
-          }}
-          onDismiss={() => session.setCreativeDraft(null)}
-        />
-      ) : null}
-
-      {isAuthenticated && session?.proposedPatch?.confirmation_token ? (
-        <View style={styles.patchCard}>
-          <Text style={styles.patchTitle}>{tr('proposedCmPatch')}</Text>
-          {changedKeys ? <Text style={styles.patchBody}>Keys: {changedKeys}</Text> : null}
-          <View style={styles.patchActions}>
-            <Pressable
-              style={styles.confirm}
-              onPress={() =>
-                void session.send('', session.proposedPatch?.confirmation_token ?? undefined)
-              }
-            >
-              <Text style={styles.confirmText}>{tr('confirmAction')}</Text>
-            </Pressable>
-            <Pressable
-              style={styles.reject}
-              onPress={() => {
-                session.setProposedPatch(null);
-                session.setPendingConfirm(null);
-              }}
-            >
-              <Text style={styles.rejectText}>{tr('rejectAction')}</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {isAuthenticated && session?.pendingConfirm && !session.proposedPatch ? (
-        <Pressable
-          style={styles.confirm}
-          onPress={() => void session.send('', session.pendingConfirm ?? undefined)}
-        >
-          <Text style={styles.confirmText}>
-            {tr('confirmAction')} {session.pendingConfirm}
+        {offline ? (
+          <Text style={[styles.error, { color: colors.warning }]}>
+            Offline — your draft is preserved. Retry when connected.
           </Text>
-        </Pressable>
-      ) : null}
+        ) : null}
 
-      <ChatComposer
-        draft={draft}
-        onChangeDraft={setDraft}
-        sending={sending || (!isAuthenticated && guest.gated)}
-        voiceState={isAuthenticated ? voiceState : 'idle'}
-        metering={isAuthenticated ? metering : null}
-        inputRef={composerInputRef}
-        onPlus={() => {
-          if (!isAuthenticated) {
-            requireAuth();
-            return;
+        {error ? (
+          <Pressable
+            onPress={() => {
+              setOffline(false);
+              void (isAuthenticated ? owner.bootstrap() : guest.bootstrap());
+            }}
+          >
+            <Text style={styles.error}>
+              {tr(
+                error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
+                  ? error
+                  : 'messageFailed',
+              )}{' '}
+              · Tap to retry
+            </Text>
+          </Pressable>
+        ) : null}
+        {voiceError ? <Text style={styles.error}>{voiceError}</Text> : null}
+
+        <ChatMessageList
+          listRef={listRef}
+          messages={messages}
+          isAuthenticated={isAuthenticated}
+          stickToBottomRef={stickToBottomRef}
+          scrollToBottom={scrollToBottom}
+          imagePreviewByContent={imagePreviewByContent}
+          statusRows={turn.statusRows}
+          liveText={turn.liveText}
+          cards={turn.cards}
+          proposedPatch={isAuthenticated ? owner.proposedPatch : null}
+          onRetryAssistant={(content) => void turn.send(content)}
+          onApproveDraft={(token) => void turn.send('', { confirm_tool: token })}
+          onDiscardProposal={() => {
+            owner.setProposedPatch(null);
+            owner.setPendingConfirm(null);
+          }}
+          onOpenCm={() => onOpenArea('cm')}
+          onGuestPrompt={(prompt) => {
+            if (guest.gated) {
+              openAuthPreservingDraft(true);
+              return;
+            }
+            scrollToBottom();
+            void guest.send(prompt);
+          }}
+        />
+
+        {isAuthenticated ? (
+          <ChoiceChips
+            choices={turn.choices}
+            disabled={choiceBusy || turn.streaming}
+            onSelect={(c) => {
+              if (!turn.choiceSetId || choiceBusy) return;
+              setChoiceBusy(true);
+              scrollToBottom();
+              void turn
+                .send(c.label, { choice_id: c.id, choice_set_id: turn.choiceSetId })
+                .finally(() => setChoiceBusy(false));
+            }}
+          />
+        ) : null}
+
+        <PendingAttachmentsStrip
+          files={pendingFiles}
+          onRemove={(id) => setPendingFiles((prev) => prev.filter((f) => f.id !== id))}
+        />
+
+        <ChatComposer
+          draft={draft}
+          onChangeDraft={setDraft}
+          sending={sending || (!isAuthenticated && guest.gated)}
+          canSendWithAttachment={pendingFiles.length > 0}
+          voiceState={isAuthenticated ? voiceState : 'idle'}
+          metering={isAuthenticated ? metering : null}
+          inputRef={composerInputRef}
+          autoFocus
+          showPlus={isAuthenticated}
+          showMic={isAuthenticated}
+          onPlus={() => setPlusOpen(true)}
+          onToggleVoice={() => void toggleVoice()}
+          onStop={turn.streaming ? () => turn.stop() : undefined}
+          onSend={() =>
+            void sendChatMessage({
+              isAuthenticated,
+              draft,
+              setDraft,
+              pendingFiles,
+              setPendingFiles,
+              voiceState,
+              conversationId: owner.conversationId,
+              guestGated: guest.gated,
+              guestQuestionsRemaining: guest.questionsRemaining,
+              guestSend: guest.send,
+              ownerSend: turn.send,
+              appendOptimisticUser: owner.appendOptimisticUser,
+              removeOptimisticUser: owner.removeOptimisticUser,
+              autoTitleFromOutgoing: owner.autoTitleFromOutgoing,
+              openAuthPreservingDraft,
+              setOffline,
+              scrollToBottom,
+              imagePreviewByContent,
+            })
           }
-          setPlusOpen(true);
+        />
+      </KeyboardAvoidingView>
+
+      <NavDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        isAuthenticated={isAuthenticated}
+        showUsers={isAuthenticated}
+        history={owner.history}
+        archivedIds={archivedIds}
+        pinnedIds={pinnedIds}
+        activeId={owner.conversationId}
+        workspaceLabel={workspaceLabel}
+        onOpenArea={onOpenArea}
+        onNewChat={() => {
+          if (isAuthenticated) void owner.newChat();
+          else setDrawerOpen(false);
         }}
-        onToggleVoice={() => {
-          if (!isAuthenticated) {
-            requireAuth();
-            return;
-          }
-          void toggleVoice();
-        }}
-        onSend={() => {
-          if (!isAuthenticated && guest.gated) {
-            onRequestLogin();
-            return;
-          }
-          if (voiceState === 'recording' || voiceState === 'transcribing') {
-            return;
-          }
-          const text = draft;
-          setDraft('');
-          if (isAuthenticated) {
-            sendAuthenticated(text);
-            return;
-          }
-          if (looksLikeCreatePostIntent(text)) {
-            requireAuth(tr('authGateCreatePost'));
-            setDraft(text);
-            return;
-          }
-          void guest.send(text);
-        }}
+        onOpenChat={(id) => void owner.openConversation(id)}
+        onTogglePin={(id) => void togglePin(id)}
+        onArchive={(id) => void owner.setArchived(id, true)}
+        onUnarchive={(id) => void owner.setArchived(id, false)}
+        onRename={(id, title) => void owner.renameConversation(id, title)}
+        onDelete={(id) => void owner.deleteConversation(id)}
+        onLogout={onLogout}
+        onLogin={() => openAuthPreservingDraft(false)}
+        onRegister={onRequestRegister}
+        onOpenNotifications={isAuthenticated ? () => onOpenArea('notifications') : undefined}
       />
 
       {isAuthenticated ? (
-        <>
-          <HistoryDrawer
-            open={historyOpen}
-            onClose={() => setHistoryOpen(false)}
-            history={owner.history}
-            pinnedIds={pinnedIds}
-            activeId={owner.conversationId}
-            onNewChat={() => { void owner.newChat().then(() => setHistoryOpen(false)); }}
-            onOpen={(id) => { void owner.openConversation(id).then(() => setHistoryOpen(false)); }}
-            onTogglePin={(id) => void togglePin(id)}
-          />
-          <ControlCenterDrawer
-            open={controlOpen}
-            onClose={() => setControlOpen(false)}
-            isPlatformOwner={isPlatformOwner}
-            onOpen={(area) => { setControlOpen(false); onOpenArea(area); }}
-            onLogout={onLogout}
-          />
-          <ComposerPlusSheet
-            open={plusOpen}
-            onClose={() => setPlusOpen(false)}
-            onAction={handlePlus}
-          />
-        </>
+        <ComposerPlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} onAction={(a) => void handlePlus(a)} />
       ) : null}
 
       <AuthGateModal
         visible={authGate}
-        reason={authGateReason}
-        onClose={() => { setAuthGate(false); setAuthGateReason(undefined); }}
-        onLogin={() => { setAuthGate(false); setAuthGateReason(undefined); onRequestLogin(); }}
-        onRegister={() => { setAuthGate(false); setAuthGateReason(undefined); onRequestRegister(); }}
+        hardLimit={hardLimit || guest.gated}
+        reason={guest.gateText ?? undefined}
+        onClose={() => {
+          setAuthGate(false);
+          setHardLimit(false);
+        }}
+        onLogin={() => {
+          setAuthGate(false);
+          onRequestLogin();
+        }}
+        onRegister={() => {
+          setAuthGate(false);
+          onRequestRegister();
+        }}
       />
     </GradientBackground>
   );

@@ -4,83 +4,177 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { APP_ENV, APP_VERSION, IOS_BUILD, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { fonts, radii, spacing, useTheme } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
 
 type Props = {
   onBack: () => void;
   onLogout: () => void;
+  onOpenActions?: () => void;
+  onOpenAiLimits?: () => void;
 };
 
 async function open(url: string) {
   await Linking.openURL(url);
 }
 
-export function SettingsScreen({ onBack, onLogout }: Props) {
+/** ST-01 — grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
+export function SettingsScreen({ onBack, onLogout, onOpenActions, onOpenAiLimits }: Props) {
   const { tr, language, setLanguage } = useI18n();
+  const { colors, mode, setMode } = useTheme();
 
   return (
     <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')} onBack={onBack}>
-      <Text style={styles.meta}>
+      <Text style={[styles.meta, { color: colors.textMuted }]}>
         Linas AI {APP_VERSION} ({APP_ENV}) · iOS build {IOS_BUILD}
       </Text>
 
-      <Text style={styles.section}>{tr('language')}</Text>
+      <Text style={[styles.group, { color: colors.textDim }]}>Account</Text>
+      <Row
+        title="Signed-in profile"
+        subtitle="Account email and workspace membership"
+        onPress={() => undefined}
+        disabled
+        note="Managed via login session"
+      />
+      <Row
+        title="Business profile"
+        subtitle="Workspace metadata only — customer AI facts live in Content Management"
+        onPress={onBack}
+        note="Open Content Management for AI Basics"
+      />
+
+      <Text style={[styles.group, { color: colors.textDim }]}>Preferences</Text>
+      <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')} (app UI)</Text>
       <View style={styles.chips}>
         {(['en', 'ar', 'fr'] as AppLanguage[]).map((lang) => (
           <Pressable
             key={lang}
-            style={[styles.chip, language === lang && styles.chipOn]}
+            style={[
+              styles.chip,
+              { borderColor: colors.border, backgroundColor: colors.bgElevated },
+              language === lang && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
+            ]}
             onPress={() => setLanguage(lang)}
+            accessibilityLabel={`App language ${lang}`}
           >
-            <Text style={styles.chipText}>{lang.toUpperCase()}</Text>
+            <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{lang.toUpperCase()}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={[styles.label, { color: colors.textMuted }]}>Appearance</Text>
+      <View style={styles.chips}>
+        {(['system', 'light', 'dark'] as const).map((m) => (
+          <Pressable
+            key={m}
+            style={[
+              styles.chip,
+              { borderColor: colors.border, backgroundColor: colors.bgElevated },
+              mode === m && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
+            ]}
+            onPress={() => setMode(m)}
+            accessibilityLabel={`Theme ${m}`}
+          >
+            <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{m}</Text>
           </Pressable>
         ))}
       </View>
 
-      <Pressable style={styles.row} onPress={() => void open(LEGAL_URLS.privacy)}>
-        <Text style={styles.rowTitle}>{tr('privacy')}</Text>
-      </Pressable>
-      <Pressable style={styles.row} onPress={() => void open(LEGAL_URLS.terms)}>
-        <Text style={styles.rowTitle}>{tr('terms')}</Text>
-      </Pressable>
-      <Pressable style={styles.row} onPress={() => void open(LEGAL_URLS.dataDeletion)}>
-        <Text style={styles.rowTitle}>{tr('dataDeletion')}</Text>
-      </Pressable>
+      {onOpenActions || onOpenAiLimits ? (
+        <>
+          <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsAiSection')}</Text>
+          {onOpenActions ? (
+            <Row
+              title={tr('settingsActions')}
+              subtitle={tr('settingsActionsSub')}
+              onPress={onOpenActions}
+            />
+          ) : null}
+          {onOpenAiLimits ? (
+            <Row
+              title={tr('settingsAiLimits')}
+              subtitle={tr('settingsAiLimitsSub')}
+              onPress={onOpenAiLimits}
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      <Text style={[styles.group, { color: colors.textDim }]}>Security & Support</Text>
+      <Row title="Privacy & Data" onPress={() => void open(LEGAL_URLS.privacy)} />
+      <Row title="Help & Support" onPress={() => void open(LEGAL_URLS.terms)} note="Use in-app chat for product help" />
+      <Row title="About & Legal" onPress={() => void open(LEGAL_URLS.terms)} />
+      <Row title={tr('terms')} onPress={() => void open(LEGAL_URLS.terms)} />
+      <Row title={tr('privacy')} onPress={() => void open(LEGAL_URLS.privacy)} />
+      <Row title={tr('dataDeletion')} onPress={() => void open(LEGAL_URLS.dataDeletion)} />
+
       <View style={styles.logout}>
-        <PrimaryButton label={tr('logout')} variant="danger" onPress={onLogout} />
+        <PrimaryButton label="Log out" variant="danger" onPress={onLogout} />
       </View>
     </ScreenChrome>
   );
 }
 
+function Row({
+  title,
+  subtitle,
+  note,
+  onPress,
+  disabled,
+}: {
+  title: string;
+  subtitle?: string;
+  note?: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      style={[
+        styles.row,
+        { backgroundColor: colors.surface, borderColor: colors.border, opacity: disabled ? 0.55 : 1 },
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityLabel={title}
+    >
+      <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 }}>{title}</Text>
+      {subtitle ? (
+        <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>{subtitle}</Text>
+      ) : null}
+      {note ? <Text style={{ color: colors.textDim, marginTop: 4, fontSize: 11 }}>{note}</Text> : null}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  meta: { color: colors.textMuted, fontFamily: fonts.body, marginBottom: spacing.lg },
-  section: {
-    color: colors.textDim,
+  meta: { fontFamily: fonts.body, marginBottom: spacing.lg },
+  group: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  chips: { flexDirection: 'row', gap: 8, marginBottom: spacing.lg },
+  label: { fontFamily: fonts.body, fontSize: 12, marginBottom: spacing.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   chip: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 999,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: colors.bgElevated,
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  chipOn: { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
-  chipText: { color: colors.text, fontFamily: fonts.bodyMedium },
   row: {
-    backgroundColor: colors.surface,
     borderRadius: radii.md,
     padding: spacing.lg,
-    borderColor: colors.border,
     borderWidth: 1,
     marginBottom: spacing.sm,
+    minHeight: 48,
+    justifyContent: 'center',
   },
-  rowTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 },
-  logout: { marginTop: spacing.xxl },
+  logout: { marginTop: spacing.xxl, marginBottom: spacing.xxl },
 });
