@@ -24,6 +24,9 @@ on:
           - enable_faq_canonical
           - sot_audit_published
           - corpus_inventory
+          - linas_content_audit
+          - bridge_readiness
+          - disable_linas_legacy_bridge
       confirmation:
         description: "Type CM_CUTOVER_CONFIRMED"
         required: true
@@ -106,6 +109,13 @@ jobs:
               sudo bash /opt/linasbot/scripts/prod_cm_sot_audit.sh
             elif [ "${PHASE}" = "corpus_inventory" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_corpus_inventory.sh
+            elif [ "${PHASE}" = "linas_content_audit" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_linas_content_audit.sh
+            elif [ "${PHASE}" = "bridge_readiness" ]; then
+              cd /opt/linasbot
+              sudo /opt/linasbot/venv/bin/python scripts/cm_prepare_remove_linas_bridge.py --tenant linas
+            elif [ "${PHASE}" = "disable_linas_legacy_bridge" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_set_linas_bridge_flag.sh true
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1

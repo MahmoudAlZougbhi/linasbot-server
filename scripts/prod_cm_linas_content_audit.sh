@@ -1,0 +1,301 @@
+#!/usr/bin/env bash
+# Read-only Linas CM draft/published content audit for production cutover.
+# Never prints secrets, full FAQ/knowledge bodies, or customer message text.
+set -euo pipefail
+
+APP_DIR="/opt/linasbot"
+cd "$APP_DIR"
+export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
+export ENVIRONMENT="${ENVIRONMENT:-production}"
+
+echo "[cm-audit] deployed_sha=$(git rev-parse HEAD)"
+echo "[cm-audit] host=$(hostname)"
+
+/opt/linasbot/venv/bin/python - <<'PY'
+from __future__ import annotations
+
+import json
+import os
+import re
+from pathlib import Path
+
+
+def load_env() -> None:
+    for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
+        if not env_path.is_file():
+            continue
+        for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or "=" not in s:
+                continue
+            key, value = s.split("=", 1)
+            key = key.strip()
+            if key:
+                os.environ.setdefault(key, value.strip().strip("'").strip('"'))
+
+
+load_env()
+os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
+os.environ.setdefault("ENVIRONMENT", "production")
+
+from services.cm.constants import (
+    CM_SECTIONS,
+    cm_disable_linas_legacy_bridge,
+    cm_emergency_force_legacy,
+    cm_publish_enabled,
+    cm_runtime_mode,
+    tenant_allows_legacy_bridge,
+    tenant_has_published_cm,
+    tenant_uses_cm_runtime,
+)
+from services.cm.storage import get_draft
+from services.cm.validation import validate_cm
+from services.cm.version_store import load_published_content, read_published_pointer
+from services.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
+
+EXPECTED_PHONES = {re.sub(r"\D", "", v) for v in DEFAULT_SOCIAL_WHATSAPP_CONTACTS.values()}
+
+
+def digits(value: object) -> str:
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def mask_phone(value: object) -> str:
+    d = digits(value)
+    if len(d) < 6:
+        return "<short_or_empty>"
+    return f"***{d[-4:]}(len={len(d)})"
+
+
+def summarize_section(name: str, payload: dict) -> dict:
+    out: dict = {"keys": sorted(payload.keys())[:40]}
+    if name == "ai_basics":
+        out.update(
+            {
+                "assistant_name": payload.get("assistant_name"),
+                "clinic_name": payload.get("clinic_name"),
+                "business_type": payload.get("business_type"),
+                "has_system_prompt": bool(payload.get("system_prompt") or payload.get("prompt")),
+                "prompt_chars": len(str(payload.get("system_prompt") or payload.get("prompt") or "")),
+            }
+        )
+    elif name == "languages":
+        out["languages"] = payload.get("languages") or payload.get("enabled") or list(payload.keys())[:12]
+    elif name == "style":
+        out["style_keys"] = list(payload.keys())[:12]
+        out["tone_present"] = bool(payload.get("tone") or payload.get("style_guide") or payload.get("guide"))
+    elif name == "services":
+        items = payload.get("items") or payload.get("services") or []
+        out["count"] = len(items) if isinstance(items, list) else None
+        if isinstance(items, list):
+            out["ids"] = [i.get("id") for i in items if isinstance(i, dict)][:30]
+    elif name == "branches":
+        items = payload.get("items") or payload.get("branches") or []
+        out["count"] = len(items) if isinstance(items, list) else None
+        if isinstance(items, list):
+            out["ids"] = [i.get("id") for i in items if isinstance(i, dict)]
+            out["labels_en"] = [
+                ((i.get("labels") or {}).get("en") if isinstance(i.get("labels"), dict) else None)
+                for i in items
+                if isinstance(i, dict)
+            ]
+    elif name == "prices":
+        items = payload.get("items") or payload.get("prices") or []
+        out["count"] = len(items) if isinstance(items, list) else None
+    elif name in {"knowledge", "care", "faq"}:
+        items = payload.get("items") or payload.get("articles") or payload.get("qa_groups") or payload.get("groups") or []
+        out["count"] = len(items) if isinstance(items, list) else None
+        if isinstance(items, list):
+            statuses: dict[str, int] = {}
+            for i in items:
+                if not isinstance(i, dict):
+                    continue
+                st = str(i.get("status") or "unknown")
+                statuses[st] = statuses.get(st, 0) + 1
+            out["status_counts"] = statuses
+            if name == "knowledge":
+                out["sample_titles"] = [i.get("title") for i in items if isinstance(i, dict)][:12]
+    elif name == "handoff":
+        contacts = payload.get("contacts") or []
+        matrix = payload.get("matrix") or []
+        out["contact_count"] = len(contacts) if isinstance(contacts, list) else None
+        out["matrix_count"] = len(matrix) if isinstance(matrix, list) else None
+        phones: list[str] = []
+        dests = []
+        if isinstance(contacts, list):
+            for c in contacts:
+                if not isinstance(c, dict):
+                    continue
+                phone = c.get("phone_e164") or c.get("phone") or c.get("whatsapp")
+                dest_type = c.get("destination_type") or ("whatsapp" if phone else c.get("type"))
+                dest_value = c.get("destination_value") or phone or c.get("email") or c.get("url")
+                phones.append(digits(phone or dest_value))
+                dests.append(
+                    {
+                        "id": c.get("id"),
+                        "branch_id": c.get("branch_id"),
+                        "gender": c.get("gender"),
+                        "destination_type": dest_type,
+                        "masked": mask_phone(phone or dest_value),
+                        "label": c.get("label"),
+                    }
+                )
+        out["contacts"] = dests
+        phone_set = {p for p in phones if p}
+        out["phone_digits_set"] = sorted(phone_set)
+        out["expected_phone_match"] = EXPECTED_PHONES == phone_set
+        missing = sorted(EXPECTED_PHONES - phone_set)
+        extra = sorted(phone_set - EXPECTED_PHONES)
+        out["missing_expected_last4"] = [f"***{m[-4:]}" for m in missing]
+        out["extra_unexpected_last4"] = [f"***{e[-4:]}" for e in extra]
+        if isinstance(matrix, list):
+            out["matrix_enabled"] = sum(1 for r in matrix if isinstance(r, dict) and r.get("enabled", True))
+    elif name == "restricted":
+        topics = payload.get("topics") or []
+        out["count"] = len(topics) if isinstance(topics, list) else None
+        if isinstance(topics, list):
+            out["topics"] = [{"id": t.get("id"), "active": t.get("active")} for t in topics if isinstance(t, dict)]
+    elif name == "actions":
+        items = payload.get("items") or payload.get("actions") or []
+        out["count"] = len(items) if isinstance(items, list) else None
+        if isinstance(items, list):
+            out["actions"] = [
+                {"id": a.get("id") or a.get("action_id"), "enabled": a.get("enabled")}
+                for a in items
+                if isinstance(a, dict)
+            ][:40]
+    elif name == "ai_limits":
+        out["limit_keys"] = sorted(payload.keys())[:30]
+    elif name == "off_days":
+        out["timezone"] = payload.get("timezone")
+        out["weekly"] = payload.get("weekly") or payload.get("weekly_off_days")
+        out["specific_count"] = len(payload.get("specific") or payload.get("specific_off_days") or [])
+        out["notes_present"] = bool(payload.get("notes"))
+    elif name == "dynamic_messages":
+        out["message_keys"] = sorted(payload.keys())[:20]
+    return out
+
+
+tenant_id = "linas"
+pointer = read_published_pointer(tenant_id)
+report: dict = {
+    "tenant_id": tenant_id,
+    "flags": {
+        "cm_runtime_mode": cm_runtime_mode(),
+        "cm_publish_enabled": cm_publish_enabled(),
+        "cm_emergency_force_legacy": cm_emergency_force_legacy(),
+        "cm_disable_linas_legacy_bridge": cm_disable_linas_legacy_bridge(),
+        "tenant_has_published_cm": tenant_has_published_cm(tenant_id),
+        "tenant_uses_cm_runtime": tenant_uses_cm_runtime(tenant_id),
+        "tenant_allows_legacy_bridge": tenant_allows_legacy_bridge(tenant_id),
+    },
+    "published_pointer": None,
+    "draft": {},
+    "published": {},
+    "validation": {},
+    "gaps": [],
+}
+if pointer is not None:
+    report["published_pointer"] = {
+        "content_version_id": getattr(pointer, "content_version_id", None)
+        or (pointer.get("content_version_id") if isinstance(pointer, dict) else None),
+        "index_version_id": getattr(pointer, "index_version_id", None)
+        or (pointer.get("index_version_id") if isinstance(pointer, dict) else None),
+    }
+
+for section in CM_SECTIONS:
+    try:
+        env = get_draft(section, tenant_id=tenant_id, create_default=False)
+    except TypeError:
+        env = get_draft(section, tenant_id=tenant_id)
+    if env is None:
+        report["draft"][section] = {"present": False}
+        report["gaps"].append(f"draft_missing:{section}")
+        continue
+    payload = env.payload if hasattr(env, "payload") else env
+    if not isinstance(payload, dict):
+        report["draft"][section] = {"present": True, "invalid_payload_type": type(payload).__name__}
+        report["gaps"].append(f"draft_invalid:{section}")
+        continue
+    summary = summarize_section(section, payload)
+    summary["present"] = True
+    summary["revision"] = getattr(env, "revision", None)
+    report["draft"][section] = summary
+
+try:
+    loaded_pointer, sections = load_published_content(tenant_id)
+    report["published_load_ok"] = True
+    report["published_pointer_loaded"] = {
+        "content_version_id": loaded_pointer.content_version_id,
+        "index_version_id": loaded_pointer.index_version_id,
+    }
+    for section in CM_SECTIONS:
+        payload = sections.get(section) or {}
+        if not isinstance(payload, dict) or not payload:
+            report["published"][section] = {"present": False}
+            report["gaps"].append(f"published_missing:{section}")
+            continue
+        summary = summarize_section(section, payload)
+        summary["present"] = True
+        report["published"][section] = summary
+except Exception as exc:
+    report["published_load_ok"] = False
+    report["published_load_error"] = type(exc).__name__
+    report["gaps"].append("published_load_failed")
+
+validation = validate_cm(tenant_id=tenant_id)
+report["validation"] = {
+    "ok": validation.get("ok"),
+    "error_count": validation.get("error_count"),
+    "warning_count": validation.get("warning_count"),
+    "errors": [
+        {"path": e.get("path"), "code": e.get("code"), "message": (e.get("message") or "")[:120]}
+        for e in (validation.get("errors") or [])[:20]
+        if isinstance(e, dict)
+    ],
+}
+if not validation.get("ok"):
+    report["gaps"].append("validation_failed")
+
+for origin in ("draft", "published"):
+    block = report.get(origin) or {}
+    ai = block.get("ai_basics") or {}
+    if ai.get("present"):
+        an = str(ai.get("assistant_name") or "").lower()
+        cn = str(ai.get("clinic_name") or "").lower()
+        if "marwa" in an or "marwa" in cn:
+            report["gaps"].append(f"{origin}:marwa_identity")
+        if not ai.get("assistant_name") and not ai.get("clinic_name"):
+            report["gaps"].append(f"{origin}:missing_identity")
+    handoff = block.get("handoff") or {}
+    if handoff.get("present") and handoff.get("expected_phone_match") is False:
+        report["gaps"].append(f"{origin}:handoff_phones_mismatch")
+    if handoff.get("present") and (handoff.get("contact_count") or 0) < 4:
+        report["gaps"].append(f"{origin}:handoff_contacts_lt_4")
+    branches = block.get("branches") or {}
+    if branches.get("present"):
+        ids = set(branches.get("ids") or [])
+        if "beirut" not in ids or "antelias" not in ids:
+            report["gaps"].append(f"{origin}:branches_missing_beirut_or_antelias")
+    restricted = block.get("restricted") or {}
+    if restricted.get("present") and (restricted.get("count") or 0) == 0:
+        report["gaps"].append(f"{origin}:restricted_topics_empty")
+    actions = block.get("actions") or {}
+    if actions.get("present") and (actions.get("count") or 0) == 0:
+        report["gaps"].append(f"{origin}:actions_empty")
+    knowledge = block.get("knowledge") or {}
+    if knowledge.get("present") and (knowledge.get("count") or 0) == 0:
+        report["gaps"].append(f"{origin}:knowledge_empty")
+    services = block.get("services") or {}
+    if services.get("present") and (services.get("count") or 0) == 0:
+        report["gaps"].append(f"{origin}:services_empty")
+
+report["audit_ok"] = (
+    len(report["gaps"]) == 0
+    and report.get("published_load_ok") is True
+    and bool((report.get("validation") or {}).get("ok"))
+)
+print(json.dumps(report, indent=2, ensure_ascii=False))
+print("[cm-audit] COMPLETE_OK" if report["audit_ok"] else "[cm-audit] COMPLETE_WITH_GAPS")
+raise SystemExit(0 if report["audit_ok"] else 2)
+PY
