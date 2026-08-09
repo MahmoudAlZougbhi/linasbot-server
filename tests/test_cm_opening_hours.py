@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from services.cm.constants import CM_SECTIONS
+from services.cm.runtime_pipeline import prepare_response
 from services.cm.schemas import (
     OpeningHoursDay,
     OpeningHoursSchedule,
@@ -10,6 +13,12 @@ from services.cm.schemas import (
     default_section_payload,
 )
 from services.cm.structured_resolver import resolve_opening_hours_facts
+from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
+
+
+@pytest.fixture(autouse=True)
+def _openai_published_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_mocked_openai_embeddings(monkeypatch, published_mode=True)
 
 
 def test_opening_hours_in_cm_sections() -> None:
@@ -49,3 +58,33 @@ def test_opening_hours_schedule_summary_and_facts() -> None:
     oh = next(f for f in facts if f.kind == "opening_hours")
     assert oh.source_id == "opening_hours:men"
     assert "Men:" in oh.value
+
+
+@pytest.mark.asyncio
+async def test_prepare_response_includes_opening_hours_facts() -> None:
+    tenant_id = "cm_opening_hours_runtime"
+    await publish_test_content(
+        tenant_id,
+        {
+            "opening_hours": OpeningHoursSection(
+                items=[
+                    OpeningHoursSchedule(
+                        id="women",
+                        title="Women",
+                        monday=OpeningHoursDay(open="09:00", close="17:00"),
+                        sunday=OpeningHoursDay(closed=True),
+                    )
+                ]
+            ).model_dump(mode="json"),
+            "faq": {"items": []},
+        },
+    )
+    outcome = await prepare_response(
+        tenant_id=tenant_id,
+        message="What are your opening hours?",
+        detected_language="en",
+        response_language="en",
+    )
+    assert outcome.stop is False
+    assert outcome.packet is not None
+    assert any(f.kind == "opening_hours" and "Women:" in f.value for f in outcome.packet.facts)

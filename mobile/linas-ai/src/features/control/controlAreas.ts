@@ -30,7 +30,7 @@ export const CONTROL_ITEMS: ControlItem[] = [
   },
   {
     id: 'faq',
-    title: 'FAQ',
+    title: 'Smart Answers / FAQ',
     subtitle: 'Saved Q&A with auto-translate',
     group: 'operate',
   },
