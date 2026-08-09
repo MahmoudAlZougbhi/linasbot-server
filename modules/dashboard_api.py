@@ -260,7 +260,7 @@ async def ready() -> Any:
         checks["data_root_writable"] = {"ok": False, "error": type(e).__name__}
         overall_ok = False
 
-    # Queue / Redis readiness (required when production or LINAS_REQUIRE_REDIS).
+    # Queue / Redis readiness — hard-fail only when LINAS_REQUIRE_REDIS (or durable queues) is on.
     try:
         from services.job_queue import job_queue
         from services.queues.config import redis_required, redis_url
@@ -268,21 +268,35 @@ async def ready() -> Any:
         required = redis_required()
         configured = bool(redis_url())
         health = job_queue.health()
-        queue_ok = bool(health.get("ok")) and (bool(health.get("production_ready")) if required else True)
-        if required and not configured:
-            queue_ok = False
+        if required:
+            queue_ok = configured and bool(health.get("ok")) and bool(health.get("production_ready"))
+        else:
+            # Opt-in Redis: unreachable REDIS_URL must not block API deploys / mobile login.
+            queue_ok = True
         checks["job_queue"] = {
             "ok": queue_ok,
             "backend": health.get("backend"),
             "production_ready": bool(health.get("production_ready")),
             "redis_required": required,
             "redis_configured": configured,
+            "redis_reachable": bool(health.get("ok")) if configured else None,
+            "error": health.get("error"),
         }
         if not queue_ok:
             overall_ok = False
     except Exception as e:
-        checks["job_queue"] = {"ok": False, "error": type(e).__name__}
-        overall_ok = False
+        from services.queues.config import redis_required as _redis_required
+
+        if _redis_required():
+            checks["job_queue"] = {"ok": False, "error": type(e).__name__}
+            overall_ok = False
+        else:
+            checks["job_queue"] = {
+                "ok": True,
+                "redis_required": False,
+                "error": type(e).__name__,
+                "note": "Redis optional; connection error ignored for readiness",
+            }
 
     status = 200 if overall_ok else 503
     from fastapi.responses import JSONResponse

@@ -117,14 +117,23 @@ class JobQueue:
 
     def health(self) -> dict[str, Any]:
         if self._redis is not None:
-            ok = self._redis.ping()
-            return {
-                "ok": ok,
-                "backend": self.backend,
-                "production_ready": self.production_ready,
-                "depths": self.depth(),
-                "heartbeats": self._redis.heartbeats(),
-            }
+            try:
+                ok = self._redis.ping()
+                return {
+                    "ok": ok,
+                    "backend": self.backend,
+                    "production_ready": self.production_ready and ok,
+                    "depths": self.depth(),
+                    "heartbeats": self._redis.heartbeats(),
+                }
+            except Exception as exc:
+                return {
+                    "ok": False,
+                    "backend": self.backend,
+                    "production_ready": False,
+                    "error": type(exc).__name__,
+                    "note": "Redis configured but unreachable",
+                }
         return {
             "ok": not redis_required(),
             "backend": self.backend,
