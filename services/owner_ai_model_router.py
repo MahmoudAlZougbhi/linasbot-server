@@ -33,21 +33,26 @@ def _env_model(key: str, default: str) -> str:
 
 
 def router_config() -> dict[str, Any]:
+    """Owner/CM/creative route models (OpenAI API ids).
+
+    Content Manager / owner CM / creative → gpt-5.6-sol
+    Customer high-volume → gpt-5.6-luna
+    """
     return {
         "owner_help": {
-            "model": _env_model("LINAS_OWNER_HELP_MODEL", "gpt-4o-mini"),
+            "model": _env_model("LINAS_OWNER_HELP_MODEL", "gpt-5.6-luna"),
             "max_context_tokens": int(os.getenv("LINAS_OWNER_HELP_MAX_CTX", "3500")),
         },
         "owner_complex_cm": {
-            "model": _env_model("LINAS_OWNER_CM_MODEL", "gpt-5-mini"),
+            "model": _env_model("LINAS_OWNER_CM_MODEL", "gpt-5.6-sol"),
             "max_context_tokens": int(os.getenv("LINAS_OWNER_CM_MAX_CTX", "6000")),
         },
         "creative": {
-            "model": _env_model("LINAS_CREATIVE_MODEL", "gpt-5-mini"),
+            "model": _env_model("LINAS_CREATIVE_MODEL", "gpt-5.6-sol"),
             "max_context_tokens": int(os.getenv("LINAS_CREATIVE_MAX_CTX", "4000")),
         },
         "customer_high_volume": {
-            "model": _env_model("LINAS_CUSTOMER_HV_MODEL", "gpt-5-mini"),
+            "model": _env_model("LINAS_CUSTOMER_HV_MODEL", "gpt-5.6-luna"),
             "max_context_tokens": int(os.getenv("LINAS_CUSTOMER_HV_MAX_CTX", "2500")),
         },
     }

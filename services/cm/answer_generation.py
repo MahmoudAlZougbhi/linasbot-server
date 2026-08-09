@@ -10,21 +10,27 @@ default) until a future cutover phase.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from services.cm.schemas import AnswerPacket
-from services.llm_core_service import client
+from services.llm_core_service import create_chat_completion
 from services.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
 
-_MODEL = "gpt-4o-mini"
+# Customer-facing CM DMs/comments — OpenAI API id gpt-5.6-luna (no weak fallback).
+DEFAULT_CM_ANSWER_MODEL = "gpt-5.6-luna"
+
+
+def cm_answer_model() -> str:
+    return (os.getenv("LINAS_CM_ANSWER_MODEL") or os.getenv("LINAS_MODEL_CUSTOMER_DM") or DEFAULT_CM_ANSWER_MODEL).strip() or DEFAULT_CM_ANSWER_MODEL
 
 
 @dataclass
 class AnswerGenerationResult:
     text: str
-    model: str = _MODEL
+    model: str = DEFAULT_CM_ANSWER_MODEL
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
@@ -131,39 +137,43 @@ async def generate_answer(message: str, packet: AnswerPacket) -> str:
 
 async def generate_answer_with_usage(message: str, packet: AnswerPacket) -> AnswerGenerationResult:
     """Call the LLM once and return text + real OpenAI usage tokens / estimated USD cost."""
+    model = cm_answer_model()
     system_prompt = _build_system_prompt(packet)
-    response = await client.chat.completions.create(
-        model=_MODEL,
+    response = await create_chat_completion(
+        model=model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": message},
         ],
+        max_tokens=800,
         temperature=0.3,
     )
     text = (response.choices[0].message.content or "").strip()
     acc = UsageAccumulator()
-    acc.add_from_response(response, _MODEL)
-    return acc.to_result(text, _MODEL)
+    acc.add_from_response(response, model)
+    return acc.to_result(text, model)
 
 
 def make_regenerate_fn(message: str, packet: AnswerPacket) -> Callable[[str, list[str]], Awaitable[str]]:
     """Build a bound ``regenerate_fn`` for :func:`services.cm.runtime_pipeline.finalize_response`."""
 
     async def _regenerate(previous_text: str, failed_rules: list[str]) -> str:
+        model = cm_answer_model()
         constraint = (
             "Your previous answer violated these rules: "
             + ", ".join(failed_rules)
             + ". Rewrite the answer, obeying every platform rule and only stating facts from KNOWN FACTS."
         )
         system_prompt = _build_system_prompt(packet) + "\n" + constraint
-        response = await client.chat.completions.create(
-            model=_MODEL,
+        response = await create_chat_completion(
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message},
                 {"role": "assistant", "content": previous_text},
                 {"role": "user", "content": constraint},
             ],
+            max_tokens=800,
             temperature=0.2,
         )
         return (response.choices[0].message.content or "").strip()
@@ -179,23 +189,25 @@ def make_regenerate_fn_with_usage(
     """Like :func:`make_regenerate_fn` but accumulates OpenAI usage into ``usage_acc``."""
 
     async def _regenerate(previous_text: str, failed_rules: list[str]) -> str:
+        model = cm_answer_model()
         constraint = (
             "Your previous answer violated these rules: "
             + ", ".join(failed_rules)
             + ". Rewrite the answer, obeying every platform rule and only stating facts from KNOWN FACTS."
         )
         system_prompt = _build_system_prompt(packet) + "\n" + constraint
-        response = await client.chat.completions.create(
-            model=_MODEL,
+        response = await create_chat_completion(
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message},
                 {"role": "assistant", "content": previous_text},
                 {"role": "user", "content": constraint},
             ],
+            max_tokens=800,
             temperature=0.2,
         )
-        usage_acc.add_from_response(response, _MODEL)
+        usage_acc.add_from_response(response, model)
         return (response.choices[0].message.content or "").strip()
 
     return _regenerate

@@ -8,7 +8,7 @@ from typing import Any
 
 from services.owner_ai_model_router import router_config
 
-DEFAULT_OWNER_HELP_MODEL = "gpt-4o-mini"
+DEFAULT_OWNER_HELP_MODEL = "gpt-5.6-luna"
 
 
 class OwnerAIModelError(RuntimeError):

@@ -34,14 +34,11 @@ class ProviderRouter:
         # Reuse existing OpenAI client path when provider is openai.
         if route["provider"] != "openai":
             raise RuntimeError(f"Text provider not configured: {route['provider']}")
-        from services import llm_core_service
+        from services.llm_core_service import create_chat_completion
 
-        client = getattr(llm_core_service, "client", None)
-        if client is None:
-            raise RuntimeError("OpenAI client unavailable")
-        resp = await client.chat.completions.create(
+        resp = await create_chat_completion(
             model=route["model"],
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             max_tokens=max_tokens,
         )
         choice = resp.choices[0].message.content or ""
