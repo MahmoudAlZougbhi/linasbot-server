@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AppIcon } from '../../components/AppIcon';
 import { fonts, radii, spacing, useTheme } from '../../theme';
+import { DRAWER_TOOL_ICONS } from './moduleIcons';
 
 export type HistoryItem = { id: string; title: string };
 
@@ -58,7 +60,15 @@ export function HistoryRows({
                 ) : (
                   <View style={styles.indicatorSpacer} />
                 )}
-                <Pressable style={styles.main} onPress={() => onOpen(item.id)}>
+                <Pressable
+                  style={styles.main}
+                  onPress={() => onOpen(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.title || 'Untitled conversation'}
+                >
+                  {pinnedIds.includes(item.id) && !archivedMode ? (
+                    <AppIcon icon={DRAWER_TOOL_ICONS.pin} size={14} color={colors.textDim} />
+                  ) : null}
                   {renameId === item.id ? (
                     <TextInput
                       value={renameText}
@@ -75,18 +85,19 @@ export function HistoryRows({
                       style={{ color: colors.text, flex: 1 }}
                     />
                   ) : (
-                    <Text style={{ color: colors.text, fontFamily: fonts.body }} numberOfLines={2}>
+                    <Text style={{ color: colors.text, fontFamily: fonts.body, flex: 1 }} numberOfLines={2}>
                       {item.title || 'Untitled'}
                     </Text>
                   )}
                 </Pressable>
                 <Pressable
                   onPress={() => setMenuId((m) => (m === item.id ? null : item.id))}
+                  accessibilityRole="button"
                   accessibilityLabel="Conversation actions"
                   hitSlop={8}
                   style={styles.overflow}
                 >
-                  <Text style={{ color: colors.textMuted }}>⋯</Text>
+                  <AppIcon icon={DRAWER_TOOL_ICONS.overflow} size={18} color={colors.textMuted} />
                 </Pressable>
               </View>
               {menuId === item.id ? (
@@ -184,8 +195,15 @@ const styles = StyleSheet.create({
   },
   indicator: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginRight: 8 },
   indicatorSpacer: { width: 3, marginRight: 8 },
-  main: { flex: 1, paddingVertical: 10 },
-  overflow: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  main: {
+    flex: 1,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 44,
+  },
+  overflow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   menu: {
     marginLeft: 12,
     marginBottom: 8,

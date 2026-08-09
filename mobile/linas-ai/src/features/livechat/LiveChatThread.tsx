@@ -10,6 +10,7 @@ import {
 
 import { EmptyState } from '../../components/EmptyState';
 import { StatusChip } from '../../components/StatusChip';
+import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { LikeFeedbackModal } from './LikeFeedbackModal';
@@ -77,12 +78,18 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
       <View style={styles.toolbar}>
         <View style={styles.chips}>
           <StatusChip label={statusLabel(status)} tone={statusTone(status)} />
-          <StatusChip label="Read-only" tone="soon" />
+          <View style={styles.readOnlyChip}>
+            <AppIcon icon={feather('lock')} size={12} color={colors.textMuted} />
+            <StatusChip label="Read-only" tone="soon" />
+          </View>
         </View>
       </View>
 
       {thread.error ? <Text style={styles.error}>{thread.error}</Text> : null}
-      <Text style={styles.readOnlyBanner}>{readOnlyReason}</Text>
+      <View style={styles.readOnlyBannerRow} accessibilityLabel={readOnlyReason}>
+        <AppIcon icon={feather('lock')} size={14} color={colors.textMuted} />
+        <Text style={styles.readOnlyBanner}>{readOnlyReason}</Text>
+      </View>
 
       {thread.loading && !thread.messages.length ? (
         <View style={styles.center}>
@@ -163,7 +170,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
+  readOnlyChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actionBtn: {
     borderRadius: radii.md,
@@ -188,10 +196,16 @@ const styles = StyleSheet.create({
   },
   emptyFlip: { transform: [{ scaleY: -1 }] },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
+  readOnlyBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
   readOnlyBanner: {
+    flex: 1,
     color: colors.textMuted,
     fontFamily: fonts.body,
     fontSize: 12,
-    marginBottom: spacing.sm,
   },
 });
