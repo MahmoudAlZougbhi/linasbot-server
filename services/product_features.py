@@ -35,8 +35,7 @@ DISABLED_API_PREFIXES: Final[tuple[str, ...]] = (
 )
 
 DISABLED_PRODUCT_MESSAGE: Final[str] = (
-    "This module is disabled in the current Linas AI product. "
-    "Use Content Management and Meta connections instead."
+    "This module is disabled in the current Linas AI product. Use Content Management and Meta connections instead."
 )
 
 # Dashboard frontend routes that must redirect away (kept for deep-link safety).
