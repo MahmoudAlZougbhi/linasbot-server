@@ -173,6 +173,27 @@ async def _generate_comment_reply_text(
     from services.cm.constants import tenant_uses_cm_runtime
 
     if tenant_uses_cm_runtime(tenant_id):
+        try:
+            from services.customer_reply_v2.flags import (
+                customer_reply_ai_v2_enabled,
+                customer_reply_ai_v2_live_send,
+            )
+
+            if customer_reply_ai_v2_enabled():
+                from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+
+                social_channel = "facebook_comment" if channel == "facebook" else "instagram_comment"
+                v2_outcome = await run_customer_reply_v2_comment(
+                    tenant_id=tenant_id,
+                    comment_text=comment_text,
+                    channel=social_channel,
+                    comments_enabled=True,
+                )
+                if customer_reply_ai_v2_live_send() and v2_outcome.reply:
+                    return str(v2_outcome.reply).strip()[:900]
+        except Exception as v2_exc:
+            _runtime_logger.warning("customer_reply_v2 comment path failed: %s", v2_exc)
+
         from services.cm.answer_generation import (
             UsageAccumulator,
             generate_answer_with_usage,
