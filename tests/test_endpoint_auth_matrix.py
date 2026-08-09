@@ -60,6 +60,7 @@ _MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"})
 
 _PARAM_DEFAULTS: dict[str, str] = {
+    "filename": "asset-matrix-test.png",
     "qa_id": "qa-matrix-test",
     "user_id": "9613000000",
     "conversation_id": "conv-matrix-test",
@@ -181,9 +182,9 @@ class TestRouteInventory:
         # +meta reconnect endpoint for first-party bindings.
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
-        assert counts["total_api_routes"] == 211
+        assert counts["total_api_routes"] == 212
         assert counts["public"] == 18
-        assert counts["protected"] == 193
+        assert counts["protected"] == 194
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),

@@ -72,24 +72,31 @@ class ModerationProvider(Protocol):
 
 
 def provider_config() -> dict[str, Any]:
-    """Configuration-driven model/provider names (env-overridable)."""
+    """Configuration-driven model/provider names (env-overridable).
+
+    Defaults (OpenAI API ids — fail honestly if the account cannot use them):
+    - Customer DM / high-volume CM answers → gpt-5.6-luna
+    - Owner / Content Manager / creative text → gpt-5.6-sol
+    - Image → gpt-image-2 (strongest Images API model)
+    - Video → sora-2-pro (strongest OpenAI Sora; Videos API)
+    """
     import os
 
     return {
         "text": {
-            "customer_dm": os.getenv("LINAS_MODEL_CUSTOMER_DM", "gpt-4o-mini"),
-            "owner_chat": os.getenv("LINAS_MODEL_OWNER_CHAT", "gpt-5-mini"),
-            "setup_complex": os.getenv("LINAS_MODEL_SETUP", "gpt-5-mini"),
-            "creative_text": os.getenv("LINAS_MODEL_CREATIVE", "gpt-5-mini"),
+            "customer_dm": os.getenv("LINAS_MODEL_CUSTOMER_DM", "gpt-5.6-luna"),
+            "owner_chat": os.getenv("LINAS_MODEL_OWNER_CHAT", "gpt-5.6-sol"),
+            "setup_complex": os.getenv("LINAS_MODEL_SETUP", "gpt-5.6-sol"),
+            "creative_text": os.getenv("LINAS_MODEL_CREATIVE", "gpt-5.6-sol"),
             "provider": os.getenv("LINAS_TEXT_PROVIDER", "openai"),
         },
         "image": {
-            "model": os.getenv("LINAS_IMAGE_MODEL", "gpt-image-1"),
+            "model": os.getenv("LINAS_IMAGE_MODEL", "gpt-image-2"),
             "provider": os.getenv("LINAS_IMAGE_PROVIDER", "openai"),
         },
         "video": {
-            "model": os.getenv("LINAS_VIDEO_MODEL", "configurable"),
-            "provider": os.getenv("LINAS_VIDEO_PROVIDER", "pluggable"),
+            "model": os.getenv("LINAS_VIDEO_MODEL", "sora-2-pro"),
+            "provider": os.getenv("LINAS_VIDEO_PROVIDER", "openai"),
         },
         "stt": {
             "model": os.getenv("LINAS_STT_MODEL", "whisper-1"),

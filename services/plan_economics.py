@@ -89,8 +89,8 @@ PLAN_FAQ_MAX_ENTRIES: Final[dict[str, int]] = {
 }
 
 # Assumed unit costs (USD) — image/video from typical production list prices; text from MODEL_PRICING.
-DEFAULT_IMAGE_COST_USD: Final[float] = 0.04  # gpt-image / similar mid tier
-DEFAULT_VIDEO_COST_USD: Final[float] = 0.50  # placeholder per short clip unit; provider-pluggable
+DEFAULT_IMAGE_COST_USD: Final[float] = 0.08  # gpt-image-2 high quality estimate
+DEFAULT_VIDEO_COST_USD: Final[float] = 0.50  # sora-2-pro short clip estimate
 APP_STORE_FEE_PCT: Final[float] = 0.15  # small-business rate assumption for modeling
 INFRA_ALLOC_USD: Final[dict[str, float]] = {
     "starter": 2.0,
@@ -102,10 +102,10 @@ INFRA_ALLOC_USD: Final[dict[str, float]] = {
 # Target gross margin floor after store fee + provider + infra (pathological 100% use).
 TARGET_MARGIN_FLOOR: Final[float] = 0.25
 
-# Customer DM model (high volume) vs owner chat model (balanced).
-DM_MODEL: Final[str] = "gpt-4o-mini"
-OWNER_MODEL: Final[str] = "gpt-5-mini"
-SETUP_MODEL: Final[str] = "gpt-5-mini"
+# Customer DM model (high volume luna) vs owner / Content Manager (sol).
+DM_MODEL: Final[str] = "gpt-5.6-luna"
+OWNER_MODEL: Final[str] = "gpt-5.6-sol"
+SETUP_MODEL: Final[str] = "gpt-5.6-sol"
 
 # Tokens per typical operation (estimates for allowance sizing).
 TOKENS_PER_DM: Final[tuple[int, int]] = (800, 250)  # in, out
@@ -132,7 +132,7 @@ class PlanAllowanceRecommendation:
 
 
 def _text_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = MODEL_PRICING.get(model) or MODEL_PRICING["gpt-4o-mini"]
+    pricing = MODEL_PRICING.get(model) or MODEL_PRICING["gpt-5.6-luna"]
     return (input_tokens / 1_000_000) * float(pricing["input"]) + (output_tokens / 1_000_000) * float(pricing["output"])
 
 

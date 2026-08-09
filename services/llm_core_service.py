@@ -41,7 +41,10 @@ def reasoning_effort_for_model(model: str) -> str | None:
     m = _model_family(model)
     if m.startswith(("o1", "o3", "o4")):
         return "low"
-    # gpt-5-mini / gpt-5 / gpt-5-nano — keep reasoning cheap so visible text fits.
+    # High-volume luna: none keeps latency/cost down for CM DMs/comments.
+    if "luna" in m:
+        return "none"
+    # gpt-5-mini / gpt-5 / gpt-5.6-sol — keep reasoning cheap so visible text fits.
     if m.startswith("gpt-5") and not m.startswith("gpt-5.4"):
         return "low"
     return None

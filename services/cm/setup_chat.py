@@ -321,7 +321,7 @@ async def interpret_and_patch(
         try:
             debit_ai_usage(
                 tenant_id=tenant_id,
-                model=str(llm_meta.get("model") or "gpt-4o-mini"),
+                model=str(llm_meta.get("model") or _setup_llm_model()),
                 prompt_tokens=int(llm_meta.get("prompt_tokens") or 0),
                 completion_tokens=int(llm_meta.get("completion_tokens") or 0),
                 reference=f"cm_setup_chat:{current}",
@@ -340,10 +340,20 @@ async def interpret_and_patch(
     }
 
 
+def _setup_llm_model() -> str:
+    """Content Manager setup chat uses gpt-5.6-sol (same family as owner CM)."""
+    import os
+
+    return (
+        os.getenv("LINAS_MODEL_SETUP") or os.getenv("LINAS_OWNER_CM_MODEL") or "gpt-5.6-sol"
+    ).strip() or "gpt-5.6-sol"
+
+
 async def _llm_patch(*, tenant_id: str, section: str, message: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """Ask the model for a JSON patch only — validated by apply_section_patch."""
-    from services.llm_core_service import client
+    from services.llm_core_service import build_chat_completion_kwargs, client
 
+    model = _setup_llm_model()
     schema_hint = json.dumps(default_section_payload(section), ensure_ascii=False)[:4000]
     system = (
         "You help a business owner fill Content Management drafts. "
@@ -358,21 +368,23 @@ async def _llm_patch(*, tenant_id: str, section: str, message: str) -> tuple[dic
         f"owner_message={message}\n"
         "Return JSON patch only."
     )
-    response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0.2,
-        response_format={"type": "json_object"},
+    kwargs = build_chat_completion_kwargs(
+        model=model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
+        max_tokens=1200,
+        temperature=0.2,
     )
+    kwargs["response_format"] = {"type": "json_object"}
+    response = await client.chat.completions.create(**kwargs)
     content = (response.choices[0].message.content or "{}").strip()
     patch = json.loads(content)
     usage = getattr(response, "usage", None)
     meta = {
         "used_llm": True,
-        "model": "gpt-4o-mini",
+        "model": model,
         "prompt_tokens": getattr(usage, "prompt_tokens", None),
         "completion_tokens": getattr(usage, "completion_tokens", None),
     }

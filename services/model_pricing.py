@@ -10,6 +10,9 @@ from typing import Any
 
 # Per 1M tokens (input, output) — keep aligned with OpenAI public pricing.
 MODEL_PRICING: dict[str, dict[str, float]] = {
+    "gpt-5.6-sol": {"input": 5.0, "output": 30.0},
+    "gpt-5.6-luna": {"input": 0.20, "output": 1.20},
+    "gpt-5.6-terra": {"input": 2.0, "output": 12.0},
     "gpt-5.1": {"input": 1.25, "output": 10.0},
     "gpt-5.4": {"input": 1.25, "output": 10.0},
     "gpt-5.4-mini": {"input": 0.25, "output": 2.0},

@@ -157,7 +157,7 @@ def test_redis_retry_then_dlq(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_creative_handler_refunds_only_via_worker_dlq_path(tmp_path, monkeypatch) -> None:
-    """Permanent video misconfig raises PermanentJobError; credits stay reserved until worker refunds."""
+    """Permanent video failure raises PermanentJobError; credits stay reserved until worker refunds."""
     from services.queues.handlers import PermanentJobError, handle_creative_expensive
 
     ledger, _ = _ledger(tmp_path, monkeypatch)
@@ -173,6 +173,17 @@ async def test_creative_handler_refunds_only_via_worker_dlq_path(tmp_path, monke
         "services.credit_ledger_service.credit_ledger_service",
         ledger,
     )
+
+    class _NoRedisThrottle:
+        def throttle_provider(self, *, provider: str, limit_per_minute: int) -> bool:
+            return True
+
+    monkeypatch.setattr("services.queues.redis_backend.RedisQueueBackend", _NoRedisThrottle)
+
+    async def _fail_video(**kwargs):  # noqa: ANN001
+        raise RuntimeError("provider_down")
+
+    monkeypatch.setattr("services.providers.openai_media.start_openai_video", _fail_video)
     job = QueueJob.new(
         queue="expensive",
         job_type="creative_video",
@@ -186,6 +197,52 @@ async def test_creative_handler_refunds_only_via_worker_dlq_path(tmp_path, monke
     assert ledger.get_balance("t1") == start - 200
     ledger.release(tenant_id="t1", reservation_id=rid)
     assert ledger.get_balance("t1") == start
+
+
+@pytest.mark.asyncio
+async def test_creative_image_handler_calls_real_provider(tmp_path, monkeypatch) -> None:
+    from services.providers.base import ImageGenerationResult
+    from services.queues.handlers import handle_creative_expensive
+
+    ledger, _ = _ledger(tmp_path, monkeypatch)
+    rid = ledger.reserve(
+        tenant_id="t1",
+        user_id="u1",
+        credits=40,
+        operation_type="creative_image",
+        request_id="ri",
+    )
+    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+
+    class _NoRedisThrottle:
+        def throttle_provider(self, *, provider: str, limit_per_minute: int) -> bool:
+            return True
+
+    monkeypatch.setattr("services.queues.redis_backend.RedisQueueBackend", _NoRedisThrottle)
+
+    async def _fake_image(*, prompt: str, model: str, tenant_id: str) -> ImageGenerationResult:
+        assert prompt == "a clinic lobby"
+        assert model == "gpt-image-2"
+        assert tenant_id == "t1"
+        return ImageGenerationResult(
+            asset_url="https://example.test/api/creative-assets/t1.png",
+            model=model,
+            provider="openai",
+            provider_cost_usd=0.08,
+        )
+
+    monkeypatch.setattr("services.providers.openai_media.generate_openai_image", _fake_image)
+    job = QueueJob.new(
+        queue="expensive",
+        job_type="creative_image",
+        tenant_id="t1",
+        payload={"kind": "image", "prompt": "a clinic lobby", "reservation_id": rid},
+        reservation_id=rid,
+    )
+    out = await handle_creative_expensive(job)
+    assert out["status"] == "completed"
+    assert out["model"] == "gpt-image-2"
+    assert out["asset_url"].endswith("t1.png")
 
 
 def test_iap_config_not_purchase_ready() -> None:
