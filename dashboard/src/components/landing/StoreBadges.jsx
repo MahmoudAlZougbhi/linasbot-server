@@ -2,21 +2,25 @@ import { STORE_LINKS } from '../../constants/publicSite';
 
 /**
  * App Store / Google Play badges. Links only when a real listing URL exists.
- * @param {{ compact?: boolean }} props
+ * Design ZIP download section uses dark “Coming soon on …” badges.
+ * @param {{ compact?: boolean, variant?: 'light' | 'dark' }} props
  */
-export default function StoreBadges({ compact = false }) {
+export default function StoreBadges({ compact = false, variant = 'light' }) {
+  const dark = variant === 'dark';
   const items = [
     {
       key: 'ios',
       store: STORE_LINKS.appStore,
-      badgeLabel: 'Download on the App Store',
+      badgeLabel: dark ? 'Coming soon on the App Store' : 'Download on the App Store',
       sub: 'iOS',
+      glyph: '',
     },
     {
       key: 'android',
       store: STORE_LINKS.playStore,
-      badgeLabel: 'Get it on Google Play',
+      badgeLabel: dark ? 'Coming soon on Google Play' : 'Get it on Google Play',
       sub: 'Android',
+      glyph: '▶',
     },
   ];
 
@@ -27,47 +31,45 @@ export default function StoreBadges({ compact = false }) {
       role="group"
       aria-label="Download Linas AI"
     >
-      {items.map(({ key, store, badgeLabel, sub }) => {
+      {items.map(({ key, store, badgeLabel, sub, glyph }) => {
         const live = store.status === 'live' && store.url;
-        const className = `inline-flex min-w-[10.5rem] flex-col justify-center rounded-xl border px-4 py-2.5 text-left transition ${
-          live
-            ? 'border-[#6D4AFF]/40 bg-[#2A1B4A] text-white hover:bg-[#3D2A6D] focus-visible:ring-2 focus-visible:ring-[#6D4AFF]'
-            : 'cursor-default border-[#E4DCF2] bg-white/80 text-[#2A1B4A]'
-        }`;
+        const className = dark
+          ? `inline-flex min-w-[11rem] items-center gap-3 rounded-xl border border-white/25 bg-black px-4 py-3 text-left text-white ${
+              live ? 'hover:border-white/50' : 'cursor-default opacity-95'
+            }`
+          : `inline-flex min-w-[10.5rem] flex-col justify-center rounded-xl border px-4 py-2.5 text-left transition ${
+              live
+                ? 'border-[#06715F]/35 bg-[#171A19] text-white hover:bg-black focus-visible:ring-2 focus-visible:ring-[#06715F]'
+                : 'cursor-default border-[#E4E8E6] bg-white text-[#171A19]'
+            }`;
 
-        const inner = (
+        const inner = dark ? (
           <>
-            <span className={`text-[0.65rem] font-semibold uppercase tracking-[0.14em] ${live ? 'text-[#C4B0FF]' : 'text-[#9B8BB5]'}`}>
+            <span className="text-lg leading-none" aria-hidden="true">
+              {glyph}
+            </span>
+            <span className="text-sm font-medium leading-snug">{live ? store.label : badgeLabel}</span>
+          </>
+        ) : (
+          <>
+            <span className={`text-[0.65rem] font-semibold uppercase tracking-[0.14em] ${live ? 'text-[#54C7AC]' : 'text-[#8A938F]'}`}>
               {sub}
             </span>
-            <span className="text-sm font-bold leading-tight">{badgeLabel}</span>
-            {!live && (
-              <span className="mt-0.5 text-xs font-medium text-[#6B5B85]">Coming soon</span>
-            )}
+            <span className="text-sm font-bold leading-tight">{store.label}</span>
+            {!live && <span className="mt-0.5 text-xs font-medium text-[#5C6663]">Coming soon</span>}
           </>
         );
 
         if (live && store.url) {
           return (
-            <a
-              key={key}
-              href={store.url}
-              className={className}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <a key={key} href={store.url} className={className} target="_blank" rel="noopener noreferrer">
               {inner}
             </a>
           );
         }
 
         return (
-          <div
-            key={key}
-            className={className}
-            title={store.blocker || 'Store listing not published yet'}
-            aria-disabled="true"
-          >
+          <div key={key} className={className} title={store.blocker || 'Store listing not published yet'} aria-disabled="true">
             {inner}
           </div>
         );

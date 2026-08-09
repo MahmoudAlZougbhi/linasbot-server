@@ -1,48 +1,52 @@
 import { Link } from 'react-router-dom';
 import { PUBLIC_PATHS, PUBLIC_SITE } from '../../constants/publicSite';
+import LinasStar from './LinasStar';
 import StoreBadges from './StoreBadges';
 
 const PublicSiteFooter = () => {
   const year = new Date().getFullYear();
   return (
-    <footer className="relative z-10 border-t border-[#E4DCF2] bg-[#F7F4FC]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 md:flex-row md:items-start md:justify-between">
+    <footer className="relative z-10 bg-[#0B0D0C] text-[#C9D0CD]">
+      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="font-display text-lg font-bold text-[#2A1B4A]">{PUBLIC_SITE.productName}</p>
-          <p className="mt-2 max-w-sm text-sm text-[#6B5B85]">
-            Business AI for Messenger & Instagram — download the app to subscribe and operate.
+          <div className="flex items-center gap-2.5">
+            <LinasStar className="h-5 w-5" color="#54C7AC" />
+            <p className="text-lg font-semibold text-white">{PUBLIC_SITE.productName}</p>
+          </div>
+          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#9AA39F]">
+            AI messaging for Facebook & Instagram DMs and comments — operated from the Linas AI app.
           </p>
-          <div className="mt-4">
+          <div className="mt-5">
             <StoreBadges compact />
           </div>
         </div>
-        <nav aria-label="Footer" className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-[#6B5B85] sm:grid-cols-3">
-          <Link className="hover:text-[#6D4AFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4AFF] rounded" to={PUBLIC_PATHS.about}>
+        <nav aria-label="Footer" className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm sm:grid-cols-3">
+          <Link className="rounded hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]" to={PUBLIC_PATHS.about}>
             About
           </Link>
-          <a className="hover:text-[#6D4AFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4AFF] rounded" href="/#pricing">
+          <a className="rounded hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]" href="/#pricing">
             Pricing
           </a>
-          <Link className="hover:text-[#6D4AFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4AFF] rounded" to={PUBLIC_PATHS.contact}>
+          <Link className="rounded hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]" to={PUBLIC_PATHS.contact}>
             Contact
           </Link>
-          <a className="hover:text-[#6D4AFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4AFF] rounded" href={PUBLIC_PATHS.privacy}>
+          <a className="rounded hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]" href={PUBLIC_PATHS.privacy}>
             Privacy Policy
           </a>
-          <a className="hover:text-[#6D4AFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4AFF] rounded" href={PUBLIC_PATHS.terms}>
+          <a className="rounded hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]" href={PUBLIC_PATHS.terms}>
             Terms of Service
           </a>
-          <a className="hover:text-[#6D4AFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4AFF] rounded" href={PUBLIC_PATHS.dataDeletion}>
+          <a className="rounded hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]" href={PUBLIC_PATHS.dataDeletion}>
             Data Deletion
           </a>
-          <a className="hover:text-[#6D4AFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4AFF] rounded" href="/#talk-to-linas">
+          <a className="rounded hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]" href="/#talk-to-linas">
             Talk to Linas
           </a>
         </nav>
       </div>
-      <div className="border-t border-[#E4DCF2] py-4 text-center text-xs text-[#9B8BB5]">
+      <div className="border-t border-white/10 py-4 text-center text-xs text-[#7A8480]">
         © {year} {PUBLIC_SITE.productName}. Contact:{' '}
-        <a className="text-[#6D4AFF] underline" href={`mailto:${PUBLIC_SITE.contactEmail}`}>
+        <a className="text-[#54C7AC] underline" href={`mailto:${PUBLIC_SITE.contactEmail}`}>
           {PUBLIC_SITE.contactEmail}
         </a>
       </div>

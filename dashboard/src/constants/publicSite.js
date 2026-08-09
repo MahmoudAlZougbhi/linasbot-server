@@ -4,9 +4,9 @@ export const PUBLIC_SITE = {
   publicBaseUrl: 'https://www.linasaibot.com',
   contactEmail: 'Mahmoudalzougbhi@gmail.com',
   heroTitle: 'Linas AI',
-  heroHeadline: 'Your business AI, in your pocket',
+  heroHeadline: 'Turn every DM and comment into a helpful answer.',
   heroSupport:
-    'Meet Linas — configure Content Management, reply to Messenger & Instagram DMs, and create for your brand from iOS and Android. This site is marketing + a short guest chat. Day-to-day work happens in the app.',
+    'Linas AI answers customers using business facts you approve—while one chat-first Owner Copilot keeps setup, control, and visibility in your hands. This site is marketing + a short guest chat. Day-to-day work happens in the app.',
   metaPlatformDataUse:
     'Our business provides a software platform that helps businesses respond to customer inquiries received on their Facebook Pages and Instagram professional accounts. With each client’s permission, we use the account details and customer messages provided by Meta only to receive inquiries, send automated replies using information approved by the client, and direct customers to the client’s chosen contact channel when booking or human assistance is needed. Each client connects only business accounts it owns or is authorized to manage.',
 };
