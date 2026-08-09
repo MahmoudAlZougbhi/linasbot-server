@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Linas AI",
+    "slug": "linas-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "linasai",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.linasai.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Linas AI uses the microphone for voice-to-text in chat."
+      }
+    },
+    "android": {
+      "package": "com.linasai.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1220",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": ["RECORD_AUDIO"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "replace-after-eas-init"
+      }
+    }
+  }
+}

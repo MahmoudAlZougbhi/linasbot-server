@@ -253,8 +253,7 @@ class DashboardSessionService:
             password_epoch=session_epoch,
         )
 
-    def revoke_session(self, cookie_value: str | None) -> None:
-        session_id = self.parse_cookie_value(cookie_value)
+    def revoke_session_id(self, session_id: str | None) -> None:
         if not session_id:
             return
         data = self._load(session_id)
@@ -275,6 +274,10 @@ class DashboardSessionService:
             password_epoch=int(data.get("password_epoch") or 0),
         )
         self._persist(record)
+
+    def revoke_session(self, cookie_value: str | None) -> None:
+        session_id = self.parse_cookie_value(cookie_value)
+        self.revoke_session_id(session_id)
 
     def revoke_all_for_user(self, user_id: str) -> int:
         """Revoke every session for user_id locally and in Firestore (multi-instance)."""

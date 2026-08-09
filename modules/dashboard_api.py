@@ -260,6 +260,30 @@ async def ready() -> Any:
         checks["data_root_writable"] = {"ok": False, "error": type(e).__name__}
         overall_ok = False
 
+    # Queue / Redis readiness (required when production or LINAS_REQUIRE_REDIS).
+    try:
+        from services.job_queue import job_queue
+        from services.queues.config import redis_required, redis_url
+
+        required = redis_required()
+        configured = bool(redis_url())
+        health = job_queue.health()
+        queue_ok = bool(health.get("ok")) and (bool(health.get("production_ready")) if required else True)
+        if required and not configured:
+            queue_ok = False
+        checks["job_queue"] = {
+            "ok": queue_ok,
+            "backend": health.get("backend"),
+            "production_ready": bool(health.get("production_ready")),
+            "redis_required": required,
+            "redis_configured": configured,
+        }
+        if not queue_ok:
+            overall_ok = False
+    except Exception as e:
+        checks["job_queue"] = {"ok": False, "error": type(e).__name__}
+        overall_ok = False
+
     status = 200 if overall_ok else 503
     from fastapi.responses import JSONResponse
 

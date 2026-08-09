@@ -38,6 +38,15 @@ if os.path.exists(DASHBOARD_BUILD_PATH):
 # Import all modules to register routes and events (must run before SPA catch-all).
 import modules.analytics_api  # noqa: E402, F401
 import modules.auth_api  # noqa: E402, F401
+import modules.mobile_auth_api  # noqa: E402, F401
+import modules.owner_ai_api  # noqa: E402, F401
+import modules.entitlements_api  # noqa: E402, F401
+import modules.creative_api  # noqa: E402, F401
+import modules.schedule_api  # noqa: E402, F401
+import modules.platform_api  # noqa: E402, F401
+import modules.mobile_integrations_api  # noqa: E402, F401
+import modules.store_iap_api  # noqa: E402, F401
+import modules.queue_api  # noqa: E402, F401
 import modules.chat_history_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401

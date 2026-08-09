@@ -15,6 +15,8 @@ import Landing from './pages/public/Landing';
 import Register from './pages/public/Register';
 import About from './pages/public/About';
 import Contact from './pages/public/Contact';
+import Pricing from './pages/public/Pricing';
+import Features from './pages/public/Features';
 import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
@@ -208,6 +210,8 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/about" element={<About />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/features" element={<Features />} />
             </Route>
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />

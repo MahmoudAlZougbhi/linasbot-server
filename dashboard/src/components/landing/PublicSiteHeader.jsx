@@ -31,12 +31,12 @@ const PublicSiteHeader = ({ compact = false }) => {
             <a href="#how-it-works" className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
               How it works
             </a>
-            <a href="#features" className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
+            <Link to={PUBLIC_PATHS.features} className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
               Features
-            </a>
-            <a href="#pricing" className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
+            </Link>
+            <Link to={PUBLIC_PATHS.pricing} className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
               Pricing
-            </a>
+            </Link>
             <a href="#faq" className="hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">
               FAQ
             </a>

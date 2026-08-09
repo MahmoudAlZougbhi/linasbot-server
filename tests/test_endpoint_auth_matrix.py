@@ -24,6 +24,15 @@ ENDPOINT_AUTH_COUNTS: dict[str, int] = {}
 _ROUTE_MODULES = (
     "modules.analytics_api",
     "modules.auth_api",
+    "modules.mobile_auth_api",
+    "modules.owner_ai_api",
+    "modules.entitlements_api",
+    "modules.creative_api",
+    "modules.schedule_api",
+    "modules.platform_api",
+    "modules.mobile_integrations_api",
+    "modules.store_iap_api",
+    "modules.queue_api",
     "modules.dashboard_api",
     "modules.live_chat_api",
     "modules.media_api",
@@ -57,6 +66,8 @@ _PARAM_DEFAULTS: dict[str, str] = {
     "category": "general",
     "message_id": "msg-matrix-test",
     "service_id": "svc-matrix-test",
+    "post_id": "post-matrix-test",
+    "tenant_id": "tenant-matrix-test",
 }
 
 
@@ -162,13 +173,14 @@ class TestRouteInventory:
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
         # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
         # +meta reconnect endpoint for first-party bindings.
-        assert counts["total_api_routes"] == 165
-        assert counts["public"] == 10
-        assert counts["protected"] == 155
+        assert counts["total_api_routes"] == 195
+        assert counts["public"] == 15
+        assert counts["protected"] == 180
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
+            ("GET", "/api/queue/ready"),
             ("POST", "/api/auth/login"),
             ("POST", "/api/auth/register"),
             ("POST", "/api/auth/forgot-password"),
@@ -177,6 +189,10 @@ class TestRouteInventory:
             ("POST", "/api/auth/resend-verification"),
             ("GET", "/api/billing/packages"),
             ("POST", "/api/billing/stripe/webhook"),
+            ("POST", "/api/auth/mobile/login"),
+            ("POST", "/api/auth/mobile/refresh"),
+            ("POST", "/api/entitlements/apple/notifications"),
+            ("POST", "/api/entitlements/google/notifications"),
         }
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set

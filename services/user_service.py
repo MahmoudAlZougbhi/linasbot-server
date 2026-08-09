@@ -112,6 +112,16 @@ class UserService:
         if not user_data.get("password"):
             raise ValueError("Password is required")
 
+        from services.role_assignment import RoleAssignmentError, assert_assignable_role
+
+        try:
+            role = assert_assignable_role(
+                str(user_data.get("role") or "viewer"),
+                created_by=created_by,
+            )
+        except RoleAssignmentError as exc:
+            raise ValueError(str(exc)) from exc
+
         # Check if email already exists
         existing = self.get_user_by_email(user_data["email"])
         if existing:
@@ -127,7 +137,7 @@ class UserService:
             "email": user_data["email"].lower().strip(),
             "password": self._hash_password(user_data["password"]),
             "name": user_data.get("name") or (user_data.get("email") or "user@unknown").split("@")[0],
-            "role": user_data.get("role", "viewer"),
+            "role": role,
             "permissions": user_data.get("permissions"),
             "tenantId": self._normalize_tenant_id(user_data.get("tenantId")),
             "status": user_data.get("status", "active"),
@@ -300,6 +310,20 @@ class UserService:
 
             # Build update dict
             update_data: dict[str, Any] = {"updatedAt": datetime.utcnow().isoformat()}
+
+            if "role" in updates:
+                from services.role_assignment import RoleAssignmentError, assert_assignable_role
+
+                try:
+                    updates = {
+                        **updates,
+                        "role": assert_assignable_role(
+                            str(updates["role"]),
+                            created_by=updates.get("_role_created_by"),
+                        ),
+                    }
+                except RoleAssignmentError as exc:
+                    raise ValueError(str(exc)) from exc
 
             # Allowed fields to update
             allowed_fields = ["name", "role", "permissions", "status"]

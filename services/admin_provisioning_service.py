@@ -88,11 +88,24 @@ def provision_first_admin(
     password: str,
     name: str | None = None,
     created_by: str = "cli-provision",
+    role: str = "admin",
 ) -> ProvisionResult:
     """
     Create the first admin when the users collection is empty.
     Idempotent: if any user already exists, refuse create and report already_provisioned.
+
+    ``role=platform_owner`` uses a separate path that may create even when users exist
+    (offline CLI only; see provision_platform_owner).
     """
+    from services.role_assignment import is_platform_owner_role
+
+    if is_platform_owner_role(role):
+        return provision_platform_owner(
+            email=email,
+            password=password,
+            name=name,
+        )
+
     email_n = _normalize_email(email)
     if not email_n or "@" not in email_n:
         raise ValueError("A valid email is required")
@@ -111,7 +124,7 @@ def provision_first_admin(
             "email": email_n,
             "password": password,
             "name": (name or "").strip() or email_n.split("@")[0],
-            "role": "admin",
+            "role": role or "admin",
             "permissions": None,
             "status": "active",
         },
@@ -120,6 +133,58 @@ def provision_first_admin(
     return ProvisionResult(
         status="created",
         message="Initial admin created",
+        email=str(user.get("email") or email_n),
+        user_id=str(user.get("id") or ""),
+    )
+
+
+def provision_platform_owner(
+    *,
+    email: str,
+    password: str,
+    name: str | None = None,
+) -> ProvisionResult:
+    """Offline-only: create or elevate a platform_owner user."""
+    from services.role_assignment import PLATFORM_OWNER_CREATED_BY, PLATFORM_OWNER_ROLE
+
+    email_n = _normalize_email(email)
+    if not email_n or "@" not in email_n:
+        raise ValueError("A valid email is required")
+    validate_provision_password(password)
+    created_by = next(iter(PLATFORM_OWNER_CREATED_BY))
+
+    existing = user_service.get_user_by_email(email_n)
+    if existing:
+        updated = user_service.update_user(
+            str(existing["id"]),
+            {
+                "role": PLATFORM_OWNER_ROLE,
+                "password": password,
+                "_role_created_by": created_by,
+            },
+        )
+        return ProvisionResult(
+            status="created" if updated else "rejected",
+            message="Existing user elevated to platform_owner",
+            email=email_n,
+            user_id=str(existing.get("id") or ""),
+        )
+
+    user = user_service.create_user(
+        {
+            "email": email_n,
+            "password": password,
+            "name": (name or "").strip() or email_n.split("@")[0],
+            "role": PLATFORM_OWNER_ROLE,
+            "permissions": None,
+            "status": "active",
+            "emailVerified": True,
+        },
+        created_by=created_by,
+    )
+    return ProvisionResult(
+        status="created",
+        message="platform_owner created",
         email=str(user.get("email") or email_n),
         user_id=str(user.get("id") or ""),
     )

@@ -1,14 +1,36 @@
 services:
+  # Single shared Redis for durable Phase 2 queues (reuse; do not add a second instance).
+  redis:
+    image: redis:7-alpine
+    container_name: linas_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - linas_redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - linas_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # Backend (Python Bot + API)
-  # Note: Redis/Postgres compose services were unused by application code and removed.
-  # Durable state uses Firestore + LINASBOT_DATA_ROOT files.
+  # Durable app state: Firestore + LINASBOT_DATA_ROOT files; queues: Redis when REDIS_URL set.
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: linas_backend
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
       - LINASBOT_DATA_ROOT=/opt/linasbot_data
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - LINAS_REQUIRE_REDIS=${LINAS_REQUIRE_REDIS:-false}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - WHATSAPP_API_TOKEN=${WHATSAPP_API_TOKEN}
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
@@ -52,6 +74,7 @@ services:
 
 volumes:
   linasbot_data:
+  linas_redis_data:
 
 networks:
   linas_network:

@@ -1,0 +1,29 @@
+{
+  "report_version": "phase2-infra-load-v2",
+  "queue_backend": "in_process",
+  "production_ready": false,
+  "note": "Entitlement/capability/economics path simulation. Does not prove Meta webhook or OpenAI rate-limit headroom. Durable Redis workers are implemented; activate with REDIS_URL + LINAS_REQUIRE_REDIS=true and verify /api/queue/ready before claiming scale-ready.",
+  "scenarios": [
+    {
+      "name": "100_tenants_burst",
+      "tenants": 100,
+      "operations": 500,
+      "p50_ms": 0.004,
+      "p95_ms": 7.715,
+      "p99_ms": 8.868,
+      "error_rate": 0.0,
+      "ops_per_sec": 51167.69
+    },
+    {
+      "name": "1000_tenants_sustained",
+      "tenants": 1000,
+      "operations": 2000,
+      "p50_ms": 0.004,
+      "p95_ms": 0.005,
+      "p99_ms": 0.011,
+      "error_rate": 0.0,
+      "ops_per_sec": 108053.84
+    }
+  ],
+  "answer_1000_businesses": "Read-path entitlement checks scale in-process. Production Meta DM + creative/video require Redis-backed workers (high_priority vs expensive separation), provider throttles, and measured p95 under real traffic."
+}

@@ -10,9 +10,12 @@ from typing import Any
 
 from fastapi import Request
 
-from modules.api_security import require_permission, require_session
+from fastapi.responses import JSONResponse
+
+from modules.api_security import require_session
 from modules.core import app
-from services.ai_usage_limits import ai_usage_limits_service, recommended_defaults
+from services.ai_limits_source import get_ai_limits_for_api
+from services.ai_usage_limits import recommended_defaults
 from services.settings_service import settings_service
 
 
@@ -33,32 +36,28 @@ async def get_settings() -> Any:
 
 @app.get("/api/settings/ai-limits")
 async def get_ai_limits(request: Request) -> Any:
-    """Per-tenant AI capability limits (images + context lines per end-user)."""
+    """Read AI limits from published Content Management (sole business SoT)."""
     session = require_session(request)
-    limits = ai_usage_limits_service.get_settings(session.tenant_id)
+    payload = get_ai_limits_for_api(session.tenant_id)
     return {
         "success": True,
         "tenant_id": session.tenant_id,
-        "limits": limits.to_public_dict(),
         "recommended": recommended_defaults(),
+        **payload,
     }
 
 
 @app.post("/api/settings/ai-limits")
-async def update_ai_limits(updates: dict[str, Any], request: Request) -> Any:
-    """Save per-tenant AI capability limits (settings permission required)."""
-    session = require_permission(request, "settings")
-    body = updates if isinstance(updates, dict) else {}
-    # Nested {limits: {...}} or flat body both accepted.
-    raw_limits = body.get("limits")
-    payload: dict[str, Any] = raw_limits if isinstance(raw_limits, dict) else body
-    limits = ai_usage_limits_service.save_settings(session.tenant_id, payload)
-    return {
-        "success": True,
-        "tenant_id": session.tenant_id,
-        "limits": limits.to_public_dict(),
-        "message": "AI limits saved",
-    }
+async def update_ai_limits_removed() -> Any:
+    """Writes removed — edit Content Management → AI Limits and publish."""
+    return JSONResponse(
+        status_code=410,
+        content={
+            "success": False,
+            "error": "AI limits are edited in Content Management and applied on publish",
+            "code": "AI_LIMITS_SETTINGS_WRITE_REMOVED",
+        },
+    )
 
 
 @app.get("/api/settings/integrations")
