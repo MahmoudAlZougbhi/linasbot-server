@@ -12,6 +12,7 @@ type Props = {
   pinnedIds: string[];
   activeId: string | null;
   archivedMode: boolean;
+  emptyLabel: string;
   onOpen: (id: string) => void;
   onTogglePin: (id: string) => void;
   onArchive: (id: string) => void;
@@ -25,6 +26,7 @@ export function HistoryRows({
   pinnedIds,
   activeId,
   archivedMode,
+  emptyLabel,
   onOpen,
   onTogglePin,
   onArchive,
@@ -149,8 +151,12 @@ export function HistoryRows({
 
   if (!items.length) {
     return (
-      <Text style={{ color: colors.textMuted, marginTop: spacing.md }}>
-        {archivedMode ? 'No archived chats.' : 'No conversations yet.'}
+      <Text
+        style={{ color: colors.textMuted, marginTop: spacing.md }}
+        accessibilityRole="text"
+        accessibilityLabel={emptyLabel}
+      >
+        {emptyLabel}
       </Text>
     );
   }
