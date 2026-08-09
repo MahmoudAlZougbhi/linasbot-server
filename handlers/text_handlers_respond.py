@@ -1095,7 +1095,7 @@ async def _handle_published_cm_runtime(
     source_titles = [
         {"source_id": chunk.source_id, "title": (chunk.text or "")[:120]} for chunk in (packet.chunks or [])[:20]
     ]
-    usage_summary = usage_acc.to_result(result.text, usage_acc.models[-1] if usage_acc.models else "gpt-5.6-luna")
+    usage_summary = usage_acc.to_result(result.text, usage_acc.models[-1] if usage_acc.models else "gpt-5.6-terra")
     return result.text, {
         "reason": "packet_ready" if result.ok else "answer_validation_failed",
         "content_version_id": packet.content_version_id,

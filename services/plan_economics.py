@@ -103,7 +103,7 @@ INFRA_ALLOC_USD: Final[dict[str, float]] = {
 TARGET_MARGIN_FLOOR: Final[float] = 0.25
 
 # Customer DM model (high volume luna) vs owner / Content Manager (sol).
-DM_MODEL: Final[str] = "gpt-5.6-luna"
+DM_MODEL: Final[str] = "gpt-5.6-terra"
 OWNER_MODEL: Final[str] = "gpt-5.6-sol"
 SETUP_MODEL: Final[str] = "gpt-5.6-sol"
 

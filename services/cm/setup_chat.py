@@ -344,18 +344,18 @@ async def interpret_and_patch(
 
 
 def _setup_llm_model() -> str:
-    """Content Manager setup chat uses gpt-5.6-sol (same family as owner CM)."""
-    import os
+    """Content Manager setup chat uses gpt-5.6-sol (owner policy)."""
+    from services.model_policy import owner_model_id
 
-    return (
-        os.getenv("LINAS_MODEL_SETUP") or os.getenv("LINAS_OWNER_CM_MODEL") or "gpt-5.6-sol"
-    ).strip() or "gpt-5.6-sol"
+    return owner_model_id()
 
 
 async def _llm_patch(*, tenant_id: str, section: str, message: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """Ask the model for a JSON patch only — validated by apply_section_patch."""
     from services.llm_core_service import build_chat_completion_kwargs, client
+    from services.model_policy import emit_model_policy_trace, resolve_owner_policy
 
+    policy = resolve_owner_policy(surface="owner_setup", mutation_hint=True, user_text=message)
     model = _setup_llm_model()
     schema_hint = json.dumps(default_section_payload(section), ensure_ascii=False)[:4000]
     system = (
@@ -379,8 +379,10 @@ async def _llm_patch(*, tenant_id: str, section: str, message: str) -> tuple[dic
         ],
         max_tokens=1200,
         temperature=0.2,
+        reasoning_effort=str(policy.reasoning_effort),
     )
     kwargs["response_format"] = {"type": "json_object"}
+    emit_model_policy_trace(policy, extra={"section": section})
     response = await client.chat.completions.create(**kwargs)
     content = (response.choices[0].message.content or "{}").strip()
     patch = json.loads(content)
@@ -388,6 +390,8 @@ async def _llm_patch(*, tenant_id: str, section: str, message: str) -> tuple[dic
     meta = {
         "used_llm": True,
         "model": model,
+        "reasoning_mode": policy.reasoning_mode,
+        "reasoning_effort": policy.reasoning_effort,
         "prompt_tokens": getattr(usage, "prompt_tokens", None),
         "completion_tokens": getattr(usage, "completion_tokens", None),
     }

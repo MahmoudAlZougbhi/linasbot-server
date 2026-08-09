@@ -98,18 +98,22 @@ def answer_context_has_full_basics_and_style(messages: list[dict[str, Any]]) -> 
 
 async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None) -> Any:
     from services.llm_core_service import build_chat_completion_kwargs, client
+    from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
 
     if tools:
         raise RuntimeError("Answer Luna must not receive retrieval tools")
+    policy = resolve_customer_social_policy(channel="instagram_dm")
     model = customer_model_name()
     kwargs = build_chat_completion_kwargs(
         model=model,
         messages=[{"role": "user", "content": "placeholder"}],
         max_tokens=900,
         temperature=0.3,
+        reasoning_effort=str(policy.reasoning_effort),
     )
     kwargs["messages"] = messages
     kwargs["model"] = model
+    emit_model_policy_trace(policy, extra={"role": "answer"})
     return await client.chat.completions.create(**kwargs)
 
 

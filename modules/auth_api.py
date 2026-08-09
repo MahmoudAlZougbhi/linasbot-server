@@ -150,6 +150,24 @@ async def ensure_auth_secret_configured() -> None:
     )
 
 
+@app.on_event("startup")
+async def ensure_model_policy_configured() -> None:
+    """Fail closed when env tries to silently override Sol/Terra routing policy."""
+    from services.model_policy import validate_model_policy_config
+
+    try:
+        snap = validate_model_policy_config()
+    except RuntimeError as exc:
+        print(f"[model_policy] FATAL: {exc}", flush=True)
+        raise
+    print(
+        "[model_policy] startup OK — "
+        f"owner={snap['owner_model']} customer={snap['customer_model']} "
+        f"mode={snap['reasoning_mode']}",
+        flush=True,
+    )
+
+
 @app.post("/api/auth/login")
 async def login(request: LoginRequest, response: Response) -> Any:
     email = (request.email or "").strip().lower()

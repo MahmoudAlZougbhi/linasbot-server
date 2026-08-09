@@ -54,7 +54,13 @@ async def _extract_via_vision(
             ],
         },
     ]
-    kwargs = build_chat_completion_kwargs(model=model, messages=messages, max_tokens=2000, temperature=0.2)
+    kwargs = build_chat_completion_kwargs(
+        model=model,
+        messages=messages,
+        max_tokens=2000,
+        temperature=0.2,
+        reasoning_effort="high",
+    )
     # messages may include multimodal content — rebuild without type restriction
     kwargs["messages"] = messages
     response = await client.chat.completions.create(**kwargs)

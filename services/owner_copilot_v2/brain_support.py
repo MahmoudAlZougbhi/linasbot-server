@@ -57,7 +57,11 @@ def done_payload(
     proposed_patch: dict[str, Any] | None = None,
     choice_set_id: str | None = None,
     reason: str = "sol_final",
+    route: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    route_payload = route or {"kind": "owner_v2", "model": model, "reason": reason}
+    if "kind" not in route_payload:
+        route_payload = {"kind": "owner_v2", **route_payload}
     return {
         "reply_text": reply_text,
         "tool_calls": tool_calls,
@@ -66,7 +70,7 @@ def done_payload(
         "choice_set_id": choice_set_id,
         "pending_confirmation": pending_confirmation,
         "proposed_patch": proposed_patch,
-        "route": {"kind": "owner_v2", "model": model, "reason": reason},
+        "route": route_payload,
         "context_tokens": ctx_tokens,
         "setup_stage": stage,
         "quick_actions": quick_actions(stage),

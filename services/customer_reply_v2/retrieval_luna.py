@@ -44,19 +44,26 @@ def _strip_fixed_from_prompt(text: str) -> str:
 
 async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None) -> Any:
     from services.llm_core_service import build_chat_completion_kwargs, client
+    from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
 
+    policy = resolve_customer_social_policy(
+        channel="instagram_dm",
+        continuation=bool(tools),
+    )
     model = customer_model_name()
     kwargs = build_chat_completion_kwargs(
         model=model,
         messages=[{"role": "user", "content": "placeholder"}],
         max_tokens=1200,
         temperature=0.2,
+        reasoning_effort=str(policy.reasoning_effort),
     )
     kwargs["messages"] = messages
     kwargs["model"] = model
     if tools is not None:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
+    emit_model_policy_trace(policy, extra={"role": "retrieval", "has_tools": tools is not None})
     return await client.chat.completions.create(**kwargs)
 
 

@@ -30,7 +30,10 @@ async def run_confirm_path(
     build_messages: Callable[..., list[dict[str, Any]]],
     done_payload: Callable[..., dict[str, Any]],
     is_cancelled: CancelCheck | None,
+    policy: Any | None = None,
 ) -> AsyncIterator[StreamEvent]:
+    from services.model_policy import ModelPolicyDecision, resolve_owner_policy
+
     args = dict(tool_args or {})
     intent = confirm_tool
     if confirm_tool.startswith("approve_cm_patch:"):
@@ -42,6 +45,17 @@ async def run_confirm_path(
     elif confirm_tool.startswith("approve_smart_answer:"):
         intent = "approve_smart_answer"
         args["proposal_id"] = confirm_tool.split(":", 1)[1]
+
+    turn_policy: ModelPolicyDecision
+    if isinstance(policy, ModelPolicyDecision):
+        turn_policy = resolve_owner_policy(prior=policy)
+    else:
+        turn_policy = resolve_owner_policy(
+            surface="owner_copilot",
+            confirm_tool=confirm_tool,
+            intent=intent,
+            force_high=True,
+        )
 
     yield StreamEvent(type="status", payload={"id": "tool", "text": f"Running {intent}…"})
     result = await dispatch_v2_tool(
@@ -69,11 +83,11 @@ async def run_confirm_path(
         }
     )
     parts: list[str] = []
-    async for piece in iter_sol_text_deltas(messages=fin, is_cancelled=is_cancelled):
+    async for piece in iter_sol_text_deltas(messages=fin, is_cancelled=is_cancelled, policy=turn_policy):
         parts.append(piece)
         yield StreamEvent(type="delta", payload={"text": piece})
     if not parts:
-        text_out, _cancelled = await collect_sol_text(messages=fin, is_cancelled=is_cancelled)
+        text_out, _cancelled = await collect_sol_text(messages=fin, is_cancelled=is_cancelled, policy=turn_policy)
         parts = [text_out] if text_out else ["Done."]
         if text_out:
             yield StreamEvent(type="delta", payload={"text": text_out})
@@ -89,5 +103,11 @@ async def run_confirm_path(
             stage=stage,
             pending_confirmation=result.confirmation_token,
             reason="confirm_tool",
+            route={
+                "model": turn_policy.model,
+                "reasoning_mode": turn_policy.reasoning_mode,
+                "reasoning_effort": turn_policy.reasoning_effort,
+                "reason": turn_policy.reason,
+            },
         ),
     )

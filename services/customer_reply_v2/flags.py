@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 
-DEFAULT_CUSTOMER_MODEL = "gpt-5.6-luna"
+DEFAULT_CUSTOMER_MODEL = "gpt-5.6-terra"
 MAX_CUSTOMER_RETRIEVAL_ROUNDS = 2
 DM_CONTEXT_WINDOW_HOURS = 3
 
@@ -28,7 +28,7 @@ def customer_reply_ai_v2_live_send() -> bool:
 
 
 def customer_semantic_retrieval_enabled() -> bool:
-    """Hierarchical Retrieval Luna. Defaults on when V2 is on."""
+    """Hierarchical Retrieval for customer social. Defaults on when V2 is on."""
     if not customer_reply_ai_v2_enabled():
         return False
     raw = os.getenv("CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED")
@@ -43,13 +43,10 @@ def customer_media_context_enabled() -> bool:
 
 
 def customer_model_name() -> str:
-    """Canonical customer Luna. No mini fallback."""
-    return (
-        os.getenv("LINAS_CUSTOMER_MODEL")
-        or os.getenv("LINAS_CM_ANSWER_MODEL")
-        or os.getenv("LINAS_MODEL_CUSTOMER_DM")
-        or DEFAULT_CUSTOMER_MODEL
-    ).strip() or DEFAULT_CUSTOMER_MODEL
+    """Canonical customer social model from policy (gpt-5.6-terra). No silent fallback."""
+    from services.model_policy import assert_customer_social_model, customer_social_model_id
+
+    return assert_customer_social_model(customer_social_model_id())
 
 
 def max_retrieval_rounds() -> int:
