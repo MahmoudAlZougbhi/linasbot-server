@@ -195,11 +195,9 @@ export function ChatScreen({
         >
           <Text style={styles.error}>
             {tr(
-              error === 'retry'
-                ? 'retry'
-                : error === 'guestWordLimit'
-                  ? 'guestWordLimit'
-                  : 'messageFailed',
+              error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
+                ? error
+                : 'messageFailed',
             )}
           </Text>
         </Pressable>

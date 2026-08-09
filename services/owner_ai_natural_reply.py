@@ -64,16 +64,16 @@ async def generate_owner_conversational_reply(
 
     model = owner_help_model_name()
     try:
-        from services.llm_core_service import client
+        from services.llm_core_service import create_chat_completion, sanitize_llm_error
 
-        response = await client.chat.completions.create(
+        response = await create_chat_completion(
             model=model,
-            temperature=0.65,
+            messages=messages,
             max_tokens=360,
-            messages=messages,  # type: ignore[arg-type]
+            temperature=0.65,
         )
     except Exception as exc:  # noqa: BLE001
-        raise OwnerAIModelError(f"owner_llm_unavailable:{type(exc).__name__}") from exc
+        raise OwnerAIModelError(f"owner_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}") from exc
 
     try:
         reply = (response.choices[0].message.content or "").strip()

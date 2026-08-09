@@ -33,6 +33,7 @@ export const ar: Record<StringKey, string> = {
   guestQuestionsLeft: 'أسئلة الضيف المتبقية: {n}/{max}',
   guestLimitReached: 'وصلت إلى حد الضيف. حمّل تطبيق Linas AI واشترك للمتابعة.',
   guestWordLimit: 'كل سؤال للضيف بحد أقصى 50 كلمة.',
+  guestModelUnavailable: 'Linas AI غير متاح مؤقتاً. حاول مرة أخرى بعد لحظات.',
   loginOrRegister: 'تسجيل الدخول / إنشاء حساب',
   authGateTitle: 'سجّل الدخول للمتابعة',
   authGateBody: 'مركز التحكم وإدارة المحتوى والتكاملات والفواتير تحتاج حساباً.',

@@ -31,6 +31,7 @@ export const en = {
   guestQuestionsLeft: 'Guest questions: {n}/{max} remaining',
   guestLimitReached: 'Guest limit reached. Download the Linas AI app and subscribe to continue.',
   guestWordLimit: 'Each guest question can be at most 50 words.',
+  guestModelUnavailable: 'Linas AI is temporarily unavailable. Please try again in a moment.',
   loginOrRegister: 'Log in / Create account',
   authGateTitle: 'Sign in to continue',
   authGateBody: 'Control Center, Content Management, integrations, and billing need an account.',

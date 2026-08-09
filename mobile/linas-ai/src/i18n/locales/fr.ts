@@ -35,6 +35,7 @@ export const fr: Record<StringKey, string> = {
   guestQuestionsLeft: 'Questions invité : {n}/{max} restantes',
   guestLimitReached: 'Limite invité atteinte. Téléchargez l’app Linas AI et abonnez-vous pour continuer.',
   guestWordLimit: 'Chaque question invité est limitée à 50 mots.',
+  guestModelUnavailable: 'Linas AI est temporairement indisponible. Réessayez dans un instant.',
   loginOrRegister: 'Connexion / Créer un compte',
   authGateTitle: 'Connectez-vous pour continuer',
   authGateBody:
