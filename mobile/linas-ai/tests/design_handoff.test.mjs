@@ -75,6 +75,22 @@ test('guest pending draft handoff does not import transcript', () => {
   assert.match(draft, /clearPendingGuestDraft/);
 });
 
+test('voice STT wires transcript into composer draft (no auto-send)', () => {
+  const voice = read('features/chat/useVoiceDraft.ts');
+  const chat = read('features/chat/ChatScreen.tsx');
+  const composer = read('features/chat/ChatComposer.tsx');
+  assert.match(voice, /apiUpload\('\/api\/mobile\/transcribe'/);
+  assert.match(voice, /onTextRef\.current\(text\)/);
+  assert.doesNotMatch(voice, /expo-av/);
+  assert.match(chat, /useVoiceDraft\(\(text\) =>/);
+  assert.match(chat, /setDraft/);
+  assert.match(chat, /showMic=\{isAuthenticated\}/);
+  assert.match(composer, /showVoiceControl/);
+  assert.match(composer, /recording \|\| transcribing \|\| !canSend/);
+  assert.match(composer, /Listening…/);
+  assert.match(composer, /Transcribing…/);
+});
+
 test('Live Chat thread remains read-only', () => {
   const thread = read('features/livechat/LiveChatThread.tsx');
   assert.match(thread, /read-only/i);

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
+import { HIT, fonts, radii, spacing, useTheme, type ThemeColors } from '../../theme';
 import type { VoiceState } from './useVoiceDraft';
 
 type Props = {
@@ -33,6 +33,25 @@ type Props = {
   autoFocus?: boolean;
 };
 
+function MicBars({
+  metering,
+  colors,
+}: {
+  metering: number | null | undefined;
+  colors: ThemeColors;
+}) {
+  // expo-audio metering is roughly -160..0 dB; map to 3 bar heights.
+  const level = metering == null ? 0.35 : Math.min(1, Math.max(0.15, (metering + 50) / 50));
+  const heights = [0.45, 1, 0.65].map((w) => 6 + level * 14 * w);
+  return (
+    <View style={styles.bars}>
+      {heights.map((h, i) => (
+        <View key={i} style={[styles.bar, { height: h, backgroundColor: colors.accent }]} />
+      ))}
+    </View>
+  );
+}
+
 export function ChatComposer({
   draft,
   onChangeDraft,
@@ -43,7 +62,7 @@ export function ChatComposer({
   sending,
   canSendWithAttachment = false,
   voiceState = 'idle',
-  metering: _metering,
+  metering,
   inputRef,
   showPlus = false,
   showMic = false,
@@ -57,6 +76,9 @@ export function ChatComposer({
   const transcribing = voiceState === 'transcribing';
   const canSend = Boolean(draft.trim() || canSendWithAttachment);
   const streamingStop = Boolean(onStop && sending);
+  // Keep stop/transcribe control visible even if draft/attachments make canSend true.
+  const showVoiceControl =
+    Boolean(showMic && onToggleVoice && !streamingStop && (recording || transcribing || !canSend));
 
   useEffect(() => {
     if (!recording) {
@@ -122,12 +144,12 @@ export function ChatComposer({
           value={draft}
           onChangeText={onChangeDraft}
           multiline
-          editable={!transcribing}
+          editable={!recording && !transcribing}
           autoFocus={autoFocus}
           blurOnSubmit={false}
           accessibilityLabel="Message Linas"
         />
-        {showMic && onToggleVoice && !canSend && !streamingStop ? (
+        {showVoiceControl ? (
           <Animated.View style={{ transform: [{ scale: pulse }] }}>
             <Pressable
               style={[
@@ -135,12 +157,22 @@ export function ChatComposer({
                 { backgroundColor: colors.surface, borderColor: colors.border },
                 recording && { backgroundColor: colors.accentSoft, borderColor: colors.accent },
               ]}
-              onPress={onToggleVoice}
+              onPress={() => {
+                if (!recording && !transcribing) {
+                  inputRef?.current?.blur();
+                  Keyboard.dismiss();
+                }
+                onToggleVoice?.();
+              }}
               disabled={transcribing}
-              accessibilityLabel={recording ? 'Stop recording' : 'Start voice input'}
+              accessibilityLabel={
+                recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start voice input'
+              }
             >
               {transcribing ? (
                 <ActivityIndicator color={colors.accent} size="small" />
+              ) : recording ? (
+                <MicBars metering={metering} colors={colors} />
               ) : (
                 <Text style={{ color: colors.accent, fontSize: 16 }}>🎙</Text>
               )}
@@ -217,6 +249,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendDisabled: { opacity: 0.45 },
+  bars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 22,
+  },
+  bar: {
+    width: 3,
+    borderRadius: 2,
+  },
   disclaimer: {
     fontFamily: fonts.body,
     fontSize: 11,
