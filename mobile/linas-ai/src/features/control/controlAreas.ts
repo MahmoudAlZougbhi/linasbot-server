@@ -9,7 +9,6 @@ export type ControlArea =
   | 'settings'
   | 'dashboard'
   | 'livechat'
-  | 'comments'
   | 'owner';
 
 export type ControlItem = {
@@ -30,19 +29,13 @@ export const CONTROL_ITEMS: ControlItem[] = [
   {
     id: 'livechat',
     title: 'Live Chat',
-    subtitle: 'Operator inbox (ops)',
-    group: 'operate',
-  },
-  {
-    id: 'comments',
-    title: 'Comments',
-    subtitle: 'Not live-verified yet',
+    subtitle: 'Customer WhatsApp inbox',
     group: 'operate',
   },
   {
     id: 'integrations',
     title: 'Integrations',
-    subtitle: 'Meta readiness (truthful)',
+    subtitle: 'Instagram & Facebook',
     group: 'operate',
   },
   {

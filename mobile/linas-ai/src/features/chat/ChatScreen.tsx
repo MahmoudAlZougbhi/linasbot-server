@@ -174,15 +174,18 @@ export function ChatScreen({
 
       {isAuthenticated && session?.quickActions.length ? (
         <View style={styles.chips}>
-          {session.quickActions.slice(0, 4).map((a) => (
-            <Pressable
-              key={a.id}
-              style={styles.chip}
-              onPress={() => onOpenArea(a.id as ControlArea)}
-            >
-              <Text style={styles.chipText}>{a.label}</Text>
-            </Pressable>
-          ))}
+          {session.quickActions
+            .filter((a) => a.id !== 'comments')
+            .slice(0, 4)
+            .map((a) => (
+              <Pressable
+                key={a.id}
+                style={styles.chip}
+                onPress={() => onOpenArea(a.id as ControlArea)}
+              >
+                <Text style={styles.chipText}>{a.label}</Text>
+              </Pressable>
+            ))}
         </View>
       ) : null}
 

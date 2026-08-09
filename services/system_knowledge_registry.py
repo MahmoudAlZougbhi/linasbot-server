@@ -188,18 +188,6 @@ CAPABILITIES: tuple[Capability, ...] = (
         tags=("ops", "diagnosis"),
     ),
     Capability(
-        feature="comments",
-        description="Comment automation — code present, not live-verified.",
-        route="comments",
-        entitlement="comment_automation",
-        status="gated",
-        help_steps=("Comments stay gated until Meta App Review + live_verified.",),
-        tools=("read_integrations",),
-        blockers=("Not live-verified; do not claim production comment automation.",),
-        keywords=("comments", "comment reply"),
-        tags=("integrations",),
-    ),
-    Capability(
         feature="users_members",
         description="Workspace members and permissions.",
         route="users",
@@ -250,7 +238,6 @@ _VALID_ROUTES: frozenset[str] = frozenset(
         "settings",
         "dashboard",
         "livechat",
-        "comments",
         "owner",
     }
 )

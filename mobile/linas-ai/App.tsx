@@ -11,7 +11,6 @@ import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
 import { CmScreen } from './src/features/cm/CmScreen';
-import { CommentsScreen } from './src/features/control/CommentsScreen';
 import type { ControlArea } from './src/features/control/controlAreas';
 import { CreativeStudioScreen } from './src/features/creative/CreativeStudioScreen';
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
@@ -34,7 +33,6 @@ type Screen =
   | { name: 'usage' }
   | { name: 'livechat' }
   | { name: 'cm' }
-  | { name: 'comments' }
   | { name: 'resource'; title: string; path: string };
 
 const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
@@ -137,10 +135,6 @@ export default function App() {
       setScreen({ name: 'cm' });
       return;
     }
-    if (area === 'comments') {
-      setScreen({ name: 'comments' });
-      return;
-    }
     const target = RESOURCE_MAP[area];
     if (target) {
       setScreen({ name: 'resource', ...target });
@@ -201,7 +195,6 @@ export default function App() {
         {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
         {screen.name === 'livechat' ? <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
         {screen.name === 'cm' ? <CmScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
-        {screen.name === 'comments' ? <CommentsScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
         {screen.name === 'resource' ? (
           <SimpleResourceScreen
             title={screen.title}
