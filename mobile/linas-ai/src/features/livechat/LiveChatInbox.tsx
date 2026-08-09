@@ -101,7 +101,9 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
         })}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Text style={styles.count}>{total} conversation{total === 1 ? '' : 's'}</Text>
+      <Text style={styles.count}>
+        {total} conversation{total === 1 ? '' : 's'}
+      </Text>
       <FlatList
         data={flatData}
         keyExtractor={(row, index) =>
@@ -116,7 +118,7 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
         ListEmptyComponent={
           <EmptyState
             title="No conversations yet"
-            body="When customers message on WhatsApp (or social), they appear here. Pull to refresh."
+            body="When customers message on WhatsApp or social, they appear here. Pull to refresh."
           />
         }
         ListFooterComponent={
@@ -149,14 +151,16 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
   chipText: { color: colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },
   chipTextActive: { color: colors.accent },
-  count: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginBottom: spacing.sm },
-  list: { gap: spacing.sm, paddingBottom: 40 },
+  count: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginBottom: spacing.xs },
+  list: { paddingBottom: 40 },
   section: {
     color: colors.textMuted,
     fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-    marginTop: spacing.sm,
+    fontSize: 12,
+    marginTop: spacing.md,
     marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   error: { color: colors.danger, fontFamily: fonts.body, marginBottom: spacing.sm, fontSize: 13 },
 });

@@ -5,7 +5,7 @@ import { tokenStore } from '../../auth/tokenStore';
 import { API_BASE } from '../../config';
 import { colors, fonts, radii, spacing } from '../../theme';
 import type { LiveChatMessage } from './liveChatTypes';
-import { messageBody } from './liveChatTypes';
+import { formatBubbleTime, messageBody } from './liveChatTypes';
 
 type Props = { message: LiveChatMessage };
 
@@ -59,32 +59,33 @@ function AuthImage({ url }: { url: string }) {
 }
 
 export function LiveChatMessageBubble({ message }: Props) {
-  const isUser = Boolean(message.is_user);
+  const isCustomer = Boolean(message.is_user);
   const handled = String(message.handled_by || message.role || '').toLowerCase();
-  const isOperator = !isUser && (handled.includes('operator') || handled.includes('human'));
+  const isOperator = !isCustomer && (handled.includes('operator') || handled.includes('human'));
   const type = String(message.type || 'text').toLowerCase();
   const imageUrl = resolveMediaUrl(message.image_url || (type === 'image' ? message.media_url : null));
   const body = messageBody(message);
+  const time = formatBubbleTime(message.timestamp || undefined);
 
   return (
-    <View style={[styles.wrap, isUser ? styles.userWrap : styles.botWrap]}>
+    <View style={[styles.wrap, isCustomer ? styles.inWrap : styles.outWrap]}>
       <View
         style={[
           styles.bubble,
-          isUser && styles.userBubble,
-          !isUser && isOperator && styles.opBubble,
-          !isUser && !isOperator && styles.aiBubble,
+          isCustomer && styles.inBubble,
+          !isCustomer && isOperator && styles.opBubble,
+          !isCustomer && !isOperator && styles.aiBubble,
         ]}
       >
         {imageUrl ? <AuthImage url={imageUrl} /> : null}
         {type === 'voice' || type === 'audio' ? (
-          <Text style={[styles.text, isUser && styles.userText]}>🎤 {body}</Text>
+          <Text style={[styles.text, isOperator && styles.opText]}>🎤 {body}</Text>
         ) : (
-          <Text style={[styles.text, isUser && styles.userText]}>{body}</Text>
+          <Text style={[styles.text, isOperator && styles.opText]}>{body}</Text>
         )}
-        <Text style={[styles.meta, isUser && styles.userMeta]}>
-          {isUser ? 'Customer' : isOperator ? 'Operator' : 'AI'}
-          {message.timestamp ? ` · ${String(message.timestamp).slice(11, 16)}` : ''}
+        <Text style={[styles.meta, isOperator && styles.opMeta]}>
+          {isCustomer ? 'Customer' : isOperator ? 'You' : 'AI'}
+          {time ? ` · ${time}` : ''}
         </Text>
       </View>
     </View>
@@ -93,8 +94,9 @@ export function LiveChatMessageBubble({ message }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.sm, maxWidth: '88%' },
-  userWrap: { alignSelf: 'flex-end' },
-  botWrap: { alignSelf: 'flex-start' },
+  // WhatsApp: inbound (customer) left, outbound (AI/human) right
+  inWrap: { alignSelf: 'flex-start' },
+  outWrap: { alignSelf: 'flex-end' },
   bubble: {
     borderRadius: radii.bubble,
     paddingHorizontal: spacing.md,
@@ -102,13 +104,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 4,
   },
-  userBubble: { backgroundColor: colors.bubbleUser, borderColor: colors.bubbleUser },
-  opBubble: { backgroundColor: colors.mintSoft, borderColor: '#99F6E4' },
-  aiBubble: { backgroundColor: colors.bubbleAi, borderColor: colors.border },
+  inBubble: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderBottomLeftRadius: 4,
+  },
+  opBubble: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+    borderBottomRightRadius: 4,
+  },
+  aiBubble: {
+    backgroundColor: colors.bubbleAi,
+    borderColor: colors.border,
+    borderBottomRightRadius: 4,
+  },
   text: { color: colors.text, fontFamily: fonts.body, fontSize: 15, lineHeight: 21 },
-  userText: { color: colors.bubbleUserText },
+  opText: { color: colors.onAccent },
   meta: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
-  userMeta: { color: 'rgba(255,255,255,0.75)' },
+  opMeta: { color: 'rgba(255,255,255,0.75)' },
   image: { width: 220, height: 160, borderRadius: radii.sm, marginBottom: 4 },
   mediaHint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 },
 });

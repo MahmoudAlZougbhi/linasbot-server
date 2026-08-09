@@ -3,14 +3,17 @@ import { z } from 'zod';
 export const InboxFilterSchema = z.enum(['all', 'waiting', 'with_operator', 'bot', 'closed']);
 export type InboxFilter = z.infer<typeof InboxFilterSchema>;
 
-export const LastMessageSchema = z
-  .object({
-    content: z.string().optional().nullable(),
-    text: z.string().optional().nullable(),
-    timestamp: z.string().optional().nullable(),
-    is_user: z.boolean().optional().nullable(),
-  })
-  .passthrough();
+export const LastMessageSchema = z.union([
+  z.string(),
+  z
+    .object({
+      content: z.string().optional().nullable(),
+      text: z.string().optional().nullable(),
+      timestamp: z.string().optional().nullable(),
+      is_user: z.boolean().optional().nullable(),
+    })
+    .passthrough(),
+]);
 
 export const LiveChatItemSchema = z
   .object({
@@ -134,22 +137,46 @@ export function chatTitle(item: LiveChatItem): string {
   );
 }
 
+export function chatAvatarLetter(item: LiveChatItem): string {
+  const title = chatTitle(item).trim();
+  return (title.charAt(0) || '?').toUpperCase();
+}
+
+function lastMessageParts(item: LiveChatItem): { text: string; isUser: boolean | null; at: string | null } {
+  const lm = item.last_message;
+  let text = String(item.last_message_text || '').trim();
+  let isUser: boolean | null = null;
+  let at: string | null = item.last_message_at || item.last_activity || null;
+  if (typeof lm === 'string') {
+    if (!text) text = lm.trim();
+  } else if (lm && typeof lm === 'object') {
+    if (!text) text = String(lm.content || lm.text || '').trim();
+    if (typeof lm.is_user === 'boolean') isUser = lm.is_user;
+    if (lm.timestamp) at = String(lm.timestamp);
+  }
+  return { text, isUser, at };
+}
+
+export function chatLastAt(item: LiveChatItem): string | null {
+  return lastMessageParts(item).at;
+}
+
+/** WhatsApp-style inbox preview. Direction prefix only when inbound is explicit. */
 export function chatPreview(item: LiveChatItem): string {
-  const fromLast =
-    item.last_message_text ||
-    item.last_message?.content ||
-    item.last_message?.text ||
-    '';
-  return String(fromLast || 'No messages yet').trim();
+  const { text, isUser } = lastMessageParts(item);
+  if (!text) return 'No messages yet';
+  if (isUser === true) return text;
+  if (isUser === false) return text;
+  return text;
 }
 
 export function channelLabel(item: LiveChatItem): string {
-  if (isSocialChannelUser(item.user_id, item.channel)) {
-    const id = String(item.user_id || '').toLowerCase();
-    if (id.includes('instagram') || String(item.channel).toLowerCase() === 'instagram') return 'Instagram';
-    if (id.includes('facebook') || String(item.channel).toLowerCase() === 'facebook') return 'Facebook';
-    return 'Social';
-  }
+  const ch = String(item.channel || '').toLowerCase();
+  const id = String(item.user_id || '').toLowerCase();
+  if (ch === 'instagram' || id.includes('instagram:')) return 'Instagram';
+  if (ch === 'facebook' || id.includes('facebook:')) return 'Facebook';
+  if (ch === 'whatsapp') return 'WhatsApp';
+  if (isSocialChannelUser(item.user_id, item.channel)) return 'Social';
   return 'WhatsApp';
 }
 
@@ -158,6 +185,38 @@ export function messageBody(msg: LiveChatMessage): string {
   if (t === 'voice' || t === 'audio') return msg.content || msg.text || 'Voice message';
   if (t === 'image') return msg.content || msg.text || 'Image';
   return String(msg.content || msg.text || '').trim() || '(empty)';
+}
+
+export function parseChatDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Inbox row time — today HH:mm, yesterday, else short date (Beirut-friendly local). */
+export function formatInboxTime(value: string | null | undefined): string {
+  const d = parseChatDate(value);
+  if (!d) return '';
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startMsg = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayDiff = Math.round((startToday.getTime() - startMsg.getTime()) / 86_400_000);
+  if (dayDiff === 0) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff < 7) return d.toLocaleDateString([], { weekday: 'short' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+export function formatBubbleTime(value: string | null | undefined): string {
+  const d = parseChatDate(value);
+  if (!d) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+export function messageKey(msg: LiveChatMessage, index = 0): string {
+  return msg.message_id || `${msg.timestamp || 't'}|${msg.is_user ? 'u' : 'a'}|${index}`;
 }
 
 export function idempotencyKey(prefix: string): string {

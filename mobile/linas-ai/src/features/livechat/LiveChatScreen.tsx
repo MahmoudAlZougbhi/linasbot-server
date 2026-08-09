@@ -4,6 +4,7 @@ import { ScreenChrome } from '../shared/ScreenChrome';
 import { LiveChatInbox } from './LiveChatInbox';
 import { LiveChatThread } from './LiveChatThread';
 import type { LiveChatItem } from './liveChatTypes';
+import { channelLabel, chatTitle } from './liveChatTypes';
 import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = { onBack: () => void };
@@ -18,25 +19,22 @@ export function LiveChatScreen({ onBack }: Props) {
 
   if (selected) {
     return (
-      <ScreenChrome title="Live Chat" subtitle="Operator thread" onBack={() => setSelected(null)}>
-        <LiveChatThread
-          chat={selected}
-          onBack={() => {
-            setSelected(null);
-            inbox.reloadQuiet();
-          }}
-          onChatUpdated={inbox.reloadQuiet}
-        />
+      <ScreenChrome
+        title={chatTitle(selected)}
+        subtitle={channelLabel(selected)}
+        backLabel="← Inbox"
+        onBack={() => {
+          setSelected(null);
+          inbox.reloadQuiet();
+        }}
+      >
+        <LiveChatThread chat={selected} onChatUpdated={inbox.reloadQuiet} />
       </ScreenChrome>
     );
   }
 
   return (
-    <ScreenChrome
-      title="Live Chat"
-      subtitle="Customer inbox — WhatsApp & social (same APIs as web)"
-      onBack={onBack}
-    >
+    <ScreenChrome title="Live Chat" subtitle="Inbox — WhatsApp, Instagram, Facebook" onBack={onBack}>
       <LiveChatInbox
         inbox={inbox}
         onOpenChat={(chat) => {

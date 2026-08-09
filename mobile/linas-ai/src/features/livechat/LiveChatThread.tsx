@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,8 +15,7 @@ import { LiveChatComposer } from './LiveChatComposer';
 import { LiveChatMessageBubble } from './LiveChatMessageBubble';
 import {
   type LiveChatItem,
-  channelLabel,
-  chatTitle,
+  messageKey,
   normalizeStatus,
   statusLabel,
   statusTone,
@@ -24,11 +24,10 @@ import { useLiveChatThread } from './useLiveChatThread';
 
 type Props = {
   chat: LiveChatItem;
-  onBack: () => void;
   onChatUpdated: () => void;
 };
 
-export function LiveChatThread({ chat, onBack, onChatUpdated }: Props) {
+export function LiveChatThread({ chat, onChatUpdated }: Props) {
   const thread = useLiveChatThread(chat, onChatUpdated);
   const status = normalizeStatus({ ...chat, status: thread.localStatus });
   const canMutate = !thread.social;
@@ -40,18 +39,14 @@ export function LiveChatThread({ chat, onBack, onChatUpdated }: Props) {
       ? 'Take over this conversation to reply as a human.'
       : null;
 
+  // Newest-first for inverted FlatList (WhatsApp: open at latest, scroll up = older).
+  const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
+
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack}>
-          <Text style={styles.back}>← Inbox</Text>
-        </Pressable>
-        <Text style={styles.title} numberOfLines={1}>
-          {chatTitle(chat)}
-        </Text>
+      <View style={styles.toolbar}>
         <View style={styles.chips}>
           <StatusChip label={statusLabel(status)} tone={statusTone(status)} />
-          <StatusChip label={channelLabel(chat)} tone="neutral" />
         </View>
         {canMutate ? (
           <View style={styles.actions}>
@@ -94,19 +89,30 @@ export function LiveChatThread({ chat, onBack, onChatUpdated }: Props) {
       ) : (
         <FlatList
           style={styles.flex}
-          data={thread.messages}
-          keyExtractor={(m, i) => m.message_id || `${m.timestamp}-${i}`}
+          inverted
+          data={listData}
+          keyExtractor={(m, i) => messageKey(m, i)}
           contentContainerStyle={styles.messages}
+          keyboardShouldPersistTaps="handled"
+          onEndReached={() => {
+            if (thread.hasMore && !thread.loadingMore) void thread.loadOlder();
+          }}
+          onEndReachedThreshold={0.2}
           ListEmptyComponent={
-            <EmptyState title="No messages yet" body="This conversation has no messages in the loaded window." />
+            <View style={styles.emptyFlip}>
+              <EmptyState
+                title="No messages yet"
+                body="This conversation has no messages in the loaded window."
+              />
+            </View>
           }
-          ListHeaderComponent={
-            thread.hasMore ? (
-              <Pressable style={styles.loadMore} onPress={() => void thread.loadOlder()} disabled={thread.loadingMore}>
-                <Text style={styles.loadMoreText}>
-                  {thread.loadingMore ? 'Loading…' : 'Load older messages'}
-                </Text>
-              </Pressable>
+          ListFooterComponent={
+            thread.loadingMore ? (
+              <ActivityIndicator color={colors.accent} style={styles.olderSpinner} />
+            ) : thread.hasMore ? (
+              <Text style={styles.olderHint}>Scroll up for older messages</Text>
+            ) : thread.messages.length > 0 ? (
+              <Text style={styles.olderHint}>Beginning of conversation</Text>
             ) : null
           }
           renderItem={({ item }) => <LiveChatMessageBubble message={item} />}
@@ -132,11 +138,19 @@ export function LiveChatThread({ chat, onBack, onChatUpdated }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  header: { gap: 8, marginBottom: spacing.md },
-  back: { color: colors.accent, fontFamily: fonts.bodyMedium, marginBottom: 2 },
-  title: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 18 },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actionBtn: {
     borderRadius: radii.md,
     paddingVertical: 8,
@@ -149,8 +163,15 @@ const styles = StyleSheet.create({
   ghostLabel: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 13 },
   dangerLabel: { color: colors.danger, fontFamily: fonts.bodyMedium, fontSize: 13 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  messages: { paddingBottom: spacing.md, flexGrow: 1 },
-  loadMore: { alignItems: 'center', paddingVertical: spacing.sm },
-  loadMoreText: { color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 13 },
+  messages: { flexGrow: 1, paddingVertical: spacing.sm },
+  olderSpinner: { marginVertical: 12 },
+  olderHint: {
+    textAlign: 'center',
+    color: colors.textDim,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    paddingVertical: 10,
+  },
+  emptyFlip: { transform: [{ scaleY: -1 }] },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
 });
