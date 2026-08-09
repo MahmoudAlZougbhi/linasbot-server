@@ -20,6 +20,7 @@ import { IntegrationsScreen } from './src/features/integrations/IntegrationsScre
 import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
 import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
+import { UsersScreen } from './src/features/users/UsersScreen';
 import { LanguageProvider } from './src/i18n/LanguageContext';
 
 type Screen =
@@ -29,6 +30,7 @@ type Screen =
   | { name: 'chat' }
   | { name: 'settings' }
   | { name: 'integrations' }
+  | { name: 'users' }
   | { name: 'creative' }
   | { name: 'dashboard' }
   | { name: 'billing' }
@@ -39,7 +41,6 @@ type Screen =
   | { name: 'resource'; title: string; path: string };
 
 const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
-  users: { title: 'Users', path: '/api/auth/users' },
   scheduled: { title: 'Scheduled', path: '/api/schedule/posts' },
   owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
 };
@@ -50,6 +51,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [hasAccess, setHasAccess] = useState(false);
   const [isPlatformOwner, setIsPlatformOwner] = useState(false);
+  const [resumeArea, setResumeArea] = useState<ControlArea | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -80,39 +82,26 @@ export default function App() {
     const user = await tokenStore.getUser();
     setIsPlatformOwner(user?.role === 'platform_owner');
     setHasAccess(true);
-    setScreen({ name: 'chat' });
-  }
-
-  async function logout() {
-    try {
-      const access = await tokenStore.getAccessToken();
-      if (access) {
-        await fetch(`${API_BASE}/api/auth/mobile/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
-        });
-      }
-    } catch {
-      // Local clear still proceeds.
+    const pending = resumeArea;
+    setResumeArea(null);
+    if (pending && pending !== 'integrations') {
+      openAreaAuthed(pending);
+      return;
     }
-    await tokenStore.clear();
-    setIsPlatformOwner(false);
-    setHasAccess(false);
     setScreen({ name: 'chat' });
   }
 
-  function openArea(area: ControlArea) {
+  function openAreaAuthed(area: ControlArea) {
+    if (area === 'settings') {
+      setScreen({ name: 'settings' });
+      return;
+    }
     if (area === 'integrations') {
-      // Guests land on Integrations → AuthGate (not a fake connect surface).
       setScreen({ name: 'integrations' });
       return;
     }
-    if (!hasAccess) {
-      setScreen({ name: 'login' });
-      return;
-    }
-    if (area === 'settings') {
-      setScreen({ name: 'settings' });
+    if (area === 'users') {
+      setScreen({ name: 'users' });
       return;
     }
     if (area === 'create') {
@@ -142,7 +131,47 @@ export default function App() {
     const target = RESOURCE_MAP[area];
     if (target) {
       setScreen({ name: 'resource', ...target });
+      return;
     }
+    setScreen({ name: 'chat' });
+  }
+
+  async function logout() {
+    try {
+      const access = await tokenStore.getAccessToken();
+      if (access) {
+        await fetch(`${API_BASE}/api/auth/mobile/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
+        });
+      }
+    } catch {
+      // Local clear still proceeds.
+    }
+    await tokenStore.clear();
+    setIsPlatformOwner(false);
+    setHasAccess(false);
+    setResumeArea(null);
+    setScreen({ name: 'chat' });
+  }
+
+  function openArea(area: ControlArea) {
+    if (area === 'integrations') {
+      // Guests land on Integrations → AuthGate (not a fake connect surface).
+      setScreen({ name: 'integrations' });
+      return;
+    }
+    if (area === 'users') {
+      // Guests land on Users → AuthGate (same pattern as Integrations).
+      setScreen({ name: 'users' });
+      return;
+    }
+    if (!hasAccess) {
+      setResumeArea(area);
+      setScreen({ name: 'login' });
+      return;
+    }
+    openAreaAuthed(area);
   }
 
   if (!bootDone || !authReady || screen.name === 'boot') {
@@ -190,6 +219,16 @@ export default function App() {
           <IntegrationsScreen
             onBack={() => setScreen({ name: 'chat' })}
             onRequestLogin={() => setScreen({ name: 'login' })}
+            onRequestRegister={() => setScreen({ name: 'register' })}
+          />
+        ) : null}
+        {screen.name === 'users' ? (
+          <UsersScreen
+            onBack={() => setScreen({ name: 'chat' })}
+            onRequestLogin={() => {
+              setResumeArea('users');
+              setScreen({ name: 'login' });
+            }}
             onRequestRegister={() => setScreen({ name: 'register' })}
           />
         ) : null}
