@@ -134,7 +134,7 @@ async def tool_propose_smart_answer(
         name="propose_smart_answer",
         data=data,
         requires_confirmation=True,
-        confirmation_token=data["confirmation_token"],
+        confirmation_token=str(data["confirmation_token"]),
         error="Confirmation required before saving Smart Answer",
     )
 

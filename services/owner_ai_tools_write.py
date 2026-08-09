@@ -24,21 +24,18 @@ async def tool_update_profile(
     from services.owner_ai_profile import update_owner_profile
 
     # Never accept inferred gender from email/name — only explicit client fields.
-    safe = {
-        k: updates[k]
-        for k in (
-            "gender",
-            "display_name",
-            "displayName",
-            "preferred_language",
-            "preferredLanguage",
-            "form_of_address",
-            "formOfAddress",
-            "address_prompt_asked",
-            "addressPromptAsked",
-        )
-        if k in updates
-    }
+    allowed = (
+        "gender",
+        "display_name",
+        "displayName",
+        "preferred_language",
+        "preferredLanguage",
+        "form_of_address",
+        "formOfAddress",
+        "address_prompt_asked",
+        "addressPromptAsked",
+    )
+    safe: dict[str, Any] = {k: updates[k] for k in allowed if k in updates}
     profile = update_owner_profile(user_id, safe)
     return ToolResult(ok=True, name="update_profile", data={"profile": profile})
 

@@ -151,7 +151,7 @@ def diagnose_interaction(*, tenant_id: str, trace_id: str) -> dict[str, Any]:
         root = "general_mismatch"
         explanation = (
             "Reply does not match current published/draft CM facts. "
-            f"Retrieved refs={retrieved[:5]}; cm_version={cm_refs.get('content_version_id')}."
+            f"Retrieved refs={retrieved[:5]}; cm_version={(cm_refs or {}).get('content_version_id')}."
         )
         correction = {
             "type": "cm_patch",

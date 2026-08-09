@@ -32,7 +32,19 @@ class FaqMetricsStore:
                 "updated_at": time.time(),
             }
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            return (
+                raw
+                if isinstance(raw, dict)
+                else {
+                    "tenant_id": tenant_id,
+                    "faq_hits": 0,
+                    "generations_avoided": 0,
+                    "lookups": 0,
+                    "misses": 0,
+                    "updated_at": time.time(),
+                }
+            )
         except Exception:
             return {
                 "tenant_id": tenant_id,

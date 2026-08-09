@@ -125,7 +125,8 @@ class CustomerResponseTraceStore:
             except Exception:
                 continue
             if str(row.get("trace_id")) == trace_id and str(row.get("tenant_id") or "").lower() == tenant_id.lower():
-                return row
+                if isinstance(row, dict):
+                    return row
         return None
 
     def list_recent(self, *, tenant_id: str, limit: int = 20) -> list[dict[str, Any]]:
