@@ -5,8 +5,8 @@ import {
   getOrCreateGuestSessionId,
   sendGuestMessage,
 } from '../../utils/guestChatApi';
-import { LINAS_BRAND_ASSETS } from '../../constants/linasBrand';
 import StoreBadges from './StoreBadges';
+import LinasStar from './LinasStar';
 import { usePublicLandingLocale } from '../../contexts/PublicLandingLocaleContext';
 
 const GATE_FALLBACK = {
@@ -18,49 +18,62 @@ const GATE_FALLBACK = {
 const COPY = {
   en: {
     title: 'Talk to Linas',
-    subtitle: 'Guest preview — 10 questions, 50 words each. Sales & product only (no workspace changes).',
-    placeholder: 'Ask about Linas AI…',
+    subtitle: 'Guest preview — 10 questions, 50 words each.',
+    placeholder: 'Message Linas',
     send: 'Send',
     /** @param {number} n */
-    remaining: (n) => `${n} question${n === 1 ? '' : 's'} left`,
+    remaining: (n) => `${n} of 10 prompts left`,
+    /** @param {number} used */
+    usedBar: (used) => `${used} of 10 prompts used`,
     wordLimit: 'Each guest question can be at most 50 words.',
     retry: 'Couldn’t start guest chat. Try again.',
     failed: 'Message failed. Please try again.',
     unavailable: 'Linas AI is temporarily unavailable. Please try again in a moment.',
     continueInApp: 'Continue in the app',
+    greeting: 'Hi — I’m the public Linas guide. Ask how the product handles DMs, comments, setup, or account access.',
+    chips: ['What can Linas answer?', 'How are replies controlled?', 'How does Meta setup work?'],
   },
   ar: {
     title: 'تحدّث مع Linas',
-    subtitle: 'معاينة ضيف — 10 أسئلة، 50 كلمة لكل سؤال. شرح المنتج فقط (بدون تعديل مساحة العمل).',
-    placeholder: 'اسأل عن Linas AI…',
+    subtitle: 'معاينة ضيف — 10 أسئلة، 50 كلمة لكل سؤال.',
+    placeholder: 'راسل Linas',
     send: 'إرسال',
     /** @param {number} n */
-    remaining: (n) => `متبقي ${n} ${n === 1 ? 'سؤال' : 'أسئلة'}`,
+    remaining: (n) => `متبقي ${n} من 10`,
+    /** @param {number} used */
+    usedBar: (used) => `${used} من 10`,
     wordLimit: 'كل سؤال ضيف بحد أقصى 50 كلمة.',
     retry: 'تعذّر بدء الدردشة. حاول مجدداً.',
     failed: 'فشل الإرسال. حاول مجدداً.',
     unavailable: 'Linas AI غير متاح مؤقتاً. حاول مرة أخرى بعد لحظات.',
     continueInApp: 'تابع في التطبيق',
+    greeting: 'مرحباً — أنا دليل Linas العام. اسأل عن الرسائل والتعليقات والإعداد.',
+    chips: ['ماذا يجيب Linas؟', 'كيف تُضبط الردود؟', 'كيف يعمل إعداد Meta؟'],
   },
   fr: {
     title: 'Parler à Linas',
-    subtitle: 'Aperçu invité — 10 questions, 50 mots max. Produit uniquement (pas de modifications).',
-    placeholder: 'Posez une question sur Linas AI…',
+    subtitle: 'Aperçu invité — 10 questions, 50 mots max.',
+    placeholder: 'Message Linas',
     send: 'Envoyer',
     /** @param {number} n */
-    remaining: (n) => `${n} question${n === 1 ? '' : 's'} restante${n === 1 ? '' : 's'}`,
+    remaining: (n) => `${n} / 10 restantes`,
+    /** @param {number} used */
+    usedBar: (used) => `${used} / 10 utilisées`,
     wordLimit: 'Chaque question invité fait au plus 50 mots.',
     retry: 'Impossible de démarrer le chat. Réessayez.',
     failed: 'Échec de l’envoi. Réessayez.',
     unavailable: 'Linas AI est temporairement indisponible. Réessayez dans un instant.',
     continueInApp: 'Continuer dans l’app',
+    greeting: 'Bonjour — je suis le guide public Linas. Demandez pour les DMs, commentaires ou configuration.',
+    chips: ['Que peut répondre Linas ?', 'Comment sont contrôlées les réponses ?', 'Comment marche Meta ?'],
   },
 };
 
 /**
- * Landing guest chat — wires to /api/guest-ai/* (same limits as mobile guest).
+ * Guest AI floating widget matching linas-landing-09-guest-ai.jpg.
+ * @param {{ open: boolean, onOpen: () => void, onClose: () => void }} props
  */
-export default function GuestChatPanel() {
+export default function GuestChatPanel({ open = false, onOpen = () => {}, onClose = () => {} }) {
   const { locale } = usePublicLandingLocale();
   const copy = COPY[locale] || COPY.en;
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
@@ -99,43 +112,37 @@ export default function GuestChatPanel() {
   }, [copy.retry, locale]);
 
   useEffect(() => {
+    if (!open) return;
     void bootstrap();
-  }, [bootstrap]);
+  }, [bootstrap, open]);
 
   useEffect(() => {
     const node = listRef.current;
     if (!node) return;
     node.scrollTop = node.scrollHeight;
-  }, [messages, gated, sending]);
+  }, [messages, gated, sending, open]);
 
-  /** @param {import('react').FormEvent<HTMLFormElement>} event */
-  const onSend = async (event) => {
-    event.preventDefault();
+  /** @param {string} content */
+  const sendContent = async (content) => {
     if (!guestId || gated || sending) return;
-    const content = draft.trim();
-    if (!content) return;
-    if (countWords(content) > maxWords) {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    if (countWords(trimmed) > maxWords) {
       setError(copy.wordLimit);
       return;
     }
     setSending(true);
     setError(null);
     setDraft('');
-    setMessages((prev) => [
-      ...prev,
-      { id: `local-${Date.now()}`, role: 'user', content },
-    ]);
+    setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: 'user', content: trimmed }]);
     try {
-      const result = await sendGuestMessage(guestId, content, locale);
+      const result = await sendGuestMessage(guestId, trimmed, locale);
       setQuestionsRemaining(result.session.questions_remaining);
       setMaxWords(result.session.max_words ?? maxWords);
       if (!result.ok) {
         setGated(true);
         setGateText(
-          result.gateMessages?.[locale] ||
-            result.gateMessages?.en ||
-            GATE_FALLBACK[locale] ||
-            GATE_FALLBACK.en,
+          result.gateMessages?.[locale] || result.gateMessages?.en || GATE_FALLBACK[locale] || GATE_FALLBACK.en,
         );
         setMessages(result.session.messages || []);
         return;
@@ -169,75 +176,65 @@ export default function GuestChatPanel() {
     }
   };
 
-  const avatarSrc = sending
-    ? LINAS_BRAND_ASSETS.typing
-    : gated
-      ? LINAS_BRAND_ASSETS.idle
-      : LINAS_BRAND_ASSETS.welcome;
+  /** @param {import('react').FormEvent<HTMLFormElement>} event */
+  const onSend = async (event) => {
+    event.preventDefault();
+    await sendContent(draft);
+  };
+
+  const used = Math.max(0, 10 - questionsRemaining);
 
   return (
-    <section
-      id="talk-to-linas"
-      className="scroll-mt-24"
-      aria-labelledby="guest-chat-heading"
-      dir={dir}
-    >
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-6 flex items-end gap-4">
-          <img
-            src={avatarSrc}
-            alt=""
-            className="h-16 w-16 rounded-2xl object-cover shadow-lg shadow-[#6D4AFF]/20"
-            width={64}
-            height={64}
-          />
-          <div>
-            <h2 id="guest-chat-heading" className="font-display text-3xl font-bold text-[#2A1B4A]">
-              {copy.title}
-            </h2>
-            <p className="mt-1 text-sm text-[#6B5B85]">{copy.subtitle}</p>
+    <div id="talk-to-linas" className="scroll-mt-24">
+      {open && (
+        <div
+          className="fixed bottom-24 right-4 z-40 flex w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-[#E4E8E6] bg-white shadow-[0_24px_80px_rgba(11,13,12,0.28)] sm:right-6"
+          role="dialog"
+          aria-label={copy.title}
+          dir={dir}
+        >
+          <div className="flex items-center justify-between border-b border-[#E4E8E6] px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <LinasStar className="h-5 w-5" />
+              <div>
+                <p className="text-sm font-semibold text-[#171A19]">Linas AI</p>
+                <p className="text-[0.7rem] text-[#8A938F]">{copy.subtitle}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-2 py-1 text-lg text-[#8A938F] hover:bg-[#F0F3F1] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F]"
+              aria-label="Close guest chat"
+            >
+              ×
+            </button>
           </div>
-        </div>
 
-        <div className="overflow-hidden rounded-3xl border border-[#E4DCF2] bg-white/90 shadow-[0_20px_60px_rgba(109,74,255,0.12)] backdrop-blur-md">
-          <div className="flex items-center justify-between border-b border-[#EFE8F8] bg-[#EDE5FF]/50 px-4 py-3">
-            <p className="text-sm font-semibold text-[#4C2BB8]">
-              {loading ? '…' : copy.remaining(questionsRemaining)}
-            </p>
-            <p className="text-xs text-[#9B8BB5]">≤{maxWords} words</p>
+          <div className="bg-[#E8F5F1] px-4 py-2 text-xs font-medium text-[#0B3D34]">
+            {loading ? '…' : copy.usedBar(used)}
           </div>
 
           <div
             ref={listRef}
-            className="flex max-h-[min(28rem,55vh)] min-h-[16rem] flex-col gap-3 overflow-y-auto px-4 py-4"
+            className="flex max-h-[min(22rem,45vh)] min-h-[14rem] flex-col gap-3 overflow-y-auto px-4 py-4"
             role="log"
             aria-live="polite"
           >
-            {loading && (
-              <p className="text-sm text-[#6B5B85]">Connecting to Linas…</p>
+            {loading && <p className="text-sm text-[#5C6663]">Connecting to Linas…</p>}
+            {!loading && messages.length === 0 && (
+              <div className="rounded-2xl bg-[#F0F3F1] px-3.5 py-2.5 text-sm leading-relaxed text-[#171A19]">
+                {copy.greeting}
+              </div>
             )}
             {!loading &&
               messages.map((msg) => {
                 const isUser = msg.role === 'user';
                 return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
-                  >
-                    {!isUser && (
-                      <img
-                        src={LINAS_BRAND_ASSETS.avatarChat}
-                        alt=""
-                        className="mr-2 mt-1 h-8 w-8 rounded-full object-cover"
-                        width={32}
-                        height={32}
-                      />
-                    )}
+                  <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                        isUser
-                          ? 'bg-[#6D4AFF] text-white'
-                          : 'bg-[#EDE5FF] text-[#2A1B4A]'
+                      className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                        isUser ? 'bg-[#06715F] text-white' : 'bg-[#F0F3F1] text-[#171A19]'
                       }`}
                     >
                       {msg.content}
@@ -245,12 +242,26 @@ export default function GuestChatPanel() {
                   </div>
                 );
               })}
+            {!loading && !gated && messages.length <= 1 && (
+              <div className="flex flex-col gap-2">
+                {copy.chips.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void sendContent(chip)}
+                    className="flex items-center justify-between rounded-xl border border-[#E4E8E6] bg-white px-3 py-2.5 text-left text-sm font-medium text-[#171A19] hover:border-[#06715F]/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F]"
+                  >
+                    {chip}
+                    <span aria-hidden="true">→</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {gated && gateText && (
-              <div className="rounded-2xl border border-[#D4C6F0] bg-[#F3EEFA] p-4 text-sm text-[#2A1B4A]">
+              <div className="rounded-2xl border border-[#D5DCD8] bg-[#F6F7F6] p-4 text-sm text-[#171A19]">
                 <p className="font-semibold">{gateText}</p>
-                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-[#6B5B85]">
-                  {copy.continueInApp}
-                </p>
+                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-[#5C6663]">{copy.continueInApp}</p>
                 <div className="mt-3">
                   <StoreBadges compact />
                 </div>
@@ -259,15 +270,12 @@ export default function GuestChatPanel() {
           </div>
 
           {error && (
-            <p className="border-t border-[#EFE8F8] px-4 py-2 text-sm text-[#DC2626]" role="alert">
+            <p className="border-t border-[#E4E8E6] px-4 py-2 text-sm text-[#DC2626]" role="alert">
               {error}
             </p>
           )}
 
-          <form
-            onSubmit={onSend}
-            className="flex gap-2 border-t border-[#EFE8F8] bg-[#F7F4FC]/80 p-3"
-          >
+          <form onSubmit={onSend} className="flex items-center gap-2 border-t border-[#E4E8E6] p-3">
             <label className="sr-only" htmlFor="guest-chat-input">
               {copy.placeholder}
             </label>
@@ -278,20 +286,40 @@ export default function GuestChatPanel() {
               onChange={(e) => setDraft(e.target.value)}
               disabled={loading || gated || sending}
               placeholder={copy.placeholder}
-              className="min-w-0 flex-1 rounded-xl border border-[#E4DCF2] bg-white px-3 py-2.5 text-sm text-[#2A1B4A] placeholder:text-[#9B8BB5] focus:border-[#6D4AFF] focus:outline-none focus:ring-2 focus:ring-[#6D4AFF]/30 disabled:opacity-60"
+              className="min-w-0 flex-1 rounded-full border border-[#E4E8E6] bg-white px-4 py-2.5 text-sm text-[#171A19] placeholder:text-[#8A938F] focus:border-[#06715F] focus:outline-none focus:ring-2 focus:ring-[#06715F]/25 disabled:opacity-60"
               maxLength={2000}
               autoComplete="off"
             />
             <button
               type="submit"
               disabled={loading || gated || sending || !draft.trim()}
-              className="rounded-xl bg-[#6D4AFF] px-4 py-2.5 text-sm font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#06715F] text-white disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={copy.send}
             >
-              {sending ? '…' : copy.send}
+              {sending ? '…' : '↗'}
             </button>
           </form>
         </div>
-      </div>
-    </section>
+      )}
+
+      <button
+        type="button"
+        onClick={open ? onClose : onOpen}
+        className="fixed bottom-5 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-[#06715F] px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-[#06715F]/35 hover:bg-[#0B3D34] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#06715F] sm:right-6"
+        aria-expanded={open}
+      >
+        {open ? (
+          '✕ Close'
+        ) : (
+          <>
+            <LinasStar className="h-4 w-4" color="#FFFFFF" />
+            Chat with Linas
+          </>
+        )}
+      </button>
+
+      {/* Accessible heading for tests / skip targets when widget closed */}
+      <h2 className="sr-only">{copy.title}</h2>
+    </div>
   );
 }

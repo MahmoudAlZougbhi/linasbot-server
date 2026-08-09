@@ -13,12 +13,13 @@ import react from "@vitejs/plugin-react";
 //   this mirrors CRA's webpack DefinePlugin behavior without touching call sites.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), ["REACT_APP_", "VITE_"]);
-  const processEnvDefine = Object.fromEntries(
-    Object.entries(env).map(([key, value]) => [
-      `process.env.${key}`,
-      JSON.stringify(value),
-    ])
-  );
+  const processEnvDefine = {
+    "process.env.REACT_APP_DEPLOY_VERSION": JSON.stringify(env.REACT_APP_DEPLOY_VERSION || "dev"),
+    "process.env.REACT_APP_DEPLOY_COMMIT": JSON.stringify(env.REACT_APP_DEPLOY_COMMIT || "local"),
+    ...Object.fromEntries(
+      Object.entries(env).map(([key, value]) => [`process.env.${key}`, JSON.stringify(value)])
+    ),
+  };
 
   return {
     plugins: [

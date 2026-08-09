@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Linas AI mobile app icon</title>
+  <desc id="desc">A white four-point Linas star with its teal signal dot, centered on a charcoal to emerald background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111917"/>
+      <stop offset="0.56" stop-color="#0B3D34"/>
+      <stop offset="1" stop-color="#06715F"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#54C7AC" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#54C7AC" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <circle cx="512" cy="464" r="390" fill="url(#glow)"/>
+  <path d="M512 212 C532 385 577 430 750 450 C577 470 532 515 512 688 C492 515 447 470 274 450 C447 430 492 385 512 212Z" fill="#FFFFFF"/>
+  <circle cx="686" cy="626" r="28" fill="#54C7AC"/>
+</svg>

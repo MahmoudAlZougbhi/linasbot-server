@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="360" viewBox="0 0 1400 360" role="img" aria-labelledby="title desc">
+  <title id="title">Linas AI wordmark</title>
+  <desc id="desc">A transparent light-surface lockup with the emerald Linas star, signal dot, and live accessible words Linas AI.</desc>
+  <path d="M190 69 C199 150 220 171 301 180 C220 189 199 210 190 291 C181 210 160 189 79 180 C160 171 181 150 190 69Z" fill="#06715F"/>
+  <circle cx="270" cy="254" r="14" fill="#54C7AC"/>
+  <text x="355" y="229" fill="#171A19" font-family="Inter, Arial, sans-serif" font-size="142" font-weight="650" letter-spacing="-4">Linas AI</text>
+</svg>

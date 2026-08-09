@@ -77,6 +77,7 @@ describe("public marketing landing", () => {
     expect(screen.getByRole("group", { name: "Page language" })).toBeInTheDocument();
     expect(screen.getAllByRole("group", { name: "Download Linas AI" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: /Talk to Linas/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chat with Linas" }));
     await waitFor(() => {
       expect(screen.getByText(/reply assistant/i)).toBeInTheDocument();
     });
