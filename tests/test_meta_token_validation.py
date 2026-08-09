@@ -1,10 +1,18 @@
-"""Strict allowlist tests for new-app Page token metadata."""
+"""Strict allowlist tests for Meta token validation contract sections."""
+
+from __future__ import annotations
 
 import pytest
 
 from scripts.validate_meta_social_token import (
+    APP_INSTAGRAM_WEBHOOK_FIELDS,
+    APP_PAGE_WEBHOOK_FIELDS,
+    COMMENT_FEATURE_SCOPES,
+    DM_WEBHOOK_FIELDS,
+    PUBLISH_FEATURE_SCOPES,
     MetaTokenValidationError,
-    validate_app_webhook_payload,
+    evaluate_feature_readiness,
+    validate_app_webhook_configuration,
     validate_conversation_payloads,
     validate_page_subscription_payload,
     validate_payloads,
@@ -45,6 +53,29 @@ def _valid_payloads() -> tuple[dict[str, object], dict[str, object], dict[str, o
             "instagram_business_account": {"id": "17841413184256533"},
         },
     )
+
+
+def _app_webhook_payload(
+    *,
+    page_fields: list[str] | None = None,
+    instagram_fields: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "data": [
+            {
+                "object": "page",
+                "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                "active": True,
+                "fields": [{"name": field} for field in (page_fields or sorted(APP_PAGE_WEBHOOK_FIELDS))],
+            },
+            {
+                "object": "instagram",
+                "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                "active": True,
+                "fields": [{"name": field} for field in (instagram_fields or sorted(APP_INSTAGRAM_WEBHOOK_FIELDS))],
+            },
+        ]
+    }
 
 
 def test_exact_page_instagram_app_scopes_and_targets_pass() -> None:
@@ -115,21 +146,22 @@ def test_exact_dm_only_page_subscription_passes() -> None:
             "data": [
                 {
                     "id": "999000111222333",
-                    "subscribed_fields": ["messages", "messaging_postbacks"],
+                    "subscribed_fields": sorted(DM_WEBHOOK_FIELDS),
                 }
             ]
         },
         expected_app_id="999000111222333",
     )
 
-    assert all(checks.values())
+    assert checks["page_subscribed_fields_exact"] is True
+    assert checks["page_subscribed_dm_fields_present"] is True
 
 
 @pytest.mark.parametrize("failure", ["none", "multiple", "wrong_app", "extra_field", "missing_field"])
 def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
     app = {
         "id": "999000111222333",
-        "subscribed_fields": ["messages", "messaging_postbacks"],
+        "subscribed_fields": sorted(DM_WEBHOOK_FIELDS),
     }
     data: list[dict[str, object]] = [app]
     if failure == "none":
@@ -139,7 +171,7 @@ def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
     elif failure == "wrong_app":
         app["id"] = "1784792718776344"
     elif failure == "extra_field":
-        app["subscribed_fields"] = ["messages", "messaging_postbacks", "feed"]
+        app["subscribed_fields"] = sorted(DM_WEBHOOK_FIELDS | {"feed"})
     else:
         app["subscribed_fields"] = ["messages"]
 
@@ -150,47 +182,46 @@ def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
         )
 
 
-def test_exact_page_and_instagram_app_webhooks_pass() -> None:
-    fields = [{"name": "messages"}, {"name": "messaging_postbacks"}]
-    checks = validate_app_webhook_payload(
-        {
-            "data": [
-                {
-                    "object": "page",
-                    "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
-                    "active": True,
-                    "fields": fields,
-                },
-                {
-                    "object": "instagram",
-                    "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
-                    "active": True,
-                    "fields": fields,
-                },
-            ]
-        }
-    )
+def test_production_app_webhook_configuration_passes() -> None:
+    checks = validate_app_webhook_configuration(_app_webhook_payload())
 
-    assert all(checks.values())
+    assert checks["app_page_webhook_fields_exact"] is True
+    assert checks["app_instagram_webhook_fields_exact"] is True
+    assert checks["app_page_webhook_dm_fields_present"] is True
+    assert checks["app_instagram_webhook_dm_fields_present"] is True
+
+
+def test_legacy_dm_only_app_webhook_configuration_fails() -> None:
+    with pytest.raises(MetaTokenValidationError) as exc:
+        validate_app_webhook_configuration(
+            _app_webhook_payload(
+                page_fields=sorted(DM_WEBHOOK_FIELDS),
+                instagram_fields=sorted(DM_WEBHOOK_FIELDS),
+            )
+        )
+    message = str(exc.value)
+    assert "page_fields_missing=['feed']" in message
+    assert "instagram_fields_missing=['comments']" in message
 
 
 @pytest.mark.parametrize(
     "failure",
-    ["missing_instagram", "inactive_page", "wrong_callback", "extra_object", "extra_field"],
+    ["missing_instagram", "inactive_page", "wrong_callback", "extra_object", "extra_field", "missing_dm_field"],
 )
 def test_app_webhook_mismatch_fails_closed(failure: str) -> None:
-    fields: list[object] = [{"name": "messages"}, {"name": "messaging_postbacks"}]
+    page_fields = sorted(APP_PAGE_WEBHOOK_FIELDS)
+    instagram_fields = sorted(APP_INSTAGRAM_WEBHOOK_FIELDS)
     page: dict[str, object] = {
         "object": "page",
         "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
         "active": True,
-        "fields": fields,
+        "fields": [{"name": field} for field in page_fields],
     }
     instagram: dict[str, object] = {
         "object": "instagram",
         "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
         "active": True,
-        "fields": fields,
+        "fields": [{"name": field} for field in instagram_fields],
     }
     data = [page, instagram]
     if failure == "missing_instagram":
@@ -200,9 +231,55 @@ def test_app_webhook_mismatch_fails_closed(failure: str) -> None:
     elif failure == "wrong_callback":
         instagram["callback_url"] = "https://example.invalid/webhook"
     elif failure == "extra_object":
-        data.append({"object": "feed", "active": True, "fields": []})
+        data.append({"object": "user", "active": True, "fields": []})
+    elif failure == "extra_field":
+        instagram["fields"] = [{"name": field} for field in [*instagram_fields, "mentions"]]
     else:
-        instagram["fields"] = [*fields, {"name": "comments"}]
+        page["fields"] = [{"name": "feed"}, {"name": "messages"}]
 
     with pytest.raises(MetaTokenValidationError):
-        validate_app_webhook_payload({"data": data})
+        validate_app_webhook_configuration({"data": data})
+
+
+def test_feature_readiness_false_when_comment_and_publish_scopes_missing() -> None:
+    readiness = evaluate_feature_readiness(
+        {
+            "pages_messaging",
+            "pages_manage_metadata",
+            "pages_show_list",
+            "pages_read_engagement",
+            "instagram_basic",
+            "instagram_manage_messages",
+        }
+    )
+    assert readiness["comment_features_ready"] is False
+    assert readiness["publish_features_ready"] is False
+    for scope in COMMENT_FEATURE_SCOPES | PUBLISH_FEATURE_SCOPES:
+        assert readiness[f"scope_{scope}_present"] is False
+
+
+def test_feature_readiness_true_when_all_feature_scopes_present() -> None:
+    scopes = {
+        "pages_messaging",
+        "pages_manage_metadata",
+        "pages_show_list",
+        "pages_read_engagement",
+        "instagram_basic",
+        "instagram_manage_messages",
+        *COMMENT_FEATURE_SCOPES,
+        *PUBLISH_FEATURE_SCOPES,
+    }
+    readiness = evaluate_feature_readiness(scopes)
+    assert readiness["comment_features_ready"] is True
+    assert readiness["publish_features_ready"] is True
+
+
+def test_random_superset_app_webhook_fields_fail() -> None:
+    with pytest.raises(MetaTokenValidationError) as exc:
+        validate_app_webhook_configuration(
+            _app_webhook_payload(
+                page_fields=sorted(APP_PAGE_WEBHOOK_FIELDS | {"mentions"}),
+                instagram_fields=sorted(APP_INSTAGRAM_WEBHOOK_FIELDS),
+            )
+        )
+    assert "page_fields_extra=['mentions']" in str(exc.value)

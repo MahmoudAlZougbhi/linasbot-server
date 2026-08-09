@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate new Page token and Instagram relationship
+    name: Validate Meta DM baseline and app webhook configuration
     environment: meta-social-cutover
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -23,4 +23,9 @@ jobs:
           META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
-        run: python scripts/validate_meta_social_token.py
+        run: |
+          python scripts/validate_meta_social_token.py
+          echo "Contract sections:"
+          echo "  [baseline-dm] token, page relationship, conversations, page subscribed_apps (DM-only)"
+          echo "  [app-webhooks] exact app-level fields with DM preserved"
+          echo "  [feature-readiness] informational only; false does not fail this workflow"
