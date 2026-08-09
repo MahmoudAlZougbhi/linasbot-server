@@ -134,9 +134,7 @@ def preserve_disable_linas_legacy_bridge(
             }
         )
 
-    effective, reason = resolve_disable_bridge_value(
-        values, linas_has_published_cm=linas_has_published_cm
-    )
+    effective, reason = resolve_disable_bridge_value(values, linas_has_published_cm=linas_has_published_cm)
     report: dict[str, Any] = {
         "key": CM_DISABLE_LINAS_LEGACY_BRIDGE,
         "paths": snapshots,
