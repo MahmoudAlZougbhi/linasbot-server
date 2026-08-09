@@ -21,6 +21,9 @@ import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
+import { CreatePostTaskChips } from './CreatePostTaskChips';
+import { CreativeDraftCard } from './CreativeDraftCard';
+import { looksLikeCreatePostIntent, type CreatePostTaskId } from './createPostTasks';
 import { GuestBanner } from './GuestBanner';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useChatSession } from './useChatSession';
@@ -55,6 +58,9 @@ export function ChatScreen({
   const [controlOpen, setControlOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [authGate, setAuthGate] = useState(false);
+  const [authGateReason, setAuthGateReason] = useState<string | undefined>(undefined);
+  const [createPostMode, setCreatePostMode] = useState(false);
+  const [createPostTask, setCreatePostTask] = useState<CreatePostTaskId>('auto');
   const [draft, setDraft] = useState('');
   const composerInputRef = useRef<TextInput>(null);
   const { voiceState, voiceError, toggleVoice, metering } = useVoiceDraft((text) => {
@@ -71,17 +77,24 @@ export function ChatScreen({
     void tokenStore.getUser().then((u) => setUserId(u?.id ?? null));
   }, [isAuthenticated]);
 
-  function requireAuth() {
+  function requireAuth(reason?: string) {
+    setAuthGateReason(reason);
     setAuthGate(true);
+  }
+
+  function enterCreatePostMode() {
+    setCreatePostMode(true);
+    setCreatePostTask('auto');
+    void owner.send(tr('createPostStart'), undefined, { creative_kind: 'auto' });
   }
 
   function handlePlus(action: PlusAction) {
     if (!isAuthenticated) {
-      requireAuth();
+      requireAuth(action === 'create_post' ? tr('authGateCreatePost') : undefined);
       return;
     }
     if (action === 'create_post') {
-      onOpenArea('create');
+      enterCreatePostMode();
       return;
     }
     if (action === 'add_cm' || action === 'review_setup') {
@@ -91,6 +104,29 @@ export function ChatScreen({
     if (action === 'check_usage') {
       onOpenArea('usage');
     }
+  }
+
+  function handleQuickAction(id: string) {
+    if (id === 'create') {
+      enterCreatePostMode();
+      return;
+    }
+    onOpenArea(id as ControlArea);
+  }
+
+  function sendAuthenticated(text: string) {
+    const toolArgs =
+      createPostMode || looksLikeCreatePostIntent(text)
+        ? {
+            creative_kind: createPostTask,
+            compress: createPostTask === 'compress',
+            prompt: text,
+          }
+        : undefined;
+    if (looksLikeCreatePostIntent(text)) {
+      setCreatePostMode(true);
+    }
+    void owner.send(text, undefined, toolArgs);
   }
 
   const loading = isAuthenticated ? owner.loading : guest.loading;
@@ -118,6 +154,16 @@ export function ChatScreen({
     <GradientBackground>
       <ChatHeader
         title={title}
+        online
+        avatarState={
+          voiceState === 'recording'
+            ? 'listening'
+            : sending
+              ? 'typing'
+              : voiceState === 'transcribing'
+                ? 'thinking'
+                : 'idle'
+        }
         onOpenHistory={() => {
           if (!isAuthenticated) {
             requireAuth();
@@ -169,6 +215,7 @@ export function ChatScreen({
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
+            showMascot
             title={tr(isAuthenticated ? 'chatEmptyTitle' : 'guestChatEmptyTitle')}
             body={tr(isAuthenticated ? 'chatEmptyBody' : 'guestChatEmptyBody')}
           />
@@ -182,15 +229,53 @@ export function ChatScreen({
             .filter((a) => a.id !== 'comments')
             .slice(0, 4)
             .map((a) => (
-              <Pressable
-                key={a.id}
-                style={styles.chip}
-                onPress={() => onOpenArea(a.id as ControlArea)}
-              >
+              <Pressable key={a.id} style={styles.chip} onPress={() => handleQuickAction(a.id)}>
                 <Text style={styles.chipText}>{a.label}</Text>
               </Pressable>
             ))}
         </View>
+      ) : null}
+
+      {isAuthenticated && createPostMode ? (
+        <CreatePostTaskChips
+          selected={createPostTask}
+          onSelect={setCreatePostTask}
+          onDismiss={() => setCreatePostMode(false)}
+        />
+      ) : null}
+
+      {isAuthenticated && session?.creativeDraft ? (
+        <CreativeDraftCard
+          draft={session.creativeDraft}
+          busy={sending}
+          onEdit={() => {
+            const text = session.creativeDraft?.text || session.creativeDraft?.prompt || '';
+            setDraft(text);
+            setCreatePostMode(true);
+            requestAnimationFrame(() => composerInputRef.current?.focus());
+          }}
+          onRegenerate={() => {
+            const prompt =
+              session.creativeDraft?.prompt ||
+              session.creativeDraft?.text ||
+              'Regenerate the last post draft';
+            setCreatePostMode(true);
+            void owner.send(prompt, undefined, {
+              creative_kind: createPostTask,
+              compress: createPostTask === 'compress',
+              prompt,
+            });
+          }}
+          onSchedule={() => {
+            const text = session.creativeDraft?.text || '';
+            if (!text.trim()) return;
+            void owner.send('', 'schedule_creative_draft', {
+              text,
+              kind: session.creativeDraft?.kind || 'post',
+            });
+          }}
+          onDismiss={() => session.setCreativeDraft(null)}
+        />
       ) : null}
 
       {isAuthenticated && session?.proposedPatch?.confirmation_token ? (
@@ -262,10 +347,15 @@ export function ChatScreen({
           const text = draft;
           setDraft('');
           if (isAuthenticated) {
-            void owner.send(text);
-          } else {
-            void guest.send(text);
+            sendAuthenticated(text);
+            return;
           }
+          if (looksLikeCreatePostIntent(text)) {
+            requireAuth(tr('authGateCreatePost'));
+            setDraft(text);
+            return;
+          }
+          void guest.send(text);
         }}
       />
 
@@ -277,22 +367,15 @@ export function ChatScreen({
             history={owner.history}
             pinnedIds={pinnedIds}
             activeId={owner.conversationId}
-            onNewChat={() => {
-              void owner.newChat().then(() => setHistoryOpen(false));
-            }}
-            onOpen={(id) => {
-              void owner.openConversation(id).then(() => setHistoryOpen(false));
-            }}
+            onNewChat={() => { void owner.newChat().then(() => setHistoryOpen(false)); }}
+            onOpen={(id) => { void owner.openConversation(id).then(() => setHistoryOpen(false)); }}
             onTogglePin={(id) => void togglePin(id)}
           />
           <ControlCenterDrawer
             open={controlOpen}
             onClose={() => setControlOpen(false)}
             isPlatformOwner={isPlatformOwner}
-            onOpen={(area) => {
-              setControlOpen(false);
-              onOpenArea(area);
-            }}
+            onOpen={(area) => { setControlOpen(false); onOpenArea(area); }}
             onLogout={onLogout}
           />
           <ComposerPlusSheet
@@ -305,15 +388,10 @@ export function ChatScreen({
 
       <AuthGateModal
         visible={authGate}
-        onClose={() => setAuthGate(false)}
-        onLogin={() => {
-          setAuthGate(false);
-          onRequestLogin();
-        }}
-        onRegister={() => {
-          setAuthGate(false);
-          onRequestRegister();
-        }}
+        reason={authGateReason}
+        onClose={() => { setAuthGate(false); setAuthGateReason(undefined); }}
+        onLogin={() => { setAuthGate(false); setAuthGateReason(undefined); onRequestLogin(); }}
+        onRegister={() => { setAuthGate(false); setAuthGateReason(undefined); onRequestRegister(); }}
       />
     </GradientBackground>
   );

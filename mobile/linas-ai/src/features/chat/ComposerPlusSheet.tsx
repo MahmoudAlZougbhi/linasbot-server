@@ -29,7 +29,7 @@ export function ComposerPlusSheet({ open, onClose, onAction }: Props) {
     {
       id: 'create_post',
       title: tr('createPost'),
-      subtitle: 'Creative Studio',
+      subtitle: 'In chat · Auto / Compress / tasks',
       live: true,
     },
     {

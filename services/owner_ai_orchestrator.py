@@ -22,6 +22,7 @@ class OwnerTurnResult:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     pending_confirmation: str | None = None
     proposed_patch: dict[str, Any] | None = None
+    creative_draft: dict[str, Any] | None = None
     route: dict[str, Any] | None = None
     context_tokens: int = 0
     setup_stage: str | None = None
@@ -32,10 +33,28 @@ _INTENT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(what can you do|capabilities|help|ماذا تستطيع|aide)\b", re.I), "help"),
     (re.compile(r"\b(usage|credits|wallet|how much|الاستخدام|crédits)\b", re.I), "read_usage"),
     (re.compile(r"\b(subscription|plan|billing|الاشتراك|abonnement)\b", re.I), "read_subscription"),
+    (
+        re.compile(
+            r"("
+            r"create(\s+a)?\s+post|make(\s+a)?\s+post|"
+            r"draft(\s+a)?\s+(caption|post)|"
+            r"write(\s+a)?\s+(caption|post)|"
+            r"generate(\s+a)?\s+(caption|post|image)|"
+            r"creative\s+studio|compress(\s+this|\s+the)?\b|"
+            r"بدي\s*(نعمل|اعمل|أعمل)\s*(بوست|منشور)|"
+            r"بدنا\s*(نعمل|ننشئ)\s*(بوست|منشور)|"
+            r"أريد\s*(أن\s*)?(أعمل|انشئ|أنشئ)\s*(بوست|منشور)|"
+            r"انشاء\s*منشور|اعمل\s*(بوست|منشور)|"
+            r"créer(\s+une)?\s+(publication|post)"
+            r")",
+            re.I,
+        ),
+        "create_creative_draft",
+    ),
     (re.compile(r"\b(instagram|facebook|meta|integrat|connected|ربط)\b", re.I), "read_integrations"),
     (re.compile(r"\b(validate|missing|setup complete|تحقق)\b", re.I), "validate_cm"),
     (re.compile(r"\b(publish|انشر|publier)\b", re.I), "publish_cm"),
-    (re.compile(r"\b(what does my ai know|content management|\bcm\b|draft|إعداد)\b", re.I), "read_cm"),
+    (re.compile(r"\b(what does my ai know|content management|\bcm\b|إعداد)\b", re.I), "read_cm"),
     (re.compile(r"\b(dashboard|metrics|stats|لوحة)\b", re.I), "read_dashboard_metrics"),
     (re.compile(r"\b(scheduled|schedule|مجدول)\b", re.I), "read_scheduled_posts"),
     (re.compile(r"\b(jobs|errors|queue|worker)\b", re.I), "read_jobs_errors"),
@@ -157,6 +176,38 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
         return f"Jobs/errors stats: {result_data.get('stats')}"
     if name == "update_profile":
         return f"Profile updated: {result_data.get('profile')}"
+    if name == "create_creative_draft":
+        status = result_data.get("status")
+        if status == "needs_brief":
+            if reply_language == "ar":
+                return (
+                    "تمام — خلّينا نعمل بوست من هون بالشات. "
+                    "اختَر نوع المهمة (Auto / Compress / Caption / Post / Image) "
+                    "أو اكتبلي شو بدك بالمنشور."
+                )
+            if reply_language == "fr":
+                return (
+                    "Parfait — créons la publication ici dans le chat. "
+                    "Choisis Auto / Compress / Caption / Post / Image, ou décris le contenu."
+                )
+            return (
+                "Let’s create that in chat. Pick Auto / Compress / Caption / Post / Image, "
+                "or describe what the post should say."
+            )
+        if status == "unavailable":
+            return str(result_data.get("reason") or "That creative kind is not available yet.")
+        if status == "queued":
+            return f"Creative {result_data.get('kind')} job queued ({result_data.get('job_id')})."
+        if status == "completed":
+            text = str(result_data.get("text") or "").strip()
+            preview = text if len(text) <= 480 else text[:477] + "…"
+            return f"Draft ready ({result_data.get('kind')}):\n\n{preview}"
+        return "Creative draft updated."
+    if name == "schedule_creative_draft":
+        return (
+            f"Scheduled on {result_data.get('platform')} for {result_data.get('scheduled_at')}. "
+            f"{result_data.get('note') or ''}"
+        ).strip()
     return "Done."
 
 
@@ -216,6 +267,15 @@ async def run_owner_turn(
             if pattern.search(text):
                 intent = name
                 break
+
+    # Client create-post mode: chip selection forces creative tool without NL match.
+    if not intent and (args.get("creative_kind") or args.get("kind")):
+        intent = "create_creative_draft"
+
+    if intent == "create_creative_draft":
+        args.setdefault("prompt", text)
+        if args.get("creative_kind") and not args.get("kind"):
+            args["kind"] = args.get("creative_kind")
 
     route = route_owner_turn(text, intent=intent)
     if ctx_tokens > route.max_context_tokens:
@@ -320,6 +380,10 @@ async def run_owner_turn(
             "preview": result.data.get("preview"),
         }
 
+    creative = None
+    if result.name in {"create_creative_draft", "schedule_creative_draft"} and isinstance(result.data, dict):
+        creative = dict(result.data)
+
     if result.requires_confirmation:
         return OwnerTurnResult(
             reply_text=_summarize(result.name, result.data, reply_language=reply_lang)
@@ -328,6 +392,7 @@ async def run_owner_turn(
             tool_calls=[tool_payload],
             pending_confirmation=result.confirmation_token,
             proposed_patch=proposed,
+            creative_draft=creative,
             route=decision_to_dict(route),
             context_tokens=ctx_tokens,
             setup_stage=stage,
@@ -338,6 +403,7 @@ async def run_owner_turn(
         return OwnerTurnResult(
             reply_text=result.error or "Tool failed.",
             tool_calls=[tool_payload],
+            creative_draft=creative,
             route=decision_to_dict(route),
             context_tokens=ctx_tokens,
             setup_stage=stage,
@@ -348,6 +414,7 @@ async def run_owner_turn(
         reply_text=_summarize(result.name, result.data, reply_language=reply_lang),
         tool_calls=[tool_payload],
         proposed_patch=proposed,
+        creative_draft=creative,
         route=decision_to_dict(route),
         context_tokens=ctx_tokens,
         setup_stage=stage,

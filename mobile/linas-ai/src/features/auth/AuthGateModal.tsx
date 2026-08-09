@@ -1,9 +1,9 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BrandMark } from '../../components/BrandMark';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing, typography } from '../../theme';
+import { LinasAvatar } from '../linas/LinasAvatar';
 
 type Props = {
   visible: boolean;
@@ -19,7 +19,7 @@ export function AuthGateModal({ visible, reason, onClose, onLogin, onRegister }:
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
-          <BrandMark size="sm" />
+          <LinasAvatar state="helping" size={72} />
           <Text style={styles.title}>{tr('authGateTitle')}</Text>
           <Text style={styles.body}>{reason || tr('authGateBody')}</Text>
           <PrimaryButton label={tr('login')} onPress={onLogin} />
@@ -47,9 +47,21 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    alignItems: 'center',
   },
-  title: { ...typography.title, color: colors.text, fontSize: 22, marginTop: spacing.sm },
-  body: { ...typography.subtitle, color: colors.textMuted, marginBottom: spacing.sm },
+  title: {
+    ...typography.title,
+    color: colors.accentDeep,
+    fontSize: 22,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  body: {
+    ...typography.subtitle,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
   later: { alignItems: 'center', paddingVertical: spacing.sm },
   laterText: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 14 },
 });
