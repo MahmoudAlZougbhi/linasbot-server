@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.linasai.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#0C1424",
         "foregroundImage": "./assets/android-icon-foreground.png",
