@@ -204,9 +204,7 @@ async def test_setup_next_step_and_choices(monkeypatch: pytest.MonkeyPatch) -> N
         "services.owner_ai_account_state.build_account_summary",
         lambda **_: {"setup_stage": "new", "cm": {"sections_present": 0, "sections_total": 17}},
     )
-    result = await tool_setup_next_step(
-        tenant_id="t1", role="admin", user_id="u1", action="status"
-    )
+    result = await tool_setup_next_step(tenant_id="t1", role="admin", user_id="u1", action="status")
     assert result.ok is True
     assert result.data["same_cm_draft"] is True
     from services.owner_copilot_v2.choices import choices_from_tool_result
@@ -217,8 +215,8 @@ async def test_setup_next_step_and_choices(monkeypatch: pytest.MonkeyPatch) -> N
 
 @pytest.mark.asyncio
 async def test_price_list_fixture_extraction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_copilot_v2.vision_import import tool_extract_price_list
     import services.owner_copilot_v2.attachments as att
+    from services.owner_copilot_v2.vision_import import tool_extract_price_list
 
     monkeypatch.setattr(att, "_root", lambda: tmp_path / "owner_attachments")
     fixture = {

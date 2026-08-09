@@ -256,9 +256,9 @@ async def run_owner_turn(
             quick_actions=v2.quick_actions,
         )
         # Attach V2 extras for API layer (non-dataclass fields via monkey attr).
-        setattr(result, "cards", v2.cards)
-        setattr(result, "choices", v2.choices)
-        setattr(result, "model", v2.model)
+        result.cards = v2.cards
+        result.choices = v2.choices
+        result.model = v2.model
         return result
 
     text = (user_text or "").strip()

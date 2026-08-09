@@ -79,8 +79,7 @@ def build_answer_messages(
     if repair_failures:
         payload["validator_failures"] = repair_failures
         payload["repair_instruction"] = (
-            "Rewrite reply_text to satisfy validator failures using the SAME evidence only. "
-            "Do not request more files."
+            "Rewrite reply_text to satisfy validator failures using the SAME evidence only. Do not request more files."
         )
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _ANSWER_SYSTEM},
@@ -92,7 +91,9 @@ def build_answer_messages(
 def answer_context_has_full_basics_and_style(messages: list[dict[str, Any]]) -> bool:
     blob = json.dumps(messages, ensure_ascii=False)
     # Nested user payload is itself JSON-encoded, so quotes may be escaped.
-    return ("ai_basics" in blob) and ("style" in blob) and ("advanced_instructions" in blob or "identity_summary" in blob)
+    return (
+        ("ai_basics" in blob) and ("style" in blob) and ("advanced_instructions" in blob or "identity_summary" in blob)
+    )
 
 
 async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None) -> Any:

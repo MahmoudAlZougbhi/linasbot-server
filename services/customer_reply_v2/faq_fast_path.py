@@ -59,8 +59,8 @@ async def try_faq_fast_path(
                 metadata={"match_score": tiered.get("match_score"), "tier": tiered.get("tier")},
             )
 
-    from services.cm.version_store import read_published_pointer
     from services.cm.semantic_index import search as semantic_search
+    from services.cm.version_store import read_published_pointer
 
     pointer = read_published_pointer(tenant_id)
     if not pointer or not pointer.index_version_id:

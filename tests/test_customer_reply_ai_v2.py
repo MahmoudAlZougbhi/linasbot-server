@@ -126,7 +126,9 @@ def _rich_sections() -> dict[str, dict[str, Any]]:
         },
         "off_days": {"days": [], "specific_days": []},
         "handoff": {
-            "contacts": [{"id": "c1", "label": "WA", "destination_type": "whatsapp", "destination_value": "+96170000000"}],
+            "contacts": [
+                {"id": "c1", "label": "WA", "destination_type": "whatsapp", "destination_value": "+96170000000"}
+            ],
             "matrix": [{"id": "m1", "enabled": True, "contact_id": "c1"}],
         },
         "restricted": {
@@ -196,15 +198,13 @@ def test_rolling_three_hour_window_boundaries():
 
 
 def test_emergency_compaction_is_explicit():
-    from services.customer_reply_v2.conversation_window import filter_rolling_window
     import os
+
+    from services.customer_reply_v2.conversation_window import filter_rolling_window
 
     os.environ["LINAS_CUSTOMER_CONTEXT_BUDGET"] = "200"
     now = time.time()
-    msgs = [
-        {"role": "user", "content": ("old-" + str(i)) * 80, "timestamp": now - 1000 + i}
-        for i in range(30)
-    ]
+    msgs = [{"role": "user", "content": ("old-" + str(i)) * 80, "timestamp": now - 1000 + i} for i in range(30)]
     window = filter_rolling_window(msgs, now_ts=now, window_hours=3)
     assert window.context_compacted is True
     assert window.compacted_summary
@@ -305,7 +305,7 @@ async def test_retrieval_round_limit_and_role_separation(v2_env):
     await publish_test_content("t_ret", _rich_sections())
     from services.customer_reply_v2.answer_luna import answer_context_has_full_basics_and_style, build_answer_messages
     from services.customer_reply_v2.manifest import load_fixed_answer_context
-    from services.customer_reply_v2.models import EvidenceRecord, RetrievalResult
+    from services.customer_reply_v2.models import EvidenceRecord
     from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
     from services.customer_reply_v2.retrieval_tools import ToolContext, dispatch_retrieval_tool
 
@@ -333,7 +333,13 @@ async def test_retrieval_round_limit_and_role_separation(v2_env):
                     "arguments": {"item_ids": ["services:svc_full", "prices:price_full_w", "branches:br_beirut"]},
                 },
             ],
-            {"final_plan": {"evidence_status": "sufficient", "selected_source_ids": ["services:svc_full"], "selected_section_ids": ["services", "prices", "branches"]}},
+            {
+                "final_plan": {
+                    "evidence_status": "sufficient",
+                    "selected_source_ids": ["services:svc_full"],
+                    "selected_section_ids": ["services", "prices", "branches"],
+                }
+            },
         ],
     )
     assert result.requested_model == "gpt-5.6-luna"
@@ -350,7 +356,12 @@ async def test_retrieval_round_limit_and_role_separation(v2_env):
         customer_profile={},
         scripted_tool_calls=[
             [{"name": "list_published_cm_items", "arguments": {"section_ids": ["care"]}}],
-            [{"name": "request_additional_published_cm_items", "arguments": {"section_ids": ["knowledge"], "item_ids": ["knowledge:kn_hours"]}}],
+            [
+                {
+                    "name": "request_additional_published_cm_items",
+                    "arguments": {"section_ids": ["knowledge"], "item_ids": ["knowledge:kn_hours"]},
+                }
+            ],
             [{"name": "request_additional_published_cm_items", "arguments": {"item_ids": ["care:care_pre"]}}],
             {"final_plan": {"evidence_status": "insufficient_can_retry", "selected_source_ids": []}},
         ],
@@ -400,7 +411,9 @@ async def test_multi_intent_and_insufficient_and_languages(v2_env):
                 [
                     {
                         "name": "list_published_cm_items",
-                        "arguments": {"section_ids": ["services", "prices", "branches", "care", "knowledge", "off_days"]},
+                        "arguments": {
+                            "section_ids": ["services", "prices", "branches", "care", "knowledge", "off_days"]
+                        },
                     },
                     {
                         "name": "read_published_cm_items",

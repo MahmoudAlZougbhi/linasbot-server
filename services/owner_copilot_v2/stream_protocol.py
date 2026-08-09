@@ -17,4 +17,4 @@ def encode_sse(event: StreamEvent | dict[str, Any]) -> str:
 
 
 def encode_sse_done() -> str:
-    return "data: {\"type\":\"stream_end\"}\n\n"
+    return 'data: {"type":"stream_end"}\n\n'

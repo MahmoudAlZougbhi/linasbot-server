@@ -14,7 +14,6 @@ from services.owner_copilot_v2.flags import (
     owner_copilot_writes_enabled,
 )
 
-
 WRITE_TOOLS = frozenset(
     {
         "propose_cm_patch",
@@ -100,7 +99,13 @@ async def dispatch_v2_tool(
 
     # Shadow / write kill switch: allow proposals to be created (they don't mutate live),
     # but block approve/publish/profile writes when writes disabled.
-    mutating = name in {"approve_cm_patch", "publish_cm", "approve_diagnosis_fix", "approve_smart_answer", "update_profile"}
+    mutating = name in {
+        "approve_cm_patch",
+        "publish_cm",
+        "approve_diagnosis_fix",
+        "approve_smart_answer",
+        "update_profile",
+    }
     if mutating and (not owner_copilot_writes_enabled() or owner_copilot_shadow_planning()):
         return ToolResult(
             ok=False,

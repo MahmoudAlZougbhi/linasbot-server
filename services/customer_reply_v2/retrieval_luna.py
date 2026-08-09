@@ -8,7 +8,7 @@ from typing import Any
 
 from services.customer_reply_v2.flags import customer_model_name, max_retrieval_rounds
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS, manifest_for_retrieval_luna
-from services.customer_reply_v2.models import EvidenceRecord, RetrievalResult
+from services.customer_reply_v2.models import RetrievalResult
 from services.customer_reply_v2.retrieval_tools import RETRIEVAL_TOOL_SCHEMAS, ToolContext, dispatch_retrieval_tool
 
 # Optional injectable for fixtures: async (messages, tools) -> OpenAI-like response

@@ -30,6 +30,7 @@ SYSTEM_V2 = (
     "Draft vs Live stay distinct. Live Chat is read-only in V2."
 )
 
+
 def _quick_actions(stage: str | None) -> list[dict[str, str]]:
     base = [
         {"id": "cm", "label": "Review Setup"},
@@ -39,6 +40,7 @@ def _quick_actions(stage: str | None) -> list[dict[str, str]]:
     if stage in {"new", "cm_partial"}:
         return [{"id": "cm", "label": "Continue Setup"}, *base[1:]]
     return base
+
 
 def _status_label(name: str) -> str:
     return {
@@ -54,6 +56,7 @@ def _status_label(name: str) -> str:
         "read_usage": "Checking usage…",
         "help": "Looking up product capabilities…",
     }.get(name, f"Running {name}…")
+
 
 def _build_messages(
     *,
@@ -83,6 +86,7 @@ def _build_messages(
     out.append({"role": "user", "content": user_text})
     return out
 
+
 def _done_payload(
     *,
     reply_text: str,
@@ -111,6 +115,7 @@ def _done_payload(
         "quick_actions": _quick_actions(stage),
         "model": model,
     }
+
 
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
     final: OwnerV2TurnResult | None = None
@@ -142,6 +147,7 @@ async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
                 model=owner_model_name(),
             )
     return final or OwnerV2TurnResult(reply_text="", model=owner_model_name())
+
 
 async def iter_owner_turn_v2_events(
     *,
@@ -220,20 +226,38 @@ async def iter_owner_turn_v2_events(
     if not text and not (attachment_ids or []):
         msg = "Tell me what you’d like to configure or inspect."
         yield StreamEvent(type="delta", payload={"text": msg})
-        yield StreamEvent(type="done", payload=_done_payload(
-            reply_text=msg, tool_calls=[], cards=[], choices=[], model=model,
-            ctx_tokens=ctx_tokens, stage=stage, reason="empty",
-        ))
+        yield StreamEvent(
+            type="done",
+            payload=_done_payload(
+                reply_text=msg,
+                tool_calls=[],
+                cards=[],
+                choices=[],
+                model=model,
+                ctx_tokens=ctx_tokens,
+                stage=stage,
+                reason="empty",
+            ),
+        )
         return
 
     if looks_like_creative_request(text):
         msg = creative_refusal_message(language=reply_lang)
         async for piece in _emit_as_deltas(msg):
             yield piece
-        yield StreamEvent(type="done", payload=_done_payload(
-            reply_text=msg, tool_calls=[], cards=[], choices=[], model=model,
-            ctx_tokens=ctx_tokens, stage=stage, reason="creative_cancelled",
-        ))
+        yield StreamEvent(
+            type="done",
+            payload=_done_payload(
+                reply_text=msg,
+                tool_calls=[],
+                cards=[],
+                choices=[],
+                model=model,
+                ctx_tokens=ctx_tokens,
+                stage=stage,
+                reason="creative_cancelled",
+            ),
+        )
         return
 
     if attachment_ids:
@@ -334,9 +358,7 @@ async def iter_owner_turn_v2_events(
                     reply_language=reply_lang,
                 )
                 tool_calls_acc.append(result.to_dict())
-                chat_messages.append(
-                    {"role": "tool", "tool_call_id": tc.id, "content": tool_result_for_model(result)}
-                )
+                chat_messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result_for_model(result)})
                 card = card_from_tool(result.name, result.data if isinstance(result.data, dict) else {}, ok=result.ok)
                 if card:
                     cards_acc.append(card.to_dict())
@@ -388,6 +410,7 @@ async def iter_owner_turn_v2_events(
                 "retryable": True,
             },
         )
+
 
 async def _emit_as_deltas(text: str, size: int = 28) -> AsyncIterator[StreamEvent]:
     for i in range(0, len(text or ""), size):

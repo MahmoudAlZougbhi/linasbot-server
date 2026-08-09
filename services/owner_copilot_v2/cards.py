@@ -134,5 +134,7 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
             body=str((data or {}).get("prompt") or "Continue setup in this chat."),
         )
     if not ok:
-        return failure_card(title=f"Tool failed: {name}", body="No changes were applied.", error=str(data.get("error") or name))
+        return failure_card(
+            title=f"Tool failed: {name}", body="No changes were applied.", error=str(data.get("error") or name)
+        )
     return None

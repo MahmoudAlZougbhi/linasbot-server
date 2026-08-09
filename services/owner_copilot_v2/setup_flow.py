@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from services.owner_ai_tools_base import ToolResult
 
 SETUP_SECTIONS: tuple[str, ...] = (

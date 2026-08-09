@@ -8,8 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from storage.persistent_storage import get_data_root
 from services.customer_reply_v2.models import CustomerFacts
+from storage.persistent_storage import get_data_root
 
 # Explicit self-identification only — not third-party mentions.
 _NAME_CORRECTION_PATTERNS = [
@@ -156,7 +156,7 @@ def should_update_language(message: str, detected_language: str | None) -> bool:
         return False
     if not text or text.lower() in _AMBIGUOUS_LANG_TOKENS:
         return False
-    if len(text) <= 2 and not any("\u0600" <= ch <= "\u06FF" for ch in text):
+    if len(text) <= 2 and not any("\u0600" <= ch <= "\u06ff" for ch in text):
         return False
     return True
 

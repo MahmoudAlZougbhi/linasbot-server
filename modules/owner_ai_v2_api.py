@@ -130,9 +130,7 @@ async def stream_owner_message(
         done_payload: dict[str, Any] | None = None
         try:
             if conversation_title:
-                yield encode_sse(
-                    StreamEvent(type="title_updated", payload={"title": conversation_title})
-                )
+                yield encode_sse(StreamEvent(type="title_updated", payload={"title": conversation_title}))
             async for ev in iter_owner_turn_v2_events(
                 tenant_id=session.tenant_id,
                 user_id=session.user_id,

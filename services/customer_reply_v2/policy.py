@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.cm.query_interpreter import BOOKING_INTENT_RE, HUMAN_INTENT_RE
 from services.cm.runtime_pipeline import DEFAULT_REFUSE_TEMPLATES, _handoff_reply
 from services.cm.schemas import ActionsSection, HandoffPolicy, RestrictedPolicy
 from services.cm.structured_resolver import find_restricted_topic, resolve_handoff
 from services.cm.version_store import load_published_content
-from services.cm.query_interpreter import BOOKING_INTENT_RE, HUMAN_INTENT_RE
 
 
 def _detect_booking_or_human(message: str) -> str | None:

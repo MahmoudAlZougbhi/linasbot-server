@@ -8,9 +8,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from storage.persistent_storage import get_data_root
 from services.customer_reply_v2.flags import customer_media_context_enabled
 from services.customer_reply_v2.models import CommentMediaContext
+from storage.persistent_storage import get_data_root
 
 MAX_CAROUSEL_THUMBS = 3
 MAX_VIDEO_FRAMES = 3

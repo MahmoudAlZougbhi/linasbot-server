@@ -32,7 +32,9 @@ async def tool_diagnose_meta_health(
 
     ch = (channel or "all").lower()
     findings: list[dict[str, Any]] = []
-    connected = bool((integrations or {}).get("any_connected") or (integrations.get("integrations") or {}).get("any_connected"))
+    connected = bool(
+        (integrations or {}).get("any_connected") or (integrations.get("integrations") or {}).get("any_connected")
+    )
     if not connected:
         findings.append(
             {
