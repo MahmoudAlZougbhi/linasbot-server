@@ -21,14 +21,14 @@ export type ControlArea =
   | 'owner';
 
 const AREAS: { id: ControlArea; title: string; subtitle: string; ownerOnly?: boolean }[] = [
-  { id: 'create', title: 'Create', subtitle: 'Creative Studio' },
+  { id: 'create', title: 'Creative Studio', subtitle: 'Captions, posts, images' },
   { id: 'cm', title: 'Content Management', subtitle: 'Manual AI configuration' },
-  { id: 'integrations', title: 'Integrations', subtitle: 'Facebook / Instagram' },
-  { id: 'usage', title: 'Usage & Credits', subtitle: 'Included usage and packs' },
-  { id: 'subscription', title: 'Subscription', subtitle: 'Plan and renewal' },
+  { id: 'integrations', title: 'Integrations', subtitle: 'Meta readiness (truthful status)' },
+  { id: 'usage', title: 'Usage & Credits', subtitle: 'Included usage and balance' },
+  { id: 'subscription', title: 'Subscription', subtitle: 'Plan status (IAP pending externally)' },
   { id: 'users', title: 'Users', subtitle: 'Members and permissions' },
   { id: 'scheduled', title: 'Scheduled', subtitle: 'Upcoming posts' },
-  { id: 'settings', title: 'Settings', subtitle: 'Account and security' },
+  { id: 'settings', title: 'Settings', subtitle: 'Legal links and app version' },
   { id: 'owner', title: 'Owner Control Center', subtitle: 'Platform metrics', ownerOnly: true },
 ];
 

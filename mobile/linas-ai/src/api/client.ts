@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
+import { API_BASE } from '../config';
 import { tokenStore } from '../auth/tokenStore';
 import { MobileLoginResponseSchema } from './types';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://linasaibot.com';
+export { API_BASE };
 
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text();

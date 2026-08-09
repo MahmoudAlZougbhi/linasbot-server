@@ -30,7 +30,7 @@ export function SimpleResourceScreen({ title, path, onBack }: Props) {
         }
       } catch {
         if (!cancelled) {
-          setError('Failed to load. Retry from Control Center.');
+          setError('Failed to load. Pull back and open again to retry.');
         }
       } finally {
         if (!cancelled) {

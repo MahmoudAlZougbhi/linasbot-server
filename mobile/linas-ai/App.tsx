@@ -8,6 +8,9 @@ import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
 import { ChatScreen } from './src/features/chat/ChatScreen';
 import { ControlCenterScreen, type ControlArea } from './src/features/control/ControlCenterScreen';
+import { CreativeStudioScreen } from './src/features/creative/CreativeStudioScreen';
+import { IntegrationsScreen } from './src/features/integrations/IntegrationsScreen';
+import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
 import { colors } from './src/theme/colors';
 
@@ -17,17 +20,17 @@ type Screen =
   | { name: 'register' }
   | { name: 'chat' }
   | { name: 'control' }
+  | { name: 'settings' }
+  | { name: 'integrations' }
+  | { name: 'creative' }
   | { name: 'resource'; title: string; path: string };
 
-const RESOURCE_MAP: Record<ControlArea, { title: string; path: string } | null> = {
-  create: { title: 'Creative Studio', path: '/api/entitlements/me' },
+const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
   cm: { title: 'Content Management', path: '/api/cm/sections' },
-  integrations: { title: 'Integrations', path: '/api/mobile/integrations' },
   usage: { title: 'Usage & Credits', path: '/api/mobile/usage' },
   subscription: { title: 'Subscription', path: '/api/entitlements/me' },
-  users: { title: 'Users', path: '/api/auth/session' },
+  users: { title: 'Users', path: '/api/auth/users' },
   scheduled: { title: 'Scheduled', path: '/api/schedule/posts' },
-  settings: { title: 'Settings', path: '/api/auth/session' },
   owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
 };
 
@@ -40,13 +43,21 @@ export default function App() {
       const access = await tokenStore.getAccessToken();
       const user = await tokenStore.getUser();
       setIsPlatformOwner(user?.role === 'platform_owner');
-      if (access) {
-        setScreen({ name: 'chat' });
-      } else {
-        setScreen({ name: 'login' });
-      }
+      setScreen(access ? { name: 'chat' } : { name: 'login' });
     })();
   }, []);
+
+  async function afterLogin() {
+    const user = await tokenStore.getUser();
+    setIsPlatformOwner(user?.role === 'platform_owner');
+    setScreen({ name: 'chat' });
+  }
+
+  async function logout() {
+    await tokenStore.clear();
+    setIsPlatformOwner(false);
+    setScreen({ name: 'login' });
+  }
 
   if (screen.name === 'boot') {
     return (
@@ -60,15 +71,7 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       {screen.name === 'login' ? (
-        <LoginScreen
-          onLoggedIn={async () => {
-            const user = await tokenStore.getUser();
-            setIsPlatformOwner(user?.role === 'platform_owner');
-            setScreen({ name: 'chat' });
-          }}
-          onGoRegister={() => setScreen({ name: 'register' })}
-          onGoForgot={() => setScreen({ name: 'login' })}
-        />
+        <LoginScreen onLoggedIn={() => void afterLogin()} onGoRegister={() => setScreen({ name: 'register' })} />
       ) : null}
       {screen.name === 'register' ? <RegisterScreen onBack={() => setScreen({ name: 'login' })} /> : null}
       {screen.name === 'chat' ? (
@@ -79,16 +82,34 @@ export default function App() {
           isPlatformOwner={isPlatformOwner}
           onBack={() => setScreen({ name: 'chat' })}
           onOpen={(area) => {
+            if (area === 'settings') {
+              setScreen({ name: 'settings' });
+              return;
+            }
+            if (area === 'integrations') {
+              setScreen({ name: 'integrations' });
+              return;
+            }
+            if (area === 'create') {
+              setScreen({ name: 'creative' });
+              return;
+            }
             const target = RESOURCE_MAP[area];
             if (target) {
               setScreen({ name: 'resource', ...target });
             }
           }}
-          onLogout={async () => {
-            await tokenStore.clear();
-            setScreen({ name: 'login' });
-          }}
+          onLogout={() => void logout()}
         />
+      ) : null}
+      {screen.name === 'settings' ? (
+        <SettingsScreen onBack={() => setScreen({ name: 'control' })} onLogout={() => void logout()} />
+      ) : null}
+      {screen.name === 'integrations' ? (
+        <IntegrationsScreen onBack={() => setScreen({ name: 'control' })} />
+      ) : null}
+      {screen.name === 'creative' ? (
+        <CreativeStudioScreen onBack={() => setScreen({ name: 'control' })} />
       ) : null}
       {screen.name === 'resource' ? (
         <SimpleResourceScreen

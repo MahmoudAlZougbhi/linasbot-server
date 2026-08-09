@@ -7,15 +7,23 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "linasai",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1220"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.linasai.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Linas AI uses the microphone for voice-to-text in chat."
+        "NSMicrophoneUsageDescription": "Linas AI uses the microphone so you can dictate messages in chat. Audio is sent to Linas servers for speech-to-text only.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.linasai.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0B1220",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -29,9 +37,16 @@
     },
     "plugins": [
       "expo-secure-store",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Linas AI uses the microphone so you can dictate messages in chat."
+        }
+      ],
       "expo-status-bar"
     ],
     "extra": {
+      "apiBaseUrl": "https://linasaibot.com",
       "eas": {
         "projectId": "replace-after-eas-init"
       }

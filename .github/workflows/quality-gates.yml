@@ -121,6 +121,9 @@ jobs:
       - name: Line limit
         working-directory: .
         run: node scripts/check_source_line_limit.mjs mobile/linas-ai/src mobile/linas-ai/App.tsx
+      - name: Mobile secret scan
+        working-directory: .
+        run: node scripts/scan_mobile_bundle_secrets.mjs
       - name: Expo export (bundle verification)
         run: npx expo export --platform android --output-dir /tmp/linas-ai-android-export
       - name: Expo export iOS (bundle verification)

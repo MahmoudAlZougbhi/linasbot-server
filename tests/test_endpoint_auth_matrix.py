@@ -31,6 +31,7 @@ _ROUTE_MODULES = (
     "modules.schedule_api",
     "modules.platform_api",
     "modules.mobile_integrations_api",
+    "modules.mobile_stt_api",
     "modules.store_iap_api",
     "modules.queue_api",
     "modules.dashboard_api",
@@ -173,9 +174,9 @@ class TestRouteInventory:
         # Exact inventory after removing public bootstrap-admin; logout is session+CSRF protected.
         # +forgot/reset/verify/resend auth + billing packages/webhook (wallet APIs).
         # +meta reconnect endpoint for first-party bindings.
-        assert counts["total_api_routes"] == 195
+        assert counts["total_api_routes"] == 196
         assert counts["public"] == 15
-        assert counts["protected"] == 180
+        assert counts["protected"] == 181
         public_set = set(auth_matrix["public"])
         assert public_set == {
             ("GET", "/api/health"),

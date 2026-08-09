@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -9,15 +10,15 @@ import {
 } from 'react-native';
 
 import { ApiError, mobileLogin } from '../../api/client';
+import { LEGAL_URLS } from '../../config';
 import { colors } from '../../theme/colors';
 
 type Props = {
   onLoggedIn: () => void;
   onGoRegister: () => void;
-  onGoForgot: () => void;
 };
 
-export function LoginScreen({ onLoggedIn, onGoRegister, onGoForgot }: Props) {
+export function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -31,9 +32,13 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onGoForgot }: Props) {
       onLoggedIn();
     } catch (err) {
       if (err instanceof ApiError) {
-        setError('Login failed. Check your email and password.');
+        setError(
+          err.status === 401 || err.status === 403
+            ? 'Login failed. Check your email and password.'
+            : 'Linas API is not ready for mobile login yet. Try again after the beta backend is live.',
+        );
       } else {
-        setError('Unable to reach Linas AI. Try again.');
+        setError('Unable to reach Linas AI. Check your network and try again.');
       }
     } finally {
       setLoading(false);
@@ -62,10 +67,10 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onGoForgot }: Props) {
         onChangeText={setPassword}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.button} onPress={onSubmit} disabled={loading}>
+      <Pressable style={styles.button} onPress={() => void onSubmit()} disabled={loading}>
         {loading ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.buttonText}>Sign in</Text>}
       </Pressable>
-      <Pressable onPress={onGoForgot}>
+      <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.forgotPassword)}>
         <Text style={styles.link}>Forgot password</Text>
       </Pressable>
       <Pressable onPress={onGoRegister}>

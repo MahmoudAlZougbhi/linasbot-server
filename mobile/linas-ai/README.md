@@ -1,32 +1,45 @@
-# Linas AI Mobile (Expo)
+# Linas AI (Expo)
 
-Production-oriented iOS + Android client for Linas AI.
+Installable beta app for Linas AI. Privileged AI/provider calls go through the Linas HTTPS API only.
 
-## Stack
+## Identifiers
 
-- Expo SDK 57 + React Native
-- TypeScript strict
-- Secure token storage (`expo-secure-store`)
-- Zod-validated API responses
+- Display name: **Linas AI**
+- Bundle / package: `com.linasai.app`
+- Version: `1.0.0` (iOS buildNumber `1`, Android versionCode `1`)
 
-## Configure
-
-Set `EXPO_PUBLIC_API_BASE_URL` to your Linas API origin (default `https://linasaibot.com`).
-
-## Commands
+## Config
 
 ```bash
-npm install
-npm run typecheck
-npm start
-npm run ios
-npm run android
+# Public only — never put provider/server secrets here
+EXPO_PUBLIC_API_BASE_URL=https://linasaibot.com
+EXPO_PUBLIC_APP_ENV=preview
 ```
 
-## Product surfaces
+## Checks
 
-- Home = Linas AI chat
-- Control Center = CM, Create, Integrations, Usage, Subscription, Users, Scheduled, Settings
-- Owner Control Center (platform_owner only)
+```bash
+npm ci
+npm run prebuild:check
+npm run secret-scan
+```
 
-Do not copy SportBook code into this app.
+## EAS profiles
+
+See `eas.json`:
+
+- `development` — dev client / debug
+- `preview` — internal installable **APK** + iOS internal build
+- `production` — future store (AAB / App Store)
+
+Requires Expo login + `eas init` to replace `extra.eas.projectId`.
+
+## Local Android preview APK
+
+```bash
+export JAVA_HOME=...
+export ANDROID_HOME=...
+cd android
+EXPO_PUBLIC_API_BASE_URL=https://linasaibot.com EXPO_PUBLIC_APP_ENV=preview ./gradlew assembleRelease
+# output: app/build/outputs/apk/release/app-release.apk
+```

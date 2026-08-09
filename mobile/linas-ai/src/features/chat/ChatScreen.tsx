@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { apiFetch } from '../../api/client';
 import { ChatMessageSchema, ConversationSummarySchema, type ChatMessage } from '../../api/types';
 import { colors } from '../../theme/colors';
+import { useVoiceDraft } from './useVoiceDraft';
 
 const CreateConvSchema = z.object({
   success: z.literal(true),
@@ -57,6 +58,9 @@ export function ChatScreen({ onOpenControlCenter }: Props) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const { voiceState, voiceError, toggleVoice } = useVoiceDraft((text) => {
+    setDraft((prev) => (prev ? `${prev} ${text}` : text));
+  });
 
   const bootstrap = useCallback(async () => {
     setLoading(true);
@@ -81,7 +85,7 @@ export function ChatScreen({ onOpenControlCenter }: Props) {
         setHistory([{ id: created.conversation.id, title: created.conversation.title }]);
       }
     } catch {
-      setError('Could not load chat. Pull to retry.');
+      setError('Could not load chat. Tap Retry.');
     } finally {
       setLoading(false);
     }
@@ -161,7 +165,7 @@ export function ChatScreen({ onOpenControlCenter }: Props) {
 
       {historyOpen ? (
         <View style={styles.drawer}>
-          <Pressable onPress={newChat}>
+          <Pressable onPress={() => void newChat()}>
             <Text style={styles.newChat}>+ New Chat</Text>
           </Pressable>
           {history.map((item) => (
@@ -182,12 +186,18 @@ export function ChatScreen({ onOpenControlCenter }: Props) {
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <Pressable onPress={() => void bootstrap()}>
+          <Text style={styles.error}>{error}</Text>
+        </Pressable>
+      ) : null}
+      {voiceError ? <Text style={styles.error}>{voiceError}</Text> : null}
 
       <FlatList
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        ListEmptyComponent={<Text style={styles.empty}>Start a conversation with Linas AI.</Text>}
         renderItem={({ item }) => (
           <View style={[styles.bubble, item.role === 'user' ? styles.userBubble : styles.aiBubble]}>
             <Text style={styles.bubbleText}>{item.content}</Text>
@@ -202,6 +212,11 @@ export function ChatScreen({ onOpenControlCenter }: Props) {
       ) : null}
 
       <View style={styles.composer}>
+        <Pressable style={styles.mic} onPress={() => void toggleVoice()} disabled={voiceState === 'transcribing'}>
+          <Text style={styles.micText}>
+            {voiceState === 'recording' ? 'Stop' : voiceState === 'transcribing' ? '…' : 'Mic'}
+          </Text>
+        </Pressable>
         <TextInput
           style={styles.input}
           placeholder="Message Linas AI"
@@ -237,6 +252,7 @@ const styles = StyleSheet.create({
   newChat: { color: colors.accent, marginBottom: 12, fontWeight: '700' },
   historyItem: { color: colors.text, paddingVertical: 8 },
   list: { padding: 16, paddingBottom: 24 },
+  empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
   bubble: { borderRadius: 16, padding: 12, marginBottom: 10, maxWidth: '90%' },
   userBubble: { alignSelf: 'flex-end', backgroundColor: colors.accentSoft },
   aiBubble: { alignSelf: 'flex-start', backgroundColor: colors.surfaceAlt },
@@ -249,6 +265,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     alignItems: 'flex-end',
   },
+  mic: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderColor: colors.border,
+    borderWidth: 1,
+  },
+  micText: { color: colors.accent, fontWeight: '700' },
   input: {
     flex: 1,
     minHeight: 44,
