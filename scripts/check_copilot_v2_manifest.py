@@ -23,6 +23,10 @@ def main() -> int:
         errors.append("owner_model must be gpt-5.6-sol")
     if data.get("guest_model") != "gpt-5.6-luna":
         errors.append("guest_model must be gpt-5.6-luna")
+    if data.get("customer_hv_model") != "gpt-5.6-terra":
+        errors.append("customer_hv_model must be gpt-5.6-terra")
+    if data.get("customer_social_model") not in (None, "gpt-5.6-terra"):
+        errors.append("customer_social_model must be gpt-5.6-terra when set")
     creative = next((c for c in data.get("capabilities", []) if c.get("id") == "creative_studio"), None)
     if not creative or creative.get("status") != "unavailable":
         errors.append("creative_studio must be unavailable in manifest")

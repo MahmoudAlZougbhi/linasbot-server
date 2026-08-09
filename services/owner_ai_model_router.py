@@ -28,34 +28,29 @@ class RouteDecision:
     max_context_tokens: int
 
 
-def _env_model(key: str, default: str) -> str:
-    return (os.getenv(key) or default).strip() or default
-
-
 def router_config() -> dict[str, Any]:
-    """Owner/CM/customer route models (OpenAI API ids).
+    """Owner/CM/customer route models — delegated to central model policy.
 
-    Owner Copilot V2: single brain LINAS_OWNER_MODEL=gpt-5.6-sol (help + CM).
-    Creative routing retained only for dormant legacy paths (unreachable under V2).
-    Customer high-volume → gpt-5.6-luna
+    Env cannot silently override; startup validation enforces Sol/Terra.
     """
-    owner_model = _env_model("LINAS_OWNER_MODEL", "gpt-5.6-sol")
+    from services.model_policy import MODEL_CUSTOMER_TERRA, MODEL_OWNER_SOL
+
     return {
         "owner_help": {
-            "model": _env_model("LINAS_OWNER_HELP_MODEL", owner_model),
+            "model": MODEL_OWNER_SOL,
             "max_context_tokens": int(os.getenv("LINAS_OWNER_HELP_MAX_CTX", "6000")),
         },
         "owner_complex_cm": {
-            "model": _env_model("LINAS_OWNER_CM_MODEL", owner_model),
+            "model": MODEL_OWNER_SOL,
             "max_context_tokens": int(os.getenv("LINAS_OWNER_CM_MAX_CTX", "6000")),
         },
         "creative": {
             # Dormant: V2 refuses creative tools; keep key for legacy tests only.
-            "model": _env_model("LINAS_CREATIVE_MODEL", owner_model),
+            "model": MODEL_OWNER_SOL,
             "max_context_tokens": int(os.getenv("LINAS_CREATIVE_MAX_CTX", "4000")),
         },
         "customer_high_volume": {
-            "model": _env_model("LINAS_CUSTOMER_HV_MODEL", "gpt-5.6-luna"),
+            "model": MODEL_CUSTOMER_TERRA,
             "max_context_tokens": int(os.getenv("LINAS_CUSTOMER_HV_MAX_CTX", "2500")),
         },
     }
@@ -108,12 +103,15 @@ def classify_owner_route(user_text: str, *, intent: str | None = None) -> RouteK
 
 
 def route_owner_turn(user_text: str, *, intent: str | None = None) -> RouteDecision:
+    from services.model_policy import resolve_owner_policy
+
     kind = classify_owner_route(user_text, intent=intent)
+    policy = resolve_owner_policy(surface="owner_chat", intent=intent, user_text=user_text)
     cfg = router_config()[kind]
     return RouteDecision(
         kind=kind,
-        model=str(cfg["model"]),
-        reason=f"intent={intent or 'heuristic'}→{kind}",
+        model=str(policy.model),
+        reason=f"intent={intent or 'heuristic'}→{kind};effort={policy.reasoning_effort}",
         max_context_tokens=int(cfg["max_context_tokens"]),
     )
 

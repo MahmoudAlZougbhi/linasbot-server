@@ -72,22 +72,21 @@ class ModerationProvider(Protocol):
 
 
 def provider_config() -> dict[str, Any]:
-    """Configuration-driven model/provider names (env-overridable).
+    """Configuration-driven model/provider names.
 
-    Defaults (OpenAI API ids — fail honestly if the account cannot use them):
-    - Customer DM / high-volume CM answers → gpt-5.6-luna
-    - Owner / Content Manager / creative text → gpt-5.6-sol
-    - Image → gpt-image-2 (strongest Images API model)
-    - Video → sora-2-pro (strongest OpenAI Sora; Videos API)
+    Text reply models come from the central Sol/Terra policy (env cannot silently override).
+    Image/video/stt/moderation remain env-configurable.
     """
     import os
 
+    from services.model_policy import MODEL_CUSTOMER_TERRA, MODEL_OWNER_SOL
+
     return {
         "text": {
-            "customer_dm": os.getenv("LINAS_MODEL_CUSTOMER_DM", "gpt-5.6-luna"),
-            "owner_chat": os.getenv("LINAS_MODEL_OWNER_CHAT", "gpt-5.6-sol"),
-            "setup_complex": os.getenv("LINAS_MODEL_SETUP", "gpt-5.6-sol"),
-            "creative_text": os.getenv("LINAS_MODEL_CREATIVE", "gpt-5.6-sol"),
+            "customer_dm": MODEL_CUSTOMER_TERRA,
+            "owner_chat": MODEL_OWNER_SOL,
+            "setup_complex": MODEL_OWNER_SOL,
+            "creative_text": MODEL_OWNER_SOL,
             "provider": os.getenv("LINAS_TEXT_PROVIDER", "openai"),
         },
         "image": {

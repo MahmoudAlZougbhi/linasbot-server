@@ -35,8 +35,10 @@ def owner_copilot_shadow_planning() -> bool:
 
 
 def owner_model_name() -> str:
-    """Single canonical owner brain. No mini fallback."""
-    return (os.getenv("LINAS_OWNER_MODEL") or "gpt-5.6-sol").strip() or "gpt-5.6-sol"
+    """Single canonical owner brain from model policy (gpt-5.6-sol). No mini fallback."""
+    from services.model_policy import owner_model_id
+
+    return owner_model_id()
 
 
 def guest_model_name_v2() -> str:

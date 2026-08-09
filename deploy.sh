@@ -221,6 +221,21 @@ else
     echo -e "${YELLOW}Warning: prod_cm_preserve_durable_flags.sh missing; bridge-disable may not survive dual-.env deploys${NC}"
 fi
 
+# Binding Sol/Terra model policy env (must match code; startup fails on conflicting overrides).
+if [ -f "$REPO_ROOT/scripts/prod_upsert_model_routing_env.py" ]; then
+    echo "Applying Sol/Terra model-routing policy env (no service restart yet)..."
+    export CM_PRESERVE_APP_DIR="$APP_DIR"
+    export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
+    export PYTHONPATH="${APP_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+    MODEL_PY="$APP_DIR/venv/bin/python"
+    if [ ! -x "$MODEL_PY" ]; then
+        MODEL_PY="python3"
+    fi
+    "$MODEL_PY" "$REPO_ROOT/scripts/prod_upsert_model_routing_env.py"
+else
+    echo -e "${YELLOW}Warning: prod_upsert_model_routing_env.py missing; model env may conflict at startup${NC}"
+fi
+
 if [ ! -f "$APP_DIR/data/firebase_data.json" ] && [ -f "$REPO_ROOT/data/firebase_data.json" ]; then
     mkdir -p "$APP_DIR/data"
     cp "$REPO_ROOT/data/firebase_data.json" "$APP_DIR/data/firebase_data.json"

@@ -30,21 +30,27 @@ def temperature_supported(model: str) -> bool:
     m = _model_family(model)
     if m.startswith(("o1", "o3", "o4")):
         return False
-    # gpt-5-mini / gpt-5 / gpt-5-nano reject non-default temperature.
+    # gpt-5-mini / gpt-5 / gpt-5.6-sol reject non-default temperature.
     if m.startswith("gpt-5") and not m.startswith("gpt-5.4"):
         return False
     return True
 
 
 def reasoning_effort_for_model(model: str) -> str | None:
-    """Prefer low effort for short conversational turns on reasoning models."""
+    """Legacy heuristic when callers do not pass an explicit policy effort.
+
+    Prefer :func:`services.model_policy.resolve_*` + explicit ``reasoning_effort``
+    on owner/customer social paths. Guest/other non-policy callers may still use this.
+    """
     m = _model_family(model)
     if m.startswith(("o1", "o3", "o4")):
         return "low"
-    # High-volume luna: none keeps latency/cost down for CM DMs/comments.
+    if "terra" in m:
+        return "medium"
     if "luna" in m:
         return "none"
-    # gpt-5-mini / gpt-5 / gpt-5.6-sol — keep reasoning cheap so visible text fits.
+    if "sol" in m:
+        return "low"
     if m.startswith("gpt-5") and not m.startswith("gpt-5.4"):
         return "low"
     return None
@@ -56,8 +62,13 @@ def build_chat_completion_kwargs(
     messages: list[dict[str, Any]],
     max_tokens: int,
     temperature: float | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
-    """Build OpenAI chat.completions.create kwargs compatible with GPT-5 param rules."""
+    """Build OpenAI chat.completions.create kwargs compatible with GPT-5 param rules.
+
+    When ``reasoning_effort`` is provided (model policy), it is written into the
+    payload as-is. Otherwise a model-name heuristic is used for non-policy callers.
+    """
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -66,7 +77,7 @@ def build_chat_completion_kwargs(
         # Floor budget so reasoning tokens don't consume the entire cap before text.
         budget = max(int(max_tokens), _REASONING_MIN_COMPLETION_TOKENS)
         kwargs["max_completion_tokens"] = budget
-        effort = reasoning_effort_for_model(model)
+        effort = reasoning_effort if reasoning_effort is not None else reasoning_effort_for_model(model)
         if effort:
             kwargs["reasoning_effort"] = effort
     else:
@@ -83,6 +94,7 @@ async def create_chat_completion(
     messages: list[dict[str, Any]],
     max_tokens: int,
     temperature: float | None = None,
+    reasoning_effort: str | None = None,
 ) -> Any:
     """Thin wrapper so guest/owner paths share GPT-5-safe parameter shaping."""
     kwargs = build_chat_completion_kwargs(
@@ -90,6 +102,7 @@ async def create_chat_completion(
         messages=messages,
         max_tokens=max_tokens,
         temperature=temperature,
+        reasoning_effort=reasoning_effort,
     )
     return await client.chat.completions.create(**kwargs)
 

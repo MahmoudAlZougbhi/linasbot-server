@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator, Callable
-from typing import Any
+from typing import Any, Literal
 
+from services.model_policy import emit_model_policy_trace, resolve_owner_policy
 from services.owner_ai_context import pack_owner_turn_context
 from services.owner_copilot_v2.brain_support import (
     SYSTEM_V2,
@@ -118,7 +119,19 @@ async def iter_owner_turn_v2_events(
     context["recent_messages_raw"] = list(messages or [])
     stage = str((context.get("account_summary") or {}).get("setup_stage") or "")
     reply_lang = str(context.get("reply_language") or "en")
-    model = owner_model_name()
+    attachment_action: Literal["none", "analyze", "import"] | None = None
+    if attachment_ids:
+        # Attachment alone does not force high; import/apply paths set import via extract tool.
+        attachment_action = "analyze"
+    policy = resolve_owner_policy(
+        surface="owner_copilot",
+        confirm_tool=confirm_tool,
+        user_text=text,
+        attachment_action=attachment_action,
+        force_high=bool(confirm_tool),
+    )
+    model = policy.model or owner_model_name()
+    emit_model_policy_trace(policy, extra={"conversation_id_hash": conversation_id[:12]})
     ctx_tokens = max(1, len(json.dumps(context, ensure_ascii=False, default=str)) // 4)
 
     yield StreamEvent(type="thinking", payload={"label": "Thinking…"})
@@ -158,6 +171,7 @@ async def iter_owner_turn_v2_events(
             build_messages=_build_messages,
             done_payload=done_payload,
             is_cancelled=is_cancelled,
+            policy=policy,
         ):
             yield ev
         return
@@ -215,7 +229,13 @@ async def iter_owner_turn_v2_events(
                 yield StreamEvent(type="cancelled", payload={"reply_text": ""})
                 return
 
-            response = await sol_chat_completion(messages=chat_messages, tools=OWNER_V2_TOOL_SCHEMAS, stream=False)
+            turn_policy = resolve_owner_policy(prior=policy)
+            response = await sol_chat_completion(
+                messages=chat_messages,
+                tools=OWNER_V2_TOOL_SCHEMAS,
+                stream=False,
+                policy=turn_policy,
+            )
             msg = response.choices[0].message
             tcalls = getattr(msg, "tool_calls", None) or []
 
@@ -226,7 +246,11 @@ async def iter_owner_turn_v2_events(
                         yield ev
                 else:
                     reply_parts: list[str] = []
-                    async for delta_text in iter_sol_text_deltas(messages=chat_messages, is_cancelled=is_cancelled):
+                    async for delta_text in iter_sol_text_deltas(
+                        messages=chat_messages,
+                        is_cancelled=is_cancelled,
+                        policy=turn_policy,
+                    ):
                         reply_parts.append(delta_text)
                         yield StreamEvent(type="delta", payload={"text": delta_text})
                     reply_text = "".join(reply_parts).strip()
@@ -256,6 +280,12 @@ async def iter_owner_turn_v2_events(
                         pending_confirmation=pending_confirmation,
                         proposed_patch=proposed_patch,
                         choice_set_id=choice_set_id_out,
+                        route={
+                            "model": turn_policy.model,
+                            "reasoning_mode": turn_policy.reasoning_mode,
+                            "reasoning_effort": turn_policy.reasoning_effort,
+                            "reason": turn_policy.reason,
+                        },
                     ),
                 )
                 return
@@ -319,8 +349,11 @@ async def iter_owner_turn_v2_events(
                 "content": "Write the natural final owner-facing answer now from the tool results. No JSON.",
             }
         )
+        fin_policy = resolve_owner_policy(prior=policy)
         parts: list[str] = []
-        async for delta_text in iter_sol_text_deltas(messages=fin_messages, is_cancelled=is_cancelled):
+        async for delta_text in iter_sol_text_deltas(
+            messages=fin_messages, is_cancelled=is_cancelled, policy=fin_policy
+        ):
             parts.append(delta_text)
             yield StreamEvent(type="delta", payload={"text": delta_text})
         yield StreamEvent(
@@ -336,6 +369,12 @@ async def iter_owner_turn_v2_events(
                 pending_confirmation=pending_confirmation,
                 proposed_patch=proposed_patch,
                 reason="max_tool_rounds",
+                route={
+                    "model": fin_policy.model,
+                    "reasoning_mode": fin_policy.reasoning_mode,
+                    "reasoning_effort": fin_policy.reasoning_effort,
+                    "reason": fin_policy.reason,
+                },
             ),
         )
     except Exception as exc:  # noqa: BLE001

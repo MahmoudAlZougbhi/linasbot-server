@@ -10,7 +10,6 @@ default) until a future cutover phase.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,14 +18,14 @@ from services.cm.schemas import AnswerPacket
 from services.llm_core_service import create_chat_completion
 from services.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
 
-# Customer-facing CM DMs/comments — OpenAI API id gpt-5.6-luna (no weak fallback).
-DEFAULT_CM_ANSWER_MODEL = "gpt-5.6-luna"
+# Customer-facing IG/FB DMs/comments — OpenAI API id gpt-5.6-terra (policy; no weak fallback).
+DEFAULT_CM_ANSWER_MODEL = "gpt-5.6-terra"
 
 
 def cm_answer_model() -> str:
-    return (
-        os.getenv("LINAS_CM_ANSWER_MODEL") or os.getenv("LINAS_MODEL_CUSTOMER_DM") or DEFAULT_CM_ANSWER_MODEL
-    ).strip() or DEFAULT_CM_ANSWER_MODEL
+    from services.model_policy import assert_customer_social_model, customer_social_model_id
+
+    return assert_customer_social_model(customer_social_model_id())
 
 
 @dataclass
@@ -139,7 +138,11 @@ async def generate_answer(message: str, packet: AnswerPacket) -> str:
 
 async def generate_answer_with_usage(message: str, packet: AnswerPacket) -> AnswerGenerationResult:
     """Call the LLM once and return text + real OpenAI usage tokens / estimated USD cost."""
+    from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
+
+    policy = resolve_customer_social_policy(channel=getattr(packet, "channel", None) or "instagram_dm")
     model = cm_answer_model()
+    emit_model_policy_trace(policy)
     system_prompt = _build_system_prompt(packet)
     response = await create_chat_completion(
         model=model,
@@ -149,6 +152,7 @@ async def generate_answer_with_usage(message: str, packet: AnswerPacket) -> Answ
         ],
         max_tokens=800,
         temperature=0.3,
+        reasoning_effort=str(policy.reasoning_effort),
     )
     text = (response.choices[0].message.content or "").strip()
     acc = UsageAccumulator()
@@ -160,6 +164,9 @@ def make_regenerate_fn(message: str, packet: AnswerPacket) -> Callable[[str, lis
     """Build a bound ``regenerate_fn`` for :func:`services.cm.runtime_pipeline.finalize_response`."""
 
     async def _regenerate(previous_text: str, failed_rules: list[str]) -> str:
+        from services.model_policy import resolve_customer_social_policy
+
+        policy = resolve_customer_social_policy(channel="instagram_dm", regeneration=True)
         model = cm_answer_model()
         constraint = (
             "Your previous answer violated these rules: "
@@ -177,6 +184,7 @@ def make_regenerate_fn(message: str, packet: AnswerPacket) -> Callable[[str, lis
             ],
             max_tokens=800,
             temperature=0.2,
+            reasoning_effort=str(policy.reasoning_effort),
         )
         return (response.choices[0].message.content or "").strip()
 
@@ -191,6 +199,9 @@ def make_regenerate_fn_with_usage(
     """Like :func:`make_regenerate_fn` but accumulates OpenAI usage into ``usage_acc``."""
 
     async def _regenerate(previous_text: str, failed_rules: list[str]) -> str:
+        from services.model_policy import resolve_customer_social_policy
+
+        policy = resolve_customer_social_policy(channel="instagram_dm", regeneration=True)
         model = cm_answer_model()
         constraint = (
             "Your previous answer violated these rules: "
@@ -208,6 +219,7 @@ def make_regenerate_fn_with_usage(
             ],
             max_tokens=800,
             temperature=0.2,
+            reasoning_effort=str(policy.reasoning_effort),
         )
         usage_acc.add_from_response(response, model)
         return (response.choices[0].message.content or "").strip()
