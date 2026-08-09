@@ -26,6 +26,7 @@ on:
           - corpus_inventory
           - linas_content_audit
           - bridge_readiness
+          - runtime_proof
           - disable_linas_legacy_bridge
       confirmation:
         description: "Type CM_CUTOVER_CONFIRMED"
@@ -112,8 +113,9 @@ jobs:
             elif [ "${PHASE}" = "linas_content_audit" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_linas_content_audit.sh
             elif [ "${PHASE}" = "bridge_readiness" ]; then
-              cd /opt/linasbot
-              sudo /opt/linasbot/venv/bin/python scripts/cm_prepare_remove_linas_bridge.py --tenant linas
+              sudo bash /opt/linasbot/scripts/prod_cm_bridge_readiness.sh
+            elif [ "${PHASE}" = "runtime_proof" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_runtime_proof.sh
             elif [ "${PHASE}" = "disable_linas_legacy_bridge" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_set_linas_bridge_flag.sh true
             else
