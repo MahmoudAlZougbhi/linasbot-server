@@ -41,6 +41,7 @@ import modules.auth_api  # noqa: E402, F401
 import modules.chat_history_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
+import modules.cm_setup_api  # noqa: E402, F401
 import modules.content_files_api  # noqa: E402, F401
 import modules.dashboard_api  # noqa: E402, F401
 import modules.event_handlers  # noqa: E402, F401

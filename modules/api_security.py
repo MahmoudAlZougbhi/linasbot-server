@@ -23,6 +23,7 @@ from services.dashboard_session_service import (
     SessionRecord,
     session_service,
 )
+from services.product_features import DISABLED_PRODUCT_MESSAGE, is_disabled_api_path
 from services.rate_limit_service import rate_limit_service
 
 # Frontend-aligned permission keys
@@ -282,6 +283,18 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=401,
                 content={"success": False, "error": "Authentication required"},
+            )
+
+        # Wave 1: legacy product modules are disabled for ALL tenants (including linas).
+        # Handlers remain in the repo but normal authenticated access is blocked.
+        if is_disabled_api_path(path):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "success": False,
+                    "error": DISABLED_PRODUCT_MESSAGE,
+                    "code": "PRODUCT_MODULE_DISABLED",
+                },
             )
 
         # The legacy dashboard control planes still operate on Lina's production

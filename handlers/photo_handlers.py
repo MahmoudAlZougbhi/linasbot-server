@@ -21,6 +21,26 @@ from utils.utils import (  # NEW: Import Firestore utilities
 )
 
 
+def _photo_analysis_enabled_for_tenant(tenant_id: str) -> bool:
+    """True only when published CM actions enable photo_analysis (default off)."""
+    try:
+        from services.cm.constants import tenant_uses_cm_runtime
+        from services.cm.schemas import ActionsSection
+        from services.cm.version_store import load_published_content
+
+        if not tenant_uses_cm_runtime(tenant_id):
+            # Legacy bridge (linas unpublished): keep previous behavior for Wave 6 cutover.
+            return tenant_id == "linas"
+        _pointer, sections = load_published_content(tenant_id)
+        actions = ActionsSection.model_validate(sections.get("actions") or {})
+        for item in actions.items:
+            if item.id == "photo_analysis":
+                return bool(item.enabled)
+    except Exception as exc:
+        print(f"[photo_handlers] actions lookup failed for {tenant_id}: {exc}")
+    return False
+
+
 async def handle_photo_message(
     user_id: str, user_name: str, image_url: str, user_data: dict, send_message_func: Any, send_action_func: Any
 ) -> Any:
@@ -29,6 +49,15 @@ async def handle_photo_message(
     Downloads the image, sends it for analysis, and replies with the result.
     """
     config.user_names[user_id] = user_name  # Ensure name is updated
+
+    # Wave 3: photo analysis is an optional CM capability (default off for new tenants).
+    tenant_id = str(user_data.get("tenant_id") or "linas").strip() or "linas"
+    if not _photo_analysis_enabled_for_tenant(tenant_id):
+        await send_message_func(
+            user_id,
+            "Photo analysis is not enabled for this business. Please contact the team on WhatsApp if you need help.",
+        )
+        return
 
     if config.user_in_training_mode.get(user_id, False):
         print(f"[handle_photo_message] INFO: User {user_id} in training mode. Handing over to handle_training_input.")

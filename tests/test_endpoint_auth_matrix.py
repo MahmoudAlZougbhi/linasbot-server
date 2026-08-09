@@ -271,10 +271,9 @@ class TestDebugAndSimulationEndpoints:
             json={"phone": "9613000000", "text": "hi"},
             headers={CSRF_HEADER_NAME: csrf},
         )
-        assert response.status_code == 200
+        assert response.status_code == 403
         body = response.json()
-        assert body.get("success") is False
-        assert "disabled" in (body.get("error") or "").lower()
+        assert body.get("code") == "PRODUCT_MODULE_DISABLED"
 
     def test_simulate_webhook_disabled_in_production_like_env(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -288,10 +287,9 @@ class TestDebugAndSimulationEndpoints:
             json={"phone": "9613000000", "text": "hi"},
             headers={CSRF_HEADER_NAME: csrf},
         )
-        assert response.status_code == 200
+        assert response.status_code == 403
         body = response.json()
-        assert body.get("success") is False
-        assert "disabled" in (body.get("error") or "").lower()
+        assert body.get("code") == "PRODUCT_MODULE_DISABLED"
 
     def test_debug_webhook_status_requires_auth(self, client: TestClient) -> None:
         _clear_client_auth(client)
@@ -346,7 +344,9 @@ class TestSSRFAndPathTraversal:
             params={"url": "http://127.0.0.1:9/"},
             headers={CSRF_HEADER_NAME: csrf},
         )
-        assert response.status_code == 400
+        # Wave 1: /api/media is a disabled product module for all tenants.
+        assert response.status_code == 403
+        assert response.json().get("code") == "PRODUCT_MODULE_DISABLED"
 
     def test_training_backup_path_traversal_blocked(self, tmp_path: Path) -> None:
         from services.safe_path import resolve_backup_filename

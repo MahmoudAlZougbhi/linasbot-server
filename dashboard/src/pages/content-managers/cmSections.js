@@ -13,7 +13,7 @@ export const CM_SECTION_CARDS = [
     slug: "ai-basics",
     section: "ai_basics",
     name: "AI Basics",
-    description: "Clinic identity, persona, and core AI grounding facts.",
+    description: "Business identity, persona, and core AI grounding facts.",
   },
   {
     slug: "languages",
@@ -25,7 +25,7 @@ export const CM_SECTION_CARDS = [
     slug: "style",
     section: "style",
     name: "Style & Tone",
-    description: "Voice, tone, and writing guidelines for Linas AI.",
+    description: "Voice, tone, and writing guidelines for your AI.",
   },
   {
     slug: "dynamic-messages",
@@ -37,13 +37,13 @@ export const CM_SECTION_CARDS = [
     slug: "services",
     section: "services",
     name: "Services",
-    description: "Structured service catalog used by answers and booking.",
+    description: "Structured service/product catalog used by answers.",
   },
   {
     slug: "branches",
     section: "branches",
-    name: "Branches & Hours",
-    description: "Locations, hours, and branch-level availability.",
+    name: "Locations",
+    description: "Branches, stores, offices, hours, and availability (optional).",
   },
   {
     slug: "prices",
@@ -54,15 +54,14 @@ export const CM_SECTION_CARDS = [
   {
     slug: "care",
     section: "care",
-    name: "Preparation & Aftercare",
-    description: "Pre- and post-care guidance tied to services.",
+    name: "Care / Instructions",
+    description: "Preparation and aftercare or operational instructions tied to services.",
   },
   {
     slug: "knowledge",
     section: "knowledge",
     name: "Knowledge",
-    description:
-      "Narrative knowledge for retrieval after FAQ miss — educational articles only. Location, booking, greeting, and price rules belong in their dedicated sections.",
+    description: "Narrative knowledge for retrieval after FAQ miss — educational articles only.",
   },
   {
     slug: "faq",
@@ -79,14 +78,32 @@ export const CM_SECTION_CARDS = [
   {
     slug: "handoff",
     section: "handoff",
-    name: "Booking & Human Handoff",
-    description: "Handoff matrix and WhatsApp numbers (draft authoring).",
+    name: "Human Handoff",
+    description: "Handoff matrix and contact destinations (WhatsApp link, phone, email, URL).",
   },
   {
     slug: "restricted",
     section: "restricted",
     name: "Restricted / Unsupported",
-    description: "Topics that must never route to booking or WhatsApp handoff.",
+    description: "Topics that must never be offered or handed off incorrectly.",
+  },
+  {
+    slug: "actions",
+    section: "actions",
+    name: "Actions / Capabilities",
+    description: "Enable or disable what the AI is allowed to do (DMs, comments, handoff, photo).",
+  },
+  {
+    slug: "ai-limits",
+    section: "ai_limits",
+    name: "AI Limits",
+    description: "Per-customer image and context usage limits for this business.",
+  },
+  {
+    slug: "off-days",
+    section: "off_days",
+    name: "Off Days",
+    description: "Weekly closed days and specific dates the AI should treat as closed.",
   },
   {
     slug: "sources",
@@ -98,7 +115,7 @@ export const CM_SECTION_CARDS = [
     slug: "publish",
     section: null,
     name: "Preview / Validate / Publish",
-    description: "Validate drafts, preview for Testing Lab, and publish when enabled.",
+    description: "Validate drafts, preview the answer packet, and publish for live customers.",
   },
 ];
 

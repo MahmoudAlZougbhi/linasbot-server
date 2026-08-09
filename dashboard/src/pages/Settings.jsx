@@ -15,13 +15,11 @@ import {
   UsersIcon,
   CalendarDaysIcon,
   CurrencyDollarIcon,
-  AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import UserManagement from '../components/UserManagement/UserManagement';
-import AiLimitsPanel from '../components/Settings/AiLimitsPanel';
 import { authFetch } from '../utils/authFetch';
 import { errorMessage } from '../utils/apiValidate';
 
@@ -145,13 +143,11 @@ const Settings = () => {
   const tabs = [
     ...(isLinasTenant ? [{ id: 'general', name: 'General', icon: Cog6ToothIcon, color: 'from-blue-500 to-cyan-500' }] : []),
     { id: 'wallet', name: 'Token Wallet', icon: CurrencyDollarIcon, color: 'from-emerald-500 to-teal-500' },
-    { id: 'ai-limits', name: 'AI Limits', icon: AdjustmentsHorizontalIcon, color: 'from-fuchsia-500 to-pink-500' },
     { id: 'security', name: 'Security', icon: LockClosedIcon, color: 'from-red-500 to-pink-500' },
     { id: 'api', name: 'Integrations', icon: KeyIcon, color: 'from-green-500 to-emerald-500' },
     ...(isLinasTenant ? [
       { id: 'languages', name: 'Languages', icon: GlobeAltIcon, color: 'from-purple-500 to-pink-500' },
       { id: 'notifications', name: 'Notifications', icon: BellIcon, color: 'from-orange-500 to-red-500' },
-      { id: 'clinic', name: 'Clinic calendar', icon: CalendarDaysIcon, color: 'from-teal-500 to-cyan-500' },
     ] : []),
     // Users tab only visible to users with userManagement permission
     ...(canManageUsers ? [{ id: 'users', name: 'Users', icon: UsersIcon, color: 'from-indigo-500 to-violet-500' }] : []),
@@ -656,12 +652,6 @@ const Settings = () => {
                 Interaction Logs
               </Link>
             </div>
-          </div>
-        )}
-
-        {activeTab === 'ai-limits' && (
-          <div className="card">
-            <AiLimitsPanel />
           </div>
         )}
 

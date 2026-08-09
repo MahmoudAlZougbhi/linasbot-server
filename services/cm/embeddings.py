@@ -53,16 +53,10 @@ def hash_embeddings_allowed() -> bool:
 
 def assert_embedding_provider_allowed(provider: str | None = None) -> str:
     """Resolve and enforce provider policy. Returns the normalized provider name."""
-    from services.cm.constants import cm_runtime_mode
-
     resolved = (provider or embedding_provider_name()).strip().lower() or "openai"
     if resolved in TEST_ONLY_EMBEDDING_PROVIDERS:
-        if cm_runtime_mode() == "published":
-            raise HashEmbeddingForbiddenError(
-                "CM_EMBEDDING_PROVIDER=hash is forbidden when CM_RUNTIME_MODE=published. "
-                "Published mode requires a real semantic embedding provider "
-                f"(one of: {sorted(PRODUCTION_EMBEDDING_PROVIDERS)})."
-            )
+        # Hash embeddings remain test-only via ENVIRONMENT=test (hash_embeddings_allowed).
+        # Do not gate on the global runtime label — SoT is per-tenant published CM.
         if not hash_embeddings_allowed():
             raise HashEmbeddingForbiddenError(
                 "CM_EMBEDDING_PROVIDER=hash is test-only. "

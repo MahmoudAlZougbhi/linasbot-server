@@ -62,20 +62,25 @@ def test_initial_restricted_defaults_helpers() -> None:
     assert tattoo.labels.en == "Tattoo removal"
 
 
-def test_publish_disabled_by_default(monkeypatch) -> None:
+def test_publish_enabled_by_default(monkeypatch) -> None:
     monkeypatch.delenv("CM_PUBLISH_ENABLED", raising=False)
-    assert cm_publish_enabled() is False
-    assert "saves drafts only" in PUBLISH_DISABLED_MESSAGE
-    try:
-        ensure_publish_enabled()
-        raise AssertionError("expected PublishDisabledError")
-    except PublishDisabledError as exc:
-        assert str(exc) == PUBLISH_DISABLED_MESSAGE
+    monkeypatch.delenv("CM_EMERGENCY_DISABLE_PUBLISH", raising=False)
+    assert cm_publish_enabled() is True
+    ensure_publish_enabled()  # does not raise
+    assert "emergency" in PUBLISH_DISABLED_MESSAGE.lower()
 
 
-def test_publish_enabled_when_flag_set(monkeypatch) -> None:
+def test_publish_disabled_by_emergency_or_explicit_flag(monkeypatch) -> None:
     monkeypatch.setenv("CM_PUBLISH_ENABLED", "true")
     assert cm_publish_enabled() is True
     ensure_publish_enabled()  # does not raise
     monkeypatch.setenv("CM_PUBLISH_ENABLED", "false")
     assert cm_publish_enabled() is False
+    monkeypatch.delenv("CM_PUBLISH_ENABLED", raising=False)
+    monkeypatch.setenv("CM_EMERGENCY_DISABLE_PUBLISH", "true")
+    assert cm_publish_enabled() is False
+    try:
+        ensure_publish_enabled()
+        raise AssertionError("expected PublishDisabledError")
+    except PublishDisabledError as exc:
+        assert str(exc) == PUBLISH_DISABLED_MESSAGE

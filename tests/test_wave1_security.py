@@ -178,7 +178,9 @@ class TestAPIAuthEnforcement:
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r2 = client.get("/api/media/audio", params={"url": "http://127.0.0.1:9/"})
-        assert r2.status_code == 400
+        # Wave 1: media module disabled for all tenants (including after auth).
+        assert r2.status_code == 403
+        assert r2.json().get("code") == "PRODUCT_MODULE_DISABLED"
 
     def test_simulate_webhook_disabled(self, client):
         rec = session_service.create_session(user_id="t1", email="t@example.com", role="admin", permissions=None)
@@ -189,10 +191,9 @@ class TestAPIAuthEnforcement:
             json={"phone": "9613000000", "text": "hi"},
             headers={"X-CSRF-Token": rec.csrf_token},
         )
-        assert r.status_code == 200
+        assert r.status_code == 403
         body = r.json()
-        assert body.get("success") is False
-        assert "disabled" in (body.get("error") or "").lower()
+        assert body.get("code") == "PRODUCT_MODULE_DISABLED"
 
     def test_social_takeover_forbidden(self, client):
         rec = session_service.create_session(user_id="op2", email="op2@example.com", role="admin", permissions=None)

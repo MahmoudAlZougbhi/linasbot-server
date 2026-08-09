@@ -19,12 +19,9 @@ import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
-import { OperatorStatusProvider } from './contexts/OperatorStatusContext';
 import { useApi } from './hooks/useApi';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Testing = lazy(() => import('./pages/Testing'));
-const SimpleApiTest = lazy(() => import('./pages/SimpleApiTest'));
 const Training = lazy(() => import('./pages/Training'));
 const ContentManagers = lazy(() => import('./pages/ContentManagers'));
 const CmSectionPage = lazy(() => import('./pages/content-managers/CmSectionPage'));
@@ -43,12 +40,10 @@ const CmCarePage = lazy(() => import('./pages/content-managers/CmCarePage'));
 const CmHandoffPage = lazy(() => import('./pages/content-managers/CmHandoffPage'));
 const CmRestrictedPage = lazy(() => import('./pages/content-managers/CmRestrictedPage'));
 const CmSourcesPage = lazy(() => import('./pages/content-managers/CmSourcesPage'));
-const ActivityFlow = lazy(() => import('./pages/ActivityFlow'));
-const LiveChat = lazy(() => import('./pages/LiveChat'));
-const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
-const SmartMessaging = lazy(() => import('./pages/SmartMessaging'));
+const CmActionsPage = lazy(() => import('./pages/content-managers/CmActionsPage'));
+const CmAiLimitsPage = lazy(() => import('./pages/content-managers/CmAiLimitsPage'));
+const CmOffDaysPage = lazy(() => import('./pages/content-managers/CmOffDaysPage'));
 const Settings = lazy(() => import('./pages/Settings'));
-const SocialPostCreator = lazy(() => import('./pages/SocialPostCreator'));
 const Wallet = lazy(() => import('./pages/Wallet'));
 
 const RouteFallback = () => (
@@ -71,7 +66,6 @@ function AppContent() {
   }
 
   return (
-      <OperatorStatusProvider>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse-slow"></div>
@@ -109,8 +103,8 @@ function AppContent() {
                 <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     <Route path="/app" element={<Dashboard />} />
-                    <Route path="/testing" element={<Testing />} />
-                    <Route path="/api-debug" element={<SimpleApiTest />} />
+                    <Route path="/testing" element={<Navigate to="/content-managers" replace />} />
+                    <Route path="/api-debug" element={<Navigate to="/content-managers" replace />} />
                     <Route path="/training" element={<Training />} />
                     <Route path="/content-managers" element={<ContentManagers />} />
                     <Route path="/content-managers/publish" element={<CmPublishPage />} />
@@ -127,13 +121,16 @@ function AppContent() {
                     <Route path="/content-managers/care" element={<CmCarePage />} />
                     <Route path="/content-managers/handoff" element={<CmHandoffPage />} />
                     <Route path="/content-managers/restricted" element={<CmRestrictedPage />} />
+                    <Route path="/content-managers/actions" element={<CmActionsPage />} />
+                    <Route path="/content-managers/ai-limits" element={<CmAiLimitsPage />} />
+                    <Route path="/content-managers/off-days" element={<CmOffDaysPage />} />
                     <Route path="/content-managers/sources" element={<CmSourcesPage />} />
                     <Route path="/content-managers/:sectionSlug" element={<CmSectionPage />} />
-                    <Route path="/activity-flow" element={<ActivityFlow />} />
-                    <Route path="/live-chat" element={<LiveChat />} />
+                    <Route path="/activity-flow" element={<Navigate to="/content-managers" replace />} />
+                    <Route path="/live-chat" element={<Navigate to="/content-managers" replace />} />
                     <Route path="/analytics" element={<Navigate to="/app" replace />} />
-                    <Route path="/smart-messaging" element={<SmartMessaging />} />
-                    <Route path="/social-posts" element={<SocialPostCreator />} />
+                    <Route path="/smart-messaging" element={<Navigate to="/content-managers" replace />} />
+                    <Route path="/social-posts" element={<Navigate to="/content-managers" replace />} />
                     <Route path="/wallet" element={<Wallet />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />
@@ -171,19 +168,6 @@ function AppContent() {
           }}
         />
       </div>
-      </OperatorStatusProvider>
-  );
-}
-
-function MobileLiveChatRoute() {
-  return (
-    <OperatorStatusProvider>
-      <div className="h-[100dvh] overflow-hidden bg-slate-950">
-        <Suspense fallback={<RouteFallback />}>
-          <MobileLiveChat />
-        </Suspense>
-      </div>
-    </OperatorStatusProvider>
   );
 }
 
@@ -216,7 +200,7 @@ function App() {
               path="/mobile/live-chat"
               element={
                 <ProtectedRoute>
-                  <MobileLiveChatRoute />
+                  <Navigate to="/content-managers" replace />
                 </ProtectedRoute>
               }
             />

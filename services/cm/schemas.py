@@ -35,8 +35,8 @@ class LocalizedLabels(CmBaseModel):
 
 
 class AiBasics(CmBaseModel):
-    assistant_name: str = "Linas"
-    clinic_name: str = "Linas Laser"
+    assistant_name: str = ""
+    clinic_name: str = ""  # Generic business display name (legacy field key retained).
     ai_role: str = ""
     business_purpose: str = ""
     short_introduction: str = ""
@@ -145,13 +145,28 @@ class ArticleRecord(CmBaseModel):
 
 
 class HandoffContact(CmBaseModel):
+    """Structured human-contact destination (phone / WhatsApp / email / URL)."""
+
     id: str
-    phone_e164: str
+    destination_type: Literal["phone", "whatsapp", "email", "url"] = "whatsapp"
+    destination_value: str = ""
+    # Legacy field retained for older drafts; used when destination_value is empty.
+    phone_e164: str = ""
     label: str = ""
     branch_id: str | None = None
     gender: GenderAudience = "any"
     topic_id: str | None = None
     notes: str | None = None
+
+    def resolved_destination(self) -> tuple[str, str]:
+        """Return (type, value) preferring destination_* then legacy phone_e164."""
+        value = (self.destination_value or "").strip() or (self.phone_e164 or "").strip()
+        dtype = (self.destination_type or "whatsapp").strip().lower()
+        if not value:
+            return dtype, ""
+        if not (self.destination_value or "").strip() and (self.phone_e164 or "").strip():
+            return "whatsapp", value
+        return dtype, value
 
 
 class HandoffMatrixRow(CmBaseModel):
@@ -183,6 +198,61 @@ class RestrictedTopic(CmBaseModel):
 
 class RestrictedPolicy(CmBaseModel):
     topics: list[RestrictedTopic] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class ActionCapability(CmBaseModel):
+    id: str
+    enabled: bool = False
+    notes: str | None = None
+
+
+class ActionsSection(CmBaseModel):
+    """Tenant-enabled capabilities. Code defines how; tenant chooses which."""
+
+    items: list[ActionCapability] = Field(
+        default_factory=lambda: [
+            ActionCapability(id="respond_facebook_dm", enabled=True),
+            ActionCapability(id="respond_instagram_dm", enabled=True),
+            ActionCapability(id="respond_facebook_comments", enabled=False),
+            ActionCapability(id="respond_instagram_comments", enabled=False),
+            ActionCapability(id="human_handoff", enabled=True),
+            ActionCapability(id="photo_analysis", enabled=False),
+        ]
+    )
+    notes: str | None = None
+
+
+class AiLimitsSection(CmBaseModel):
+    """Tenant-configurable AI usage limits (enforced from published CM)."""
+
+    unlimited: bool = False
+    image_per_day: int = Field(default=20, ge=0)
+    image_per_week: int = Field(default=100, ge=0)
+    context_lines_per_day: int = Field(default=500, ge=0)
+    context_lines_per_week: int = Field(default=2000, ge=0)
+    enforce_image_day: bool = True
+    enforce_image_week: bool = True
+    enforce_context_day: bool = True
+    enforce_context_week: bool = True
+    notes: str | None = None
+
+
+class OffDayRule(CmBaseModel):
+    id: str
+    kind: Literal["weekly", "date", "range"] = "weekly"
+    # weekly: 0=Monday .. 6=Sunday
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    date: str = ""  # YYYY-MM-DD for kind=date
+    start_date: str = ""  # YYYY-MM-DD for kind=range
+    end_date: str = ""  # YYYY-MM-DD for kind=range
+    reason: str = ""
+    notes: str | None = None
+
+
+class OffDaysSection(CmBaseModel):
+    timezone: str = "Asia/Beirut"
+    rules: list[OffDayRule] = Field(default_factory=list)
     notes: str | None = None
 
 
@@ -402,6 +472,9 @@ def default_section_payload(section: str) -> dict[str, object]:
         "handoff": HandoffPolicy(),
         # Empty by default — Restricted Topics are owner-configured, not auto-seeded.
         "restricted": RestrictedPolicy(),
+        "actions": ActionsSection(),
+        "ai_limits": AiLimitsSection(),
+        "off_days": OffDaysSection(),
     }
     model = builders.get(section)
     if model is None:

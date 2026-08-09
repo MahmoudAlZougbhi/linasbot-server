@@ -55,10 +55,20 @@ def find_restricted_topic(
 
 @dataclass
 class HandoffResolution:
-    contact_phone_e164: str | None
+    destination_type: str | None
+    destination_value: str | None
     contact_label: str
     matched_row_id: str | None
     missing_reason: str | None = None
+
+    @property
+    def contact_phone_e164(self) -> str | None:
+        """Back-compat: phone/whatsapp destinations expose digits/value as phone-like."""
+        if not self.destination_value:
+            return None
+        if (self.destination_type or "") in {"phone", "whatsapp"}:
+            return self.destination_value
+        return None
 
 
 def resolve_handoff(
@@ -69,10 +79,9 @@ def resolve_handoff(
     branch_id: str | None = None,
     gender: str | None = None,
 ) -> HandoffResolution:
-    """Resolve the best-matching enabled handoff matrix row to a contact.
+    """Resolve the best-matching enabled handoff matrix row to a contact destination.
 
-    Never invoked for restricted topics by the runtime pipeline (restricted is screened first).
-    Never invents a phone number: returns ``missing_reason`` instead when nothing is configured.
+    Never invents a destination: returns ``missing_reason`` when nothing is configured.
     """
     policy = handoff if isinstance(handoff, HandoffPolicy) else HandoffPolicy.model_validate(handoff)
     contacts_by_id = {contact.id: contact for contact in policy.contacts}
@@ -91,14 +100,22 @@ def resolve_handoff(
 
     candidates = [row for row in policy.matrix if row.enabled]
     if not candidates:
-        return HandoffResolution(None, "", None, missing_reason="NO_HANDOFF_ROWS")
+        # Fall back to first contact with any destination when matrix empty.
+        for contact in policy.contacts:
+            dtype, value = contact.resolved_destination()
+            if value:
+                return HandoffResolution(dtype, value, contact.label or contact.id, None)
+        return HandoffResolution(None, None, "", None, missing_reason="NO_HANDOFF_ROWS")
 
     candidates.sort(key=_score, reverse=True)
     best = candidates[0]
-    contact = contacts_by_id.get(best.contact_id)
-    if contact is None or not (contact.phone_e164 or "").strip():
-        return HandoffResolution(None, "", best.id, missing_reason="CONTACT_NOT_FOUND")
-    return HandoffResolution(contact.phone_e164, contact.label, best.id)
+    matched = contacts_by_id.get(best.contact_id)
+    if matched is None:
+        return HandoffResolution(None, None, "", best.id, missing_reason="CONTACT_NOT_FOUND")
+    dtype, value = matched.resolved_destination()
+    if not value:
+        return HandoffResolution(None, None, "", best.id, missing_reason="CONTACT_NOT_FOUND")
+    return HandoffResolution(dtype, value, matched.label or matched.id, best.id)
 
 
 def resolve_service_facts(services: ServicesSection | dict[str, Any], service_id: str) -> list[AnswerFact]:
@@ -198,12 +215,21 @@ def resolve_handoff_phone_facts(
 ) -> list[AnswerFact]:
     """AnswerFact wrapper around :func:`resolve_handoff` for packet assembly."""
     resolution = resolve_handoff(handoff, service_id=service_id, topic_id=topic_id, branch_id=branch_id, gender=gender)
-    if not resolution.contact_phone_e164:
+    if not resolution.destination_value:
         return []
-    return [
+    facts = [
         AnswerFact(
-            kind="handoff_phone",
-            value=resolution.contact_phone_e164,
+            kind="handoff_destination",
+            value=f"{resolution.destination_type}:{resolution.destination_value}",
             source_id=f"handoff:{resolution.matched_row_id or 'unknown'}",
         )
     ]
+    if resolution.contact_phone_e164:
+        facts.append(
+            AnswerFact(
+                kind="handoff_phone",
+                value=resolution.contact_phone_e164,
+                source_id=f"handoff:{resolution.matched_row_id or 'unknown'}",
+            )
+        )
+    return facts

@@ -18,6 +18,7 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { CM_SECTION_CARDS } from "./content-managers/cmSections";
+import CmSetupChatPanel from "./content-managers/CmSetupChatPanel";
 
 /** @type {Record<string, import('react').ComponentType<{ className?: string }>>} */
 const SECTION_ICONS = {
@@ -34,6 +35,9 @@ const SECTION_ICONS = {
   "learning-inbox": InboxStackIcon,
   handoff: GlobeAltIcon,
   restricted: ExclamationTriangleIcon,
+  actions: WrenchScrewdriverIcon,
+  "ai-limits": ClockIcon,
+  "off-days": ClockIcon,
   sources: ClockIcon,
   publish: RocketLaunchIcon,
 };
@@ -44,11 +48,13 @@ const ContentManagers = () => {
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Content Managers</h1>
         <p className="text-slate-600 mt-1 max-w-3xl">
-          Guided control plane for Linas AI facts, FAQ, handoff, and restricted topics.
-          Edit each section, Save Draft, Validate, then open Preview / Validate / Publish when you
-          want customer-facing AI to use the new version.
+          Configure your business AI: identity, languages, knowledge, handoff, limits, and actions.
+          Use the Setup Assistant or edit sections manually — both write the same drafts. Then Validate
+          and Publish so customers get answers from your published version.
         </p>
       </div>
+
+      <CmSetupChatPanel />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {CM_SECTION_CARDS.map((card, index) => {

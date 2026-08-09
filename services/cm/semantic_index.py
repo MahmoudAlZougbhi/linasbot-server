@@ -11,12 +11,12 @@ import uuid
 from typing import Any
 
 from services.cm.atomic_io import atomic_write_json, read_json, read_json_object
-from services.cm.constants import cm_runtime_mode
 from services.cm.embeddings import (
     assert_published_embedding_pin,
     cosine_similarity,
     embed_texts,
     embedding_pin,
+    hash_embeddings_allowed,
 )
 from services.cm.paths import indexes_dir
 from services.cm.schemas import CareSection, FaqSection, KnowledgeSection
@@ -188,10 +188,12 @@ async def search(
 ) -> list[dict[str, Any]]:
     """Cosine top-k search, tenant + index scoped. Returns rows without raw vectors."""
     manifest, rows = load_index(tenant_id, index_id)
-    if cm_runtime_mode() == "published":
-        embedding_raw = manifest.get("embedding")
-        embedding: dict[str, Any] = embedding_raw if isinstance(embedding_raw, dict) else {}
-        provider = str(embedding.get("provider") or "")
+    manifest, rows = load_index(tenant_id, index_id)
+    embedding_raw = manifest.get("embedding")
+    embedding: dict[str, Any] = embedding_raw if isinstance(embedding_raw, dict) else {}
+    provider = str(embedding.get("provider") or "")
+    # Production indexes must pin a real provider; hash is allowed only in ENVIRONMENT=test.
+    if provider and not (provider == "hash" and hash_embeddings_allowed()):
         assert_published_embedding_pin(provider, context=f"index {index_id}")
     if not rows or not (query or "").strip():
         return []

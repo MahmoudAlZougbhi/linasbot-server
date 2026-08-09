@@ -3595,18 +3595,15 @@ def get_system_instruction(
         custom_knowledge_context: When provided (dynamic retrieval), ADDITIVE to KB/Style - never replaces
         operational_context: Structured block with state, original_question, task (Plan §10)
 
-    ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
-    When ``cm_runtime_mode() == "published"``, never inject legacy price_list / style_guide /
-    knowledge_base file contents. Published path does not use this helper for customer answers;
-    this guard is defensive against accidental legacy calls (no silent SoT fill).
+    ===== CM AI CONTROL PLANE =====
+    Customer answers for published tenants use the CM runtime pipeline — not this helper.
+    This helper remains for the temporary linas legacy bridge only; do not gate file injection
+    on a global env flag (that would blank Linas legacy context incorrectly).
     """
     _ = qa_reference  # compatibility placeholder
     user_gender_str = config.user_gender.get(user_id, "unknown")
 
-    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
-    from services.cm.constants import cm_runtime_mode
-
-    published_mode = cm_runtime_mode() == "published"
+    published_mode = False
     if published_mode:
         include_price_list = False
 

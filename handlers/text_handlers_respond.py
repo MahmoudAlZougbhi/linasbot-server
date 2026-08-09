@@ -1132,8 +1132,17 @@ async def _process_and_respond(
     # =====================================
 
     # Instagram/Facebook never create or manage appointments inside the social DM.
-    # Route booking and human-agent requests to the correct branch/gender WhatsApp contact
-    # before any GPT or CRM tool can run.
+    # Laser-specific branch/gender WhatsApp routing is legacy-bridge only.
+    # Published CM tenants use the CM handoff pipeline (no Beirut/Antelias leakage).
+    from services.cm.constants import (
+        DEFAULT_TENANT_ID as _CM_DEFAULT_TENANT,
+    )
+    from services.cm.constants import (
+        tenant_allows_legacy_bridge as _tenant_allows_legacy_bridge,
+    )
+    from services.cm.constants import (
+        tenant_uses_cm_runtime as _tenant_uses_cm_runtime,
+    )
     from services.social_contact_routing import (
         clear_social_booking_preference,
         is_social_channel,
@@ -1143,49 +1152,54 @@ async def _process_and_respond(
     )
 
     if is_social_channel(user_data.get("channel")):
-        if user_data.get("user_preferred_lang") != current_preferred_lang:
-            user_persistence.save_user_language(user_id, current_preferred_lang)
-        social_route = route_social_contact_request(
-            user_input_to_process,
-            user_data,
-            current_preferred_lang,
+        _social_tenant = user_data.get("tenant_id") or _CM_DEFAULT_TENANT
+        _use_legacy_social_router = _tenant_allows_legacy_bridge(_social_tenant) and not _tenant_uses_cm_runtime(
+            _social_tenant
         )
-        if social_route:
-            preference_persisted = True
-            if social_route.preference_to_persist:
-                preference_persisted = await user_persistence.save_social_booking_preference(
-                    user_id,
-                    social_booking_preference_key(user_data),
-                    social_route.preference_to_persist,
-                )
-                if not preference_persisted:
-                    clear_social_booking_preference(user_data)
-
-            reply = social_route.reply
-            if social_route.intent == "preference" and social_route.gender in {"male", "female"}:
-                reply = social_booking_preference_reply(
-                    current_preferred_lang,
-                    social_route.gender,
-                    persisted=preference_persisted,
-                )
-
-            await send_message_func(user_id, reply)
-            await save_conversation_message_to_firestore(
-                user_id,
-                "ai",
-                reply,
-                current_conversation_id,
-                user_name,
-                user_data.get("phone_number"),
-                metadata={
-                    "handled_by": "deterministic_social_router",
-                    "channel": user_data.get("channel"),
-                    "social_contact_intent": social_route.intent,
-                    "social_contact_env": social_route.contact_env,
-                    "social_preference_persisted": preference_persisted,
-                },
+        if _use_legacy_social_router:
+            if user_data.get("user_preferred_lang") != current_preferred_lang:
+                user_persistence.save_user_language(user_id, current_preferred_lang)
+            social_route = route_social_contact_request(
+                user_input_to_process,
+                user_data,
+                current_preferred_lang,
             )
-            return
+            if social_route:
+                preference_persisted = True
+                if social_route.preference_to_persist:
+                    preference_persisted = await user_persistence.save_social_booking_preference(
+                        user_id,
+                        social_booking_preference_key(user_data),
+                        social_route.preference_to_persist,
+                    )
+                    if not preference_persisted:
+                        clear_social_booking_preference(user_data)
+
+                reply = social_route.reply
+                if social_route.intent == "preference" and social_route.gender in {"male", "female"}:
+                    reply = social_booking_preference_reply(
+                        current_preferred_lang,
+                        social_route.gender,
+                        persisted=preference_persisted,
+                    )
+
+                await send_message_func(user_id, reply)
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    reply,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={
+                        "handled_by": "deterministic_social_router",
+                        "channel": user_data.get("channel"),
+                        "social_contact_intent": social_route.intent,
+                        "social_contact_env": social_route.contact_env,
+                        "social_preference_persisted": preference_persisted,
+                    },
+                )
+                return
 
     # DEBUG: Log gender state at start of processing
     print(f"[_process_and_respond] 🔍 USER STATE for {user_id}:")
@@ -1347,16 +1361,21 @@ async def _process_and_respond(
         )
         return
 
-    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
-    # Opt-in only (CM_RUNTIME_MODE defaults to "legacy" => this block is a no-op and the
-    # rest of the function is completely unchanged). When enabled, this fully replaces the
-    # legacy FAQ/GPT/booking flow for THIS message with the CM answer pipeline; there is
-    # no silent fallback to legacy if the published pointer/index is missing (honest failure).
-    from services.cm.constants import DEFAULT_TENANT_ID, cm_runtime_mode
+    # ===== CM AI CONTROL PLANE — per-tenant published runtime =====
+    # Published CM is the SoT when this tenant has an active published version.
+    # New tenants without publish get an honest unpublished message (never Marwa/Linas).
+    # Temporary legacy bridge: only ``linas`` without published content (removed in Wave 6).
+    from services.cm.constants import (
+        DEFAULT_TENANT_ID,
+        UNPUBLISHED_AI_MESSAGE,
+        tenant_allows_legacy_bridge,
+        tenant_uses_cm_runtime,
+    )
 
-    if cm_runtime_mode() == "published":
+    cm_tenant_id = user_data.get("tenant_id") or DEFAULT_TENANT_ID
+    if tenant_uses_cm_runtime(cm_tenant_id):
         cm_reply, cm_metadata = await _handle_published_cm_runtime(
-            tenant_id=user_data.get("tenant_id") or DEFAULT_TENANT_ID,
+            tenant_id=cm_tenant_id,
             message=user_input_to_process,
             detected_language=current_preferred_lang,
             response_language=response_language,
@@ -1448,6 +1467,48 @@ async def _process_and_respond(
             ai_called=bool(cm_metadata.get("ai_called")),
             token_source="backend" if cm_metadata.get("prompt_tokens") is not None else None,
             flow_steps=cm_steps,
+        )
+        return
+
+    if not tenant_allows_legacy_bridge(cm_tenant_id):
+        lang_key = (response_language or current_preferred_lang or "en").strip().lower()
+        if lang_key not in UNPUBLISHED_AI_MESSAGE:
+            lang_key = "en" if lang_key == "en" else ("ar" if lang_key in {"ar", "franco"} else "en")
+        unpublished_reply = UNPUBLISHED_AI_MESSAGE.get(lang_key) or UNPUBLISHED_AI_MESSAGE["en"]
+        await send_message_func(user_id, unpublished_reply)
+        await save_conversation_message_to_firestore(
+            user_id,
+            "ai",
+            unpublished_reply,
+            current_conversation_id,
+            user_name,
+            user_data.get("phone_number"),
+            metadata={"handled_by": "cm_unpublished_guard", "tenant_id": cm_tenant_id},
+        )
+        log_interaction(
+            user_id,
+            user_input_to_process,
+            unpublished_reply,
+            "cm_unpublished",
+            user_name=user_name,
+            user_phone=user_data.get("phone_number"),
+            user_gender=current_gender,
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            handler_path="cm_unpublished_guard",
+            outcome="unpublished",
+            ai_called=False,
+            cost_status="none",
+            flow_steps=[
+                {"step": 1, "title": "User → Bot", "content": user_input_to_process},
+                {
+                    "step": 2,
+                    "title": "CM unpublished guard",
+                    "content": "Tenant has no published CM version; refused without legacy fallback.",
+                    "event_type": "unpublished_refuse",
+                },
+                {"step": 3, "title": "Bot → User", "content": unpublished_reply, "event_type": "response_sent"},
+            ],
         )
         return
     # =====================================================================

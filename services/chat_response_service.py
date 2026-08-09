@@ -30,6 +30,7 @@ from services.gender_recognition_service import get_gender_from_gpt
 from services.llm_core_service import client
 from services.model_pricing import compute_cost_from_usage as _compute_cost_from_usage
 from services.moderation_service import check_rate_limits, get_rate_limit_response
+from services.product_features import LEGACY_BOOKING_TOOL_NAMES
 from utils.appointment_slot_rules import (
     extract_appointment_booking_fields,
     find_appointment_row_in_check_next_payload,
@@ -3239,10 +3240,9 @@ async def get_bot_chat_response(
 
     # Get the core system instruction from utils.py, with conditional price list loading.
     # When custom_knowledge_context is provided (from dynamic retrieval), ADDITIVE to KB/Style.
-    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
-    from services.cm.constants import cm_runtime_mode
-
-    _published = cm_runtime_mode() == "published"
+    # Legacy path only reaches here for the temporary linas bridge (Wave 6 removes it).
+    # Per-tenant published CM answers never enter this function.
+    _published = False
     system_instruction_core = get_system_instruction(
         user_id,
         current_preferred_lang,
@@ -3651,34 +3651,7 @@ async def get_bot_chat_response(
             temperature=0.7,
             tools=cast(
                 list[ChatCompletionToolParam],
-                get_openai_tools_schema(
-                    excluded_tool_names={
-                        "update_customer_profile",
-                        "submit_booking_intent",
-                        "create_appointment",
-                        "update_appointment_date",
-                        "update_paused_appointment",
-                        "edit_appointment",
-                        "resume_appointment",
-                        "sync_appointment_agreed_price",
-                        "send_appointment_reminders",
-                        "check_next_appointment",
-                        "get_appointment_details",
-                        "check_appointment_payment",
-                        "get_customer_sessions",
-                        "get_sessions_count_by_phone",
-                        "move_client_branch",
-                        "get_customer_by_phone",
-                        "check_customer_gender",
-                        "create_customer",
-                        "add_customer_note",
-                        "get_all_customers",
-                        "get_clients_without_today",
-                        "get_missed_appointments",
-                    }
-                    if social_channel
-                    else None
-                ),
+                get_openai_tools_schema(excluded_tool_names=set(LEGACY_BOOKING_TOOL_NAMES)),
             ),
             tool_choice="auto",
             response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),
