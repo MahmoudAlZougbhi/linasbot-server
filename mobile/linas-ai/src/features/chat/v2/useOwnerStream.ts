@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { API_BASE } from '../../api/client';
-import { tokenStore } from '../../auth/tokenStore';
+import { API_BASE } from '../../../api/client';
+import { tokenStore } from '../../../auth/tokenStore';
 
 export type StreamStatus = { id: string; text: string };
 export type StreamCard = {
