@@ -26,7 +26,7 @@ const FAQS = [
 
 /** FAQ + contact — matches linas-landing-08-contact.jpg */
 export default function LandingFaqContact() {
-  const [open, setOpen] = useState(/** @type {string | null} */ (FAQS[0].q));
+  const [open, setOpen] = useState(/** @type {string | null} */ (FAQS[0]?.q ?? null));
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
