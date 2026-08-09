@@ -426,9 +426,25 @@ async def handle_message(
 
     # AI-primary: GPT decides when to transfer to human (handover_degree, human_handover action).
     # Sentiment is still logged for dashboard; escalation decision is delegated to GPT.
+    # Owner alerts for anger/offensive use this same keyword analyzer (no new ML).
     sentiment_analysis = sentiment_service.analyze_sentiment(
         user_id=user_id, message=raw_msg, language=user_data.get("user_preferred_lang", "ar")
     )
+
+    try:
+        from services.owner_alert_service import owner_alert_service
+
+        owner_alert_service.emit_sentiment_signal(
+            tenant_id=user_data.get("tenant_id") or user_data.get("tenantId"),
+            customer_name=user_name,
+            user_id=user_id,
+            conversation_id=user_data.get("current_conversation_id"),
+            channel=user_data.get("channel"),
+            sentiment_analysis=sentiment_analysis,
+            last_message=raw_msg,
+        )
+    except Exception as alert_err:
+        print(f"⚠️ Failed to persist sentiment owner alert: {alert_err}")
 
     # Update conversation sentiment in Firebase (for dashboard/analytics only)
     if db and user_data.get("current_conversation_id"):

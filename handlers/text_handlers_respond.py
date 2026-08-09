@@ -1632,6 +1632,8 @@ async def _process_and_respond(
                         last_message=user_input_to_process,
                         trigger_source=trigger_source,
                         conversation_id=current_conversation_id,
+                        tenant_id=user_data.get("tenant_id") or user_data.get("tenantId"),
+                        channel=user_data.get("channel"),
                         extra_details={"action": "router_human_handover"},
                     )
                 except Exception as notify_error:
@@ -2695,6 +2697,8 @@ async def _process_and_respond(
                 last_message=user_input_to_process,
                 trigger_source=trigger_source,
                 conversation_id=current_conversation_id,
+                tenant_id=user_data.get("tenant_id") or user_data.get("tenantId"),
+                channel=user_data.get("channel"),
                 extra_details={"action": action},
             )
         except Exception as notify_error:

@@ -29,7 +29,7 @@ export const en = {
   guestChatEmptyTitle: 'Welcome to Linas AI',
   guestChatEmptyBody: 'Ask what Linas AI offers for your business. Guest chat is explanatory only.',
   guestQuestionsLeft: 'Guest questions: {n}/{max} remaining',
-  guestLimitReached: 'Guest limit reached. Log in or create an account to continue.',
+  guestLimitReached: 'Guest limit reached. Download the Linas AI app and subscribe to continue.',
   guestWordLimit: 'Each guest question can be at most 50 words.',
   loginOrRegister: 'Log in / Create account',
   authGateTitle: 'Sign in to continue',
@@ -154,6 +154,18 @@ export const en = {
   permContentManagers: 'Content Managers',
   permContentPublish: 'Content Publish',
   permActivityFlow: 'Interaction Logs',
+  notificationsTitle: 'Notifications',
+  notificationsSub: 'Owner alerts from customer chats',
+  notificationsEmptyTitle: 'No alerts yet',
+  notificationsEmptyBody:
+    'You will see alerts when a customer requests a human, curses, or is angry while talking to the AI.',
+  notificationsLoadError: 'Could not load notifications. Try again.',
+  notificationsForbiddenTitle: 'Live Chat permission required',
+  notificationsForbiddenBody: 'Your account needs Live Chat access to view owner alerts.',
+  notificationsAuthBody: 'Sign in to view owner alerts from customer conversations.',
+  notificationsUnread: '{n} unread',
+  notificationsAllRead: 'All caught up',
+  notificationsMarkAll: 'Mark all read',
 } as const;
 
 export type StringKey = keyof typeof en;

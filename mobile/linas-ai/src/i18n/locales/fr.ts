@@ -33,7 +33,7 @@ export const fr: Record<StringKey, string> = {
   guestChatEmptyBody:
     'Demandez ce que Linas AI offre à votre entreprise. Le chat invité est explicatif seulement.',
   guestQuestionsLeft: 'Questions invité : {n}/{max} restantes',
-  guestLimitReached: 'Limite invité atteinte. Connectez-vous ou créez un compte pour continuer.',
+  guestLimitReached: 'Limite invité atteinte. Téléchargez l’app Linas AI et abonnez-vous pour continuer.',
   guestWordLimit: 'Chaque question invité est limitée à 50 mots.',
   loginOrRegister: 'Connexion / Créer un compte',
   authGateTitle: 'Connectez-vous pour continuer',
@@ -160,4 +160,16 @@ export const fr: Record<StringKey, string> = {
   permContentManagers: 'Gestionnaires de contenu',
   permContentPublish: 'Publication de contenu',
   permActivityFlow: 'Journal d’interactions',
+  notificationsTitle: 'Notifications',
+  notificationsSub: 'Alertes propriétaire depuis les chats clients',
+  notificationsEmptyTitle: 'Aucune alerte',
+  notificationsEmptyBody:
+    'Vous verrez des alertes quand un client demande un humain, insulte, ou est en colère avec l’IA.',
+  notificationsLoadError: 'Impossible de charger les notifications. Réessayez.',
+  notificationsForbiddenTitle: 'Permission Live Chat requise',
+  notificationsForbiddenBody: 'Votre compte a besoin de l’accès Live Chat pour voir les alertes.',
+  notificationsAuthBody: 'Connectez-vous pour voir les alertes des conversations clients.',
+  notificationsUnread: '{n} non lues',
+  notificationsAllRead: 'Tout est à jour',
+  notificationsMarkAll: 'Tout marquer lu',
 };

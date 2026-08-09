@@ -9,6 +9,7 @@ export type ControlArea =
   | 'settings'
   | 'dashboard'
   | 'livechat'
+  | 'notifications'
   | 'owner';
 
 export type ControlItem = {
@@ -33,6 +34,12 @@ export const CONTROL_ITEMS: ControlItem[] = [
     group: 'operate',
   },
   {
+    id: 'notifications',
+    title: 'Notifications',
+    subtitle: 'Human request & escalation alerts',
+    group: 'operate',
+  },
+  {
     id: 'integrations',
     title: 'Integrations',
     subtitle: 'Instagram & Facebook',
@@ -40,8 +47,8 @@ export const CONTROL_ITEMS: ControlItem[] = [
   },
   {
     id: 'create',
-    title: 'Create Post',
-    subtitle: 'Creative Studio',
+    title: 'Creative Studio',
+    subtitle: 'Full studio workspace',
     group: 'grow',
   },
   {
@@ -64,8 +71,8 @@ export const CONTROL_ITEMS: ControlItem[] = [
   },
   {
     id: 'subscription',
-    title: 'Billing',
-    subtitle: 'Plan & entitlements',
+    title: 'Subscription',
+    subtitle: 'Plans $24.99–$250 & entitlements',
     group: 'account',
   },
   {

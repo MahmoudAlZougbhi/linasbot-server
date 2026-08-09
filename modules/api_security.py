@@ -166,6 +166,8 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "activityFlow"
     if p.startswith("/api/live-chat") or p.startswith("/api/chat-history"):
         return "liveChat"
+    if p.startswith("/api/owner-notifications"):
+        return "liveChat"
     if p.startswith("/api/smart-messaging"):
         return "smartMessaging"
     if p.startswith("/api/settings"):

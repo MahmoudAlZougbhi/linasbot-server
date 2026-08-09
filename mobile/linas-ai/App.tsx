@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
+import { Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { API_BASE } from './src/config';
@@ -18,10 +19,14 @@ import { CreativeStudioScreen } from './src/features/creative/CreativeStudioScre
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
 import { IntegrationsScreen } from './src/features/integrations/IntegrationsScreen';
 import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
+import { NotificationsScreen } from './src/features/notifications/NotificationsScreen';
+import { tryRegisterOwnerPushScaffold } from './src/features/notifications/pushScaffold';
 import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
 import { UsersScreen } from './src/features/users/UsersScreen';
 import { LanguageProvider } from './src/i18n/LanguageContext';
+
+type LiveChatOpen = { userId: string; conversationId: string };
 
 type Screen =
   | { name: 'boot' }
@@ -35,7 +40,8 @@ type Screen =
   | { name: 'dashboard' }
   | { name: 'billing' }
   | { name: 'usage' }
-  | { name: 'livechat' }
+  | { name: 'livechat'; open?: LiveChatOpen | null }
+  | { name: 'notifications' }
   | { name: 'cm' }
   | { name: 'cm_section'; section: CmSectionId }
   | { name: 'resource'; title: string; path: string };
@@ -44,6 +50,31 @@ const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>
   scheduled: { title: 'Scheduled', path: '/api/schedule/posts' },
   owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
 };
+
+function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
+  if (!url) return null;
+  try {
+    const normalized = url.replace(/^linasai:\/\//i, 'https://linasai.app/');
+    const parsed = new URL(normalized);
+    const path = parsed.pathname.replace(/^\//, '');
+    if (path !== 'livechat' && !path.startsWith('livechat/')) {
+      return null;
+    }
+    const userId = parsed.searchParams.get('userId') || parsed.searchParams.get('user_id');
+    const conversationId =
+      parsed.searchParams.get('conversationId') || parsed.searchParams.get('conversation_id');
+    if (userId && conversationId) {
+      return { userId, conversationId };
+    }
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length >= 3 && parts[0] === 'livechat') {
+      return { userId: decodeURIComponent(parts[1]), conversationId: decodeURIComponent(parts[2]) };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'boot' });
@@ -60,8 +91,27 @@ export default function App() {
       setIsPlatformOwner(user?.role === 'platform_owner');
       setHasAccess(Boolean(access));
       setAuthReady(true);
+      if (access) {
+        void tryRegisterOwnerPushScaffold();
+      }
     })();
   }, []);
+
+  useEffect(() => {
+    const applyUrl = (url: string | null) => {
+      const target = parseLiveChatDeepLink(url);
+      if (!target) return;
+      if (!hasAccess) {
+        setResumeArea('livechat');
+        setScreen({ name: 'login' });
+        return;
+      }
+      setScreen({ name: 'livechat', open: target });
+    };
+    void Linking.getInitialURL().then(applyUrl);
+    const sub = Linking.addEventListener('url', (event) => applyUrl(event.url));
+    return () => sub.remove();
+  }, [hasAccess]);
 
   const finishBoot = useCallback(() => {
     setBootDone(true);
@@ -82,6 +132,7 @@ export default function App() {
     const user = await tokenStore.getUser();
     setIsPlatformOwner(user?.role === 'platform_owner');
     setHasAccess(true);
+    void tryRegisterOwnerPushScaffold();
     const pending = resumeArea;
     setResumeArea(null);
     if (pending && pending !== 'integrations') {
@@ -121,7 +172,11 @@ export default function App() {
       return;
     }
     if (area === 'livechat') {
-      setScreen({ name: 'livechat' });
+      setScreen({ name: 'livechat', open: null });
+      return;
+    }
+    if (area === 'notifications') {
+      setScreen({ name: 'notifications' });
       return;
     }
     if (area === 'cm') {
@@ -164,6 +219,11 @@ export default function App() {
     if (area === 'users') {
       // Guests land on Users → AuthGate (same pattern as Integrations).
       setScreen({ name: 'users' });
+      return;
+    }
+    if (area === 'notifications') {
+      // Guests land on Notifications → AuthGate (no owner alerts for guests).
+      setScreen({ name: 'notifications' });
       return;
     }
     if (!hasAccess) {
@@ -240,7 +300,21 @@ export default function App() {
         ) : null}
         {screen.name === 'billing' ? <BillingScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
         {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
-        {screen.name === 'livechat' ? <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+        {screen.name === 'livechat' ? (
+          <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} initialOpen={screen.open ?? null} />
+        ) : null}
+        {screen.name === 'notifications' ? (
+          <NotificationsScreen
+            isAuthenticated={hasAccess}
+            onBack={() => setScreen({ name: 'chat' })}
+            onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
+            onRequestLogin={() => {
+              setResumeArea('notifications');
+              setScreen({ name: 'login' });
+            }}
+            onRequestRegister={() => setScreen({ name: 'register' })}
+          />
+        ) : null}
         {screen.name === 'cm' ? (
           <CmScreen
             onBack={() => setScreen({ name: 'chat' })}
