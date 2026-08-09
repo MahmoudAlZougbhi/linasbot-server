@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
 import { ChatMessageSchema, ConversationSummarySchema, type ChatMessage } from '../../api/types';
+import {
+  OWNER_MESSAGE_PAGE,
+  conversationMessagesUrl,
+  mergeLatestWindow,
+  prependOlderUnique,
+} from './ownerChatPaging';
 
 const CreateConvSchema = z.object({
   success: z.literal(true),
@@ -20,6 +26,8 @@ const GetConvSchema = z.object({
     id: z.string(),
     title: z.string(),
     messages: z.array(ChatMessageSchema),
+    has_more: z.boolean().optional(),
+    total_messages: z.number().optional(),
   }),
 });
 
@@ -97,11 +105,18 @@ export function useChatSession(enabled = true) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(enabled);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
   const [proposedPatch, setProposedPatch] = useState<ProposedPatch | null>(null);
   const [quickActions, setQuickActions] = useState<{ id: string; label: string }[]>([]);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+  const loadingMoreRef = useRef(false);
 
   const bootstrap = useCallback(async () => {
     if (!enabled) {
@@ -121,12 +136,11 @@ export function useChatSession(enabled = true) {
       );
       const active = listed.conversations.find((c) => !c.archived) || listed.conversations[0];
       if (active) {
-        const full = await apiFetch(`/api/owner-ai/conversations/${active.id}`, {
-          schema: GetConvSchema,
-        });
+        const full = await apiFetch(conversationMessagesUrl(active.id), { schema: GetConvSchema });
         setConversationId(full.conversation.id);
         setTitle(full.conversation.title);
         setMessages(full.conversation.messages);
+        setHasMore(Boolean(full.conversation.has_more));
       } else {
         const created = await apiFetch('/api/owner-ai/conversations', {
           method: 'POST',
@@ -136,6 +150,7 @@ export function useChatSession(enabled = true) {
         setConversationId(created.conversation.id);
         setTitle(created.conversation.title);
         setMessages(created.conversation.messages);
+        setHasMore(false);
         setHistory([{ id: created.conversation.id, title: created.conversation.title }]);
       }
     } catch {
@@ -145,7 +160,7 @@ export function useChatSession(enabled = true) {
     }
   }, [enabled]);
 
-  /** Soft sync after a stream turn — refresh history + active thread without full-screen loading. */
+  /** Soft sync after a stream turn — refresh history + latest page; keep older prepended pages. */
   const syncAfterTurn = useCallback(async () => {
     if (!enabled) return;
     const activeId = conversationId;
@@ -159,14 +174,11 @@ export function useChatSession(enabled = true) {
           archived: Boolean(c.archived),
         })),
       );
-      const full = await apiFetch(`/api/owner-ai/conversations/${activeId}`, {
-        schema: GetConvSchema,
-      });
-      // Ignore if user switched chats while the request was in flight.
+      const full = await apiFetch(conversationMessagesUrl(activeId), { schema: GetConvSchema });
       setConversationId((current) => {
         if (current === activeId) {
           setTitle(full.conversation.title);
-          setMessages(full.conversation.messages);
+          setMessages((prev) => mergeLatestWindow(prev, full.conversation.messages));
         }
         return current;
       });
@@ -215,10 +227,11 @@ export function useChatSession(enabled = true) {
   }, [bootstrap]);
 
   async function openConversation(id: string) {
-    const full = await apiFetch(`/api/owner-ai/conversations/${id}`, { schema: GetConvSchema });
+    const full = await apiFetch(conversationMessagesUrl(id), { schema: GetConvSchema });
     setConversationId(full.conversation.id);
     setTitle(full.conversation.title);
     setMessages(full.conversation.messages);
+    setHasMore(Boolean(full.conversation.has_more));
     setPendingConfirm(null);
     setProposedPatch(null);
   }
@@ -232,10 +245,32 @@ export function useChatSession(enabled = true) {
     setConversationId(created.conversation.id);
     setTitle(created.conversation.title);
     setMessages(created.conversation.messages);
+    setHasMore(false);
     setHistory((prev) => [{ id: created.conversation.id, title: created.conversation.title }, ...prev]);
     setPendingConfirm(null);
     setProposedPatch(null);
   }
+
+  const loadOlder = useCallback(async () => {
+    if (!enabled || !conversationId || !hasMoreRef.current || loadingMoreRef.current) return;
+    const oldest = messagesRef.current[0]?.id;
+    if (!oldest || oldest.startsWith('local-')) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await apiFetch(
+        conversationMessagesUrl(conversationId, { limit: OWNER_MESSAGE_PAGE, before: oldest }),
+        { schema: GetConvSchema },
+      );
+      setMessages((prev) => prependOlderUnique(prev, page.conversation.messages));
+      setHasMore(Boolean(page.conversation.has_more));
+    } catch {
+      /* keep current window; user can scroll again */
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [conversationId, enabled]);
 
   async function renameConversation(id: string, nextTitle: string) {
     await apiFetch(`/api/owner-ai/conversations/${id}`, {
@@ -290,6 +325,8 @@ export function useChatSession(enabled = true) {
     messages,
     history,
     loading,
+    loadingMore,
+    hasMore,
     sending,
     error,
     pendingConfirm,
@@ -301,6 +338,7 @@ export function useChatSession(enabled = true) {
     autoTitleFromOutgoing,
     openConversation,
     newChat,
+    loadOlder,
     renameConversation,
     setArchived,
     deleteConversation,
