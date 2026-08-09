@@ -69,13 +69,18 @@ def _parse_final_plan(content: str) -> dict[str, Any]:
             text = text.strip("`")
             if text.startswith("json"):
                 text = text[4:].strip()
-        return json.loads(text)
+        parsed = json.loads(text)
+        return (
+            parsed if isinstance(parsed, dict) else {"evidence_status": "insufficient_final", "selected_source_ids": []}
+        )
     except json.JSONDecodeError:
         start = text.find("{")
         end = text.rfind("}")
         if start >= 0 and end > start:
             try:
-                return json.loads(text[start : end + 1])
+                parsed = json.loads(text[start : end + 1])
+                if isinstance(parsed, dict):
+                    return parsed
             except json.JSONDecodeError:
                 pass
     return {"evidence_status": "insufficient_final", "selected_source_ids": [], "parse_error": True}

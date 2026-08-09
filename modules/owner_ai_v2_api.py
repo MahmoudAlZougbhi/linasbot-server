@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
@@ -113,7 +114,7 @@ async def stream_owner_message(
     history = [{"role": m.role, "content": m.content} for m in ((conv.messages if conv else None) or [])]
     cancel_flag = {"cancelled": False}
 
-    async def event_gen():  # noqa: ANN202
+    async def event_gen() -> AsyncIterator[str]:
         from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
         from services.owner_copilot_v2.models import StreamEvent
 

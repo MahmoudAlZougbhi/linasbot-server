@@ -65,7 +65,8 @@ async def _extract_via_vision(
             raw = raw.strip("`")
             if raw.startswith("json"):
                 raw = raw[4:].strip()
-        parsed = json.loads(raw)
+        loaded = json.loads(raw)
+        parsed: dict[str, Any] = loaded if isinstance(loaded, dict) else {}
     except Exception:
         parsed = {
             "document_type": "unknown",
@@ -162,7 +163,8 @@ async def tool_extract_price_list(
     parsed["attachment_id"] = attachment_id
     parsed.setdefault("extraction_id", f"ext_{uuid.uuid4().hex[:12]}")
     # Normalize items confidence
-    items = parsed.get("items") if isinstance(parsed.get("items"), list) else []
+    raw_items = parsed.get("items")
+    items: list[Any] = raw_items if isinstance(raw_items, list) else []
     for item in items:
         if isinstance(item, dict) and "confidence" not in item:
             item["confidence"] = 0.5

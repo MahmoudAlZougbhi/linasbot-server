@@ -28,9 +28,10 @@ def load_cached_media(tenant_id: str, media_revision: str) -> dict[str, Any] | N
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    return raw if isinstance(raw, dict) else None
 
 
 def save_cached_media(tenant_id: str, media_revision: str, payload: dict[str, Any]) -> None:

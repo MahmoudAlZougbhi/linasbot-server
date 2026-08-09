@@ -7,6 +7,12 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from services.owner_ai_context import pack_owner_turn_context
+from services.owner_copilot_v2.brain_support import (
+    SYSTEM_V2,
+    done_payload,
+    emit_as_deltas,
+    status_label,
+)
 from services.owner_copilot_v2.cards import card_from_tool
 from services.owner_copilot_v2.choices import choices_from_tool_result, make_choice_set
 from services.owner_copilot_v2.confirm_path import run_confirm_path
@@ -20,42 +26,6 @@ from services.owner_copilot_v2.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
 CancelCheck = Callable[[], bool]
 MAX_TOOL_ROUNDS = 4
-
-SYSTEM_V2 = (
-    "You are Linas AI System Copilot — one brain for the authenticated business owner. "
-    "Customer scope: Instagram/Facebook DMs and comments only. Creative/posts/images/videos are cancelled. "
-    "Use typed tools for account, CM, integrations, diagnosis, setup, and price-list extraction. "
-    "Never claim a tool ran unless you received a tool result. Never invent connection status or successes. "
-    "After tools return, write a natural final answer (not JSON). High-impact writes need confirmation. "
-    "Draft vs Live stay distinct. Live Chat is read-only in V2."
-)
-
-
-def _quick_actions(stage: str | None) -> list[dict[str, str]]:
-    base = [
-        {"id": "cm", "label": "Review Setup"},
-        {"id": "usage", "label": "Check Usage"},
-        {"id": "integrations", "label": "Integrations"},
-    ]
-    if stage in {"new", "cm_partial"}:
-        return [{"id": "cm", "label": "Continue Setup"}, *base[1:]]
-    return base
-
-
-def _status_label(name: str) -> str:
-    return {
-        "read_integrations": "Checking your Instagram/Facebook connection…",
-        "diagnose_meta_health": "Reading Meta health evidence…",
-        "read_cm": "Reading Content Management…",
-        "validate_cm": "Validating your setup…",
-        "propose_cm_patch": "Preparing a change proposal…",
-        "extract_price_list": "Reading the uploaded price list…",
-        "setup_next_step": "Checking setup progress…",
-        "get_recent_customer_interactions": "Loading recent customer interactions…",
-        "get_interaction_trace": "Reading interaction TRACE…",
-        "read_usage": "Checking usage…",
-        "help": "Looking up product capabilities…",
-    }.get(name, f"Running {name}…")
 
 
 def _build_messages(
@@ -85,36 +55,6 @@ def _build_messages(
         out.append({"role": m["role"], "content": m["content"]})
     out.append({"role": "user", "content": user_text})
     return out
-
-
-def _done_payload(
-    *,
-    reply_text: str,
-    tool_calls: list[dict[str, Any]],
-    cards: list[dict[str, Any]],
-    choices: list[dict[str, Any]],
-    model: str,
-    ctx_tokens: int,
-    stage: str,
-    pending_confirmation: str | None = None,
-    proposed_patch: dict[str, Any] | None = None,
-    choice_set_id: str | None = None,
-    reason: str = "sol_final",
-) -> dict[str, Any]:
-    return {
-        "reply_text": reply_text,
-        "tool_calls": tool_calls,
-        "cards": cards,
-        "choices": choices,
-        "choice_set_id": choice_set_id,
-        "pending_confirmation": pending_confirmation,
-        "proposed_patch": proposed_patch,
-        "route": {"kind": "owner_v2", "model": model, "reason": reason},
-        "context_tokens": ctx_tokens,
-        "setup_stage": stage,
-        "quick_actions": _quick_actions(stage),
-        "model": model,
-    }
 
 
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
@@ -186,7 +126,6 @@ async def iter_owner_turn_v2_events(
         yield StreamEvent(type="cancelled", payload={"reply_text": ""})
         return
 
-    # Resolve clickable choice
     if choice_id and choice_set_id:
         from services.owner_copilot_v2.choices import resolve_choice
 
@@ -217,7 +156,7 @@ async def iter_owner_turn_v2_events(
             ctx_tokens=ctx_tokens,
             stage=stage,
             build_messages=_build_messages,
-            done_payload=_done_payload,
+            done_payload=done_payload,
             is_cancelled=is_cancelled,
         ):
             yield ev
@@ -228,7 +167,7 @@ async def iter_owner_turn_v2_events(
         yield StreamEvent(type="delta", payload={"text": msg})
         yield StreamEvent(
             type="done",
-            payload=_done_payload(
+            payload=done_payload(
                 reply_text=msg,
                 tool_calls=[],
                 cards=[],
@@ -243,11 +182,11 @@ async def iter_owner_turn_v2_events(
 
     if looks_like_creative_request(text):
         msg = creative_refusal_message(language=reply_lang)
-        async for piece in _emit_as_deltas(msg):
-            yield piece
+        async for ev in emit_as_deltas(msg):
+            yield ev
         yield StreamEvent(
             type="done",
-            payload=_done_payload(
+            payload=done_payload(
                 reply_text=msg,
                 tool_calls=[],
                 cards=[],
@@ -283,13 +222,13 @@ async def iter_owner_turn_v2_events(
             if not tcalls:
                 reply_text = (getattr(msg, "content", None) or "").strip()
                 if reply_text:
-                    async for piece in _emit_as_deltas(reply_text):
-                        yield piece
+                    async for ev in emit_as_deltas(reply_text):
+                        yield ev
                 else:
                     reply_parts: list[str] = []
-                    async for piece in iter_sol_text_deltas(messages=chat_messages, is_cancelled=is_cancelled):
-                        reply_parts.append(piece)
-                        yield StreamEvent(type="delta", payload={"text": piece})
+                    async for delta_text in iter_sol_text_deltas(messages=chat_messages, is_cancelled=is_cancelled):
+                        reply_parts.append(delta_text)
+                        yield StreamEvent(type="delta", payload={"text": delta_text})
                     reply_text = "".join(reply_parts).strip()
                 choice_set_id_out = None
                 choices_out = choices_acc
@@ -306,7 +245,7 @@ async def iter_owner_turn_v2_events(
                     yield StreamEvent(type="choices", payload=choice_payload)
                 yield StreamEvent(
                     type="done",
-                    payload=_done_payload(
+                    payload=done_payload(
                         reply_text=reply_text,
                         tool_calls=tool_calls_acc,
                         cards=cards_acc,
@@ -347,7 +286,7 @@ async def iter_owner_turn_v2_events(
                 if tool_args:
                     for k, v in tool_args.items():
                         args.setdefault(k, v)
-                yield StreamEvent(type="status", payload={"id": name, "text": _status_label(name)})
+                yield StreamEvent(type="status", payload={"id": name, "text": status_label(name)})
                 result = await dispatch_v2_tool(
                     name,
                     tenant_id=tenant_id,
@@ -373,7 +312,6 @@ async def iter_owner_turn_v2_events(
                     }
                     pending_confirmation = result.confirmation_token
 
-        # Max rounds — stream Sol final over accumulated tool results
         fin_messages = list(chat_messages)
         fin_messages.append(
             {
@@ -382,12 +320,12 @@ async def iter_owner_turn_v2_events(
             }
         )
         parts: list[str] = []
-        async for piece in iter_sol_text_deltas(messages=fin_messages, is_cancelled=is_cancelled):
-            parts.append(piece)
-            yield StreamEvent(type="delta", payload={"text": piece})
+        async for delta_text in iter_sol_text_deltas(messages=fin_messages, is_cancelled=is_cancelled):
+            parts.append(delta_text)
+            yield StreamEvent(type="delta", payload={"text": delta_text})
         yield StreamEvent(
             type="done",
-            payload=_done_payload(
+            payload=done_payload(
                 reply_text="".join(parts).strip(),
                 tool_calls=tool_calls_acc,
                 cards=cards_acc,
@@ -410,8 +348,3 @@ async def iter_owner_turn_v2_events(
                 "retryable": True,
             },
         )
-
-
-async def _emit_as_deltas(text: str, size: int = 28) -> AsyncIterator[StreamEvent]:
-    for i in range(0, len(text or ""), size):
-        yield StreamEvent(type="delta", payload={"text": text[i : i + size]})

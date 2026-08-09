@@ -96,7 +96,10 @@ def load_attachment_meta(*, tenant_id: str, attachment_id: str) -> dict[str, Any
     path = _tenant_dir(tenant_id) / f"{attachment_id}.json"
     if not path.exists():
         return None
-    meta = json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return None
+    meta: dict[str, Any] = raw
     if str(meta.get("tenant_id")) != tenant_id:
         return None
     return meta

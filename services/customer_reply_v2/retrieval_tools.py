@@ -289,20 +289,20 @@ def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -
                     by_id[bare] = (sid, raw_match)
 
         evidence: list[dict[str, Any]] = []
-        rejected: list[str] = []
+        rejected_item_ids: list[str] = []
         chars = 0
         for iid in item_ids:
             if "/" in iid or ".." in iid or iid.startswith("http"):
-                rejected.append(iid)
+                rejected_item_ids.append(iid)
                 continue
             hit = by_id.get(iid)
             if not hit:
-                rejected.append(iid)
+                rejected_item_ids.append(iid)
                 continue
             sid, raw = hit
             content = _record_content(sid, raw)
             if chars + len(content) > MAX_EVIDENCE_CHARS:
-                rejected.append(iid)
+                rejected_item_ids.append(iid)
                 continue
             chars += len(content)
             source_id = iid if ":" in iid else f"{sid}:{iid}"
@@ -324,7 +324,7 @@ def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -
                 }
             )
         ctx.audit.append({"tool": name, "ok": True, "class": "read_items", "count": len(evidence)})
-        out: dict[str, Any] = {"ok": True, "data": {"evidence": evidence, "rejected_item_ids": rejected}}
+        out: dict[str, Any] = {"ok": True, "data": {"evidence": evidence, "rejected_item_ids": rejected_item_ids}}
         if listed is not None:
             out["data"]["round_index"] = ctx.round_index
             out["data"]["item_index"] = listed.get("data")

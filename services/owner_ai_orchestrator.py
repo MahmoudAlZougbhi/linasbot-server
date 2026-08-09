@@ -27,6 +27,10 @@ class OwnerTurnResult:
     context_tokens: int = 0
     setup_stage: str | None = None
     quick_actions: list[dict[str, str]] = field(default_factory=list)
+    # V2 extras (populated when OWNER_COPILOT_V2 path runs).
+    cards: list[dict[str, Any]] = field(default_factory=list)
+    choices: list[dict[str, Any]] = field(default_factory=list)
+    model: str | None = None
 
 
 _INTENT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -244,7 +248,7 @@ async def run_owner_turn(
             attachment_ids=attachment_ids,
         )
         # Preserve OwnerTurnResult shape; creative always None under V2.
-        result = OwnerTurnResult(
+        return OwnerTurnResult(
             reply_text=v2.reply_text,
             tool_calls=v2.tool_calls,
             pending_confirmation=v2.pending_confirmation,
@@ -254,12 +258,10 @@ async def run_owner_turn(
             context_tokens=v2.context_tokens,
             setup_stage=v2.setup_stage,
             quick_actions=v2.quick_actions,
+            cards=list(v2.cards or []),
+            choices=list(v2.choices or []),
+            model=v2.model,
         )
-        # Attach V2 extras for API layer (non-dataclass fields via monkey attr).
-        result.cards = v2.cards
-        result.choices = v2.choices
-        result.model = v2.model
-        return result
 
     text = (user_text or "").strip()
     context = pack_owner_turn_context(
@@ -372,7 +374,7 @@ async def run_owner_turn(
         )
 
     try:
-        result = await dispatch_tool(
+        tool_result = await dispatch_tool(
             intent,
             tenant_id=tenant_id,
             user_id=user_id,
@@ -397,36 +399,36 @@ async def run_owner_turn(
             quick_actions=_quick_actions(stage),
         )
 
-    tool_payload = result.to_dict()
+    tool_payload = tool_result.to_dict()
     owner_chat_usage_tracker.record(
         tenant_id=tenant_id,
         user_id=user_id,
         conversation_id=conversation_id,
         route=route,
         prompt_tokens=ctx_tokens,
-        completion_tokens=max(1, len(result.error or "") // 4 + len(str(result.data)) // 8),
-        meta={"intent": intent, "ok": result.ok},
+        completion_tokens=max(1, len(tool_result.error or "") // 4 + len(str(tool_result.data)) // 8),
+        meta={"intent": intent, "ok": tool_result.ok},
     )
 
     proposed = None
-    if result.name == "propose_cm_patch" and isinstance(result.data, dict):
+    if tool_result.name == "propose_cm_patch" and isinstance(tool_result.data, dict):
         proposed = {
-            "proposal_id": result.data.get("proposal_id"),
-            "confirmation_token": result.data.get("confirmation_token"),
-            "preview": result.data.get("preview"),
+            "proposal_id": tool_result.data.get("proposal_id"),
+            "confirmation_token": tool_result.data.get("confirmation_token"),
+            "preview": tool_result.data.get("preview"),
         }
 
     creative = None
-    if result.name in {"create_creative_draft", "schedule_creative_draft"} and isinstance(result.data, dict):
-        creative = dict(result.data)
+    if tool_result.name in {"create_creative_draft", "schedule_creative_draft"} and isinstance(tool_result.data, dict):
+        creative = dict(tool_result.data)
 
-    if result.requires_confirmation:
+    if tool_result.requires_confirmation:
         return OwnerTurnResult(
-            reply_text=_summarize(result.name, result.data, reply_language=reply_lang)
-            if result.name == "propose_cm_patch"
-            else (f"This is a high-impact action. Confirm in the app to proceed ({result.confirmation_token})."),
+            reply_text=_summarize(tool_result.name, tool_result.data, reply_language=reply_lang)
+            if tool_result.name == "propose_cm_patch"
+            else (f"This is a high-impact action. Confirm in the app to proceed ({tool_result.confirmation_token})."),
             tool_calls=[tool_payload],
-            pending_confirmation=result.confirmation_token,
+            pending_confirmation=tool_result.confirmation_token,
             proposed_patch=proposed,
             creative_draft=creative,
             route=decision_to_dict(route),
@@ -435,9 +437,9 @@ async def run_owner_turn(
             quick_actions=_quick_actions(stage),
         )
 
-    if not result.ok:
+    if not tool_result.ok:
         return OwnerTurnResult(
-            reply_text=result.error or "Tool failed.",
+            reply_text=tool_result.error or "Tool failed.",
             tool_calls=[tool_payload],
             creative_draft=creative,
             route=decision_to_dict(route),
@@ -447,7 +449,7 @@ async def run_owner_turn(
         )
 
     return OwnerTurnResult(
-        reply_text=_summarize(result.name, result.data, reply_language=reply_lang),
+        reply_text=_summarize(tool_result.name, tool_result.data, reply_language=reply_lang),
         tool_calls=[tool_payload],
         proposed_patch=proposed,
         creative_draft=creative,
