@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { API_BASE } from './src/config';
 import { tokenStore } from './src/auth/tokenStore';
 import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
@@ -54,6 +55,17 @@ export default function App() {
   }
 
   async function logout() {
+    try {
+      const access = await tokenStore.getAccessToken();
+      if (access) {
+        await fetch(`${API_BASE}/api/auth/mobile/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
+        });
+      }
+    } catch {
+      // Local clear still proceeds — network logout is best-effort.
+    }
     await tokenStore.clear();
     setIsPlatformOwner(false);
     setScreen({ name: 'login' });
