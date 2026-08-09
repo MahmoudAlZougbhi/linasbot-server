@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { ChatMessage } from '../../api/types';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 
 type Props = {
@@ -8,12 +9,13 @@ type Props = {
 };
 
 export function ChatBubble({ message }: Props) {
+  const { isRtl } = useI18n();
   const isUser = message.role === 'user';
   return (
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
       {!isUser ? <Text style={styles.aiLabel}>Linas</Text> : null}
       <View style={[styles.bubble, isUser ? styles.user : styles.ai]}>
-        <Text style={styles.text}>{message.content}</Text>
+        <Text style={[styles.text, isRtl && styles.rtl]}>{message.content}</Text>
       </View>
     </View>
   );
@@ -51,4 +53,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
   },
+  rtl: { textAlign: 'right', writingDirection: 'rtl' },
 });

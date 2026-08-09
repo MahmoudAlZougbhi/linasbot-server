@@ -7,6 +7,10 @@ export const PublicUserSchema = z.object({
   tenantId: z.string().optional(),
   tenant_id: z.string().optional(),
   name: z.string().optional(),
+  displayName: z.string().optional(),
+  gender: z.enum(['male', 'female', 'unset']).optional(),
+  preferredLanguage: z.enum(['ar', 'en', 'fr']).optional(),
+  formOfAddress: z.string().optional(),
   status: z.string().optional(),
   permissions: z.record(z.string(), z.boolean()).nullable().optional(),
 });

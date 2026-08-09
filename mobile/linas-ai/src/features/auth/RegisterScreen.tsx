@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
@@ -15,6 +16,8 @@ import { BrandMark } from '../../components/BrandMark';
 import { GradientBackground } from '../../components/GradientBackground';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
+import { useI18n } from '../../i18n/LanguageContext';
+import type { AppLanguage } from '../../i18n';
 import { colors, fonts, spacing, typography } from '../../theme';
 import { SocialAuthButtons } from './SocialAuthButtons';
 
@@ -23,15 +26,20 @@ const RegisterSchema = z.object({
   error: z.string().optional(),
 });
 
+type Gender = 'unset' | 'male' | 'female';
+
 type Props = {
   onBack: () => void;
 };
 
 export function RegisterScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
+  const { tr, language, setLanguage } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [gender, setGender] = useState<Gender>('unset');
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -46,14 +54,14 @@ export function RegisterScreen({ onBack }: Props) {
           email: email.trim(),
           password,
           business_name: businessName.trim(),
+          display_name: displayName.trim() || undefined,
+          name: displayName.trim() || undefined,
+          gender,
+          preferred_language: language,
         }),
         schema: RegisterSchema,
       });
-      setMessage(
-        result.success
-          ? 'Registered. Verify your email, then log in.'
-          : (result.error ?? 'Registration failed'),
-      );
+      setMessage(result.success ? tr('registeredVerify') : (result.error ?? 'Registration failed'));
     } catch (err) {
       setMessage(err instanceof ApiError ? 'Registration failed' : 'Network error');
     } finally {
@@ -75,32 +83,70 @@ export function RegisterScreen({ onBack }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           <Pressable onPress={onBack}>
-            <Text style={styles.back}>← Back to log in</Text>
+            <Text style={styles.back}>{tr('backToLogin')}</Text>
           </Pressable>
           <BrandMark size="md" showWordmark />
-          <Text style={styles.title}>Create account</Text>
-          <Text style={styles.sub}>Start your business AI workspace</Text>
+          <Text style={styles.title}>{tr('register')}</Text>
+          <Text style={styles.sub}>{tr('startWorkspace')}</Text>
 
           <TextField
-            placeholder="Business name"
+            placeholder={tr('businessName')}
             value={businessName}
             onChangeText={setBusinessName}
           />
           <TextField
+            placeholder={tr('displayName')}
+            value={displayName}
+            onChangeText={setDisplayName}
+          />
+          <TextField
             autoCapitalize="none"
             keyboardType="email-address"
-            placeholder="Email"
+            placeholder={tr('email')}
             value={email}
             onChangeText={setEmail}
           />
           <TextField
             secureTextEntry
-            placeholder="Password"
+            placeholder={tr('password')}
             value={password}
             onChangeText={setPassword}
           />
+
+          <Text style={styles.label}>{tr('genderOptional')}</Text>
+          <View style={styles.chips}>
+            {(
+              [
+                ['unset', 'genderUnset'],
+                ['male', 'genderMale'],
+                ['female', 'genderFemale'],
+              ] as const
+            ).map(([value, key]) => (
+              <Pressable
+                key={value}
+                style={[styles.chip, gender === value && styles.chipOn]}
+                onPress={() => setGender(value)}
+              >
+                <Text style={styles.chipText}>{tr(key)}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.label}>{tr('language')}</Text>
+          <View style={styles.chips}>
+            {(['en', 'ar', 'fr'] as AppLanguage[]).map((lang) => (
+              <Pressable
+                key={lang}
+                style={[styles.chip, language === lang && styles.chipOn]}
+                onPress={() => setLanguage(lang)}
+              >
+                <Text style={styles.chipText}>{lang.toUpperCase()}</Text>
+              </Pressable>
+            ))}
+          </View>
+
           {message ? <Text style={styles.msg}>{message}</Text> : null}
-          <PrimaryButton label="Create account" onPress={() => void onSubmit()} loading={loading} />
+          <PrimaryButton label={tr('createAccount')} onPress={() => void onSubmit()} loading={loading} />
           <SocialAuthButtons />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -114,5 +160,17 @@ const styles = StyleSheet.create({
   back: { color: colors.accent, fontFamily: fonts.bodyMedium, marginBottom: spacing.lg },
   title: { ...typography.title, color: colors.text, marginTop: spacing.lg },
   sub: { ...typography.subtitle, color: colors.textMuted, marginBottom: spacing.xl, marginTop: 6 },
+  label: { color: colors.textMuted, fontFamily: fonts.bodyMedium, marginBottom: 8, marginTop: 4 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.bgElevated,
+  },
+  chipOn: { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
+  chipText: { color: colors.text, fontFamily: fonts.body, fontSize: 13 },
   msg: { color: colors.textMuted, fontFamily: fonts.body, marginBottom: spacing.md },
 });

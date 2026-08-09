@@ -49,8 +49,25 @@ class OwnerChatStore:
     def _conv_path(self, tenant_id: str, conversation_id: str) -> Path:
         return self._tenant_dir(tenant_id) / f"{conversation_id}.json"
 
-    def create_conversation(self, *, tenant_id: str, user_id: str, title: str = "New chat") -> OwnerConversation:
+    def create_conversation(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        title: str = "New chat",
+        greeting_text: str | None = None,
+    ) -> OwnerConversation:
         now = time.time()
+        if greeting_text is None:
+            try:
+                from services.owner_ai_greeting import build_greeting
+
+                greeting_text = build_greeting(tenant_id=tenant_id, user_id=user_id)["text"]
+            except Exception:
+                greeting_text = (
+                    "Hello. I’m Linas AI — your System Copilot for the whole app. "
+                    "Content Management is one capability; ask about integrations, usage, or creative work too."
+                )
         conv = OwnerConversation(
             id=uuid.uuid4().hex,
             tenant_id=tenant_id,
@@ -62,11 +79,7 @@ class OwnerChatStore:
                 OwnerChatMessage(
                     id=uuid.uuid4().hex,
                     role="assistant",
-                    content=(
-                        "Welcome to Linas AI. I can help you configure your business AI, "
-                        "manage content, review usage, and prepare creative work. "
-                        "Chat with me or edit Content Management manually."
-                    ),
+                    content=str(greeting_text),
                     created_at=now,
                 )
             ],

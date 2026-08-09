@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { SideDrawer } from '../../components/SideDrawer';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 
 type Item = { id: string; title: string };
@@ -26,12 +27,13 @@ export function HistoryDrawer({
   onOpen,
   onTogglePin,
 }: Props) {
+  const { tr, isRtl } = useI18n();
   const pinned = history.filter((h) => pinnedIds.includes(h.id));
   const rest = history.filter((h) => !pinnedIds.includes(h.id));
 
   return (
-    <SideDrawer open={open} side="left" onClose={onClose}>
-      <Text style={styles.heading}>Chats</Text>
+    <SideDrawer open={open} side={isRtl ? 'right' : 'left'} onClose={onClose}>
+      <Text style={styles.heading}>{tr('history')}</Text>
       <Pressable style={styles.newBtn} onPress={onNewChat}>
         <Text style={styles.newText}>+ New chat</Text>
       </Pressable>

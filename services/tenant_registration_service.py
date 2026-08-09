@@ -97,6 +97,10 @@ def register_company_account(
     email: str,
     password: str,
     name: str | None = None,
+    display_name: str | None = None,
+    gender: str | None = None,
+    preferred_language: str | None = None,
+    form_of_address: str | None = None,
 ) -> RegistrationResult:
     business = (business_name or "").strip()
     if len(business) < 2 or len(business) > 120:
@@ -112,13 +116,27 @@ def register_company_account(
         raise ValueError("Email already exists")
 
     tenant_id = allocate_tenant_id(business)
-    display_name = (name or "").strip() or business
+    shown_name = (display_name or name or "").strip() or business
+    gender_norm = str(gender or "unset").strip().lower()
+    if gender_norm not in {"male", "female", "unset"}:
+        gender_norm = "unset"
+    lang = str(preferred_language or "en").strip().lower()
+    if lang.startswith("ar"):
+        lang = "ar"
+    elif lang.startswith("fr"):
+        lang = "fr"
+    else:
+        lang = "en"
 
     user = user_service.create_user(
         {
             "email": email_n,
             "password": password,
-            "name": display_name,
+            "name": shown_name,
+            "displayName": shown_name,
+            "gender": gender_norm,
+            "preferredLanguage": lang,
+            "formOfAddress": (form_of_address or "").strip()[:80],
             "role": "admin",
             "permissions": None,
             "status": "active",

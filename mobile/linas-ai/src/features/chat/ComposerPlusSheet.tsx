@@ -1,9 +1,16 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StatusChip } from '../../components/StatusChip';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 
-export type PlusAction = 'attach_image' | 'attach_video' | 'create_post' | 'add_cm';
+export type PlusAction =
+  | 'attach_image'
+  | 'attach_video'
+  | 'create_post'
+  | 'add_cm'
+  | 'review_setup'
+  | 'check_usage';
 
 type Props = {
   open: boolean;
@@ -11,45 +18,58 @@ type Props = {
   onAction: (action: PlusAction) => void;
 };
 
-const ACTIONS: {
-  id: PlusAction;
-  title: string;
-  subtitle: string;
-  live: boolean;
-}[] = [
-  {
-    id: 'attach_image',
-    title: 'Attach image',
-    subtitle: 'Upload coming with media pipeline',
-    live: false,
-  },
-  {
-    id: 'attach_video',
-    title: 'Attach video',
-    subtitle: 'No production video provider yet',
-    live: false,
-  },
-  {
-    id: 'create_post',
-    title: 'Create post',
-    subtitle: 'Open Creative Studio',
-    live: true,
-  },
-  {
-    id: 'add_cm',
-    title: 'Add CM',
-    subtitle: 'Open Content Management',
-    live: true,
-  },
-];
-
 export function ComposerPlusSheet({ open, onClose, onAction }: Props) {
+  const { tr } = useI18n();
+  const actions: {
+    id: PlusAction;
+    title: string;
+    subtitle: string;
+    live: boolean;
+  }[] = [
+    {
+      id: 'create_post',
+      title: tr('createPost'),
+      subtitle: 'Creative Studio',
+      live: true,
+    },
+    {
+      id: 'add_cm',
+      title: tr('addEditCm'),
+      subtitle: 'Content Management',
+      live: true,
+    },
+    {
+      id: 'review_setup',
+      title: tr('reviewSetup'),
+      subtitle: 'CM readiness',
+      live: true,
+    },
+    {
+      id: 'check_usage',
+      title: tr('checkUsage'),
+      subtitle: 'Credits & wallet',
+      live: true,
+    },
+    {
+      id: 'attach_image',
+      title: tr('attachImage'),
+      subtitle: tr('attachSoon'),
+      live: false,
+    },
+    {
+      id: 'attach_video',
+      title: tr('attachVideo'),
+      subtitle: tr('attachSoon'),
+      live: false,
+    },
+  ];
+
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>Add to chat</Text>
-          {ACTIONS.map((a) => (
+          <Text style={styles.title}>{tr('addToChat')}</Text>
+          {actions.map((a) => (
             <Pressable
               key={a.id}
               style={[styles.row, !a.live && styles.rowDisabled]}
@@ -63,7 +83,7 @@ export function ComposerPlusSheet({ open, onClose, onAction }: Props) {
                 <Text style={styles.rowTitle}>{a.title}</Text>
                 <Text style={styles.rowSub}>{a.subtitle}</Text>
               </View>
-              {!a.live ? <StatusChip label="Coming soon" tone="soon" /> : null}
+              {!a.live ? <StatusChip label={tr('comingSoon')} tone="soon" /> : null}
             </Pressable>
           ))}
         </Pressable>

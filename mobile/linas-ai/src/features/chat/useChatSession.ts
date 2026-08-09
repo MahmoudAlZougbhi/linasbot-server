@@ -10,6 +10,7 @@ const CreateConvSchema = z.object({
     id: z.string(),
     title: z.string(),
     messages: z.array(ChatMessageSchema),
+    setup_stage: z.string().optional(),
   }),
 });
 
@@ -27,11 +28,31 @@ const ListConvSchema = z.object({
   conversations: z.array(ConversationSummarySchema),
 });
 
+const ProposedPatchSchema = z
+  .object({
+    proposal_id: z.string().optional(),
+    confirmation_token: z.string().optional(),
+    preview: z.record(z.string(), z.unknown()).optional(),
+  })
+  .nullable()
+  .optional();
+
 const SendSchema = z.object({
   success: z.literal(true),
   message: ChatMessageSchema.nullable(),
   pending_confirmation: z.string().nullable().optional(),
+  proposed_patch: ProposedPatchSchema,
+  quick_actions: z
+    .array(z.object({ id: z.string(), label: z.string() }))
+    .optional(),
+  setup_stage: z.string().nullable().optional(),
 });
+
+export type ProposedPatch = {
+  proposal_id?: string;
+  confirmation_token?: string;
+  preview?: Record<string, unknown>;
+};
 
 export function useChatSession() {
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -42,6 +63,8 @@ export function useChatSession() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const [proposedPatch, setProposedPatch] = useState<ProposedPatch | null>(null);
+  const [quickActions, setQuickActions] = useState<{ id: string; label: string }[]>([]);
 
   const bootstrap = useCallback(async () => {
     setLoading(true);
@@ -68,7 +91,7 @@ export function useChatSession() {
         setHistory([{ id: created.conversation.id, title: created.conversation.title }]);
       }
     } catch {
-      setError('Could not load chat. Tap Retry.');
+      setError('retry');
     } finally {
       setLoading(false);
     }
@@ -84,6 +107,7 @@ export function useChatSession() {
     setTitle(full.conversation.title);
     setMessages(full.conversation.messages);
     setPendingConfirm(null);
+    setProposedPatch(null);
   }
 
   async function newChat() {
@@ -97,6 +121,7 @@ export function useChatSession() {
     setMessages(created.conversation.messages);
     setHistory((prev) => [{ id: created.conversation.id, title: created.conversation.title }, ...prev]);
     setPendingConfirm(null);
+    setProposedPatch(null);
   }
 
   async function send(content: string, confirmTool?: string) {
@@ -127,8 +152,12 @@ export function useChatSession() {
         setMessages((prev) => [...prev, result.message as ChatMessage]);
       }
       setPendingConfirm(result.pending_confirmation ?? null);
+      setProposedPatch(result.proposed_patch ?? null);
+      if (result.quick_actions?.length) {
+        setQuickActions(result.quick_actions);
+      }
     } catch {
-      setError('Message failed. You can retry.');
+      setError('messageFailed');
     } finally {
       setSending(false);
     }
@@ -143,10 +172,14 @@ export function useChatSession() {
     sending,
     error,
     pendingConfirm,
+    proposedPatch,
+    quickActions,
     bootstrap,
     openConversation,
     newChat,
     send,
     setError,
+    setProposedPatch,
+    setPendingConfirm,
   };
 }

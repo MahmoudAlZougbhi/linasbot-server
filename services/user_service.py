@@ -151,6 +151,24 @@ class UserService:
         if business_name:
             user_doc["businessName"] = business_name[:120]
 
+        # Optional owner preferences — never infer gender from email/name.
+        gender_raw = str(user_data.get("gender") or "unset").strip().lower()
+        user_doc["gender"] = gender_raw if gender_raw in {"male", "female", "unset"} else "unset"
+        display_name = str(user_data.get("displayName") or user_data.get("name") or "").strip()
+        if display_name:
+            user_doc["displayName"] = display_name[:80]
+        pref_lang = str(user_data.get("preferredLanguage") or "en").strip().lower()
+        if pref_lang.startswith("ar"):
+            user_doc["preferredLanguage"] = "ar"
+        elif pref_lang.startswith("fr"):
+            user_doc["preferredLanguage"] = "fr"
+        else:
+            user_doc["preferredLanguage"] = "en"
+        form = str(user_data.get("formOfAddress") or "").strip()
+        if form:
+            user_doc["formOfAddress"] = form[:80]
+        user_doc["addressPromptAsked"] = bool(user_data.get("addressPromptAsked", False))
+
         # SaaS public registration starts unverified; offline/provisioned admins default verified.
         if "emailVerified" in user_data:
             user_doc["emailVerified"] = bool(user_data.get("emailVerified"))
@@ -332,6 +350,24 @@ class UserService:
                     update_data[field] = updates[field]
             if "tenantId" in updates:
                 update_data["tenantId"] = self._normalize_tenant_id(updates["tenantId"])
+
+            if "gender" in updates and updates["gender"] is not None:
+                g = str(updates["gender"]).strip().lower()
+                update_data["gender"] = g if g in {"male", "female", "unset"} else "unset"
+            if "displayName" in updates and updates["displayName"] is not None:
+                update_data["displayName"] = str(updates["displayName"]).strip()[:80]
+            if "preferredLanguage" in updates and updates["preferredLanguage"] is not None:
+                lang = str(updates["preferredLanguage"]).strip().lower()
+                if lang.startswith("ar"):
+                    update_data["preferredLanguage"] = "ar"
+                elif lang.startswith("fr"):
+                    update_data["preferredLanguage"] = "fr"
+                else:
+                    update_data["preferredLanguage"] = "en"
+            if "formOfAddress" in updates and updates["formOfAddress"] is not None:
+                update_data["formOfAddress"] = str(updates["formOfAddress"]).strip()[:80]
+            if "addressPromptAsked" in updates:
+                update_data["addressPromptAsked"] = bool(updates["addressPromptAsked"])
 
             # Handle password update separately (hash it) and bump epoch for session invalidation
             if "password" in updates and updates["password"]:
@@ -623,6 +659,16 @@ class UserService:
             return None
 
         email_verified = True if "emailVerified" not in user else bool(user.get("emailVerified"))
+        gender = str(user.get("gender") or "unset").strip().lower()
+        if gender not in {"male", "female", "unset"}:
+            gender = "unset"
+        pref_lang = str(user.get("preferredLanguage") or "en").strip().lower()
+        if pref_lang.startswith("ar"):
+            pref_lang = "ar"
+        elif pref_lang.startswith("fr"):
+            pref_lang = "fr"
+        else:
+            pref_lang = "en"
         return {
             "id": user.get("id"),
             "email": user.get("email"),
@@ -638,6 +684,11 @@ class UserService:
             "createdAt": user.get("createdAt"),
             "createdBy": user.get("createdBy"),
             "updatedAt": user.get("updatedAt"),
+            "gender": gender,
+            "displayName": user.get("displayName") or user.get("name"),
+            "preferredLanguage": pref_lang,
+            "formOfAddress": user.get("formOfAddress") or "",
+            "addressPromptAsked": bool(user.get("addressPromptAsked")),
         }
 
 

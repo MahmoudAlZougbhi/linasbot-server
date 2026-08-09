@@ -1,8 +1,9 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { SideDrawer } from '../../components/SideDrawer';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
-import { CONTROL_ITEMS, GROUP_LABELS, type ControlArea, type ControlItem } from './controlAreas';
+import { CONTROL_ITEMS, type ControlArea, type ControlItem } from './controlAreas';
 
 type Props = {
   open: boolean;
@@ -14,6 +15,13 @@ type Props = {
 
 const ORDER: ControlItem['group'][] = ['operate', 'grow', 'account', 'owner'];
 
+const GROUP_I18N = {
+  operate: 'groupOperate',
+  grow: 'groupGrow',
+  account: 'groupAccount',
+  owner: 'groupOwner',
+} as const;
+
 export function ControlCenterDrawer({
   open,
   onClose,
@@ -21,12 +29,13 @@ export function ControlCenterDrawer({
   onLogout,
   isPlatformOwner,
 }: Props) {
+  const { tr, isRtl } = useI18n();
   const items = CONTROL_ITEMS.filter((a) => !a.ownerOnly || isPlatformOwner);
 
   return (
-    <SideDrawer open={open} side="right" onClose={onClose} widthRatio={0.86}>
-      <Text style={styles.heading}>Control Center</Text>
-      <Text style={styles.sub}>Operate your business AI around chat</Text>
+    <SideDrawer open={open} side={isRtl ? 'left' : 'right'} onClose={onClose} widthRatio={0.86}>
+      <Text style={styles.heading}>{tr('controlCenter')}</Text>
+      <Text style={styles.sub}>Linas AI System Copilot</Text>
       <ScrollView contentContainerStyle={styles.list}>
         {ORDER.map((group) => {
           const rows = items.filter((i) => i.group === group);
@@ -35,7 +44,7 @@ export function ControlCenterDrawer({
           }
           return (
             <View key={group} style={styles.group}>
-              <Text style={styles.groupLabel}>{GROUP_LABELS[group]}</Text>
+              <Text style={styles.groupLabel}>{tr(GROUP_I18N[group])}</Text>
               {rows.map((area) => (
                 <Pressable key={area.id} style={styles.row} onPress={() => onOpen(area.id)}>
                   <Text style={styles.rowTitle}>{area.title}</Text>
@@ -46,7 +55,7 @@ export function ControlCenterDrawer({
           );
         })}
         <Pressable style={styles.logout} onPress={onLogout}>
-          <Text style={styles.logoutText}>Log out</Text>
+          <Text style={styles.logoutText}>{tr('logout')}</Text>
         </Pressable>
       </ScrollView>
     </SideDrawer>
