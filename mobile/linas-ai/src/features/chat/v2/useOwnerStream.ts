@@ -25,6 +25,7 @@ type StreamHandlers = {
   onDelta?: (text: string) => void;
   onCard?: (card: StreamCard) => void;
   onChoices?: (payload: { choice_set_id: string; choices: StreamChoice[] }) => void;
+  onTitleUpdated?: (title: string) => void;
   onError?: (message: string) => void;
   onDone?: (payload: Record<string, unknown>) => void;
   onCancelled?: () => void;
@@ -48,6 +49,8 @@ function dispatchEvent(raw: string, handlers: StreamHandlers) {
       choice_set_id: String(ev.choice_set_id || ''),
       choices: (ev.choices as StreamChoice[]) || [],
     });
+  } else if (type === 'title_updated') {
+    handlers.onTitleUpdated?.(String(ev.title || ''));
   } else if (type === 'error') handlers.onError?.(String(ev.message || 'error'));
   else if (type === 'cancelled') handlers.onCancelled?.();
   else if (type === 'done') handlers.onDone?.(ev);

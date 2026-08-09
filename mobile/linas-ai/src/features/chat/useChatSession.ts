@@ -73,6 +73,24 @@ export type CreativeDraft = {
 
 export type HistoryEntry = { id: string; title: string; archived?: boolean };
 
+const DEFAULT_TITLES = new Set(['New chat', 'Chat', 'Untitled', 'Linas AI', '']);
+
+export function isDefaultConversationTitle(title: string | null | undefined): boolean {
+  return DEFAULT_TITLES.has((title || '').trim());
+}
+
+/** Match server auto_title_from_first_message — first user text, single line, max 60. */
+export function autoTitleFromFirstMessage(content: string, maxLen = 60): string {
+  const cleaned = String(content || '')
+    .replace(/\r/g, '\n')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
+  if (!cleaned) return 'New chat';
+  if (cleaned.length <= maxLen) return cleaned;
+  return cleaned.slice(0, maxLen).trimEnd();
+}
+
 export function useChatSession(enabled = true) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [title, setTitle] = useState('Linas AI');
@@ -126,6 +144,71 @@ export function useChatSession(enabled = true) {
       setLoading(false);
     }
   }, [enabled]);
+
+  /** Soft sync after a stream turn — refresh history + active thread without full-screen loading. */
+  const syncAfterTurn = useCallback(async () => {
+    if (!enabled) return;
+    const activeId = conversationId;
+    if (!activeId) return;
+    try {
+      const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
+      setHistory(
+        listed.conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          archived: Boolean(c.archived),
+        })),
+      );
+      const full = await apiFetch(`/api/owner-ai/conversations/${activeId}`, {
+        schema: GetConvSchema,
+      });
+      // Ignore if user switched chats while the request was in flight.
+      setConversationId((current) => {
+        if (current === activeId) {
+          setTitle(full.conversation.title);
+          setMessages(full.conversation.messages);
+        }
+        return current;
+      });
+    } catch {
+      /* keep optimistic UI; user can retry via error banner */
+    }
+  }, [conversationId, enabled]);
+
+  const applyConversationTitle = useCallback(
+    (id: string, nextTitle: string, opts?: { onlyIfDefault?: boolean }) => {
+      const cleaned = (nextTitle || '').trim();
+      if (!cleaned) return;
+      setHistory((prev) =>
+        prev.map((h) => {
+          if (h.id !== id) return h;
+          if (opts?.onlyIfDefault && !isDefaultConversationTitle(h.title)) return h;
+          return { ...h, title: cleaned };
+        }),
+      );
+      setConversationId((current) => {
+        if (current === id) {
+          setTitle((prevTitle) => {
+            if (opts?.onlyIfDefault && !isDefaultConversationTitle(prevTitle)) return prevTitle;
+            return cleaned;
+          });
+        }
+        return current;
+      });
+    },
+    [],
+  );
+
+  /** Optimistic ChatGPT-style title from first user message while still untitled. */
+  const autoTitleFromOutgoing = useCallback(
+    (content: string) => {
+      if (!conversationId || !isDefaultConversationTitle(title)) return;
+      const next = autoTitleFromFirstMessage(content);
+      if (isDefaultConversationTitle(next)) return;
+      applyConversationTitle(conversationId, next);
+    },
+    [applyConversationTitle, conversationId, title],
+  );
 
   useEffect(() => {
     void bootstrap();
@@ -213,6 +296,9 @@ export function useChatSession(enabled = true) {
     proposedPatch,
     quickActions,
     bootstrap,
+    syncAfterTurn,
+    applyConversationTitle,
+    autoTitleFromOutgoing,
     openConversation,
     newChat,
     renameConversation,

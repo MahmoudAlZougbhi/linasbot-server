@@ -1,15 +1,23 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { StreamCard, StreamChoice } from './useOwnerStream';
 import { useOwnerStream } from './useOwnerStream';
 
-type Bootstrap = () => Promise<void> | void;
+type TurnHooks = {
+  onTerminal: () => Promise<void> | void;
+  onTitleUpdated?: (title: string) => void;
+};
 
 /**
  * Owns streaming UI state for one owner conversation turn.
  */
-export function useStreamingTurn(conversationId: string | null, bootstrap: Bootstrap) {
+export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks) {
   const stream = useOwnerStream();
+  const hooksRef = useRef(hooks);
+  useEffect(() => {
+    hooksRef.current = hooks;
+  }, [hooks]);
+
   const [thinking, setThinking] = useState(false);
   const [statusRows, setStatusRows] = useState<{ id: string; text: string }[]>([]);
   const [liveText, setLiveText] = useState('');
@@ -21,6 +29,14 @@ export function useStreamingTurn(conversationId: string | null, bootstrap: Boots
     setThinking(false);
     setStatusRows([]);
     setLiveText('');
+  }, []);
+
+  const applyTitle = useCallback((payload: Record<string, unknown> | string) => {
+    const next =
+      typeof payload === 'string'
+        ? payload
+        : String(payload.conversation_title || payload.title || '');
+    if (next.trim()) hooksRef.current.onTitleUpdated?.(next.trim());
   }, []);
 
   const send = useCallback(
@@ -63,23 +79,25 @@ export function useStreamingTurn(conversationId: string | null, bootstrap: Boots
             setChoiceSetId(p.choice_set_id);
             setChoices(p.choices || []);
           },
+          onTitleUpdated: (title) => applyTitle(title),
           onError: () => {
             resetUi();
-            void bootstrap();
+            void hooksRef.current.onTerminal();
           },
           onCancelled: () => {
             resetUi();
-            void bootstrap();
+            void hooksRef.current.onTerminal();
           },
-          onDone: () => {
+          onDone: (payload) => {
+            applyTitle(payload);
             resetUi();
-            void bootstrap();
+            void hooksRef.current.onTerminal();
           },
         },
       );
       return result;
     },
-    [bootstrap, conversationId, resetUi, stream],
+    [applyTitle, conversationId, resetUi, stream],
   );
 
   return {
