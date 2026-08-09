@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_session
 from modules.core import app
-from services.owner_chat_store import owner_chat_store
 from services.owner_ai_orchestrator import run_owner_turn
+from services.owner_chat_store import owner_chat_store
 
 
 class CreateConversationBody(BaseModel):
