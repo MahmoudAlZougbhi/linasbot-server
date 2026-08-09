@@ -96,6 +96,18 @@ export function useGuestChatSession(enabled = true) {
       } else {
         setError('messageFailed');
       }
+      // Drop optimistic user bubble and resync from server (LLM failures must not fake a reply).
+      try {
+        const session = await ensureGuestSession(guestId, language);
+        setMessages(session.messages);
+        setQuestionsUsed(session.questions_used);
+        setQuestionsRemaining(session.questions_remaining);
+        setMaxQuestions(session.max_questions);
+        setMaxWords(session.max_words);
+        setGated(session.questions_remaining <= 0);
+      } catch {
+        setMessages((prev) => prev.filter((m) => !String(m.id).startsWith('local-')));
+      }
     } finally {
       setSending(false);
     }

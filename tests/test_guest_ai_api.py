@@ -1,12 +1,34 @@
-"""Guest chat: public access, 10-question / 50-word limits, no tool writes."""
+"""Guest chat: public access, 10-question / 50-word limits, no tool writes, real LLM path."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+
+class _FakeMsg:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class _FakeChoice:
+    def __init__(self, content: str) -> None:
+        self.message = _FakeMsg(content)
+
+
+class _FakeUsage:
+    prompt_tokens = 11
+    completion_tokens = 22
+
+
+class _FakeResponse:
+    def __init__(self, content: str) -> None:
+        self.choices = [_FakeChoice(content)]
+        self.usage = _FakeUsage()
 
 
 @pytest.fixture()
@@ -16,9 +38,47 @@ def guest_client(tmp_path: Path):
     from services.guest_chat_store import GuestChatStore
 
     store = GuestChatStore(root=tmp_path / "guest_chat")
+
+    async def _fake_create(**kwargs: Any) -> _FakeResponse:
+        messages = kwargs.get("messages") or []
+        user_text = ""
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                user_text = str(m.get("content") or "")
+                break
+        lower = user_text.lower()
+        if "price" in lower or "pricing" in lower or "اشتراك" in lower:
+            body = (
+                "Pricing depends on your plan tier and included usage credits. "
+                "Guest chat can’t bill you — sign in to see Billing & Usage for your workspace."
+            )
+        elif "instagram" in lower or "meta" in lower:
+            body = (
+                "Linas connects Meta (Instagram/Facebook) from Integrations. "
+                "Comment automation stays gated until App Review + live_verified."
+            )
+        elif "content management" in lower or " cm" in lower or lower.strip() == "cm":
+            body = (
+                "Content Management is where you configure what your customer AI knows — "
+                "services, prices, FAQ, handoff — then validate and publish when ready."
+            )
+        else:
+            body = (
+                f"Linas AI helps with that specifically: {user_text[:80]}. "
+                "After sign-in, System Copilot can operate setup for your workspace."
+            )
+        # Prove history was included when present.
+        prior_users = [m for m in messages if m.get("role") == "user"]
+        if len(prior_users) >= 2:
+            body += " (continuing our earlier thread)"
+        return _FakeResponse(body)
+
+    fake_client = type("C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": staticmethod(_fake_create)})()})()})()
+
     with patch("modules.guest_ai_api.guest_chat_store", store):
         with patch("services.guest_chat_store.guest_chat_store", store):
-            yield TestClient(app), store
+            with patch("services.llm_core_service.client", fake_client):
+                yield TestClient(app), store
 
 
 def test_guest_session_public_and_idempotent(guest_client):
@@ -82,13 +142,75 @@ def test_guest_question_limit_and_no_tools(guest_client):
     assert session.questions_used == 10
 
 
-def test_compose_guest_reply_never_lists_tools():
+@pytest.mark.asyncio
+async def test_compose_guest_reply_uses_llm_not_canned_pitch():
     from services.guest_ai_service import FORBIDDEN_GUEST_TOOLS, compose_guest_reply
 
-    result = compose_guest_reply("What do you offer for businesses?", language="en")
+    async def _create(**kwargs: Any) -> _FakeResponse:
+        assert kwargs.get("messages")
+        assert kwargs["messages"][0]["role"] == "system"
+        assert "broken record" in kwargs["messages"][0]["content"] or "not a brochure" in kwargs["messages"][0][
+            "content"
+        ]
+        return _FakeResponse(
+            "Content Management lets you teach the AI your services and FAQs before publish."
+        )
+
+    fake = type("C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()})()
+    with patch("services.llm_core_service.client", fake):
+        result = await compose_guest_reply("Explain Content Management", language="en")
     assert result["tools_used"] == []
     assert FORBIDDEN_GUEST_TOOLS
-    assert "Content Management" in result["reply_text"] or "business" in result["reply_text"].lower()
+    assert "Content Management" in result["reply_text"]
+    # Old canned sales intro must not be the reply body.
+    assert not result["reply_text"].startswith("Linas AI is a business AI platform: connect channels")
+
+
+def test_different_guest_questions_get_different_answers(guest_client):
+    client, _store = guest_client
+    sid = "guest-test-session-variety"
+    client.post("/api/guest-ai/session", json={"guest_session_id": sid, "language": "en"})
+
+    r1 = client.post(
+        "/api/guest-ai/session/messages",
+        json={"guest_session_id": sid, "content": "What is your pricing?"},
+    )
+    r2 = client.post(
+        "/api/guest-ai/session/messages",
+        json={"guest_session_id": sid, "content": "How does Instagram / Meta integration work?"},
+    )
+    assert r1.status_code == 200 and r2.status_code == 200
+    a1 = r1.json()["message"]["content"]
+    a2 = r2.json()["message"]["content"]
+    assert a1 != a2
+    assert "pricing" in a1.lower() or "plan" in a1.lower() or "credit" in a1.lower()
+    assert "instagram" in a2.lower() or "meta" in a2.lower()
+    # Follow-up should see history (fake model appends marker when >=2 user msgs in prompt).
+    assert "continuing our earlier thread" in a2
+
+
+def test_guest_llm_failure_surfaces_error_no_canned_fallback(guest_client):
+    client, store = guest_client
+    sid = "guest-test-session-fail"
+
+    async def _boom(**_kwargs: Any) -> Any:
+        raise RuntimeError("simulated_provider_down")
+
+    client.post("/api/guest-ai/session", json={"guest_session_id": sid, "language": "en"})
+    boom = type("C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": staticmethod(_boom)})()})()})()
+    with patch("services.llm_core_service.client", boom):
+        r = client.post(
+            "/api/guest-ai/session/messages",
+            json={"guest_session_id": sid, "content": "What is Linas?"},
+        )
+    assert r.status_code == 503
+    detail = r.json().get("detail") or {}
+    assert detail.get("error") == "guest_model_unavailable"
+    assert "business AI platform: connect channels" not in str(detail).lower()
+    session = store.get(sid)
+    assert session is not None
+    assert session.questions_used == 0
+    assert len([m for m in session.messages if m.role == "user"]) == 0
 
 
 def test_guest_routes_are_public():

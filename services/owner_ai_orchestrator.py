@@ -223,30 +223,57 @@ async def run_owner_turn(
         context = {**context, "conversation_summary": None, "recent_messages": context.get("recent_messages", [])[-4:]}
         ctx_tokens = estimate_context_tokens(context)
 
-    if intent is None:
-        # Unmatched: targeted help from knowledge layer (not full docs).
-        help_data = help_payload_for_query(text)
+    # Conversational help (no tool writes): real LLM + knowledge + recent history.
+    # Operational intents keep the existing tool dispatch path.
+    if intent is None or intent == "help":
+        from services.owner_ai_natural_reply import OwnerAIModelError, generate_owner_conversational_reply
+
+        help_data = help_payload_for_query(text if intent is None else str(args.get("query") or text))
+        try:
+            reply_text = await generate_owner_conversational_reply(
+                user_text=text,
+                context=context,
+                help_data=help_data,
+            )
+        except OwnerAIModelError as exc:
+            owner_chat_usage_tracker.record(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                route=route,
+                prompt_tokens=ctx_tokens,
+                completion_tokens=1,
+                meta={"intent": intent or "help_fallback", "ok": False, "error": str(exc)},
+            )
+            return OwnerTurnResult(
+                reply_text=(
+                    "Linas AI is temporarily unavailable to answer that. "
+                    f"Please try again shortly ({exc})."
+                ),
+                tool_calls=[{"ok": False, "name": "help", "data": help_data, "requires_confirmation": False}],
+                route=decision_to_dict(route),
+                context_tokens=ctx_tokens,
+                setup_stage=stage,
+                quick_actions=_quick_actions(stage),
+            )
+
         owner_chat_usage_tracker.record(
             tenant_id=tenant_id,
             user_id=user_id,
             conversation_id=conversation_id,
             route=route,
             prompt_tokens=ctx_tokens,
-            completion_tokens=max(1, len(str(help_data)) // 4),
-            meta={"intent": "help_fallback"},
+            completion_tokens=max(1, len(reply_text) // 4),
+            meta={"intent": intent or "help_fallback", "ok": True, "llm": True},
         )
         return OwnerTurnResult(
-            reply_text=_summarize("help", help_data, reply_language=reply_lang)
-            + " Ask specifically (validate setup, check Instagram, show usage, propose a CM change).",
+            reply_text=reply_text,
             tool_calls=[{"ok": True, "name": "help", "data": help_data, "requires_confirmation": False}],
             route=decision_to_dict(route),
             context_tokens=ctx_tokens,
             setup_stage=stage,
             quick_actions=_quick_actions(stage),
         )
-
-    if intent == "help":
-        args.setdefault("query", text)
 
     try:
         result = await dispatch_tool(
