@@ -58,7 +58,7 @@ export const en = {
   settingsActionsSub: 'Instagram, Facebook, handoff, photo & more',
   settingsAiLimits: 'AI Limits',
   settingsAiLimitsSub: 'Image and context usage limits',
-  faqTitle: 'FAQ',
+  faqTitle: 'Smart Answers / FAQ',
   faqSub: 'Saved questions with auto-translate',
   faqCreateNew: 'Create new FAQ',
   faqSavedList: 'Saved FAQ',
