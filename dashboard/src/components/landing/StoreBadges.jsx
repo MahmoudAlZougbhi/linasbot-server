@@ -47,7 +47,7 @@ export default function StoreBadges({ compact = false }) {
           </>
         );
 
-        if (live) {
+        if (live && store.url) {
           return (
             <a
               key={key}

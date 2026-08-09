@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from modules.api_security import DashboardAuthMiddleware
-from services.dashboard_session_service import SESSION_COOKIE_NAME, session_service
+from services.dashboard_session_service import session_service
 
 
 @pytest.fixture()

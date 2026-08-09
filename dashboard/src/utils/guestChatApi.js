@@ -4,6 +4,10 @@
 
 const STORAGE_KEY = 'linas_guest_session_id';
 
+/**
+ * @typedef {Error & { status?: number; body?: unknown }} GuestApiError
+ */
+
 function randomId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `guest-${crypto.randomUUID()}`;
@@ -23,10 +27,27 @@ export function getOrCreateGuestSessionId() {
   }
 }
 
+/**
+ * @param {Response} response
+ */
 async function parseJson(response) {
   const text = await response.text();
   if (!text) return {};
   return JSON.parse(text);
+}
+
+/**
+ * @param {string} message
+ * @param {number} [status]
+ * @param {unknown} [body]
+ * @returns {GuestApiError}
+ */
+function guestApiError(message, status, body) {
+  /** @type {GuestApiError} */
+  const err = new Error(message);
+  if (status != null) err.status = status;
+  if (body !== undefined) err.body = body;
+  return err;
 }
 
 /**
@@ -41,10 +62,7 @@ export async function ensureGuestSession(guestSessionId, language = 'en') {
   });
   const body = await parseJson(response);
   if (!response.ok) {
-    const err = new Error('Guest session failed');
-    err.status = response.status;
-    err.body = body;
-    throw err;
+    throw guestApiError('Guest session failed', response.status, body);
   }
   return body.session;
 }
@@ -62,16 +80,10 @@ export async function sendGuestMessage(guestSessionId, content, language = 'en')
   });
   const body = await parseJson(response);
   if (response.status === 400) {
-    const err = new Error('word_limit');
-    err.status = 400;
-    err.body = body;
-    throw err;
+    throw guestApiError('word_limit', 400, body);
   }
   if (!response.ok) {
-    const err = new Error('Guest message failed');
-    err.status = response.status;
-    err.body = body;
-    throw err;
+    throw guestApiError('Guest message failed', response.status, body);
   }
   if (body?.success === false && body?.code === 'GUEST_QUESTION_LIMIT') {
     return { ok: false, session: body.session, gateMessages: body.message };
@@ -79,6 +91,9 @@ export async function sendGuestMessage(guestSessionId, content, language = 'en')
   return { ok: true, session: body.session, message: body.message };
 }
 
+/**
+ * @param {string} text
+ */
 export function countWords(text) {
   return (text || '').trim().split(/\s+/).filter(Boolean).length;
 }

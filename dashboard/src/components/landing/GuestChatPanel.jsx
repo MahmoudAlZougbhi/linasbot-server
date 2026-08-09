@@ -21,6 +21,7 @@ const COPY = {
     subtitle: 'Guest preview — 10 questions, 50 words each. Sales & product only (no workspace changes).',
     placeholder: 'Ask about Linas AI…',
     send: 'Send',
+    /** @param {number} n */
     remaining: (n) => `${n} question${n === 1 ? '' : 's'} left`,
     wordLimit: 'Each guest question can be at most 50 words.',
     retry: 'Couldn’t start guest chat. Try again.',
@@ -32,6 +33,7 @@ const COPY = {
     subtitle: 'معاينة ضيف — 10 أسئلة، 50 كلمة لكل سؤال. شرح المنتج فقط (بدون تعديل مساحة العمل).',
     placeholder: 'اسأل عن Linas AI…',
     send: 'إرسال',
+    /** @param {number} n */
     remaining: (n) => `متبقي ${n} ${n === 1 ? 'سؤال' : 'أسئلة'}`,
     wordLimit: 'كل سؤال ضيف بحد أقصى 50 كلمة.',
     retry: 'تعذّر بدء الدردشة. حاول مجدداً.',
@@ -43,6 +45,7 @@ const COPY = {
     subtitle: 'Aperçu invité — 10 questions, 50 mots max. Produit uniquement (pas de modifications).',
     placeholder: 'Posez une question sur Linas AI…',
     send: 'Envoyer',
+    /** @param {number} n */
     remaining: (n) => `${n} question${n === 1 ? '' : 's'} restante${n === 1 ? '' : 's'}`,
     wordLimit: 'Chaque question invité fait au plus 50 mots.',
     retry: 'Impossible de démarrer le chat. Réessayez.',
@@ -102,6 +105,7 @@ export default function GuestChatPanel() {
     node.scrollTop = node.scrollHeight;
   }, [messages, gated, sending]);
 
+  /** @param {import('react').FormEvent<HTMLFormElement>} event */
   const onSend = async (event) => {
     event.preventDefault();
     if (!guestId || gated || sending) return;
@@ -139,7 +143,8 @@ export default function GuestChatPanel() {
         setGateText(GATE_FALLBACK[locale] || GATE_FALLBACK.en);
       }
     } catch (err) {
-      if (err && err.message === 'word_limit') {
+      const message = err instanceof Error ? err.message : '';
+      if (message === 'word_limit') {
         setError(copy.wordLimit);
       } else {
         setError(copy.failed);
