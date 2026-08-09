@@ -31,6 +31,7 @@ const navigationItems = [
   { name: "Token Wallet", href: "/wallet", icon: CurrencyDollarIcon, permissionKey: "settings" },
 ];
 
+/** @type {Array<{ name: string; href: string; icon?: any; permissionKey?: string; badge?: string }>} */
 const downloadItems = [];
 
 /** @param {{ collapsed: boolean; onToggleCollapse: () => void; onClose?: () => void }} props */

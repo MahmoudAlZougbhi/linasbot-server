@@ -33,12 +33,12 @@ const CmAiLimitsPage = () => {
           <input type="checkbox" checked={Boolean(p.unlimited)} onChange={(e) => setField("unlimited", e.target.checked)} />
           Unlimited (disable enforcement)
         </label>
-        {[
+        {/** @type {Array<[string, string]>} */ ([
           ["image_per_day", "Images per day"],
           ["image_per_week", "Images per week"],
           ["context_lines_per_day", "Context lines per day"],
           ["context_lines_per_week", "Context lines per week"],
-        ].map(([key, label]) => (
+        ]).map(([key, label]) => (
           <label key={key} className="block space-y-1">
             <span className="text-sm font-medium">{label}</span>
             <input

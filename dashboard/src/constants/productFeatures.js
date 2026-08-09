@@ -22,6 +22,10 @@ export const SAAS_NAV_ITEMS = [
   { name: "Token Wallet", href: "/wallet", permissionKey: "settings" },
 ];
 
+/**
+ * @param {string} pathname
+ * @returns {boolean}
+ */
 export function isDisabledFrontendRoute(pathname) {
   if (!pathname) return false;
   const p = pathname.length > 1 && pathname.endsWith("/") ? pathname.replace(/\/+$/, "") : pathname;

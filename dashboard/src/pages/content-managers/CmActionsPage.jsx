@@ -3,6 +3,7 @@ import { useCmSectionDraft } from "./useCmSectionDraft";
 
 const FIELD = "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm";
 
+/** @type {Record<string, string>} */
 const ACTION_LABELS = {
   respond_facebook_dm: "Respond to Facebook DMs",
   respond_instagram_dm: "Respond to Instagram DMs",
