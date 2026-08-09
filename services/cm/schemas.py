@@ -271,6 +271,53 @@ class OffDaysSection(CmBaseModel):
     notes: str | None = None
 
 
+class OpeningHoursDay(CmBaseModel):
+    """One weekday row: open→close times, or marked closed."""
+
+    closed: bool = False
+    open: str = ""  # HH:MM
+    close: str = ""  # HH:MM
+
+
+class OpeningHoursSchedule(CmBaseModel):
+    """Named hours calendar (e.g. Men / Women / Branch Beirut)."""
+
+    id: str
+    title: str = ""
+    monday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
+    tuesday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
+    wednesday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
+    thursday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
+    friday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
+    saturday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
+    sunday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
+    notes: str | None = None
+
+    def summary_line(self) -> str:
+        days = (
+            ("Mon", self.monday),
+            ("Tue", self.tuesday),
+            ("Wed", self.wednesday),
+            ("Thu", self.thursday),
+            ("Fri", self.friday),
+            ("Sat", self.saturday),
+            ("Sun", self.sunday),
+        )
+        parts: list[str] = []
+        for label, day in days:
+            if day.closed:
+                parts.append(f"{label}: closed")
+            elif (day.open or "").strip() and (day.close or "").strip():
+                parts.append(f"{label}: {day.open.strip()}-{day.close.strip()}")
+        title = (self.title or "").strip() or self.id
+        return f"{title}: " + "; ".join(parts) if parts else title
+
+
+class OpeningHoursSection(CmBaseModel):
+    items: list[OpeningHoursSchedule] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class ServicesSection(CmBaseModel):
     items: list[ServiceRecord] = Field(default_factory=list)
     notes: str | None = None
@@ -490,6 +537,7 @@ def default_section_payload(section: str) -> dict[str, object]:
         "actions": ActionsSection(),
         "ai_limits": AiLimitsSection(),
         "off_days": OffDaysSection(),
+        "opening_hours": OpeningHoursSection(),
     }
     model = builders.get(section)
     if model is None:

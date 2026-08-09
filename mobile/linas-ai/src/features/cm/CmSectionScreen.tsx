@@ -13,6 +13,7 @@ import { DynamicMessagesEditor } from './editors/DynamicMessagesEditor';
 import { HandoffEditor } from './editors/HandoffEditor';
 import { LanguagesEditor } from './editors/LanguagesEditor';
 import { OffDaysEditor } from './editors/OffDaysEditor';
+import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { ActionsEditor, AiLimitsEditor, RestrictedEditor } from './editors/PolicyEditors';
 import { PricesEditor } from './editors/PricesEditor';
 import { ServicesEditor } from './editors/ServicesEditor';
@@ -55,6 +56,8 @@ function SectionBody({
       return <DynamicMessagesEditor payload={payload} onChange={onChange} />;
     case 'branches':
       return <BranchesEditor payload={payload} onChange={onChange} />;
+    case 'opening_hours':
+      return <OpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
       return <RestrictedEditor payload={payload} onChange={onChange} />;
     case 'actions':

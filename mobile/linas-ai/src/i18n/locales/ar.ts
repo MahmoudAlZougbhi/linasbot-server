@@ -175,7 +175,7 @@ export const ar: Record<StringKey, string> = {
   settingsActionsSub: 'إنستغرام، فيسبوك، التحويل البشري، الصور والمزيد',
   settingsAiLimits: 'حدود الذكاء الاصطناعي',
   settingsAiLimitsSub: 'حدود استخدام الصور والسياق',
-  faqTitle: 'الأسئلة الشائعة',
+  faqTitle: 'الإجابات الذكية / الأسئلة الشائعة',
   faqSub: 'أسئلة محفوظة مع ترجمة تلقائية',
   faqCreateNew: 'إنشاء سؤال جديد',
   faqSavedList: 'الأسئلة المحفوظة',

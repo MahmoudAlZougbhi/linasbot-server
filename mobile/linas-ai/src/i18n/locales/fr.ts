@@ -179,7 +179,7 @@ export const fr: Record<StringKey, string> = {
   settingsActionsSub: 'Instagram, Facebook, transfert humain, photo et plus',
   settingsAiLimits: 'Limites IA',
   settingsAiLimitsSub: 'Limites d’usage images et contexte',
-  faqTitle: 'FAQ',
+  faqTitle: 'Réponses intelligentes / FAQ',
   faqSub: 'Questions enregistrées avec traduction auto',
   faqCreateNew: 'Créer une FAQ',
   faqSavedList: 'FAQ enregistrées',

@@ -7,6 +7,7 @@ export type CmSectionId =
   | 'dynamic_messages'
   | 'services'
   | 'branches'
+  | 'opening_hours'
   | 'prices'
   | 'care'
   | 'knowledge'
@@ -63,6 +64,12 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     id: 'branches',
     title: 'Locations',
     description: 'Branches with address and Maps link.',
+    mobileSupported: true,
+  },
+  {
+    id: 'opening_hours',
+    title: 'Opening Hours',
+    description: 'Named schedules with Mon–Sun open hours or day off.',
     mobileSupported: true,
   },
   {

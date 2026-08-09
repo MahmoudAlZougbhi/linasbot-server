@@ -28,6 +28,7 @@ from services.cm.structured_resolver import (
     find_restricted_topic,
     resolve_branch_facts,
     resolve_handoff,
+    resolve_opening_hours_facts,
     resolve_price_facts,
     resolve_service_catalog_facts,
     resolve_service_facts,
@@ -219,6 +220,7 @@ async def prepare_response(
     facts: list[AnswerFact] = []
     facts.extend(resolve_service_catalog_facts(services_section))
     facts.extend(resolve_off_day_facts(sections.get("off_days") or {}))
+    facts.extend(resolve_opening_hours_facts(sections.get("opening_hours") or {}))
     if interpreted.service_id:
         facts.extend(resolve_service_facts(services_section, interpreted.service_id))
         facts.extend(resolve_price_facts(sections.get("prices") or {}, interpreted.service_id))
