@@ -21,6 +21,7 @@ test('drawer module order matches binding product order', () => {
   assert.deepEqual(ids, [
     'dashboard',
     'cm',
+    'faq',
     'livechat',
     'integrations',
     'users',
@@ -28,6 +29,21 @@ test('drawer module order matches binding product order', () => {
     'usage',
     'settings',
   ]);
+});
+
+test('drawer and CM module tiles expose design handoff icons', () => {
+  const nav = read('features/nav/NavDrawer.tsx');
+  const modules = read('features/nav/moduleIcons.ts');
+  const cm = read('features/cm/CmScreen.tsx');
+  const cmIcons = read('features/cm/cmSectionIcons.ts');
+  assert.match(nav, /MODULE_ICONS/);
+  assert.match(nav, /AppIcon/);
+  assert.match(modules, /dashboard: feather\('grid'\)/);
+  assert.match(modules, /cm: feather\('book-open'\)/);
+  assert.match(modules, /livechat: feather\('message-square'\)/);
+  assert.match(cm, /CM_SECTION_ICONS/);
+  assert.match(cmIcons, /ai_basics: feather\('book-open'\)/);
+  assert.match(cmIcons, /languages: feather\('globe'\)/);
 });
 
 test('NavDrawer is physical-left only', () => {

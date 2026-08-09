@@ -5,12 +5,13 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
+import { AppIcon, feather } from '../../components/AppIcon';
 import { EmptyState } from '../../components/EmptyState';
-import { TextField } from '../../components/TextField';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { HIT, colors, fonts, radii, spacing, useTheme } from '../../theme';
 import { ConversationRow } from './ConversationRow';
 import type { InboxFilter, LiveChatItem } from './liveChatTypes';
 import { useLiveChatInbox } from './useLiveChatInbox';
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export function LiveChatInbox({ onOpenChat, inbox }: Props) {
+  const { colors: theme } = useTheme();
   const {
     sections,
     loading,
@@ -78,14 +80,25 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
 
   return (
     <View style={styles.flex}>
-      <TextField
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Search name or phone…"
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.search}
-      />
+      <View
+        style={[
+          styles.searchWrap,
+          { backgroundColor: theme.input, borderColor: theme.border },
+        ]}
+      >
+        <AppIcon icon={feather('search')} size={16} color={theme.textDim} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search conversations"
+          placeholderTextColor={theme.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[styles.search, { color: theme.text }]}
+          accessibilityLabel="Search conversations"
+        />
+        <AppIcon icon={feather('filter')} size={16} color={theme.textMuted} />
+      </View>
       <View style={styles.filters}>
         {FILTERS.map((f) => {
           const active = filter === f.id;
@@ -94,6 +107,9 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
               key={f.id}
               style={[styles.chip, active && styles.chipActive]}
               onPress={() => setFilter(f.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter ${f.label}`}
+              accessibilityState={{ selected: active }}
             >
               <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
             </Pressable>
@@ -138,7 +154,17 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  search: { marginBottom: spacing.sm },
+  searchWrap: {
+    minHeight: HIT,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    marginBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  search: { flex: 1, minHeight: HIT - 4, paddingVertical: 8, fontFamily: fonts.body, fontSize: 16 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm },
   chip: {
     borderRadius: radii.pill,
@@ -147,6 +173,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   chipActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
   chipText: { color: colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 12 },

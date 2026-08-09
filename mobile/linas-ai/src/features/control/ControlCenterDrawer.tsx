@@ -1,8 +1,10 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AppIcon } from '../../components/AppIcon';
 import { SideDrawer } from '../../components/SideDrawer';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { HIT, colors, fonts, radii, spacing } from '../../theme';
+import { MODULE_ICONS, DRAWER_TOOL_ICONS } from '../nav/moduleIcons';
 import { CONTROL_ITEMS, type ControlArea, type ControlItem } from './controlAreas';
 
 type Props = {
@@ -38,15 +40,32 @@ export function ControlCenterDrawer({
             <View key={group} style={styles.group}>
               <Text style={styles.groupLabel}>{GROUP_LABELS_SAFE[group]}</Text>
               {rows.map((area) => (
-                <Pressable key={area.id} style={styles.row} onPress={() => onOpen(area.id)}>
-                  <Text style={styles.rowTitle}>{area.title}</Text>
-                  <Text style={styles.rowSub}>{area.subtitle}</Text>
+                <Pressable
+                  key={area.id}
+                  style={styles.row}
+                  onPress={() => onOpen(area.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={area.title}
+                >
+                  <View style={styles.rowIcon}>
+                    <AppIcon icon={MODULE_ICONS[area.id]} size={18} color={colors.accentDeep} />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text style={styles.rowTitle}>{area.title}</Text>
+                    <Text style={styles.rowSub}>{area.subtitle}</Text>
+                  </View>
                 </Pressable>
               ))}
             </View>
           );
         })}
-        <Pressable style={styles.logout} onPress={onLogout}>
+        <Pressable
+          style={styles.logout}
+          onPress={onLogout}
+          accessibilityRole="button"
+          accessibilityLabel={tr('logout')}
+        >
+          <AppIcon icon={DRAWER_TOOL_ICONS.logout} size={18} color={colors.danger} />
           <Text style={styles.logoutText}>{tr('logout')}</Text>
         </Pressable>
       </ScrollView>
@@ -82,13 +101,34 @@ const styles = StyleSheet.create({
   row: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.md,
-    padding: spacing.lg - 2,
+    padding: spacing.md,
     borderColor: colors.border,
     borderWidth: 1,
     marginBottom: spacing.sm,
+    minHeight: HIT + 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
+  rowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: { flex: 1, minWidth: 0 },
   rowTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 },
   rowSub: { color: colors.textMuted, fontFamily: fonts.body, marginTop: 3, fontSize: 12 },
-  logout: { marginTop: spacing.md, padding: spacing.lg, alignItems: 'center' },
+  logout: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    minHeight: HIT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
   logoutText: { color: colors.danger, fontFamily: fonts.bodyMedium, fontWeight: '700' },
 });
