@@ -187,6 +187,31 @@ export function messageBody(msg: LiveChatMessage): string {
   return String(msg.content || msg.text || '').trim() || '(empty)';
 }
 
+/** Web parity: Like only on AI text replies (not bot/FAQ, not media). */
+export function isLikeableAiReply(msg: LiveChatMessage): boolean {
+  if (msg.is_user) return false;
+  const type = String(msg.type || 'text').toLowerCase();
+  if (type === 'voice' || type === 'audio' || type === 'image') return false;
+  return String(msg.handled_by || '').toLowerCase() === 'ai';
+}
+
+/** Chronological messages: find the customer question before this AI reply. */
+export function previousUserQuestion(
+  messages: LiveChatMessage[],
+  aiMessage: LiveChatMessage,
+): string {
+  const idx = messages.findIndex((m) => m === aiMessage);
+  const start = idx >= 0 ? idx - 1 : messages.length - 1;
+  for (let i = start; i >= 0; i--) {
+    const candidate = messages[i];
+    if (candidate?.is_user) {
+      const text = String(candidate.content || candidate.text || '').trim();
+      if (text) return text;
+    }
+  }
+  return '';
+}
+
 export function parseChatDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const d = new Date(value);

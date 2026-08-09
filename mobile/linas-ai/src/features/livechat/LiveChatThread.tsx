@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -10,13 +11,20 @@ import {
 
 import { EmptyState } from '../../components/EmptyState';
 import { StatusChip } from '../../components/StatusChip';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
+import { LikeFeedbackModal } from './LikeFeedbackModal';
 import { LiveChatComposer } from './LiveChatComposer';
 import { LiveChatMessageBubble } from './LiveChatMessageBubble';
+import { saveFaqFromLiveChat } from './liveChatApi';
 import {
   type LiveChatItem,
+  type LiveChatMessage,
+  isLikeableAiReply,
+  messageBody,
   messageKey,
   normalizeStatus,
+  previousUserQuestion,
   statusLabel,
   statusTone,
 } from './liveChatTypes';
@@ -28,10 +36,15 @@ type Props = {
 };
 
 export function LiveChatThread({ chat, onChatUpdated }: Props) {
+  const { tr } = useI18n();
   const thread = useLiveChatThread(chat, onChatUpdated);
   const status = normalizeStatus({ ...chat, status: thread.localStatus });
   const canMutate = !thread.social;
   const isHuman = status === 'human' || status === 'waiting_human';
+
+  const [likeTarget, setLikeTarget] = useState<LiveChatMessage | null>(null);
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [likeError, setLikeError] = useState<string | null>(null);
 
   const readOnlyReason = thread.social
     ? 'Instagram/Facebook conversations are read-only. Use WhatsApp for operator replies.'
@@ -41,6 +54,30 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
 
   // Newest-first for inverted FlatList (WhatsApp: open at latest, scroll up = older).
   const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
+
+  const likeInitialQuestion = likeTarget
+    ? previousUserQuestion(thread.messages, likeTarget)
+    : '';
+  const likeInitialAnswer = likeTarget ? messageBody(likeTarget) : '';
+
+  const submitLikeFaq = async (question: string, answer: string) => {
+    setLikeBusy(true);
+    setLikeError(null);
+    try {
+      await saveFaqFromLiveChat({
+        question,
+        answer,
+        language: chat.language || 'ar',
+      });
+      setLikeTarget(null);
+      Alert.alert(tr('likeFaqSavedTitle'), tr('likeFaqSavedBody'));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : tr('likeFaqSaveError');
+      setLikeError(msg || tr('faqQuotaUpgrade'));
+    } finally {
+      setLikeBusy(false);
+    }
+  };
 
   return (
     <View style={styles.flex}>
@@ -115,7 +152,19 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
               <Text style={styles.olderHint}>Beginning of conversation</Text>
             ) : null
           }
-          renderItem={({ item }) => <LiveChatMessageBubble message={item} />}
+          renderItem={({ item }) => (
+            <LiveChatMessageBubble
+              message={item}
+              onLike={
+                isLikeableAiReply(item)
+                  ? () => {
+                      setLikeError(null);
+                      setLikeTarget(item);
+                    }
+                  : undefined
+              }
+            />
+          )}
         />
       )}
 
@@ -131,6 +180,20 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
         }
         onSendText={thread.sendText}
         onSendMedia={thread.sendMedia}
+      />
+
+      <LikeFeedbackModal
+        visible={Boolean(likeTarget)}
+        initialQuestion={likeInitialQuestion}
+        initialAnswer={likeInitialAnswer}
+        busy={likeBusy}
+        error={likeError}
+        onClose={() => {
+          if (likeBusy) return;
+          setLikeTarget(null);
+          setLikeError(null);
+        }}
+        onSubmit={(q, a) => void submitLikeFaq(q, a)}
       />
     </View>
   );

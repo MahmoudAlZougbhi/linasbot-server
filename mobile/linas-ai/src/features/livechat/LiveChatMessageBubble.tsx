@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { tokenStore } from '../../auth/tokenStore';
 import { API_BASE } from '../../config';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 import type { LiveChatMessage } from './liveChatTypes';
-import { formatBubbleTime, messageBody } from './liveChatTypes';
+import { formatBubbleTime, isLikeableAiReply, messageBody } from './liveChatTypes';
 
-type Props = { message: LiveChatMessage };
+type Props = {
+  message: LiveChatMessage;
+  onLike?: () => void;
+};
 
 function resolveMediaUrl(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -58,7 +62,8 @@ function AuthImage({ url }: { url: string }) {
   return <Image source={{ uri }} style={styles.image} resizeMode="cover" />;
 }
 
-export function LiveChatMessageBubble({ message }: Props) {
+export function LiveChatMessageBubble({ message, onLike }: Props) {
+  const { tr } = useI18n();
   const isCustomer = Boolean(message.is_user);
   const handled = String(message.handled_by || message.role || '').toLowerCase();
   const isOperator = !isCustomer && (handled.includes('operator') || handled.includes('human'));
@@ -66,6 +71,7 @@ export function LiveChatMessageBubble({ message }: Props) {
   const imageUrl = resolveMediaUrl(message.image_url || (type === 'image' ? message.media_url : null));
   const body = messageBody(message);
   const time = formatBubbleTime(message.timestamp || undefined);
+  const showLike = Boolean(onLike) && isLikeableAiReply(message);
 
   return (
     <View style={[styles.wrap, isCustomer ? styles.inWrap : styles.outWrap]}>
@@ -88,6 +94,17 @@ export function LiveChatMessageBubble({ message }: Props) {
           {time ? ` · ${time}` : ''}
         </Text>
       </View>
+      {showLike ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={tr('likeFaqTitle')}
+          hitSlop={8}
+          onPress={onLike}
+          style={styles.likeBtn}
+        >
+          <Text style={styles.likeLabel}>👍 {tr('likeFaqAction')}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -125,4 +142,15 @@ const styles = StyleSheet.create({
   opMeta: { color: 'rgba(255,255,255,0.75)' },
   image: { width: 220, height: 160, borderRadius: radii.sm, marginBottom: 4 },
   mediaHint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 },
+  likeBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  likeLabel: { color: colors.accentDeep, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

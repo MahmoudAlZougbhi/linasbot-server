@@ -177,3 +177,65 @@ export function classifyLiveChatError(err: unknown): 'forbidden' | 'auth' | 'oth
   if (msg.includes('not authenticated') || msg.includes('401')) return 'auth';
   return 'other';
 }
+
+const SaveFaqFromLiveChatSchema = z
+  .object({
+    success: z.boolean(),
+    qa_group_id: z.string().optional(),
+    awaiting_publication: z.boolean().optional(),
+    status: z.string().optional(),
+    incomplete: z.boolean().optional(),
+    count_created: z.number().optional(),
+    error: z.string().optional(),
+    message: z.string().optional(),
+  })
+  .passthrough();
+
+export type SaveFaqFromLiveChatResult = z.infer<typeof SaveFaqFromLiveChatSchema>;
+
+function entitlementDetailMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (detail && typeof detail === 'object') {
+    const d = detail as {
+      upgrade_message?: unknown;
+      code?: unknown;
+      message?: unknown;
+    };
+    if (d.upgrade_message) return String(d.upgrade_message);
+    if (d.code === 'FAQ_QUOTA_EXCEEDED' || d.code === 'FAQ_DISABLED') {
+      return String(d.message || d.upgrade_message || '');
+    }
+  }
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  return null;
+}
+
+/** Live Chat Like → CM FAQ (4-lang auto). Enforces plan FAQ entitlements (402/403). */
+export async function saveFaqFromLiveChat(input: {
+  question: string;
+  answer: string;
+  language?: string;
+}): Promise<SaveFaqFromLiveChatResult> {
+  try {
+    return await apiFetch('/api/cm/faq/from-livechat', {
+      method: 'POST',
+      body: JSON.stringify({
+        question: input.question.trim(),
+        answer: input.answer.trim(),
+        language: input.language || 'ar',
+        publish: false,
+      }),
+      schema: SaveFaqFromLiveChatSchema,
+    });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      const entitlementMsg = entitlementDetailMessage(err.body);
+      if (entitlementMsg) throw new Error(entitlementMsg);
+      if (err.status === 402 || err.status === 403) {
+        throw new Error(errorMessage(err, 'Smart Answers quota reached. Upgrade your plan.'));
+      }
+    }
+    rethrow(err, 'Could not save to FAQ.');
+  }
+}
