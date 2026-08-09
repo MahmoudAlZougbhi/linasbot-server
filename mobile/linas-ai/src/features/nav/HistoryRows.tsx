@@ -63,8 +63,11 @@ export function HistoryRows({
                 <Pressable
                   style={styles.main}
                   onPress={() => onOpen(item.id)}
+                  onLongPress={() => setMenuId((m) => (m === item.id ? null : item.id))}
+                  delayLongPress={350}
                   accessibilityRole="button"
                   accessibilityLabel={item.title || 'Untitled conversation'}
+                  accessibilityHint="Long press to rename, pin, archive, or delete"
                 >
                   {pinnedIds.includes(item.id) && !archivedMode ? (
                     <AppIcon icon={DRAWER_TOOL_ICONS.pin} size={14} color={colors.textDim} />
