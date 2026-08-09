@@ -1,12 +1,14 @@
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 
 type FeatherName = ComponentProps<typeof Feather>['name'];
 type IonName = ComponentProps<typeof Ionicons>['name'];
+type MciName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 export type AppIconName =
   | { set: 'feather'; name: FeatherName }
-  | { set: 'ion'; name: IonName };
+  | { set: 'ion'; name: IonName }
+  | { set: 'mci'; name: MciName };
 
 type Props = {
   icon: AppIconName;
@@ -16,7 +18,7 @@ type Props = {
   accessibilityLabel?: string;
 };
 
-/** Thin-line product icons (Feather ≈ Lucide / SF-style). */
+/** Thin-line product icons (Feather ≈ Lucide / SF-style; MCI for DRW plug). */
 export function AppIcon({ icon, size = 20, color, accessibilityLabel }: Props) {
   const a11y = accessibilityLabel
     ? ({ accessibilityLabel, accessible: true } as const)
@@ -24,6 +26,9 @@ export function AppIcon({ icon, size = 20, color, accessibilityLabel }: Props) {
 
   if (icon.set === 'ion') {
     return <Ionicons name={icon.name} size={size} color={color} {...a11y} />;
+  }
+  if (icon.set === 'mci') {
+    return <MaterialCommunityIcons name={icon.name} size={size} color={color} {...a11y} />;
   }
   return <Feather name={icon.name} size={size} color={color} {...a11y} />;
 }
@@ -34,4 +39,8 @@ export function feather(name: FeatherName): AppIconName {
 
 export function ion(name: IonName): AppIconName {
   return { set: 'ion', name };
+}
+
+export function mci(name: MciName): AppIconName {
+  return { set: 'mci', name };
 }
