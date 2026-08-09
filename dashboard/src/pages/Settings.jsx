@@ -15,7 +15,6 @@ import {
   UsersIcon,
   CalendarDaysIcon,
   CurrencyDollarIcon,
-  AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';

@@ -8,7 +8,6 @@ from services.cm.schemas import ActionsSection
 from services.cm.version_store import PublishedVersionError, load_published_content, read_published_pointer
 from services.meta_app_registry import META_COMMENT_SCOPES, MetaChannel
 
-
 ACTION_FACEBOOK_COMMENTS = "respond_facebook_comments"
 ACTION_INSTAGRAM_COMMENTS = "respond_instagram_comments"
 ACTION_FACEBOOK_DM = "respond_facebook_dm"

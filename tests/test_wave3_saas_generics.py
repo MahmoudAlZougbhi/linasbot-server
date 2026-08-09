@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.cm.constants import CM_SECTIONS
-from services.cm.schemas import AiBasics, ActionsSection, AiLimitsSection, OffDaysSection, default_section_payload
+from services.cm.schemas import ActionsSection, AiBasics, AiLimitsSection, OffDaysSection, default_section_payload
 from services.product_features import LEGACY_BOOKING_TOOL_NAMES, legacy_booking_tools_disabled
 from utils.utils import get_openai_tools_schema
 

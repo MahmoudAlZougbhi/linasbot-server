@@ -12,7 +12,9 @@ import time
 import uuid
 from typing import Any
 
+from services.cm.atomic_io import atomic_write_json, read_json_object
 from services.cm.constants import CM_SECTIONS
+from services.cm.paths import tenant_cm_root
 from services.cm.schemas import (
     ActionsSection,
     AiBasics,
@@ -32,8 +34,6 @@ from services.cm.schemas import (
     default_section_payload,
 )
 from services.cm.storage import ConflictError, get_draft, put_draft
-from services.cm.paths import tenant_cm_root
-from services.cm.atomic_io import atomic_write_json, read_json_object
 
 SECTION_MODELS: dict[str, type] = {
     "ai_basics": AiBasics,

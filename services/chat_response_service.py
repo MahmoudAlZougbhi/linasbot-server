@@ -20,7 +20,6 @@ from openai.types.shared_params.response_format_json_object import ResponseForma
 
 import config
 from prompt_templates import CUSTOMER_STATUS_TOKEN
-from services.product_features import LEGACY_BOOKING_TOOL_NAMES
 
 # Import all API functions from api_integrations
 from services import api_integrations
@@ -31,6 +30,7 @@ from services.gender_recognition_service import get_gender_from_gpt
 from services.llm_core_service import client
 from services.model_pricing import compute_cost_from_usage as _compute_cost_from_usage
 from services.moderation_service import check_rate_limits, get_rate_limit_response
+from services.product_features import LEGACY_BOOKING_TOOL_NAMES
 from utils.appointment_slot_rules import (
     extract_appointment_booking_fields,
     find_appointment_row_in_check_next_payload,

@@ -1134,17 +1134,21 @@ async def _process_and_respond(
     # Instagram/Facebook never create or manage appointments inside the social DM.
     # Laser-specific branch/gender WhatsApp routing is legacy-bridge only.
     # Published CM tenants use the CM handoff pipeline (no Beirut/Antelias leakage).
+    from services.cm.constants import (
+        DEFAULT_TENANT_ID as _CM_DEFAULT_TENANT,
+    )
+    from services.cm.constants import (
+        tenant_allows_legacy_bridge as _tenant_allows_legacy_bridge,
+    )
+    from services.cm.constants import (
+        tenant_uses_cm_runtime as _tenant_uses_cm_runtime,
+    )
     from services.social_contact_routing import (
         clear_social_booking_preference,
         is_social_channel,
         route_social_contact_request,
         social_booking_preference_key,
         social_booking_preference_reply,
-    )
-    from services.cm.constants import (
-        DEFAULT_TENANT_ID as _CM_DEFAULT_TENANT,
-        tenant_allows_legacy_bridge as _tenant_allows_legacy_bridge,
-        tenant_uses_cm_runtime as _tenant_uses_cm_runtime,
     )
 
     if is_social_channel(user_data.get("channel")):

@@ -21,8 +21,8 @@ async def main() -> int:
     args = parser.parse_args()
 
     if args.dry_run:
-        from services.cm.storage import ensure_defaults, get_draft
         from services.cm.constants import CM_SECTIONS
+        from services.cm.storage import ensure_defaults, get_draft
 
         ensure_defaults(tenant_id=args.tenant_id)
         print(f"[dry-run] tenant={args.tenant_id} data_root={os.getenv('LINASBOT_DATA_ROOT')}")
