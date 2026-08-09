@@ -320,9 +320,10 @@ function AppBody() {
       {screen.name === 'notifications' ? (
         <NotificationsScreen
           isAuthenticated={hasAccess}
-          onBack={() =>
-            setScreen({ name: screen.backTo === 'settings' ? 'settings' : 'chat' })
-          }
+          onBack={() => {
+            if (screen.backTo === 'settings') setScreen({ name: 'settings' });
+            else setScreen({ name: 'chat' });
+          }}
           onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
           onRequestLogin={() => {
             setResumeArea('notifications');

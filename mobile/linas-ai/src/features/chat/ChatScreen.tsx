@@ -206,10 +206,6 @@ export function ChatScreen({
           workspaceLabel={workspaceLabel}
           onOpenMenu={() => setDrawerOpen(true)}
           onSignIn={() => openAuthPreservingDraft(false)}
-          onNewChat={() => {
-            stickToBottomRef.current = true;
-            void owner.newChat();
-          }}
         />
 
         {!isAuthenticated ? (
@@ -349,8 +345,12 @@ export function ChatScreen({
         workspaceLabel={workspaceLabel}
         onOpenArea={onOpenArea}
         onNewChat={() => {
-          if (isAuthenticated) void owner.newChat();
-          else setDrawerOpen(false);
+          if (isAuthenticated) {
+            stickToBottomRef.current = true;
+            void owner.newChat();
+          } else {
+            setDrawerOpen(false);
+          }
         }}
         onOpenChat={(id) => {
           stickToBottomRef.current = true;

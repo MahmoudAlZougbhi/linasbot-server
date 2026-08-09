@@ -128,6 +128,23 @@ test('Live Chat thread remains read-only', () => {
   assert.doesNotMatch(thread, /function\s+takeover|pauseAi|humanTakeover/i);
 });
 
+test('drawer search filters chats; New chat is bottom-left not header-right', () => {
+  const nav = read('features/nav/NavDrawer.tsx');
+  const header = read('features/chat/ChatHeader.tsx');
+  const chat = read('features/chat/ChatScreen.tsx');
+  const headerCall = chat.match(/<ChatHeader[\s\S]*?\/>/)?.[0] || '';
+  assert.match(nav, /bottomDock/);
+  assert.match(nav, /newChatBtn/);
+  assert.match(nav, /searchConversationTitles/);
+  assert.match(nav, /noChatsMatch/);
+  assert.match(nav, /emptyLabel/);
+  assert.doesNotMatch(header, /onNewChat/);
+  assert.doesNotMatch(header, /NewChatIcon/);
+  assert.match(headerCall, /<ChatHeader/);
+  assert.doesNotMatch(headerCall, /onNewChat/);
+  assert.match(chat, /<NavDrawer[\s\S]*onNewChat=/);
+});
+
 test('Settings hosts Notifications and Logout; drawer does not', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
   const nav = read('features/nav/NavDrawer.tsx');

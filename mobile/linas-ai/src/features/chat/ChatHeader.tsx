@@ -2,26 +2,27 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
+import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, spacing, useTheme } from '../../theme';
-import { MenuIcon, NewChatIcon } from './ChatHeaderIcons';
+import { MenuIcon } from './ChatHeaderIcons';
 
 type Props = {
   isAuthenticated: boolean;
   workspaceLabel?: string | null;
   onOpenMenu: () => void;
   onSignIn?: () => void;
-  onNewChat?: () => void;
 };
 
+/** Header chrome: menu left, brand center, Sign in right for guests. New chat lives in NavDrawer. */
 export function ChatHeader({
   isAuthenticated,
   workspaceLabel,
   onOpenMenu,
   onSignIn,
-  onNewChat,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { tr } = useI18n();
   const iconColor = colors.text;
 
   return (
@@ -38,7 +39,7 @@ export function ChatHeader({
       <Pressable
         onPress={onOpenMenu}
         style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
-        accessibilityLabel="Open menu"
+        accessibilityLabel={tr('openMenu')}
         accessibilityRole="button"
         hitSlop={4}
       >
@@ -55,25 +56,21 @@ export function ChatHeader({
       </View>
 
       {isAuthenticated ? (
-        <Pressable
-          onPress={onNewChat}
-          style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
-          accessibilityLabel="New chat"
-          accessibilityRole="button"
-          hitSlop={4}
-        >
-          <NewChatIcon color={iconColor} />
-        </Pressable>
+        <View
+          style={styles.hit}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
       ) : (
         <Pressable
           onPress={onSignIn}
           style={({ pressed }) => [styles.signIn, pressed && styles.pressed]}
-          accessibilityLabel="Sign in"
+          accessibilityLabel={tr('signIn')}
           accessibilityRole="button"
           hitSlop={8}
         >
           <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 15 }}>
-            Sign in
+            {tr('signIn')}
           </Text>
         </Pressable>
       )}

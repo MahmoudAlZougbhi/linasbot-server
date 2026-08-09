@@ -185,6 +185,22 @@ export const en = {
   notificationsUnread: '{n} unread',
   notificationsAllRead: 'All caught up',
   notificationsMarkAll: 'Mark all read',
+  newChat: 'New chat',
+  searchChats: 'Search chats',
+  searchConversationTitles: 'Search conversation titles',
+  noChatsMatch: 'No chats match your search.',
+  noConversationsYet: 'No conversations yet.',
+  noArchivedChats: 'No archived chats.',
+  archivedChats: 'Archived chats',
+  showRecent: 'Show recent',
+  signInToKeepHistory: 'Sign in to keep Owner Copilot history. Guest chats stay on this device session only.',
+  closeMenu: 'Close menu',
+  openMenu: 'Open menu',
+  signIn: 'Sign in',
+  workspace: 'Workspace',
+  deleteConversation: 'Delete conversation',
+  deleteConversationConfirm: 'Delete “{title}”? This cannot be undone.',
+  untitledChat: 'Untitled',
 } as const;
 
 export type StringKey = keyof typeof en;

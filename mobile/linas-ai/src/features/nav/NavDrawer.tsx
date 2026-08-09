@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -13,6 +13,7 @@ import { AppIcon } from '../../components/AppIcon';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { SideDrawer } from '../../components/SideDrawer';
 import { LEGAL_URLS } from '../../config';
+import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
 import { NewChatIcon } from '../chat/ChatHeaderIcons';
 import type { ControlArea } from '../control/controlAreas';
@@ -44,18 +45,27 @@ type Props = {
 
 export function NavDrawer(props: Props) {
   const { colors } = useTheme();
+  const { tr } = useI18n();
   const [query, setQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const searchRef = useRef<TextInput>(null);
   const modules = visibleDrawerModules({ showUsers: props.showUsers });
+  const queryTrimmed = query.trim();
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = queryTrimmed.toLowerCase();
     const base = props.history.filter((h) =>
       showArchived ? props.archivedIds.includes(h.id) : !props.archivedIds.includes(h.id),
     );
     if (!q) return base;
     return base.filter((h) => (h.title || '').toLowerCase().includes(q));
-  }, [props.history, props.archivedIds, query, showArchived]);
+  }, [props.history, props.archivedIds, queryTrimmed, showArchived]);
+
+  const emptyLabel = queryTrimmed
+    ? tr('noChatsMatch')
+    : showArchived
+      ? tr('noArchivedChats')
+      : tr('noConversationsYet');
 
   return (
     <SideDrawer open={props.open} side="left" onClose={props.onClose} widthRatio={0.88}>
@@ -64,14 +74,19 @@ export function NavDrawer(props: Props) {
         <Pressable
           onPress={props.onClose}
           style={[styles.close, { borderColor: colors.border }]}
-          accessibilityLabel="Close menu"
+          accessibilityLabel={tr('closeMenu')}
+          accessibilityRole="button"
           hitSlop={4}
         >
           <AppIcon icon={DRAWER_TOOL_ICONS.close} size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        style={styles.scrollFlex}
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.grid}>
           {modules.map((m) => (
             <Pressable
@@ -92,50 +107,36 @@ export function NavDrawer(props: Props) {
           ))}
         </View>
 
-        <View style={styles.tools}>
-          <Pressable
-            style={[styles.toolPrimary, { backgroundColor: colors.accent }]}
-            onPress={() => {
-              props.onNewChat();
-              props.onClose();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="New chat"
-          >
-            <NewChatIcon color={colors.onAccent} />
-            <Text style={[styles.toolPrimaryText, { color: colors.onAccent }]}>New chat</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.toolSecondary, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-            onPress={() => setShowArchived(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Search chats"
-          >
-            <AppIcon icon={DRAWER_TOOL_ICONS.search} size={18} color={colors.text} />
-            <Text style={{ color: colors.text }}>Search</Text>
-          </Pressable>
-        </View>
-
-        <View style={[styles.searchWrap, { backgroundColor: colors.input, borderColor: colors.border }]}>
+        <Pressable
+          style={[styles.searchWrap, { backgroundColor: colors.input, borderColor: colors.border }]}
+          onPress={() => searchRef.current?.focus()}
+          accessibilityRole="search"
+          accessibilityLabel={tr('searchChats')}
+        >
           <AppIcon icon={DRAWER_TOOL_ICONS.search} size={16} color={colors.textDim} />
           <TextInput
+            ref={searchRef}
             value={query}
             onChangeText={setQuery}
-            placeholder="Search chats"
+            placeholder={tr('searchChats')}
             placeholderTextColor={colors.textDim}
             style={[styles.search, { color: colors.text }]}
-            accessibilityLabel="Search conversation titles"
+            accessibilityLabel={tr('searchConversationTitles')}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-        </View>
+        </Pressable>
 
         <Pressable
           onPress={() => setShowArchived((v) => !v)}
           style={styles.archiveToggle}
           accessibilityRole="button"
-          accessibilityLabel={showArchived ? 'Show recent chats' : 'Archived chats'}
+          accessibilityLabel={showArchived ? tr('showRecent') : tr('archivedChats')}
         >
           <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>
-            {showArchived ? 'Show recent' : 'Archived chats'}
+            {showArchived ? tr('showRecent') : tr('archivedChats')}
           </Text>
         </Pressable>
 
@@ -145,6 +146,7 @@ export function NavDrawer(props: Props) {
             pinnedIds={props.pinnedIds}
             activeId={props.activeId}
             archivedMode={showArchived}
+            emptyLabel={emptyLabel}
             onOpen={(id) => {
               props.onOpenChat(id);
               props.onClose();
@@ -156,26 +158,46 @@ export function NavDrawer(props: Props) {
             onDelete={(id) => {
               const item = props.history.find((h) => h.id === id);
               Alert.alert(
-                'Delete conversation',
-                `Delete “${item?.title || 'Untitled'}”? This cannot be undone.`,
+                tr('deleteConversation'),
+                tr('deleteConversationConfirm').replace(
+                  '{title}',
+                  item?.title || tr('untitledChat'),
+                ),
                 [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => props.onDelete(id) },
+                  { text: tr('usersCancel'), style: 'cancel' },
+                  {
+                    text: tr('usersDelete'),
+                    style: 'destructive',
+                    onPress: () => props.onDelete(id),
+                  },
                 ],
               );
             }}
           />
         ) : (
           <Text style={{ color: colors.textMuted, marginTop: spacing.md }}>
-            Sign in to keep Owner Copilot history. Guest chats stay on this device session only.
+            {tr('signInToKeepHistory')}
           </Text>
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: colors.borderSoft }]}>
+      <View style={[styles.bottomDock, { borderTopColor: colors.borderSoft }]}>
+        <Pressable
+          style={[styles.newChatBtn, { backgroundColor: colors.accent }]}
+          onPress={() => {
+            props.onNewChat();
+            props.onClose();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={tr('newChat')}
+        >
+          <NewChatIcon color={colors.onAccent} />
+          <Text style={[styles.newChatText, { color: colors.onAccent }]}>{tr('newChat')}</Text>
+        </Pressable>
+
         {props.isAuthenticated ? (
           <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-            {props.workspaceLabel || 'Workspace'}
+            {props.workspaceLabel || tr('workspace')}
           </Text>
         ) : (
           <>
@@ -186,9 +208,9 @@ export function NavDrawer(props: Props) {
               }}
               style={styles.footerRow}
               accessibilityRole="button"
-              accessibilityLabel="Log in"
+              accessibilityLabel={tr('login')}
             >
-              <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Log in</Text>
+              <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>{tr('login')}</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -197,12 +219,13 @@ export function NavDrawer(props: Props) {
               }}
               style={styles.footerRow}
               accessibilityRole="button"
-              accessibilityLabel="Create account"
+              accessibilityLabel={tr('createAccount')}
             >
-              <Text style={{ color: colors.text }}>Create account</Text>
+              <Text style={{ color: colors.text }}>{tr('createAccount')}</Text>
             </Pressable>
             <Text style={{ color: colors.textDim, fontSize: 11 }}>
-              Privacy · Terms available in Settings after sign-in ({LEGAL_URLS.privacy ? 'linked' : ''})
+              {tr('privacy')} · {tr('terms')}
+              {LEGAL_URLS.privacy ? '' : ''}
             </Text>
           </>
         )}
@@ -226,7 +249,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  scroll: { paddingBottom: 24, gap: 8 },
+  scrollFlex: { flex: 1 },
+  scroll: { paddingBottom: 16, gap: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tile: {
     width: '47%',
@@ -239,33 +263,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tileText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
-  tools: { flexDirection: 'row', gap: 8, marginTop: spacing.sm },
-  toolPrimary: {
-    flex: 1,
-    minHeight: HIT,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  toolPrimaryText: { fontFamily: fonts.bodyMedium, fontWeight: '700' },
-  toolSecondary: {
-    flex: 1,
-    minHeight: HIT,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
   searchWrap: {
     borderWidth: 1,
     borderRadius: radii.md,
     minHeight: HIT,
     paddingHorizontal: 12,
-    marginTop: 4,
+    marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -276,11 +279,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   archiveToggle: { minHeight: 44, justifyContent: 'center' },
-  footer: {
+  bottomDock: {
     borderTopWidth: 1,
     paddingTop: spacing.md,
-    gap: 4,
+    gap: spacing.sm,
   },
+  newChatBtn: {
+    minHeight: HIT,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  newChatText: { fontFamily: fonts.bodyMedium, fontWeight: '700' },
   footerRow: {
     minHeight: HIT,
     flexDirection: 'row',
