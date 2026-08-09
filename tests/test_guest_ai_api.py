@@ -99,7 +99,8 @@ def test_guest_session_public_and_idempotent(guest_client):
     assert len(r2.json()["session"]["messages"]) == len(body1["session"]["messages"])
 
 
-def test_guest_word_limit_rejected(guest_client):
+def test_guest_word_limit_allows_over_50(guest_client):
+    """V2 removed the artificial 50-word ceiling; 51 words must be accepted."""
     client, _store = guest_client
     sid = "guest-test-session-words"
     client.post("/api/guest-ai/session", json={"guest_session_id": sid})
@@ -107,6 +108,20 @@ def test_guest_word_limit_rejected(guest_client):
     r = client.post(
         "/api/guest-ai/session/messages",
         json={"guest_session_id": sid, "content": long},
+    )
+    assert r.status_code == 200
+    assert r.json()["success"] is True
+
+
+def test_guest_abuse_word_guard_still_rejects_huge(guest_client):
+    client, _store = guest_client
+    sid = "guest-test-session-huge"
+    client.post("/api/guest-ai/session", json={"guest_session_id": sid})
+    # Stay under pydantic body max while exceeding GUEST_MAX_WORDS (2000).
+    huge = " ".join(["w"] * 2001)
+    r = client.post(
+        "/api/guest-ai/session/messages",
+        json={"guest_session_id": sid, "content": huge},
     )
     assert r.status_code == 400
     detail = r.json().get("detail") or {}

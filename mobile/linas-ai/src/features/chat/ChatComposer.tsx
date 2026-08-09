@@ -19,7 +19,9 @@ type Props = {
   onSend: () => void;
   onPlus: () => void;
   onToggleVoice: () => void;
+  onStop?: () => void;
   sending: boolean;
+  canSendWithAttachment?: boolean;
   voiceState: VoiceState;
   metering?: number | null;
   inputRef?: RefObject<TextInput | null>;
@@ -44,7 +46,9 @@ export function ChatComposer({
   onSend,
   onPlus,
   onToggleVoice,
+  onStop,
   sending,
+  canSendWithAttachment = false,
   voiceState,
   metering,
   inputRef,
@@ -53,6 +57,7 @@ export function ChatComposer({
   const pulse = useRef(new Animated.Value(1)).current;
   const recording = voiceState === 'recording';
   const transcribing = voiceState === 'transcribing';
+  const canSend = Boolean(draft.trim() || canSendWithAttachment);
 
   useEffect(() => {
     if (!recording) {
@@ -100,18 +105,24 @@ export function ChatComposer({
           )}
         </Pressable>
       </Animated.View>
-      <Pressable
-        style={[styles.send, (!draft.trim() || sending || recording || transcribing) && styles.sendDisabled]}
-        onPress={onSend}
-        disabled={sending || !draft.trim() || recording || transcribing}
-        accessibilityLabel="Send message"
-      >
-        {sending ? (
-          <ActivityIndicator color={colors.onAccent} />
-        ) : (
-          <Text style={styles.sendText}>↑</Text>
-        )}
-      </Pressable>
+      {onStop && sending ? (
+        <Pressable style={styles.send} onPress={onStop} accessibilityLabel="Stop generating">
+          <Text style={styles.sendText}>■</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          style={[styles.send, (!canSend || sending || recording || transcribing) && styles.sendDisabled]}
+          onPress={onSend}
+          disabled={sending || !canSend || recording || transcribing}
+          accessibilityLabel="Send message"
+        >
+          {sending ? (
+            <ActivityIndicator color={colors.onAccent} />
+          ) : (
+            <Text style={styles.sendText}>↑</Text>
+          )}
+        </Pressable>
+      )}
     </View>
   );
 }

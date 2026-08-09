@@ -53,7 +53,7 @@ def reasoning_effort_for_model(model: str) -> str | None:
 def build_chat_completion_kwargs(
     *,
     model: str,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     max_tokens: int,
     temperature: float | None = None,
 ) -> dict[str, Any]:
@@ -80,7 +80,7 @@ def build_chat_completion_kwargs(
 async def create_chat_completion(
     *,
     model: str,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     max_tokens: int,
     temperature: float | None = None,
 ) -> Any:

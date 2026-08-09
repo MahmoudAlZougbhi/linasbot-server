@@ -28,8 +28,8 @@ FORBIDDEN_GUEST_TOOLS = frozenset(
 
 MAX_HISTORY_MESSAGES = 12
 MAX_HISTORY_CHARS = 700
-# gpt-4o-mini: reliable short replies + temperature variety (gpt-5-mini often returns empty text under low completion caps).
-DEFAULT_GUEST_MODEL = "gpt-4o-mini"
+# V2: guest product explainer on Luna. No silent mini fallback.
+DEFAULT_GUEST_MODEL = "gpt-5.6-luna"
 
 
 class GuestAIModelError(RuntimeError):
@@ -46,20 +46,17 @@ def guest_model_name() -> str:
 def build_guest_greeting(*, language: str = "en") -> str:
     if language == "ar":
         return (
-            "مرحباً — أنا Linas AI. أساعدك تفهم كيف نُشغّل ذكاء أعمال لمشروعك: "
-            "ردود العملاء، إدارة المحتوى، التكاملات، والاستخدام. "
-            "اسألني ماذا نقدّم — وبعد تحميل التطبيق والاشتراك تحصل على المساعد الكامل."
+            "مرحباً — أنا Linas AI. أشرح كيف نساعد الأعمال على أتمتة رسائل وتعليقات "
+            "إنستغرام وفيسبوك عبر معرفة نشاطك والتكاملات. اسألني أي سؤال عن المنتج."
         )
     if language == "fr":
         return (
-            "Bonjour — je suis Linas AI. Je vous explique comment nous aidons les entreprises : "
-            "réponses clients, Content Management, intégrations et usage. "
-            "Demandez ce que nous offrons ; après téléchargement de l’app et abonnement, le copilote complet s’ouvre."
+            "Bonjour — je suis Linas AI. J’explique comment nous automatisons les messages et "
+            "commentaires Instagram/Facebook pour les entreprises. Posez vos questions sur le produit."
         )
     return (
-        "Hi — I’m Linas AI. I help businesses run customer AI: smart replies, "
-        "Content Management, Meta integrations, usage, and a System Copilot in the app. "
-        "Ask what we offer — guest chat is explanatory only; download the app to subscribe."
+        "Hi — I’m Linas AI. I explain how we help businesses automate Instagram and Facebook "
+        "DMs and comments with Content Management and integrations. Ask me anything about the product."
     )
 
 
@@ -82,24 +79,25 @@ def _product_primer(lang: str) -> str:
             "réponses clients dans la voix de la marque, et System Copilot dans l’app après abonnement."
         )
     return (
-        "Linas AI is a business AI platform: connect channels, configure what your AI knows "
-        "(Content Management), reply to customers in your brand voice, and use System Copilot "
-        "in the mobile app after you subscribe — for setup, usage, integrations, creative, and ops."
+        "Linas AI is a business AI platform focused on Instagram/Facebook DMs and comments: "
+        "connect channels, configure Content Management, and use System Copilot in the app after signup. "
+        "Creative Studio / social post generation is not part of the current product."
     )
 
 
 def build_guest_system_prompt(*, language: str, knowledge_block: str) -> str:
     lang = language if language in {"en", "ar", "fr"} else "en"
     return (
-        "You are Linas AI — a sharp, natural product explainer and sales guide for the Linas AI app.\n"
+        "You are Linas AI — a clear, natural product explainer for the Linas AI app.\n"
         "Speak like a helpful expert, not a brochure or a broken record.\n"
         "Answer THIS user's question directly; vary wording every turn; use conversation history for follow-ups.\n"
-        "Stay sales-oriented about Linas AI, but never paste the same pitch twice.\n"
+        "Do not force a download/subscribe pitch into every answer. Mention signup only when relevant.\n"
         "Guest constraints (hard): no tools, no CM writes, no tenant mutation, no claiming you changed anything.\n"
         "Do not invent live Meta comment automation, verified publish, or store IAP if knowledge marks them gated/partial.\n"
-        "If you don't know a detail, say so briefly and invite them to download the Linas AI app and subscribe.\n"
+        "Creative posts/images/videos are out of scope — say so briefly if asked.\n"
+        "If you don't know a detail, say so honestly.\n"
         f"Reply language: {lang} (match the user if they write in another of en/ar/fr).\n"
-        "Keep replies concise (about 40–120 words) unless the user asks for more detail.\n"
+        "Keep replies useful; expand when the user asks for detail.\n"
         f"Product primer: {_product_primer(lang)}\n"
         f"{knowledge_block or 'Relevant capabilities: general Linas AI product overview.'}"
     )
@@ -163,8 +161,8 @@ async def compose_guest_reply(
         response = await create_chat_completion(
             model=model,
             messages=messages,
-            max_tokens=320,
-            temperature=0.75,
+            max_tokens=900,
+            temperature=0.65,
         )
     except Exception as exc:  # noqa: BLE001 — surface provider/network failures honestly
         raise GuestAIModelError(f"guest_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}") from exc

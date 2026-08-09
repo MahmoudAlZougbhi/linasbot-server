@@ -18,9 +18,12 @@ class CreateConversationBody(BaseModel):
 
 
 class SendMessageBody(BaseModel):
-    content: str = Field(min_length=0, max_length=8000)
+    content: str = Field(min_length=0, max_length=16000)
     confirm_tool: str | None = None
     tool_args: dict[str, Any] | None = None
+    choice_id: str | None = None
+    choice_set_id: str | None = None
+    attachment_ids: list[str] | None = None
 
 
 class RenameBody(BaseModel):
@@ -119,15 +122,15 @@ async def send_owner_message(conversation_id: str, body: SendMessageBody, reques
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     content = (body.content or "").strip()
-    if not content and not body.confirm_tool:
-        raise HTTPException(status_code=400, detail="content or confirm_tool required")
-    if content:
+    if not content and not body.confirm_tool and not body.choice_id and not (body.attachment_ids or []):
+        raise HTTPException(status_code=400, detail="content, confirm_tool, choice, or attachment required")
+    if content or body.choice_id:
         owner_chat_store.append_message(
             tenant_id=session.tenant_id,
             user_id=session.user_id,
             conversation_id=conversation_id,
             role="user",
-            content=content,
+            content=content or (body.choice_id or ""),
         )
         conv = owner_chat_store.get_conversation(
             tenant_id=session.tenant_id,
@@ -144,6 +147,9 @@ async def send_owner_message(conversation_id: str, body: SendMessageBody, reques
         confirm_tool=body.confirm_tool,
         messages=history,
         tool_args=body.tool_args,
+        choice_id=body.choice_id,
+        choice_set_id=body.choice_set_id,
+        attachment_ids=body.attachment_ids,
     )
     assistant = owner_chat_store.append_message(
         tenant_id=session.tenant_id,
@@ -158,11 +164,14 @@ async def send_owner_message(conversation_id: str, body: SendMessageBody, reques
         "message": assistant.__dict__ if assistant else None,
         "pending_confirmation": result.pending_confirmation,
         "proposed_patch": result.proposed_patch,
-        "creative_draft": result.creative_draft,
+        "creative_draft": None,
         "route": result.route,
         "context_tokens": result.context_tokens,
         "setup_stage": result.setup_stage,
         "quick_actions": result.quick_actions,
+        "cards": getattr(result, "cards", []),
+        "choices": getattr(result, "choices", []),
+        "model": getattr(result, "model", None),
     }
 
 

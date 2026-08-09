@@ -15,7 +15,6 @@ import { CmScreen } from './src/features/cm/CmScreen';
 import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
 import type { CmSectionId } from './src/features/cm/cmSections';
 import type { ControlArea } from './src/features/control/controlAreas';
-import { CreativeStudioScreen } from './src/features/creative/CreativeStudioScreen';
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
 import { IntegrationsScreen } from './src/features/integrations/IntegrationsScreen';
 import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
@@ -36,7 +35,6 @@ type Screen =
   | { name: 'settings' }
   | { name: 'integrations' }
   | { name: 'users' }
-  | { name: 'creative' }
   | { name: 'dashboard' }
   | { name: 'billing' }
   | { name: 'usage' }
@@ -47,7 +45,6 @@ type Screen =
   | { name: 'resource'; title: string; path: string };
 
 const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
-  scheduled: { title: 'Scheduled', path: '/api/schedule/posts' },
   owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
 };
 
@@ -153,10 +150,6 @@ export default function App() {
     }
     if (area === 'users') {
       setScreen({ name: 'users' });
-      return;
-    }
-    if (area === 'create') {
-      setScreen({ name: 'creative' });
       return;
     }
     if (area === 'dashboard') {
@@ -291,9 +284,6 @@ export default function App() {
             }}
             onRequestRegister={() => setScreen({ name: 'register' })}
           />
-        ) : null}
-        {screen.name === 'creative' ? (
-          <CreativeStudioScreen onBack={() => setScreen({ name: 'chat' })} />
         ) : null}
         {screen.name === 'dashboard' ? (
           <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />

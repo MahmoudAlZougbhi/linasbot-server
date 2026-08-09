@@ -13,11 +13,11 @@ type Props = {
   isPlatformOwner: boolean;
 };
 
-const ORDER: ControlItem['group'][] = ['operate', 'grow', 'account', 'owner'];
+const ORDER: ControlItem['group'][] = ['operate', 'insights', 'account', 'owner'];
 
 const GROUP_I18N = {
   operate: 'groupOperate',
-  grow: 'groupGrow',
+  insights: 'groupInsights',
   account: 'groupAccount',
   owner: 'groupOwner',
 } as const;

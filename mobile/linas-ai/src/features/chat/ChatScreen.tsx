@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
 import { GradientBackground } from '../../components/GradientBackground';
@@ -21,15 +14,17 @@ import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
-import { CreatePostTaskChips } from './CreatePostTaskChips';
-import { CreativeDraftCard } from './CreativeDraftCard';
-import { looksLikeCreatePostIntent, type CreatePostTaskId } from './createPostTasks';
 import { GuestBanner } from './GuestBanner';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
 import { useVoiceDraft } from './useVoiceDraft';
+import { ActivityCard } from './v2/ActivityCard';
+import { ChoiceChips } from './v2/ChoiceChips';
+import { pickDocumentAttachment, pickImageAttachment, type PendingFile } from './v2/pickAttachment';
+import { uploadOwnerAttachment } from './v2/useOwnerStream';
+import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
   isAuthenticated: boolean;
@@ -52,20 +47,20 @@ export function ChatScreen({
   const owner = useChatSession(isAuthenticated);
   const guest = useGuestChatSession(!isAuthenticated);
   const session = isAuthenticated ? owner : null;
+  const turn = useStreamingTurn(owner.conversationId, owner.bootstrap);
   const [userId, setUserId] = useState<string | null>(null);
   const { pinnedIds, togglePin } = usePinnedChats(userId);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [controlOpen, setControlOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [authGate, setAuthGate] = useState(false);
-  const [authGateReason, setAuthGateReason] = useState<string | undefined>(undefined);
-  const [createPostMode, setCreatePostMode] = useState(false);
-  const [createPostTask, setCreatePostTask] = useState<CreatePostTaskId>('auto');
+  const [authGateReason, setAuthGateReason] = useState<string | undefined>();
   const [draft, setDraft] = useState('');
+  const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
+  const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
   const { voiceState, voiceError, toggleVoice, metering } = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
-    // ChatGPT-style: land transcript in composer; user taps Send.
     requestAnimationFrame(() => composerInputRef.current?.focus());
   });
 
@@ -77,24 +72,9 @@ export function ChatScreen({
     void tokenStore.getUser().then((u) => setUserId(u?.id ?? null));
   }, [isAuthenticated]);
 
-  function requireAuth(reason?: string) {
-    setAuthGateReason(reason);
-    setAuthGate(true);
-  }
-
-  function enterCreatePostMode() {
-    setCreatePostMode(true);
-    setCreatePostTask('auto');
-    void owner.send(tr('createPostStart'), undefined, { creative_kind: 'auto' });
-  }
-
-  function handlePlus(action: PlusAction) {
+  async function handlePlus(action: PlusAction) {
     if (!isAuthenticated) {
-      requireAuth(action === 'create_post' ? tr('authGateCreatePost') : undefined);
-      return;
-    }
-    if (action === 'create_post') {
-      enterCreatePostMode();
+      setAuthGate(true);
       return;
     }
     if (action === 'add_cm' || action === 'review_setup') {
@@ -103,37 +83,26 @@ export function ChatScreen({
     }
     if (action === 'check_usage') {
       onOpenArea('usage');
-    }
-  }
-
-  function handleQuickAction(id: string) {
-    if (id === 'create') {
-      enterCreatePostMode();
       return;
     }
-    onOpenArea(id as ControlArea);
-  }
-
-  function sendAuthenticated(text: string) {
-    const toolArgs =
-      createPostMode || looksLikeCreatePostIntent(text)
-        ? {
-            creative_kind: createPostTask,
-            compress: createPostTask === 'compress',
-            prompt: text,
-          }
-        : undefined;
-    if (looksLikeCreatePostIntent(text)) {
-      setCreatePostMode(true);
+    if (action === 'attach_image') {
+      setPendingFile(await pickImageAttachment());
+      return;
     }
-    void owner.send(text, undefined, toolArgs);
+    if (action === 'attach_document') {
+      setPendingFile(await pickDocumentAttachment());
+    }
   }
 
   const loading = isAuthenticated ? owner.loading : guest.loading;
   const messages = isAuthenticated ? owner.messages : guest.messages;
-  const sending = isAuthenticated ? owner.sending : guest.sending;
+  const sending = isAuthenticated ? owner.sending || turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const title = isAuthenticated ? owner.title : guest.title;
+  const preview = session?.proposedPatch?.preview;
+  const changedKeys = Array.isArray(preview?.changed_keys)
+    ? (preview?.changed_keys as string[]).join(', ')
+    : '';
 
   if (loading) {
     return (
@@ -145,11 +114,6 @@ export function ChatScreen({
     );
   }
 
-  const preview = session?.proposedPatch?.preview;
-  const changedKeys = Array.isArray(preview?.changed_keys)
-    ? (preview?.changed_keys as string[]).join(', ')
-    : '';
-
   return (
     <GradientBackground>
       <ChatHeader
@@ -158,26 +122,14 @@ export function ChatScreen({
         avatarState={
           voiceState === 'recording'
             ? 'listening'
-            : sending
-              ? 'typing'
+            : turn.thinking || turn.streaming
+              ? 'thinking'
               : voiceState === 'transcribing'
                 ? 'thinking'
                 : 'idle'
         }
-        onOpenHistory={() => {
-          if (!isAuthenticated) {
-            requireAuth();
-            return;
-          }
-          setHistoryOpen(true);
-        }}
-        onOpenControl={() => {
-          if (!isAuthenticated) {
-            requireAuth();
-            return;
-          }
-          setControlOpen(true);
-        }}
+        onOpenHistory={() => (isAuthenticated ? setHistoryOpen(true) : setAuthGate(true))}
+        onOpenControl={() => (isAuthenticated ? setControlOpen(true) : setAuthGate(true))}
       />
 
       {!isAuthenticated ? (
@@ -190,9 +142,7 @@ export function ChatScreen({
       ) : null}
 
       {error ? (
-        <Pressable
-          onPress={() => void (isAuthenticated ? owner.bootstrap() : guest.bootstrap())}
-        >
+        <Pressable onPress={() => void (isAuthenticated ? owner.bootstrap() : guest.bootstrap())}>
           <Text style={styles.error}>
             {tr(
               error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
@@ -203,9 +153,6 @@ export function ChatScreen({
         </Pressable>
       ) : null}
       {voiceError ? <Text style={styles.error}>{voiceError}</Text> : null}
-      {!isAuthenticated && guest.gateText ? (
-        <Text style={styles.gate}>{guest.gateText}</Text>
-      ) : null}
 
       <FlatList
         data={messages}
@@ -213,67 +160,71 @@ export function ChatScreen({
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
-            showMascot
+            showMascot={false}
             title={tr(isAuthenticated ? 'chatEmptyTitle' : 'guestChatEmptyTitle')}
             body={tr(isAuthenticated ? 'chatEmptyBody' : 'guestChatEmptyBody')}
           />
         }
         renderItem={({ item }) => <ChatBubble message={item} />}
+        ListFooterComponent={
+          <View>
+            {turn.thinking ? <Text style={styles.gate}>Thinking…</Text> : null}
+            {turn.statusRows.map((s) => (
+              <Text key={s.id} style={styles.gate}>
+                {s.text}
+              </Text>
+            ))}
+            {turn.liveText ? (
+              <ChatBubble
+                message={{
+                  id: 'live-stream',
+                  role: 'assistant',
+                  content: turn.liveText,
+                  created_at: Date.now() / 1000,
+                }}
+              />
+            ) : null}
+            {turn.cards.map((c) => (
+              <ActivityCard key={c.id} card={c} />
+            ))}
+          </View>
+        }
       />
 
       {isAuthenticated && session?.quickActions.length ? (
         <View style={styles.chips}>
           {session.quickActions
-            .filter((a) => a.id !== 'comments')
+            .filter((a) => a.id !== 'create' && a.id !== 'comments')
             .slice(0, 4)
             .map((a) => (
-              <Pressable key={a.id} style={styles.chip} onPress={() => handleQuickAction(a.id)}>
+              <Pressable key={a.id} style={styles.chip} onPress={() => onOpenArea(a.id as ControlArea)}>
                 <Text style={styles.chipText}>{a.label}</Text>
               </Pressable>
             ))}
         </View>
       ) : null}
 
-      {isAuthenticated && createPostMode ? (
-        <CreatePostTaskChips
-          selected={createPostTask}
-          onSelect={setCreatePostTask}
-          onDismiss={() => setCreatePostMode(false)}
+      {isAuthenticated ? (
+        <ChoiceChips
+          choices={turn.choices}
+          disabled={choiceBusy || turn.streaming}
+          onSelect={(c) => {
+            if (!turn.choiceSetId || choiceBusy) return;
+            setChoiceBusy(true);
+            void turn
+              .send(c.label, { choice_id: c.id, choice_set_id: turn.choiceSetId })
+              .finally(() => setChoiceBusy(false));
+          }}
         />
       ) : null}
 
-      {isAuthenticated && session?.creativeDraft ? (
-        <CreativeDraftCard
-          draft={session.creativeDraft}
-          busy={sending}
-          onEdit={() => {
-            const text = session.creativeDraft?.text || session.creativeDraft?.prompt || '';
-            setDraft(text);
-            setCreatePostMode(true);
-            requestAnimationFrame(() => composerInputRef.current?.focus());
-          }}
-          onRegenerate={() => {
-            const prompt =
-              session.creativeDraft?.prompt ||
-              session.creativeDraft?.text ||
-              'Regenerate the last post draft';
-            setCreatePostMode(true);
-            void owner.send(prompt, undefined, {
-              creative_kind: createPostTask,
-              compress: createPostTask === 'compress',
-              prompt,
-            });
-          }}
-          onSchedule={() => {
-            const text = session.creativeDraft?.text || '';
-            if (!text.trim()) return;
-            void owner.send('', 'schedule_creative_draft', {
-              text,
-              kind: session.creativeDraft?.kind || 'post',
-            });
-          }}
-          onDismiss={() => session.setCreativeDraft(null)}
-        />
+      {pendingFile ? (
+        <View style={styles.patchCard}>
+          <Text style={styles.patchTitle}>{pendingFile.name}</Text>
+          <Pressable style={styles.reject} onPress={() => setPendingFile(null)}>
+            <Text style={styles.rejectText}>{tr('rejectAction')}</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {isAuthenticated && session?.proposedPatch?.confirmation_token ? (
@@ -283,9 +234,7 @@ export function ChatScreen({
           <View style={styles.patchActions}>
             <Pressable
               style={styles.confirm}
-              onPress={() =>
-                void session.send('', session.proposedPatch?.confirmation_token ?? undefined)
-              }
+              onPress={() => void turn.send('', { confirm_tool: session.proposedPatch?.confirmation_token })}
             >
               <Text style={styles.confirmText}>{tr('confirmAction')}</Text>
             </Pressable>
@@ -302,58 +251,50 @@ export function ChatScreen({
         </View>
       ) : null}
 
-      {isAuthenticated && session?.pendingConfirm && !session.proposedPatch ? (
-        <Pressable
-          style={styles.confirm}
-          onPress={() => void session.send('', session.pendingConfirm ?? undefined)}
-        >
-          <Text style={styles.confirmText}>
-            {tr('confirmAction')} {session.pendingConfirm}
-          </Text>
-        </Pressable>
-      ) : null}
-
       <ChatComposer
         draft={draft}
         onChangeDraft={setDraft}
         sending={sending || (!isAuthenticated && guest.gated)}
+        canSendWithAttachment={Boolean(pendingFile)}
         voiceState={isAuthenticated ? voiceState : 'idle'}
         metering={isAuthenticated ? metering : null}
         inputRef={composerInputRef}
-        onPlus={() => {
-          if (!isAuthenticated) {
-            requireAuth();
-            return;
-          }
-          setPlusOpen(true);
-        }}
+        onPlus={() => (isAuthenticated ? setPlusOpen(true) : setAuthGate(true))}
         onToggleVoice={() => {
           if (!isAuthenticated) {
-            requireAuth();
+            setAuthGate(true);
             return;
           }
           void toggleVoice();
         }}
+        onStop={turn.streaming ? () => turn.stop() : undefined}
         onSend={() => {
           if (!isAuthenticated && guest.gated) {
             onRequestLogin();
             return;
           }
-          if (voiceState === 'recording' || voiceState === 'transcribing') {
-            return;
-          }
+          if (voiceState === 'recording' || voiceState === 'transcribing') return;
           const text = draft;
           setDraft('');
-          if (isAuthenticated) {
-            sendAuthenticated(text);
+          if (!isAuthenticated) {
+            void guest.send(text);
             return;
           }
-          if (looksLikeCreatePostIntent(text)) {
-            requireAuth(tr('authGateCreatePost'));
-            setDraft(text);
-            return;
-          }
-          void guest.send(text);
+          void (async () => {
+            let attachmentIds: string[] | undefined;
+            if (pendingFile) {
+              try {
+                const up = await uploadOwnerAttachment(pendingFile);
+                attachmentIds = [up.attachment_id];
+              } catch {
+                /* upload error surfaced on next turn */
+              }
+              setPendingFile(null);
+            }
+            await turn.send(text || (attachmentIds ? 'Please analyze this attachment.' : ''), {
+              attachment_ids: attachmentIds,
+            });
+          })();
         }}
       />
 
@@ -365,31 +306,39 @@ export function ChatScreen({
             history={owner.history}
             pinnedIds={pinnedIds}
             activeId={owner.conversationId}
-            onNewChat={() => { void owner.newChat().then(() => setHistoryOpen(false)); }}
-            onOpen={(id) => { void owner.openConversation(id).then(() => setHistoryOpen(false)); }}
+            onNewChat={() => void owner.newChat().then(() => setHistoryOpen(false))}
+            onOpen={(id) => void owner.openConversation(id).then(() => setHistoryOpen(false))}
             onTogglePin={(id) => void togglePin(id)}
           />
           <ControlCenterDrawer
             open={controlOpen}
             onClose={() => setControlOpen(false)}
             isPlatformOwner={isPlatformOwner}
-            onOpen={(area) => { setControlOpen(false); onOpenArea(area); }}
+            onOpen={(area) => {
+              setControlOpen(false);
+              onOpenArea(area);
+            }}
             onLogout={onLogout}
           />
-          <ComposerPlusSheet
-            open={plusOpen}
-            onClose={() => setPlusOpen(false)}
-            onAction={handlePlus}
-          />
+          <ComposerPlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} onAction={(a) => void handlePlus(a)} />
         </>
       ) : null}
 
       <AuthGateModal
         visible={authGate}
         reason={authGateReason}
-        onClose={() => { setAuthGate(false); setAuthGateReason(undefined); }}
-        onLogin={() => { setAuthGate(false); setAuthGateReason(undefined); onRequestLogin(); }}
-        onRegister={() => { setAuthGate(false); setAuthGateReason(undefined); onRequestRegister(); }}
+        onClose={() => {
+          setAuthGate(false);
+          setAuthGateReason(undefined);
+        }}
+        onLogin={() => {
+          setAuthGate(false);
+          onRequestLogin();
+        }}
+        onRegister={() => {
+          setAuthGate(false);
+          onRequestRegister();
+        }}
       />
     </GradientBackground>
   );

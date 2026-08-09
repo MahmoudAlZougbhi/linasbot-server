@@ -151,6 +151,7 @@ async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) 
 async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.owner_ai_orchestrator import run_owner_turn
 
+    monkeypatch.setenv("OWNER_COPILOT_V2", "false")
     monkeypatch.setattr(
         "services.owner_ai_context.pack_owner_turn_context",
         lambda **_: {
@@ -174,7 +175,7 @@ async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPat
     async def _fake_owner_llm(**_kwargs: Any) -> str:
         return (
             "I’m your System Copilot. I can help with CM setup, integrations, usage, "
-            "and creative — ask specifically what you need."
+            "and ops — ask specifically what you need."
         )
 
     monkeypatch.setattr(

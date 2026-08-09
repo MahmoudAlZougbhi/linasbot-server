@@ -221,7 +221,46 @@ async def run_owner_turn(
     confirm_tool: str | None = None,
     messages: list[dict[str, Any]] | None = None,
     tool_args: dict[str, Any] | None = None,
+    choice_id: str | None = None,
+    choice_set_id: str | None = None,
+    attachment_ids: list[str] | None = None,
 ) -> OwnerTurnResult:
+    from services.owner_copilot_v2.flags import owner_copilot_v2_enabled
+
+    if owner_copilot_v2_enabled():
+        from services.owner_copilot_v2.brain import run_owner_turn_v2
+
+        v2 = await run_owner_turn_v2(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            role=role,
+            conversation_id=conversation_id,
+            user_text=user_text,
+            confirm_tool=confirm_tool,
+            messages=messages,
+            tool_args=tool_args,
+            choice_id=choice_id,
+            choice_set_id=choice_set_id,
+            attachment_ids=attachment_ids,
+        )
+        # Preserve OwnerTurnResult shape; creative always None under V2.
+        result = OwnerTurnResult(
+            reply_text=v2.reply_text,
+            tool_calls=v2.tool_calls,
+            pending_confirmation=v2.pending_confirmation,
+            proposed_patch=v2.proposed_patch,
+            creative_draft=None,
+            route=v2.route,
+            context_tokens=v2.context_tokens,
+            setup_stage=v2.setup_stage,
+            quick_actions=v2.quick_actions,
+        )
+        # Attach V2 extras for API layer (non-dataclass fields via monkey attr).
+        setattr(result, "cards", v2.cards)
+        setattr(result, "choices", v2.choices)
+        setattr(result, "model", v2.model)
+        return result
+
     text = (user_text or "").strip()
     context = pack_owner_turn_context(
         tenant_id=tenant_id,

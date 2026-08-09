@@ -8,7 +8,7 @@ from typing import Any
 
 from services.owner_ai_model_router import router_config
 
-DEFAULT_OWNER_HELP_MODEL = "gpt-5.6-luna"
+DEFAULT_OWNER_MODEL = "gpt-5.6-sol"
 
 
 class OwnerAIModelError(RuntimeError):
@@ -16,8 +16,10 @@ class OwnerAIModelError(RuntimeError):
 
 
 def owner_help_model_name() -> str:
+    """Legacy helper path — V2 uses LINAS_OWNER_MODEL via owner_copilot_v2.flags."""
+    owner = (os.getenv("LINAS_OWNER_MODEL") or DEFAULT_OWNER_MODEL).strip() or DEFAULT_OWNER_MODEL
     cfg = router_config().get("owner_help") or {}
-    return str(cfg.get("model") or os.getenv("LINAS_OWNER_HELP_MODEL") or DEFAULT_OWNER_HELP_MODEL)
+    return str(cfg.get("model") or os.getenv("LINAS_OWNER_HELP_MODEL") or owner)
 
 
 async def generate_owner_conversational_reply(
@@ -69,7 +71,7 @@ async def generate_owner_conversational_reply(
         response = await create_chat_completion(
             model=model,
             messages=messages,
-            max_tokens=360,
+            max_tokens=int(os.getenv("LINAS_OWNER_MAX_OUTPUT_TOKENS") or "1200"),
             temperature=0.65,
         )
     except Exception as exc:  # noqa: BLE001

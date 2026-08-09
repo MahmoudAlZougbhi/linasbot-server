@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -14,7 +13,6 @@ import { StatusChip } from '../../components/StatusChip';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { LikeFeedbackModal } from './LikeFeedbackModal';
-import { LiveChatComposer } from './LiveChatComposer';
 import { LiveChatMessageBubble } from './LiveChatMessageBubble';
 import { saveFaqFromLiveChat } from './liveChatApi';
 import {
@@ -39,20 +37,15 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
   const { tr } = useI18n();
   const thread = useLiveChatThread(chat, onChatUpdated);
   const status = normalizeStatus({ ...chat, status: thread.localStatus });
-  const canMutate = !thread.social;
-  const isHuman = status === 'human' || status === 'waiting_human';
 
   const [likeTarget, setLikeTarget] = useState<LiveChatMessage | null>(null);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
 
-  const readOnlyReason = thread.social
-    ? 'Instagram/Facebook conversations are read-only. Use WhatsApp for operator replies.'
-    : status === 'bot' || status === 'closed'
-      ? 'Take over this conversation to reply as a human.'
-      : null;
+  // V2: Live Chat is strictly read-only — no composer, takeover, release, or end.
+  const readOnlyReason =
+    'Live Chat is read-only. Use System Copilot for diagnosis and Content Management fixes.';
 
-  // Newest-first for inverted FlatList (WhatsApp: open at latest, scroll up = older).
   const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
 
   const likeInitialQuestion = likeTarget
@@ -84,40 +77,12 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
       <View style={styles.toolbar}>
         <View style={styles.chips}>
           <StatusChip label={statusLabel(status)} tone={statusTone(status)} />
+          <StatusChip label="Read-only" tone="soon" />
         </View>
-        {canMutate ? (
-          <View style={styles.actions}>
-            {status !== 'human' ? (
-              <Pressable
-                style={[styles.actionBtn, styles.primary]}
-                disabled={thread.busy}
-                onPress={() => void thread.takeover()}
-              >
-                <Text style={styles.primaryLabel}>Take over</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={[styles.actionBtn, styles.ghost]}
-                disabled={thread.busy}
-                onPress={() => void thread.release()}
-              >
-                <Text style={styles.ghostLabel}>Return to AI</Text>
-              </Pressable>
-            )}
-            {isHuman ? (
-              <Pressable
-                style={[styles.actionBtn, styles.danger]}
-                disabled={thread.busy}
-                onPress={() => void thread.end()}
-              >
-                <Text style={styles.dangerLabel}>End</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
       </View>
 
       {thread.error ? <Text style={styles.error}>{thread.error}</Text> : null}
+      <Text style={styles.readOnlyBanner}>{readOnlyReason}</Text>
 
       {thread.loading && !thread.messages.length ? (
         <View style={styles.center}>
@@ -167,20 +132,6 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
           )}
         />
       )}
-
-      <LiveChatComposer
-        busy={thread.busy}
-        disabled={!canMutate || status === 'bot' || status === 'closed'}
-        readOnlyReason={
-          thread.social
-            ? readOnlyReason
-            : status === 'bot' || status === 'closed'
-              ? readOnlyReason
-              : null
-        }
-        onSendText={thread.sendText}
-        onSendMedia={thread.sendMedia}
-      />
 
       <LikeFeedbackModal
         visible={Boolean(likeTarget)}
@@ -237,4 +188,10 @@ const styles = StyleSheet.create({
   },
   emptyFlip: { transform: [{ scaleY: -1 }] },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
+  readOnlyBanner: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    marginBottom: spacing.sm,
+  },
 });
