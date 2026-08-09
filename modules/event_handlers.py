@@ -719,6 +719,11 @@ async def startup_event() -> None:
 
         app.state.scheduler = scheduler
 
+        from services.meta_instagram_login_lifecycle import start_instagram_login_lifecycle
+
+        await start_instagram_login_lifecycle(app.state)
+        print("✅ Instagram Login lifecycle scheduler started")
+
     except Exception as e:
         print(f"❌ ERROR initializing Smart Messaging Scheduler: {e}")
         print("⚠️ Smart messaging will not work")
@@ -730,6 +735,12 @@ async def startup_event() -> None:
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     """Cleanup on shutdown"""
+    try:
+        from services.meta_instagram_login_lifecycle import stop_instagram_login_lifecycle
+
+        await stop_instagram_login_lifecycle(app.state)
+    except Exception as e:
+        print(f"❌ Error shutting down Instagram Login lifecycle: {e}")
     try:
         if hasattr(app.state, "scheduler"):
             print("🛑 Shutting down Smart Messaging Scheduler...")

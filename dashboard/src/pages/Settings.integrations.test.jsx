@@ -119,6 +119,11 @@ describe("Settings integrations", () => {
           json: async () => ({
             success: true,
             registry_enabled: true,
+            instagram_login_configured: false,
+            instagram_login_config: {
+              configured: false,
+              missing: ["META_INSTAGRAM_LOGIN_APP_SECRET", "META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"],
+            },
             apps: [
               {
                 key: "linas_first_party",
@@ -186,7 +191,7 @@ describe("Settings integrations", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
 
     expect(await screen.findByRole("button", { name: "Add / Manage Facebook & Instagram" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "Connect Instagram" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Connect Instagram" })).toBeDisabled();
     expect(screen.getByText("Meta authorization — App A")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
@@ -213,6 +218,11 @@ describe("Settings integrations", () => {
           json: async () => ({
             success: true,
             registry_enabled: true,
+            instagram_login_configured: false,
+            instagram_login_config: {
+              configured: false,
+              missing: ["META_INSTAGRAM_LOGIN_APP_SECRET", "META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"],
+            },
             apps: [
               {
                 key: "linas_first_party",
@@ -264,6 +274,11 @@ describe("Settings integrations", () => {
           json: async () => ({
             success: true,
             registry_enabled: true,
+            instagram_login_configured: false,
+            instagram_login_config: {
+              configured: false,
+              missing: ["META_INSTAGRAM_LOGIN_APP_SECRET", "META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"],
+            },
             apps: [
               {
                 key: "linas_first_party",
@@ -294,8 +309,9 @@ describe("Settings integrations", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Integrations" }));
 
     expect(await screen.findByRole("button", { name: "Add / Manage Facebook & Instagram" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Connect Instagram" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Connect Instagram" })).toBeDisabled();
     expect(screen.getByText(/META_APP_A_LOGIN_CONFIG_ID/i)).toBeInTheDocument();
+    expect(screen.getByText(/Connect Instagram is disabled until ops configure/i)).toBeInTheDocument();
   });
 
   it("shows Reconnect for disconnected Lina first-party bindings with a valid token", async () => {
@@ -307,6 +323,11 @@ describe("Settings integrations", () => {
           json: async () => ({
             success: true,
             registry_enabled: true,
+            instagram_login_configured: false,
+            instagram_login_config: {
+              configured: false,
+              missing: ["META_INSTAGRAM_LOGIN_APP_SECRET", "META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"],
+            },
             apps: [
               {
                 key: "saas_tech_provider",

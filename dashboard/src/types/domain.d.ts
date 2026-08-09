@@ -603,6 +603,15 @@ interface MetaConnectionStatus {
   authorized_meta_user_id_hash?: string;
   superseded_by_binding_id?: string;
   asset_key?: string;
+  auth_flow?: "facebook_login" | "instagram_login";
+  webhook_subscription?: {
+    status?: string;
+    subscribed_fields?: string[];
+    error?: string;
+    checked_at?: number;
+    ready_for_dm?: boolean;
+  };
+  declined_permissions?: string[];
   comment_replies?: {
     enabled: boolean;
     instructions?: string;

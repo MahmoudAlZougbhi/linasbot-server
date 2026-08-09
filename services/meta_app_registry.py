@@ -40,6 +40,7 @@ REGISTRY_SCHEMA_VERSION = 1
 MetaChannel = Literal["facebook", "instagram"]
 MetaAppClassification = Literal["own_business", "tech_provider"]
 BindingStatus = Literal["active", "inactive", "testing", "disconnected"]
+AuthFlow = Literal["facebook_login", "instagram_login"]
 
 META_COMMON_MESSAGING_SCOPES = frozenset(
     {
@@ -111,6 +112,10 @@ def _normalized_graph_version(value: str | None) -> str:
     return version if version.startswith("v") else f"v{version}"
 
 
+def get_meta_graph_api_version() -> str:
+    return _normalized_graph_version(os.getenv("META_GRAPH_API_VERSION"))
+
+
 def _app_b_linas_cutover_allowed() -> bool:
     return _truthy(os.getenv("META_APP_B_LINAS_CUTOVER_APPROVED"))
 
@@ -124,9 +129,26 @@ def normalize_meta_tenant_id(value: str) -> str:
     return tenant
 
 
-def binding_asset_key(tenant_id: str, app_key: str, channel: str, asset_id: str) -> str:
+def _bindings_share_exclusive_asset(left: MetaAssetBinding, right: MetaAssetBinding) -> bool:
+    if left.tenant_id != right.tenant_id or left.channel != right.channel or left.asset_id != right.asset_id:
+        return False
+    if left.channel == "instagram":
+        return left.auth_flow == right.auth_flow
+    return True
+
+
+def binding_asset_key(
+    tenant_id: str,
+    app_key: str,
+    channel: str,
+    asset_id: str,
+    auth_flow: AuthFlow = "facebook_login",
+) -> str:
     tenant = normalize_meta_tenant_id(tenant_id)
-    return f"{tenant}:{app_key}:{channel}:{str(asset_id or '').strip()}"
+    asset = str(asset_id or "").strip()
+    if channel == "instagram":
+        return f"{tenant}:{app_key}:{channel}:{auth_flow}:{asset}"
+    return f"{tenant}:{app_key}:{channel}:{asset}"
 
 
 def authorized_meta_user_id_hash(meta_user_id: str) -> str:
@@ -171,7 +193,7 @@ class MetaAppConfig:
 def get_meta_app_configs() -> dict[str, MetaAppConfig]:
     """Load the two allowlisted Meta apps without exposing secret values."""
 
-    graph_version = _normalized_graph_version(os.getenv("META_GRAPH_API_VERSION"))
+    graph_version = get_meta_graph_api_version()
     app_a_id = (os.getenv("META_APP_A_ID") or os.getenv("META_APP_ID") or "").strip()
     app_a_secret = (os.getenv("META_APP_A_SECRET") or os.getenv("META_APP_SECRET") or "").strip()
     app_a_verify = (
@@ -296,6 +318,11 @@ class MetaAssetBinding:
     instagram_username: str = ""
     authorized_meta_user_id_hash: str = ""
     superseded_by_binding_id: str = ""
+    auth_flow: AuthFlow = "facebook_login"
+    webhook_subscription_status: str = "unknown"
+    webhook_subscribed_fields: tuple[str, ...] = ()
+    webhook_subscription_error: str = ""
+    webhook_subscription_checked_at: float = 0.0
 
     @property
     def active(self) -> bool:
@@ -303,7 +330,23 @@ class MetaAssetBinding:
 
     @property
     def asset_key(self) -> str:
-        return binding_asset_key(self.tenant_id, self.app_key, self.channel, self.asset_id)
+        return binding_asset_key(
+            self.tenant_id,
+            self.app_key,
+            self.channel,
+            self.asset_id,
+            self.auth_flow,
+        )
+
+    @property
+    def instagram_login_ready(self) -> bool:
+        if self.auth_flow != "instagram_login":
+            return self.active
+        from services.meta_instagram_login_subscription import REQUIRED_DM_SUBSCRIPTION_FIELDS
+
+        if self.webhook_subscription_status not in {"ready", "partial"}:
+            return False
+        return self.active and REQUIRED_DM_SUBSCRIPTION_FIELDS.issubset(self.webhook_subscribed_fields)
 
     @property
     def visible_in_dashboard(self) -> bool:
@@ -332,6 +375,21 @@ class MetaAssetBinding:
             "previous_binding_id": self.previous_binding_id,
             "authorized_meta_user_id_hash": self.authorized_meta_user_id_hash,
             "superseded_by_binding_id": self.superseded_by_binding_id,
+            "auth_flow": self.auth_flow,
+            **(
+                {
+                    "webhook_subscription": {
+                        "status": self.webhook_subscription_status,
+                        "subscribed_fields": list(self.webhook_subscribed_fields),
+                        "error": self.webhook_subscription_error,
+                        "checked_at": self.webhook_subscription_checked_at,
+                        "ready_for_dm": self.instagram_login_ready,
+                        "ready_for_comments": "comments" in self.webhook_subscribed_fields,
+                    }
+                }
+                if self.auth_flow == "instagram_login"
+                else {}
+            ),
             "asset_key": self.asset_key,
         }
 
@@ -344,6 +402,8 @@ class MetaBindingCredential:
     scopes: tuple[str, ...]
     expires_at: int | None = None
     authorized_meta_user_id: str = ""
+    auth_flow: AuthFlow = "facebook_login"
+    declined_scopes: tuple[str, ...] = ()
 
     def as_secret_dict(self) -> dict[str, Any]:
         return {
@@ -353,6 +413,8 @@ class MetaBindingCredential:
             "scopes": list(self.scopes),
             "expires_at": self.expires_at,
             "authorized_meta_user_id": self.authorized_meta_user_id,
+            "auth_flow": self.auth_flow,
+            "declined_scopes": list(self.declined_scopes),
         }
 
 
@@ -463,6 +525,11 @@ class MetaAppRegistry:
             instagram_username=str(raw.get("instagram_username") or ""),
             authorized_meta_user_id_hash=str(raw.get("authorized_meta_user_id_hash") or ""),
             superseded_by_binding_id=str(raw.get("superseded_by_binding_id") or ""),
+            auth_flow=cast(AuthFlow, raw.get("auth_flow") or "facebook_login"),
+            webhook_subscription_status=str(raw.get("webhook_subscription_status") or "unknown"),
+            webhook_subscribed_fields=tuple(str(item) for item in raw.get("webhook_subscribed_fields") or ()),
+            webhook_subscription_error=str(raw.get("webhook_subscription_error") or ""),
+            webhook_subscription_checked_at=float(raw.get("webhook_subscription_checked_at") or 0),
         )
 
     def list_bindings(
@@ -529,6 +596,11 @@ class MetaAppRegistry:
         page_name: str = "",
         instagram_username: str = "",
         status: BindingStatus = "active",
+        auth_flow: AuthFlow = "facebook_login",
+        webhook_subscription_status: str = "unknown",
+        webhook_subscribed_fields: tuple[str, ...] = (),
+        webhook_subscription_error: str = "",
+        webhook_subscription_checked_at: float = 0.0,
     ) -> MetaAssetBinding:
         """Upsert one workspace asset binding without disconnecting unrelated assets."""
 
@@ -537,6 +609,7 @@ class MetaAppRegistry:
         if not asset:
             raise MetaBindingConflictError("asset is required")
         auth_hash = authorized_meta_user_id_hash(credential.authorized_meta_user_id)
+        resolved_auth_flow = auth_flow or credential.auth_flow or "facebook_login"
         now = time.time()
         with self._locked():
             state = self._read_unlocked()
@@ -553,7 +626,7 @@ class MetaAppRegistry:
             same_key = [
                 binding
                 for binding in all_bindings
-                if binding.asset_key == binding_asset_key(tenant, app_key, channel, asset)
+                if binding.asset_key == binding_asset_key(tenant, app_key, channel, asset, resolved_auth_flow)
                 and not binding.superseded_by_binding_id
             ]
             canonical = (
@@ -601,6 +674,11 @@ class MetaAppRegistry:
                     instagram_username=instagram_username.strip(),
                     authorized_meta_user_id_hash=auth_hash,
                     superseded_by_binding_id="",
+                    auth_flow=resolved_auth_flow,
+                    webhook_subscription_status=webhook_subscription_status,
+                    webhook_subscribed_fields=webhook_subscribed_fields,
+                    webhook_subscription_error=webhook_subscription_error,
+                    webhook_subscription_checked_at=webhook_subscription_checked_at,
                 )
                 state["bindings"][binding_id] = asdict(updated)
                 for duplicate in same_key:
@@ -652,6 +730,11 @@ class MetaAppRegistry:
                 page_name=page_name.strip(),
                 instagram_username=instagram_username.strip(),
                 authorized_meta_user_id_hash=auth_hash,
+                auth_flow=resolved_auth_flow,
+                webhook_subscription_status=webhook_subscription_status,
+                webhook_subscribed_fields=webhook_subscribed_fields,
+                webhook_subscription_error=webhook_subscription_error,
+                webhook_subscription_checked_at=webhook_subscription_checked_at,
             )
             state["bindings"][binding_id] = asdict(binding)
             self._write_unlocked(state)
@@ -735,7 +818,7 @@ class MetaAppRegistry:
             other = self._binding_from_dict(value)
             if other.binding_id in {current.binding_id, replacing_binding_id} or not other.active:
                 continue
-            if other.channel == current.channel and other.asset_id == current.asset_id:
+            if _bindings_share_exclusive_asset(other, current):
                 raise MetaBindingConflictError("another active binding owns this asset")
 
     def assert_binding_can_activate(
@@ -968,7 +1051,7 @@ class MetaAppRegistry:
                 other = self._binding_from_dict(value)
                 if not other.active:
                     continue
-                if other.channel == current.channel and other.asset_id == current.asset_id:
+                if _bindings_share_exclusive_asset(other, current):
                     conflicts.append(other)
             conflict_ids = {conflict.binding_id for conflict in conflicts}
             if len(conflict_ids) > 1:
@@ -1023,6 +1106,8 @@ class MetaAppRegistry:
         scopes = decoded.get("scopes")
         if not isinstance(scopes, list):
             raise MetaCredentialError("binding credential scopes are invalid")
+        declined = decoded.get("declined_scopes")
+        declined_scopes = tuple(str(scope) for scope in declined) if isinstance(declined, list) else ()
         return MetaBindingCredential(
             access_token=str(decoded.get("access_token") or ""),
             token_app_id=str(decoded.get("token_app_id") or ""),
@@ -1030,6 +1115,8 @@ class MetaAppRegistry:
             scopes=tuple(str(scope) for scope in scopes),
             expires_at=int(decoded["expires_at"]) if decoded.get("expires_at") is not None else None,
             authorized_meta_user_id=str(decoded.get("authorized_meta_user_id") or ""),
+            auth_flow=cast(AuthFlow, decoded.get("auth_flow") or binding.auth_flow),
+            declined_scopes=declined_scopes,
         )
 
     def revoke_authorization(
@@ -1145,6 +1232,46 @@ class MetaAppRegistry:
             state["oauth_states"][nonce_hash] = dict(payload)
             self._write_unlocked(state)
 
+    def update_instagram_login_webhook_subscription(
+        self,
+        binding_id: str,
+        *,
+        state: Any,
+        actor_id: str,
+    ) -> MetaAssetBinding:
+        from services.meta_instagram_login_subscription import InstagramLoginSubscriptionState
+
+        if not isinstance(state, InstagramLoginSubscriptionState):
+            raise MetaRegistryError("subscription state is invalid")
+        with self._locked():
+            raw = self._read_unlocked()["bindings"].get(binding_id)
+            if not isinstance(raw, dict):
+                raise MetaBindingNotFoundError("binding not found")
+            binding = self._binding_from_dict(raw)
+            if binding.auth_flow != "instagram_login":
+                raise MetaBindingConflictError("subscription state applies only to Instagram Login bindings")
+            changed = dict(raw)
+            changed["webhook_subscription_status"] = state.status
+            changed["webhook_subscribed_fields"] = list(state.verified_fields or state.subscribed_fields)
+            changed["webhook_subscription_error"] = state.error
+            changed["webhook_subscription_checked_at"] = time.time()
+            changed["updated_at"] = time.time()
+            state_store = self._read_unlocked()
+            state_store["bindings"][binding_id] = changed
+            self._write_unlocked(state_store)
+            updated = self._binding_from_dict(changed)
+        self._append_audit(
+            {
+                "event": "instagram_login_webhook_subscription",
+                "actor_id": actor_id,
+                "tenant_id": updated.tenant_id,
+                "binding_id": updated.binding_id,
+                "status": state.status,
+                "verified_fields": list(state.verified_fields),
+            }
+        )
+        return updated
+
     def consume_oauth_state(self, nonce_hash: str) -> dict[str, Any]:
         with self._locked():
             state = self._read_unlocked()
@@ -1187,16 +1314,12 @@ def get_meta_registry_readiness(
     try:
         current_registry = registry or get_meta_app_registry()
         bindings = current_registry.list_bindings(include_inactive=False)
-        tenant_channels: set[tuple[str, MetaChannel]] = set()
-        channel_assets: set[tuple[MetaChannel, str]] = set()
+        active_asset_keys: set[str] = set()
         now = int(time.time())
         for binding in bindings:
-            tenant_key = (binding.tenant_id, binding.channel)
-            asset_key = (binding.channel, binding.asset_id)
-            if tenant_key in tenant_channels or asset_key in channel_assets:
+            if binding.asset_key in active_asset_keys:
                 checks["active_indexes_exclusive"] = False
-            tenant_channels.add(tenant_key)
-            channel_assets.add(asset_key)
+            active_asset_keys.add(binding.asset_key)
             if binding.app_key == APP_B_KEY and binding.asset_id in {
                 LINAS_PAGE_ID,
                 LINAS_INSTAGRAM_ACCOUNT_ID,
@@ -1205,14 +1328,32 @@ def get_meta_registry_readiness(
             try:
                 credential = current_registry.get_credential(binding)
                 app = get_meta_app_configs().get(binding.app_key)
+                from services.meta_instagram_login_config import required_scopes_for_binding
+
+                required_scopes = required_scopes_for_binding(
+                    channel=binding.channel,
+                    auth_flow=binding.auth_flow,
+                )
+                instagram_login_app_id = (os.getenv("META_INSTAGRAM_LOGIN_APP_ID") or "1035856539045307").strip()
                 if (
                     app is None
                     or not app.enabled
-                    or credential.token_app_id != app.app_id
-                    or credential.token_profile_id != binding.page_id
-                    or not META_CHANNEL_SCOPES[binding.channel].issubset(credential.scopes)
+                    or (
+                        credential.token_app_id != app.app_id
+                        and not (
+                            binding.auth_flow == "instagram_login" and credential.token_app_id == instagram_login_app_id
+                        )
+                    )
+                    or (binding.auth_flow == "facebook_login" and credential.token_profile_id != binding.page_id)
+                    or (binding.auth_flow == "instagram_login" and credential.token_profile_id != binding.asset_id)
+                    or not required_scopes.issubset(credential.scopes)
                     or set(credential.scopes) & META_FORBIDDEN_SCOPES
                     or (credential.expires_at is not None and credential.expires_at <= now)
+                    or (
+                        binding.auth_flow == "instagram_login"
+                        and binding.active
+                        and binding.webhook_subscription_status != "ready"
+                    )
                 ):
                     checks["active_credentials_valid"] = False
             except MetaRegistryError:

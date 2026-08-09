@@ -324,7 +324,7 @@ class MetaCommentRegistryRoutingTests(unittest.TestCase):
             access_token="token",
             token_app_id="2963733803971681",
             token_profile_id="111",
-            scopes=("pages_messaging",),
+            scopes=("pages_messaging", "pages_read_user_content", "pages_manage_engagement"),
         )
         app_config = mock.MagicMock()
         app_config.key = APP_A_KEY

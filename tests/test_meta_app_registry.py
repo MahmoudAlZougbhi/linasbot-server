@@ -431,7 +431,8 @@ def test_oauth_state_is_one_time_and_expires(registry: MetaAppRegistry) -> None:
         registry.consume_oauth_state("expired")
 
 
-def test_app_b_signature_cannot_route_app_a_active_binding(registry: MetaAppRegistry) -> None:
+@pytest.mark.asyncio
+async def test_app_b_signature_cannot_route_app_a_active_binding(registry: MetaAppRegistry) -> None:
     configs = get_meta_app_configs()
     registry.activate_binding(
         tenant_id="linas",
@@ -444,8 +445,8 @@ def test_app_b_signature_cannot_route_app_a_active_binding(registry: MetaAppRegi
         actor_id="owner",
     )
     payload = _page_payload(page_id=LINAS_PAGE_ID)
-    assert resolve_registry_events(payload, app_config=configs[APP_B_KEY], registry=registry) == []
-    routed = resolve_registry_events(payload, app_config=configs[APP_A_KEY], registry=registry)
+    assert await resolve_registry_events(payload, app_config=configs[APP_B_KEY], registry=registry) == []
+    routed = await resolve_registry_events(payload, app_config=configs[APP_A_KEY], registry=registry)
     assert len(routed) == 1
     assert routed[0].settings.tenant_id == "linas"
     assert routed[0].event["meta_app_key"] == APP_A_KEY
