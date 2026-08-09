@@ -11,6 +11,7 @@ StreamEventType = Literal[
     "delta",
     "card",
     "choices",
+    "title_updated",
     "error",
     "done",
     "cancelled",

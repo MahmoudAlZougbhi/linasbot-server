@@ -12,6 +12,24 @@ from typing import Any
 
 from storage.persistent_storage import _DATA_ROOT
 
+DEFAULT_CONVERSATION_TITLE = "New chat"
+_AUTO_TITLE_MAX_LEN = 60
+
+
+def is_default_conversation_title(title: str | None) -> bool:
+    cleaned = (title or "").strip()
+    return not cleaned or cleaned in {DEFAULT_CONVERSATION_TITLE, "Chat", "Untitled"}
+
+
+def auto_title_from_first_message(content: str, *, max_len: int = _AUTO_TITLE_MAX_LEN) -> str:
+    """ChatGPT-style title: first user text, single line, truncated."""
+    cleaned = " ".join(str(content or "").replace("\r", "\n").split())
+    if not cleaned:
+        return DEFAULT_CONVERSATION_TITLE
+    if len(cleaned) <= max_len:
+        return cleaned
+    return cleaned[:max_len].rstrip()
+
 
 @dataclass
 class OwnerChatMessage:
@@ -54,7 +72,7 @@ class OwnerChatStore:
         *,
         tenant_id: str,
         user_id: str,
-        title: str = "New chat",
+        title: str = DEFAULT_CONVERSATION_TITLE,
         greeting_text: str | None = None,
     ) -> OwnerConversation:
         now = time.time()
@@ -72,7 +90,7 @@ class OwnerChatStore:
             id=uuid.uuid4().hex,
             tenant_id=tenant_id,
             user_id=user_id,
-            title=(title or "New chat")[:120],
+            title=(title or DEFAULT_CONVERSATION_TITLE)[:120],
             created_at=now,
             updated_at=now,
             messages=[
@@ -171,8 +189,9 @@ class OwnerChatStore:
         msgs.append(msg)
         conv.messages = msgs
         conv.updated_at = msg.created_at
-        if role == "user" and (conv.title == "New chat" or not conv.title):
-            conv.title = content.strip()[:60] or "New chat"
+        # Auto-title once from first user message while still on the default title.
+        if role == "user" and is_default_conversation_title(conv.title):
+            conv.title = auto_title_from_first_message(content)
         self._write(conv)
         return msg
 

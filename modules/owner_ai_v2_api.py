@@ -93,6 +93,7 @@ async def stream_owner_message(
     if not content and not body.confirm_tool and not body.choice_id and not (body.attachment_ids or []):
         raise HTTPException(status_code=400, detail="content, confirm_tool, choice, or attachment required")
 
+    conversation_title: str | None = conv.title if conv else None
     if content or body.choice_id:
         label = content or (body.label if hasattr(body, "label") else None) or body.choice_id or ""
         owner_chat_store.append_message(
@@ -107,12 +108,14 @@ async def stream_owner_message(
             user_id=session.user_id,
             conversation_id=conversation_id,
         )
+        conversation_title = conv.title if conv else conversation_title
 
     history = [{"role": m.role, "content": m.content} for m in ((conv.messages if conv else None) or [])]
     cancel_flag = {"cancelled": False}
 
     async def event_gen():  # noqa: ANN202
         from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+        from services.owner_copilot_v2.models import StreamEvent
 
         # Client disconnect → cancel
         async def watch_disconnect() -> None:
@@ -126,6 +129,10 @@ async def stream_owner_message(
         reply_parts: list[str] = []
         done_payload: dict[str, Any] | None = None
         try:
+            if conversation_title:
+                yield encode_sse(
+                    StreamEvent(type="title_updated", payload={"title": conversation_title})
+                )
             async for ev in iter_owner_turn_v2_events(
                 tenant_id=session.tenant_id,
                 user_id=session.user_id,
@@ -143,7 +150,12 @@ async def stream_owner_message(
                 if ev.type == "delta":
                     reply_parts.append(str(ev.payload.get("text") or ""))
                 if ev.type == "done":
-                    done_payload = ev.payload
+                    done_payload = {
+                        **ev.payload,
+                        "conversation_title": conversation_title,
+                    }
+                    yield encode_sse(StreamEvent(type="done", payload=done_payload))
+                    continue
                 yield encode_sse(ev)
             yield encode_sse_done()
         finally:
