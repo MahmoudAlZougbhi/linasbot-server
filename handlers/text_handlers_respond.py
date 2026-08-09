@@ -1988,16 +1988,31 @@ async def _process_and_respond(
                 metadata={"handled_by": "ai"},
             )
 
-        # Check Q&A Database before calling GPT-4
-        # Required flow: ALWAYS try FAQ first. If match >=90% return direct answer, else continue normal flow.
+        # Check Smart Answers / FAQ before GPT. Prefer tenant-safe multi-signal match
+        # (not blind 90% similarity). Falls back to legacy matcher only when no tenant.
         print(f"[_process_and_respond] 🔍 Checking Q&A DATABASE for: '{query_to_send_to_gpt}'")
 
         is_reschedule_intent = detect_reschedule_intent(query_to_send_to_gpt)
         is_price_intent = _is_price_intent(query_to_send_to_gpt)
-        match_result = await local_qa_service.find_match_with_tier(
-            query_to_send_to_gpt,
-            current_preferred_lang,
-        )
+        match_result = None
+        _faq_tenant = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip().lower()
+        if _faq_tenant:
+            try:
+                from services.faq_safe_match import find_safe_faq_match
+
+                match_result = find_safe_faq_match(
+                    tenant_id=_faq_tenant,
+                    question=query_to_send_to_gpt,
+                    language=current_preferred_lang,
+                )
+            except Exception as _faq_exc:
+                print(f"[_process_and_respond] safe FAQ match skipped: {type(_faq_exc).__name__}")
+                match_result = None
+        else:
+            match_result = await local_qa_service.find_match_with_tier(
+                query_to_send_to_gpt,
+                current_preferred_lang,
+            )
 
         if match_result:
             # 90%+ match: Return Q&A directly
@@ -2020,12 +2035,23 @@ async def _process_and_respond(
             print("[_process_and_respond] ✅ Q&A MATCH FOUND!")
             if match_tier == "exact":
                 print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (exact match)")
+            elif match_tier == "safe_semantic":
+                print(
+                    f"[_process_and_respond] 📊 Safe semantic score: {match_result.get('safe_score', match_score):.0%}"
+                )
             else:
                 print(f"[_process_and_respond] 📊 Match Score: {match_score:.0%} (≥90% threshold)")
             print("[_process_and_respond] 🎯 Returning Q&A directly")
             print("[_process_and_respond] 💰 AI CREDITS SAVED: $0.02-0.05 (NO GPT-4 CALL)")
             print("[_process_and_respond] ⚡ Response Time: ~100-200ms (vs 2-5s with GPT-4)")
             print(f"[_process_and_respond] 🎯 Answer: {qa_response[:100]}...")
+            if _faq_tenant:
+                try:
+                    from services.faq_metrics import faq_metrics_store
+
+                    faq_metrics_store.record_lookup(tenant_id=_faq_tenant, hit=True, generation_avoided=True)
+                except Exception:
+                    pass
 
             await send_message_func(user_id, qa_response)
             qa_pair = match_result.get("qa_pair", {})

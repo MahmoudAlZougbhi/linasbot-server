@@ -397,6 +397,15 @@ def log_interaction(
     _FLOW_BUFFER.append(entry)
     _append_to_file(entry)
 
+    # Persist safe customer-response TRACE for owner self-diagnosis (no chain-of-thought).
+    if resolved_tenant_id:
+        try:
+            from services.customer_response_trace import persist_from_interaction_entry
+
+            persist_from_interaction_entry(entry)
+        except Exception as exc:
+            print(f"[interaction_flow] TRACE persist skipped: {type(exc).__name__}", flush=True)
+
 
 def get_recent_flows(limit: int = 50, search_phone: str | None = None) -> list[dict[str, Any]]:
     """Get recent flow entries for dashboard. Optionally filter by phone (partial match)."""

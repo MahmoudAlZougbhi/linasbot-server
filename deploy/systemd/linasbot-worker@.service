@@ -1,0 +1,28 @@
+[Unit]
+Description=Linas AI queue worker (%i)
+Documentation=file:///opt/linasbot/docs/PHASE2_PRODUCTION_RECONCILE.md
+After=network-online.target redis-server.service linasbot.service
+Wants=network-online.target
+# Redis may be remote (REDIS_URL). redis-server.service is optional locally.
+# Do not start workers before the API unit exists; they share EnvironmentFile.
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=-__APP_DIR__/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=LINAS_WORKER_QUEUE=%i
+Environment=PATH=__APP_DIR__/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__APP_DIR__/venv/bin/python scripts/run_queue_worker.py --queue %i
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+StandardOutput=append:/var/log/linasbot-worker-%i.log
+StandardError=append:/var/log/linasbot-worker-%i.error.log
+# Never dump EnvironmentFile into logs.
+SyslogIdentifier=linasbot-worker-%i
+
+[Install]
+WantedBy=multi-user.target

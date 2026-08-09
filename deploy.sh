@@ -232,8 +232,8 @@ fi
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 7: Create systemd service
-echo -e "${YELLOW}[7/8] Creating systemd service...${NC}"
+# Step 7: Create systemd services (API + optional durable workers)
+echo -e "${YELLOW}[7/9] Creating systemd services...${NC}"
 cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Linas Laser AI Bot
@@ -256,12 +256,26 @@ Environment=PATH=${APP_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin
 WantedBy=multi-user.target
 EOF
 
+# Worker template — queues: high_priority, interactive, background, expensive
+WORKER_UNIT_SRC="$REPO_ROOT/deploy/systemd/linasbot-worker@.service"
+if [ -f "$WORKER_UNIT_SRC" ]; then
+  sed "s|__APP_DIR__|${APP_DIR}|g" "$WORKER_UNIT_SRC" > /etc/systemd/system/linasbot-worker@.service
+  echo "Installed linasbot-worker@.service template"
+else
+  echo -e "${YELLOW}Worker unit template missing; skipping worker units${NC}"
+fi
+
+# Re-preserve durable CM flags AFTER systemd EnvironmentFile path rewrite.
+if [ -f "$REPO_ROOT/scripts/prod_cm_preserve_durable_flags.sh" ]; then
+  bash "$REPO_ROOT/scripts/prod_cm_preserve_durable_flags.sh" "$APP_DIR"
+fi
+
 systemctl daemon-reload
 echo -e "${GREEN}Done!${NC}"
 echo ""
 
-# Step 8: Start the service
-echo -e "${YELLOW}[8/8] Starting the service...${NC}"
+# Step 8: Start the API service
+echo -e "${YELLOW}[8/9] Starting API service...${NC}"
 systemctl enable ${SERVICE_NAME}
 # Stop first, wait for port 8003 to be released (avoid "address already in use" race)
 systemctl stop ${SERVICE_NAME} 2>/dev/null || true
@@ -283,7 +297,7 @@ systemctl start ${SERVICE_NAME}
 sleep 3
 
 if systemctl is-active --quiet ${SERVICE_NAME}; then
-    echo -e "${GREEN}Service started successfully!${NC}"
+    echo -e "${GREEN}API service started successfully!${NC}"
 else
     echo -e "${RED}Service failed to start. Showing error log:${NC}"
     echo "=== /var/log/${SERVICE_NAME}.error.log ==="
@@ -298,6 +312,56 @@ else
 fi
 echo ""
 
+# Step 9: Durable workers (only when REDIS_URL + LINAS_REQUIRE_REDIS are set)
+echo -e "${YELLOW}[9/9] Queue workers + readiness...${NC}"
+WORKER_QUEUES=(high_priority interactive background expensive)
+DURABLE_QUEUES_ON=0
+if grep -Eq '^[[:space:]]*(REDIS_URL|LINAS_REDIS_URL)=' "$APP_DIR/.env" 2>/dev/null \
+  && grep -Eq '^[[:space:]]*(LINAS_REQUIRE_REDIS|LINAS_ENABLE_DURABLE_QUEUES)=(1|true|yes|on)' "$APP_DIR/.env" 2>/dev/null; then
+  DURABLE_QUEUES_ON=1
+fi
+
+if [ "$DURABLE_QUEUES_ON" = "1" ] && [ -f /etc/systemd/system/linasbot-worker@.service ]; then
+  for q in "${WORKER_QUEUES[@]}"; do
+    systemctl enable "linasbot-worker@${q}.service"
+    systemctl restart "linasbot-worker@${q}.service" || systemctl start "linasbot-worker@${q}.service"
+  done
+  sleep 2
+  WORKER_FAIL=0
+  for q in "${WORKER_QUEUES[@]}"; do
+    if systemctl is-active --quiet "linasbot-worker@${q}.service"; then
+      echo -e "${GREEN}Worker active: linasbot-worker@${q}${NC}"
+    else
+      echo -e "${RED}Worker inactive: linasbot-worker@${q}${NC}"
+      journalctl -u "linasbot-worker@${q}.service" -n 20 --no-pager || true
+      WORKER_FAIL=1
+    fi
+  done
+  if [ "$WORKER_FAIL" = "1" ]; then
+    echo -e "${RED}Critical workers unavailable — failing deploy${NC}"
+    exit 1
+  fi
+  # Queue readiness (no secrets printed)
+  if ! curl -fsS "http://127.0.0.1:8003/api/queue/ready" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+    echo -e "${RED}/api/queue/ready failed — failing deploy${NC}"
+    curl -sS "http://127.0.0.1:8003/api/queue/ready" || true
+    exit 1
+  fi
+  echo -e "${GREEN}Queue readiness OK${NC}"
+else
+  echo -e "${YELLOW}Durable queues not activated (set REDIS_URL + LINAS_REQUIRE_REDIS=true to enable workers).${NC}"
+  echo -e "${YELLOW}API-only deploy continues; in-process queue remains non-production.${NC}"
+fi
+
+# API readiness (boolean checks only)
+if ! curl -fsS "http://127.0.0.1:8003/api/ready" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+  echo -e "${RED}/api/ready failed — failing deploy${NC}"
+  curl -sS "http://127.0.0.1:8003/api/ready" || true
+  exit 1
+fi
+echo -e "${GREEN}/api/ready OK${NC}"
+echo ""
+
 # Final summary
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${GREEN}  Deployment Complete!${NC}"
@@ -308,9 +372,11 @@ echo -e "Dashboard version: ${YELLOW}v$DEPLOY_VERSION${NC}"
 echo -e "Service name: ${YELLOW}$SERVICE_NAME${NC}"
 echo -e "Log file: ${YELLOW}/var/log/${SERVICE_NAME}.log${NC}"
 echo -e "Error log: ${YELLOW}/var/log/${SERVICE_NAME}.error.log${NC}"
+echo -e "Workers: ${YELLOW}linasbot-worker@{high_priority,interactive,background,expensive}${NC}"
 echo ""
 echo -e "${BLUE}Useful commands:${NC}"
 echo "  Check status:    systemctl status $SERVICE_NAME"
+echo "  Worker status:   systemctl status 'linasbot-worker@*'"
 echo "  View logs:       tail -f /var/log/${SERVICE_NAME}.log"
 echo "  Restart:         systemctl restart $SERVICE_NAME"
 echo "  Stop:            systemctl stop $SERVICE_NAME"

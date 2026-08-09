@@ -14,6 +14,8 @@ from services.cm.semantic_index import build_index, load_index, search
 from services.cm.shadow_eval import run_shadow_eval
 from services.local_qa_service import local_qa_service
 
+pytestmark = pytest.mark.usefixtures("enable_faq_plan")
+
 
 @pytest.fixture(autouse=True)
 def _hash_provider(monkeypatch: pytest.MonkeyPatch) -> None:

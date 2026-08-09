@@ -53,6 +53,12 @@ def main() -> int:
         action="store_true",
         help="Emit a redacted JSON audit line on stdout",
     )
+    parser.add_argument(
+        "--role",
+        default="admin",
+        choices=["admin", "platform_owner"],
+        help="admin (default first-admin) or platform_owner (offline-only elevation)",
+    )
     args = parser.parse_args()
 
     try:
@@ -69,6 +75,7 @@ def main() -> int:
             password=password,
             name=args.name,
             created_by="cli-provision",
+            role=str(args.role),
         )
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)

@@ -83,6 +83,10 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     name: str | None = None
+    display_name: str | None = None
+    gender: str | None = None  # male | female | unset — never inferred server-side
+    preferred_language: str | None = None  # ar | en | fr
+    form_of_address: str | None = None
 
 
 class CreateUserRequest(BaseModel):
@@ -221,7 +225,11 @@ async def register(request: RegisterRequest, response: Response) -> Any:
                 business_name=request.business_name,
                 email=request.email,
                 password=request.password,
-                name=request.name,
+                name=request.name or request.display_name,
+                display_name=request.display_name or request.name,
+                gender=request.gender,
+                preferred_language=request.preferred_language,
+                form_of_address=request.form_of_address,
             ),
             timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
         )

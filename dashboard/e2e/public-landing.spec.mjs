@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("public SaaS landing smoke", () => {
   test("home is public with Create Account and Log in", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "AI Messaging for Facebook and Instagram" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your business AI — in the Linas AI app" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Create Account" }).first()).toHaveAttribute(
       "href",
       "/register"

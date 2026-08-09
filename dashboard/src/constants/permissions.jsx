@@ -104,6 +104,26 @@ export const SYSTEM_ROLES = {
       activityFlow: true
     }
   },
+  platform_owner: {
+    id: 'platform_owner',
+    name: 'Platform Owner',
+    description: 'Linas AI platform operator (CLI-provisioned only; not assignable in-app)',
+    isSystem: true,
+    assignableInTenantUi: false,
+    permissions: {
+      dashboard: true,
+      liveChat: true,
+      training: true,
+      testing: true,
+      analytics: true,
+      smartMessaging: true,
+      settings: true,
+      userManagement: true,
+      contentManagers: true,
+      contentPublish: true,
+      activityFlow: true
+    }
+  },
   operator: {
     id: 'operator',
     name: 'Operator',

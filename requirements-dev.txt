@@ -8,3 +8,4 @@ mypy>=1.8.0
 types-requests
 bandit>=1.7.0
 pip-audit>=2.6.0
+fakeredis>=2.23.0,<3.0.0

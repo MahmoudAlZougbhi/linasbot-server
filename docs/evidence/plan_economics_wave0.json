@@ -1,0 +1,268 @@
+{
+  "credit_pack_hint": {
+    "approx_provider_usd_per_credit": 0.001,
+    "note": "Extra packs priced in Wave 4 from same cost basis + margin policy.",
+    "unit": "linas_credit"
+  },
+  "generated_at": "2026-08-09T14:03:52.901118+00:00",
+  "plans": [
+    {
+      "allowance": {
+        "gross_margin_at_100pct": 0.7462,
+        "included_credits": 593,
+        "included_dm_replies": 800,
+        "included_images": 0,
+        "included_owner_messages": 120,
+        "included_setup_turns": 40,
+        "included_videos": 0,
+        "infra_usd": 2.0,
+        "margin_ok": true,
+        "max_provider_cost_usd": 0.593,
+        "notes": "Seed mix fits margin floor without scaling.",
+        "plan_id": "starter",
+        "price_usd": 24.99,
+        "store_fee_usd": 3.7485
+      },
+      "features": {
+        "ai_setup": true,
+        "basic_integrations": true,
+        "comment_automation": false,
+        "content_management": true,
+        "creative_studio": false,
+        "customer_dm_automation": true,
+        "image_generation": false,
+        "owner_assistant": true,
+        "scheduling": false,
+        "video_generation": false
+      },
+      "flag_negative_economics": false,
+      "plan_id": "starter",
+      "scenarios": [
+        {
+          "gross_margin": 0.764,
+          "gross_profit_usd": 19.0932,
+          "infra_allocation_usd": 2.0,
+          "provider_cost_usd": 0.1482,
+          "store_fee_usd": 3.7485,
+          "subscription_revenue_usd": 24.99,
+          "usage_pct": 0.25
+        },
+        {
+          "gross_margin": 0.7581,
+          "gross_profit_usd": 18.945,
+          "infra_allocation_usd": 2.0,
+          "provider_cost_usd": 0.2965,
+          "store_fee_usd": 3.7485,
+          "subscription_revenue_usd": 24.99,
+          "usage_pct": 0.5
+        },
+        {
+          "gross_margin": 0.7462,
+          "gross_profit_usd": 18.6485,
+          "infra_allocation_usd": 2.0,
+          "provider_cost_usd": 0.593,
+          "store_fee_usd": 3.7485,
+          "subscription_revenue_usd": 24.99,
+          "usage_pct": 1.0
+        }
+      ]
+    },
+    {
+      "allowance": {
+        "gross_margin_at_100pct": 0.754,
+        "included_credits": 1666,
+        "included_dm_replies": 3500,
+        "included_images": 0,
+        "included_owner_messages": 250,
+        "included_setup_turns": 60,
+        "included_videos": 0,
+        "infra_usd": 4.0,
+        "margin_ok": true,
+        "max_provider_cost_usd": 1.6663,
+        "notes": "Seed mix fits margin floor without scaling.",
+        "plan_id": "growth",
+        "price_usd": 59.0,
+        "store_fee_usd": 8.85
+      },
+      "features": {
+        "ai_setup": true,
+        "basic_integrations": true,
+        "comment_automation": true,
+        "content_management": true,
+        "creative_studio": false,
+        "customer_dm_automation": true,
+        "image_generation": false,
+        "owner_assistant": true,
+        "scheduling": false,
+        "video_generation": false
+      },
+      "flag_negative_economics": false,
+      "plan_id": "growth",
+      "scenarios": [
+        {
+          "gross_margin": 0.7751,
+          "gross_profit_usd": 45.7334,
+          "infra_allocation_usd": 4.0,
+          "provider_cost_usd": 0.4166,
+          "store_fee_usd": 8.85,
+          "subscription_revenue_usd": 59.0,
+          "usage_pct": 0.25
+        },
+        {
+          "gross_margin": 0.7681,
+          "gross_profit_usd": 45.3168,
+          "infra_allocation_usd": 4.0,
+          "provider_cost_usd": 0.8331,
+          "store_fee_usd": 8.85,
+          "subscription_revenue_usd": 59.0,
+          "usage_pct": 0.5
+        },
+        {
+          "gross_margin": 0.754,
+          "gross_profit_usd": 44.4837,
+          "infra_allocation_usd": 4.0,
+          "provider_cost_usd": 1.6663,
+          "store_fee_usd": 8.85,
+          "subscription_revenue_usd": 59.0,
+          "usage_pct": 1.0
+        }
+      ]
+    },
+    {
+      "allowance": {
+        "gross_margin_at_100pct": 0.7185,
+        "included_credits": 6330,
+        "included_dm_replies": 6000,
+        "included_images": 40,
+        "included_owner_messages": 400,
+        "included_setup_turns": 80,
+        "included_videos": 4,
+        "infra_usd": 8.0,
+        "margin_ok": true,
+        "max_provider_cost_usd": 6.33,
+        "notes": "Seed mix fits margin floor without scaling.",
+        "plan_id": "pro",
+        "price_usd": 109.0,
+        "store_fee_usd": 16.35
+      },
+      "features": {
+        "ai_setup": true,
+        "basic_integrations": true,
+        "comment_automation": true,
+        "content_management": true,
+        "creative_studio": true,
+        "customer_dm_automation": true,
+        "image_generation": true,
+        "owner_assistant": true,
+        "scheduling": true,
+        "video_generation": true
+      },
+      "flag_negative_economics": false,
+      "plan_id": "pro",
+      "scenarios": [
+        {
+          "gross_margin": 0.7621,
+          "gross_profit_usd": 83.0675,
+          "infra_allocation_usd": 8.0,
+          "provider_cost_usd": 1.5825,
+          "store_fee_usd": 16.35,
+          "subscription_revenue_usd": 109.0,
+          "usage_pct": 0.25
+        },
+        {
+          "gross_margin": 0.7476,
+          "gross_profit_usd": 81.485,
+          "infra_allocation_usd": 8.0,
+          "provider_cost_usd": 3.165,
+          "store_fee_usd": 16.35,
+          "subscription_revenue_usd": 109.0,
+          "usage_pct": 0.5
+        },
+        {
+          "gross_margin": 0.7185,
+          "gross_profit_usd": 78.32,
+          "infra_allocation_usd": 8.0,
+          "provider_cost_usd": 6.33,
+          "store_fee_usd": 16.35,
+          "subscription_revenue_usd": 109.0,
+          "usage_pct": 1.0
+        }
+      ]
+    },
+    {
+      "allowance": {
+        "gross_margin_at_100pct": 0.7286,
+        "included_credits": 15350,
+        "included_dm_replies": 12000,
+        "included_images": 100,
+        "included_owner_messages": 800,
+        "included_setup_turns": 120,
+        "included_videos": 12,
+        "infra_usd": 15.0,
+        "margin_ok": true,
+        "max_provider_cost_usd": 15.35,
+        "notes": "Seed mix fits margin floor without scaling.",
+        "plan_id": "max",
+        "price_usd": 250.0,
+        "store_fee_usd": 37.5
+      },
+      "features": {
+        "advanced_capabilities": true,
+        "ai_setup": true,
+        "basic_integrations": true,
+        "comment_automation": true,
+        "content_management": true,
+        "creative_studio": true,
+        "customer_dm_automation": true,
+        "image_generation": true,
+        "owner_assistant": true,
+        "scheduling": true,
+        "video_generation": true
+      },
+      "flag_negative_economics": false,
+      "plan_id": "max",
+      "scenarios": [
+        {
+          "gross_margin": 0.7746,
+          "gross_profit_usd": 193.6625,
+          "infra_allocation_usd": 15.0,
+          "provider_cost_usd": 3.8375,
+          "store_fee_usd": 37.5,
+          "subscription_revenue_usd": 250.0,
+          "usage_pct": 0.25
+        },
+        {
+          "gross_margin": 0.7593,
+          "gross_profit_usd": 189.825,
+          "infra_allocation_usd": 15.0,
+          "provider_cost_usd": 7.675,
+          "store_fee_usd": 37.5,
+          "subscription_revenue_usd": 250.0,
+          "usage_pct": 0.5
+        },
+        {
+          "gross_margin": 0.7286,
+          "gross_profit_usd": 182.15,
+          "infra_allocation_usd": 15.0,
+          "provider_cost_usd": 15.35,
+          "store_fee_usd": 37.5,
+          "subscription_revenue_usd": 250.0,
+          "usage_pct": 1.0
+        }
+      ]
+    }
+  ],
+  "pricing_source": {
+    "app_store_fee_pct": 0.15,
+    "dm_model": "gpt-4o-mini",
+    "image_cost_usd_per_unit": 0.04,
+    "notes": "Text rates from configured MODEL_PRICING (aligned with OpenAI public list). Image/video unit costs are configurable defaults pending provider router binding. Plan list prices are fixed product requirements.",
+    "owner_model": "gpt-5-mini",
+    "setup_model": "gpt-5-mini",
+    "target_margin_floor": 0.25,
+    "text_models": "services.model_pricing.MODEL_PRICING",
+    "text_pricing_date": "2026-08-09",
+    "video_cost_usd_per_unit": 0.5
+  },
+  "report_version": "phase2-wave0-v1"
+}

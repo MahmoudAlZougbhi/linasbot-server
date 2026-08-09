@@ -36,3 +36,33 @@ def _ensure_event_loop():
     except RuntimeError:
         asyncio.set_event_loop(asyncio.new_event_loop())
     yield
+
+
+@pytest.fixture
+def enable_faq_plan(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Active starter plan so CM FAQ write tests pass plan entitlements."""
+    import services.entitlements_service as es
+    from services.entitlements_service import EntitlementsStore
+
+    store = EntitlementsStore(root=tmp_path / "entitlements")
+    real_get = store.get
+
+    def get(tenant_id: str):
+        ent = real_get(tenant_id)
+        if ent.plan_id != "none" and ent.status != "none":
+            return ent
+        # set_plan() calls get(); use the real getter to avoid recursion.
+        store.get = real_get
+        try:
+            return store.set_plan(
+                tenant_id=tenant_id,
+                plan_id="starter",
+                status="active",
+                source="admin",
+            )
+        finally:
+            store.get = get
+
+    monkeypatch.setattr(store, "get", get)
+    monkeypatch.setattr(es, "entitlements_store", store)
+    return store

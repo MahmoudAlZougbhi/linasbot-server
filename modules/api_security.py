@@ -43,6 +43,7 @@ PERMISSION_KEYS = {
 
 SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
     "admin": {k: True for k in PERMISSION_KEYS},
+    "platform_owner": {k: True for k in PERMISSION_KEYS},
     "operator": {
         "dashboard": True,
         "liveChat": True,
@@ -72,6 +73,17 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
 }
 
 
+def is_platform_owner(session: SessionRecord) -> bool:
+    return (session.role or "").strip().lower() == "platform_owner"
+
+
+def require_platform_owner(request: Request) -> SessionRecord:
+    session = require_session(request)
+    if not is_platform_owner(session):
+        raise HTTPException(status_code=403, detail="Platform owner role required")
+    return session
+
+
 def is_production_env() -> bool:
     env = (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "").strip().lower()
     return env in {"prod", "production"}
@@ -79,7 +91,7 @@ def is_production_env() -> bool:
 
 def resolve_permissions(role: str, custom: dict[str, bool] | None) -> dict[str, bool]:
     base = dict(SYSTEM_ROLE_PERMISSIONS.get(role) or SYSTEM_ROLE_PERMISSIONS["viewer"])
-    if role == "admin":
+    if role in {"admin", "platform_owner"}:
         return {k: True for k in PERMISSION_KEYS}
     if custom:
         for k, v in custom.items():
@@ -105,10 +117,15 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/auth/resend-verification"),
     ("GET", "/api/billing/packages"),
     ("POST", "/api/billing/stripe/webhook"),
+    ("POST", "/api/auth/mobile/login"),
+    ("POST", "/api/auth/mobile/refresh"),
+    ("GET", "/api/queue/ready"),
+    ("POST", "/api/entitlements/apple/notifications"),
+    ("POST", "/api/entitlements/google/notifications"),
 }
 
-# Prefix public (rare)
-_PUBLIC_PREFIX: tuple[str, ...] = ()
+# Prefix public (rare) — guest sales chat is intentionally unauthenticated + rate-limited.
+_PUBLIC_PREFIX: tuple[str, ...] = ("/api/guest-ai/",)
 
 
 def _normalize_path(path: str) -> str:
@@ -223,6 +240,8 @@ def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
         rules.append((f"resend-verify:{ip}", 5, 300))
     if path == "/api/auth/change-password":
         rules.append((f"pw:{ip}", 10, 300))
+    if path.startswith("/api/guest-ai/"):
+        rules.append((f"guest-ai:{ip}", 60, 300))
     if any(path.startswith(p) for p in _SENSITIVE_MUTATION_PREFIXES):
         rules.append((f"mut:{ip}:{path.split('?')[0]}", 60, 60))
     for key, limit, window in rules:
@@ -267,10 +286,20 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
         if not path.startswith("/api/"):
             return await call_next(request)
 
-        # Attach session if present (even for public routes)
-        cookie = request.cookies.get(SESSION_COOKIE_NAME)
-        session = session_service.get_valid_session(cookie)
+        # Attach session if present (Bearer preferred; cookie fallback)
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+        bearer_token: str | None = None
+        used_bearer = False
+        if auth_header.lower().startswith("bearer "):
+            bearer_token = auth_header[7:].strip() or None
+        if bearer_token:
+            session = session_service.get_valid_session(bearer_token)
+            used_bearer = session is not None
+        else:
+            cookie = request.cookies.get(SESSION_COOKIE_NAME)
+            session = session_service.get_valid_session(cookie)
         request.state.dashboard_session = session
+        request.state.auth_via_bearer = used_bearer
 
         limited = check_rate_limit(request, path)
         if limited is not None:
@@ -307,14 +336,23 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/meta/connections")
             or path.startswith("/api/cm")
             or path.startswith("/api/billing/")
+            or path.startswith("/api/owner-ai/")
+            or path.startswith("/api/mobile/")
+            or path.startswith("/api/entitlements/")
+            or path.startswith("/api/creative/")
+            or path.startswith("/api/schedule/")
+            or path.startswith("/api/platform/")
+            or path.startswith("/api/safety/")
+            or path.startswith("/api/queue/")
+            or path.startswith("/api/entitlements/")
         ):
             return JSONResponse(
                 status_code=403,
                 content={"success": False, "error": "Tenant-isolated API unavailable"},
             )
 
-        # CSRF for cookie-authenticated mutations
-        if method in {"POST", "PUT", "PATCH", "DELETE"}:
+        # CSRF for cookie-authenticated mutations only (Bearer mobile clients skip CSRF)
+        if method in {"POST", "PUT", "PATCH", "DELETE"} and not used_bearer:
             header = request.headers.get(CSRF_HEADER_NAME) or request.headers.get(CSRF_HEADER_NAME.lower())
             csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
             if not header or not csrf_cookie or not session.csrf_token:

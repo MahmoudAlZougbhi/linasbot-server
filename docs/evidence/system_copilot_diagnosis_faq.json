@@ -1,0 +1,77 @@
+{
+  "report_version": "phase2b-copilot-diagnosis-faq-v1",
+  "generated_for": "feat/linas-ai-phase2-app-first",
+  "summary": {
+    "system_copilot": "extended typed tools + knowledge registry (FAQ + self-diagnosis)",
+    "self_diagnosis": "safe TRACE persist + get_recent_customer_interactions / get_interaction_trace + propose/approve fix (no Publish UX)",
+    "faq_entitlements": {
+      "source": "services.plan_economics.PLAN_FEATURES.faq_enabled + PLAN_FAQ_MAX_ENTRIES",
+      "policy": {
+        "none": {"faq_enabled": false, "faq_max_entries": 0},
+        "starter": {"faq_enabled": true, "faq_max_entries": 200},
+        "growth": {"faq_enabled": true, "faq_max_entries": 200},
+        "pro": {"faq_enabled": true, "faq_max_entries": 1000},
+        "max": {"faq_enabled": true, "faq_max_entries": 1000}
+      },
+      "quota_display": "used / max (e.g. 143 / 200)",
+      "match": "tenant + language + intent + freshness multi-signal (not blind 90%)",
+      "cm_invalidation": "related FAQ marked needs_review / cm_stale on CM patch (e.g. 7 → 7-10)"
+    }
+  },
+  "apis": [
+    "GET/POST /api/owner-ai/conversations*",
+    "GET/PATCH /api/owner-ai/profile",
+    "GET /api/owner-ai/knowledge",
+    "POST /api/owner-ai/cm/propose-patch",
+    "POST /api/owner-ai/cm/approve-patch",
+    "GET/POST /api/cm/faq (+ entitlement + quota_display)",
+    "GET /api/entitlements/me (+ faq_enabled/faq_max_entries/faq_quota_display)",
+    "GET /api/entitlements/plans (+ faq fields)"
+  ],
+  "owner_tools": [
+    "help",
+    "read_profile",
+    "read_account_summary",
+    "read_cm",
+    "validate_cm",
+    "propose_cm_patch",
+    "approve_cm_patch",
+    "publish_cm",
+    "read_usage",
+    "read_subscription",
+    "read_integrations",
+    "read_dashboard_metrics",
+    "read_scheduled_posts",
+    "read_jobs_errors",
+    "update_profile",
+    "get_recent_customer_interactions",
+    "get_interaction_trace",
+    "propose_diagnosis_fix",
+    "approve_diagnosis_fix",
+    "read_faq_quota",
+    "propose_smart_answer",
+    "approve_smart_answer"
+  ],
+  "diagnosis_flow": [
+    "Customer reply logged → safe TRACE (no CoT)",
+    "Owner reports bad reply → get_recent_customer_interactions",
+    "get_interaction_trace → root cause (session/location/service/stale FAQ)",
+    "propose_diagnosis_fix → owner approval → apply immediately",
+    "No user-facing Publish question; auto-activate if published base exists"
+  ],
+  "tests": [
+    "tests/test_system_copilot.py",
+    "tests/test_system_copilot_phase2b.py"
+  ],
+  "token_cost_smoke": {
+    "owner_chat_usage": "OwnerChatUsageTracker JSONL under data/owner_ai_usage",
+    "evidence": "test_faq_metrics_and_token_cost_smoke asserts turns/tokens recorded"
+  },
+  "gates": {
+    "prod_api_deploy": "required before TRACE/FAQ entitlements live in production",
+    "meta": "preserve working Meta paths; comments stay gated until live_verified",
+    "iap": "store purchase_ready may still be false until sandbox products exist",
+    "cm_legacy_bridge": "not re-enabled",
+    "fake_live": "not claimed"
+  }
+}
