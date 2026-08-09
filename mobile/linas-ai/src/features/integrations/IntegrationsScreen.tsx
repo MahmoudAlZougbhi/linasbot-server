@@ -19,6 +19,15 @@ import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import {
+  ChannelCapabilityToggles,
+  type ChannelToggles,
+} from './ChannelCapabilityToggles';
+
+const TogglesSchema = z.object({
+  dm: z.boolean(),
+  comments: z.boolean(),
+});
 
 const RowSchema = z.object({
   platform: z.string(),
@@ -27,12 +36,19 @@ const RowSchema = z.object({
   coming_soon: z.boolean().optional(),
   connectable: z.boolean().optional(),
   binding_ids: z.array(z.string()).optional(),
+  toggles: TogglesSchema.optional(),
   capabilities: z.record(z.string(), z.unknown()).optional(),
 });
 
 const ListSchema = z.object({
   success: z.literal(true),
   integrations: z.array(RowSchema),
+});
+
+const ToggleResponseSchema = z.object({
+  success: z.literal(true),
+  platform: z.string(),
+  toggles: TogglesSchema,
 });
 
 const StartSchema = z.object({
@@ -65,10 +81,17 @@ function isComingSoon(row: Row): boolean {
   return row.platform === 'tiktok' || row.platform === 'snapchat';
 }
 
+function defaultToggles(row: Row): ChannelToggles {
+  return row.toggles ?? { dm: false, comments: false };
+}
+
 export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }: Props) {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
   const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
+  const [busyToggle, setBusyToggle] = useState<{ platform: string; key: 'dm' | 'comments' } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [authGate, setAuthGate] = useState(false);
@@ -130,7 +153,7 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
         await Linking.openURL(started.authorization_url);
         return;
       } catch (firstErr) {
-        // Instagram Login may be unconfigured; fall back to Meta Business Login (truthful OAuth).
+        // Instagram Login may be unconfigured; use Meta Business Login for the same channel.
         if (platform === 'instagram') {
           const started = await apiFetch('/api/meta/connections/start', {
             method: 'POST',
@@ -180,6 +203,43 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
     }
   }
 
+  async function setToggle(row: Row, key: 'dm' | 'comments', value: boolean) {
+    const previous = defaultToggles(row);
+    setBusyToggle({ platform: row.platform, key });
+    setError(null);
+    setRows((curr) =>
+      curr.map((r) =>
+        r.platform === row.platform
+          ? { ...r, toggles: { ...defaultToggles(r), [key]: value } }
+          : r,
+      ),
+    );
+    try {
+      const res = await apiFetch(`/api/mobile/integrations/${encodeURIComponent(row.platform)}/toggles`, {
+        method: 'PATCH',
+        body: JSON.stringify({ [key]: value }),
+        schema: ToggleResponseSchema,
+      });
+      setRows((curr) =>
+        curr.map((r) => (r.platform === row.platform ? { ...r, toggles: res.toggles } : r)),
+      );
+    } catch (err) {
+      setRows((curr) =>
+        curr.map((r) => (r.platform === row.platform ? { ...r, toggles: previous } : r)),
+      );
+      if (err instanceof ApiError && err.status === 401) {
+        setAuthGate(true);
+      } else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+        const msg = (err.body as { message?: unknown }).message;
+        setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsToggleError'));
+      } else {
+        setError(tr('integrationsToggleError'));
+      }
+    } finally {
+      setBusyToggle(null);
+    }
+  }
+
   function platformTitle(row: Row): string {
     const key = PLATFORM_LABEL[row.platform];
     return key ? tr(key) : row.label;
@@ -193,6 +253,7 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
         {rows.map((row) => {
           const soon = isComingSoon(row);
           const busy = busyPlatform === row.platform;
+          const showToggles = !soon && (row.platform === 'instagram' || row.platform === 'facebook');
           return (
             <View key={row.platform} style={styles.card}>
               <View style={styles.head}>
@@ -208,23 +269,35 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
               </View>
               {soon ? (
                 <Text style={styles.soonHint}>{tr('comingSoon')}</Text>
-              ) : row.connected ? (
-                <PrimaryButton
-                  label={tr('disconnect')}
-                  onPress={() => void disconnectPlatform(row)}
-                  loading={busy}
-                  disabled={busyPlatform !== null}
-                  variant="danger"
-                />
               ) : (
-                <PrimaryButton
-                  label={tr('connect')}
-                  onPress={() =>
-                    void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
-                  }
-                  loading={busy}
-                  disabled={busyPlatform !== null}
-                />
+                <>
+                  {showToggles ? (
+                    <ChannelCapabilityToggles
+                      toggles={defaultToggles(row)}
+                      busyKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
+                      disabled={busyPlatform !== null || busyToggle !== null}
+                      onToggle={(key, value) => void setToggle(row, key, value)}
+                    />
+                  ) : null}
+                  {row.connected ? (
+                    <PrimaryButton
+                      label={tr('disconnect')}
+                      onPress={() => void disconnectPlatform(row)}
+                      loading={busy}
+                      disabled={busyPlatform !== null || busyToggle !== null}
+                      variant="danger"
+                    />
+                  ) : (
+                    <PrimaryButton
+                      label={tr('connect')}
+                      onPress={() =>
+                        void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
+                      }
+                      loading={busy}
+                      disabled={busyPlatform !== null || busyToggle !== null}
+                    />
+                  )}
+                </>
               )}
             </View>
           );
