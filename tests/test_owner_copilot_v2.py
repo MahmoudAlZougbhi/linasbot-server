@@ -11,8 +11,8 @@ import pytest
 from services.owner_copilot_v2.attachments import store_attachment, validate_upload
 from services.owner_copilot_v2.choices import make_choice_set, resolve_choice, setup_tone_choices
 from services.owner_copilot_v2.creative_policy import looks_like_creative_request
-from services.owner_copilot_v2.flags import flags_snapshot, owner_model_name
-from services.owner_copilot_v2.memory import pack_recent_messages
+from services.owner_copilot_v2.flags import flags_snapshot, owner_model_name, owner_recent_history_tokens
+from services.owner_copilot_v2.memory import estimate_messages_tokens, pack_recent_messages
 from services.owner_copilot_v2.models import StreamEvent
 from services.owner_copilot_v2.stream_protocol import encode_sse
 from services.owner_copilot_v2.tool_schemas import tool_names
@@ -24,6 +24,16 @@ def test_owner_model_is_sol() -> None:
     assert snap["OWNER_COPILOT_V2"] is True
     assert snap["OWNER_COPILOT_WRITES"] is False
     assert snap["OWNER_COPILOT_META_ACTIONS"] is False
+    assert snap["LINAS_OWNER_RECENT_HISTORY_TOKENS"] == 4000
+
+
+def test_owner_recent_history_tokens_default_4000(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LINAS_OWNER_RECENT_HISTORY_TOKENS", raising=False)
+    assert owner_recent_history_tokens() == 4000
+    monkeypatch.setenv("LINAS_OWNER_RECENT_HISTORY_TOKENS", "4000")
+    assert owner_recent_history_tokens() == 4000
+    monkeypatch.setenv("LINAS_OWNER_RECENT_HISTORY_TOKENS", "5000")
+    assert owner_recent_history_tokens() == 5000
 
 
 def test_creative_keywords_detected() -> None:
@@ -40,6 +50,20 @@ def test_token_aware_memory_not_fixed_8x600() -> None:
     # No hard 600-char trim on kept messages
     if recent:
         assert len(recent[-1]["content"]) > 100
+
+
+def test_default_recent_history_pack_uses_4000(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Logged-in owner read window is 4000 tokens — not CONTEXT_BUDGET÷3 (~2000)."""
+    monkeypatch.delenv("LINAS_OWNER_RECENT_HISTORY_TOKENS", raising=False)
+    monkeypatch.setenv("LINAS_OWNER_CONTEXT_BUDGET", "6000")
+    # Each message ≈ 1004 tokens (1000 chars/4 + 4 overhead) → 4 fit in 4000, 5th would exceed.
+    msgs = [{"role": "user", "content": ("x" * 4000)}] * 10
+    recent, _summary = pack_recent_messages(msgs)
+    assert owner_recent_history_tokens() == 4000
+    assert estimate_messages_tokens(recent) <= 4000
+    # With budget÷3 (~2000) only ~2 would fit; with 4000 we keep more.
+    assert len(recent) >= 3
+    assert len(recent) <= 4
 
 
 def test_choices_max_three_and_single_use() -> None:

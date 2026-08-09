@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.owner_copilot_v2.flags import owner_context_token_budget
+from services.owner_copilot_v2.flags import owner_recent_history_tokens
 
 
 def _approx_tokens(text: str) -> int:
@@ -18,9 +18,10 @@ def pack_recent_messages(
 ) -> tuple[list[dict[str, str]], str | None]:
     """Select a recent-turn window by token budget (not fixed 8×600).
 
+    Default budget is LINAS_OWNER_RECENT_HISTORY_TOKENS (4000).
     Returns (recent_messages, optional_summary_of_older).
     """
-    budget = int(token_budget or owner_context_token_budget() // 3)
+    budget = int(token_budget if token_budget is not None else owner_recent_history_tokens())
     msgs = list(messages or [])
     if not msgs:
         return [], None

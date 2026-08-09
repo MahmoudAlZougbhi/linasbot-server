@@ -11,7 +11,7 @@ from services.owner_copilot_v2.cards import card_from_tool
 from services.owner_copilot_v2.choices import choices_from_tool_result, make_choice_set
 from services.owner_copilot_v2.confirm_path import run_confirm_path
 from services.owner_copilot_v2.creative_policy import creative_refusal_message, looks_like_creative_request
-from services.owner_copilot_v2.flags import owner_context_token_budget, owner_copilot_v2_enabled, owner_model_name
+from services.owner_copilot_v2.flags import owner_copilot_v2_enabled, owner_model_name, owner_recent_history_tokens
 from services.owner_copilot_v2.memory import pack_recent_messages
 from services.owner_copilot_v2.models import ChatChoice, OwnerV2TurnResult, StreamEvent
 from services.owner_copilot_v2.provider import iter_sol_text_deltas, sol_chat_completion
@@ -63,7 +63,7 @@ def _build_messages(
 ) -> list[dict[str, Any]]:
     recent, summary = pack_recent_messages(
         context.get("recent_messages_raw") or context.get("recent_messages"),
-        token_budget=owner_context_token_budget() // 3,
+        token_budget=owner_recent_history_tokens(),
     )
     parts = [
         SYSTEM_V2,

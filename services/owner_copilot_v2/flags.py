@@ -53,11 +53,24 @@ def owner_max_output_tokens() -> int:
 
 
 def owner_context_token_budget() -> int:
+    """Overall owner turn context budget (system + tools + history overhead)."""
     raw = (os.getenv("LINAS_OWNER_CONTEXT_BUDGET") or "6000").strip()
     try:
         return max(1500, min(32000, int(raw)))
     except ValueError:
         return 6000
+
+
+def owner_recent_history_tokens() -> int:
+    """Logged-in Owner Copilot recent chat-history read window (what the model reads).
+
+    Explicit env — not an opaque fraction of LINAS_OWNER_CONTEXT_BUDGET.
+    """
+    raw = (os.getenv("LINAS_OWNER_RECENT_HISTORY_TOKENS") or "4000").strip()
+    try:
+        return max(500, min(32000, int(raw)))
+    except ValueError:
+        return 4000
 
 
 def flags_snapshot() -> dict[str, object]:
@@ -70,4 +83,5 @@ def flags_snapshot() -> dict[str, object]:
         "LINAS_GUEST_MODEL": guest_model_name_v2(),
         "LINAS_OWNER_MAX_OUTPUT_TOKENS": owner_max_output_tokens(),
         "LINAS_OWNER_CONTEXT_BUDGET": owner_context_token_budget(),
+        "LINAS_OWNER_RECENT_HISTORY_TOKENS": owner_recent_history_tokens(),
     }
