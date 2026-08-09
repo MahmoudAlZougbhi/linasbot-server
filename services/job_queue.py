@@ -29,6 +29,7 @@ class JobQueue:
         self._redis = None
         self.backend = "in_process"
         self.production_ready = False
+        self._init_error: str | None = None
         if redis_url():
             try:
                 from services.queues.redis_backend import RedisQueueBackend
@@ -41,9 +42,7 @@ class JobQueue:
                     raise
                 self._init_error = str(exc)
         elif redis_required():
-            self._init_error = "REDIS_URL required in production"
-        else:
-            self._init_error = None
+            self._init_error = "REDIS_URL / LINAS_REQUIRE_REDIS set but REDIS_URL missing"
 
     def enqueue(
         self,
