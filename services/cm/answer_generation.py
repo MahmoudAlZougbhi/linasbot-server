@@ -74,7 +74,13 @@ class UsageAccumulator:
 def _build_system_prompt(packet: AnswerPacket) -> str:
     lines: list[str] = []
     identity = packet.identity
-    lines.append(f"You are {identity.assistant_name}, the AI assistant for {identity.clinic_name}.")
+    assistant = (identity.assistant_name or "").strip() or "the business assistant"
+    business = (identity.clinic_name or "").strip() or "this business"
+    lines.append(f"You are {assistant}, the AI assistant for {business}.")
+    lines.append(
+        "Use only the identity and facts in this packet. "
+        "Do not invent another brand, clinic, city, doctor, or phone number."
+    )
     if identity.identity_summary:
         lines.append(identity.identity_summary)
     if identity.advanced_instructions:

@@ -26,10 +26,9 @@ def test_default_provider_name_is_openai_when_unset(monkeypatch: pytest.MonkeyPa
     assert pin.model == OPENAI_EMBEDDING_MODEL_DEFAULT
 
 
-def test_hash_allowed_in_test_harness_when_legacy(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_hash_allowed_in_test_harness(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("CM_EMBEDDING_PROVIDER", "hash")
-    monkeypatch.setenv("CM_RUNTIME_MODE", "legacy")
     assert assert_embedding_provider_allowed() == "hash"
 
 
@@ -37,26 +36,16 @@ def test_hash_forbidden_outside_test_harness(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.setenv("CM_EMBEDDING_PROVIDER", "hash")
-    monkeypatch.setenv("CM_RUNTIME_MODE", "legacy")
     with pytest.raises(HashEmbeddingForbiddenError, match="test-only"):
         assert_embedding_provider_allowed()
 
 
-def test_hash_forbidden_in_published_mode_even_in_tests(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "test")
-    monkeypatch.setenv("CM_EMBEDDING_PROVIDER", "hash")
-    monkeypatch.setenv("CM_RUNTIME_MODE", "published")
-    with pytest.raises(HashEmbeddingForbiddenError, match="CM_RUNTIME_MODE=published"):
-        assert_embedding_provider_allowed()
-
-
 @pytest.mark.asyncio
-async def test_embed_texts_rejects_hash_in_published_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_embed_texts_allows_hash_only_in_test_harness(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("CM_EMBEDDING_PROVIDER", "hash")
-    monkeypatch.setenv("CM_RUNTIME_MODE", "published")
-    with pytest.raises(HashEmbeddingForbiddenError):
-        await embed_texts(["laser price"])
+    vectors = await embed_texts(["laser price"])
+    assert vectors and vectors[0]
 
 
 def test_published_embedding_pin_rejects_hash() -> None:
@@ -65,10 +54,9 @@ def test_published_embedding_pin_rejects_hash() -> None:
 
 
 @pytest.mark.asyncio
-async def test_published_search_rejects_hash_index_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Index built with hash under legacy/test must not be searchable in published mode."""
+async def test_production_search_rejects_hash_index_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Index built with hash under test must not be searchable outside the test harness."""
     monkeypatch.setenv("CM_EMBEDDING_PROVIDER", "hash")
-    monkeypatch.setenv("CM_RUNTIME_MODE", "legacy")
     monkeypatch.setenv("ENVIRONMENT", "test")
     tenant_id = "cm_embed_policy_hash_index"
     sections = {
@@ -89,7 +77,8 @@ async def test_published_search_rejects_hash_index_manifest(monkeypatch: pytest.
     )
     assert manifest["embedding"]["provider"] == "hash"
 
-    monkeypatch.setenv("CM_RUNTIME_MODE", "published")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     with pytest.raises(PublishedEmbeddingError):
         await search(tenant_id=tenant_id, index_id="idx_hash_policy", query="price")
 

@@ -60,10 +60,31 @@ DEFAULT_REFUSE_TEMPLATES: dict[str, str] = {
     "fr": "Ce sujet ne fait pas partie des services que nous proposons actuellement, mais je peux vous aider pour autre chose.",
 }
 
-_HANDOFF_TEMPLATES: dict[str, str] = {
-    "ar": "للحجز أو للتواصل مع فريقنا، تواصل معنا على واتساب فقط:\n{phone}\nhttps://wa.me/{digits}",
-    "en": "For booking or to reach our team, please contact us on WhatsApp only:\n{phone}\nhttps://wa.me/{digits}",
-    "fr": "Pour réserver ou contacter notre équipe, écrivez-nous uniquement sur WhatsApp :\n{phone}\nhttps://wa.me/{digits}",
+_HANDOFF_TEMPLATES: dict[str, dict[str, str]] = {
+    "whatsapp": {
+        "ar": "للحجز أو للتواصل مع فريقنا، تواصل معنا على واتساب فقط:\n{value}\nhttps://wa.me/{digits}",
+        "en": "For booking or to reach our team, please contact us on WhatsApp only:\n{value}\nhttps://wa.me/{digits}",
+        "fr": "Pour réserver ou contacter notre équipe, écrivez-nous uniquement sur WhatsApp :\n{value}\nhttps://wa.me/{digits}",
+        "franco": "للحجز أو للتواصل مع فريقنا، تواصل معنا على واتساب فقط:\n{value}\nhttps://wa.me/{digits}",
+    },
+    "phone": {
+        "ar": "للتواصل مع فريقنا، اتصل على: {value}",
+        "en": "To reach our team, call: {value}",
+        "fr": "Pour joindre notre équipe, appelez : {value}",
+        "franco": "للتواصل مع فريقنا، اتصل على: {value}",
+    },
+    "email": {
+        "ar": "للتواصل مع فريقنا، راسلنا على البريد: {value}",
+        "en": "To reach our team, email: {value}",
+        "fr": "Pour joindre notre équipe, écrivez à : {value}",
+        "franco": "للتواصل مع فريقنا، راسلنا على البريد: {value}",
+    },
+    "url": {
+        "ar": "للتواصل أو الحجز، استخدم هذا الرابط: {value}",
+        "en": "To book or reach our team, use this link: {value}",
+        "fr": "Pour réserver ou nous joindre, utilisez ce lien : {value}",
+        "franco": "للتواصل أو الحجز، استخدم هذا الرابط: {value}",
+    },
 }
 
 
@@ -74,10 +95,14 @@ def _refuse_reply(topic: Any, response_language: str) -> str:
     return DEFAULT_REFUSE_TEMPLATES.get(response_language, DEFAULT_REFUSE_TEMPLATES["en"])
 
 
-def _handoff_reply(phone: str, response_language: str) -> str:
-    template = _HANDOFF_TEMPLATES.get(response_language, _HANDOFF_TEMPLATES["en"])
-    digits = "".join(ch for ch in phone if ch.isdigit())
-    return template.format(phone=phone, digits=digits)
+def _handoff_reply(destination_type: str, destination_value: str, response_language: str) -> str:
+    dtype = (destination_type or "whatsapp").strip().lower()
+    if dtype not in _HANDOFF_TEMPLATES:
+        dtype = "url" if "://" in (destination_value or "") else "whatsapp"
+    by_lang = _HANDOFF_TEMPLATES[dtype]
+    template = by_lang.get(response_language) or by_lang["en"]
+    digits = "".join(ch for ch in destination_value if ch.isdigit())
+    return template.format(value=destination_value, digits=digits or "0")
 
 
 def _detect_booking_or_human(message: str) -> str | None:
@@ -123,17 +148,29 @@ async def prepare_response(
         )
 
     # Step 6 — Handoff only for explicit booking/human intent, only if not restricted.
+    from services.cm.actions import ACTION_HUMAN_HANDOFF, action_enabled
+    from services.cm.schemas import ActionsSection
+
     handoff_intent = _detect_booking_or_human(message)
-    if handoff_intent:
+    actions_section = ActionsSection.model_validate(sections.get("actions") or {})
+    if handoff_intent and action_enabled(actions_section, ACTION_HUMAN_HANDOFF):
         resolution = resolve_handoff(handoff_policy)
-        if resolution.contact_phone_e164:
+        if resolution.destination_value:
             return PipelineOutcome(
                 stop=True,
-                reply=_handoff_reply(resolution.contact_phone_e164, response_language),
+                reply=_handoff_reply(
+                    resolution.destination_type or "whatsapp",
+                    resolution.destination_value,
+                    response_language,
+                ),
                 reason="handoff",
-                metadata={"handoff_intent": handoff_intent, "matched_row_id": resolution.matched_row_id},
+                metadata={
+                    "handoff_intent": handoff_intent,
+                    "matched_row_id": resolution.matched_row_id,
+                    "destination_type": resolution.destination_type,
+                },
             )
-        # No confidently-resolvable contact — fall through rather than invent a number.
+        # No confidently-resolvable contact — fall through rather than invent a destination.
 
     # Steps 7–9 — Exact then semantic FAQ. A hit skips the Interpreter and the generative call.
     tiered_match = await local_qa_service.find_match_with_tier(message, detected_language)
@@ -177,8 +214,11 @@ async def prepare_response(
     interpreted = await interpret_query(message, services=services_section, restricted=restricted_policy)
 
     # Step 11 — Structured facts from the published version.
+    from services.cm.off_days import resolve_off_day_facts
+
     facts: list[AnswerFact] = []
     facts.extend(resolve_service_catalog_facts(services_section))
+    facts.extend(resolve_off_day_facts(sections.get("off_days") or {}))
     if interpreted.service_id:
         facts.extend(resolve_service_facts(services_section, interpreted.service_id))
         facts.extend(resolve_price_facts(sections.get("prices") or {}, interpreted.service_id))

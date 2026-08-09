@@ -127,8 +127,8 @@ const Wallet = () => {
           Prepaid input and output AI tokens for your workspace ({user?.tenantId || 'tenant'}).
           Each AI call uses input tokens for what the model reads and output tokens for what it writes.
           Detailed per-message spend and reasons are in{' '}
-          <Link to="/activity-flow" className="font-medium text-primary-700 underline">
-            Interaction Logs
+          <Link to="/content-managers" className="font-medium text-primary-700 underline">
+            Content Managers
           </Link>
           .
         </p>
@@ -229,8 +229,8 @@ const Wallet = () => {
               Aggregated from Interaction Logs. Per-message input/output tokens and $ are on each log entry.
             </p>
           </div>
-          <Link to="/activity-flow" className="text-sm font-medium text-primary-700 underline">
-            Open Interaction Logs
+          <Link to="/content-managers" className="text-sm font-medium text-primary-700 underline">
+            Open Content Managers
           </Link>
         </div>
 

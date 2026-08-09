@@ -114,6 +114,14 @@ async def list_meta_connections(request: Request) -> Any:
             channel=binding.channel,
             asset_id=binding.asset_id,
         )
+        from services.cm.actions import comments_enforcement_decision
+
+        comment_decision = comments_enforcement_decision(
+            tenant_id=binding.tenant_id,
+            channel=binding.channel,
+            per_asset_enabled=bool(comment_setting.enabled),
+            granted_scopes=set(public.get("granted_permissions") or []),
+        )
         public["comment_replies"] = {
             **comment_setting.public_dict(),
             "scopes_granted": sorted(
@@ -121,6 +129,11 @@ async def list_meta_connections(request: Request) -> Any:
             ),
             "scopes_required": sorted(required_comment_scopes(binding.channel)),
             "scopes_ready": credential_has_comment_scopes(binding, registry),
+            "cm_action_enabled": bool(comment_decision["readiness"].get("cm_action_enabled")),
+            "cm_enforcement_allow": bool(comment_decision["allow"]),
+            "cm_enforcement_reason": comment_decision["reason"],
+            "readiness": comment_decision["readiness"],
+            "live_verified": False,
         }
         connections.append(public)
 
@@ -273,11 +286,8 @@ async def activate_meta_connection(binding_id: str, request: Request) -> Any:
     if binding.app_key not in {APP_A_KEY, APP_B_KEY} or binding.status not in {"testing", "inactive"}:
         raise HTTPException(status_code=409, detail="Connection is not eligible for activation")
     if session.tenant_id != "linas":
-        from services.cm.constants import cm_runtime_mode
         from services.cm.version_store import load_published_content
 
-        if cm_runtime_mode() != "published":
-            raise HTTPException(status_code=409, detail="Tenant AI content is not in published mode")
         try:
             load_published_content(session.tenant_id)
         except Exception as exc:
@@ -396,6 +406,20 @@ async def update_meta_comment_replies(
                 "after the new permissions are added to Login Configuration 1057282070324984."
             ),
         )
+    if enabled:
+        from services.cm.actions import comments_action_enabled
+        from services.cm.constants import tenant_uses_cm_runtime
+
+        if tenant_uses_cm_runtime(binding.tenant_id) and not comments_action_enabled(
+            binding.tenant_id, binding.channel
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Enable the matching Comments action in Content Management → Actions "
+                    "and publish before turning on per-asset comment replies."
+                ),
+            )
 
     previous = get_comment_reply_setting(
         tenant_id=binding.tenant_id,
@@ -444,9 +468,22 @@ async def update_meta_comment_replies(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     public = binding.public_dict()
+    from services.cm.actions import comments_enforcement_decision
+
+    comment_decision = comments_enforcement_decision(
+        tenant_id=binding.tenant_id,
+        channel=binding.channel,
+        per_asset_enabled=bool(updated_setting.enabled),
+        granted_scopes=None,
+    )
     public["comment_replies"] = {
         **updated_setting.public_dict(),
         "scopes_required": sorted(required_comment_scopes(binding.channel)),
         "scopes_ready": credential_has_comment_scopes(binding, registry),
+        "cm_action_enabled": bool(comment_decision["readiness"].get("cm_action_enabled")),
+        "cm_enforcement_allow": bool(comment_decision["allow"]),
+        "cm_enforcement_reason": comment_decision["reason"],
+        "readiness": comment_decision["readiness"],
+        "live_verified": False,
     }
     return {"success": True, "comment_replies": public["comment_replies"]}

@@ -61,12 +61,28 @@ def _session_tenant(session: SessionRecord) -> str:
 async def cm_meta(request: Request) -> Any:
     session = require_session(request)
     status = publish_status()
+    tenant_id = _session_tenant(session)
+    from services.cm.constants import (
+        tenant_allows_legacy_bridge,
+        tenant_has_published_cm,
+        tenant_uses_cm_runtime,
+    )
+
+    if tenant_uses_cm_runtime(tenant_id):
+        tenant_runtime = "published"
+    elif tenant_allows_legacy_bridge(tenant_id):
+        tenant_runtime = "legacy_bridge"
+    else:
+        tenant_runtime = "unpublished"
+
     return {
         "success": True,
-        "tenant_id": _session_tenant(session),
+        "tenant_id": tenant_id,
         "sections": list(CM_SECTIONS),
         "publish_enabled": bool(status.get("publish_enabled")),
         "runtime_mode": cm_runtime_mode(),
+        "tenant_runtime": tenant_runtime,
+        "has_published_content": tenant_has_published_cm(tenant_id),
         "publish_disabled_message": status.get("message"),
         "faq_canonical": cm_faq_canonical(),
     }

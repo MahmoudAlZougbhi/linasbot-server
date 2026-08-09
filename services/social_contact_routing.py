@@ -197,10 +197,10 @@ def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str = "linas") -
     if override:
         return override
 
-    # CM AI CONTROL PLANE — published mode reads phones from published CM handoff only.
-    from services.cm.constants import cm_runtime_mode
+    # CM AI CONTROL PLANE — published handoff contacts when this tenant uses CM runtime.
+    from services.cm.constants import tenant_uses_cm_runtime
 
-    if cm_runtime_mode() == "published":
+    if tenant_uses_cm_runtime(tenant):
         try:
             from services.cm.schemas import HandoffPolicy
             from services.cm.version_store import load_published_content
@@ -209,8 +209,14 @@ def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str = "linas") -
             policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
             contact_id = env_name.strip().lower()
             for contact in policy.contacts:
-                if contact.id == contact_id and (contact.phone_e164 or "").strip():
-                    return contact.phone_e164.strip()
+                if contact.id != contact_id:
+                    continue
+                dtype, value = contact.resolved_destination()
+                if not value:
+                    return None
+                if dtype in {"whatsapp", "phone"}:
+                    return value
+                return None
         except Exception as exc:
             print(f"[social_contact_routing] published handoff resolve failed for {env_name}: {exc}")
             return None

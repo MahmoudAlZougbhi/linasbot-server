@@ -3,36 +3,23 @@ import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   HomeIcon,
-  BeakerIcon,
   FolderIcon,
-  ChatBubbleLeftRightIcon,
-  ArrowDownTrayIcon,
-  ArrowPathRoundedSquareIcon,
-  BellIcon,
   Cog6ToothIcon,
   XMarkIcon,
   SparklesIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CurrencyDollarIcon,
-  PhotoIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../contexts/AuthContext";
 import { hasPermission } from "../../utils/permissions";
 import { buildDisplayLabel } from "../../utils/buildInfo";
 import { authFetch } from "../../utils/authFetch";
 
-// Navigation items with permission keys.
-// FAQ authoring is only under Content Managers → FAQ (no separate Bot Training nav).
+// Wave 1: Testing Lab, Smart Messaging, Live Chat, Interaction Logs, Create Post,
+// and Live Chat APK are disabled/hidden for ALL tenants (legacy code retained).
 const navigationItems = [
   { name: "Dashboard", href: "/app", icon: HomeIcon, permissionKey: "dashboard" },
-  {
-    name: "Testing Lab",
-    href: "/testing",
-    icon: BeakerIcon,
-    badge: "Active",
-    permissionKey: "testing",
-  },
   {
     name: "Content Managers",
     href: "/content-managers",
@@ -40,47 +27,11 @@ const navigationItems = [
     badge: "New",
     permissionKey: "contentManagers",
   },
-  {
-    name: "Interaction Logs",
-    href: "/activity-flow",
-    icon: ArrowPathRoundedSquareIcon,
-    badge: "New",
-    permissionKey: "activityFlow",
-  },
-  {
-    name: "Live Chat",
-    href: "/live-chat",
-    icon: ChatBubbleLeftRightIcon,
-    badge: "Active",
-    permissionKey: "liveChat",
-  },
-  {
-    name: "Smart Messaging",
-    href: "/smart-messaging",
-    icon: BellIcon,
-    badge: "Active",
-    permissionKey: "smartMessaging",
-  },
-  {
-    name: "Create Post",
-    href: "/social-posts",
-    icon: PhotoIcon,
-    badge: "New",
-    permissionKey: "settings",
-  },
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, permissionKey: "settings" },
   { name: "Token Wallet", href: "/wallet", icon: CurrencyDollarIcon, permissionKey: "settings" },
 ];
 
-const downloadItems = [
-  {
-    name: "Download Live Chat APK",
-    href: "/downloads/live-chat-android.apk",
-    icon: ArrowDownTrayIcon,
-    badge: "Android",
-    permissionKey: "liveChat",
-  },
-];
+const downloadItems = [];
 
 /** @param {{ collapsed: boolean; onToggleCollapse: () => void; onClose?: () => void }} props */
 const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
@@ -182,7 +133,7 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
                   <h1 className="text-xl font-bold gradient-text font-display">
                     Linas AI
                   </h1>
-                  <p className="text-sm text-slate-500">Laser Center Bot</p>
+                  <p className="text-sm text-slate-500">Business AI Platform</p>
                 </div>
               )}
             </motion.div>

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from services.cm.constants import cm_runtime_mode
-
 _CAPTION_SYSTEM_RULES = (
     "You are drafting a short social media post caption for a business. "
     "Write 1-3 concise sentences suitable for Facebook or Instagram. "
@@ -28,7 +26,9 @@ async def generate_social_caption(
         f"Topic or brief: {(topic or 'general business update').strip()}\n"
     )
 
-    if cm_runtime_mode() == "published":
+    from services.cm.constants import tenant_uses_cm_runtime
+
+    if tenant_uses_cm_runtime(tenant_id):
         from services.cm.answer_generation import (
             UsageAccumulator,
             generate_answer_with_usage,

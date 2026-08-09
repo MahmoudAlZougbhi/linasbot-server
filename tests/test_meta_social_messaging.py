@@ -816,15 +816,16 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
         from pathlib import Path
 
         source = Path("services/chat_response_service.py").read_text(encoding="utf-8")
+        features = Path("services/product_features.py").read_text(encoding="utf-8")
         for blocked_tool in (
-            '"submit_booking_intent"',
-            '"create_appointment"',
-            '"update_appointment_date"',
-            '"check_next_appointment"',
-            '"get_customer_by_phone"',
+            "submit_booking_intent",
+            "create_appointment",
+            "update_appointment_date",
+            "check_next_appointment",
+            "get_customer_by_phone",
         ):
-            self.assertIn(blocked_tool, source)
-        self.assertIn("if social_channel", source)
+            self.assertIn(blocked_tool, features)
+        self.assertIn("LEGACY_BOOKING_TOOL_NAMES", source)
         self.assertIn("Never create, change, cancel, confirm, list, or check an appointment", source)
 
 

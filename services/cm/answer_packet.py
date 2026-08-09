@@ -11,7 +11,8 @@ PLATFORM_RULES: tuple[str, ...] = (
     "Never invent a business fact that is not present in this packet's facts/chunks.",
     "Never offer, price, or schedule a restricted service.",
     "Respond only in the packet's response_language.",
-    "A WhatsApp handoff number may only be stated if it matches a packet 'handoff_phone' fact.",
+    "A handoff destination may only be stated if it matches a packet 'handoff_destination' or 'handoff_phone' fact.",
+    "Never invent or reuse another brand's name, phone, city, or clinic details (including Linas, Marwa, Beirut, Antelias).",
 )
 
 

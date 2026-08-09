@@ -10,7 +10,6 @@ from typing import Any
 
 import httpx
 
-from services.cm.constants import cm_runtime_mode
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
@@ -170,7 +169,9 @@ async def _generate_comment_reply_text(
         f"Customer comment: {comment_text.strip()}\n"
     )
 
-    if cm_runtime_mode() == "published":
+    from services.cm.constants import tenant_uses_cm_runtime
+
+    if tenant_uses_cm_runtime(tenant_id):
         from services.cm.answer_generation import (
             UsageAccumulator,
             generate_answer_with_usage,
@@ -247,8 +248,19 @@ async def process_meta_comment_event(
         channel=binding.channel,
         asset_id=binding.asset_id,
     )
-    if not reply_setting.enabled:
-        return CommentReplyResult(status="ignored", reason="feature_disabled")
+
+    from services.cm.actions import comments_enforcement_decision
+
+    # Scope readiness is reported via Meta connections API / evaluate_comments_meta_readiness.
+    # Webhook enforcement gates on published CM actions + per-asset switch (scopes enforced at enable-time).
+    decision = comments_enforcement_decision(
+        tenant_id=binding.tenant_id,
+        channel=binding.channel,
+        per_asset_enabled=bool(reply_setting.enabled),
+        granted_scopes=None,
+    )
+    if not decision["allow"]:
+        return CommentReplyResult(status="ignored", reason=str(decision["reason"]))
 
     rate_key = _rate_limit_key(binding)
     if not _rate_limit_allow(rate_key):

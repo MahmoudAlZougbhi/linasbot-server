@@ -20,6 +20,7 @@ from openai.types.shared_params.response_format_json_object import ResponseForma
 
 import config
 from prompt_templates import CUSTOMER_STATUS_TOKEN
+from services.product_features import LEGACY_BOOKING_TOOL_NAMES
 
 # Import all API functions from api_integrations
 from services import api_integrations
@@ -3239,10 +3240,9 @@ async def get_bot_chat_response(
 
     # Get the core system instruction from utils.py, with conditional price list loading.
     # When custom_knowledge_context is provided (from dynamic retrieval), ADDITIVE to KB/Style.
-    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
-    from services.cm.constants import cm_runtime_mode
-
-    _published = cm_runtime_mode() == "published"
+    # Legacy path only reaches here for the temporary linas bridge (Wave 6 removes it).
+    # Per-tenant published CM answers never enter this function.
+    _published = False
     system_instruction_core = get_system_instruction(
         user_id,
         current_preferred_lang,
@@ -3652,32 +3652,7 @@ async def get_bot_chat_response(
             tools=cast(
                 list[ChatCompletionToolParam],
                 get_openai_tools_schema(
-                    excluded_tool_names={
-                        "update_customer_profile",
-                        "submit_booking_intent",
-                        "create_appointment",
-                        "update_appointment_date",
-                        "update_paused_appointment",
-                        "edit_appointment",
-                        "resume_appointment",
-                        "sync_appointment_agreed_price",
-                        "send_appointment_reminders",
-                        "check_next_appointment",
-                        "get_appointment_details",
-                        "check_appointment_payment",
-                        "get_customer_sessions",
-                        "get_sessions_count_by_phone",
-                        "move_client_branch",
-                        "get_customer_by_phone",
-                        "check_customer_gender",
-                        "create_customer",
-                        "add_customer_note",
-                        "get_all_customers",
-                        "get_clients_without_today",
-                        "get_missed_appointments",
-                    }
-                    if social_channel
-                    else None
+                    excluded_tool_names=set(LEGACY_BOOKING_TOOL_NAMES)
                 ),
             ),
             tool_choice="auto",

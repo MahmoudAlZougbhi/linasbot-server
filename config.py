@@ -323,24 +323,12 @@ def load_bot_assets() -> None:
     """
     Loads static bot assets (price list, style guide, knowledge base) from persistent storage.
 
-    ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
-    When ``cm_runtime_mode() == "published"``, legacy foundation TXT files are NOT loaded.
-    Published answers use the immutable CM version only (no silent legacy fill).
+    Published CM tenants do not use these files for customer answers. They remain loaded
+    only to support the temporary linas legacy bridge until Wave 6 migration.
     """
     global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE, SYSTEM_PROMPT_TEMPLATE
 
     ensure_dirs()
-
-    # ===== CM AI CONTROL PLANE — published-mode runtime (plan §12) =====
-    from services.cm.constants import cm_runtime_mode
-
-    if cm_runtime_mode() == "published":
-        PRICE_LIST = ""
-        BOT_STYLE_GUIDE = ""
-        CORE_KNOWLEDGE_BASE = ""
-        SYSTEM_PROMPT_TEMPLATE = ""
-        print("[cm-sot] published mode: skipped legacy price_list/style_guide/knowledge_base file load")
-        return
 
     try:
         with open(PRICE_LIST_FILE, encoding="utf-8") as f:

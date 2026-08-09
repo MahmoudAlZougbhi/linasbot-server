@@ -22,6 +22,8 @@ const CmHandoffPage = () => {
       contacts: [
         {
           id: newId("contact"),
+          destination_type: "whatsapp",
+          destination_value: "",
           phone_e164: "",
           label: "",
           branch_id: null,
@@ -73,7 +75,7 @@ const CmHandoffPage = () => {
   return (
     <CmSectionShell
       title="Booking & Human Handoff"
-      description="WhatsApp routing by branch and audience, plus booking/appointment policy notes. WhatsApp inbound AI stays disabled — contacts control Instagram/Facebook handoff only."
+      description="Human-contact destinations (phone, WhatsApp, email, or URL) by branch and audience. WhatsApp inbound AI stays disabled — these contacts are outbound handoff only."
       countLabel={`${contacts.length} contacts · ${matrix.length} routes`}
       loading={draft.loading}
       dirty={draft.dirty}
@@ -129,12 +131,43 @@ const CmHandoffPage = () => {
                 <input className={FIELD_CLASS} value={String(item.label || "")} onChange={(e) => patchContact(String(item.id), { label: e.target.value })} />
               </label>
               <label className="block space-y-1">
-                <span className="text-sm font-medium">WhatsApp number (E.164)</span>
+                <span className="text-sm font-medium">Destination type</span>
+                <select
+                  className={FIELD_CLASS}
+                  value={String(item.destination_type || (item.phone_e164 ? "whatsapp" : "whatsapp"))}
+                  onChange={(e) =>
+                    patchContact(String(item.id), {
+                      destination_type: e.target.value,
+                      phone_e164: e.target.value === "whatsapp" || e.target.value === "phone" ? String(item.destination_value || item.phone_e164 || "") : "",
+                    })
+                  }
+                >
+                  <option value="whatsapp">WhatsApp / wa.me</option>
+                  <option value="phone">Phone</option>
+                  <option value="email">Email</option>
+                  <option value="url">URL</option>
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm font-medium">Destination value</span>
                 <input
                   className={FIELD_CLASS}
-                  value={String(item.phone_e164 || "")}
-                  onChange={(e) => patchContact(String(item.id), { phone_e164: e.target.value })}
-                  placeholder="+9617xxxxxxx"
+                  value={String(item.destination_value || item.phone_e164 || "")}
+                  onChange={(e) => {
+                    const destination_value = e.target.value;
+                    const dtype = String(item.destination_type || "whatsapp");
+                    patchContact(String(item.id), {
+                      destination_value,
+                      phone_e164: dtype === "whatsapp" || dtype === "phone" ? destination_value : "",
+                    });
+                  }}
+                  placeholder={
+                    String(item.destination_type || "whatsapp") === "email"
+                      ? "hello@example.com"
+                      : String(item.destination_type || "whatsapp") === "url"
+                        ? "https://example.com/book"
+                        : "+9617xxxxxxx"
+                  }
                 />
               </label>
               <label className="block space-y-1">

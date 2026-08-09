@@ -81,7 +81,7 @@ def _instagram_comment_payload(
 
 def _binding(
     *,
-    tenant_id: str = "tenant-a",
+    tenant_id: str = "linas",
     channel: str = "facebook",
     asset_id: str = "111",
     page_id: str = "111",
