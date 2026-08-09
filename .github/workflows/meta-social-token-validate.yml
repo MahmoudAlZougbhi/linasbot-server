@@ -43,7 +43,7 @@ jobs:
           META_FACEBOOK_COMMENT_SWITCH_ENABLED: ${{ inputs.facebook_comment_switch_enabled }}
           META_INSTAGRAM_COMMENT_SWITCH_ENABLED: ${{ inputs.instagram_comment_switch_enabled }}
         run: |
-          python scripts/validate_meta_social_token.py
+          PYTHONPATH=${{ github.workspace }} python scripts/validate_meta_social_token.py
           echo "Contract sections:"
           echo "  [baseline-dm] token, page relationship, conversations, page subscribed_apps DM subset"
           echo "  [page-subscription] explicit delivery profile; feed absence is informational when comments disabled"
