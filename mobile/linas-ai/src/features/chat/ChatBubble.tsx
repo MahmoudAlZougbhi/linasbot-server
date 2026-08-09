@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { ChatMessage } from '../../api/types';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { MessageActions } from './MessageActions';
 import { MessageImageThumbs } from './MessageImageThumbs';
 
@@ -47,7 +47,7 @@ export function ChatBubble({ message, onRetry, showActions = true, imageUris }: 
           {hasText ? (
             <Text
               style={[
-                styles.text,
+                isUser ? styles.textUser : styles.textAi,
                 { color: isUser ? colors.bubbleUserText : colors.bubbleAiText },
                 rtl && styles.rtl,
               ]}
@@ -87,10 +87,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg - 2,
     paddingVertical: spacing.md,
   },
-  text: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    lineHeight: 23,
+  textAi: {
+    ...typography.chatAi,
+  },
+  textUser: {
+    ...typography.chatUser,
   },
   rtl: { textAlign: 'right', writingDirection: 'rtl' },
 });

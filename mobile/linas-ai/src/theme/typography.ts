@@ -62,4 +62,16 @@ export const typography = {
     fontSize: 14,
     letterSpacing: 0.3,
   } satisfies TextStyle,
+  /** Linas / AI reply body — larger + clearer than default body. */
+  chatAi: {
+    fontFamily: body,
+    fontSize: 18,
+    lineHeight: 27,
+  } satisfies TextStyle,
+  /** Owner / user message body — intentionally larger than chatAi. */
+  chatUser: {
+    fontFamily: bodyMedium,
+    fontSize: 20,
+    lineHeight: 29,
+  } satisfies TextStyle,
 } as const;
