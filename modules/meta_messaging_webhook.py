@@ -21,6 +21,12 @@ from services.meta_app_registry import (
 )
 from services.meta_comment_events import ResolvedMetaCommentEvent, resolve_registry_comment_events
 from services.meta_comment_replies import process_meta_comment_event
+from services.meta_cross_flow_dedup import (
+    GLOBAL_COMMENT_CLAIM_NAMESPACE,
+    GLOBAL_DM_CLAIM_NAMESPACE,
+    global_comment_claim_key,
+    global_dm_claim_key,
+)
 from services.meta_messaging import (
     InMemoryMessageDeduper,
     get_meta_messaging_settings,
@@ -146,7 +152,11 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     if registry_enabled:
         if signed_app is None:  # pragma: no cover - guarded above
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
-        resolved_events = resolve_registry_events(payload, app_config=signed_app)
+        resolved_events = await resolve_registry_events(
+            payload,
+            app_config=signed_app,
+            auth_flow="facebook_login",
+        )
     else:
         legacy_events = parse_meta_messaging_events(
             payload,
@@ -168,7 +178,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         from services.durable_event_claim import complete_event_claim, release_event_claim
 
         event = resolved.event
-        mid = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{str(event.get('message_id') or '')}"
+        global_key = global_dm_claim_key(event)
         channel = str(event.get("channel") or "unknown").strip().lower()
         _runtime_logger.info(
             "[meta-social] event_processing_started channel=%s app_key=%s",
@@ -178,9 +188,9 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         try:
             await process_meta_social_event(event, resolved.settings)
             await complete_event_claim(
-                "meta_messaging_mid",
-                mid,
-                firestore_collection="meta_messaging_mid_claims",
+                GLOBAL_DM_CLAIM_NAMESPACE,
+                global_key,
+                firestore_collection="meta_social_dm_global_claims",
             )
             _runtime_logger.info(
                 "[meta-social] event_processing_completed channel=%s app_key=%s",
@@ -194,26 +204,27 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
                 type(exc).__name__,
             )
             await release_event_claim(
-                "meta_messaging_mid",
-                mid,
-                firestore_collection="meta_messaging_mid_claims",
+                GLOBAL_DM_CLAIM_NAMESPACE,
+                global_key,
+                firestore_collection="meta_social_dm_global_claims",
             )
             raise
 
     for resolved in resolved_events:
         event = resolved.event
-        mid = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{str(event.get('message_id') or '')}"
-        # Fast local reject for same-process redeliveries
-        if not _message_deduper.claim(mid):
+        global_key = global_dm_claim_key(event)
+        if global_key.endswith(":"):
+            continue
+        if not _message_deduper.claim(global_key):
             duplicates += 1
             continue
         from services.durable_event_claim import try_claim_event
 
         claimed = await try_claim_event(
-            "meta_messaging_mid",
-            mid,
+            GLOBAL_DM_CLAIM_NAMESPACE,
+            global_key,
             ttl_seconds=300.0,
-            firestore_collection="meta_messaging_mid_claims",
+            firestore_collection="meta_social_dm_global_claims",
         )
         if not claimed:
             duplicates += 1
@@ -225,13 +236,16 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     comment_duplicates = 0
     resolved_comment_events: list[ResolvedMetaCommentEvent] = []
     if registry_enabled and signed_app is not None and signed_app.key == APP_A_KEY:
-        resolved_comment_events = resolve_registry_comment_events(payload, app_config=signed_app)
+        resolved_comment_events = resolve_registry_comment_events(
+            payload,
+            app_config=signed_app,
+            auth_flow="facebook_login",
+        )
 
     async def _process_comment_claimed(resolved: ResolvedMetaCommentEvent) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
 
-        comment_id = str(resolved.event.get("comment_id") or "")
-        claim_key = f"{resolved.settings.app_key}:{resolved.binding.binding_id}:{comment_id}"
+        global_key = global_comment_claim_key(resolved.event)
         _runtime_logger.info(
             "[meta-comment] event_processing_started channel=%s tenant=%s",
             resolved.binding.channel,
@@ -240,9 +254,9 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         try:
             result = await process_meta_comment_event(resolved)
             await complete_event_claim(
-                "meta_comment_id",
-                claim_key,
-                firestore_collection="meta_comment_claims",
+                GLOBAL_COMMENT_CLAIM_NAMESPACE,
+                global_key,
+                firestore_collection="meta_social_comment_global_claims",
             )
             _runtime_logger.info(
                 "[meta-comment] event_processing_completed channel=%s status=%s reason=%s",
@@ -257,25 +271,26 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
                 type(exc).__name__,
             )
             await release_event_claim(
-                "meta_comment_id",
-                claim_key,
-                firestore_collection="meta_comment_claims",
+                GLOBAL_COMMENT_CLAIM_NAMESPACE,
+                global_key,
+                firestore_collection="meta_social_comment_global_claims",
             )
             raise
 
     for resolved_comment in resolved_comment_events:
-        comment_id = str(resolved_comment.event.get("comment_id") or "")
-        claim_key = f"{resolved_comment.settings.app_key}:{resolved_comment.binding.binding_id}:{comment_id}"
-        if not _comment_deduper.claim(claim_key):
+        global_key = global_comment_claim_key(resolved_comment.event)
+        if global_key.endswith(":"):
+            continue
+        if not _comment_deduper.claim(global_key):
             comment_duplicates += 1
             continue
         from services.durable_event_claim import try_claim_event
 
         claimed = await try_claim_event(
-            "meta_comment_id",
-            claim_key,
+            GLOBAL_COMMENT_CLAIM_NAMESPACE,
+            global_key,
             ttl_seconds=86400.0,
-            firestore_collection="meta_comment_claims",
+            firestore_collection="meta_social_comment_global_claims",
         )
         if not claimed:
             comment_duplicates += 1

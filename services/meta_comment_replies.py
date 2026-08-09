@@ -13,6 +13,7 @@ import httpx
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
+from services.meta_graph_routing import graph_api_url
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
@@ -132,13 +133,13 @@ async def _comment_has_page_reply(
     client: httpx.AsyncClient,
     *,
     comment_id: str,
-    page_id: str,
+    owner_id: str,
     token: str,
-    graph_version: str,
+    graph_url: str,
 ) -> bool:
     payload = await _graph_get_json(
         client,
-        f"https://graph.facebook.com/{graph_version}/{comment_id}/comments",
+        graph_url,
         token=token,
         params={"fields": "from{id}", "limit": "10"},
     )
@@ -150,7 +151,7 @@ async def _comment_has_page_reply(
             continue
         from_raw = row.get("from")
         from_dict = from_raw if isinstance(from_raw, dict) else {}
-        if str(from_dict.get("id") or "") == page_id:
+        if str(from_dict.get("id") or "") == owner_id:
             return True
     return False
 
@@ -272,13 +273,14 @@ async def process_meta_comment_event(
 
     graph_version = settings.graph_api_version or "v24.0"
     token = settings.page_access_token
+    owner_id = binding.page_id if binding.channel == "facebook" else (binding.instagram_account_id or binding.asset_id)
     async with httpx.AsyncClient(timeout=20.0) as client:
         if await _comment_has_page_reply(
             client,
             comment_id=comment_id,
-            page_id=binding.page_id,
+            owner_id=owner_id,
             token=token,
-            graph_version=graph_version,
+            graph_url=graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/comments"),
         ):
             return CommentReplyResult(status="ignored", reason="human_replied")
 
@@ -305,14 +307,14 @@ async def process_meta_comment_event(
         if binding.channel == "facebook":
             ok, reason, response = await _graph_post_form(
                 client,
-                f"https://graph.facebook.com/{graph_version}/{comment_id}/comments",
+                graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/comments"),
                 token=token,
                 data={"message": reply_text},
             )
         else:
             ok, reason, response = await _graph_post_form(
                 client,
-                f"https://graph.facebook.com/{graph_version}/{comment_id}/replies",
+                graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/replies"),
                 token=token,
                 data={"message": reply_text},
             )

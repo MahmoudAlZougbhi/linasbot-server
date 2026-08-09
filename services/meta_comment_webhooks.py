@@ -6,12 +6,12 @@ import httpx
 
 from services.meta_app_registry import (
     APP_A_KEY,
-    META_COMMENT_SCOPES,
     MetaAppRegistry,
     MetaAssetBinding,
     get_meta_app_configs,
     get_meta_app_registry,
 )
+from services.meta_graph_routing import credential_has_comment_scopes, required_comment_scopes_for_binding
 from services.meta_oauth import MetaOAuthError, _safe_json
 
 PAGE_DM_FIELDS = ("messages", "messaging_postbacks")
@@ -19,20 +19,50 @@ PAGE_COMMENT_FIELDS = ("messages", "messaging_postbacks", "feed")
 INSTAGRAM_APP_DM_FIELDS = ("messages", "messaging_postbacks")
 INSTAGRAM_APP_COMMENT_FIELDS = ("comments", "messages", "messaging_postbacks")
 
+__all__ = [
+    "credential_has_comment_scopes",
+    "ensure_instagram_comment_app_webhook",
+    "ensure_page_comment_webhook_subscription",
+    "required_comment_scopes",
+]
+
 
 def required_comment_scopes(channel: str) -> frozenset[str]:
     if channel == "facebook":
-        return META_COMMENT_SCOPES["facebook"]
-    if channel == "instagram":
-        return META_COMMENT_SCOPES["instagram"]
-    return frozenset()
-
-
-def credential_has_comment_scopes(binding: MetaAssetBinding, registry: MetaAppRegistry | None = None) -> bool:
-    current_registry = registry or get_meta_app_registry()
-    credential = current_registry.get_credential(binding)
-    granted = set(credential.scopes)
-    return required_comment_scopes(binding.channel).issubset(granted)
+        return required_comment_scopes_for_binding(
+            MetaAssetBinding(
+                binding_id="scope-check",
+                tenant_id="scope",
+                channel="facebook",
+                asset_id="",
+                page_id="",
+                instagram_account_id="",
+                app_key=APP_A_KEY,
+                credential_id="",
+                status="active",
+                generation=1,
+                created_at=0.0,
+                updated_at=0.0,
+                auth_flow="facebook_login",
+            )
+        )
+    return required_comment_scopes_for_binding(
+        MetaAssetBinding(
+            binding_id="scope-check",
+            tenant_id="scope",
+            channel="instagram",
+            asset_id="",
+            page_id="",
+            instagram_account_id="",
+            app_key=APP_A_KEY,
+            credential_id="",
+            status="active",
+            generation=1,
+            created_at=0.0,
+            updated_at=0.0,
+            auth_flow="facebook_login",
+        )
+    )
 
 
 async def ensure_page_comment_webhook_subscription(
@@ -45,6 +75,8 @@ async def ensure_page_comment_webhook_subscription(
 
     if binding.app_key != APP_A_KEY:
         raise MetaOAuthError("Comment webhooks are only supported for App A")
+    if binding.auth_flow == "instagram_login":
+        raise MetaOAuthError("Instagram Login comment webhooks are managed via subscribed_apps")
     if binding.channel != "facebook":
         raise MetaOAuthError("Page comment webhooks apply to Facebook bindings only")
     current_registry = registry or get_meta_app_registry()

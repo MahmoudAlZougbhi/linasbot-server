@@ -125,6 +125,7 @@ async def process_meta_social_event(
             account_id=account_id,
             channel=channel,
             graph_api_version=settings.graph_api_version,
+            graph_base_url=settings.graph_base_url,
         )
     try:
         if user_id not in config.user_data_whatsapp:

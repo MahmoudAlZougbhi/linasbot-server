@@ -12,6 +12,10 @@ from fastapi.responses import FileResponse
 from modules.api_security import require_permission
 from modules.core import app
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding, get_meta_app_registry
+from services.meta_graph_routing import required_publish_scopes_for_binding
+from services.meta_instagram_login_capabilities import (
+    binding_ready_for_publish,
+)
 from services.meta_social_caption import generate_social_caption
 from services.meta_social_media_store import (
     media_content_type,
@@ -21,12 +25,7 @@ from services.meta_social_media_store import (
     verify_media_access_token,
 )
 from services.meta_social_post_confirm import SocialPostConfirmError, build_preview, verify_preview_token
-from services.meta_social_publish import (
-    credential_has_publish_scopes,
-    publish_facebook_post,
-    publish_instagram_post,
-    required_publish_scopes,
-)
+from services.meta_social_publish import publish_facebook_post, publish_instagram_post
 
 
 def _tenant_binding(binding_id: str, tenant_id: str) -> MetaAssetBinding:
@@ -48,8 +47,12 @@ def _asset_row(binding: MetaAssetBinding) -> dict[str, Any]:
         public["granted_permissions"] = sorted(credential.scopes)
     except Exception:
         public["granted_permissions"] = []
-    public["publish_scopes_required"] = sorted(required_publish_scopes(binding.channel))
-    public["publish_scopes_ready"] = credential_has_publish_scopes(binding, registry)
+    public["publish_scopes_required"] = sorted(required_publish_scopes_for_binding(binding))
+    try:
+        credential = registry.get_credential(binding)
+        public["publish_scopes_ready"] = binding_ready_for_publish(binding, credential)
+    except Exception:
+        public["publish_scopes_ready"] = False
     return public
 
 
@@ -137,18 +140,19 @@ async def preview_social_post(request: Request, body: dict[str, Any] = Body(defa
     media_id = str(body.get("media_id") or "").strip()
     facebook_binding_id = str(body.get("facebook_binding_id") or "").strip()
     instagram_binding_id = str(body.get("instagram_binding_id") or "").strip()
+    registry = get_meta_app_registry()
 
     if publish_facebook:
         fb_binding = _tenant_binding(facebook_binding_id, session.tenant_id)
         if fb_binding.channel != "facebook":
             raise HTTPException(status_code=400, detail="Invalid Facebook Page selection")
-        if not credential_has_publish_scopes(fb_binding):
+        if not binding_ready_for_publish(fb_binding, registry.get_credential(fb_binding)):
             raise HTTPException(status_code=409, detail="Facebook publish permissions are missing")
     if publish_instagram:
         ig_binding = _tenant_binding(instagram_binding_id, session.tenant_id)
         if ig_binding.channel != "instagram":
             raise HTTPException(status_code=400, detail="Invalid Instagram account selection")
-        if not credential_has_publish_scopes(ig_binding):
+        if not binding_ready_for_publish(ig_binding, registry.get_credential(ig_binding)):
             raise HTTPException(status_code=409, detail="Instagram publish permissions are missing")
         if not media_id:
             raise HTTPException(status_code=400, detail="Instagram posts require an image")

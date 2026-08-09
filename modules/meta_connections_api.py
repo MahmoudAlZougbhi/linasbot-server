@@ -16,6 +16,7 @@ from services.meta_app_registry import (
     APP_B_KEY,
     MetaAssetBinding,
     MetaRegistryError,
+    _bindings_share_exclusive_asset,
     get_meta_app_configs,
     get_meta_app_registry,
     meta_multi_app_registry_enabled,
@@ -27,6 +28,10 @@ from services.meta_comment_webhooks import (
     ensure_page_comment_webhook_subscription,
     required_comment_scopes,
 )
+from services.meta_graph_routing import required_comment_scopes_for_binding
+from services.meta_instagram_login_config import instagram_login_config_status
+from services.meta_instagram_login_oauth import begin_instagram_login, complete_instagram_login
+from services.meta_instagram_login_subscription_recovery import retry_instagram_login_webhook_subscription
 from services.meta_oauth import (
     MetaOAuthError,
     begin_meta_business_login,
@@ -60,8 +65,8 @@ def _active_conflict(binding: MetaAssetBinding) -> MetaAssetBinding | None:
         item
         for item in get_meta_app_registry().list_bindings(include_inactive=False, include_superseded=False)
         if item.binding_id != binding.binding_id
-        and item.channel == binding.channel
-        and item.asset_id == binding.asset_id
+        and item.tenant_id == binding.tenant_id
+        and _bindings_share_exclusive_asset(item, binding)
     ]
     if len(matches) > 1:
         raise MetaRegistryError("Active Meta binding indexes are inconsistent")
@@ -98,6 +103,7 @@ async def list_meta_connections(request: Request) -> Any:
             )
             public["expires_at"] = credential.expires_at
             public["granted_permissions"] = sorted(credential.scopes)
+            public["declined_permissions"] = sorted(credential.declined_scopes)
             if not public.get("authorized_meta_user_id_hash"):
                 from services.meta_app_registry import authorized_meta_user_id_hash
 
@@ -108,6 +114,7 @@ async def list_meta_connections(request: Request) -> Any:
             public["token_status"] = "unavailable"
             public["expires_at"] = None
             public["granted_permissions"] = []
+            public["declined_permissions"] = []
         comment_setting = get_comment_reply_setting(
             tenant_id=binding.tenant_id,
             app_key=binding.app_key,
@@ -125,9 +132,9 @@ async def list_meta_connections(request: Request) -> Any:
         public["comment_replies"] = {
             **comment_setting.public_dict(),
             "scopes_granted": sorted(
-                required_comment_scopes(binding.channel) & set(public.get("granted_permissions") or [])
+                required_comment_scopes_for_binding(binding) & set(public.get("granted_permissions") or [])
             ),
-            "scopes_required": sorted(required_comment_scopes(binding.channel)),
+            "scopes_required": sorted(required_comment_scopes_for_binding(binding)),
             "scopes_ready": credential_has_comment_scopes(binding, registry),
             "cm_action_enabled": bool(comment_decision["readiness"].get("cm_action_enabled")),
             "cm_enforcement_allow": bool(comment_decision["allow"]),
@@ -151,9 +158,16 @@ async def list_meta_connections(request: Request) -> Any:
             },
         )
         bucket["assets"].append(connection)
+    ig_status = instagram_login_config_status()
     return {
         "success": True,
         "registry_enabled": True,
+        "instagram_login_configured": ig_status.configured,
+        "instagram_login_config": {
+            "configured": ig_status.configured,
+            "missing": list(ig_status.missing),
+            "reasons": ig_status.reasons,
+        },
         "apps": [config.public_dict() for config in get_meta_app_configs().values()],
         "connections": connections,
         "authorizations": list(authorizations.values()),
@@ -178,6 +192,45 @@ async def start_meta_connection(
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"success": True, "authorization_url": login_url}
+
+
+@app.post("/api/meta/connections/instagram-login/start")
+async def start_instagram_login_connection(request: Request) -> Any:
+    session = require_permission(request, "settings")
+    try:
+        login_url = begin_instagram_login(
+            tenant_id=session.tenant_id,
+            actor_id=session.user_id or session.email,
+        )
+    except (MetaOAuthError, MetaRegistryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"success": True, "authorization_url": login_url}
+
+
+@app.get("/oauth/instagram/callback")
+async def instagram_login_oauth_callback(
+    code: str = Query(default=""),
+    state: str = Query(default=""),
+    error: str = Query(default=""),
+) -> RedirectResponse:
+    from services.meta_app_registry import MetaOAuthStateError
+
+    if error:
+        query = urlencode({"meta_connection": "cancelled", "meta_flow": "instagram_login"})
+        return RedirectResponse(url=f"/settings?{query}", status_code=303)
+    try:
+        result = await complete_instagram_login(code=code, state=state)
+        query = urlencode(
+            {
+                "meta_connection": "connected",
+                "meta_flow": "instagram_login",
+                "channel": result.binding.channel,
+                "status": result.binding.status,
+            }
+        )
+    except (MetaOAuthError, MetaOAuthStateError, MetaRegistryError):
+        query = urlencode({"meta_connection": "failed", "meta_flow": "instagram_login"})
+    return RedirectResponse(url=f"/settings?{query}", status_code=303)
 
 
 @app.get("/oauth/meta/callback")
@@ -228,6 +281,29 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
     return {"success": True, "connection": updated.public_dict()}
 
 
+@app.post("/api/meta/connections/{binding_id}/instagram-login/retry-webhook")
+async def retry_instagram_login_webhook_setup(binding_id: str, request: Request) -> Any:
+    session = require_permission(request, "settings")
+    binding = _tenant_binding(binding_id, session.tenant_id)
+    if binding.auth_flow != "instagram_login":
+        raise HTTPException(status_code=409, detail="Webhook retry applies only to Instagram Login connections")
+    try:
+        state = await retry_instagram_login_webhook_subscription(
+            binding.binding_id,
+            actor_id=session.user_id or session.email,
+        )
+    except MetaOAuthError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    refreshed = _tenant_binding(binding_id, session.tenant_id)
+    public = refreshed.public_dict()
+    public["webhook_subscription"] = state.public_dict()
+    return {
+        "success": state.ready_for_dm,
+        "connection": public,
+        "webhook_subscription": state.public_dict(),
+    }
+
+
 @app.post("/api/meta/connections/{binding_id}/reconnect")
 async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
     """Re-enable a disconnected first-party (App A) binding when its token is still valid."""
@@ -241,6 +317,11 @@ async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
                 "Reconnect is only for stored Lina Meta app bindings. "
                 "Use Add / Manage Facebook & Instagram to authorize a Page again."
             ),
+        )
+    if binding.auth_flow == "instagram_login":
+        raise HTTPException(
+            status_code=409,
+            detail="Reconnect Instagram Login connections with Connect Instagram.",
         )
     if binding.status not in {"disconnected", "inactive"}:
         raise HTTPException(status_code=409, detail="Connection is already active or cannot be reconnected here")

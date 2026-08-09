@@ -53,6 +53,7 @@ import modules.local_qa_api  # noqa: E402, F401
 import modules.media_api  # noqa: E402, F401
 import modules.meta_compliance  # noqa: E402, F401
 import modules.meta_connections_api  # noqa: E402, F401
+import modules.meta_instagram_login_webhook  # noqa: E402, F401
 import modules.meta_messaging_webhook  # noqa: E402, F401
 import modules.meta_social_posts_api  # noqa: E402, F401
 import modules.qa_api  # noqa: E402, F401

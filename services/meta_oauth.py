@@ -470,7 +470,8 @@ async def disconnect_binding_webhook(
     """Unsubscribe the Page, then retain an encrypted disconnected rollback record."""
 
     current_registry = registry or get_meta_app_registry()
-    await unsubscribe_binding_webhook(binding, registry=current_registry, client=client)
+    if binding.auth_flow != "instagram_login" and binding.page_id:
+        await unsubscribe_binding_webhook(binding, registry=current_registry, client=client)
     return current_registry.set_binding_status(
         binding.binding_id,
         status="disconnected",

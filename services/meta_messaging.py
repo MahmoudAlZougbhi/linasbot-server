@@ -12,6 +12,8 @@ from typing import Any, cast
 
 import httpx
 
+from services.meta_app_registry import get_meta_graph_api_version
+
 
 @dataclass(frozen=True)
 class MetaMessagingSettings:
@@ -26,12 +28,12 @@ class MetaMessagingSettings:
     app_key: str = "linas_first_party"
     tenant_id: str = "linas"
     binding_id: str = ""
+    auth_flow: str = "facebook_login"
+    graph_base_url: str = "https://graph.facebook.com"
 
 
 def get_meta_messaging_settings() -> MetaMessagingSettings:
-    version = (os.getenv("META_GRAPH_API_VERSION") or "v24.0").strip()
-    if not version.startswith("v"):
-        version = f"v{version}"
+    version = get_meta_graph_api_version()
     return MetaMessagingSettings(
         enabled=(os.getenv("META_SOCIAL_MESSAGING_ENABLED") or "false").strip().lower() in {"1", "true", "yes"},
         app_secret=(os.getenv("META_APP_SECRET") or "").strip(),
@@ -80,8 +82,10 @@ def resolve_meta_send_account_id(
 ) -> str:
     """
     Page-linked Messenger API for Instagram uses PAGE_ID/messages with the Page access token.
-    Instagram Login (no Page) falls back to META_INSTAGRAM_ACCOUNT_ID.
+    Instagram Login uses graph.instagram.com /{ig_user_id}/messages per Meta docs.
     """
+    if settings.auth_flow == "instagram_login" and str(channel or "").strip().lower() == "instagram":
+        return settings.instagram_account_id or str(event.get("account_id") or event.get("recipient_id") or "").strip()
     event_account = str(event.get("account_id") or event.get("recipient_id") or "").strip()
     if settings.page_id:
         return settings.page_id
@@ -353,17 +357,19 @@ class MetaMessagingAdapter:
         channel: str,
         graph_api_version: str = "v24.0",
         client: httpx.AsyncClient | None = None,
+        graph_base_url: str = "https://graph.facebook.com",
     ):
         self.access_token = access_token
         self.account_id = account_id
         self.channel = channel
         self.graph_api_version = graph_api_version
+        self.graph_base_url = graph_base_url.rstrip("/")
         self.client = client or httpx.AsyncClient(timeout=20.0)
         self._owns_client = client is None
 
     @property
     def messages_url(self) -> str:
-        return f"https://graph.facebook.com/{self.graph_api_version}/{self.account_id}/messages"
+        return f"{self.graph_base_url}/{self.graph_api_version}/{self.account_id}/messages"
 
     async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = await self.client.post(
@@ -427,7 +433,7 @@ class MetaMessagingAdapter:
         if not pid or not self.access_token:
             return {}
         fields = "name,username" if str(self.channel or "").lower() == "instagram" else "name,first_name,last_name"
-        url = f"https://graph.facebook.com/{self.graph_api_version}/{pid}"
+        url = f"{self.graph_base_url}/{self.graph_api_version}/{pid}"
         try:
             response = await self.client.get(
                 url,

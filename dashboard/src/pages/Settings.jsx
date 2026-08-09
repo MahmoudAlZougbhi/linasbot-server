@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from 'framer-motion';
 import {
   Cog6ToothIcon,
@@ -56,12 +56,37 @@ const Settings = () => {
   const [metaAuthorizations, setMetaAuthorizations] = useState(/** @type {MetaAuthorizationGroup[]} */ ([]));
   const [metaApps, setMetaApps] = useState(/** @type {MetaAppPublicStatus[]} */ ([]));
   const [metaRegistryEnabled, setMetaRegistryEnabled] = useState(false);
+  const [metaInstagramLoginConfigured, setMetaInstagramLoginConfigured] = useState(false);
+  const [metaInstagramLoginMissing, setMetaInstagramLoginMissing] = useState(/** @type {string[]} */ ([]));
   const [metaConnectionError, setMetaConnectionError] = useState(/** @type {string | null} */ (null));
   const [metaConnectionBusy, setMetaConnectionBusy] = useState('');
   const metaOAuthReady = metaApps.some(
     (item) => item.key === 'linas_first_party' && item.enabled && item.oauth_configured
   );
   const canStartMetaConnect = metaOAuthReady && metaConnectionBusy === '';
+  const canStartInstagramLogin = metaInstagramLoginConfigured && metaConnectionBusy === '';
+
+  const loadMetaConnections = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/meta/connections');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMetaConnectionError(data.detail || data.error || `Failed to load Meta connections (${res.status})`);
+        return;
+      }
+      setMetaConnections(Array.isArray(data.connections) ? data.connections : []);
+      setMetaAuthorizations(Array.isArray(data.authorizations) ? data.authorizations : []);
+      setMetaApps(Array.isArray(data.apps) ? data.apps : []);
+      setMetaRegistryEnabled(data.registry_enabled === true);
+      setMetaInstagramLoginConfigured(data.instagram_login_configured === true);
+      setMetaInstagramLoginMissing(
+        Array.isArray(data.instagram_login_config?.missing) ? data.instagram_login_config.missing : [],
+      );
+      setMetaConnectionError(null);
+    } catch (e) {
+      setMetaConnectionError(errorMessage(e) || 'Failed to load Meta connections');
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLinasTenant && activeTab === 'general') {
@@ -113,29 +138,12 @@ const Settings = () => {
         setIntegrationsError(errorMessage(e) || 'Failed to load integrations');
       }
     };
-    const loadMetaConnections = async () => {
-      try {
-        const res = await authFetch('/api/meta/connections');
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          setMetaConnectionError(data.detail || data.error || `Failed to load Meta connections (${res.status})`);
-          return;
-        }
-        setMetaConnections(Array.isArray(data.connections) ? data.connections : []);
-        setMetaAuthorizations(Array.isArray(data.authorizations) ? data.authorizations : []);
-        setMetaApps(Array.isArray(data.apps) ? data.apps : []);
-        setMetaRegistryEnabled(data.registry_enabled === true);
-        setMetaConnectionError(null);
-      } catch (e) {
-        setMetaConnectionError(errorMessage(e) || 'Failed to load Meta connections');
-      }
-    };
     if (isLinasTenant) {
       loadSettings();
       loadIntegrations();
     }
     loadMetaConnections();
-  }, [isLinasTenant]);
+  }, [isLinasTenant, loadMetaConnections]);
 
   // Check if user can manage users
   const canManageUsers = user?.role === 'admin' || user?.resolvedPermissions?.userManagement === true;
@@ -304,6 +312,28 @@ const Settings = () => {
     }
   };
 
+  const handleConnectInstagramLogin = async () => {
+    setMetaConnectionBusy('instagram-login-oauth');
+    try {
+      const res = await authFetch('/api/meta/connections/instagram-login/start', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || typeof data.authorization_url !== 'string') {
+        throw new Error(data.detail || data.error || 'Instagram connection could not be started');
+      }
+      const target = new URL(data.authorization_url);
+      if (target.protocol !== 'https:' || target.hostname !== 'www.instagram.com') {
+        throw new Error('Instagram returned an invalid authorization destination');
+      }
+      window.location.assign(target.toString());
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Instagram connection could not be started');
+      setMetaConnectionBusy('');
+    }
+  };
+
   /** @param {MetaConnectionStatus} connection */
   const handleDisconnectMeta = async (connection) => {
     const assetLabel = connection.page_name
@@ -331,6 +361,26 @@ const Settings = () => {
       toast.success(`${connection.channel === 'facebook' ? 'Facebook' : 'Instagram'} disconnected`);
     } catch (e) {
       toast.error(errorMessage(e) || 'Disconnect failed');
+    } finally {
+      setMetaConnectionBusy('');
+    }
+  };
+
+  const handleRetryInstagramWebhook = async (/** @type {MetaConnectionStatus} */ connection) => {
+    setMetaConnectionBusy(`webhook-${connection.binding_id}`);
+    try {
+      const res = await authFetch(`/api/meta/connections/${connection.binding_id}/instagram-login/retry-webhook`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || data.webhook_subscription?.error || 'Webhook setup could not be retried');
+      }
+      toast.success('Instagram webhook subscription verified');
+      await loadMetaConnections();
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Webhook setup could not be retried');
     } finally {
       setMetaConnectionBusy('');
     }
@@ -432,6 +482,11 @@ const Settings = () => {
       : 'Enable AI replies to Instagram comments';
     const commentBusy = metaConnectionBusy === `comment-${connection.binding_id}`;
     const canConfigureComments = connection.app_key === 'linas_first_party' && connection.status === 'active';
+    const isInstagramLogin = connection.auth_flow === 'instagram_login';
+    const webhookReady = connection.webhook_subscription?.ready_for_dm === true;
+    const connectionLabel = isInstagramLogin
+      ? (webhookReady ? connection.status : 'pending webhook')
+      : connection.status;
 
     return (
     <div key={connection.binding_id} className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm">
@@ -444,6 +499,7 @@ const Settings = () => {
           </div>
           <div className="text-xs text-slate-500">
             {connection.channel === 'facebook' ? 'Facebook Page' : 'Instagram'}
+            {isInstagramLogin ? ' · Instagram Login' : ' · Facebook Login'}
             {' · '}
             ID {connection.asset_id_masked || '***'}
             {connection.page_id_masked && connection.channel === 'instagram'
@@ -451,14 +507,37 @@ const Settings = () => {
               : ''}
           </div>
           <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 capitalize">{connection.status}</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 capitalize">{connectionLabel}</span>
             <span className="rounded-full bg-slate-100 px-2 py-0.5">token {connection.token_status || 'unknown'}</span>
+            {isInstagramLogin ? (
+              <span
+                className={`rounded-full px-2 py-0.5 ${webhookReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}
+                title={
+                  webhookReady
+                    ? `Webhook fields: ${(connection.webhook_subscription?.subscribed_fields || []).join(', ')}`
+                    : connection.webhook_subscription?.error || 'DM webhook subscription is not verified yet'
+                }
+              >
+                webhook {connection.webhook_subscription?.status || 'unknown'}
+              </span>
+            ) : null}
             <span className="rounded-full bg-slate-100 px-2 py-0.5">{connection.app_label || 'App A'}</span>
             <span>connected {formatConnectedAt(connection.connected_at || connection.created_at)}</span>
           </div>
         </div>
         <div className="flex gap-2">
+          {isInstagramLogin && !webhookReady ? (
+            <button
+              type="button"
+              className="btn-secondary px-3 py-1 text-sm"
+              disabled={metaConnectionBusy !== ''}
+              onClick={() => handleRetryInstagramWebhook(connection)}
+            >
+              {metaConnectionBusy === `webhook-${connection.binding_id}` ? 'Retrying…' : 'Retry Setup'}
+            </button>
+          ) : null}
           {connection.app_key === 'linas_first_party'
+          && !isInstagramLogin
           && (connection.status === 'disconnected' || connection.status === 'inactive')
           && connection.token_status === 'valid' ? (
             <button
@@ -923,7 +1002,7 @@ const Settings = () => {
                 <div>
                   <h3 className="font-semibold text-blue-900">Meta business messaging</h3>
                   <p className="mt-1 text-sm text-blue-800">
-                    Connect one or more Facebook Pages and linked professional Instagram accounts. Tokens stay encrypted on the server and are never shown here.
+                    Connect Facebook Pages with Facebook Login for Business, or connect Instagram professional accounts directly with Instagram Login. Tokens stay encrypted on the server and are never shown here.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -940,6 +1019,19 @@ const Settings = () => {
                   >
                     {metaConnectionBusy === 'meta-oauth' ? 'Opening Meta…' : 'Add / Manage Facebook & Instagram'}
                   </button>
+                  <button
+                    type="button"
+                    className="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!canStartInstagramLogin}
+                    title={
+                      canStartInstagramLogin
+                        ? 'Connect an Instagram professional account with Instagram Login (no Facebook Page required)'
+                        : `Requires Instagram Login configuration: ${metaInstagramLoginMissing.join(', ') || 'META_INSTAGRAM_LOGIN_APP_SECRET and META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN'}`
+                    }
+                    onClick={() => handleConnectInstagramLogin()}
+                  >
+                    {metaConnectionBusy === 'instagram-login-oauth' ? 'Opening Instagram…' : 'Connect Instagram'}
+                  </button>
                 </div>
               </div>
               {metaConnectionError ? (
@@ -947,6 +1039,14 @@ const Settings = () => {
               ) : null}
               {!metaRegistryEnabled ? (
                 <p className="mt-3 text-xs text-blue-700">Multi-app onboarding is staged but not enabled on this deployment.</p>
+              ) : null}
+              {metaRegistryEnabled && !metaInstagramLoginConfigured ? (
+                <p className="mt-3 text-xs text-amber-800">
+                  Connect Instagram is disabled until ops configure{' '}
+                  <code className="font-mono">META_INSTAGRAM_LOGIN_APP_SECRET</code> and{' '}
+                  <code className="font-mono">META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN</code>
+                  {metaInstagramLoginMissing.length > 0 ? ` (missing: ${metaInstagramLoginMissing.join(', ')})` : ''}.
+                </p>
               ) : null}
               {metaRegistryEnabled && !metaOAuthReady ? (
                 <p className="mt-3 text-xs text-amber-800">

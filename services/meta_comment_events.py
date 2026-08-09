@@ -12,8 +12,16 @@ from services.meta_app_registry import (
     MetaAppConfig,
     MetaAppRegistry,
     MetaAssetBinding,
+    MetaBindingCredential,
     get_meta_app_registry,
 )
+from services.meta_graph_routing import build_messaging_settings_for_binding
+from services.meta_instagram_login_capabilities import (
+    binding_ready_for_comments,
+    facebook_login_binding_superseded_for_capability,
+    select_instagram_binding_for_capability,
+)
+from services.meta_instagram_login_config import AuthFlow, instagram_login_app_id
 from services.meta_messaging import MetaMessagingSettings
 
 MetaCommentChannel = Literal["facebook", "instagram"]
@@ -61,16 +69,11 @@ def _parse_facebook_comment_changes(
             comment_id = str(value.get("comment_id") or value.get("id") or "").strip()
             post_id = str(value.get("post_id") or value.get("parent_id") or "").strip()
             parent_id = str(value.get("parent_id") or "").strip()
-            if parent_id and parent_id != post_id and parent_id != comment_id:
-                # Nested reply to another comment — still a new comment event.
-                pass
             from_raw = value.get("from")
             from_dict = from_raw if isinstance(from_raw, dict) else {}
             author_id = str(from_dict.get("id") or "").strip()
             text = str(value.get("message") or value.get("text") or "").strip()
-            if not comment_id or not author_id:
-                continue
-            if not text:
+            if not comment_id or not author_id or not text:
                 continue
             events.append(
                 {
@@ -152,64 +155,102 @@ def parse_meta_comment_events(
     return _parse_instagram_comment_changes(payload, instagram_account_id=instagram_account_id)
 
 
+def _prepare_comment_binding(
+    binding: MetaAssetBinding,
+    *,
+    app_config: MetaAppConfig,
+    registry: MetaAppRegistry,
+) -> tuple[MetaAssetBinding, MetaBindingCredential] | None:
+    credential = registry.get_credential(binding)
+    if binding.auth_flow == "facebook_login" and credential.token_app_id != app_config.app_id:
+        return None
+    if binding.auth_flow == "instagram_login" and credential.token_app_id != instagram_login_app_id():
+        return None
+    if credential.expires_at and credential.expires_at <= int(time.time()):
+        return None
+    if facebook_login_binding_superseded_for_capability(binding, "comments", registry=registry):
+        return None
+    if not binding_ready_for_comments(binding, credential):
+        return None
+    return binding, credential
+
+
 def resolve_registry_comment_events(
     payload: dict[str, Any],
     *,
     app_config: MetaAppConfig,
     registry: MetaAppRegistry | None = None,
+    auth_flow: AuthFlow | None = None,
 ) -> list[ResolvedMetaCommentEvent]:
-    """Resolve comment webhook payloads to active App A bindings only."""
+    """Resolve comment webhook payloads to active App A bindings."""
 
     if app_config.key != APP_A_KEY:
         return []
     current_registry = registry or get_meta_app_registry()
-    resolved: list[ResolvedMetaCommentEvent] = []
-    claimed: set[tuple[str, str]] = set()
-    for binding in current_registry.get_active_bindings_for_app(app_config.key):
-        if binding.status != "active":
+    bindings = [
+        binding
+        for binding in current_registry.get_active_bindings_for_app(app_config.key)
+        if binding.status == "active" and (auth_flow is None or binding.auth_flow == auth_flow)
+    ]
+    by_comment_id: dict[str, list[tuple[MetaAssetBinding, MetaBindingCredential, dict[str, Any]]]] = {}
+    for binding in bindings:
+        prepared = _prepare_comment_binding(binding, app_config=app_config, registry=current_registry)
+        if prepared is None:
             continue
-        credential = current_registry.get_credential(binding)
-        if credential.token_app_id != app_config.app_id:
-            continue
-        if credential.expires_at and credential.expires_at <= int(time.time()):
-            continue
-        settings = MetaMessagingSettings(
-            enabled=True,
-            app_secret=app_config.app_secret,
-            page_id=binding.page_id,
-            page_access_token=credential.access_token,
-            instagram_account_id=binding.instagram_account_id,
-            verify_token=app_config.verify_token,
-            graph_api_version=app_config.graph_api_version,
-            app_id=app_config.app_id,
-            app_key=app_config.key,
-            tenant_id=binding.tenant_id,
-            binding_id=binding.binding_id,
-        )
+        active_binding, credential = prepared
         events = parse_meta_comment_events(
             payload,
-            channel=binding.channel,
-            page_id=binding.page_id,
-            instagram_account_id=binding.instagram_account_id,
+            channel=active_binding.channel,
+            page_id=active_binding.page_id,
+            instagram_account_id=active_binding.instagram_account_id or active_binding.asset_id,
         )
         for event in events:
-            if str(event.get("channel") or "") != binding.channel:
+            if str(event.get("channel") or "") != active_binding.channel:
                 continue
-            event_asset = binding.instagram_account_id if binding.channel == "instagram" else binding.page_id
-            if event_asset != binding.asset_id:
+            event_asset = (
+                active_binding.instagram_account_id if active_binding.channel == "instagram" else active_binding.page_id
+            )
+            if event_asset != active_binding.asset_id:
                 continue
             comment_id = str(event.get("comment_id") or "")
-            key = (binding.binding_id, comment_id)
-            if not comment_id or key in claimed:
+            if not comment_id:
                 continue
-            claimed.add(key)
-            tagged = dict(event)
-            tagged.update(
-                {
-                    "tenant_id": binding.tenant_id,
-                    "meta_app_key": app_config.key,
-                    "meta_binding_id": binding.binding_id,
-                }
+            by_comment_id.setdefault(comment_id, []).append((active_binding, credential, event))
+
+    resolved: list[ResolvedMetaCommentEvent] = []
+    for _comment_id, options in by_comment_id.items():
+        instagram_options = [item for item in options if item[0].channel == "instagram"]
+        facebook_options = [item for item in options if item[0].channel == "facebook"]
+        chosen: tuple[MetaAssetBinding, MetaBindingCredential, dict[str, Any]] | None = None
+        if instagram_options:
+            selected = select_instagram_binding_for_capability(
+                [binding for binding, _, _ in instagram_options],
+                "comments",
+                registry=current_registry,
             )
-            resolved.append(ResolvedMetaCommentEvent(event=tagged, settings=settings, binding=binding))
+            if selected is not None:
+                for binding, credential, event in instagram_options:
+                    if binding.binding_id == selected.binding_id:
+                        chosen = (binding, credential, event)
+                        break
+        elif facebook_options:
+            chosen = facebook_options[0]
+        if chosen is None:
+            continue
+        binding, credential, event = chosen
+        settings = build_messaging_settings_for_binding(
+            binding,
+            credential=credential,
+            app_config=app_config,
+        )
+        tagged = dict(event)
+        tagged.update(
+            {
+                "tenant_id": binding.tenant_id,
+                "meta_app_key": app_config.key,
+                "meta_binding_id": binding.binding_id,
+                "meta_auth_flow": binding.auth_flow,
+            }
+        )
+        resolved.append(ResolvedMetaCommentEvent(event=tagged, settings=settings, binding=binding))
     return resolved
