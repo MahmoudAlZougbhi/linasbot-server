@@ -203,9 +203,21 @@ def test_meta_capability_matrix_truthful() -> None:
     from services.integration_capabilities import list_tenant_integration_status
 
     rows = list_tenant_integration_status("linas")
-    meta = next(r for r in rows if r["platform"] == "meta")
-    comment = meta["capabilities"]["comment_reply"]
-    assert comment["supported_in_code"] is True
-    assert comment["live_verified"] is False
-    publish = meta["capabilities"]["content_publish"]
-    assert publish["live_verified"] is False
+    platforms = {r["platform"] for r in rows}
+    assert "instagram" in platforms
+    assert "facebook" in platforms
+    assert "meta" not in platforms
+    for platform in ("instagram", "facebook"):
+        row = next(r for r in rows if r["platform"] == platform)
+        assert row["coming_soon"] is False
+        assert row["connectable"] is True
+        comment = row["capabilities"]["comment_reply"]
+        assert comment["supported_in_code"] is True
+        assert comment["live_verified"] is False
+        publish = row["capabilities"]["content_publish"]
+        assert publish["live_verified"] is False
+    for platform in ("tiktok", "snapchat"):
+        row = next(r for r in rows if r["platform"] == platform)
+        assert row["coming_soon"] is True
+        assert row["connectable"] is False
+        assert row["connected"] is False

@@ -63,6 +63,7 @@ import modules.mobile_auth_api  # noqa: E402, F401
 import modules.mobile_integrations_api  # noqa: E402, F401
 import modules.mobile_stt_api  # noqa: E402, F401
 import modules.owner_ai_api  # noqa: E402, F401
+import modules.owner_notifications_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
 import modules.qa_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401

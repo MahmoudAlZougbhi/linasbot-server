@@ -117,11 +117,14 @@ async def tool_read_integrations(*, tenant_id: str, role: str) -> ToolResult:
     del role
     from services.integration_capabilities import list_tenant_integration_status
 
-    return ToolResult(
-        ok=True,
-        name="read_integrations",
-        data={"integrations": list_tenant_integration_status(tenant_id)},
-    )
+    # Comments are not a product surface — do not expose comment_* caps to System Copilot.
+    rows: list[dict[str, Any]] = []
+    for row in list_tenant_integration_status(tenant_id):
+        caps = row.get("capabilities") or {}
+        if isinstance(caps, dict):
+            caps = {k: v for k, v in caps.items() if not str(k).lower().startswith("comment")}
+        rows.append({**row, "capabilities": caps})
+    return ToolResult(ok=True, name="read_integrations", data={"integrations": rows})
 
 
 async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str = "") -> ToolResult:

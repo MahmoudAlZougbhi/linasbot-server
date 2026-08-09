@@ -9,7 +9,7 @@ export type ControlArea =
   | 'settings'
   | 'dashboard'
   | 'livechat'
-  | 'comments'
+  | 'notifications'
   | 'owner';
 
 export type ControlItem = {
@@ -30,25 +30,25 @@ export const CONTROL_ITEMS: ControlItem[] = [
   {
     id: 'livechat',
     title: 'Live Chat',
-    subtitle: 'Operator inbox (ops)',
+    subtitle: 'Customer WhatsApp inbox',
     group: 'operate',
   },
   {
-    id: 'comments',
-    title: 'Comments',
-    subtitle: 'Not live-verified yet',
+    id: 'notifications',
+    title: 'Notifications',
+    subtitle: 'Human request & escalation alerts',
     group: 'operate',
   },
   {
     id: 'integrations',
     title: 'Integrations',
-    subtitle: 'Meta readiness (truthful)',
+    subtitle: 'Instagram & Facebook',
     group: 'operate',
   },
   {
     id: 'create',
-    title: 'Create Post',
-    subtitle: 'Creative Studio',
+    title: 'Creative Studio',
+    subtitle: 'Full studio workspace',
     group: 'grow',
   },
   {
@@ -71,8 +71,8 @@ export const CONTROL_ITEMS: ControlItem[] = [
   },
   {
     id: 'subscription',
-    title: 'Billing',
-    subtitle: 'Plan & entitlements',
+    title: 'Subscription',
+    subtitle: 'Plans $24.99–$250 & entitlements',
     group: 'account',
   },
   {

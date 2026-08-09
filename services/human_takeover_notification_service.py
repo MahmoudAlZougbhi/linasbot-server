@@ -209,11 +209,14 @@ class HumanTakeoverNotificationService:
         conversation_id: str | None = None,
         settings_mobile_numbers: str | None = None,
         extra_details: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+        channel: str | None = None,
     ) -> dict[str, Any]:
         """
         Unified AI->Human handoff flow:
         1) Notifies configured admin numbers
         2) Writes an audit event with notification outcome
+        3) Persists an in-app owner alert (Linas AI Notifications inbox)
         """
         if settings_mobile_numbers is None:
             from services.settings_service import settings_service
@@ -247,10 +250,35 @@ class HumanTakeoverNotificationService:
             "human_handover_audit", user_id or customer_phone or "unknown_user", user_gender or "unknown", audit_details
         )
 
+        owner_alert = None
+        try:
+            from services.owner_alert_service import owner_alert_service
+
+            resolved_tenant = tenant_id
+            resolved_channel = channel
+            if extra_details:
+                if not resolved_tenant:
+                    resolved_tenant = extra_details.get("tenant_id")
+                if not resolved_channel:
+                    resolved_channel = extra_details.get("channel")
+            owner_alert = owner_alert_service.emit_handoff(
+                tenant_id=resolved_tenant,
+                customer_name=customer_name,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                channel=resolved_channel,
+                escalation_reason=escalation_reason,
+                last_message=last_message,
+                trigger_source=trigger_source,
+            )
+        except Exception as alert_err:
+            print(f"⚠️ Failed to persist owner alert for handoff: {alert_err}")
+
         return {
             "success": notification_result.get("success", False),
             "notification_result": notification_result,
             "audit_event": "human_handover_audit",
+            "owner_alert_id": (owner_alert or {}).get("id"),
         }
 
 

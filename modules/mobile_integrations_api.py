@@ -2,20 +2,86 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import Request
+from fastapi import Body, HTTPException, Request
+from fastapi.responses import JSONResponse
 
-from modules.api_security import require_session
+from modules.api_security import require_permission, require_session, user_has_permission
 from modules.core import app
+from services.channel_capability_toggles import (
+    ChannelToggleError,
+    attach_channel_toggles,
+    set_channel_toggle,
+    supported_platforms,
+)
 from services.credit_ledger_service import credit_ledger_service
 from services.integration_capabilities import list_tenant_integration_status
+
+ToggleKey = Literal["dm", "comments"]
+
+
+def _without_comment_capabilities(integrations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Strip comment_* capability-matrix jargon from mobile rows (not the toggles field)."""
+    out: list[dict[str, Any]] = []
+    for row in integrations:
+        caps = row.get("capabilities") or {}
+        if isinstance(caps, dict):
+            caps = {k: v for k, v in caps.items() if not str(k).lower().startswith("comment")}
+        out.append({**row, "capabilities": caps})
+    return out
 
 
 @app.get("/api/mobile/integrations")
 async def mobile_integrations(request: Request) -> Any:
     session = require_session(request)
-    return {"success": True, "integrations": list_tenant_integration_status(session.tenant_id)}
+    rows = list_tenant_integration_status(session.tenant_id)
+    rows = _without_comment_capabilities(rows)
+    rows = attach_channel_toggles(rows, tenant_id=session.tenant_id)
+    return {"success": True, "integrations": rows}
+
+
+@app.patch("/api/mobile/integrations/{platform}/toggles")
+async def mobile_integration_toggles(
+    platform: str,
+    request: Request,
+    body: dict[str, Any] = Body(default={}),
+) -> Any:
+    """Enable/disable channel capabilities (CM Actions + comment assets). No Comments hub."""
+    session = require_permission(request, "contentManagers")
+    if not user_has_permission(session, "contentPublish"):
+        raise HTTPException(status_code=403, detail="contentPublish permission required to apply toggles")
+
+    platform_key = (platform or "").strip().lower()
+    if platform_key not in supported_platforms():
+        raise HTTPException(status_code=404, detail="Unknown platform")
+
+    if "dm" in body and "comments" in body:
+        raise HTTPException(status_code=400, detail="Set one toggle per request (dm or comments)")
+    if "dm" in body:
+        toggle: ToggleKey = "dm"
+        enabled = bool(body.get("dm"))
+    elif "comments" in body:
+        toggle = "comments"
+        enabled = bool(body.get("comments"))
+    else:
+        raise HTTPException(status_code=400, detail="Body must include dm or comments boolean")
+
+    try:
+        toggles = await set_channel_toggle(
+            tenant_id=session.tenant_id,
+            platform=platform_key,
+            toggle=toggle,
+            enabled=enabled,
+            actor=session.user_id or session.email or "mobile",
+        )
+    except ChannelToggleError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "error": exc.code, "message": exc.message},
+        )
+
+    return {"success": True, "platform": platform_key, "toggles": toggles}
 
 
 @app.get("/api/mobile/usage")

@@ -1,107 +1,324 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  AppState,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { z } from 'zod';
 
-import { apiFetch } from '../../api/client';
+import { ApiError, apiFetch } from '../../api/client';
+import { tokenStore } from '../../auth/tokenStore';
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { StatusChip } from '../../components/StatusChip';
+import { useI18n } from '../../i18n/LanguageContext';
+import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts, radii, spacing } from '../../theme';
+import { AuthGateModal } from '../auth/AuthGateModal';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import {
+  ChannelCapabilityToggles,
+  type ChannelToggles,
+} from './ChannelCapabilityToggles';
 
-const CapSchema = z
-  .object({
-    level: z.string().optional(),
-    supported_in_code: z.boolean().optional(),
-    live_verified: z.boolean().optional(),
-    notes: z.string().optional(),
-  })
-  .passthrough();
-
-const Schema = z.object({
-  success: z.literal(true),
-  integrations: z.array(
-    z.object({
-      platform: z.string(),
-      label: z.string(),
-      connected: z.boolean(),
-      capabilities: z.record(z.string(), z.union([z.string(), CapSchema])),
-    }),
-  ),
+const TogglesSchema = z.object({
+  dm: z.boolean(),
+  comments: z.boolean(),
 });
 
-type Props = { onBack: () => void };
+const RowSchema = z.object({
+  platform: z.string(),
+  label: z.string(),
+  connected: z.boolean(),
+  coming_soon: z.boolean().optional(),
+  connectable: z.boolean().optional(),
+  binding_ids: z.array(z.string()).optional(),
+  toggles: TogglesSchema.optional(),
+  capabilities: z.record(z.string(), z.unknown()).optional(),
+});
 
-function capTone(value: unknown): 'ok' | 'warn' | 'soon' | 'neutral' {
-  if (typeof value === 'string') {
-    if (value === 'live' || value === 'connected') return 'ok';
-    if (value.includes('coming')) return 'soon';
-    return 'neutral';
-  }
-  if (value && typeof value === 'object') {
-    const cap = value as z.infer<typeof CapSchema>;
-    if (cap.live_verified) return 'ok';
-    if (cap.level === 'needs_permission') return 'warn';
-    if (cap.level === 'coming_later') return 'soon';
-  }
-  return 'neutral';
+const ListSchema = z.object({
+  success: z.literal(true),
+  integrations: z.array(RowSchema),
+});
+
+const ToggleResponseSchema = z.object({
+  success: z.literal(true),
+  platform: z.string(),
+  toggles: TogglesSchema,
+});
+
+const StartSchema = z.object({
+  success: z.literal(true),
+  authorization_url: z.string().url(),
+});
+
+const DisconnectSchema = z.object({
+  success: z.literal(true),
+});
+
+type Row = z.infer<typeof RowSchema>;
+
+type Props = {
+  onBack: () => void;
+  onRequestLogin?: () => void;
+  onRequestRegister?: () => void;
+};
+
+const PLATFORM_LABEL: Record<string, StringKey> = {
+  instagram: 'platformInstagram',
+  facebook: 'platformFacebook',
+  tiktok: 'platformTikTok',
+  snapchat: 'platformSnapchat',
+};
+
+function isComingSoon(row: Row): boolean {
+  if (row.coming_soon === true) return true;
+  if (row.connectable === false) return true;
+  return row.platform === 'tiktok' || row.platform === 'snapchat';
 }
 
-function statusLabel(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value && typeof value === 'object') {
-    const cap = value as z.infer<typeof CapSchema>;
-    if (cap.live_verified) return 'live';
-    return cap.level ?? 'unavailable';
-  }
-  return 'unavailable';
+function defaultToggles(row: Row): ChannelToggles {
+  return row.toggles ?? { dm: false, comments: false };
 }
 
-export function IntegrationsScreen({ onBack }: Props) {
+export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }: Props) {
+  const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
+  const [busyToggle, setBusyToggle] = useState<{ platform: string; key: 'dm' | 'comments' } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
-  const [rows, setRows] = useState<z.infer<typeof Schema>['integrations']>([]);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [authGate, setAuthGate] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const access = await tokenStore.getAccessToken();
+      if (!access) {
+        setAuthGate(true);
+        setRows([]);
+        setError(null);
+        return;
+      }
+      const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
+      setRows(data.integrations);
+      setError(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setAuthGate(true);
+        setError(null);
+      } else {
+        setError(tr('integrationsLoadError'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [tr]);
 
   useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      try {
-        const data = await apiFetch('/api/mobile/integrations', { schema: Schema });
-        setRows(data.integrations);
-        setError(null);
-      } catch {
-        setError('Could not load integrations.');
-      } finally {
-        setLoading(false);
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void load();
       }
-    })();
-  }, []);
+    });
+    return () => sub.remove();
+  }, [load]);
+
+  async function connectPlatform(platform: 'instagram' | 'facebook') {
+    setBusyPlatform(platform);
+    setError(null);
+    try {
+      const path =
+        platform === 'instagram'
+          ? '/api/meta/connections/instagram-login/start'
+          : '/api/meta/connections/start';
+      const body =
+        platform === 'facebook' ? JSON.stringify({ channel: 'facebook' }) : undefined;
+      try {
+        const started = await apiFetch(path, {
+          method: 'POST',
+          body,
+          schema: StartSchema,
+        });
+        await Linking.openURL(started.authorization_url);
+        return;
+      } catch (firstErr) {
+        // Instagram Login may be unconfigured; use Meta Business Login for the same channel.
+        if (platform === 'instagram') {
+          const started = await apiFetch('/api/meta/connections/start', {
+            method: 'POST',
+            body: JSON.stringify({ channel: 'instagram' }),
+            schema: StartSchema,
+          });
+          await Linking.openURL(started.authorization_url);
+          return;
+        }
+        throw firstErr;
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setAuthGate(true);
+      } else {
+        setError(tr('integrationsActionError'));
+      }
+    } finally {
+      setBusyPlatform(null);
+    }
+  }
+
+  async function disconnectPlatform(row: Row) {
+    const ids = row.binding_ids?.filter(Boolean) ?? [];
+    if (ids.length === 0) {
+      setError(tr('integrationsActionError'));
+      return;
+    }
+    setBusyPlatform(row.platform);
+    setError(null);
+    try {
+      for (const bindingId of ids) {
+        await apiFetch(`/api/meta/connections/${encodeURIComponent(bindingId)}/disconnect`, {
+          method: 'POST',
+          schema: DisconnectSchema,
+        });
+      }
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setAuthGate(true);
+      } else {
+        setError(tr('integrationsActionError'));
+      }
+    } finally {
+      setBusyPlatform(null);
+    }
+  }
+
+  async function setToggle(row: Row, key: 'dm' | 'comments', value: boolean) {
+    const previous = defaultToggles(row);
+    setBusyToggle({ platform: row.platform, key });
+    setError(null);
+    setRows((curr) =>
+      curr.map((r) =>
+        r.platform === row.platform
+          ? { ...r, toggles: { ...defaultToggles(r), [key]: value } }
+          : r,
+      ),
+    );
+    try {
+      const res = await apiFetch(`/api/mobile/integrations/${encodeURIComponent(row.platform)}/toggles`, {
+        method: 'PATCH',
+        body: JSON.stringify({ [key]: value }),
+        schema: ToggleResponseSchema,
+      });
+      setRows((curr) =>
+        curr.map((r) => (r.platform === row.platform ? { ...r, toggles: res.toggles } : r)),
+      );
+    } catch (err) {
+      setRows((curr) =>
+        curr.map((r) => (r.platform === row.platform ? { ...r, toggles: previous } : r)),
+      );
+      if (err instanceof ApiError && err.status === 401) {
+        setAuthGate(true);
+      } else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+        const msg = (err.body as { message?: unknown }).message;
+        setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsToggleError'));
+      } else {
+        setError(tr('integrationsToggleError'));
+      }
+    } finally {
+      setBusyToggle(null);
+    }
+  }
+
+  function platformTitle(row: Row): string {
+    const key = PLATFORM_LABEL[row.platform];
+    return key ? tr(key) : row.label;
+  }
 
   return (
-    <ScreenChrome
-      title="Integrations"
-      subtitle="Truthful Meta readiness — never fake connected"
-      onBack={onBack}
-    >
+    <ScreenChrome title={tr('integrations')} subtitle={tr('integrationsSub')} onBack={onBack}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView contentContainerStyle={styles.list}>
-        {rows.map((row) => (
-          <View key={row.platform} style={styles.card}>
-            <View style={styles.head}>
-              <Text style={styles.cardTitle}>{row.label}</Text>
-              <StatusChip
-                label={row.connected ? 'Connected' : 'Not connected'}
-                tone={row.connected ? 'ok' : 'soon'}
-              />
-            </View>
-            {Object.entries(row.capabilities).map(([key, value]) => (
-              <View key={key} style={styles.capRow}>
-                <Text style={styles.capKey}>{key}</Text>
-                <StatusChip label={statusLabel(value)} tone={capTone(value)} />
+        {rows.map((row) => {
+          const soon = isComingSoon(row);
+          const busy = busyPlatform === row.platform;
+          const showToggles = !soon && (row.platform === 'instagram' || row.platform === 'facebook');
+          return (
+            <View key={row.platform} style={styles.card}>
+              <View style={styles.head}>
+                <Text style={styles.cardTitle}>{platformTitle(row)}</Text>
+                {soon ? (
+                  <StatusChip label={tr('comingSoon')} tone="soon" />
+                ) : (
+                  <StatusChip
+                    label={row.connected ? tr('connected') : tr('notConnected')}
+                    tone={row.connected ? 'ok' : 'neutral'}
+                  />
+                )}
               </View>
-            ))}
-          </View>
-        ))}
+              {soon ? (
+                <Text style={styles.soonHint}>{tr('comingSoon')}</Text>
+              ) : (
+                <>
+                  {showToggles ? (
+                    <ChannelCapabilityToggles
+                      toggles={defaultToggles(row)}
+                      busyKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
+                      disabled={busyPlatform !== null || busyToggle !== null}
+                      onToggle={(key, value) => void setToggle(row, key, value)}
+                    />
+                  ) : null}
+                  {row.connected ? (
+                    <PrimaryButton
+                      label={tr('disconnect')}
+                      onPress={() => void disconnectPlatform(row)}
+                      loading={busy}
+                      disabled={busyPlatform !== null || busyToggle !== null}
+                      variant="danger"
+                    />
+                  ) : (
+                    <PrimaryButton
+                      label={tr('connect')}
+                      onPress={() =>
+                        void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
+                      }
+                      loading={busy}
+                      disabled={busyPlatform !== null || busyToggle !== null}
+                    />
+                  )}
+                </>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
+
+      <AuthGateModal
+        visible={authGate}
+        onClose={() => {
+          setAuthGate(false);
+          onBack();
+        }}
+        onLogin={() => {
+          setAuthGate(false);
+          onRequestLogin?.();
+        }}
+        onRegister={() => {
+          setAuthGate(false);
+          onRequestRegister?.();
+        }}
+      />
     </ScreenChrome>
   );
 }
@@ -114,22 +331,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderColor: colors.border,
     borderWidth: 1,
+    gap: spacing.md,
   },
   head: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
   cardTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 17 },
-  capRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSoft,
-  },
-  capKey: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13, flex: 1 },
+  soonHint: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13 },
   error: { color: colors.danger, marginBottom: spacing.md, fontFamily: fonts.body },
 });

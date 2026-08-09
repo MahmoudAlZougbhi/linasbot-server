@@ -66,13 +66,32 @@ _CM_MARKERS = (
     "handoff",
     "ai basics",
 )
-_CREATIVE_MARKERS = ("create post", "caption", "creative", "image", "reel", "schedule post")
+_CREATIVE_MARKERS = (
+    "create post",
+    "make a post",
+    "caption",
+    "creative",
+    "image",
+    "reel",
+    "schedule post",
+    "بوست",
+    "منشور",
+    "كابشن",
+    "صورة",
+    "فيديو",
+    "compress",
+    "اختصر",
+)
 
 
 def classify_owner_route(user_text: str, *, intent: str | None = None) -> RouteKind:
     if intent in {"propose_cm_patch", "publish_cm", "validate_cm", "read_cm", "approve_cm_patch"}:
         return "owner_complex_cm"
-    if intent in {"read_scheduled_posts"} or any(m in f" {(user_text or '').lower()} " for m in _CREATIVE_MARKERS):
+    if intent in {
+        "read_scheduled_posts",
+        "create_creative_draft",
+        "schedule_creative_draft",
+    } or any(m in f" {(user_text or '').lower()} " for m in _CREATIVE_MARKERS):
         return "creative"
     text = f" {(user_text or '').lower()} "
     if any(m in text for m in _CM_MARKERS):

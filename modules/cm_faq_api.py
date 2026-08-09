@@ -133,6 +133,15 @@ async def cm_faq_from_livechat(request: Request, body: dict[str, Any] = Body(def
         require_permission(request, "contentPublish")
     if not question or not answer:
         raise HTTPException(status_code=400, detail="question and answer are required")
+
+    from services.faq_entitlements import FaqEntitlementError, assert_can_create_faq
+
+    try:
+        assert_can_create_faq(tenant_id)
+    except FaqEntitlementError as exc:
+        status = 403 if exc.code == "FAQ_DISABLED" else 402
+        raise HTTPException(status_code=status, detail={"code": exc.code, **exc.payload}) from exc
+
     try:
         result = await create_faq_pair_from_livechat(
             question=question,

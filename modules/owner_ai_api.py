@@ -158,6 +158,7 @@ async def send_owner_message(conversation_id: str, body: SendMessageBody, reques
         "message": assistant.__dict__ if assistant else None,
         "pending_confirmation": result.pending_confirmation,
         "proposed_patch": result.proposed_patch,
+        "creative_draft": result.creative_draft,
         "route": result.route,
         "context_tokens": result.context_tokens,
         "setup_stage": result.setup_stage,

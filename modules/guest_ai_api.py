@@ -8,7 +8,7 @@ from fastapi import Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from modules.core import app
-from services.guest_ai_service import build_guest_greeting, compose_guest_reply
+from services.guest_ai_service import GuestAIModelError, build_guest_greeting, compose_guest_reply
 from services.guest_chat_limits import (
     GUEST_MAX_QUESTIONS,
     GUEST_MAX_WORDS,
@@ -72,6 +72,10 @@ def _session_payload(session: Any) -> dict[str, Any]:
             for m in session.messages
         ],
     }
+
+
+def _history_payload(session: Any) -> list[dict[str, Any]]:
+    return [{"role": m.role, "content": m.content} for m in session.messages]
 
 
 @app.post("/api/guest-ai/session")
@@ -139,16 +143,30 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
             "code": "GUEST_QUESTION_LIMIT",
             "session": _session_payload(session),
             "message": {
-                "en": "You’ve reached the guest limit (10 questions). Log in or create an account to continue.",
-                "ar": "وصلت إلى حد الضيف (10 أسئلة). سجّل الدخول أو أنشئ حساباً للمتابعة.",
-                "fr": "Limite invité atteinte (10 questions). Connectez-vous ou créez un compte.",
+                "en": "You’ve reached the guest limit (10 questions). Download the Linas AI app and subscribe to continue.",
+                "ar": "وصلت إلى حد الضيف (10 أسئلة). حمّل تطبيق Linas AI واشترك للمتابعة.",
+                "fr": "Limite invité atteinte (10 questions). Téléchargez l’app Linas AI et abonnez-vous pour continuer.",
             },
         }
 
     lang = (body.language or detect_message_language(content)).strip().lower()
     if lang not in {"en", "ar", "fr"}:
         lang = "en"
-    composed = compose_guest_reply(content, language=lang)
+
+    history = _history_payload(session)
+    try:
+        composed = await compose_guest_reply(content, language=lang, history=history)
+    except GuestAIModelError as exc:
+        # Honest failure — do not append a canned sales blurb or consume a question.
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "guest_model_unavailable",
+                "message": "Linas AI is temporarily unavailable. Please try again in a moment.",
+                "reason": str(exc),
+            },
+        ) from exc
+
     # Hard guarantee: no tool execution path exists on guest chat.
     assert composed.get("tools_used") == []
     updated = guest_chat_store.append_turn(
@@ -170,5 +188,6 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
             "tools_used": [],
             "capabilities": composed.get("capabilities") or [],
             "language": composed.get("language"),
+            "model": composed.get("model"),
         },
     }

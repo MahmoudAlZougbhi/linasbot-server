@@ -29,13 +29,18 @@ async def handle_publish_scheduled(job: QueueJob) -> dict[str, Any]:
     from services.integration_capabilities import list_tenant_integration_status
 
     statuses = list_tenant_integration_status(job.tenant_id)
-    meta = next((s for s in statuses if s.get("platform") == "meta"), {})
-    caps = meta.get("capabilities") or {}
-    publish = caps.get("content_publish") or {}
-    if isinstance(publish, dict):
-        live = bool(publish.get("live_verified"))
-    else:
-        live = publish == "connected"
+    live = False
+    for row in statuses:
+        if row.get("platform") not in {"facebook", "instagram", "meta"}:
+            continue
+        caps = row.get("capabilities") or {}
+        publish = caps.get("content_publish") or {}
+        if isinstance(publish, dict):
+            live = bool(publish.get("live_verified"))
+        else:
+            live = publish == "connected"
+        if live:
+            break
     if not live:
         raise PermanentJobError("content_publish not live_verified for tenant")
     raise PermanentJobError("Meta publish provider path not live_verified — job not executed")

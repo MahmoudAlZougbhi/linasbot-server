@@ -109,13 +109,17 @@ CAPABILITIES: tuple[Capability, ...] = (
     ),
     Capability(
         feature="creative_studio",
-        description="Create post drafts in Creative Studio.",
+        description="Create post drafts in main Linas chat (Auto/Compress/Caption/Post/Image).",
         route="create",
         entitlement=None,
         status="available",
-        help_steps=("Open Create Post from Control Center or chat + sheet.",),
-        tools=("read_scheduled_posts",),
-        keywords=("create post", "creative", "caption", "generate"),
+        help_steps=(
+            "Say you want to make a post in chat, or open + → Create Post.",
+            "Pick Auto / Compress / a content task, or describe the post naturally.",
+            "Full Creative Studio remains under Control Center for advanced work.",
+        ),
+        tools=("create_creative_draft", "schedule_creative_draft", "read_scheduled_posts"),
+        keywords=("create post", "creative", "caption", "generate", "بوست", "منشور", "compress"),
         tags=("creative",),
     ),
     Capability(
@@ -188,18 +192,6 @@ CAPABILITIES: tuple[Capability, ...] = (
         tags=("ops", "diagnosis"),
     ),
     Capability(
-        feature="comments",
-        description="Comment automation — code present, not live-verified.",
-        route="comments",
-        entitlement="comment_automation",
-        status="gated",
-        help_steps=("Comments stay gated until Meta App Review + live_verified.",),
-        tools=("read_integrations",),
-        blockers=("Not live-verified; do not claim production comment automation.",),
-        keywords=("comments", "comment reply"),
-        tags=("integrations",),
-    ),
-    Capability(
         feature="users_members",
         description="Workspace members and permissions.",
         route="users",
@@ -250,7 +242,6 @@ _VALID_ROUTES: frozenset[str] = frozenset(
         "settings",
         "dashboard",
         "livechat",
-        "comments",
         "owner",
     }
 )

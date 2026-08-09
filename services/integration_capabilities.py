@@ -101,10 +101,47 @@ SNAP_CAPABILITIES: dict[str, dict[str, Any]] = {
 # Flat level map for load sims / legacy callers (truthful matrix is list_tenant_integration_status).
 META_CAPABILITIES: dict[str, CapabilityLevel] = {key: val["level"] for key, val in _meta_base().items()}
 
+_META_CHANNELS = ("instagram", "facebook")
 
-def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
-    connected = False
-    granted: list[str] = []
+
+def _apply_connection_to_caps(
+    *,
+    connected: bool,
+    granted_scopes: set[str],
+    channel: str,
+) -> dict[str, dict[str, Any]]:
+    """Build capability matrix for one Meta brand channel (internal; not primary mobile UI)."""
+    meta_caps = _meta_base()
+    if not connected:
+        return meta_caps
+
+    for key in ("dm_read", "dm_reply", "webhooks"):
+        meta_caps[key]["level"] = "connected"
+        meta_caps[key]["permission_present"] = True
+        # live_verified remains true only for existing DM path that is already in production.
+        meta_caps[key]["live_verified"] = True
+
+    comment_scopes = {"instagram_manage_comments"} if channel == "instagram" else {"pages_manage_engagement"}
+    publish_scopes = {"instagram_content_publish"} if channel == "instagram" else {"pages_manage_posts"}
+
+    if granted_scopes & comment_scopes:
+        meta_caps["comment_read"]["permission_present"] = True
+        meta_caps["comment_read"]["level"] = "needs_permission"
+        meta_caps["comment_read"]["live_verified"] = False
+        meta_caps["comment_reply"]["permission_present"] = True
+        meta_caps["comment_reply"]["live_verified"] = False
+    if granted_scopes & publish_scopes:
+        meta_caps["content_publish"]["permission_present"] = True
+        meta_caps["content_publish"]["level"] = "needs_permission"
+        meta_caps["content_publish"]["live_verified"] = False
+        meta_caps["content_publish"]["app_review_advanced_access"] = False
+    return meta_caps
+
+
+def _tenant_meta_bindings(tenant_id: str) -> tuple[list[Any], dict[str, set[str]]]:
+    """Return active bindings + per-channel granted scopes for a tenant."""
+    bindings: list[Any] = []
+    granted_by_channel: dict[str, set[str]] = {ch: set() for ch in _META_CHANNELS}
     try:
         from services.meta_app_registry import get_meta_app_registry
 
@@ -114,53 +151,83 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
             for b in registry.list_bindings(include_inactive=False, include_superseded=False)
             if getattr(b, "tenant_id", None) == tenant_id
         ]
-        connected = bool(bindings)
         for b in bindings:
+            channel = str(getattr(b, "channel", "") or "")
+            if channel not in granted_by_channel:
+                continue
             scopes = getattr(b, "granted_scopes", None) or ()
-            granted.extend(str(s) for s in scopes)
+            if scopes:
+                granted_by_channel[channel].update(str(s) for s in scopes)
+                continue
+            try:
+                credential = registry.get_credential(b)
+                granted_by_channel[channel].update(str(s) for s in (credential.scopes or ()))
+            except Exception:
+                continue
     except Exception:
-        connected = False
+        return [], {ch: set() for ch in _META_CHANNELS}
+    return bindings, granted_by_channel
 
-    meta_caps = _meta_base()
-    scope_set = {str(s) for s in granted}
-    if connected:
-        for key in ("dm_read", "dm_reply", "webhooks"):
-            meta_caps[key]["level"] = "connected"
-            meta_caps[key]["permission_present"] = True
-            # live_verified remains true only for existing DM path that is already in production.
-            meta_caps[key]["live_verified"] = True
-        if "instagram_manage_comments" in scope_set or "pages_manage_engagement" in scope_set:
-            meta_caps["comment_read"]["permission_present"] = True
-            meta_caps["comment_read"]["level"] = "needs_permission"
-            meta_caps["comment_read"]["live_verified"] = False
-            meta_caps["comment_reply"]["permission_present"] = True
-            meta_caps["comment_reply"]["live_verified"] = False
-        if "instagram_content_publish" in scope_set or "pages_manage_posts" in scope_set:
-            meta_caps["content_publish"]["permission_present"] = True
-            meta_caps["content_publish"]["level"] = "needs_permission"
-            meta_caps["content_publish"]["live_verified"] = False
-            meta_caps["content_publish"]["app_review_advanced_access"] = False
 
-    return [
-        {
-            "platform": "meta",
-            "label": "Facebook / Instagram",
-            "connected": connected,
-            "capabilities": meta_caps,
-            "granted_scopes": sorted(set(granted)),
-        },
-        {
-            "platform": "tiktok",
-            "label": "TikTok",
-            "connected": False,
-            "capabilities": {k: dict(v) for k, v in TIKTOK_CAPABILITIES.items()},
-            "audit_notes": "Official API capability audit pending Meta stability.",
-        },
-        {
-            "platform": "snapchat",
-            "label": "Snapchat",
-            "connected": False,
-            "capabilities": {k: dict(v) for k, v in SNAP_CAPABILITIES.items()},
-            "audit_notes": "Official API capability audit pending Meta stability.",
-        },
-    ]
+def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
+    """Per-brand integration rows with truthful connection state.
+
+    Primary UI should only surface connected | not_connected | coming_soon.
+    Capability matrix remains for internal/owner-AI consumers — do not dump it in mobile UI.
+    """
+    bindings, granted_by_channel = _tenant_meta_bindings(tenant_id)
+    by_channel: dict[str, list[Any]] = {ch: [] for ch in _META_CHANNELS}
+    for b in bindings:
+        channel = str(getattr(b, "channel", "") or "")
+        if channel in by_channel:
+            by_channel[channel].append(b)
+
+    rows: list[dict[str, Any]] = []
+    for platform, label in (("instagram", "Instagram"), ("facebook", "Facebook")):
+        channel_bindings = by_channel[platform]
+        connected = bool(channel_bindings)
+        binding_ids = [
+            str(getattr(b, "binding_id", "") or "") for b in channel_bindings if getattr(b, "binding_id", None)
+        ]
+        rows.append(
+            {
+                "platform": platform,
+                "label": label,
+                "connected": connected,
+                "coming_soon": False,
+                "connectable": True,
+                "binding_ids": binding_ids,
+                "capabilities": _apply_connection_to_caps(
+                    connected=connected,
+                    granted_scopes=granted_by_channel[platform],
+                    channel=platform,
+                ),
+                "granted_scopes": sorted(granted_by_channel[platform]),
+            }
+        )
+
+    rows.extend(
+        [
+            {
+                "platform": "tiktok",
+                "label": "TikTok",
+                "connected": False,
+                "coming_soon": True,
+                "connectable": False,
+                "binding_ids": [],
+                "capabilities": {k: dict(v) for k, v in TIKTOK_CAPABILITIES.items()},
+                "audit_notes": "Official API capability audit pending Meta stability.",
+            },
+            {
+                "platform": "snapchat",
+                "label": "Snapchat",
+                "connected": False,
+                "coming_soon": True,
+                "connectable": False,
+                "binding_ids": [],
+                "capabilities": {k: dict(v) for k, v in SNAP_CAPABILITIES.items()},
+                "audit_notes": "Official API capability audit pending Meta stability.",
+            },
+        ]
+    )
+    return rows

@@ -171,6 +171,17 @@ async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPat
         lambda **_: {},
     )
 
+    async def _fake_owner_llm(**_kwargs: Any) -> str:
+        return (
+            "I’m your System Copilot. I can help with CM setup, integrations, usage, "
+            "and creative — ask specifically what you need."
+        )
+
+    monkeypatch.setattr(
+        "services.owner_ai_natural_reply.generate_owner_conversational_reply",
+        _fake_owner_llm,
+    )
+
     help_turn = await run_owner_turn(
         tenant_id="t1",
         user_id="u1",

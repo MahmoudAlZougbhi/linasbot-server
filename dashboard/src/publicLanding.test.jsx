@@ -1,6 +1,6 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, Navigate } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { PUBLIC_PATHS, PUBLIC_SITE } from "./constants/publicSite";
 import { PublicLandingLocaleProvider } from "./contexts/PublicLandingLocaleContext";
 import Landing from "./pages/public/Landing";
@@ -18,7 +18,41 @@ vi.mock("./contexts/AuthContext", () => ({
   AuthProvider: ({ children }) => children,
 }));
 
-describe("public SaaS landing routes", () => {
+describe("public marketing landing", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => {
+        if (String(url).includes("/api/guest-ai/session")) {
+          return {
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify({
+                success: true,
+                session: {
+                  id: "guest-test",
+                  questions_used: 0,
+                  questions_remaining: 10,
+                  max_questions: 10,
+                  max_words: 50,
+                  messages: [
+                    {
+                      id: "g1",
+                      role: "assistant",
+                      content: "Hi — I’m Linas, your reply assistant.",
+                      created_at: 1,
+                    },
+                  ],
+                },
+              }),
+          };
+        }
+        return { ok: false, status: 404, text: async () => "{}" };
+      }),
+    );
+  });
+
   const renderLanding = (initial = "/") =>
     render(
       <MemoryRouter initialEntries={[initial]}>
@@ -26,36 +60,34 @@ describe("public SaaS landing routes", () => {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<div>login-page</div>} />
+            <Route path="/register" element={<Navigate to="/#get-app" replace />} />
           </Routes>
         </PublicLandingLocaleProvider>
       </MemoryRouter>
     );
 
-  it("renders public home without login redirect", () => {
+  it("renders marketing home without login or create-account CTAs", async () => {
     renderLanding("/");
 
-    expect(screen.getByRole("heading", { name: PUBLIC_SITE.heroTitle })).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Create Account" })[0]).toHaveAttribute(
-      "href",
-      PUBLIC_PATHS.register
-    );
-    expect(screen.getAllByRole("link", { name: "Log in" })[0]).toHaveAttribute(
-      "href",
-      PUBLIC_PATHS.login
-    );
+    expect(screen.getByRole("heading", { name: PUBLIC_SITE.heroHeadline })).toBeInTheDocument();
+    expect(screen.getAllByText(PUBLIC_SITE.heroTitle).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Create Account" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
     expect(screen.queryByText("login-page")).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /Linas/i })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Page language" })).toBeInTheDocument();
+    expect(screen.getAllByRole("group", { name: "Download Linas AI" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: /Talk to Linas/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/reply assistant/i)).toBeInTheDocument();
+    });
   });
 
-  it("switches mascot speech language with the page language control", async () => {
+  it("switches page language control", async () => {
     renderLanding("/");
-
-    expect(await screen.findByText(/reply assistant/i)).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Page language" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ع" }));
-    expect(await screen.findByText(/مساعدك بالردود/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "FR" }));
-    expect(await screen.findByText(/assistant réponses/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "FR" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("keeps privacy/terms/data-deletion footer targets", () => {

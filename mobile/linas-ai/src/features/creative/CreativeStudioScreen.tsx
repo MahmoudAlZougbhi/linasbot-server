@@ -62,7 +62,7 @@ export function CreativeStudioScreen({ onBack }: Props) {
   }
 
   return (
-    <ScreenChrome title="Create Post" subtitle="Creative Studio" onBack={onBack}>
+    <ScreenChrome title="Creative Studio" subtitle="Full studio workspace" onBack={onBack}>
       <ScrollView horizontal contentContainerStyle={styles.kinds} showsHorizontalScrollIndicator={false}>
         {KINDS.map((item) => {
           const disabled = 'disabled' in item && item.disabled;
