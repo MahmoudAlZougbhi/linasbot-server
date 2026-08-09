@@ -88,9 +88,7 @@ async def run_owner_turn(
     except PermissionError as exc:
         return OwnerTurnResult(reply_text=f"I can’t do that with your role: {exc}")
     except Exception as exc:
-        return OwnerTurnResult(
-            reply_text=f"That tool failed safely without applying changes: {type(exc).__name__}"
-        )
+        return OwnerTurnResult(reply_text=f"That tool failed safely without applying changes: {type(exc).__name__}")
 
     tool_payload = result.to_dict()
     if result.requires_confirmation:

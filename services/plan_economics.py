@@ -119,9 +119,7 @@ class PlanAllowanceRecommendation:
 
 def _text_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     pricing = MODEL_PRICING.get(model) or MODEL_PRICING["gpt-4o-mini"]
-    return (input_tokens / 1_000_000) * float(pricing["input"]) + (
-        output_tokens / 1_000_000
-    ) * float(pricing["output"])
+    return (input_tokens / 1_000_000) * float(pricing["input"]) + (output_tokens / 1_000_000) * float(pricing["output"])
 
 
 def _cost_for_mix(
@@ -240,9 +238,7 @@ def build_economics_report() -> dict[str, Any]:
     plans: list[dict[str, Any]] = []
     for plan_id in ("starter", "growth", "pro", "max"):
         allowance = recommend_allowance(plan_id)
-        scenarios = [
-            usage_scenario(plan_id, allowance, p) for p in (0.25, 0.50, 1.0)
-        ]
+        scenarios = [usage_scenario(plan_id, allowance, p) for p in (0.25, 0.50, 1.0)]
         heavy = usage_scenario(plan_id, allowance, 1.0)
         heavy["label"] = "heavy_100pct_allowance"
         plans.append(

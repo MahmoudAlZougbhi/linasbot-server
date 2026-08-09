@@ -50,7 +50,9 @@ class ModerationResult:
 
 
 class TextModelProvider(Protocol):
-    async def generate(self, *, messages: list[dict[str, str]], model: str, max_tokens: int) -> TextGenerationResult: ...
+    async def generate(
+        self, *, messages: list[dict[str, str]], model: str, max_tokens: int
+    ) -> TextGenerationResult: ...
 
 
 class ImageProvider(Protocol):

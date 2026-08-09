@@ -99,9 +99,7 @@ SNAP_CAPABILITIES: dict[str, dict[str, Any]] = {
 
 
 # Flat level map for load sims / legacy callers (truthful matrix is list_tenant_integration_status).
-META_CAPABILITIES: dict[str, CapabilityLevel] = {
-    key: val["level"] for key, val in _meta_base().items()
-}
+META_CAPABILITIES: dict[str, CapabilityLevel] = {key: val["level"] for key, val in _meta_base().items()}
 
 
 def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:

@@ -57,11 +57,7 @@ def run_scenario(name: str, tenants: int, ops_per_tenant: int, workers: int) -> 
     total = tenants * ops_per_tenant
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [
-            pool.submit(_work, t)
-            for t in range(tenants)
-            for _ in range(ops_per_tenant)
-        ]
+        futures = [pool.submit(_work, t) for t in range(tenants) for _ in range(ops_per_tenant)]
         for fut in as_completed(futures):
             try:
                 latencies.append(fut.result())
