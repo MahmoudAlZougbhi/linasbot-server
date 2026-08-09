@@ -112,17 +112,36 @@ async def get_integration_status() -> Any:
             {
                 "name": "Firebase",
                 "service": "Conversations / Live Chat store",
-                "configured": _env_configured(
-                    "GOOGLE_APPLICATION_CREDENTIALS",
-                    "FIREBASE_CREDENTIALS_PATH",
-                )
-                or os.path.exists("firebase_data.json"),
-                "notes": "Path presence only; credentials never returned",
+                "configured": _firebase_credentials_configured(),
+                "notes": "Aligned with FIRESTORE_SERVICE_ACCOUNT_KEY_PATH / data/firebase_data.json",
             },
         ]
         return {"success": True, "integrations": integrations}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+def _firebase_credentials_configured() -> bool:
+    """Match Live Chat init paths so Settings readiness does not false-report Missing env."""
+    candidates: list[str] = []
+    for name in (
+        "FIRESTORE_SERVICE_ACCOUNT_KEY_PATH",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "FIREBASE_CREDENTIALS_PATH",
+    ):
+        raw = (os.getenv(name) or "").strip()
+        if raw:
+            candidates.append(raw)
+    candidates.extend(
+        [
+            "data/firebase_data.json",
+            "firebase_data.json",
+        ]
+    )
+    for path in candidates:
+        if os.path.isfile(path):
+            return True
+    return False
 
 
 @app.post("/api/settings/{category}")

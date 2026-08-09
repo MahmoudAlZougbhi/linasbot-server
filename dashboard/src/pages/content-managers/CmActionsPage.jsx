@@ -15,21 +15,27 @@ const ACTION_LABELS = {
 
 const CmActionsPage = () => {
   const draft = useCmSectionDraft("actions");
-  const items = Array.isArray(draft.payload.items) ? draft.payload.items : [];
+  const items = (Array.isArray(draft.payload.items) ? draft.payload.items : []).filter(
+    (item) => item?.id !== "photo_analysis",
+  );
 
   /**
    * @param {number} index
    * @param {boolean} enabled
    */
   const setEnabled = (index, enabled) => {
-    const next = items.map((item, i) => (i === index ? { ...item, enabled } : item));
+    const all = Array.isArray(draft.payload.items) ? draft.payload.items : [];
+    // Map filtered UI index back onto the full items array (photo_analysis may still exist in draft).
+    const visibleIds = items.map((item) => item.id);
+    const targetId = visibleIds[index];
+    const next = all.map((item) => (item.id === targetId ? { ...item, enabled } : item));
     draft.setPayload({ ...draft.payload, items: next });
   };
 
   return (
     <CmSectionShell
       title="Actions / Capabilities"
-      description="Choose what this AI is allowed to do. Booking and WhatsApp AI bot are not available in this product."
+      description="Choose what this AI is allowed to do. Voice processing and image analysis are managed under AI Limits."
       loading={draft.loading}
       dirty={draft.dirty}
       saving={draft.saving}

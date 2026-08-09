@@ -47,6 +47,19 @@ async def handle_voice_message(
     """
     config.user_names[user_id] = user_name  # Ensure name is updated
 
+    tenant_id = str(user_data.get("tenant_id") or "linas").strip() or "linas"
+    try:
+        from services.cm.capability_gates import voice_processing_enabled
+
+        if not voice_processing_enabled(tenant_id):
+            await send_message_func(
+                user_id,
+                "Voice messages are not enabled for this business. Please send a text message.",
+            )
+            return
+    except Exception as exc:
+        print(f"[handle_voice_message] voice gate lookup failed for {tenant_id}: {exc}")
+
     if config.user_in_training_mode.get(user_id, False):
         print(f"[handle_voice_message] INFO: User {user_id} in training mode. Handing over to handle_training_input.")
         # Pass necessary data directly to handle_training_input for voice processing in training mode
