@@ -31,9 +31,9 @@ def test_registry_includes_faq_and_diagnosis_routes() -> None:
 
 
 def test_faq_entitlements_central_plan_config(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.entitlements_service import EntitlementsStore
     from services import entitlements_service as es
     from services import faq_entitlements as fe
+    from services.entitlements_service import EntitlementsStore
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)

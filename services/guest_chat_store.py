@@ -10,9 +10,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from storage.persistent_storage import _DATA_ROOT
-
 from services.guest_chat_limits import GUEST_MAX_QUESTIONS
+from storage.persistent_storage import _DATA_ROOT
 
 
 @dataclass

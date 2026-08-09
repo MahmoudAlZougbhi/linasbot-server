@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def guest_client(tmp_path: Path):
-    from modules.core import app
     import modules.guest_ai_api  # noqa: F401
+    from modules.core import app
     from services.guest_chat_store import GuestChatStore
 
     store = GuestChatStore(root=tmp_path / "guest_chat")
