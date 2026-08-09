@@ -120,7 +120,10 @@ jobs:
         run: npm run typecheck
       - name: Line limit
         working-directory: .
-        run: node scripts/check_source_line_limit.mjs mobile/linas-ai/src mobile/linas-ai/App.tsx
+        run: node scripts/check_source_line_limit.mjs mobile/linas-ai/src mobile/linas-ai/App.tsx services/owner_copilot_v2
+      - name: Copilot V2 manifest freshness
+        working-directory: .
+        run: python scripts/check_copilot_v2_manifest.py
       - name: Mobile secret scan
         working-directory: .
         run: node scripts/scan_mobile_bundle_secrets.mjs
