@@ -9,6 +9,7 @@ import { getInfoAsync } from 'expo-file-system/legacy';
 import { useEffect, useRef, useState } from 'react';
 
 import { apiUpload, ApiError } from '../../api/client';
+import { appendLocalFile } from '../../api/formDataFile';
 
 export type VoiceState = 'idle' | 'recording' | 'transcribing';
 
@@ -24,15 +25,6 @@ function extensionForUri(uri: string): string {
   return match?.[1]?.toLowerCase() ?? 'm4a';
 }
 
-function mimeForExtension(ext: string): string {
-  if (ext === 'm4a' || ext === 'mp4' || ext === 'aac') return 'audio/mp4';
-  if (ext === '3gp' || ext === '3gpp') return 'audio/3gpp';
-  if (ext === 'webm') return 'audio/webm';
-  if (ext === 'wav') return 'audio/wav';
-  if (ext === 'caf') return 'audio/x-caf';
-  return 'audio/mp4';
-}
-
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     const body = err.body as { detail?: string; error?: string } | null;
@@ -41,7 +33,12 @@ function errorMessage(err: unknown): string {
     if (err.status === 401) return 'Please sign in again to use voice.';
     if (err.message) return err.message;
   }
-  if (err instanceof Error && err.message) return err.message;
+  if (err instanceof Error && err.message) {
+    if (/unsupported form data part/i.test(err.message)) {
+      return 'Voice upload failed (FormData). Rebuild the app and try again.';
+    }
+    return err.message;
+  }
   return 'Could not transcribe. Try again or type your message.';
 }
 
@@ -126,11 +123,8 @@ export function useVoiceDraft(onText: (text: string) => void) {
       const ext = extensionForUri(uri);
       const buildForm = () => {
         const form = new FormData();
-        form.append('audio', {
-          uri,
-          name: `voice.${ext}`,
-          type: mimeForExtension(ext),
-        } as unknown as Blob);
+        // Must use expo-file-system File — RN uri object parts break expo/fetch.
+        appendLocalFile(form, 'audio', uri, { name: `voice.${ext}` });
         return form;
       };
 

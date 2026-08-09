@@ -79,9 +79,14 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   const voice = read('features/chat/useVoiceDraft.ts');
   const chat = read('features/chat/ChatScreen.tsx');
   const composer = read('features/chat/ChatComposer.tsx');
+  const formData = read('api/formDataFile.ts');
   assert.match(voice, /apiUpload\('\/api\/mobile\/transcribe'/);
+  assert.match(voice, /appendLocalFile\(form, 'audio'/);
   assert.match(voice, /onTextRef\.current\(text\)/);
   assert.doesNotMatch(voice, /expo-av/);
+  assert.doesNotMatch(voice, /form\.append\(\s*'audio'\s*,\s*\{/);
+  assert.match(formData, /expo-file-system/);
+  assert.match(formData, /Unsupported FormDataPart/);
   assert.match(chat, /useVoiceDraft\(\(text\) =>/);
   assert.match(chat, /setDraft/);
   assert.match(chat, /showMic=\{isAuthenticated\}/);
@@ -89,6 +94,9 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   assert.match(composer, /recording \|\| transcribing \|\| !canSend/);
   assert.match(composer, /Listening…/);
   assert.match(composer, /Transcribing…/);
+  assert.match(composer, /MicGlyph/);
+  assert.match(composer, /StopGlyph/);
+  assert.doesNotMatch(composer, /🎙/);
 });
 
 test('Live Chat thread remains read-only', () => {

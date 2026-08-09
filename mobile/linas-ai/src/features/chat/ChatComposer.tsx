@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HIT, fonts, radii, spacing, useTheme, type ThemeColors } from '../../theme';
+import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
 import type { VoiceState } from './useVoiceDraft';
 
 type Props = {
@@ -33,22 +33,69 @@ type Props = {
   autoFocus?: boolean;
 };
 
-function MicBars({
-  metering,
-  colors,
-}: {
-  metering: number | null | undefined;
-  colors: ThemeColors;
-}) {
-  // expo-audio metering is roughly -160..0 dB; map to 3 bar heights.
-  const level = metering == null ? 0.35 : Math.min(1, Math.max(0.15, (metering + 50) / 50));
-  const heights = [0.45, 1, 0.65].map((w) => 6 + level * 14 * w);
+/** Clean ChatGPT-style mic glyph (no emoji). */
+function MicGlyph({ color, size = 20 }: { color: string; size?: number }) {
+  const headW = size * 0.38;
+  const headH = size * 0.52;
   return (
-    <View style={styles.bars}>
-      {heights.map((h, i) => (
-        <View key={i} style={[styles.bar, { height: h, backgroundColor: colors.accent }]} />
-      ))}
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: headW,
+          height: headH,
+          borderRadius: headW / 2,
+          borderWidth: 2,
+          borderColor: color,
+          backgroundColor: 'transparent',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: size * 0.18,
+          width: size * 0.55,
+          height: size * 0.28,
+          borderWidth: 2,
+          borderTopWidth: 0,
+          borderColor: color,
+          borderBottomLeftRadius: size * 0.28,
+          borderBottomRightRadius: size * 0.28,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: size * 0.08,
+          width: 2,
+          height: size * 0.14,
+          backgroundColor: color,
+          borderRadius: 1,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: size * 0.06,
+          width: size * 0.28,
+          height: 2,
+          backgroundColor: color,
+          borderRadius: 1,
+        }}
+      />
     </View>
+  );
+}
+
+function StopGlyph({ color }: { color: string }) {
+  return (
+    <View
+      style={{
+        width: 12,
+        height: 12,
+        borderRadius: 2.5,
+        backgroundColor: color,
+      }}
+    />
   );
 }
 
@@ -62,7 +109,7 @@ export function ChatComposer({
   sending,
   canSendWithAttachment = false,
   voiceState = 'idle',
-  metering,
+  metering: _metering,
   inputRef,
   showPlus = false,
   showMic = false,
@@ -72,6 +119,7 @@ export function ChatComposer({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const pulse = useRef(new Animated.Value(1)).current;
+  const ring = useRef(new Animated.Value(0.55)).current;
   const recording = voiceState === 'recording';
   const transcribing = voiceState === 'transcribing';
   const canSend = Boolean(draft.trim() || canSendWithAttachment);
@@ -83,17 +131,28 @@ export function ChatComposer({
   useEffect(() => {
     if (!recording) {
       pulse.setValue(1);
+      ring.setValue(0.55);
       return;
     }
-    const loop = Animated.loop(
+    const scaleLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.12, duration: 420, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 420, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.06, duration: 480, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 480, useNativeDriver: true }),
       ]),
     );
-    loop.start();
-    return () => loop.stop();
-  }, [recording, pulse]);
+    const ringLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ring, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(ring, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    scaleLoop.start();
+    ringLoop.start();
+    return () => {
+      scaleLoop.stop();
+      ringLoop.stop();
+    };
+  }, [recording, pulse, ring]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -150,34 +209,52 @@ export function ChatComposer({
           accessibilityLabel="Message Linas"
         />
         {showVoiceControl ? (
-          <Animated.View style={{ transform: [{ scale: pulse }] }}>
-            <Pressable
-              style={[
-                styles.round,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                recording && { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-              ]}
-              onPress={() => {
-                if (!recording && !transcribing) {
-                  inputRef?.current?.blur();
-                  Keyboard.dismiss();
+          <View style={styles.micSlot}>
+            {recording ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.pulseRing,
+                  {
+                    borderColor: colors.danger,
+                    opacity: ring,
+                    transform: [{ scale: pulse }],
+                  },
+                ]}
+              />
+            ) : null}
+            <Animated.View style={{ transform: [{ scale: pulse }] }}>
+              <Pressable
+                style={[
+                  styles.round,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  recording && {
+                    backgroundColor: colors.danger,
+                    borderColor: colors.danger,
+                  },
+                ]}
+                onPress={() => {
+                  if (!recording && !transcribing) {
+                    inputRef?.current?.blur();
+                    Keyboard.dismiss();
+                  }
+                  onToggleVoice?.();
+                }}
+                disabled={transcribing}
+                accessibilityLabel={
+                  recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start voice input'
                 }
-                onToggleVoice?.();
-              }}
-              disabled={transcribing}
-              accessibilityLabel={
-                recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start voice input'
-              }
-            >
-              {transcribing ? (
-                <ActivityIndicator color={colors.accent} size="small" />
-              ) : recording ? (
-                <MicBars metering={metering} colors={colors} />
-              ) : (
-                <Text style={{ color: colors.accent, fontSize: 16 }}>🎙</Text>
-              )}
-            </Pressable>
-          </Animated.View>
+              >
+                {transcribing ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : recording ? (
+                  <StopGlyph color="#FFFFFF" />
+                ) : (
+                  <MicGlyph color={colors.accent} />
+                )}
+              </Pressable>
+            </Animated.View>
+          </View>
         ) : null}
         {streamingStop ? (
           <Pressable
@@ -222,6 +299,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  micSlot: {
+    width: HIT,
+    height: HIT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: HIT + 10,
+    height: HIT + 10,
+    borderRadius: (HIT + 10) / 2,
+    borderWidth: 2,
+  },
   round: {
     width: HIT,
     height: HIT,
@@ -249,16 +339,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendDisabled: { opacity: 0.45 },
-  bars: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    height: 22,
-  },
-  bar: {
-    width: 3,
-    borderRadius: 2,
-  },
   disclaimer: {
     fontFamily: fonts.body,
     fontSize: 11,
