@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.linasai.app",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Linas AI uses the microphone so you can dictate messages in chat. Audio is sent to Linas servers for speech-to-text only.",
         "ITSAppUsesNonExemptEncryption": false
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.linasai.app",
-      "versionCode": 10,
+      "versionCode": 11,
       "adaptiveIcon": {
         "backgroundColor": "#F7F4FC",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -44,6 +44,13 @@
           "microphonePermission": "Linas AI uses the microphone so you can dictate messages in chat."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Linas AI needs photo access so you can attach images in chat with Copilot."
+        }
+      ],
+      "expo-document-picker",
       [
         "expo-splash-screen",
         {
